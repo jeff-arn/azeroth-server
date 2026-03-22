@@ -1,0 +1,13 @@
+# Secrets
+.env
+mangosd.conf
+realmd.conf
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Build artifacts
+*.o
+*.a
