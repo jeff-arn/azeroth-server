@@ -3,11 +3,13 @@ import asyncio
 import subprocess
 import json
 import os
+import re
 import mysql.connector
 from datetime import datetime, timezone
 
 # ==================== CONFIG ====================
 TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
+
 CHANNEL_PATCH_NOTES = 1485324341062402239
 CHANNEL_PLAYER_ACTIVITY = 1485324380832665610
 CHANNEL_SERVER_STATUS = 1485324622177108078
@@ -18,6 +20,8 @@ DB_CONFIG = {
     "password": "fo2IquNCzghd0qBRYetHUtQw",
     "port": 3306,
 }
+
+LEVELUP_LOG = "/home/wow/vmangos/run/bin/LevelUp.log"
 
 # How often to check (seconds)
 STATUS_CHECK_INTERVAL = 60
@@ -31,8 +35,6 @@ client = discord.Client(intents=intents)
 # Track state
 last_server_status = None
 known_online_players = {}
-known_player_levels = {}
-
 
 def is_server_running():
     """Check if mangosd process is running."""
@@ -42,13 +44,11 @@ def is_server_running():
     except Exception:
         return False
 
-
 def get_db_connection(database):
     """Get a MySQL connection."""
     config = DB_CONFIG.copy()
     config["database"] = database
     return mysql.connector.connect(**config)
-
 
 def get_online_players():
     """Query characters DB for online players."""
@@ -69,14 +69,12 @@ def get_online_players():
         print(f"DB Error: {e}")
         return []
 
-
 def get_race_name(race_id):
     races = {
         1: "Human", 2: "Orc", 3: "Dwarf", 4: "Night Elf",
         5: "Undead", 6: "Tauren", 7: "Gnome", 8: "Troll"
     }
     return races.get(race_id, "Unknown")
-
 
 def get_class_name(class_id):
     classes = {
@@ -86,6 +84,12 @@ def get_class_name(class_id):
     }
     return classes.get(class_id, "Unknown")
 
+CLASS_RACE_MAP = {
+    "c1": "Warrior", "c2": "Paladin", "c3": "Hunter", "c4": "Rogue",
+    "c5": "Priest", "c7": "Shaman", "c8": "Mage", "c9": "Warlock", "c11": "Druid",
+    "r1": "Human", "r2": "Orc", "r3": "Dwarf", "r4": "Night Elf",
+    "r5": "Undead", "r6": "Tauren", "r7": "Gnome", "r8": "Troll",
+}
 
 def get_class_emoji(class_id):
     emojis = {
@@ -95,11 +99,17 @@ def get_class_emoji(class_id):
     }
     return emojis.get(class_id, "❓")
 
+def get_class_emoji_str(class_str):
+    mapping = {"c1": 1, "c2": 2, "c3": 3, "c4": 4, "c5": 5, "c7": 7, "c8": 8, "c9": 9, "c11": 11}
+    return get_class_emoji(mapping.get(class_str, 0))
 
 def get_faction_emoji(race_id):
     alliance_races = {1, 3, 4, 7}
     return "🔵" if race_id in alliance_races else "🔴"
 
+def get_faction_emoji_str(race_str):
+    alliance = {"r1", "r3", "r4", "r7"}
+    return "🔵" if race_str in alliance else "🔴"
 
 # ==================== TASKS ====================
 
@@ -115,7 +125,6 @@ async def server_status_loop():
     while not client.is_closed():
         try:
             running = is_server_running()
-
             if last_server_status is not None and running != last_server_status:
                 now = datetime.now(timezone.utc)
                 if running:
@@ -134,42 +143,103 @@ async def server_status_loop():
                     )
                 embed.set_footer(text="Azeroth Private Server")
                 await channel.send(embed=embed)
-
             last_server_status = running
         except Exception as e:
             print(f"Status check error: {e}")
-
         await asyncio.sleep(STATUS_CHECK_INTERVAL)
 
-
-async def player_activity_loop():
-    """Monitor player logins, logouts, and level-ups."""
-    global known_online_players, known_player_levels
+async def levelup_log_watcher():
+    """Watch LevelUp.log for instant level-up announcements."""
     await client.wait_until_ready()
     channel = client.get_channel(CHANNEL_PLAYER_ACTIVITY)
     if not channel:
         print(f"Could not find player activity channel {CHANNEL_PLAYER_ACTIVITY}")
         return
 
-    # Initial population — don't announce on first check
-    first_run = True
+    # Seek to end of file on startup so we don't re-announce old levels
+    try:
+        with open(LEVELUP_LOG, "r") as f:
+            f.seek(0, 2)  # Seek to end
+            file_pos = f.tell()
+    except FileNotFoundError:
+        file_pos = 0
 
+    # Pattern: Character Name:guid [cX rY] reaches level  Z
+    pattern = re.compile(
+        r"Character (\w+):\d+ \[(c\d+) (r\d+)\] reaches level\s+(\d+)"
+    )
+
+    while not client.is_closed():
+        try:
+            with open(LEVELUP_LOG, "r") as f:
+                f.seek(file_pos)
+                new_lines = f.readlines()
+                file_pos = f.tell()
+
+            for line in new_lines:
+                match = pattern.search(line)
+                if match:
+                    name = match.group(1)
+                    class_str = match.group(2)
+                    race_str = match.group(3)
+                    level = int(match.group(4))
+
+                    cls_name = CLASS_RACE_MAP.get(class_str, "Unknown")
+                    race_name = CLASS_RACE_MAP.get(race_str, "Unknown")
+                    emoji = get_class_emoji_str(class_str)
+                    faction = get_faction_emoji_str(race_str)
+
+                    # Milestone levels
+                    if level == 60:
+                        title = f"🏆👑 {name} reached LEVEL 60! 👑🏆"
+                        color = 0xFF8000
+                    elif level in (10, 20, 30, 40, 50):
+                        title = f"🎉 {name} hit level {level}!"
+                        color = 0xFFD100
+                        if level == 40:
+                            title = f"🐴 {name} hit level {level}! Mount time!"
+                    else:
+                        title = f"⬆️ {name} reached level {level}"
+                        color = 0x0070DD
+
+                    embed = discord.Embed(
+                        title=title,
+                        description=f"{faction} {emoji} {race_name} {cls_name}",
+                        color=color,
+                        timestamp=datetime.now(timezone.utc),
+                    )
+                    embed.set_footer(text="Azeroth Private Server")
+                    await channel.send(embed=embed)
+                    print(f"Level-up announced: {name} -> {level}")
+
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"LevelUp log watcher error: {e}")
+
+        await asyncio.sleep(5)  # Check every 5 seconds
+
+async def player_activity_loop():
+    """Monitor player logins and logouts."""
+    global known_online_players
+    await client.wait_until_ready()
+    channel = client.get_channel(CHANNEL_PLAYER_ACTIVITY)
+    if not channel:
+        print(f"Could not find player activity channel {CHANNEL_PLAYER_ACTIVITY}")
+        return
+
+    first_run = True
     while not client.is_closed():
         try:
             players = get_online_players()
             current_online = {}
-            current_levels = {}
-
             for p in players:
                 guid = p["guid"]
-                current_levels[guid] = p["level"]
-
                 if p["online"]:
                     current_online[guid] = p
 
             if not first_run:
                 now = datetime.now(timezone.utc)
-
                 # Check for logins
                 for guid, player in current_online.items():
                     if guid not in known_online_players:
@@ -177,7 +247,6 @@ async def player_activity_loop():
                         cls = get_class_name(player["cls"])
                         emoji = get_class_emoji(player["cls"])
                         faction = get_faction_emoji(player["race"])
-
                         embed = discord.Embed(
                             title=f"{faction} {player['name']} has logged in",
                             description=f"{emoji} Level {player['level']} {race} {cls}",
@@ -193,71 +262,25 @@ async def player_activity_loop():
                         race = get_race_name(player["race"])
                         cls = get_class_name(player["cls"])
                         emoji = get_class_emoji(player["cls"])
-
                         embed = discord.Embed(
                             title=f"👋 {player['name']} has logged out",
-                            description=f"{emoji} Level {current_levels.get(guid, player['level'])} {race} {cls}",
+                            description=f"{emoji} Level {player['level']} {race} {cls}",
                             color=0x9D9D9D,
                             timestamp=now,
                         )
                         embed.set_footer(text="Azeroth Private Server")
                         await channel.send(embed=embed)
 
-                # Check for level-ups
-                for guid, new_level in current_levels.items():
-                    if guid in known_player_levels:
-                        old_level = known_player_levels[guid]
-                        if new_level > old_level:
-                            player = None
-                            for p in players:
-                                if p["guid"] == guid:
-                                    player = p
-                                    break
-                            if player:
-                                race = get_race_name(player["race"])
-                                cls = get_class_name(player["cls"])
-                                emoji = get_class_emoji(player["cls"])
-
-                                # Milestone levels get special treatment
-                                if new_level in (10, 20, 30, 40, 50, 60):
-                                    title = f"🎉 {player['name']} hit level {new_level}!"
-                                    color = 0xFFD100  # Gold
-                                    if new_level == 60:
-                                        title = f"🏆👑 {player['name']} reached LEVEL 60! 👑🏆"
-                                        color = 0xFF8000  # Legendary orange
-                                elif new_level == 40:
-                                    title = f"🐴 {player['name']} hit level {new_level}! Mount time!"
-                                    color = 0xFFD100
-                                else:
-                                    title = f"⬆️ {player['name']} reached level {new_level}"
-                                    color = 0x0070DD  # Rare blue
-
-                                embed = discord.Embed(
-                                    title=title,
-                                    description=f"{emoji} {race} {cls}",
-                                    color=color,
-                                    timestamp=now,
-                                )
-                                embed.set_footer(text="Azeroth Private Server")
-                                await channel.send(embed=embed)
-
             first_run = False
             known_online_players = current_online
-            known_player_levels = current_levels
-
         except Exception as e:
             print(f"Player activity error: {e}")
-
         await asyncio.sleep(PLAYER_CHECK_INTERVAL)
 
-
 # ==================== COMMANDS ====================
-
 @client.event
 async def on_ready():
     print(f"Bot connected as {client.user}")
-
-    # Post startup status
     channel = client.get_channel(CHANNEL_SERVER_STATUS)
     if channel:
         running = is_server_running()
@@ -274,19 +297,17 @@ async def on_ready():
     # Start background tasks
     client.loop.create_task(server_status_loop())
     client.loop.create_task(player_activity_loop())
-
+    client.loop.create_task(levelup_log_watcher())
 
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
 
-    # !status command
     if message.content.strip() == "!status":
         running = is_server_running()
         players = get_online_players()
         online = [p for p in players if p["online"]]
-
         if running:
             desc = f"**Players online:** {len(online)}"
             if online:
@@ -295,7 +316,6 @@ async def on_message(message):
                     emoji = get_class_emoji(p["cls"])
                     faction = get_faction_emoji(p["race"])
                     desc += f"\n{faction} {emoji} **{p['name']}** — Level {p['level']} {get_race_name(p['race'])} {get_class_name(p['cls'])}"
-
             embed = discord.Embed(
                 title="🟢 Azeroth is Online",
                 description=desc,
@@ -312,14 +332,11 @@ async def on_message(message):
         embed.set_footer(text="Azeroth Private Server")
         await message.channel.send(embed=embed)
 
-    # !patchnotes command — post a patch note
     if message.content.strip().startswith("!patchnotes"):
-        # Only allow from the patch notes channel or by admins
         content = message.content[len("!patchnotes"):].strip()
         if not content:
             await message.channel.send("Usage: `!patchnotes <your patch note text>`")
             return
-
         channel = client.get_channel(CHANNEL_PATCH_NOTES)
         if channel:
             embed = discord.Embed(
@@ -332,7 +349,6 @@ async def on_message(message):
             await channel.send(embed=embed)
             if message.channel.id != CHANNEL_PATCH_NOTES:
                 await message.channel.send("✅ Patch notes posted!")
-
 
 # ==================== RUN ====================
 if __name__ == "__main__":
