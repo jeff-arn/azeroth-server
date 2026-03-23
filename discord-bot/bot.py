@@ -177,6 +177,9 @@ async def levelup_log_watcher():
                 file_pos = f.tell()
 
             for line in new_lines:
+                # Skip bot level-ups
+                if '<BOT>' in line:
+                    continue
                 match = pattern.search(line)
                 if match:
                     name = match.group(1)

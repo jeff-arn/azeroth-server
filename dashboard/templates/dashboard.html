@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azeroth Server Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #1a1a2e;
+    color: #e0d8c8;
+    font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+.header {
+    text-align: center;
+    padding: 24px 0 16px;
+    border-bottom: 2px solid #c9aa71;
+    margin-bottom: 24px;
+}
+
+.header h1 {
+    color: #ffd100;
+    font-size: 28px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.status-bar {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    font-size: 14px;
+    color: #8b8878;
+}
+
+.status-bar .value { color: #e0d8c8; font-weight: 600; }
+
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+.status-dot.online {
+    background: #00ff00;
+    box-shadow: 0 0 6px #00ff00;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.offline {
+    background: #ff0000;
+    box-shadow: 0 0 6px #ff0000;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Sections */
+.section {
+    background: #16213e;
+    border: 1px solid #c9aa71;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 10px rgba(201, 170, 113, 0.1);
+}
+
+.section-title {
+    color: #ffd100;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 1px solid #3d3d5c;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+}
+
+/* Grid */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* Player Cards */
+.players-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.player-card {
+    background: #1f2b47;
+    border-radius: 4px;
+    padding: 12px 16px;
+    border-left: 4px solid #ffffff;
+    min-width: 200px;
+    flex: 1;
+}
+
+.player-name {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.player-detail {
+    font-size: 12px;
+    color: #8b8878;
+    line-height: 1.6;
+}
+
+.player-detail .label { color: #6b6860; }
+
+/* Activity */
+.activity-list {
+    list-style: none;
+}
+
+.activity-list li {
+    padding: 6px 0;
+    border-bottom: 1px solid #1f2b47;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.activity-list li:last-child { border-bottom: none; }
+
+.activity-name { font-weight: 600; }
+.activity-level { color: #0070dd; font-weight: 600; }
+.activity-time { color: #6b6860; font-size: 11px; }
+
+.milestone-10 { color: #1eff00; }
+.milestone-20 { color: #1eff00; }
+.milestone-30 { color: #0070dd; }
+.milestone-40 { color: #ffd100; }
+.milestone-50 { color: #a335ee; }
+.milestone-60 { color: #ff8000; }
+
+/* Auctions */
+.ah-total {
+    font-size: 24px;
+    color: #ffd100;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.ah-bar-container {
+    margin-bottom: 6px;
+}
+
+.ah-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 2px;
+}
+
+.ah-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: #1a1a2e;
+    overflow: hidden;
+}
+
+.ah-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+/* Raids */
+.raid-list {
+    list-style: none;
+}
+
+.raid-list li {
+    padding: 6px 0;
+    border-bottom: 1px solid #1f2b47;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.raid-list li:last-child { border-bottom: none; }
+
+.raid-name { display: flex; align-items: center; gap: 8px; }
+.raid-icon { font-size: 14px; }
+.raid-locked { color: #4a4a4a; }
+.raid-unlocked { color: #e0d8c8; }
+.raid-phase { color: #6b6860; font-size: 11px; }
+
+/* Bots */
+.bot-total {
+    font-size: 20px;
+    color: #a335ee;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.bot-zone-list {
+    list-style: none;
+}
+
+.bot-zone-list li {
+    padding: 4px 0;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.bot-zone-count {
+    color: #8b8878;
+    font-weight: 600;
+}
+
+/* Empty state */
+.empty { color: #4a4a4a; font-style: italic; font-size: 13px; }
+
+/* Refresh indicator */
+.refresh-bar {
+    text-align: center;
+    color: #3d3d5c;
+    font-size: 11px;
+    padding: 8px 0;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .status-bar { flex-wrap: wrap; gap: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Azeroth</h1>
+        <div class="status-bar" id="status-bar">
+            <span><span class="status-dot offline" id="status-dot"></span> <span class="value" id="status-text">Checking...</span></span>
+            <span>Uptime: <span class="value" id="uptime">--</span></span>
+            <span>Players: <span class="value" id="player-count">--</span></span>
+            <span>Bots: <span class="value" id="bot-count">--</span></span>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title" id="players-title">Online Players</div>
+        <div class="players-grid" id="players-grid">
+            <div class="empty">No players online</div>
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <div class="section">
+            <div class="section-title">Recent Activity</div>
+            <ul class="activity-list" id="activity-list">
+                <li class="empty">No recent activity</li>
+            </ul>
+        </div>
+        <div class="section">
+            <div class="section-title">Auction House</div>
+            <div id="auctions-content">
+                <div class="empty">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <div class="section">
+            <div class="section-title">Raid Progression</div>
+            <ul class="raid-list" id="raid-list">
+                <li class="empty">Loading...</li>
+            </ul>
+        </div>
+        <div class="section">
+            <div class="section-title">Bot Population</div>
+            <div id="bots-content">
+                <div class="empty">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="refresh-bar" id="refresh-bar">Auto-refreshes every 30 seconds</div>
+</div>
+
+<script>
+const REFRESH_INTERVAL = 30000;
+
+async function fetchJSON(url) {
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(resp.status);
+        return await resp.json();
+    } catch (e) {
+        console.error("Fetch error:", url, e);
+        return null;
+    }
+}
+
+function renderStatus(data) {
+    const dot = document.getElementById("status-dot");
+    const text = document.getElementById("status-text");
+    const uptime = document.getElementById("uptime");
+    const pcount = document.getElementById("player-count");
+    const bcount = document.getElementById("bot-count");
+
+    dot.className = "status-dot " + (data.online ? "online" : "offline");
+    text.textContent = data.online ? "Online" : "Offline";
+    uptime.textContent = data.uptime_display;
+    pcount.textContent = data.players_online;
+    bcount.textContent = data.bots_online;
+}
+
+function renderPlayers(players) {
+    const grid = document.getElementById("players-grid");
+    const title = document.getElementById("players-title");
+    title.textContent = `Online Players (${players.length})`;
+
+    if (!players.length) {
+        grid.innerHTML = '<div class="empty">No players online</div>';
+        return;
+    }
+
+    grid.innerHTML = players.map(p => `
+        <div class="player-card" style="border-left-color: ${p.class_color}">
+            <div class="player-name" style="color: ${p.class_color}">${p.name}</div>
+            <div class="player-detail">
+                Level ${p.level} ${p.race} ${p.class}<br>
+                <span class="label">Zone:</span> ${p.zone}<br>
+                <span class="label">Gold:</span> ${p.money}<br>
+                <span class="label">Played:</span> ${p.played_time}
+            </div>
+        </div>
+    `).join("");
+}
+
+function getMilestoneClass(level) {
+    if (level === 60) return "milestone-60";
+    if (level >= 50) return "milestone-50";
+    if (level >= 40) return "milestone-40";
+    if (level >= 30) return "milestone-30";
+    if (level >= 20) return "milestone-20";
+    if (level >= 10) return "milestone-10";
+    return "activity-level";
+}
+
+function renderActivity(events) {
+    const list = document.getElementById("activity-list");
+    if (!events || !events.length) {
+        list.innerHTML = '<li class="empty">No recent activity</li>';
+        return;
+    }
+    list.innerHTML = events.map(e => `
+        <li>
+            <span>
+                <span class="activity-name" style="color: ${e.class_color}">${e.name}</span>
+                reached level <span class="${getMilestoneClass(e.level)}">${e.level}</span>
+            </span>
+            <span class="activity-time">${e.timestamp}</span>
+        </li>
+    `).join("");
+}
+
+function renderAuctions(data) {
+    const el = document.getElementById("auctions-content");
+    if (!data || data.total === 0) {
+        el.innerHTML = '<div class="empty">No auctions</div>';
+        return;
+    }
+    let html = `<div class="ah-total">${data.total} Listings</div>`;
+    const maxCount = Math.max(...data.by_quality.map(q => q.count), 1);
+    data.by_quality.forEach(q => {
+        const pct = (q.count / maxCount * 100).toFixed(0);
+        html += `
+            <div class="ah-bar-container">
+                <div class="ah-bar-label">
+                    <span style="color: ${q.color}">${q.name}</span>
+                    <span>${q.count}</span>
+                </div>
+                <div class="ah-bar">
+                    <div class="ah-bar-fill" style="width: ${pct}%; background: ${q.color}"></div>
+                </div>
+            </div>
+        `;
+    });
+    el.innerHTML = html;
+}
+
+function renderRaids(raids) {
+    const list = document.getElementById("raid-list");
+    if (!raids || !raids.length) {
+        list.innerHTML = '<li class="empty">No raid data</li>';
+        return;
+    }
+    list.innerHTML = raids.map(r => `
+        <li class="${r.unlocked ? 'raid-unlocked' : 'raid-locked'}">
+            <span class="raid-name">
+                <span class="raid-icon">${r.unlocked ? '\u2714' : '\uD83D\uDD12'}</span>
+                ${r.name}
+            </span>
+            <span class="raid-phase">Phase ${r.phase}</span>
+        </li>
+    `).join("");
+}
+
+function renderBots(data) {
+    const el = document.getElementById("bots-content");
+    if (!data || data.total_online === 0) {
+        el.innerHTML = '<div class="empty">No bots online</div>';
+        return;
+    }
+    let html = `<div class="bot-total">${data.total_online} Online</div>`;
+    html += '<ul class="bot-zone-list">';
+    data.by_zone.forEach(z => {
+        html += `<li><span>${z.zone}</span><span class="bot-zone-count">${z.count}</span></li>`;
+    });
+    html += '</ul>';
+    el.innerHTML = html;
+}
+
+let countdown = 30;
+function updateRefreshBar() {
+    document.getElementById("refresh-bar").textContent = `Refreshing in ${countdown}s`;
+    countdown--;
+    if (countdown < 0) countdown = 30;
+}
+
+async function refresh() {
+    countdown = 30;
+    const [status, players, activity, auctions, raids, bots] = await Promise.all([
+        fetchJSON("/api/status"),
+        fetchJSON("/api/players"),
+        fetchJSON("/api/activity"),
+        fetchJSON("/api/auctions"),
+        fetchJSON("/api/raids"),
+        fetchJSON("/api/bots"),
+    ]);
+    if (status) renderStatus(status);
+    if (players) renderPlayers(players);
+    if (activity) renderActivity(activity);
+    if (auctions) renderAuctions(auctions);
+    if (raids) renderRaids(raids);
+    if (bots) renderBots(bots);
+}
+
+refresh();
+setInterval(refresh, REFRESH_INTERVAL);
+setInterval(updateRefreshBar, 1000);
+</script>
+</body>
+</html>
