@@ -112,10 +112,10 @@ def assign_bots(players):
     """Main director logic — assign bots based on player locations."""
     assignments = []
 
-    if not players:
-        logging.info("No players online — clearing assignments")
-        clear_all_assignments()
-        return
+
+
+
+
 
     # Categorize players
     city_players = []

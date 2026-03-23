@@ -48,10 +48,10 @@ index 7f1ed538a..4727ee32e 100644
      };
  
 diff --git a/src/game/PlayerBots/PlayerBotAI.cpp b/src/game/PlayerBots/PlayerBotAI.cpp
-index ec535488d..5cea94425 100644
+index ec535488d..4c50b17b7 100644
 --- a/src/game/PlayerBots/PlayerBotAI.cpp
 +++ b/src/game/PlayerBots/PlayerBotAI.cpp
-@@ -358,6 +358,460 @@ void PopulateAreaBotAI::OnPlayerLogin()
+@@ -358,6 +358,489 @@ void PopulateAreaBotAI::OnPlayerLogin()
          me->GetMotionMaster()->MoveConfused();
  }
  
@@ -92,8 +92,14 @@ index ec535488d..5cea94425 100644
 +            me->SetUInt32Value(PLAYER_XP, 0);
 +        }
 +        // Equip premade gear template based on class and level
-+        if (!me->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
++        if (!m_gearEquipped)
 +        {
++            m_gearEquipped = true;
++
++            // Unequip any existing gear first
++            for (int i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
++                me->AutoUnequipItemFromSlot(i);
++
 +            // Find best matching premade gear template for this class/level
 +            // Templates exist at levels 19, 29, 39, 49, 60
 +            uint32 bestEntry = 0;
@@ -109,9 +115,17 @@ index ec535488d..5cea94425 100644
 +                }
 +            }
 +            if (bestEntry)
++            {
++                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] %s (lvl %u, class %u) equipping premade template %u (template lvl %u)",
++                    me->GetName(), me->GetLevel(), me->GetClass(), bestEntry, bestLevel);
 +                sObjectMgr.ApplyPremadeGearTemplateToPlayer(bestEntry, me);
++            }
 +            else
++            {
++                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] %s (lvl %u, class %u) no premade template found, using starter items",
++                    me->GetName(), me->GetLevel(), me->GetClass());
 +                me->AddStartingItems();  // Fallback for very low level bots
++            }
 +        }
 +    }
 +}
@@ -163,6 +177,8 @@ index ec535488d..5cea94425 100644
 +
 +void DynamicBotAI::OnPlayerLogin()
 +{
++    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] OnPlayerLogin called for guid %u",
++        botEntry ? botEntry->playerGUID : 0);
 +    LoadAssignment();
 +
 +    // Set level from assignment
@@ -178,6 +194,10 @@ index ec535488d..5cea94425 100644
 +                me->GiveLevel(targetLevel);
 +        }
 +    }
++
++    // Start wandering
++    if (me && !_aggressive)
++        me->GetMotionMaster()->MoveRandom();
 +}
 +
 +Unit* DynamicBotAI::FindEnemyPlayer(float range)
@@ -262,6 +282,14 @@ index ec535488d..5cea94425 100644
 +{
 +    PlayerBotAI::UpdateAI(diff);
 +
++    // One-time init log
++    if (!m_initLogged && me)
++    {
++        m_initLogged = true;
++        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] UpdateAI first call for %s (lvl %u, class %u, loaded=%u, geared=%u)",
++            me->GetName(), me->GetLevel(), me->GetClass(), m_loaded ? 1 : 0, m_gearEquipped ? 1 : 0);
++    }
++
 +    m_updateTimer += diff;
 +    if (m_updateTimer < 1000)
 +        return;
@@ -283,13 +311,14 @@ index ec535488d..5cea94425 100644
 +    }
 +
 +    // Reload assignment periodically (every ~2 min) to pick up director changes
-+    static uint32 reloadTimer = 0;
-+    reloadTimer += 1000;
-+    if (reloadTimer > 120000)
++    m_reloadTimer += 1000;
++    if (m_reloadTimer > 120000)
 +    {
 +        m_loaded = false;
++        m_gearEquipped = false;
 +        LoadAssignment();
-+        reloadTimer = 0;
++        m_reloadTimer = 0;
++    m_initLogged = false;
 +    }
 +
 +    // Out of combat regen
@@ -512,7 +541,7 @@ index ec535488d..5cea94425 100644
  PlayerBotAI* CreatePlayerBotAI(std::string ainame)
  {
      if (ainame == "MageOrgrimmarAttackerAI")
-@@ -370,5 +824,23 @@ PlayerBotAI* CreatePlayerBotAI(std::string ainame)
+@@ -370,5 +853,23 @@ PlayerBotAI* CreatePlayerBotAI(std::string ainame)
          return new PopulateAreaBotAI(1, 1568, -4405.87f, 8.13f, HORDE, 150.0f);
      if (ainame == "PlayerBotFleeingAI")
          return new PlayerBotFleeingAI();
@@ -537,10 +566,10 @@ index ec535488d..5cea94425 100644
      return new PlayerBotAI();
  }
 diff --git a/src/game/PlayerBots/PlayerBotAI.h b/src/game/PlayerBots/PlayerBotAI.h
-index ffe73b702..2030242ca 100644
+index ffe73b702..c45a82033 100644
 --- a/src/game/PlayerBots/PlayerBotAI.h
 +++ b/src/game/PlayerBots/PlayerBotAI.h
-@@ -96,4 +96,47 @@ class PopulateAreaBotAI: public PlayerBotAI
+@@ -96,4 +96,50 @@ class PopulateAreaBotAI: public PlayerBotAI
          float _radius;
          uint32 _team;
  };
@@ -581,6 +610,9 @@ index ffe73b702..2030242ca 100644
 +        uint32 m_updateTimer;
 +        uint32 m_regenTimer;
 +        bool m_loaded;
++    bool m_gearEquipped;
++    uint32 m_reloadTimer;
++    bool m_initLogged;
 +        void LoadAssignment();
 +        Unit* FindEnemyPlayer(float range);
 +        void DoMeleeCombat(Unit* target);
@@ -588,6 +620,19 @@ index ffe73b702..2030242ca 100644
 +};
 +
  #endif
+diff --git a/src/game/PlayerBots/PlayerBotMgr.cpp b/src/game/PlayerBots/PlayerBotMgr.cpp
+index a8895ff61..2d3228733 100644
+--- a/src/game/PlayerBots/PlayerBotMgr.cpp
++++ b/src/game/PlayerBots/PlayerBotMgr.cpp
+@@ -178,6 +178,8 @@ void PlayerBotMgr::OnBotLogout(PlayerBotEntry *e)
+ 
+ void PlayerBotMgr::OnPlayerInWorld(Player* player)
+ {
++    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PlayerBotMgr] OnPlayerInWorld: %s, session=%p, bot=%p",
++        player->GetName(), player->GetSession(), player->GetSession() ? player->GetSession()->GetBot() : nullptr);
+     if (PlayerBotEntry* e = player->GetSession()->GetBot())
+     {
+         player->SetAI(e->ai.get());
 diff --git a/src/shared/Progression.h b/src/shared/Progression.h
 index f9a08bce2..a92c9e08a 100644
 --- a/src/shared/Progression.h
