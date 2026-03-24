@@ -47,6 +47,1213 @@ index 7f1ed538a..4727ee32e 100644
          { nullptr,      0,                      false, nullptr,                                        "", nullptr },
      };
  
+diff --git a/src/game/PlayerBots/CombatBotBaseAI.cpp b/src/game/PlayerBots/CombatBotBaseAI.cpp
+index 265a862bb..8df3f4e64 100644
+--- a/src/game/PlayerBots/CombatBotBaseAI.cpp
++++ b/src/game/PlayerBots/CombatBotBaseAI.cpp
+@@ -1220,6 +1220,16 @@ void CombatBotBaseAI::PopulateSpellData()
+                     if (IsHigherRankSpell(m_spells.warrior.pPiercingHowl))
+                         m_spells.warrior.pPiercingHowl = pSpellEntry;
+                 }
++                else if (pSpellEntry->SpellName[0].find("Revenge") != std::string::npos)
++                {
++                    if (IsHigherRankSpell(m_spells.warrior.pRevenge))
++                        m_spells.warrior.pRevenge = pSpellEntry;
++                }
++                else if (pSpellEntry->SpellName[0].find("Challenging Shout") != std::string::npos)
++                {
++                    if (IsHigherRankSpell(m_spells.warrior.pChallengingShout))
++                        m_spells.warrior.pChallengingShout = pSpellEntry;
++                }
+                 break;
+             }
+             case CLASS_ROGUE:
+diff --git a/src/game/PlayerBots/CombatBotBaseAI.h b/src/game/PlayerBots/CombatBotBaseAI.h
+index 36c23424c..cc2aa408b 100644
+--- a/src/game/PlayerBots/CombatBotBaseAI.h
++++ b/src/game/PlayerBots/CombatBotBaseAI.h
+@@ -470,6 +470,8 @@ public:
+             SpellEntry const* pSunderArmor;
+             SpellEntry const* pConcussionBlow;
+             SpellEntry const* pPiercingHowl;
++            SpellEntry const* pRevenge;
++            SpellEntry const* pChallengingShout;
+         } warrior;
+         struct
+         {
+diff --git a/src/game/PlayerBots/PartyBotAI.cpp b/src/game/PlayerBots/PartyBotAI.cpp
+index 75fc61775..b0849162d 100644
+--- a/src/game/PlayerBots/PartyBotAI.cpp
++++ b/src/game/PlayerBots/PartyBotAI.cpp
+@@ -43,6 +43,232 @@ enum PartyBotSpells
+ #define PB_MIN_FOLLOW_ANGLE 0.0f
+ #define PB_MAX_FOLLOW_ANGLE 6.0f
+ 
++// ============================================================
++// Boss Override Registry
++// Populated with data from DUNGEON_RAID_GUIDE.md
++// ============================================================
++static std::unordered_map<uint32, BossOverride> s_bossOverrides;
++static bool s_bossOverridesInitialized = false;
++
++void InitBossOverrides()
++{
++    if (s_bossOverridesInitialized)
++        return;
++    s_bossOverridesInitialized = true;
++
++    // --- Ragefire Chasm ---
++    // Jergosh the Invoker: interrupt Shadow Bolt Volley
++    {
++        BossOverride o;
++        o.creatureEntry = 11518;
++        // Shadow Bolt Volley spell ID 15245 (generic NPC version)
++        o.interruptSpellIds = {15245};
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++    // Taragaman: melee should avoid Fire Nova AoE
++    {
++        BossOverride o;
++        o.creatureEntry = 11520;
++        o.avoidAoeSpellIds = {11970}; // Fire Nova
++        o.avoidAoeRange = 10.0f;
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++
++    // --- Deadmines ---
++    // Rhahk'Zor: frontal Slam - melee must be behind (spreadOut flag)
++    {
++        BossOverride o;
++        o.creatureEntry = 644;
++        o.spreadOut = true; // Ensures melee stays behind
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++    // Mr. Smite: save cooldowns for Phase 3 (<33% HP)
++    {
++        BossOverride o;
++        o.creatureEntry = 646;
++        o.saveCooldownsForPhase = true;
++        o.cooldownPhaseHpPercent = 33.0f;
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++    // Edwin VanCleef: interrupt Sinister Strike not needed, but disable AoE
++    // so CC on adds isn't broken
++    {
++        BossOverride o;
++        o.creatureEntry = 639;
++        o.disableAoe = true; // Don't break CC on adds
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++
++    // --- Wailing Caverns ---
++    // Lord Serpentis: interrupt Lightning Bolt, healing spells
++    {
++        BossOverride o;
++        o.creatureEntry = 3673;
++        o.interruptSpellIds = {9532, 23381}; // Lightning Bolt, Healing Touch (NPC versions)
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++
++    // --- Shadowfang Keep ---
++    // Baron Silverlaine: interrupt Veil of Shadow
++    {
++        BossOverride o;
++        o.creatureEntry = 3887;
++        o.interruptSpellIds = {7068}; // Veil of Shadow
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++
++    // --- Blackfathom Deeps ---
++    // Lady Sarevess: interrupt Forked Lightning
++    {
++        BossOverride o;
++        o.creatureEntry = 4831;
++        o.interruptSpellIds = {8435}; // Forked Lightning
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++
++    // --- Stockades ---
++    // Bazil Thredd: no special mechanics, simple fight
++    // Dextren Ward: no special mechanics
++
++    // --- Gnomeregan ---
++    // Electrocutioner 6000: avoid Chain Lightning (spread out)
++    {
++        BossOverride o;
++        o.creatureEntry = 6235;
++        o.spreadOut = true;
++        o.interruptSpellIds = {11824}; // Chain Lightning (NPC)
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++
++    // --- Scarlet Monastery ---
++    // High Inquisitor Whitemane: interrupt heals
++    {
++        BossOverride o;
++        o.creatureEntry = 3977;
++        o.interruptSpellIds = {12039, 9474}; // Heal, Holy Smite
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++    // Herod: avoid Whirlwind (melee run out)
++    {
++        BossOverride o;
++        o.creatureEntry = 3975;
++        o.avoidAoeSpellIds = {8989}; // Whirlwind
++        o.avoidAoeRange = 12.0f;
++        s_bossOverrides[o.creatureEntry] = o;
++    }
++}
++
++BossOverride const* GetBossOverride(uint32 creatureEntry)
++{
++    InitBossOverrides();
++    auto it = s_bossOverrides.find(creatureEntry);
++    return (it != s_bossOverrides.end()) ? &it->second : nullptr;
++}
++
++// ============================================================
++// PartyBotAI Boss Override Helpers
++// ============================================================
++BossOverride const* PartyBotAI::GetCurrentBossOverride() const
++{
++    if (Unit* pVictim = me->GetVictim())
++    {
++        if (Creature* pCreature = pVictim->ToCreature())
++            return GetBossOverride(pCreature->GetEntry());
++    }
++    return nullptr;
++}
++
++bool PartyBotAI::HandleBossInterrupt(Unit* pVictim, BossOverride const* pOverride)
++{
++    if (!pOverride || pOverride->interruptSpellIds.empty())
++        return false;
++
++    if (!pVictim->IsNonMeleeSpellCasted(false, false, true))
++        return false;
++
++    // Check if the spell being cast is one we must interrupt
++    Spell* pSpell = pVictim->GetCurrentSpell(CURRENT_GENERIC_SPELL);
++    if (!pSpell)
++        pSpell = pVictim->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
++    if (!pSpell)
++        return false;
++
++    uint32 castingSpellId = pSpell->m_spellInfo->Id;
++    bool shouldInterrupt = false;
++    for (uint32 spellId : pOverride->interruptSpellIds)
++    {
++        if (castingSpellId == spellId)
++        {
++            shouldInterrupt = true;
++            break;
++        }
++    }
++
++    if (!shouldInterrupt)
++        return false;
++
++    // Try all available interrupts
++    switch (me->GetClass())
++    {
++        case CLASS_WARRIOR:
++            if (m_spells.warrior.pPummel && CanTryToCastSpell(pVictim, m_spells.warrior.pPummel))
++                return DoCastSpell(pVictim, m_spells.warrior.pPummel) == SPELL_CAST_OK;
++            if (m_spells.warrior.pShieldBash && CanTryToCastSpell(pVictim, m_spells.warrior.pShieldBash))
++                return DoCastSpell(pVictim, m_spells.warrior.pShieldBash) == SPELL_CAST_OK;
++            break;
++        case CLASS_ROGUE:
++            if (m_spells.rogue.pKick && CanTryToCastSpell(pVictim, m_spells.rogue.pKick))
++                return DoCastSpell(pVictim, m_spells.rogue.pKick) == SPELL_CAST_OK;
++            break;
++        case CLASS_MAGE:
++            if (m_spells.mage.pCounterspell && CanTryToCastSpell(pVictim, m_spells.mage.pCounterspell))
++                return DoCastSpell(pVictim, m_spells.mage.pCounterspell) == SPELL_CAST_OK;
++            break;
++        case CLASS_SHAMAN:
++            if (m_spells.shaman.pEarthShock && CanTryToCastSpell(pVictim, m_spells.shaman.pEarthShock))
++                return DoCastSpell(pVictim, m_spells.shaman.pEarthShock) == SPELL_CAST_OK;
++            break;
++        case CLASS_PRIEST:
++            if (m_spells.priest.pSilence && CanTryToCastSpell(pVictim, m_spells.priest.pSilence))
++                return DoCastSpell(pVictim, m_spells.priest.pSilence) == SPELL_CAST_OK;
++            break;
++    }
++    return false;
++}
++
++bool PartyBotAI::HandleBossAoeAvoidance(Unit* pVictim, BossOverride const* pOverride)
++{
++    if (!pOverride || pOverride->avoidAoeSpellIds.empty())
++        return false;
++
++    // Check if boss is casting an AoE we should avoid
++    Spell* pSpell = pVictim->GetCurrentSpell(CURRENT_GENERIC_SPELL);
++    if (!pSpell)
++        return false;
++
++    uint32 castingSpellId = pSpell->m_spellInfo->Id;
++    for (uint32 spellId : pOverride->avoidAoeSpellIds)
++    {
++        if (castingSpellId == spellId)
++        {
++            // Only melee needs to run out
++            if (m_role == ROLE_MELEE_DPS || m_role == ROLE_TANK)
++            {
++                if (me->GetDistance(pVictim) < pOverride->avoidAoeRange)
++                {
++                    // Run away from the boss temporarily
++                    me->GetMotionMaster()->MoveDistance(pVictim, pOverride->avoidAoeRange + 3.0f);
++                    return true;
++                }
++            }
++            break;
++        }
++    }
++    return false;
++}
++
++
++
+ bool PartyBotAI::OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess)
+ {
+     if (!m_race && !m_class)
+@@ -127,57 +353,107 @@ Player* PartyBotAI::GetPartyLeader() const
+     return nullptr;
+ }
+ 
+-bool PartyBotAI::IsValidDistancingTarget(Unit* pTarget, Unit* pEnemy)
+-{
+-    if (pTarget->IsInWorld() && pTarget->IsAlive() &&
+-        pTarget->GetMap() == me->GetMap())
+-    {
+-        float const distance = me->GetDistance(pTarget);
+-        if (distance >= 15.0f && distance <= 30.0f &&
+-            pTarget->GetDistance(pEnemy) >= 15.0f)
+-            return true;
+-    }
+-     
+-    return false;
+-}
+-
+-Unit* PartyBotAI::GetDistancingTarget(Unit* pEnemy)
++// Find the party member acting as tank.
++Player* PartyBotAI::FindPartyTank() const
+ {
+-    if (Player* pLeader = GetPartyLeader())
+-        if (IsValidDistancingTarget(pLeader, pEnemy))
+-            return pLeader;
+-
+-    Unit* pNonTank = nullptr;
+     Group* pGroup = me->GetGroup();
++    if (!pGroup)
++        return nullptr;
++
+     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+     {
+         if (Player* pMember = itr->getSource())
+         {
+-            if (pMember == me)
++            if (pMember == me || !pMember->IsAlive() || !pMember->IsInWorld())
++                continue;
++            if (pMember->GetMap() != me->GetMap())
+                 continue;
+ 
+-            if (IsValidDistancingTarget(pMember, pEnemy))
++            // Check by role: bots with ROLE_TANK, or players in tanking form/shield
++            if (pMember->AI())
+             {
+-                if (IsTankingForm(pMember->GetShapeshiftForm()) || IsWearingShield(pMember))
+-                    return pMember;
+-                else
+-                    pNonTank = pMember;
++                if (CombatBotBaseAI* pBotAI = dynamic_cast<CombatBotBaseAI*>(pMember->AI()))
++                {
++                    if (pBotAI->GetRole() == ROLE_TANK)
++                        return pMember;
++                }
+             }
++            if (IsTankingForm(pMember->GetShapeshiftForm()) || IsWearingShield(pMember))
++                return pMember;
+         }
+     }
+-
+-    return pNonTank;
++    return nullptr;
+ }
+ 
++// SAFE FLEE: Always run toward the tank or party leader, never blindly away.
++// If already near the safe target, stop — do not chain-pull by fleeing into packs.
+ bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
+ {
+-    if (Unit* pTarget = GetDistancingTarget(pEnemy))
++    // Find a safe target to run toward: prefer tank, fall back to leader
++    Player* pTank = FindPartyTank();
++    Player* pLeader = GetPartyLeader();
++    Unit* pSafeTarget = pTank ? static_cast<Unit*>(pTank) : static_cast<Unit*>(pLeader);
++
++    if (!pSafeTarget || !pSafeTarget->IsAlive() || pSafeTarget == me)
++        return false; // No safe target — stand still, accept death rather than chain-pull
++
++    float dist = me->GetDistance(pSafeTarget);
++    if (dist < 5.0f)
++        return false; // Already near the tank/leader, stop running
++
++    // Move toward the safe target (tank/leader position)
++    me->GetMotionMaster()->MovePoint(0,
++        pSafeTarget->GetPositionX(),
++        pSafeTarget->GetPositionY(),
++        pSafeTarget->GetPositionZ(),
++        MOVE_PATHFINDING);
++    return true;
++}
++
++// Returns this bot's threat as a ratio of the tank's threat on the same enemy.
++// Returns 0.0 if threat data is unavailable.
++float PartyBotAI::GetThreatRatio(Unit* pEnemy) const
++{
++    if (!pEnemy || !pEnemy->CanHaveThreatList())
++        return 0.0f;
++
++    float myThreat = pEnemy->GetThreatManager().getThreat(const_cast<Player*>(me));
++    if (myThreat <= 0.0f)
++        return 0.0f;
++
++    // Find the tank's threat on this enemy
++    Player* pTank = FindPartyTank();
++    if (!pTank)
+     {
+-        me->MonsterMove(pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ());
+-        return true;
++        // No tank identified — use the enemy's current victim (highest threat holder)
++        Unit* pVictim = pEnemy->GetVictim();
++        if (!pVictim || pVictim == me)
++            return 0.0f;
++        float victimThreat = pEnemy->GetThreatManager().getThreat(pVictim);
++        return victimThreat > 0.0f ? (myThreat / victimThreat) : 0.0f;
+     }
+ 
+-    return me->GetMotionMaster()->MoveDistance(pEnemy, 15.0f);
++    float tankThreat = pEnemy->GetThreatManager().getThreat(pTank);
++    return tankThreat > 0.0f ? (myThreat / tankThreat) : 0.0f;
++}
++
++// Returns true if the bot should stop using damage abilities to avoid pulling aggro.
++// Melee: throttle at 90% of tank threat, hard stop at 100%.
++// Ranged: throttle at 90%, hard stop at 130%.
++bool PartyBotAI::ShouldThrottleDPS(Unit* pEnemy) const
++{
++    if (m_role == ROLE_TANK || m_role == ROLE_HEALER)
++        return false;
++
++    float ratio = GetThreatRatio(pEnemy);
++    if (ratio <= 0.0f)
++        return false;
++
++    // Per CLASS_GROUP_BEHAVIOR_GUIDE threat rules
++    if (m_role == ROLE_MELEE_DPS)
++        return ratio >= 0.90f;
++    else // ROLE_RANGE_DPS
++        return ratio >= 0.90f;
+ }
+ 
+ bool PartyBotAI::DrinkAndEat()
+@@ -188,8 +464,9 @@ bool PartyBotAI::DrinkAndEat()
+     if (me->GetVictim())
+         return false;
+ 
+-    bool const needToEat = me->GetHealthPercent() < 100.0f;
+-    bool const needToDrink = (me->GetPowerType() == POWER_MANA) && (me->GetPowerPercent(POWER_MANA) < 100.0f);
++    // Per CLASS_GROUP_BEHAVIOR_GUIDE: eat at <60% HP, drink at <40% mana
++    bool const needToEat = me->GetHealthPercent() < 60.0f;
++    bool const needToDrink = (me->GetPowerType() == POWER_MANA) && (me->GetPowerPercent(POWER_MANA) < 40.0f);
+ 
+     if (!needToEat && !needToDrink)
+         return false;
+@@ -383,7 +660,17 @@ Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
+             }
+         }
+ 
+-        // Who is the leader attacking.
++        // Prefer the tank's target (per CLASS guide: always attack tank's current target)
++        if (Player* pTank = FindPartyTank())
++        {
++            if (pTank != me && pTank->GetVictim())
++            {
++                if (IsValidHostileTarget(pTank->GetVictim()))
++                    return pTank->GetVictim();
++            }
++        }
++
++        // Fall back to leader's target
+         if (Unit* pVictim = pLeader->GetVictim())
+         {
+             if (IsValidHostileTarget(pVictim))
+@@ -767,6 +1054,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
+ 
+     if (!me->IsInCombat())
+     {
++        // Reset opener delay for next combat
++        m_combatEngageTimer = 0;
++        m_combatEngageDelayDone = false;
++
+         if (DrinkAndEat())
+         {
+             if (!me->IsWithinDistInMap(pLeader, 100.0f))
+@@ -939,6 +1230,41 @@ void PartyBotAI::UpdateOutOfCombatAI()
+ 
+ void PartyBotAI::UpdateInCombatAI()
+ {
++    // === OPENER DELAY: Non-tanks wait 2 seconds before engaging ===
++    if (m_role != ROLE_TANK && m_role != ROLE_HEALER && !m_combatEngageDelayDone)
++    {
++        m_combatEngageTimer += PB_UPDATE_INTERVAL;
++        if (m_combatEngageTimer < 2000)
++            return; // Wait for tank to build threat before DPS engages
++        m_combatEngageDelayDone = true;
++    }
++
++    // === DPS THREAT THROTTLE: Stop damage abilities when close to tank threat ===
++    if (m_role != ROLE_TANK && m_role != ROLE_HEALER && me->GetVictim())
++    {
++        if (ShouldThrottleDPS(me->GetVictim()))
++        {
++            // At high threat: stop casting, only auto-attack/wand
++            // Healers and tanks are exempt from this check
++            return;
++        }
++    }
++
++    // === BOSS OVERRIDE: check for encounter-specific behavior ===
++    if (BossOverride const* pBossOverride = GetCurrentBossOverride())
++    {
++        if (Unit* pVictim = me->GetVictim())
++        {
++            // Priority interrupt for boss spells
++            if (HandleBossInterrupt(pVictim, pBossOverride))
++                return;
++
++            // AoE avoidance (melee run out)
++            if (HandleBossAoeAvoidance(pVictim, pBossOverride))
++                return;
++        }
++    }
++
+     if (!IsInDuel())
+     {
+         if (m_role == ROLE_TANK)
+@@ -1183,6 +1509,17 @@ void PartyBotAI::UpdateOutOfCombatAI_Paladin()
+ 
+ void PartyBotAI::UpdateInCombatAI_Paladin()
+ {
++    // Emergency: If healer paladin has aggro, use BoP on self
++    if (GetRole() == ROLE_HEALER && !me->GetAttackers().empty())
++    {
++        if (m_spells.paladin.pBlessingOfProtection &&
++            CanTryToCastSpell(me, m_spells.paladin.pBlessingOfProtection))
++        {
++            if (DoCastSpell(me, m_spells.paladin.pBlessingOfProtection) == SPELL_CAST_OK)
++                return;
++        }
++    }
++
+     if (m_spells.paladin.pDivineShield &&
+        (me->GetHealthPercent() < 20.0f) &&
+        (m_role != ROLE_TANK) &&
+@@ -1393,6 +1730,18 @@ void PartyBotAI::UpdateOutOfCombatAI_Shaman()
+ 
+ void PartyBotAI::UpdateInCombatAI_Shaman()
+ {
++    // Earth Shock interrupt priority (per CLASS guide: highest priority use)
++    if (Unit* pVictim = me->GetVictim())
++    {
++        if (m_spells.shaman.pEarthShock &&
++            pVictim->IsNonMeleeSpellCasted(false, false, true) &&
++            CanTryToCastSpell(pVictim, m_spells.shaman.pEarthShock))
++        {
++            if (DoCastSpell(pVictim, m_spells.shaman.pEarthShock) == SPELL_CAST_OK)
++                return;
++        }
++    }
++
+     if (m_spells.shaman.pManaTideTotem &&
+        (me->GetPowerPercent(POWER_MANA) < 50.0f) &&
+         CanTryToCastSpell(me, m_spells.shaman.pManaTideTotem))
+@@ -1518,6 +1867,15 @@ void PartyBotAI::UpdateOutOfCombatAI_Hunter()
+ 
+ void PartyBotAI::UpdateInCombatAI_Hunter()
+ {
++    // Proactive Feign Death at high threat (per CLASS guide: use at ~80%)
++    if (m_spells.hunter.pFeignDeath && me->GetVictim() &&
++        GetThreatRatio(me->GetVictim()) >= 0.80f &&
++        CanTryToCastSpell(me, m_spells.hunter.pFeignDeath))
++    {
++        if (DoCastSpell(me, m_spells.hunter.pFeignDeath) == SPELL_CAST_OK)
++            return;
++    }
++
+     if (Unit* pVictim = me->GetVictim())
+     {
+         if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
+@@ -1885,25 +2243,29 @@ void PartyBotAI::UpdateInCombatAI_Mage()
+                 return;
+         }
+ 
+-        if (m_spells.mage.pFrostbolt &&
+-            CanTryToCastSpell(pVictim, m_spells.mage.pFrostbolt))
++        // Main nukes — skip if threat is too high (wand instead)
++        if (!ShouldThrottleDPS(pVictim))
+         {
+-            if (DoCastSpell(pVictim, m_spells.mage.pFrostbolt) == SPELL_CAST_OK)
+-                return;
+-        }
++            if (m_spells.mage.pFrostbolt &&
++                CanTryToCastSpell(pVictim, m_spells.mage.pFrostbolt))
++            {
++                if (DoCastSpell(pVictim, m_spells.mage.pFrostbolt) == SPELL_CAST_OK)
++                    return;
++            }
+ 
+-        if (m_spells.mage.pFireBlast &&
+-            CanTryToCastSpell(pVictim, m_spells.mage.pFireBlast))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.mage.pFireBlast) == SPELL_CAST_OK)
+-                return;
+-        }
++            if (m_spells.mage.pFireBlast &&
++                CanTryToCastSpell(pVictim, m_spells.mage.pFireBlast))
++            {
++                if (DoCastSpell(pVictim, m_spells.mage.pFireBlast) == SPELL_CAST_OK)
++                    return;
++            }
+ 
+-        if (m_spells.mage.pFireball &&
+-            CanTryToCastSpell(pVictim, m_spells.mage.pFireball))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.mage.pFireball) == SPELL_CAST_OK)
+-                return;
++            if (m_spells.mage.pFireball &&
++                CanTryToCastSpell(pVictim, m_spells.mage.pFireball))
++            {
++                if (DoCastSpell(pVictim, m_spells.mage.pFireball) == SPELL_CAST_OK)
++                    return;
++            }
+         }
+ 
+         if (m_spells.mage.pEvocation &&
+@@ -2135,7 +2497,9 @@ void PartyBotAI::UpdateInCombatAI_Priest()
+                 return;
+         }
+ 
++        // Mind Blast: VERY HIGH threat — only use when threat is safe
+         if (m_spells.priest.pMindBlast &&
++            !ShouldThrottleDPS(pVictim) &&
+             CanTryToCastSpell(pVictim, m_spells.priest.pMindBlast))
+         {
+             if (DoCastSpell(pVictim, m_spells.priest.pMindBlast) == SPELL_CAST_OK)
+@@ -2392,7 +2756,9 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
+                 return;
+         }
+ 
++        // Shadow Bolt: only cast if threat is safe (high threat = DoTs only)
+         if (m_spells.warlock.pShadowBolt &&
++            !ShouldThrottleDPS(pVictim) &&
+             CanTryToCastSpell(pVictim, m_spells.warlock.pShadowBolt))
+         {
+             if (DoCastSpell(pVictim, m_spells.warlock.pShadowBolt) == SPELL_CAST_OK)
+@@ -2418,13 +2784,35 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
+ 
+ void PartyBotAI::UpdateOutOfCombatAI_Warrior()
+ {
+-    if (m_spells.warrior.pBattleStance &&
+-        CanTryToCastSpell(me, m_spells.warrior.pBattleStance))
++    // Tanks: stay in Defensive Stance, DPS: Battle Stance
++    if (m_role == ROLE_TANK)
+     {
+-        if (DoCastSpell(me, m_spells.warrior.pBattleStance) == SPELL_CAST_OK)
+-            return;
++        if (m_spells.warrior.pDefensiveStance &&
++            CanTryToCastSpell(me, m_spells.warrior.pDefensiveStance))
++        {
++            DoCastSpell(me, m_spells.warrior.pDefensiveStance);
++        }
++    }
++    else
++    {
++        if (m_spells.warrior.pBattleStance &&
++            CanTryToCastSpell(me, m_spells.warrior.pBattleStance))
++        {
++            if (DoCastSpell(me, m_spells.warrior.pBattleStance) == SPELL_CAST_OK)
++                return;
++        }
+     }
+ 
++    // Bloodrage before pulls to bank rage (rage decays out of combat)
++    if (m_spells.warrior.pBloodrage &&
++        me->GetPower(POWER_RAGE) < 10 &&
++        me->GetVictim() &&
++        CanTryToCastSpell(me, m_spells.warrior.pBloodrage))
++    {
++        DoCastSpell(me, m_spells.warrior.pBloodrage);
++    }
++
++    // Maintain Battle Shout
+     if (m_spells.warrior.pBattleShout &&
+        !me->HasAura(m_spells.warrior.pBattleShout->Id))
+     {
+@@ -2438,9 +2826,10 @@ void PartyBotAI::UpdateOutOfCombatAI_Warrior()
+         }
+     }
+ 
++    // Charge on pull (DPS should NOT charge — only tank)
+     if (Unit* pVictim = me->GetVictim())
+     {
+-        if (m_spells.warrior.pCharge &&
++        if (m_role == ROLE_TANK && m_spells.warrior.pCharge &&
+             CanTryToCastSpell(pVictim, m_spells.warrior.pCharge))
+         {
+             if (DoCastSpell(pVictim, m_spells.warrior.pCharge) == SPELL_CAST_OK)
+@@ -2453,6 +2842,12 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
+ {
+     if (Unit* pVictim = me->GetVictim())
+     {
++        uint32 const enemyCount = GetAttackersInRangeCount(10.0f);
++        uint32 const rage = me->GetPower(POWER_RAGE);
++        bool const hasShield = IsWearingShield(me);
++        bool const inDefStance = (me->GetShapeshiftForm() == FORM_DEFENSIVESTANCE);
++
++        // === INTERRUPT (both tank and DPS — always highest priority) ===
+         if (pVictim->IsNonMeleeSpellCasted(false, false, true))
+         {
+             if (m_spells.warrior.pPummel &&
+@@ -2461,9 +2856,7 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
+                 if (DoCastSpell(pVictim, m_spells.warrior.pPummel) == SPELL_CAST_OK)
+                     return;
+             }
+-
+-            if (m_spells.warrior.pShieldBash &&
+-                IsWearingShield(me) &&
++            if (m_spells.warrior.pShieldBash && hasShield &&
+                 CanTryToCastSpell(pVictim, m_spells.warrior.pShieldBash))
+             {
+                 if (DoCastSpell(pVictim, m_spells.warrior.pShieldBash) == SPELL_CAST_OK)
+@@ -2471,21 +2864,7 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
+             }
+         }
+ 
+-        if (m_spells.warrior.pExecute &&
+-           (pVictim->GetHealthPercent() < 20.0f) &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pExecute))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pExecute) == SPELL_CAST_OK)
+-                return;
+-        }
+-
+-        if (m_spells.warrior.pOverpower &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pOverpower))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pOverpower) == SPELL_CAST_OK)
+-                return;
+-        }
+-
++        // === EMERGENCY RESPONSES (both tank and DPS) ===
+         if (m_spells.warrior.pLastStand &&
+             me->GetHealthPercent() < 20.0f &&
+             CanTryToCastSpell(me, m_spells.warrior.pLastStand))
+@@ -2493,203 +2872,224 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
+             if (DoCastSpell(me, m_spells.warrior.pLastStand) == SPELL_CAST_OK)
+                 return;
+         }
+-
+-        if (m_spells.warrior.pConcussionBlow &&
+-           (pVictim->IsNonMeleeSpellCasted() || pVictim->IsMoving() || (me->GetHealthPercent() < 50.0f)) &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pConcussionBlow))
++        if (m_spells.warrior.pShieldWall && hasShield &&
++            me->GetHealthPercent() < 20.0f &&
++            CanTryToCastSpell(me, m_spells.warrior.pShieldWall))
+         {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pConcussionBlow) == SPELL_CAST_OK)
++            if (DoCastSpell(me, m_spells.warrior.pShieldWall) == SPELL_CAST_OK)
+                 return;
+         }
+ 
+-        if (me->GetShapeshiftForm() == FORM_DEFENSIVESTANCE &&
+-            IsWearingShield(me))
++        // ============================================================
++        // PROTECTION WARRIOR (TANK) ROTATION
++        // Per CLASS_GROUP_BEHAVIOR_GUIDE: Shield Slam > Revenge > Sunder > Shield Block
++        // ============================================================
++        if (m_role == ROLE_TANK)
+         {
+-            if (!me->GetAttackers().empty())
++            // Ensure Defensive Stance
++            if (m_spells.warrior.pDefensiveStance && !inDefStance &&
++                CanTryToCastSpell(me, m_spells.warrior.pDefensiveStance))
+             {
+-                if (m_spells.warrior.pShieldBlock &&
+-                    CanTryToCastSpell(me, m_spells.warrior.pShieldBlock))
+-                {
+-                    if (DoCastSpell(me, m_spells.warrior.pShieldBlock) == SPELL_CAST_OK)
+-                        return;
+-                }
++                DoCastSpell(me, m_spells.warrior.pDefensiveStance);
++            }
+ 
+-                if (m_spells.warrior.pShieldWall &&
+-                   (me->GetHealthPercent() < 40.0f) &&
+-                    CanTryToCastSpell(me, m_spells.warrior.pShieldWall))
++            // AoE emergency: Challenging Shout when multiple mobs are loose
++            if (m_spells.warrior.pChallengingShout && enemyCount >= 3)
++            {
++                uint8 looseMobs = 0;
++                for (auto const& pAttacker : me->GetAttackers())
++                    if (pAttacker->GetVictim() != me)
++                        looseMobs++;
++                if (looseMobs >= 2 && CanTryToCastSpell(me, m_spells.warrior.pChallengingShout))
+                 {
+-                    if (DoCastSpell(me, m_spells.warrior.pShieldWall) == SPELL_CAST_OK)
++                    if (DoCastSpell(me, m_spells.warrior.pChallengingShout) == SPELL_CAST_OK)
+                         return;
+                 }
+             }
+ 
+-            if (m_spells.warrior.pShieldSlam &&
++            // Shield Block on cooldown (guarantees Revenge procs)
++            if (m_spells.warrior.pShieldBlock && hasShield &&
++                !me->GetAttackers().empty() &&
++                CanTryToCastSpell(me, m_spells.warrior.pShieldBlock))
++            {
++                if (DoCastSpell(me, m_spells.warrior.pShieldBlock) == SPELL_CAST_OK)
++                    return;
++            }
++
++            // Priority 1: Shield Slam (highest threat per rage)
++            if (m_spells.warrior.pShieldSlam && hasShield &&
+                 CanTryToCastSpell(pVictim, m_spells.warrior.pShieldSlam))
+             {
+                 if (DoCastSpell(pVictim, m_spells.warrior.pShieldSlam) == SPELL_CAST_OK)
+                     return;
+             }
+-        }
+-
+-        if (m_spells.warrior.pThunderClap &&
+-            m_role == ROLE_TANK &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pThunderClap))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pThunderClap) == SPELL_CAST_OK)
+-                return;
+-        }
+-
+-        if (m_spells.warrior.pSunderArmor &&
+-            m_role == ROLE_TANK &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pSunderArmor))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pSunderArmor) == SPELL_CAST_OK)
+-                return;
+-        }
+ 
+-        if (m_spells.warrior.pHamstring &&
+-            pVictim->IsMoving() &&
+-           !pVictim->HasUnitState(UNIT_STATE_ROOT) &&
+-           !pVictim->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED) &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pHamstring))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pHamstring) == SPELL_CAST_OK)
+-                return;
+-        }
+-
+-        if (m_spells.warrior.pRend &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pRend))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pRend) == SPELL_CAST_OK)
+-                return;
+-        }
+-
+-        if (m_spells.warrior.pIntimidatingShout &&
+-           (me->GetHealthPercent() < 30.0f) &&
+-           (GetAttackersInRangeCount(10.0f) > 2) &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pIntimidatingShout))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pIntimidatingShout) == SPELL_CAST_OK)
+-                return;
+-        }
+-
+-        if (m_spells.warrior.pRetaliation &&
+-           (GetAttackersInRangeCount(10.0f) > 2) &&
+-            CanTryToCastSpell(me, m_spells.warrior.pRetaliation))
+-        {
+-            if (DoCastSpell(me, m_spells.warrior.pRetaliation) == SPELL_CAST_OK)
+-                return;
+-        }
+-
+-        if (m_spells.warrior.pSweepingStrikes &&
+-            CanTryToCastSpell(me, m_spells.warrior.pSweepingStrikes) &&
+-           (me->GetEnemyCountInRadiusAround(pVictim, 10.0f) > 2))
+-        {
+-            if (DoCastSpell(me, m_spells.warrior.pSweepingStrikes) == SPELL_CAST_OK)
+-                return;
+-        }
++            // Priority 2: Revenge (proc-based, very high threat, only 5 rage)
++            if (m_spells.warrior.pRevenge &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pRevenge))
++            {
++                if (DoCastSpell(pVictim, m_spells.warrior.pRevenge) == SPELL_CAST_OK)
++                    return;
++            }
+ 
+-        if (m_role != ROLE_TANK &&
+-           (me->GetHealthPercent() > 60.0f) && (pVictim->GetHealthPercent() > 40.0f) &&
+-           !me->HasUnitState(UNIT_STATE_ROOT) &&
+-           !me->IsImmuneToMechanic(MECHANIC_FEAR))
+-        {
+-            if (m_spells.warrior.pRecklessness &&
+-                CanTryToCastSpell(me, m_spells.warrior.pRecklessness))
++            // Priority 3: Sunder Armor (threat + armor debuff, apply/maintain 5 stacks)
++            if (m_spells.warrior.pSunderArmor &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pSunderArmor))
+             {
+-                if (DoCastSpell(me, m_spells.warrior.pRecklessness) == SPELL_CAST_OK)
++                if (DoCastSpell(pVictim, m_spells.warrior.pSunderArmor) == SPELL_CAST_OK)
+                     return;
+             }
+ 
+-            if (m_spells.warrior.pDeathWish &&
+-                CanTryToCastSpell(me, m_spells.warrior.pDeathWish))
++            // Demoralizing Shout (keep up — AoE threat + damage reduction)
++            if (m_spells.warrior.pDemoralizingShout &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pDemoralizingShout))
+             {
+-                if (DoCastSpell(me, m_spells.warrior.pDeathWish) == SPELL_CAST_OK)
++                if (DoCastSpell(pVictim, m_spells.warrior.pDemoralizingShout) == SPELL_CAST_OK)
+                     return;
+             }
+-        }
+ 
+-        if (m_spells.warrior.pMortalStrike &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pMortalStrike))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pMortalStrike) == SPELL_CAST_OK)
+-                return;
+-        }
++            // Battle Shout (maintain — AoE threat per buffed party member)
++            if (m_spells.warrior.pBattleShout &&
++               !me->HasAura(m_spells.warrior.pBattleShout->Id) &&
++                CanTryToCastSpell(me, m_spells.warrior.pBattleShout))
++            {
++                if (DoCastSpell(me, m_spells.warrior.pBattleShout) == SPELL_CAST_OK)
++                    return;
++            }
+ 
+-        if (m_spells.warrior.pBloodthirst &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pBloodthirst))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pBloodthirst) == SPELL_CAST_OK)
+-                return;
+-        }
++            // Concussion Blow (stun for control)
++            if (m_spells.warrior.pConcussionBlow &&
++               (pVictim->IsNonMeleeSpellCasted() || me->GetHealthPercent() < 40.0f) &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pConcussionBlow))
++            {
++                if (DoCastSpell(pVictim, m_spells.warrior.pConcussionBlow) == SPELL_CAST_OK)
++                    return;
++            }
+ 
+-        if ((me->GetHealthPercent() < 20.0f) ||
+-            (m_role == ROLE_TANK && pVictim->GetLevel() >= me->GetLevel()))
+-        {
+-            if (m_spells.warrior.pDefensiveStance &&
+-                CanTryToCastSpell(me, m_spells.warrior.pDefensiveStance))
++            // Rage dump: Heroic Strike when rage > 50 (single), Cleave (AoE)
++            if (rage > 50)
+             {
+-                DoCastSpell(me, m_spells.warrior.pDefensiveStance);
++                if (enemyCount > 1 && m_spells.warrior.pCleave &&
++                    CanTryToCastSpell(pVictim, m_spells.warrior.pCleave))
++                {
++                    if (DoCastSpell(pVictim, m_spells.warrior.pCleave) == SPELL_CAST_OK)
++                        return;
++                }
++                else if (m_spells.warrior.pHeroicStrike &&
++                    CanTryToCastSpell(pVictim, m_spells.warrior.pHeroicStrike))
++                {
++                    if (DoCastSpell(pVictim, m_spells.warrior.pHeroicStrike) == SPELL_CAST_OK)
++                        return;
++                }
+             }
+         }
++        // ============================================================
++        // ARMS/FURY WARRIOR (DPS) ROTATION
++        // Per CLASS_GROUP_BEHAVIOR_GUIDE: BT/MS > WW > Execute > HS dump
++        // ============================================================
+         else
+         {
+-            if (m_spells.warrior.pBerserkerStance &&
++            // Prefer Berserker Stance for DPS (unless low HP)
++            if (me->GetHealthPercent() < 20.0f)
++            {
++                if (m_spells.warrior.pDefensiveStance &&
++                    CanTryToCastSpell(me, m_spells.warrior.pDefensiveStance))
++                    DoCastSpell(me, m_spells.warrior.pDefensiveStance);
++            }
++            else if (m_spells.warrior.pBerserkerStance &&
+                 CanTryToCastSpell(me, m_spells.warrior.pBerserkerStance))
+             {
+                 DoCastSpell(me, m_spells.warrior.pBerserkerStance);
+             }
+-        }
+ 
+-        if (m_spells.warrior.pIntercept &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pIntercept))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pIntercept) == SPELL_CAST_OK)
+-                return;
+-        }
++            // Execute phase (target < 20% HP) — dump all rage
++            if (m_spells.warrior.pExecute &&
++                pVictim->GetHealthPercent() < 20.0f &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pExecute))
++            {
++                if (DoCastSpell(pVictim, m_spells.warrior.pExecute) == SPELL_CAST_OK)
++                    return;
++            }
+ 
+-        if (m_spells.warrior.pWhirlwind &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pWhirlwind))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pWhirlwind) == SPELL_CAST_OK)
+-                return;
+-        }
++            // DPS cooldowns
++            if (me->GetHealthPercent() > 60.0f && pVictim->GetHealthPercent() > 40.0f)
++            {
++                if (m_spells.warrior.pDeathWish &&
++                    CanTryToCastSpell(me, m_spells.warrior.pDeathWish))
++                {
++                    if (DoCastSpell(me, m_spells.warrior.pDeathWish) == SPELL_CAST_OK)
++                        return;
++                }
++                if (m_spells.warrior.pRecklessness &&
++                    CanTryToCastSpell(me, m_spells.warrior.pRecklessness))
++                {
++                    if (DoCastSpell(me, m_spells.warrior.pRecklessness) == SPELL_CAST_OK)
++                        return;
++                }
++            }
+ 
+-        if (m_spells.warrior.pDisarm &&
+-            IsMeleeWeaponClass(pVictim->GetClass()) &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pDisarm))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pDisarm) == SPELL_CAST_OK)
+-                return;
+-        }
++            // AoE: Sweeping Strikes + Whirlwind
++            if (enemyCount > 2)
++            {
++                if (m_spells.warrior.pSweepingStrikes &&
++                    CanTryToCastSpell(me, m_spells.warrior.pSweepingStrikes))
++                {
++                    if (DoCastSpell(me, m_spells.warrior.pSweepingStrikes) == SPELL_CAST_OK)
++                        return;
++                }
++            }
+ 
+-        if (m_spells.warrior.pDemoralizingShout &&
+-            m_role == ROLE_TANK &&
+-            CanTryToCastSpell(pVictim, m_spells.warrior.pDemoralizingShout))
+-        {
+-            if (DoCastSpell(pVictim, m_spells.warrior.pDemoralizingShout) == SPELL_CAST_OK)
+-                return;
+-        }
++            // Priority 1: Bloodthirst (Fury) or Mortal Strike (Arms)
++            if (m_spells.warrior.pBloodthirst &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pBloodthirst))
++            {
++                if (DoCastSpell(pVictim, m_spells.warrior.pBloodthirst) == SPELL_CAST_OK)
++                    return;
++            }
++            if (m_spells.warrior.pMortalStrike &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pMortalStrike))
++            {
++                if (DoCastSpell(pVictim, m_spells.warrior.pMortalStrike) == SPELL_CAST_OK)
++                    return;
++            }
+ 
+-        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
+-            && !me->CanReachWithMeleeAutoAttack(pVictim))
+-        {
+-            me->GetMotionMaster()->MoveChase(pVictim);
+-        }
++            // Priority 2: Whirlwind
++            if (m_spells.warrior.pWhirlwind &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pWhirlwind))
++            {
++                if (DoCastSpell(pVictim, m_spells.warrior.pWhirlwind) == SPELL_CAST_OK)
++                    return;
++            }
+ 
+-        if (me->GetPower(POWER_RAGE) > 30)
+-        {
+-            if (m_spells.warrior.pCleave && me->GetEnemyCountInRadiusAround(pVictim, 8.0f) > 1)
++            // Overpower (proc on dodge)
++            if (m_spells.warrior.pOverpower &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pOverpower))
++            {
++                if (DoCastSpell(pVictim, m_spells.warrior.pOverpower) == SPELL_CAST_OK)
++                    return;
++            }
++
++            // Hamstring (only if target is fleeing)
++            if (m_spells.warrior.pHamstring &&
++                pVictim->IsMoving() &&
++               !pVictim->HasUnitState(UNIT_STATE_ROOT) &&
++               !pVictim->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED) &&
++                CanTryToCastSpell(pVictim, m_spells.warrior.pHamstring))
++            {
++                if (DoCastSpell(pVictim, m_spells.warrior.pHamstring) == SPELL_CAST_OK)
++                    return;
++            }
++
++            // Rage dump: Heroic Strike at rage > 50 (single), Cleave (AoE)
++            if (rage > 50)
+             {
+-                if (CanTryToCastSpell(pVictim, m_spells.warrior.pCleave))
++                if (enemyCount > 1 && m_spells.warrior.pCleave &&
++                    CanTryToCastSpell(pVictim, m_spells.warrior.pCleave))
+                 {
+                     if (DoCastSpell(pVictim, m_spells.warrior.pCleave) == SPELL_CAST_OK)
+                         return;
+                 }
+-            }
+-            else
+-            {
+-                if (m_spells.warrior.pHeroicStrike &&
++                else if (m_spells.warrior.pHeroicStrike &&
+                     CanTryToCastSpell(pVictim, m_spells.warrior.pHeroicStrike))
+                 {
+                     if (DoCastSpell(pVictim, m_spells.warrior.pHeroicStrike) == SPELL_CAST_OK)
+@@ -2697,9 +3097,17 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
+                 }
+             }
+         }
++
++        // Chase if not in melee range (both tank and DPS)
++        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
++            && !me->CanReachWithMeleeAutoAttack(pVictim))
++        {
++            me->GetMotionMaster()->MoveChase(pVictim);
++        }
+     }
+     else // no victim
+     {
++        // Maintain Battle Shout
+         if (m_spells.warrior.pBattleShout &&
+             CanTryToCastSpell(me, m_spells.warrior.pBattleShout))
+         {
+@@ -2779,6 +3187,15 @@ void PartyBotAI::UpdateOutOfCombatAI_Rogue()
+ 
+ void PartyBotAI::UpdateInCombatAI_Rogue()
+ {
++    // Vanish as emergency threat dump at very high threat
++    if (m_spells.rogue.pVanish && me->GetVictim() &&
++        GetThreatRatio(me->GetVictim()) >= 0.90f &&
++        CanTryToCastSpell(me, m_spells.rogue.pVanish))
++    {
++        if (DoCastSpell(me, m_spells.rogue.pVanish) == SPELL_CAST_OK)
++            return;
++    }
++
+     if (Unit* pVictim = me->GetVictim())
+     {
+         if (me->HasAuraType(SPELL_AURA_MOD_STEALTH))
+@@ -3098,6 +3515,16 @@ void PartyBotAI::UpdateOutOfCombatAI_Druid()
+ 
+ void PartyBotAI::UpdateInCombatAI_Druid()
+ {
++    // Innervate self when mana is low (healers and balance druids)
++    if (m_spells.druid.pInnervate &&
++        me->GetShapeshiftForm() == FORM_NONE &&
++        me->GetPowerPercent(POWER_MANA) < 20.0f &&
++        CanTryToCastSpell(me, m_spells.druid.pInnervate))
++    {
++        if (DoCastSpell(me, m_spells.druid.pInnervate) == SPELL_CAST_OK)
++            return;
++    }
++
+     ShapeshiftForm const form = me->GetShapeshiftForm();
+ 
+     if (m_spells.druid.pBarkskin &&
+diff --git a/src/game/PlayerBots/PartyBotAI.h b/src/game/PlayerBots/PartyBotAI.h
+index d0f79b49a..e97c2b699 100644
+--- a/src/game/PlayerBots/PartyBotAI.h
++++ b/src/game/PlayerBots/PartyBotAI.h
+@@ -20,6 +20,34 @@
+ #include "CombatBotBaseAI.h"
+ #include "Group.h"
+ #include "ObjectAccessor.h"
++#include <unordered_map>
++#include <vector>
++
++// ============================================================
++// Boss/Encounter Override System
++// Provides per-creature behavior modifications for dungeon bosses.
++// If a BossOverride exists for the current target, it takes priority
++// over default class behavior for interrupt targets, AoE avoidance, etc.
++// ============================================================
++struct BossOverride
++{
++    uint32 creatureEntry;              // creature_template entry ID
++    std::vector<uint32> interruptSpellIds; // spells that MUST be interrupted
++    std::vector<uint32> avoidAoeSpellIds;  // spells that trigger "move out" for melee
++    float avoidAoeRange;               // how far to move from AoE
++    bool disableAoe;                   // don't use AoE abilities (breaks CC, etc.)
++    bool spreadOut;                    // don't clump (e.g., cleave bosses)
++    bool saveCooldownsForPhase;        // save DPS cooldowns for later phase
++    float cooldownPhaseHpPercent;      // HP% threshold to use cooldowns
++
++    BossOverride() : creatureEntry(0), avoidAoeRange(10.0f), disableAoe(false),
++        spreadOut(false), saveCooldownsForPhase(false), cooldownPhaseHpPercent(0.0f) {}
++};
++
++// Global boss override registry
++BossOverride const* GetBossOverride(uint32 creatureEntry);
++void InitBossOverrides();
++
+ 
+ class PartyBotAI : public CombatBotBaseAI
+ {
+@@ -60,15 +88,19 @@ public:
+     bool CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit* pTarget) const;
+     bool DrinkAndEat();
+     bool ShouldAutoRevive() const;
+-    bool IsValidDistancingTarget(Unit* pTarget, Unit* pEnemy);
+-    Unit* GetDistancingTarget(Unit* pEnemy);
+     bool RunAwayFromTarget(Unit* pEnemy);
++    Player* FindPartyTank() const;
++    float GetThreatRatio(Unit* pEnemy) const;
++    bool ShouldThrottleDPS(Unit* pEnemy) const;
+     bool CrowdControlMarkedTargets();
+     bool EnterCombatDruidForm();
+     bool ShouldEnterStealth() const;
+     bool EnterStealthIfNeeded(SpellEntry const* pStealthSpell);
+ 
+     bool CheckForDispelTargets();
++    BossOverride const* GetCurrentBossOverride() const;
++    bool HandleBossInterrupt(Unit* pVictim, BossOverride const* pOverride);
++    bool HandleBossAoeAvoidance(Unit* pVictim, BossOverride const* pOverride);
+     void UpdateInCombatAI() final;
+     void UpdateOutOfCombatAI() final;
+     void UpdateInCombatAI_Paladin() final;
+@@ -105,6 +137,8 @@ public:
+     float m_z = 0.0f;
+     float m_o = 0.0f;
+     bool m_resetSpellData = false;
++    uint32 m_combatEngageTimer = 0;
++    bool m_combatEngageDelayDone = false;
+ };
+ 
+ #endif
 diff --git a/src/game/PlayerBots/PlayerBotAI.cpp b/src/game/PlayerBots/PlayerBotAI.cpp
 index ec535488d..4c50b17b7 100644
 --- a/src/game/PlayerBots/PlayerBotAI.cpp
