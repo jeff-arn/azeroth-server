@@ -76,9 +76,24 @@ VMaNGOS configs (`mangosd.conf`, `realmd.conf`) also contain DB credentials and 
 
 The vmangos source is fully owned — no upstream relationship. Key customizations:
 - PartyBot commands downgraded from SEC_ADMINISTRATOR to SEC_MODERATOR
-- Warrior AI: Revenge, Challenging Shout, Protection Warrior rewrite
 - Boss Override Registry: interrupt spell IDs, spread mechanics, AoE avoidance for 20+ bosses
 - DPS threat throttling and combat opener logic
+
+### PartyBot AI Architecture
+
+Bot AI is split into per-class files for independent iteration:
+- `PartyBotAI.cpp` — core dispatch, boss overrides, shared utilities (1464 lines)
+- `PartyBotAI_<Class>.cpp` — one file per class (9 files)
+- `CombatBotBaseAI.h` — spell pointer structs per class
+- `CombatBotBaseAI.cpp` — spell population by name, totem/heal helpers
+
+**Class overhaul status** (tracked in GitHub issue #1):
+- **Warrior**: done (v0.4 — Protection rewrite, Revenge, Challenging Shout)
+- **Shaman**: done (Resto/Enhance/Elemental, context-aware totems, NS emergency)
+- **Priest**: done (HP-threshold healing, Prayer of Healing, Shadow threat awareness)
+- Paladin, Hunter, Mage, Warlock, Rogue, Druid: pending
+
+Research docs in `docs/` (gitignored): `CLASS_GROUP_BEHAVIOR_GUIDE.md`, `DUNGEON_RAID_GUIDE.md`, `bot_class_behavior_instructions.md`
 
 ## Bot Director
 
