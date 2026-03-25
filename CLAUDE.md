@@ -28,7 +28,8 @@ VMaNGOS-based WoW 1.12.1 private server with custom bot AI, a web dashboard, and
 │   ├── requirements.txt
 │   └── venv/                      (gitignored)
 ├── scripts/
-│   └── backup-db.sh               ← daily DB backup (cron)
+│   ├── backup-db.sh               ← daily DB backup (cron)
+│   └── release.sh                 ← version bump + tag + Discord notify
 ├── vmangos/                       ← C++ game server (owned, no upstream)
 │   ├── src/                       ← source code
 │   ├── sql/                       ← schema + migrations
@@ -52,9 +53,8 @@ All Python services use `EnvironmentFile=/home/wow/wow-private-server/.env` for 
 | Discord Bot | `azeroth-discord-bot.service` | `discord-bot/bot.py` |
 | Bot Director | `bot-director.service` | `bot-director/bot_director.py` |
 
-Game servers run in screen sessions:
-- **realmd** — port 3724
-- **mangosd** — port 8085
+| Realm Server | `azeroth-realmd.service` | `vmangos/run/bin/realmd` (port 3724) |
+| World Server | `azeroth-mangosd.service` | `vmangos/run/bin/mangosd` (port 8085) |
 
 ## Secrets
 
@@ -102,6 +102,38 @@ Runs every 2 minutes. Assigns bots to zones based on player locations:
 | `GET /api/raids` | Raid analytics |
 
 Player vs bot distinction: account ID < 100 = human, >= 100 = bot.
+
+## Commits and Versioning
+
+Uses [commitizen](https://commitizen-tools.github.io/commitizen/) conventional commit format:
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+```
+
+**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
+
+**Scopes**: `vmangos`, `dashboard`, `discord-bot`, `bot-director`, `scripts`, `db`
+
+**Version bumps** (current: v0.4.x):
+- `fix` commit → patch bump (+0.0.1), git tag, Discord release notes
+- `feat` commit → minor bump (+0.1.0), git tag, Discord release notes
+- All other types → no version bump
+- Major bumps only when explicitly requested
+
+**Releasing**:
+```bash
+scripts/release.sh              # auto-detect bump from commits
+scripts/release.sh patch        # force patch bump
+scripts/release.sh minor        # force minor bump
+scripts/release.sh --dry-run    # preview without doing anything
+```
+
+The script tags, then posts release notes to the Discord #patch-notes channel. Push tags after: `git push origin main --tags`
 
 ## Common Commands
 
