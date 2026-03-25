@@ -100,6 +100,29 @@ Bot AI is split into per-class files for independent iteration:
 
 Research docs in `docs/` (gitignored): `CLASS_GROUP_BEHAVIOR_GUIDE.md`, `DUNGEON_RAID_GUIDE.md`, `bot_class_behavior_instructions.md`
 
+### Bot Social & Services Architecture
+
+Bot social behavior and tradeskill services are managed by two singletons:
+- `BotChatManager` — trade chat advertising (rotation-based, frequency-scaled) and keyword-matched whisper responses
+- `BotServiceMgr` — stateful service interactions (portal, enchant, transmute, mooncloth)
+
+**Service flow**: player whispers bot → bot asks clarifying questions → bot says "trade me" → player initiates trade → bot auto-accepts → service delivered (portal cast, enchant applied, etc.)
+
+**Config** (`mangosd.conf`): `BotChat.Enable`, `BotChat.TradeChat.IntervalMin/Max`, `BotService.Enable`
+
+### Auction House Bot
+
+Realistic AH pricing model in `AuctionHouseBotMgr`:
+- **Farmability-weighted selection**: items appear proportional to how farmable they are in-game
+- **Category quotas**: trade goods 35-40%, crafting 15-20%, consumables 20-25%, recipes 3-5%, equipment 5-10%, leveling 10-15%
+- **Simulated sellers**: 12 fake seller identities (account 99) with 4 archetypes (casual/dedicated/crafter/opportunist), each with distinct pricing behavior
+- **Price jitter**: ±10-20% per listing around base price
+- **72-hour refresh cycle**: full wipe + re-simulation of all bot listings
+- **Bot buyers**: scan player auctions every 30min, purchase probability based on price vs fair market value (0% for absurd prices, 80-95% for fair prices), 50g budget per cycle
+
+**Config** (`mangosd.conf`): `AHBot.Enable`, `AHBot.itemcount`, `AHBot.RefreshInterval`, `AHBot.Buyer.*`
+**DB table**: `world.auctionhousebot` (item, min_stack, max_stack, bid, buyout, weight, category, price_variance_pct)
+
 ## Bot Director
 
 Runs every 2 minutes. Assigns bots to zones based on player locations:
