@@ -91,7 +91,12 @@ Bot AI is split into per-class files for independent iteration:
 - **Warrior**: done (v0.4 — Protection rewrite, Revenge, Challenging Shout)
 - **Shaman**: done (Resto/Enhance/Elemental, context-aware totems, NS emergency)
 - **Priest**: done (HP-threshold healing, Prayer of Healing, Shadow threat awareness)
-- Paladin, Hunter, Mage, Warlock, Rogue, Druid: pending
+- **Paladin**: done (intelligent blessing selection, Holy/Prot/Ret role-aware, Cleanse priority)
+- **Hunter**: done (shot weaving, Freezing Trap CC, Feign Death threat, Aspect swapping)
+- **Mage**: done (Counterspell priority, Polymorph CC maintenance, Evocation safety)
+- **Warlock**: done (curse priority system, Life Tap safety, Banish CC, no Searing Pain)
+- **Rogue**: done (deterministic SnD>Evisc finishers, Feint threat, Kick priority)
+- **Druid**: done (Rebirth combat rez, Innervate on healers, Bear offtank, Faerie Fire uptime)
 
 Research docs in `docs/` (gitignored): `CLASS_GROUP_BEHAVIOR_GUIDE.md`, `DUNGEON_RAID_GUIDE.md`, `bot_class_behavior_instructions.md`
 
