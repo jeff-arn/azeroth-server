@@ -205,6 +205,7 @@ set (game_SRCS
     PlayerBots/PlayerBotAI.cpp
     PlayerBots/PlayerBotMgr.cpp
     PlayerBots/BotChatManager.cpp
+    PlayerBots/BotServiceMgr.cpp
     Server/Protocol/Opcodes.cpp
     Server/WorldSession.cpp
     Server/WorldSocket.cpp

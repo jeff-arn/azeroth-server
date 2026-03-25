@@ -33,6 +33,7 @@
 #include "Map.h"
 #include "TradeData.h"
 #include "TransactionLog.h"
+#include "PlayerBots/BotServiceMgr.h"
 
 void WorldSession::SendTradeStatus(TradeStatus status)
 {
@@ -539,6 +540,25 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& recvPacket)
 
         if (his_spell)
             his_spell->prepare(std::move(his_targets));
+
+        // Notify bot service manager if a bot was involved in this trade.
+        // Check both sides: either _player or trader could be the bot.
+        {
+            uint32 playerAcctId = _player->GetSession() ? _player->GetSession()->GetAccountId() : 0;
+            uint32 traderAcctId = trader->GetSession() ? trader->GetSession()->GetAccountId() : 0;
+            // Bot accounts are >= 100. The gold the bot received is what
+            // the human player put up (from the human's trade side).
+            if (traderAcctId >= 100 && playerAcctId < 100)
+            {
+                // trader is bot, _player is human. Bot received my_trade money.
+                sBotServiceMgr.OnTradeCompleted(trader, _player, my_trade->GetMoney());
+            }
+            else if (playerAcctId >= 100 && traderAcctId < 100)
+            {
+                // _player is bot, trader is human. Bot received his_trade money.
+                sBotServiceMgr.OnTradeCompleted(_player, trader, his_trade->GetMoney());
+            }
+        }
 
         // cleanup
         clearAcceptTradeMode(my_trade, his_trade);

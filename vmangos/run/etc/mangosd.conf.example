@@ -2986,6 +2986,17 @@ BotChat.TradeChat.IntervalMin = 120
 BotChat.TradeChat.IntervalMax = 300
 
 ###################################################################################################################
+# BOT SERVICES
+#
+#    BotService.Enable
+#        Enable bot tradeskill/portal services (mage portals, future: enchanting, transmutes).
+#        Bots respond to whisper requests, accept trade with tip, and deliver the service.
+#        Default: 1 - on
+#
+###################################################################################################################
+BotService.Enable = 1
+
+###################################################################################################################
 # PLAYER BOTS
 #
 #    RandomBot.Enable

@@ -140,6 +140,9 @@ public:
     bool m_resetSpellData = false;
     uint32 m_combatEngageTimer = 0;
     bool m_combatEngageDelayDone = false;
+
+    // Trade service support (portal tips, etc.)
+    uint32 m_pendingTradeAcceptTimer = 0;
 };
 
 #endif

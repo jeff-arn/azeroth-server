@@ -15,6 +15,7 @@
 */
 
 #include "PartyBotAI.h"
+#include "BotServiceMgr.h"
 #include "Player.h"
 #include "CreatureAI.h"
 #include "MotionMaster.h"
@@ -26,6 +27,7 @@
 #include "Spell.h"
 #include "SpellAuras.h"
 #include "Chat.h"
+#include "TradeData.h"
 #include <random>
 
 enum PartyBotSpells
@@ -853,6 +855,57 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
             me->GetSession()->QueuePacket(std::move(data));
             return;
         }
+        case SMSG_TRADE_STATUS:
+        {
+            // A player initiated trade with this bot.
+            // Read the trade status from the packet.
+            WorldPacket pktCopy(*packet);
+            uint32 status;
+            pktCopy >> status;
+
+            if (status == TRADE_STATUS_BEGIN_TRADE)
+            {
+                // Check if we have a pending service request with this trader.
+                if (me->GetTradeData())
+                {
+                    Player* trader = me->GetTradeData()->GetTrader();
+                    if (trader && sBotServiceMgr.ShouldAcceptTrade(me, trader))
+                    {
+                        // Accept the trade initiation (open trade window).
+                        std::unique_ptr<WorldPacket> beginData =
+                            std::make_unique<WorldPacket>(CMSG_BEGIN_TRADE, 0);
+                        me->GetSession()->QueuePacket(std::move(beginData));
+                        m_pendingTradeAcceptTimer = 2000; // accept after 2s delay
+                    }
+                    else
+                    {
+                        // No pending service — decline trade.
+                        me->TradeCancel(true, TRADE_STATUS_BUSY);
+                    }
+                }
+            }
+            else if (status == TRADE_STATUS_TRADE_ACCEPT)
+            {
+                // The other player accepted. If we haven't yet, accept now.
+                if (me->GetTradeData() && !me->GetTradeData()->IsAccepted())
+                {
+                    std::unique_ptr<WorldPacket> acceptData =
+                        std::make_unique<WorldPacket>(CMSG_ACCEPT_TRADE, 4);
+                    *acceptData << uint32(1);
+                    me->GetSession()->QueuePacket(std::move(acceptData));
+                }
+            }
+            else if (status == TRADE_STATUS_TRADE_COMPLETE)
+            {
+                // Trade completed — deliver the service.
+                // Gold was already transferred by the trade system.
+                // We need to figure out how much gold we received.
+                // The service manager tracks the request and will deliver.
+                // Note: the trade data is already cleaned up at this point,
+                // so we fire the completion from the timer-based check.
+            }
+            return;
+        }
     }
 
     CombatBotBaseAI::OnPacketReceived(packet);
@@ -866,6 +919,24 @@ void PartyBotAI::OnPlayerLogin()
 
 void PartyBotAI::UpdateAI(uint32 const diff)
 {
+    // Handle pending trade accept timer (for service trades like portals).
+    if (m_pendingTradeAcceptTimer)
+    {
+        if (m_pendingTradeAcceptTimer <= diff)
+        {
+            m_pendingTradeAcceptTimer = 0;
+            if (me->GetTradeData() && !me->GetTradeData()->IsAccepted())
+            {
+                std::unique_ptr<WorldPacket> acceptData =
+                    std::make_unique<WorldPacket>(CMSG_ACCEPT_TRADE, 4);
+                *acceptData << uint32(1);
+                me->GetSession()->QueuePacket(std::move(acceptData));
+            }
+        }
+        else
+            m_pendingTradeAcceptTimer -= diff;
+    }
+
     m_updateTimer.Update(diff);
     if (m_updateTimer.Passed())
         m_updateTimer.Reset(PB_UPDATE_INTERVAL);

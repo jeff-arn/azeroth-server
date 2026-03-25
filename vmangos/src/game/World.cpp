@@ -68,6 +68,7 @@
 #include "AutoBroadCastMgr.h"
 #include "AuctionHouseBotMgr.h"
 #include "BotChatManager.h"
+#include "BotServiceMgr.h"
 #include "Transports/TransportMgr.h"
 #include "PlayerBotMgr.h"
 #include "ZoneScriptMgr.h"
@@ -1835,6 +1836,9 @@ void World::SetInitialWorldSettings()
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading bot chat manager");
     sBotChatMgr.Load();
 
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading bot service manager");
+    sBotServiceMgr.Load();
+
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Caching player phases (obsolete)");
     sObjectMgr.LoadPlayerPhaseFromDb();
 
@@ -2003,6 +2007,7 @@ void World::Update(uint32 diff)
 
         sAuctionHouseBotMgr.Update();
         sBotChatMgr.Update(m_timers[WUPDATE_AUCTIONS].GetInterval());
+        sBotServiceMgr.Update(m_timers[WUPDATE_AUCTIONS].GetInterval());
         // Handle expired auctions
         sAuctionMgr.Update();
     }

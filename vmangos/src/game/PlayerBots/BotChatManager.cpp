@@ -1,4 +1,5 @@
 #include "BotChatManager.h"
+#include "BotServiceMgr.h"
 #include "Policies/SingletonImp.h"
 #include "Player.h"
 #include "ObjectAccessor.h"
@@ -227,6 +228,21 @@ const char* BotChatManager::PickTradeMessage(Player* bot) const
     if (level < 40)
         return TRADE_MESSAGES_LOWLEVEL[urand(0, TRADE_LOWLEVEL_COUNT - 1)];
 
+    // Mage bots sometimes advertise portals specifically.
+    if (bot->GetClass() == CLASS_MAGE && urand(1, 100) <= 50)
+    {
+        // Extern declarations for portal trade messages in BotServiceMgr.cpp
+        extern const char* TRADE_MESSAGES_PORTALS[];
+        extern const uint32 TRADE_PORTALS_COUNT;
+        extern const char* TRADE_MESSAGES_PORTALS_HORDE[];
+        extern const uint32 TRADE_PORTALS_HORDE_COUNT;
+
+        if (bot->GetTeam() == ALLIANCE)
+            return TRADE_MESSAGES_PORTALS[urand(0, TRADE_PORTALS_COUNT - 1)];
+        else
+            return TRADE_MESSAGES_PORTALS_HORDE[urand(0, TRADE_PORTALS_HORDE_COUNT - 1)];
+    }
+
     // Level 60 bots use a weighted mix of message types.
     uint32 roll = urand(1, 100);
     if (roll <= 40)
@@ -248,6 +264,11 @@ bool BotChatManager::HandleWhisper(Player* bot, ObjectGuid senderGuid, const std
     if (!m_enabled || !bot)
         return false;
 
+    // Route to service manager first (portal requests, enchants, etc.)
+    if (sBotServiceMgr.HandleServiceWhisper(bot, senderGuid, message))
+        return true;
+
+    // Generic whisper response.
     const char* response = PickWhisperResponse(message);
     SendWhisperToPlayer(bot, senderGuid, response);
     return true;
