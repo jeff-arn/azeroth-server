@@ -570,6 +570,27 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.shaman.pManaTideTotem))
                         m_spells.shaman.pManaTideTotem = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Nature's Swiftness") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.shaman.pNaturesSwiftness))
+                        m_spells.shaman.pNaturesSwiftness = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Healing Wave") != std::string::npos &&
+                         pSpellEntry->SpellName[0].find("Lesser") == std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.shaman.pHealingWave))
+                        m_spells.shaman.pHealingWave = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Lesser Healing Wave") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.shaman.pLesserHealingWave))
+                        m_spells.shaman.pLesserHealingWave = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Chain Heal") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.shaman.pChainHeal))
+                        m_spells.shaman.pChainHeal = pSpellEntry;
+                }
                 break;
             }
             case CLASS_HUNTER:
@@ -1750,6 +1771,18 @@ void CombatBotBaseAI::PopulateSpellData()
                 waterTotems.push_back(pPoisonCleansingTotem);
             if (!waterTotems.empty())
                 m_spells.shaman.pWaterTotem = SelectRandomContainerElement(waterTotems);
+
+            // Store individual totem pointers for context-aware selection
+            m_spells.shaman.pWindfuryTotem = pWindfuryTotem;
+            m_spells.shaman.pManaSpringTotem = pManaSpringTotem;
+            m_spells.shaman.pHealingStreamTotem = pHealingStreamTotem;
+            m_spells.shaman.pStrengthOfEarthTotem = pStrengthOfEarthTotem;
+            m_spells.shaman.pSearingTotem = pSearingTotem;
+            m_spells.shaman.pTremorTotem = pTremorTotem;
+            m_spells.shaman.pStoneclawTotem = pStoneclawtotem;
+            m_spells.shaman.pEarthbindTotem = pEarthbindTotem;
+            m_spells.shaman.pPoisonCleansingTotem = pPoisonCleansingTotem;
+            m_spells.shaman.pTranquilAirTotem = pTranquilAirTotem;
 
             if (pWindfuryWeapon && m_role == ROLE_MELEE_DPS)
                 m_spells.shaman.pWeaponBuff = pWindfuryWeapon;

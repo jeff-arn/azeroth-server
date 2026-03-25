@@ -107,6 +107,7 @@ public:
     void UpdateOutOfCombatAI_Paladin() final;
     void UpdateInCombatAI_Shaman() final;
     void UpdateOutOfCombatAI_Shaman() final;
+    bool SummonShamanTotemsContext();
     void UpdateInCombatAI_Hunter() final;
     void UpdateOutOfCombatAI_Hunter() final;
     void UpdateInCombatAI_Mage() final;
