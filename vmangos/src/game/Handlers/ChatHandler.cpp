@@ -40,6 +40,7 @@
 #include "CellImpl.h"
 #include "Anticheat.h"
 #include "AccountMgr.h"
+#include "BotChatManager.h"
 
 bool WorldSession::CheckChatMessageValidity(char* msg, uint32 lang, uint32 msgType)
 {
@@ -519,6 +520,10 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
 
                 if (masterPlr->IsGameMaster() || allowSendWhisper)
                     masterPlr->Whisper(msg, lang, player);
+
+                // Bot whisper response: if target is a bot, generate a reply.
+                if (toPlayer->GetSession()->GetAccountId() >= 100)
+                    sBotChatMgr.HandleWhisper(toPlayer, masterPlr->GetObjectGuid(), msg);
 
                 if (lang != LANG_ADDON)
                 {

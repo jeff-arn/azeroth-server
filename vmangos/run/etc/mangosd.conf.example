@@ -2969,6 +2969,23 @@ AHBot.Quota.Leveling.Min = 10
 AHBot.Quota.Leveling.Max = 15
 
 ###################################################################################################################
+# BOT CHAT
+#
+#    BotChat.Enable
+#        Enable bot social chat behavior (trade chat advertising, whisper responses).
+#        Default: 1 - on
+#
+#    BotChat.TradeChat.IntervalMin / IntervalMax
+#        Seconds between trade chat messages from bots.
+#        A random interval between min and max is chosen after each message.
+#        Default: 120 / 300 (2-5 minutes)
+#
+###################################################################################################################
+BotChat.Enable = 1
+BotChat.TradeChat.IntervalMin = 120
+BotChat.TradeChat.IntervalMax = 300
+
+###################################################################################################################
 # PLAYER BOTS
 #
 #    RandomBot.Enable
