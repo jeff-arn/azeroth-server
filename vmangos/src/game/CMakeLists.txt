@@ -190,6 +190,15 @@ set (game_SRCS
     PacketBroadcast/MovementBroadcaster.cpp
     PacketBroadcast/PlayerBroadcaster.cpp
     PlayerBots/PartyBotAI.cpp
+    PlayerBots/PartyBotAI_Druid.cpp
+    PlayerBots/PartyBotAI_Hunter.cpp
+    PlayerBots/PartyBotAI_Mage.cpp
+    PlayerBots/PartyBotAI_Paladin.cpp
+    PlayerBots/PartyBotAI_Priest.cpp
+    PlayerBots/PartyBotAI_Rogue.cpp
+    PlayerBots/PartyBotAI_Shaman.cpp
+    PlayerBots/PartyBotAI_Warlock.cpp
+    PlayerBots/PartyBotAI_Warrior.cpp
     PlayerBots/CombatBotBaseAI.cpp
     PlayerBots/BattleBotAI.cpp
     PlayerBots/BattleBotWaypoints.cpp

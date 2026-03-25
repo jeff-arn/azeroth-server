@@ -35,6 +35,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# ============ Reference docs ============
+docs/
+
 # ============ IDE / editor ============
 .vscode/
 .vscode-server/
