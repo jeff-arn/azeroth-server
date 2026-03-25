@@ -2036,6 +2036,28 @@ bool ChatHandler::HandleBattleBotShowAllPathsCommand(char* args)
 
 #include "GuildBotMgr.h"
 
+bool ChatHandler::HandleGuildRaidFillCommand(char* args)
+{
+    Player* pPlayer = m_session->GetPlayer();
+    if (!pPlayer)
+        return false;
+
+    if (!sGuildBotMgr.IsEnabled())
+    {
+        SendSysMessage("Guild bot system is disabled.");
+        return true;
+    }
+
+    sGuildBotMgr.DetectAndPopulateGuild();
+
+    if (sGuildBotMgr.GetGuildId() == 0)
+        SendSysMessage("No guild found. Create a guild first using a Guild Charter.");
+    else
+        PSendSysMessage("Guild roster populated. %u bots in roster.", (uint32)sGuildBotMgr.GetRoster().size());
+
+    return true;
+}
+
 bool ChatHandler::HandleGuildRaidAssembleCommand(char* args)
 {
     Player* pPlayer = m_session->GetPlayer();

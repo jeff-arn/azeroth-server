@@ -93,6 +93,7 @@ ChatCommand * ChatHandler::getCommandTable()
 
     static ChatCommand guildRaidCommandTable[] =
     {
+        { "fill",       SEC_MODERATOR,        false, &ChatHandler::HandleGuildRaidFillCommand,        "", nullptr },
         { "assemble",   SEC_MODERATOR,        false, &ChatHandler::HandleGuildRaidAssembleCommand,    "", nullptr },
         { "disband",    SEC_MODERATOR,        false, &ChatHandler::HandleGuildRaidDisbandCommand,     "", nullptr },
         { "check",      SEC_MODERATOR,        false, &ChatHandler::HandleGuildRaidCheckCommand,       "", nullptr },

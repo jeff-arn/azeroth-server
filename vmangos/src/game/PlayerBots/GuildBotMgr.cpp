@@ -247,6 +247,11 @@ uint32 GuildBotMgr::GetOnlineGuildBotCount() const
     return count;
 }
 
+void GuildBotMgr::DetectAndPopulateGuild()
+{
+    DetectPlayerGuild();
+}
+
 // --- Raid Assembly ---
 
 bool GuildBotMgr::AssembleRaid(Player* pLeader)

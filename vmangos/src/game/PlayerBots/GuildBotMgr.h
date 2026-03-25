@@ -82,6 +82,7 @@ public:
     // Guild info
     uint32 GetGuildId() const { return m_guildId; }
     bool IsGuildBot(uint32 guid) const;
+    void DetectAndPopulateGuild();
 
     // Config
     bool IsEnabled() const { return m_enabled; }
