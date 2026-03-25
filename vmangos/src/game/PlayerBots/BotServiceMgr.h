@@ -7,6 +7,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 #include <ctime>
 
 class Player;
@@ -25,19 +26,41 @@ enum PortalSpellId : uint32
 };
 
 // ============================================================================
+// Enchant definitions — spell ID, keyword, tip tier.
+// ============================================================================
+enum EnchantTipTier : uint8
+{
+    ENCHANT_TIP_COMMON   = 0,  // 0-1g (trainer-learned)
+    ENCHANT_TIP_MIDTIER  = 1,  // 2-5g (rep-gated/uncommon)
+    ENCHANT_TIP_RARE     = 2,  // 5-10g (world drop, e.g., Crusader)
+    ENCHANT_TIP_ULTRARARE = 3, // 10-20g (very rare, e.g., +30 SP, +55 Healing)
+};
+
+struct EnchantDefinition
+{
+    uint32 spellId;
+    const char* keyword;       // match in whisper (e.g., "crusader")
+    const char* displayName;   // friendly name for bot responses
+    EnchantTipTier tipTier;
+    bool isRareRecipe;         // not all bots know this
+};
+
+// ============================================================================
 // Service request types.
 // ============================================================================
 enum BotServiceType : uint8
 {
-    BOT_SERVICE_NONE    = 0,
-    BOT_SERVICE_PORTAL  = 1,
-    // Future: BOT_SERVICE_ENCHANT, BOT_SERVICE_TRANSMUTE, etc.
+    BOT_SERVICE_NONE      = 0,
+    BOT_SERVICE_PORTAL    = 1,
+    BOT_SERVICE_ENCHANT   = 2,
+    BOT_SERVICE_TRANSMUTE = 3,
+    BOT_SERVICE_MOONCLOTH = 4,
 };
 
 enum BotServiceState : uint8
 {
-    SERVICE_STATE_ASKED_DESTINATION = 0,  // Bot asked "which city?"
-    SERVICE_STATE_WAITING_FOR_TRADE = 1,  // Bot said "meet me, 1g"
+    SERVICE_STATE_ASKED_DESTINATION = 0,  // Bot asked "which city?" / "which enchant?"
+    SERVICE_STATE_WAITING_FOR_TRADE = 1,  // Bot said "trade me"
     SERVICE_STATE_TRADE_IN_PROGRESS = 2,  // Trade window open
     SERVICE_STATE_COMPLETE          = 3,  // Service delivered
 };
@@ -48,12 +71,15 @@ struct BotServiceRequest
     ObjectGuid botGuid;
     BotServiceType serviceType;
     BotServiceState state;
-    uint32 portalSpellId;      // which portal to cast
+    uint32 spellId;            // portal spell, enchant spell, or transmute spell
     time_t createdAt;
     time_t lastUpdate;
 
-    static constexpr uint32 PORTAL_TIP_MIN = 10000;  // 1g minimum tip in copper
-    static constexpr uint32 TIMEOUT_SECS   = 300;    // 5 min timeout
+    static constexpr uint32 PORTAL_TIP_MIN    = 10000;   // 1g in copper
+    static constexpr uint32 ENCHANT_TIP_MIN   = 10000;   // 1g minimum
+    static constexpr uint32 TRANSMUTE_TIP_MIN = 20000;   // 2g minimum
+    static constexpr uint32 MOONCLOTH_TIP_MIN = 20000;   // 2g minimum
+    static constexpr uint32 TIMEOUT_SECS      = 300;     // 5 min timeout
 };
 
 // ============================================================================
@@ -81,32 +107,43 @@ public:
     // Returns true if the bot should accept (has a pending service).
     bool ShouldAcceptTrade(Player* bot, Player* player);
 
+    // Called when the trade window is open and the bot should set up its side.
+    // For enchanting, this sets the enchant spell on the bot's trade data.
+    void OnTradeWindowOpen(Player* bot, Player* player);
+
     // Called after a trade with a bot completes successfully.
-    // Delivers the service (casts portal, etc.)
+    // Delivers the service (casts portal, gives transmute product, etc.)
     void OnTradeCompleted(Player* bot, Player* player, uint32 goldReceived);
 
     // === Query ===
 
-    // Returns the pending request for this bot+player pair, or nullptr.
     BotServiceRequest* GetPendingRequest(ObjectGuid botGuid, ObjectGuid playerGuid);
 
-    // Is this bot a mage that can provide portal services?
+    // Bot class checks.
     static bool IsMageBot(Player* bot);
+    static bool IsEnchanterBot(Player* bot);
+    static bool IsAlchemistBot(Player* bot);
+    static bool IsTailorBot(Player* bot);
 
 private:
-    // Resolve portal destination from player's whisper text.
+    // === Portal helpers ===
     uint32 ResolvePortalSpell(Player* bot, const std::string& message) const;
-
-    // Send a whisper from bot to player.
-    void BotWhisper(Player* bot, ObjectGuid targetGuid, const char* message);
-
-    // Cast portal and clean up.
     void DeliverPortal(Player* bot, Player* player, uint32 spellId);
 
-    // Clean up expired requests.
+    // === Enchant helpers ===
+    EnchantDefinition const* ResolveEnchant(const std::string& message) const;
+    bool BotKnowsEnchant(Player* bot, EnchantDefinition const* enchant) const;
+    void DeliverEnchant(Player* bot, Player* player, uint32 spellId);
+    uint32 GetEnchantTipMin(EnchantTipTier tier) const;
+
+    // === Transmute/Mooncloth helpers ===
+    void DeliverTransmute(Player* bot, Player* player);
+    void DeliverMooncloth(Player* bot, Player* player);
+
+    // === Shared helpers ===
+    void BotWhisper(Player* bot, ObjectGuid targetGuid, const char* message);
     void CleanupExpiredRequests();
 
-    // Key: botGuid.GetCounter() ^ playerGuid.GetCounter() (unique pair)
     using RequestKey = uint64;
     static RequestKey MakeKey(ObjectGuid botGuid, ObjectGuid playerGuid);
 

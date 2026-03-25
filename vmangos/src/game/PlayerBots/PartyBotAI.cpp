@@ -884,6 +884,16 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
                     }
                 }
             }
+            else if (status == TRADE_STATUS_OPEN_WINDOW)
+            {
+                // Trade window is now open. Set up bot's side (e.g., enchant spell).
+                if (me->GetTradeData())
+                {
+                    Player* trader = me->GetTradeData()->GetTrader();
+                    if (trader)
+                        sBotServiceMgr.OnTradeWindowOpen(me, trader);
+                }
+            }
             else if (status == TRADE_STATUS_TRADE_ACCEPT)
             {
                 // The other player accepted. If we haven't yet, accept now.
