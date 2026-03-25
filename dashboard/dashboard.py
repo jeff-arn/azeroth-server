@@ -1,13 +1,16 @@
 """Azeroth Private Server Dashboard — Flask backend."""
 
+import functools
+import hashlib
 import os
 import re
 import subprocess
 
 import mysql.connector
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(32))
 
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "127.0.0.1"),
@@ -370,6 +373,152 @@ def api_bots():
         return jsonify({"total_online": 0, "by_zone": []})
 
 
+# ============================================================================
+# Authentication — SRP6 password verification against realmd.account
+# ============================================================================
+
+# WoW 1.12 SRP6 constants
+SRP6_N = int("894B645E89E1535BBDAD5B8B290650530801B18EBFBF5E8FAB3C82872A3E9BB7", 16)
+SRP6_g = 7
+
+
+def _verify_srp6_password(username, password, s_hex, v_hex):
+    """Verify password against stored SRP6 salt and verifier."""
+    username = username.upper()
+    password = password.upper()
+
+    # SHA1(USERNAME:PASSWORD) -> bytes
+    identity_hash = hashlib.sha1(f"{username}:{password}".encode()).digest()
+
+    # Reverse to little-endian (matching vmangos BigNumber byte order)
+    identity_reversed = identity_hash[::-1]
+
+    # Salt: hex string -> int -> little-endian bytes (32 bytes)
+    s_int = int(s_hex, 16)
+    s_bytes = s_int.to_bytes(32, byteorder="little")
+
+    # x = SHA1(salt_bytes || identity_reversed)
+    x_hash = hashlib.sha1(s_bytes + identity_reversed).digest()
+    # Convert from little-endian bytes to int
+    x = int.from_bytes(x_hash, byteorder="little")
+
+    # v = g^x mod N
+    computed_v = pow(SRP6_g, x, SRP6_N)
+
+    # Compare against stored verifier
+    stored_v = int(v_hex, 16)
+    return computed_v == stored_v
+
+
+def authenticate_user(username, password):
+    """Check credentials against realmd.account. Returns account dict or None."""
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG, database="realmd")
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, username, gmlevel, v, s FROM account WHERE username = %s",
+            (username.upper(),),
+        )
+        account = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not account:
+            return None
+
+        if not _verify_srp6_password(username, password, account["s"], account["v"]):
+            return None
+
+        return account
+    except Exception:
+        return None
+
+
+def get_user_guild_info(account_id):
+    """Get the logged-in user's guild membership and rank."""
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG, database="characters")
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """SELECT gm.guild_id, gm.rank, c.guid, c.name AS char_name
+               FROM characters c
+               JOIN guild_member gm ON c.guid = gm.guid
+               WHERE c.account = %s
+               LIMIT 1""",
+            (account_id,),
+        )
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return result
+    except Exception:
+        return None
+
+
+def login_required(f):
+    """Decorator: redirect to login if not authenticated."""
+
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if "account_id" not in session:
+            return redirect(url_for("login", next=request.path))
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def guild_write_required(f):
+    """Decorator: require guild master (rank 0) or officer (rank 1) for write ops."""
+
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if "account_id" not in session:
+            return jsonify({"error": "Not authenticated"}), 401
+        guild_rank = session.get("guild_rank")
+        if guild_rank is None or guild_rank > 1:
+            return jsonify({"error": "Insufficient guild rank"}), 403
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        account = authenticate_user(username, password)
+        if account:
+            session["account_id"] = account["id"]
+            session["username"] = account["username"]
+            session["gmlevel"] = account["gmlevel"]
+
+            # Load guild info
+            guild_info = get_user_guild_info(account["id"])
+            if guild_info:
+                session["guild_id"] = guild_info["guild_id"]
+                session["guild_rank"] = guild_info["rank"]
+                session["char_name"] = guild_info["char_name"]
+            else:
+                session["guild_id"] = None
+                session["guild_rank"] = None
+                session["char_name"] = account["username"]
+
+            next_url = request.args.get("next", url_for("guild_page"))
+            return redirect(next_url)
+        else:
+            error = "Invalid username or password."
+
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("index"))
+
+
 SLOT_NAMES = {
     0: "Head",
     1: "Neck",
@@ -394,8 +543,14 @@ SLOT_NAMES = {
 
 
 @app.route("/guild")
+@login_required
 def guild_page():
-    return render_template("guild.html")
+    can_edit = session.get("guild_rank") is not None and session.get("guild_rank") <= 1
+    return render_template(
+        "guild.html",
+        char_name=session.get("char_name", ""),
+        can_edit=can_edit,
+    )
 
 
 @app.route("/api/guild/roster")
@@ -512,6 +667,7 @@ def api_guild_bot_detail(guid):
 
 
 @app.route("/api/guild/bot/<int:guid>/spec", methods=["POST"])
+@guild_write_required
 def api_guild_bot_update_spec(guid):
     try:
         data = request.get_json()
@@ -550,6 +706,7 @@ def api_guild_bot_update_spec(guid):
 
 
 @app.route("/api/guild/raid-plan", methods=["POST"])
+@guild_write_required
 def api_guild_raid_plan():
     try:
         data = request.get_json()
