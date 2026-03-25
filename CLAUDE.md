@@ -132,17 +132,43 @@ Runs every 2 minutes. Assigns bots to zones based on player locations:
 - No bots when no players are online
 - Bot GUIDs: Horde 33-52, Alliance city 53-72, Alliance world 73-92
 
+### Guild Bot System
+
+Persistent guild "Vanguard of Azeroth" with 20 bots (expandable to 40) managed by `GuildBotMgr` singleton:
+- **Roster**: 2 tanks, 5 healers, 13 DPS across all classes, stored in `guild_bot_roster` table
+- **Gear persistence**: bots equip and save gear via standard `character_inventory` / `item_instance` tables
+- **Spec-aware upgrades**: `guild_bot_spec_weights` table drives item comparison using stat weights per class/spec
+- **Loot integration**: guild bots roll Need on upgrades during Group Loot, but always defer to human players. Never roll Greed.
+- **Raid lockouts**: vanilla-authentic — guild bots get locked to raid instances like real players
+- **Guild chat**: bots chat in /g on a timer (5-15min configurable) with idle banter
+
+**Guild bot account**: 98, GUIDs 200-219
+
+**In-game commands** (SEC_MODERATOR):
+- `.guildraid assemble` — spawn all raid-assigned guild bots
+- `.guildraid disband` — dismiss all guild bots
+- `.guildraid check` — show raid composition and buff coverage
+- `.guildraid roster` — list all guild bots with class, spec, role, gear score
+- `.guildraid botinfo <name>` — inspect a specific bot
+
+**Config** (`mangosd.conf`): `GuildBot.Enable`, `GuildBot.AccountId`, `BotChat.GuildChat.IntervalMin/Max`
+
 ## Dashboard API
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /` | Web UI |
+| `GET /guild` | Guild roster editor and raid planner |
 | `GET /api/status` | Server status, uptime, player/bot counts |
 | `GET /api/players` | Online players with stats |
 | `GET /api/characters` | All characters (paginated) |
 | `GET /api/items` | Item analytics |
 | `GET /api/guilds` | Guild info |
 | `GET /api/raids` | Raid analytics |
+| `GET /api/guild/roster` | Guild bot roster JSON |
+| `GET /api/guild/bot/<guid>` | Guild bot detail with gear |
+| `POST /api/guild/bot/<guid>/spec` | Update bot spec/role |
+| `POST /api/guild/raid-plan` | Save raid assignments |
 
 Player vs bot distinction: account ID < 100 = human, >= 100 = bot.
 
