@@ -2930,13 +2930,43 @@ CharDelete.KeepDays = 30
 #
 #    AHBot.itemcount
 #        How many listings to put into the auction house at most.
-#        The AH bot will add items until this number of listings is reached in the auction house (this includes potential player listings).
-#        Default: 50
+#        Default: 200
+#
+#    AHBot.RefreshInterval
+#        How often (in seconds) to wipe all bot auctions and re-simulate the entire listing set.
+#        Default: 259200 (72 hours)
+#
+#    AHBot.SellerAccountId
+#        Account ID used for fake seller characters. Must not be a real player account.
+#        Default: 99
+#
+#    AHBot.SellerCount
+#        Number of fake seller identities to create. These appear as different sellers on the AH.
+#        Default: 12
+#
+#    AHBot.Quota.<Category>.Min / Max
+#        Percentage of total listings allocated to each item category.
+#        A random value between Min and Max is chosen each refresh cycle.
 #
 ###################################################################################################################
 AHBot.Enable = 1
 AHBot.ah.fid = 55
 AHBot.itemcount = 200
+AHBot.RefreshInterval = 259200
+AHBot.SellerAccountId = 99
+AHBot.SellerCount = 12
+AHBot.Quota.TradeGoods.Min = 35
+AHBot.Quota.TradeGoods.Max = 40
+AHBot.Quota.Crafting.Min = 15
+AHBot.Quota.Crafting.Max = 20
+AHBot.Quota.Consumables.Min = 20
+AHBot.Quota.Consumables.Max = 25
+AHBot.Quota.Recipes.Min = 3
+AHBot.Quota.Recipes.Max = 5
+AHBot.Quota.Equipment.Min = 5
+AHBot.Quota.Equipment.Max = 10
+AHBot.Quota.Leveling.Min = 10
+AHBot.Quota.Leveling.Max = 15
 
 ###################################################################################################################
 # PLAYER BOTS
