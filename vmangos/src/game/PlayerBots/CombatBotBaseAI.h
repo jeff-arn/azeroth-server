@@ -405,6 +405,10 @@ public:
             SpellEntry const* pPowerWordShield;
             SpellEntry const* pHolyNova;
             SpellEntry const* pHolyFire;
+            SpellEntry const* pFlashHeal;
+            SpellEntry const* pGreaterHeal;
+            SpellEntry const* pRenew;
+            SpellEntry const* pPrayerOfHealing;
             SpellEntry const* pMindBlast;
             SpellEntry const* pMindFlay;
             SpellEntry const* pShadowWordPain;

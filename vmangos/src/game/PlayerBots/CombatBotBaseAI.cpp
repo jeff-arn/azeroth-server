@@ -948,6 +948,26 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.priest.pSmite))
                         m_spells.priest.pSmite = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Flash Heal") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.priest.pFlashHeal))
+                        m_spells.priest.pFlashHeal = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Greater Heal") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.priest.pGreaterHeal))
+                        m_spells.priest.pGreaterHeal = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Renew") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.priest.pRenew))
+                        m_spells.priest.pRenew = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Prayer of Healing") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.priest.pPrayerOfHealing))
+                        m_spells.priest.pPrayerOfHealing = pSpellEntry;
+                }
                 break;
             }
             case CLASS_WARLOCK:

@@ -24,6 +24,8 @@ enum PartyBotSpells_Priest
 
 void PartyBotAI::UpdateOutOfCombatAI_Priest()
 {
+    // === BUFF PRIORITY: Fortitude > Spirit > Shadow Protection > Inner Fire ===
+
     if (m_spells.priest.pPrayerofFortitude)
     {
         if (Player* pTarget = SelectBuffTarget(m_spells.priest.pPrayerofFortitude))
@@ -74,9 +76,9 @@ void PartyBotAI::UpdateOutOfCombatAI_Priest()
     {
         if (Player* pTarget = SelectBuffTarget(m_spells.priest.pDivineSpirit))
         {
-            if (CanTryToCastSpell(me, m_spells.priest.pDivineSpirit))
+            if (CanTryToCastSpell(pTarget, m_spells.priest.pDivineSpirit))
             {
-                if (DoCastSpell(me, m_spells.priest.pDivineSpirit) == SPELL_CAST_OK)
+                if (DoCastSpell(pTarget, m_spells.priest.pDivineSpirit) == SPELL_CAST_OK)
                 {
                     m_isBuffing = true;
                     me->ClearTarget();
@@ -135,8 +137,24 @@ void PartyBotAI::UpdateOutOfCombatAI_Priest()
         m_isBuffing = false;
     }
 
-    if (m_role == ROLE_HEALER &&
-        FindAndHealInjuredAlly())
+    // Pre-pull: Shield tank before combat starts
+    if (GetRole() == ROLE_HEALER && me->GetVictim())
+    {
+        if (m_spells.priest.pPowerWordShield)
+        {
+            if (Player* pTank = FindPartyTank())
+            {
+                if (CanTryToCastSpell(pTank, m_spells.priest.pPowerWordShield))
+                {
+                    if (DoCastSpell(pTank, m_spells.priest.pPowerWordShield) == SPELL_CAST_OK)
+                        return;
+                }
+            }
+        }
+    }
+
+    // Heal between pulls
+    if (m_role == ROLE_HEALER && FindAndHealInjuredAlly())
         return;
 
     if (me->GetVictim())
@@ -145,46 +163,93 @@ void PartyBotAI::UpdateOutOfCombatAI_Priest()
 
 void PartyBotAI::UpdateInCombatAI_Priest()
 {
-    if (m_spells.priest.pPowerWordShield &&
-        CanTryToCastSpell(me, m_spells.priest.pPowerWordShield))
+    // === HOLY/DISCIPLINE PRIEST (Healer) ===
+    if (GetRole() == ROLE_HEALER)
     {
-        if (DoCastSpell(me, m_spells.priest.pPowerWordShield) == SPELL_CAST_OK)
-            return;
-    }
-
-    if (!me->GetAttackers().empty() &&
-        m_role != ROLE_TANK)
-    {
-        if (m_spells.priest.pFade &&
-            CanTryToCastSpell(me, m_spells.priest.pFade))
+        // Shield self if being attacked
+        if (!me->GetAttackers().empty())
         {
-            if (DoCastSpell(me, m_spells.priest.pFade) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.priest.pShackleUndead)
-        {
-            Unit* pAttacker = *me->GetAttackers().begin();
-            if ((pAttacker->GetHealth() > me->GetHealth()) &&
-                CanTryToCastSpell(pAttacker, m_spells.priest.pShackleUndead) &&
-                CanUseCrowdControl(m_spells.priest.pShackleUndead, pAttacker))
+            if (m_spells.priest.pPowerWordShield &&
+                CanTryToCastSpell(me, m_spells.priest.pPowerWordShield))
             {
-                if (DoCastSpell(pAttacker, m_spells.priest.pShackleUndead) == SPELL_CAST_OK)
+                if (DoCastSpell(me, m_spells.priest.pPowerWordShield) == SPELL_CAST_OK)
                     return;
             }
+
+            // Fade to dump threat
+            if (m_spells.priest.pFade &&
+                CanTryToCastSpell(me, m_spells.priest.pFade))
+            {
+                if (DoCastSpell(me, m_spells.priest.pFade) == SPELL_CAST_OK)
+                    return;
+            }
+
+            // Shackle Undead attacker as last resort CC
+            if (m_spells.priest.pShackleUndead)
+            {
+                Unit* pAttacker = *me->GetAttackers().begin();
+                if ((pAttacker->GetHealth() > me->GetHealth()) &&
+                    CanTryToCastSpell(pAttacker, m_spells.priest.pShackleUndead) &&
+                    CanUseCrowdControl(m_spells.priest.pShackleUndead, pAttacker))
+                {
+                    if (DoCastSpell(pAttacker, m_spells.priest.pShackleUndead) == SPELL_CAST_OK)
+                        return;
+                }
+            }
         }
-    }
 
-    if (m_spells.priest.pInnerFocus &&
-       (me->GetPowerPercent(POWER_MANA) < 50.0f) &&
-        CanTryToCastSpell(me, m_spells.priest.pInnerFocus))
-    {
-        DoCastSpell(me, m_spells.priest.pInnerFocus);
-    }
+        // Inner Focus before expensive heals when mana is getting low
+        if (m_spells.priest.pInnerFocus &&
+           (me->GetPowerPercent(POWER_MANA) < 50.0f) &&
+            CanTryToCastSpell(me, m_spells.priest.pInnerFocus))
+        {
+            DoCastSpell(me, m_spells.priest.pInnerFocus);
+        }
 
-    if (GetRole() == ROLE_HEALER || (!me->GetVictim() && me->GetShapeshiftForm() == FORM_NONE))
-    {
-        // Shield allies being attacked.
+        // === HP-THRESHOLD HEALING on tank ===
+        if (Player* pTank = FindPartyTank())
+        {
+            float tankHp = pTank->GetHealthPercent();
+
+            // CRITICAL (<30%): Shield + Greater Heal
+            if (tankHp < 30.0f)
+            {
+                if (m_spells.priest.pPowerWordShield &&
+                    CanTryToCastSpell(pTank, m_spells.priest.pPowerWordShield))
+                {
+                    DoCastSpell(pTank, m_spells.priest.pPowerWordShield);
+                }
+
+                if (m_spells.priest.pGreaterHeal &&
+                    CanTryToCastSpell(pTank, m_spells.priest.pGreaterHeal))
+                {
+                    if (DoCastSpell(pTank, m_spells.priest.pGreaterHeal) == SPELL_CAST_OK)
+                        return;
+                }
+            }
+            // MODERATE (30-60%): Flash Heal (fast, 1.5s cast)
+            else if (tankHp < 60.0f)
+            {
+                if (m_spells.priest.pFlashHeal &&
+                    CanTryToCastSpell(pTank, m_spells.priest.pFlashHeal))
+                {
+                    if (DoCastSpell(pTank, m_spells.priest.pFlashHeal) == SPELL_CAST_OK)
+                        return;
+                }
+            }
+            // LIGHT (60-80%): Renew (HoT, mana efficient)
+            else if (tankHp < 80.0f)
+            {
+                if (m_spells.priest.pRenew &&
+                    CanTryToCastSpell(pTank, m_spells.priest.pRenew))
+                {
+                    if (DoCastSpell(pTank, m_spells.priest.pRenew) == SPELL_CAST_OK)
+                        return;
+                }
+            }
+        }
+
+        // Shield allies being attacked
         if (m_spells.priest.pPowerWordShield)
         {
             if (Player* pTarget = SelectShieldTarget())
@@ -197,21 +262,69 @@ void PartyBotAI::UpdateInCombatAI_Priest()
             }
         }
 
-        // Direct heal more seriously injured.
+        // Prayer of Healing when 3+ party members are injured
+        if (m_spells.priest.pPrayerOfHealing &&
+            me->GetPowerPercent(POWER_MANA) > 30.0f)
+        {
+            // Count injured party members in range
+            uint8 injuredCount = 0;
+            if (Group* pGroup = me->GetGroup())
+            {
+                for (auto itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+                {
+                    if (Player* pMember = itr->getSource())
+                    {
+                        if (pMember->IsAlive() && pMember->GetHealthPercent() < 60.0f &&
+                            me->GetDistance(pMember) < 30.0f)
+                            injuredCount++;
+                    }
+                }
+            }
+            if (injuredCount >= 3 &&
+                CanTryToCastSpell(me, m_spells.priest.pPrayerOfHealing))
+            {
+                // Use Inner Focus before Prayer of Healing if available
+                if (m_spells.priest.pInnerFocus &&
+                    CanTryToCastSpell(me, m_spells.priest.pInnerFocus))
+                {
+                    DoCastSpell(me, m_spells.priest.pInnerFocus);
+                }
+
+                if (DoCastSpell(me, m_spells.priest.pPrayerOfHealing) == SPELL_CAST_OK)
+                    return;
+            }
+        }
+
+        // Fallback: heal any injured ally (direct then periodic)
         if (Unit* pTarget = SelectHealTarget(60.0f, 80.0f))
             if (HealInjuredTargetDirect(pTarget))
                 return;
 
-        // Apply HoT aura for small injuries.
         if (Unit* pTarget = SelectPeriodicHealTarget(80.0f, 90.0f))
             if (HealInjuredTargetPeriodic(pTarget))
                 return;
 
-        if (GetRole() == ROLE_HEALER && FindAndPreHealTarget())
+        if (FindAndPreHealTarget())
             return;
+
+        // Wand for mana regen during low-damage phases (5-second rule)
+        if (me->HasSpell(PB_SPELL_SHOOT_WAND_P) && me->GetVictim() &&
+           !me->IsMoving() &&
+           (me->GetPowerPercent(POWER_MANA) < 80.0f) &&
+           !me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+        {
+            me->CastSpell(me->GetVictim(), PB_SPELL_SHOOT_WAND_P, false);
+        }
+
+        return;
     }
-    else if (Unit* pVictim = me->GetVictim())
+
+    // === SHADOW PRIEST (DPS) ===
+    if (Unit* pVictim = me->GetVictim())
     {
+        bool const highThreat = ShouldThrottleDPS(pVictim);
+
+        // Enter Shadowform
         if (m_spells.priest.pShadowform &&
             CanTryToCastSpell(me, m_spells.priest.pShadowform))
         {
@@ -219,14 +332,36 @@ void PartyBotAI::UpdateInCombatAI_Priest()
                 return;
         }
 
+        // Shield self if being attacked
+        if (m_spells.priest.pPowerWordShield &&
+            !me->GetAttackers().empty() &&
+            CanTryToCastSpell(me, m_spells.priest.pPowerWordShield))
+        {
+            if (DoCastSpell(me, m_spells.priest.pPowerWordShield) == SPELL_CAST_OK)
+                return;
+        }
+
+        // Fade when we have aggro
+        if (!me->GetAttackers().empty())
+        {
+            if (m_spells.priest.pFade &&
+                CanTryToCastSpell(me, m_spells.priest.pFade))
+            {
+                if (DoCastSpell(me, m_spells.priest.pFade) == SPELL_CAST_OK)
+                    return;
+            }
+        }
+
+        // Silence interrupt (highest priority)
         if (m_spells.priest.pSilence &&
-            pVictim->IsNonMeleeSpellCasted() &&
+            pVictim->IsNonMeleeSpellCasted(false, false, true) &&
             CanTryToCastSpell(pVictim, m_spells.priest.pSilence))
         {
             if (DoCastSpell(pVictim, m_spells.priest.pSilence) == SPELL_CAST_OK)
                 return;
         }
 
+        // Vampiric Embrace (apply FIRST before any damage)
         if (m_spells.priest.pVampiricEmbrace &&
             CanTryToCastSpell(pVictim, m_spells.priest.pVampiricEmbrace))
         {
@@ -234,15 +369,7 @@ void PartyBotAI::UpdateInCombatAI_Priest()
                 return;
         }
 
-        // Mind Blast: VERY HIGH threat — only use when threat is safe
-        if (m_spells.priest.pMindBlast &&
-            !ShouldThrottleDPS(pVictim) &&
-            CanTryToCastSpell(pVictim, m_spells.priest.pMindBlast))
-        {
-            if (DoCastSpell(pVictim, m_spells.priest.pMindBlast) == SPELL_CAST_OK)
-                return;
-        }
-
+        // Shadow Word: Pain (keep up, lower threat than Mind Blast)
         if (m_spells.priest.pShadowWordPain &&
             CanTryToCastSpell(pVictim, m_spells.priest.pShadowWordPain))
         {
@@ -250,6 +377,15 @@ void PartyBotAI::UpdateInCombatAI_Priest()
                 return;
         }
 
+        // Mind Blast (high burst, HIGH threat — skip entirely when threat is high)
+        if (!highThreat && m_spells.priest.pMindBlast &&
+            CanTryToCastSpell(pVictim, m_spells.priest.pMindBlast))
+        {
+            if (DoCastSpell(pVictim, m_spells.priest.pMindBlast) == SPELL_CAST_OK)
+                return;
+        }
+
+        // Devouring Plague (Undead racial)
         if (m_spells.priest.pDevouringPlague &&
             CanTryToCastSpell(pVictim, m_spells.priest.pDevouringPlague))
         {
@@ -257,22 +393,7 @@ void PartyBotAI::UpdateInCombatAI_Priest()
                 return;
         }
 
-        if (m_spells.priest.pPsychicScream &&
-            GetAttackersInRangeCount(10.0f) &&
-            CanTryToCastSpell(me, m_spells.priest.pPsychicScream))
-        {
-            if (DoCastSpell(me, m_spells.priest.pPsychicScream) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.priest.pManaBurn &&
-           (pVictim->GetPowerType() == POWER_MANA) &&
-            CanTryToCastSpell(pVictim, m_spells.priest.pManaBurn))
-        {
-            if (DoCastSpell(pVictim, m_spells.priest.pManaBurn) == SPELL_CAST_OK)
-                return;
-        }
-
+        // Mind Flay (filler — safe to use at high threat since it's low threat)
         if (m_spells.priest.pMindFlay &&
            (!GetAttackersInRangeCount(10.0f) || me->HasAuraType(SPELL_AURA_SCHOOL_ABSORB)) &&
             CanTryToCastSpell(pVictim, m_spells.priest.pMindFlay))
@@ -281,12 +402,24 @@ void PartyBotAI::UpdateInCombatAI_Priest()
                 return;
         }
 
+        // Range positioning
         if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
             && me->GetDistance(pVictim) > 30.0f)
         {
             me->GetMotionMaster()->MoveChase(pVictim, 25.0f);
         }
 
+        // Mana Burn (situational, target has mana)
+        if (m_spells.priest.pManaBurn &&
+           (pVictim->GetPowerType() == POWER_MANA) &&
+           !highThreat &&
+            CanTryToCastSpell(pVictim, m_spells.priest.pManaBurn))
+        {
+            if (DoCastSpell(pVictim, m_spells.priest.pManaBurn) == SPELL_CAST_OK)
+                return;
+        }
+
+        // Holy form fallback (if not in Shadowform for some reason)
         if (me->GetShapeshiftForm() == FORM_NONE)
         {
             if (m_spells.priest.pHolyNova &&
@@ -305,6 +438,7 @@ void PartyBotAI::UpdateInCombatAI_Priest()
             }
         }
 
+        // Wand when OOM
         if (me->HasSpell(PB_SPELL_SHOOT_WAND_P) &&
            !me->IsMoving() &&
            (me->GetPowerPercent(POWER_MANA) < 10.0f) &&
