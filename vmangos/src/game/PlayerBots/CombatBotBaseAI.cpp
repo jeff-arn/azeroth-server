@@ -143,6 +143,7 @@ void CombatBotBaseAI::PopulateSpellData()
     SpellEntry const* pBlessingOfMight = nullptr;
     SpellEntry const* pBlessingOfWisdom = nullptr;
     SpellEntry const* pBlessingOfKings = nullptr;
+    SpellEntry const* pBlessingOfSalvation = nullptr;
     SpellEntry const* pBlessingOfSanctuary = nullptr;
 
     // Paladin Auras
@@ -295,6 +296,11 @@ void CombatBotBaseAI::PopulateSpellData()
                 {
                     if (IsHigherRankSpell(pBlessingOfLight))
                         pBlessingOfLight = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Blessing of Salvation") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(pBlessingOfSalvation))
+                        pBlessingOfSalvation = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Devotion Aura") != std::string::npos)
                 {
@@ -674,6 +680,11 @@ void CombatBotBaseAI::PopulateSpellData()
                 {
                     if (IsHigherRankSpell(m_spells.hunter.pVolley))
                         m_spells.hunter.pVolley = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Freezing Trap") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.hunter.pFreezingTrap))
+                        m_spells.hunter.pFreezingTrap = pSpellEntry;
                 }
                 break;
             }
@@ -1400,6 +1411,11 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.rogue.pSprint))
                         m_spells.rogue.pSprint = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Feint") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.rogue.pFeint))
+                        m_spells.rogue.pFeint = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Deadly Poison") != std::string::npos)
                 {
                     hasDeadlyPoison = true;
@@ -1713,6 +1729,12 @@ void CombatBotBaseAI::PopulateSpellData()
                 if (!blessings.empty())
                     m_spells.paladin.pBlessingBuff = SelectRandomContainerElement(blessings);
             }
+
+            // Store individual blessing pointers for intelligent selection
+            m_spells.paladin.pBlessingOfWisdom = pBlessingOfWisdom;
+            m_spells.paladin.pBlessingOfMight = pBlessingOfMight;
+            m_spells.paladin.pBlessingOfSalvation = pBlessingOfSalvation;
+            m_spells.paladin.pBlessingOfKings = pBlessingOfKings;
 
             std::vector<SpellEntry const*> auras;
             if (pDevotionAura)

@@ -286,7 +286,7 @@ public:
     {
         struct
         {
-            SpellEntry const* spells[45];
+            SpellEntry const* spells[50];
         } raw;
         struct
         {
@@ -310,6 +310,11 @@ public:
             SpellEntry const* pHolyWrath;
             SpellEntry const* pTurnEvil;
             SpellEntry const* pHolyShield;
+            // Intelligent blessing selection
+            SpellEntry const* pBlessingOfWisdom;
+            SpellEntry const* pBlessingOfMight;
+            SpellEntry const* pBlessingOfSalvation;
+            SpellEntry const* pBlessingOfKings;
         } paladin;
         struct
         {
@@ -365,6 +370,7 @@ public:
             SpellEntry const* pFeignDeath;
             SpellEntry const* pScareBeast;
             SpellEntry const* pVolley;
+            SpellEntry const* pFreezingTrap;
         } hunter;
         struct
         {
@@ -521,6 +527,7 @@ public:
             SpellEntry const* pSprint;
             SpellEntry const* pMainHandPoison;
             SpellEntry const* pOffHandPoison;
+            SpellEntry const* pFeint;
         } rogue;
         struct
         {
