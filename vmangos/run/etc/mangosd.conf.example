@@ -2995,6 +2995,8 @@ AHBot.Buyer.BudgetPerCycle = 500000
 BotChat.Enable = 1
 BotChat.TradeChat.IntervalMin = 120
 BotChat.TradeChat.IntervalMax = 300
+BotChat.GuildChat.IntervalMin = 300
+BotChat.GuildChat.IntervalMax = 900
 
 ###################################################################################################################
 # BOT SERVICES

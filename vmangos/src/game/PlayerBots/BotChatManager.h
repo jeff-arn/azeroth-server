@@ -39,10 +39,20 @@ private:
     const char* PickWhisperResponse(const std::string& incomingMessage) const;
     void SendWhisperToPlayer(Player* bot, ObjectGuid targetGuid, const char* message);
 
+    // Guild chat
+    void UpdateGuildChat();
+    Player* FindRandomOnlineGuildBot() const;
+    const char* PickGuildChatMessage() const;
+    void SendGuildChat(Player* bot, const char* message);
+
     // Timers
     ShortTimeTracker m_tradeChatTimer;
     uint32 m_tradeChatIntervalMin;  // ms
     uint32 m_tradeChatIntervalMax;  // ms
+
+    ShortTimeTracker m_guildChatTimer;
+    uint32 m_guildChatIntervalMin;
+    uint32 m_guildChatIntervalMax;
 
     bool m_enabled;
     bool m_loaded;

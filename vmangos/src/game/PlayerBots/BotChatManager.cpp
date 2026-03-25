@@ -1,5 +1,6 @@
 #include "BotChatManager.h"
 #include "BotServiceMgr.h"
+#include "GuildBotMgr.h"
 #include "Policies/SingletonImp.h"
 #include "Player.h"
 #include "ObjectAccessor.h"
@@ -8,6 +9,8 @@
 #include "Chat/Chat.h"
 #include "Chat/Channel.h"
 #include "Chat/ChannelMgr.h"
+#include "Guild/Guild.h"
+#include "Guild/GuildMgr.h"
 #include "PlayerBotMgr.h"
 #include "Config/Config.h"
 #include "Log.h"
@@ -150,9 +153,14 @@ void BotChatManager::Load()
     // Set initial timer with random delay so it doesn't fire immediately on startup.
     m_tradeChatTimer.Reset(urand(m_tradeChatIntervalMin, m_tradeChatIntervalMax));
 
+    m_guildChatIntervalMin = sConfig.GetIntDefault("BotChat.GuildChat.IntervalMin", 300) * 1000;
+    m_guildChatIntervalMax = sConfig.GetIntDefault("BotChat.GuildChat.IntervalMax", 900) * 1000;
+    m_guildChatTimer.Reset(urand(m_guildChatIntervalMin, m_guildChatIntervalMax));
+
     m_loaded = true;
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotChat: Loaded. Trade chat interval: %u-%us.",
-        m_tradeChatIntervalMin / 1000, m_tradeChatIntervalMax / 1000);
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotChat: Loaded. Trade chat interval: %u-%us, Guild chat interval: %u-%us.",
+        m_tradeChatIntervalMin / 1000, m_tradeChatIntervalMax / 1000,
+        m_guildChatIntervalMin / 1000, m_guildChatIntervalMax / 1000);
 }
 
 void BotChatManager::Update(uint32 diff)
@@ -165,6 +173,13 @@ void BotChatManager::Update(uint32 diff)
     {
         m_tradeChatTimer.Reset(urand(m_tradeChatIntervalMin, m_tradeChatIntervalMax));
         UpdateTradeChat();
+    }
+
+    m_guildChatTimer.Update(diff);
+    if (m_guildChatTimer.Passed())
+    {
+        m_guildChatTimer.Reset(urand(m_guildChatIntervalMin, m_guildChatIntervalMax));
+        UpdateGuildChat();
     }
 }
 
@@ -309,4 +324,86 @@ void BotChatManager::SendWhisperToPlayer(Player* bot, ObjectGuid targetGuid, con
 
     sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s whispers to %s: %s",
         bot->GetName(), target->GetName(), message);
+}
+
+// ============================================================================
+// Guild chat
+// ============================================================================
+
+static const char* GUILD_CHAT_IDLE[] = {
+    "anyone up for a dungeon later?",
+    "just finished farming, got some good drops",
+    "how's everyone doing today",
+    "anyone need help with anything?",
+    "been working on my pre-raid gear, getting close",
+    "quiet day on the server",
+    "anyone seen any good BoE drops lately?",
+    "I need to farm some gold tonight",
+    "thinking about running Strat later if anyone's interested",
+    "finally got my last piece from BRD",
+    "grats to everyone on last raid, good progress",
+    "who's available for raid this week?",
+    "just hit exalted with Argent Dawn",
+    "need a few more runs of UBRS for my attunement",
+    "what consumables should I bring for next raid?",
+    "been a while since we ran Scholo, could use some drops from there",
+};
+static const uint32 GUILD_IDLE_COUNT = sizeof(GUILD_CHAT_IDLE) / sizeof(GUILD_CHAT_IDLE[0]);
+
+void BotChatManager::UpdateGuildChat()
+{
+    if (!sGuildBotMgr.IsEnabled())
+        return;
+
+    Player* bot = FindRandomOnlineGuildBot();
+    if (!bot)
+        return;
+
+    const char* message = PickGuildChatMessage();
+    if (!message)
+        return;
+
+    SendGuildChat(bot, message);
+}
+
+Player* BotChatManager::FindRandomOnlineGuildBot() const
+{
+    std::vector<Player*> onlineBots;
+
+    auto const& roster = sGuildBotMgr.GetRoster();
+    for (auto const& info : roster)
+    {
+        if (!info.online)
+            continue;
+
+        Player* p = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, info.guid));
+        if (p && p->IsInWorld())
+            onlineBots.push_back(p);
+    }
+
+    if (onlineBots.empty())
+        return nullptr;
+
+    return onlineBots[urand(0, static_cast<uint32>(onlineBots.size()) - 1)];
+}
+
+const char* BotChatManager::PickGuildChatMessage() const
+{
+    return GUILD_CHAT_IDLE[urand(0, GUILD_IDLE_COUNT - 1)];
+}
+
+void BotChatManager::SendGuildChat(Player* bot, const char* message)
+{
+    uint32 guildId = sGuildBotMgr.GetGuildId();
+    if (!guildId)
+        return;
+
+    Guild* guild = sGuildMgr.GetGuildById(guildId);
+    if (!guild)
+        return;
+
+    guild->BroadcastToGuild(bot->GetSession(), message, LANG_UNIVERSAL);
+
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s says in guild: %s",
+        bot->GetName(), message);
 }
