@@ -1,11 +1,11 @@
-import discord
 import asyncio
-import subprocess
-import json
 import os
 import re
-import mysql.connector
+import subprocess
 from datetime import datetime, timezone
+
+import discord
+import mysql.connector
 
 # ==================== CONFIG ====================
 TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
@@ -36,6 +36,7 @@ client = discord.Client(intents=intents)
 last_server_status = None
 known_online_players = {}
 
+
 def is_server_running():
     """Check if mangosd process is running."""
     try:
@@ -44,11 +45,13 @@ def is_server_running():
     except Exception:
         return False
 
+
 def get_db_connection(database):
     """Get a MySQL connection."""
     config = DB_CONFIG.copy()
     config["database"] = database
     return mysql.connector.connect(**config)
+
 
 def get_online_players():
     """Query characters DB for online players."""
@@ -69,49 +72,70 @@ def get_online_players():
         print(f"DB Error: {e}")
         return []
 
+
 def get_race_name(race_id):
-    races = {
-        1: "Human", 2: "Orc", 3: "Dwarf", 4: "Night Elf",
-        5: "Undead", 6: "Tauren", 7: "Gnome", 8: "Troll"
-    }
+    races = {1: "Human", 2: "Orc", 3: "Dwarf", 4: "Night Elf", 5: "Undead", 6: "Tauren", 7: "Gnome", 8: "Troll"}
     return races.get(race_id, "Unknown")
+
 
 def get_class_name(class_id):
     classes = {
-        1: "Warrior", 2: "Paladin", 3: "Hunter", 4: "Rogue",
-        5: "Priest", 7: "Shaman", 8: "Mage", 9: "Warlock",
-        11: "Druid"
+        1: "Warrior",
+        2: "Paladin",
+        3: "Hunter",
+        4: "Rogue",
+        5: "Priest",
+        7: "Shaman",
+        8: "Mage",
+        9: "Warlock",
+        11: "Druid",
     }
     return classes.get(class_id, "Unknown")
 
+
 CLASS_RACE_MAP = {
-    "c1": "Warrior", "c2": "Paladin", "c3": "Hunter", "c4": "Rogue",
-    "c5": "Priest", "c7": "Shaman", "c8": "Mage", "c9": "Warlock", "c11": "Druid",
-    "r1": "Human", "r2": "Orc", "r3": "Dwarf", "r4": "Night Elf",
-    "r5": "Undead", "r6": "Tauren", "r7": "Gnome", "r8": "Troll",
+    "c1": "Warrior",
+    "c2": "Paladin",
+    "c3": "Hunter",
+    "c4": "Rogue",
+    "c5": "Priest",
+    "c7": "Shaman",
+    "c8": "Mage",
+    "c9": "Warlock",
+    "c11": "Druid",
+    "r1": "Human",
+    "r2": "Orc",
+    "r3": "Dwarf",
+    "r4": "Night Elf",
+    "r5": "Undead",
+    "r6": "Tauren",
+    "r7": "Gnome",
+    "r8": "Troll",
 }
 
+
 def get_class_emoji(class_id):
-    emojis = {
-        1: "⚔️", 2: "🛡️", 3: "🏹", 4: "🗡️",
-        5: "✨", 7: "🌩️", 8: "🔥", 9: "😈",
-        11: "🌿"
-    }
+    emojis = {1: "⚔️", 2: "🛡️", 3: "🏹", 4: "🗡️", 5: "✨", 7: "🌩️", 8: "🔥", 9: "😈", 11: "🌿"}
     return emojis.get(class_id, "❓")
+
 
 def get_class_emoji_str(class_str):
     mapping = {"c1": 1, "c2": 2, "c3": 3, "c4": 4, "c5": 5, "c7": 7, "c8": 8, "c9": 9, "c11": 11}
     return get_class_emoji(mapping.get(class_str, 0))
 
+
 def get_faction_emoji(race_id):
     alliance_races = {1, 3, 4, 7}
     return "🔵" if race_id in alliance_races else "🔴"
+
 
 def get_faction_emoji_str(race_str):
     alliance = {"r1", "r3", "r4", "r7"}
     return "🔵" if race_str in alliance else "🔴"
 
+
 # ==================== TASKS ====================
+
 
 async def server_status_loop():
     """Monitor server status and post changes."""
@@ -148,6 +172,7 @@ async def server_status_loop():
             print(f"Status check error: {e}")
         await asyncio.sleep(STATUS_CHECK_INTERVAL)
 
+
 async def levelup_log_watcher():
     """Watch LevelUp.log for instant level-up announcements."""
     await client.wait_until_ready()
@@ -165,9 +190,7 @@ async def levelup_log_watcher():
         file_pos = 0
 
     # Pattern: Character Name:guid [cX rY] reaches level  Z
-    pattern = re.compile(
-        r"Character (\w+):\d+ \[(c\d+) (r\d+)\] reaches level\s+(\d+)"
-    )
+    pattern = re.compile(r"Character (\w+):\d+ \[(c\d+) (r\d+)\] reaches level\s+(\d+)")
 
     while not client.is_closed():
         try:
@@ -178,7 +201,7 @@ async def levelup_log_watcher():
 
             for line in new_lines:
                 # Skip bot level-ups
-                if '<BOT>' in line:
+                if "<BOT>" in line:
                     continue
                 match = pattern.search(line)
                 if match:
@@ -221,6 +244,7 @@ async def levelup_log_watcher():
             print(f"LevelUp log watcher error: {e}")
 
         await asyncio.sleep(5)  # Check every 5 seconds
+
 
 async def player_activity_loop():
     """Monitor player logins and logouts."""
@@ -280,6 +304,7 @@ async def player_activity_loop():
             print(f"Player activity error: {e}")
         await asyncio.sleep(PLAYER_CHECK_INTERVAL)
 
+
 # ==================== COMMANDS ====================
 @client.event
 async def on_ready():
@@ -301,6 +326,7 @@ async def on_ready():
     client.loop.create_task(server_status_loop())
     client.loop.create_task(player_activity_loop())
     client.loop.create_task(levelup_log_watcher())
+
 
 @client.event
 async def on_message(message):
@@ -336,7 +362,7 @@ async def on_message(message):
         await message.channel.send(embed=embed)
 
     if message.content.strip().startswith("!patchnotes"):
-        content = message.content[len("!patchnotes"):].strip()
+        content = message.content[len("!patchnotes") :].strip()
         if not content:
             await message.channel.send("Usage: `!patchnotes <your patch note text>`")
             return
@@ -352,6 +378,7 @@ async def on_message(message):
             await channel.send(embed=embed)
             if message.channel.id != CHANNEL_PATCH_NOTES:
                 await message.channel.send("✅ Patch notes posted!")
+
 
 # ==================== RUN ====================
 if __name__ == "__main__":

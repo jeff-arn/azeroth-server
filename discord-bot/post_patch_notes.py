@@ -4,14 +4,17 @@ Post patch notes to Discord from the command line.
 Usage: python3 post_patch_notes.py "Your patch notes here"
        python3 post_patch_notes.py --file /path/to/notes.txt
 """
-import discord
+
 import asyncio
-import sys
 import os
+import sys
 from datetime import datetime, timezone
+
+import discord
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 CHANNEL_PATCH_NOTES = 1485324341062402239
+
 
 async def post(content):
     intents = discord.Intents.default()
@@ -36,9 +39,10 @@ async def post(content):
 
     await client.start(TOKEN)
 
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python3 post_patch_notes.py \"Your patch notes here\"")
+        print('Usage: python3 post_patch_notes.py "Your patch notes here"')
         print("       python3 post_patch_notes.py --file /path/to/notes.txt")
         sys.exit(1)
 

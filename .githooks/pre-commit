@@ -1,0 +1,34 @@
+#!/bin/bash
+# Pre-commit hook: lint and format Python files before committing.
+
+RUFF="$HOME/.local/bin/ruff"
+
+if ! command -v "$RUFF" &>/dev/null; then
+    echo "ruff not found at $RUFF — skipping lint"
+    exit 0
+fi
+
+# Get staged .py files (excluding deletions)
+STAGED_PY=$(git diff --cached --name-only --diff-filter=d | grep '\.py$' || true)
+
+if [ -z "$STAGED_PY" ]; then
+    exit 0
+fi
+
+echo "Running ruff on staged Python files..."
+
+# Check lint
+if ! $RUFF check $STAGED_PY; then
+    echo ""
+    echo "Lint errors found. Fix with: ruff check --fix ."
+    exit 1
+fi
+
+# Check format
+if ! $RUFF format --check $STAGED_PY; then
+    echo ""
+    echo "Formatting issues found. Fix with: ruff format ."
+    exit 1
+fi
+
+echo "Lint passed."
