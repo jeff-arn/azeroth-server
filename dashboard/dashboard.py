@@ -5,7 +5,7 @@ import re
 import subprocess
 
 import mysql.connector
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
@@ -368,6 +368,212 @@ def api_bots():
         return jsonify({"total_online": total, "by_zone": by_zone})
     except Exception:
         return jsonify({"total_online": 0, "by_zone": []})
+
+
+SLOT_NAMES = {
+    0: "Head",
+    1: "Neck",
+    2: "Shoulder",
+    3: "Shirt",
+    4: "Chest",
+    5: "Waist",
+    6: "Legs",
+    7: "Feet",
+    8: "Wrists",
+    9: "Hands",
+    10: "Finger 1",
+    11: "Finger 2",
+    12: "Trinket 1",
+    13: "Trinket 2",
+    14: "Back",
+    15: "Main Hand",
+    16: "Off Hand",
+    17: "Ranged",
+    18: "Tabard",
+}
+
+
+@app.route("/guild")
+def guild_page():
+    return render_template("guild.html")
+
+
+@app.route("/api/guild/roster")
+def api_guild_roster():
+    try:
+        conn = get_db("characters")
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT r.guid, c.name, c.race, c.class AS cls, c.level,
+                   r.spec, r.role, r.gear_score, r.raid_assigned, r.active,
+                   g.name AS guild_name, gm.rank AS guild_rank
+            FROM guild_bot_roster r
+            JOIN characters c ON r.guid = c.guid
+            LEFT JOIN guild_member gm ON c.guid = gm.guid
+            LEFT JOIN guild g ON gm.guild_id = g.guild_id
+            WHERE r.active = 1
+            ORDER BY r.role, c.class, c.name
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        roster = []
+        for r in rows:
+            roster.append(
+                {
+                    "guid": r["guid"],
+                    "name": r["name"],
+                    "race": RACES.get(r["race"], "Unknown"),
+                    "class": CLASSES.get(r["cls"], "Unknown"),
+                    "class_id": r["cls"],
+                    "class_color": CLASS_COLORS.get(r["cls"], "#ffffff"),
+                    "level": r["level"],
+                    "spec": r["spec"] or "",
+                    "role": r["role"] or "dps",
+                    "gear_score": round(r["gear_score"], 1) if r["gear_score"] else 0,
+                    "raid_assigned": bool(r["raid_assigned"]),
+                    "active": bool(r["active"]),
+                    "guild_name": r["guild_name"] or "",
+                    "guild_rank": r["guild_rank"],
+                    "faction": "Alliance" if r["race"] in ALLIANCE_RACES else "Horde",
+                }
+            )
+        return jsonify(roster)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/guild/bot/<int:guid>")
+def api_guild_bot_detail(guid):
+    try:
+        conn = get_db("characters")
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT r.guid, c.name, c.race, c.class AS cls, c.level,
+                   r.spec, r.role, r.gear_score, r.raid_assigned, r.active
+            FROM guild_bot_roster r
+            JOIN characters c ON r.guid = c.guid
+            WHERE r.guid = %s
+        """,
+            (guid,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "Bot not found"}), 404
+
+        bot = {
+            "guid": row["guid"],
+            "name": row["name"],
+            "race": RACES.get(row["race"], "Unknown"),
+            "class": CLASSES.get(row["cls"], "Unknown"),
+            "class_id": row["cls"],
+            "class_color": CLASS_COLORS.get(row["cls"], "#ffffff"),
+            "level": row["level"],
+            "spec": row["spec"] or "",
+            "role": row["role"] or "dps",
+            "gear_score": round(row["gear_score"], 1) if row["gear_score"] else 0,
+            "raid_assigned": bool(row["raid_assigned"]),
+        }
+
+        # Fetch equipped items
+        cursor.execute(
+            """
+            SELECT ci.slot, ci.item_id, it.name, it.Quality, it.ItemLevel
+            FROM character_inventory ci
+            JOIN mangos.item_template it ON ci.item_id = it.entry
+            WHERE ci.guid = %s AND ci.bag = 0 AND ci.slot < 19
+            ORDER BY ci.slot
+        """,
+            (guid,),
+        )
+        items = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        gear = []
+        for item in items:
+            gear.append(
+                {
+                    "slot": SLOT_NAMES.get(item["slot"], f"Slot {item['slot']}"),
+                    "item_id": item["item_id"],
+                    "name": item["name"],
+                    "quality": QUALITY_NAMES.get(item["Quality"], "Unknown"),
+                    "quality_color": QUALITY_COLORS.get(item["Quality"], "#ffffff"),
+                    "item_level": item["ItemLevel"],
+                }
+            )
+        bot["gear"] = gear
+        return jsonify(bot)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/guild/bot/<int:guid>/spec", methods=["POST"])
+def api_guild_bot_update_spec(guid):
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        spec = data.get("spec")
+        role = data.get("role")
+        if role and role not in ("tank", "healer", "dps"):
+            return jsonify({"error": "Invalid role"}), 400
+        conn = get_db("characters")
+        cursor = conn.cursor()
+        updates = []
+        params = []
+        if spec is not None:
+            updates.append("spec = %s")
+            params.append(spec)
+        if role is not None:
+            updates.append("role = %s")
+            params.append(role)
+        if not updates:
+            return jsonify({"error": "Nothing to update"}), 400
+        params.append(guid)
+        cursor.execute(
+            f"UPDATE guild_bot_roster SET {', '.join(updates)} WHERE guid = %s",
+            params,
+        )
+        conn.commit()
+        affected = cursor.rowcount
+        cursor.close()
+        conn.close()
+        if affected == 0:
+            return jsonify({"error": "Bot not found"}), 404
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/guild/raid-plan", methods=["POST"])
+def api_guild_raid_plan():
+    try:
+        data = request.get_json()
+        if not data or "assignments" not in data:
+            return jsonify({"error": "No assignments provided"}), 400
+        assignments = data["assignments"]  # list of {guid, raid_assigned}
+        conn = get_db("characters")
+        cursor = conn.cursor()
+        # Clear all raid assignments first, then set the selected ones
+        cursor.execute("UPDATE guild_bot_roster SET raid_assigned = 0 WHERE active = 1")
+        if assignments:
+            guids = [a["guid"] for a in assignments if a.get("raid_assigned")]
+            if guids:
+                placeholders = ", ".join(["%s"] * len(guids))
+                cursor.execute(
+                    f"UPDATE guild_bot_roster SET raid_assigned = 1 WHERE guid IN ({placeholders})",
+                    guids,
+                )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
