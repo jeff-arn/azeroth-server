@@ -24,6 +24,8 @@ enum PartyBotSpells_Mage
 
 void PartyBotAI::UpdateOutOfCombatAI_Mage()
 {
+    // === BUFF PRIORITY: Arcane Brilliance (group) > Arcane Intellect (individual) ===
+
     if (m_spells.mage.pArcaneBrilliance)
     {
         if (CanTryToCastSpell(me, m_spells.mage.pArcaneBrilliance))
@@ -52,6 +54,7 @@ void PartyBotAI::UpdateOutOfCombatAI_Mage()
         }
     }
 
+    // Ice Armor / Frost Armor self-buff
     if (m_spells.mage.pIceArmor &&
         CanTryToCastSpell(me, m_spells.mage.pIceArmor))
     {
@@ -63,6 +66,7 @@ void PartyBotAI::UpdateOutOfCombatAI_Mage()
         }
     }
 
+    // Ice Barrier pre-combat absorb shield
     if (m_spells.mage.pIceBarrier &&
         CanTryToCastSpell(me, m_spells.mage.pIceBarrier))
     {
@@ -71,6 +75,23 @@ void PartyBotAI::UpdateOutOfCombatAI_Mage()
             m_isBuffing = true;
             me->ClearTarget();
             return;
+        }
+    }
+
+    // Remove Lesser Curse on allies
+    if (m_spells.mage.pRemoveLesserCurse)
+    {
+        if (Player* pTarget = SelectDispelTarget(m_spells.mage.pRemoveLesserCurse))
+        {
+            if (CanTryToCastSpell(pTarget, m_spells.mage.pRemoveLesserCurse))
+            {
+                if (DoCastSpell(pTarget, m_spells.mage.pRemoveLesserCurse) == SPELL_CAST_OK)
+                {
+                    m_isBuffing = true;
+                    me->ClearTarget();
+                    return;
+                }
+            }
         }
     }
 
@@ -89,22 +110,16 @@ void PartyBotAI::UpdateInCombatAI_Mage()
 {
     if (Unit* pVictim = me->GetVictim())
     {
-        if (m_spells.mage.pCombustion &&
-            CanTryToCastSpell(me, m_spells.mage.pCombustion))
+        // === HIGHEST PRIORITY: Counterspell interrupt ===
+        if (m_spells.mage.pCounterspell &&
+            pVictim->IsNonMeleeSpellCasted(false, false, true) &&
+            CanTryToCastSpell(pVictim, m_spells.mage.pCounterspell))
         {
-            if (DoCastSpell(me, m_spells.mage.pCombustion) == SPELL_CAST_OK)
+            if (DoCastSpell(pVictim, m_spells.mage.pCounterspell) == SPELL_CAST_OK)
                 return;
         }
 
-        if (m_spells.mage.pPyroblast &&
-           ((m_spells.mage.pPresenceOfMind && me->HasAura(m_spells.mage.pPresenceOfMind->Id)) ||
-            (!pVictim->IsInCombat() && (pVictim->GetMaxHealth() > me->GetMaxHealth()) && (me->GetDistance(pVictim) > 30.0f))) &&
-            CanTryToCastSpell(pVictim, m_spells.mage.pPyroblast))
-        {
-            if (DoCastSpell(pVictim, m_spells.mage.pPyroblast) == SPELL_CAST_OK)
-                return;
-        }
-
+        // === EMERGENCY: Ice Block at <10% HP (drops all threat) ===
         if (m_spells.mage.pIceBlock &&
            (me->GetHealthPercent() < 10.0f) &&
             CanTryToCastSpell(me, m_spells.mage.pIceBlock))
@@ -113,13 +128,32 @@ void PartyBotAI::UpdateInCombatAI_Mage()
                 return;
         }
 
-        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
-            && me->GetDistance(pVictim) > 30.0f)
+        // === POLYMORPH CC MAINTENANCE: sheep a different attacker if >20% HP ===
+        if (m_spells.mage.pPolymorph)
+        {
+            if (Unit* pCCTarget = SelectAttackerDifferentFrom(pVictim))
+            {
+                if (pCCTarget->GetHealthPercent() > 20.0f &&
+                    CanTryToCastSpell(pCCTarget, m_spells.mage.pPolymorph) &&
+                    CanUseCrowdControl(m_spells.mage.pPolymorph, pCCTarget))
+                {
+                    if (DoCastSpell(pCCTarget, m_spells.mage.pPolymorph) == SPELL_CAST_OK)
+                        return;
+                }
+            }
+        }
+
+        // === RANGE POSITIONING: maintain 25-30 yards ===
+        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE &&
+            me->GetDistance(pVictim) > 30.0f)
         {
             me->GetMotionMaster()->MoveChase(pVictim, 25.0f);
         }
-        else if (GetAttackersInRangeCount(10.0f))
+
+        // === DEFENSIVE SEQUENCE: melee attackers in range ===
+        if (GetAttackersInRangeCount(10.0f))
         {
+            // Mana Shield if mana >20%
             if (m_spells.mage.pManaShield &&
                (me->GetPowerPercent(POWER_MANA) > 20.0f) &&
                 CanTryToCastSpell(me, m_spells.mage.pManaShield))
@@ -128,40 +162,40 @@ void PartyBotAI::UpdateInCombatAI_Mage()
                     return;
             }
 
-            if ((GetRole() != ROLE_MELEE_DPS) &&
-                (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE))
+            if (!me->HasUnitState(UNIT_STATE_CAN_NOT_MOVE))
             {
-                if (m_spells.mage.pBlink &&
-                    (me->HasUnitState(UNIT_STATE_CAN_NOT_MOVE) ||
-                        me->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED)) &&
-                    CanTryToCastSpell(me, m_spells.mage.pBlink))
+                // Frost Nova to root nearby enemies before blinking out
+                if (m_spells.mage.pFrostNova &&
+                   !pVictim->HasUnitState(UNIT_STATE_ROOT) &&
+                   !pVictim->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL) &&
+                    CanTryToCastSpell(me, m_spells.mage.pFrostNova))
                 {
-                    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
-                        me->GetMotionMaster()->Clear();
-
-                    if (DoCastSpell(me, m_spells.mage.pBlink) == SPELL_CAST_OK)
-                        return;
+                    DoCastSpell(me, m_spells.mage.pFrostNova);
                 }
 
-                if (!me->HasUnitState(UNIT_STATE_CAN_NOT_MOVE))
+                // Run away and set ranged kite distance
+                if (RunAwayFromTarget(pVictim))
                 {
-                    if (m_spells.mage.pFrostNova &&
-                       !pVictim->HasUnitState(UNIT_STATE_ROOT) &&
-                       !pVictim->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL) &&
-                        CanTryToCastSpell(me, m_spells.mage.pFrostNova))
-                    {
-                        DoCastSpell(me, m_spells.mage.pFrostNova);
-                    }
-
-                    if (RunAwayFromTarget(pVictim))
-                    {
-                        me->SetCasterChaseDistance(25.0f);
-                        return;
-                    }
+                    me->SetCasterChaseDistance(25.0f);
+                    return;
                 }
+            }
+
+            // Blink away if rooted or snared
+            if (m_spells.mage.pBlink &&
+               (me->HasUnitState(UNIT_STATE_CAN_NOT_MOVE) ||
+                me->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED)) &&
+                CanTryToCastSpell(me, m_spells.mage.pBlink))
+            {
+                if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
+                    me->GetMotionMaster()->Clear();
+
+                if (DoCastSpell(me, m_spells.mage.pBlink) == SPELL_CAST_OK)
+                    return;
             }
         }
 
+        // === AOE: 2+ enemies near self ===
         if (me->GetEnemyCountInRadiusAround(me, 10.0f) > 1)
         {
             if (m_spells.mage.pConeofCold && !me->IsMoving() &&
@@ -186,17 +220,7 @@ void PartyBotAI::UpdateInCombatAI_Mage()
             }
         }
 
-        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == DISTANCING_MOTION_TYPE)
-            return;
-
-        if (m_spells.mage.pCounterspell &&
-            pVictim->IsNonMeleeSpellCasted(false, false, true) &&
-            CanTryToCastSpell(pVictim, m_spells.mage.pCounterspell))
-        {
-            if (DoCastSpell(pVictim, m_spells.mage.pCounterspell) == SPELL_CAST_OK)
-                return;
-        }
-
+        // === BLIZZARD: 3+ enemies grouped on target ===
         if (m_spells.mage.pBlizzard &&
            (me->GetEnemyCountInRadiusAround(pVictim, 10.0f) > 2) &&
             CanTryToCastSpell(pVictim, m_spells.mage.pBlizzard))
@@ -205,28 +229,30 @@ void PartyBotAI::UpdateInCombatAI_Mage()
                 return;
         }
 
-        if (m_spells.mage.pPolymorph)
+        // Don't cast while actively distancing
+        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == DISTANCING_MOTION_TYPE)
+            return;
+
+        // === COOLDOWNS ===
+
+        // Combustion (fire crit buff — activate before fire spells)
+        if (m_spells.mage.pCombustion &&
+            CanTryToCastSpell(me, m_spells.mage.pCombustion))
         {
-            if (Unit* pTarget = SelectAttackerDifferentFrom(pVictim))
-            {
-                if (pTarget->GetHealthPercent() > 20.0f &&
-                    CanTryToCastSpell(pTarget, m_spells.mage.pPolymorph) &&
-                    CanUseCrowdControl(m_spells.mage.pPolymorph, pTarget))
-                {
-                    if (DoCastSpell(pTarget, m_spells.mage.pPolymorph) == SPELL_CAST_OK)
-                        return;
-                }
-            }
+            if (DoCastSpell(me, m_spells.mage.pCombustion) == SPELL_CAST_OK)
+                return;
         }
 
+        // Arcane Power (damage boost, mana >50%)
         if (m_spells.mage.pArcanePower &&
-            (me->GetPowerPercent(POWER_MANA) > 50.0f) &&
+           (me->GetPowerPercent(POWER_MANA) > 50.0f) &&
             CanTryToCastSpell(me, m_spells.mage.pArcanePower))
         {
             if (DoCastSpell(me, m_spells.mage.pArcanePower) == SPELL_CAST_OK)
                 return;
         }
 
+        // Presence of Mind (instant next cast, mana >50%)
         if (m_spells.mage.pPresenceOfMind &&
            (me->GetPowerPercent(POWER_MANA) > 50.0f) &&
             CanTryToCastSpell(me, m_spells.mage.pPresenceOfMind))
@@ -235,6 +261,17 @@ void PartyBotAI::UpdateInCombatAI_Mage()
                 return;
         }
 
+        // Pyroblast — only with Presence of Mind aura active OR opener at range
+        if (m_spells.mage.pPyroblast &&
+           ((m_spells.mage.pPresenceOfMind && me->HasAura(m_spells.mage.pPresenceOfMind->Id)) ||
+            (!pVictim->IsInCombat() && (pVictim->GetMaxHealth() > me->GetMaxHealth()) && (me->GetDistance(pVictim) > 30.0f))) &&
+            CanTryToCastSpell(pVictim, m_spells.mage.pPyroblast))
+        {
+            if (DoCastSpell(pVictim, m_spells.mage.pPyroblast) == SPELL_CAST_OK)
+                return;
+        }
+
+        // === EXECUTE PHASE: Scorch at <20% target HP (fast cast) ===
         if (m_spells.mage.pScorch &&
            (pVictim->GetHealthPercent() < 20.0f) &&
             CanTryToCastSpell(pVictim, m_spells.mage.pScorch))
@@ -243,9 +280,10 @@ void PartyBotAI::UpdateInCombatAI_Mage()
                 return;
         }
 
-        // Main nukes — skip if threat is too high (wand instead)
+        // === PRIMARY NUKES — threat-aware (skip if ShouldThrottleDPS) ===
         if (!ShouldThrottleDPS(pVictim))
         {
+            // Frostbolt (primary nuke)
             if (m_spells.mage.pFrostbolt &&
                 CanTryToCastSpell(pVictim, m_spells.mage.pFrostbolt))
             {
@@ -253,6 +291,7 @@ void PartyBotAI::UpdateInCombatAI_Mage()
                     return;
             }
 
+            // Fire Blast (instant, use between Frostbolts)
             if (m_spells.mage.pFireBlast &&
                 CanTryToCastSpell(pVictim, m_spells.mage.pFireBlast))
             {
@@ -260,6 +299,7 @@ void PartyBotAI::UpdateInCombatAI_Mage()
                     return;
             }
 
+            // Fireball (fire spec alternative)
             if (m_spells.mage.pFireball &&
                 CanTryToCastSpell(pVictim, m_spells.mage.pFireball))
             {
@@ -268,6 +308,7 @@ void PartyBotAI::UpdateInCombatAI_Mage()
             }
         }
 
+        // === EVOCATION: mana recovery when <30% mana AND safe (no melee range) ===
         if (m_spells.mage.pEvocation &&
            (me->GetPowerPercent(POWER_MANA) < 30.0f) &&
            (GetAttackersInRangeCount(10.0f) == 0) &&
@@ -277,6 +318,7 @@ void PartyBotAI::UpdateInCombatAI_Mage()
                 return;
         }
 
+        // === WAND: when OOM (<5% mana) ===
         if (me->HasSpell(PB_SPELL_SHOOT_WAND_M) &&
            !me->IsMoving() &&
            (me->GetPowerPercent(POWER_MANA) < 5.0f) &&
