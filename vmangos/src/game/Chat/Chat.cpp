@@ -91,6 +91,16 @@ ChatCommand * ChatHandler::getCommandTable()
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 
+    static ChatCommand guildRaidCommandTable[] =
+    {
+        { "assemble",   SEC_MODERATOR,        false, &ChatHandler::HandleGuildRaidAssembleCommand,    "", nullptr },
+        { "disband",    SEC_MODERATOR,        false, &ChatHandler::HandleGuildRaidDisbandCommand,     "", nullptr },
+        { "check",      SEC_MODERATOR,        false, &ChatHandler::HandleGuildRaidCheckCommand,       "", nullptr },
+        { "roster",     SEC_MODERATOR,        false, &ChatHandler::HandleGuildRosterCommand,          "", nullptr },
+        { "botinfo",    SEC_MODERATOR,        false, &ChatHandler::HandleGuildBotInfoCommand,         "", nullptr },
+        { nullptr,      0,                    false, nullptr,                                         "", nullptr },
+    };
+
     static ChatCommand partyBotCommandTable[] =
     {
         { "add",        SEC_MODERATOR,        false, &ChatHandler::HandlePartyBotAddCommand,         "", nullptr },
@@ -1217,6 +1227,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "bot",            SEC_ADMINISTRATOR,  true, nullptr,                              "Manage bots", botCommandTable      },
         { "ahbot",          SEC_ADMINISTRATOR,  true, nullptr,                            "Manage AH bot", ahbotCommandTable    },
         { "partybot",       SEC_ADMINISTRATOR,  false, nullptr,                       "Manage party bots", partyBotCommandTable },
+        { "guildraid",      SEC_MODERATOR,      false, nullptr,                      "Manage guild raids", guildRaidCommandTable },
         { "battlebot",      SEC_ADMINISTRATOR,  true, nullptr,                      "Manage battle bots", battleBotCommandTable},
         { "world",          SEC_ADMINISTRATOR,  false, nullptr,                                        "", worldCommandTable    },
         { "possess",        SEC_GAMEMASTER,     false, &ChatHandler::HandlePossessCommand,             "", nullptr              },

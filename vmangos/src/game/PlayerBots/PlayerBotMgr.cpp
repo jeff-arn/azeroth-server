@@ -2031,3 +2031,180 @@ bool ChatHandler::HandleBattleBotShowAllPathsCommand(char* args)
     PSendSysMessage("Showing %u paths for battleground.", id);
     return true;
 }
+
+// --- Guild Raid Commands ---
+
+#include "GuildBotMgr.h"
+
+bool ChatHandler::HandleGuildRaidAssembleCommand(char* args)
+{
+    Player* pPlayer = m_session->GetPlayer();
+    if (!pPlayer)
+        return false;
+
+    if (!sGuildBotMgr.IsEnabled())
+    {
+        SendSysMessage("Guild bot system is disabled.");
+        return true;
+    }
+
+    if (sGuildBotMgr.AssembleRaid(pPlayer))
+        PSendSysMessage("Assembling guild raid (%u bots assigned).",
+            (uint32)sGuildBotMgr.GetOnlineGuildBotCount());
+    else
+        SendSysMessage("No guild bots available to assemble.");
+
+    return true;
+}
+
+bool ChatHandler::HandleGuildRaidDisbandCommand(char* args)
+{
+    Player* pPlayer = m_session->GetPlayer();
+    if (!pPlayer)
+        return false;
+
+    if (sGuildBotMgr.DisbandRaid(pPlayer))
+        SendSysMessage("Guild raid disbanded.");
+    else
+        SendSysMessage("No guild bots online to disband.");
+
+    return true;
+}
+
+bool ChatHandler::HandleGuildRaidCheckCommand(char* args)
+{
+    if (!sGuildBotMgr.IsEnabled())
+    {
+        SendSysMessage("Guild bot system is disabled.");
+        return true;
+    }
+
+    auto const& roster = sGuildBotMgr.GetRoster();
+
+    uint32 tanks = 0, healers = 0, meleeDps = 0, rangedDps = 0;
+    for (auto const& bot : roster)
+    {
+        if (!bot.raidAssigned || !bot.active)
+            continue;
+        switch (bot.role)
+        {
+            case GUILD_BOT_ROLE_TANK: ++tanks; break;
+            case GUILD_BOT_ROLE_HEALER: ++healers; break;
+            case GUILD_BOT_ROLE_DPS:
+                switch (bot.cls)
+                {
+                    case 1: case 4: ++meleeDps; break;  // Warrior, Rogue
+                    case 2: // Paladin
+                        if (bot.spec == "retribution") ++meleeDps; else ++rangedDps;
+                        break;
+                    case 7: // Shaman
+                        if (bot.spec == "enhancement") ++meleeDps; else ++rangedDps;
+                        break;
+                    case 11: // Druid
+                        if (bot.spec == "feral_cat") ++meleeDps; else ++rangedDps;
+                        break;
+                    default: ++rangedDps; break;
+                }
+                break;
+        }
+    }
+
+    PSendSysMessage("Raid composition: %u tanks, %u healers, %u melee DPS, %u ranged DPS (%u total)",
+        tanks, healers, meleeDps, rangedDps, tanks + healers + meleeDps + rangedDps);
+
+    // Check for missing critical buffs
+    bool hasMark = false, hasFortitude = false, hasKings = false, hasTrueshot = false;
+    for (auto const& bot : roster)
+    {
+        if (!bot.raidAssigned || !bot.active)
+            continue;
+        if (bot.cls == 11) hasMark = true;          // Druid: Mark of the Wild
+        if (bot.cls == 5) hasFortitude = true;       // Priest: Power Word: Fortitude
+        if (bot.cls == 2) hasKings = true;           // Paladin: Blessing of Kings
+        if (bot.cls == 3) hasTrueshot = true;        // Hunter: Trueshot Aura
+    }
+
+    if (!hasFortitude) SendSysMessage("  WARNING: No Priest for Fortitude!");
+    if (!hasMark) SendSysMessage("  WARNING: No Druid for Mark of the Wild!");
+    if (!hasKings) SendSysMessage("  WARNING: No Paladin for Blessings!");
+    if (!hasTrueshot) SendSysMessage("  WARNING: No Hunter for Trueshot Aura!");
+
+    return true;
+}
+
+bool ChatHandler::HandleGuildRosterCommand(char* args)
+{
+    if (!sGuildBotMgr.IsEnabled())
+    {
+        SendSysMessage("Guild bot system is disabled.");
+        return true;
+    }
+
+    auto const& roster = sGuildBotMgr.GetRoster();
+
+    static const char* classNames[] = {
+        "", "Warrior", "Paladin", "Hunter", "Rogue", "Priest",
+        "", "Shaman", "Mage", "Warlock", "", "Druid"
+    };
+
+    static const char* roleNames[] = { "Tank", "Healer", "DPS" };
+
+    PSendSysMessage("Guild Roster (%u bots):", (uint32)roster.size());
+    for (auto const& bot : roster)
+    {
+        const char* className = (bot.cls < 12) ? classNames[bot.cls] : "Unknown";
+        const char* roleName = roleNames[bot.role];
+        PSendSysMessage("  %s%s - %s %s (%s) - GS: %.0f",
+            bot.raidAssigned ? "[R] " : "    ",
+            bot.name.c_str(),
+            className,
+            bot.spec.c_str(),
+            roleName,
+            bot.gearScore);
+    }
+
+    return true;
+}
+
+bool ChatHandler::HandleGuildBotInfoCommand(char* args)
+{
+    if (!args || !*args)
+    {
+        SendSysMessage("Usage: .guildraid botinfo <name>");
+        return true;
+    }
+
+    if (!sGuildBotMgr.IsEnabled())
+    {
+        SendSysMessage("Guild bot system is disabled.");
+        return true;
+    }
+
+    std::string searchName = args;
+    auto const& roster = sGuildBotMgr.GetRoster();
+
+    for (auto const& bot : roster)
+    {
+        if (bot.name == searchName)
+        {
+            static const char* classNames[] = {
+                "", "Warrior", "Paladin", "Hunter", "Rogue", "Priest",
+                "", "Shaman", "Mage", "Warlock", "", "Druid"
+            };
+            static const char* roleNames[] = { "Tank", "Healer", "DPS" };
+
+            PSendSysMessage("%s - Level 60 %s", bot.name.c_str(),
+                (bot.cls < 12) ? classNames[bot.cls] : "Unknown");
+            PSendSysMessage("  Spec: %s | Role: %s", bot.spec.c_str(), roleNames[bot.role]);
+            PSendSysMessage("  Gear Score: %.0f", bot.gearScore);
+            PSendSysMessage("  Raid Assigned: %s | Active: %s",
+                bot.raidAssigned ? "Yes" : "No",
+                bot.active ? "Yes" : "No");
+            PSendSysMessage("  Online: %s", bot.online ? "Yes" : "No");
+            return true;
+        }
+    }
+
+    PSendSysMessage("Guild bot '%s' not found.", searchName.c_str());
+    return true;
+}
