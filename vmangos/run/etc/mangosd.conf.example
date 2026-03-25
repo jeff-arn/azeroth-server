@@ -3027,6 +3027,13 @@ BotService.Enable = 1
 GuildBot.Enable = 1
 GuildBot.AccountId = 98
 
+#    MinPetitionSigns
+#        Minimum signatures required on a guild charter before it can be turned in.
+#        Vanilla default is 9. Set to 0 to allow solo guild creation.
+#        Default: 0
+#
+MinPetitionSigns = 0
+
 ###################################################################################################################
 # PLAYER BOTS
 #

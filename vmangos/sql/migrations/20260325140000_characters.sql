@@ -41,18 +41,9 @@ CREATE TABLE IF NOT EXISTS `guild_bot_spec_weights` (
   PRIMARY KEY (`class`, `spec`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
--- Create the guild (id=1, tabard: gold lion on blue background)
-INSERT IGNORE INTO `guild` (`guild_id`, `name`, `leader_guid`, `emblem_style`, `emblem_color`, `border_style`, `border_color`, `background_color`, `info`, `motd`, `create_date`)
-VALUES (1, 'Vanguard of Azeroth', 200, 35, 17, 1, 17, 45, 'A guild of stalwart heroes.', 'Ready for the next raid!', UNIX_TIMESTAMP());
-
--- Create guild ranks
-INSERT IGNORE INTO `guild_rank` (`guild_id`, `id`, `name`, `rights`)
-VALUES
-(1, 0, 'Guild Master', 1048575),
-(1, 1, 'Officer', 1048575),
-(1, 2, 'Raider', 590145),
-(1, 3, 'Member', 590145),
-(1, 4, 'Initiate', 65);
+-- Guild is NOT pre-created here. The human player creates the guild in-game
+-- (MinPetitionSigns=0 allows solo creation). GuildBotMgr auto-adds bots when
+-- it detects a guild with a human member.
 
 -- Create 20 bot characters (account 98, GUIDs 200-219)
 -- Faction: Alliance (Human=1, Dwarf=3, NightElf=4, Gnome=7)
@@ -88,31 +79,10 @@ VALUES
 (218, 98, 'Davan',     1, 5, 0, 60, 1519, 0, -8949.95, -132.493, 83.5312, 0, 0),  -- Human Shadow Priest
 (219, 98, 'Feranor',   4, 11, 0, 60, 1519, 0, -8949.95, -132.493, 83.5312, 0, 0); -- NightElf Feral Cat Druid
 
--- Add all bots to guild as Raiders (rank 2), leader as Guild Master (rank 0)
-INSERT IGNORE INTO `guild_member` (`guild_id`, `guid`, `rank`, `player_note`, `officer_note`)
-VALUES
-(1, 200, 0, 'Main Tank', ''),
-(1, 201, 2, 'Offtank / Bear', ''),
-(1, 202, 2, 'Healer', ''),
-(1, 203, 2, 'Healer', ''),
-(1, 204, 2, 'Healer', ''),
-(1, 205, 2, 'Healer', ''),
-(1, 206, 2, 'Healer', ''),
-(1, 207, 2, 'DPS', ''),
-(1, 208, 2, 'DPS', ''),
-(1, 209, 2, 'DPS', ''),
-(1, 210, 2, 'DPS', ''),
-(1, 211, 2, 'DPS', ''),
-(1, 212, 2, 'DPS', ''),
-(1, 213, 2, 'DPS', ''),
-(1, 214, 2, 'DPS', ''),
-(1, 215, 2, 'DPS', ''),
-(1, 216, 2, 'DPS', ''),
-(1, 217, 2, 'DPS', ''),
-(1, 218, 2, 'DPS', ''),
-(1, 219, 2, 'DPS', '');
+-- Guild membership is NOT pre-seeded. GuildBotMgr adds bots to the player's
+-- guild dynamically when it detects one exists.
 
--- Populate guild bot roster metadata
+-- Populate guild bot roster metadata (spec/role config, independent of guild membership)
 INSERT IGNORE INTO `guild_bot_roster` (`guid`, `spec`, `role`, `raid_assigned`, `active`)
 VALUES
 (200, 'protection',    'tank',   1, 1),

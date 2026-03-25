@@ -90,6 +90,8 @@ public:
 private:
     void LoadRoster();
     void LoadSpecWeights();
+    void DetectPlayerGuild();
+    void PopulateBotsIntoGuild();
 
     bool m_enabled;
     uint32 m_guildId;

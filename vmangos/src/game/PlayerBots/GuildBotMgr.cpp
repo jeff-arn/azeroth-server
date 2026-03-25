@@ -90,14 +90,80 @@ void GuildBotMgr::LoadRoster()
     }
     while (result->NextRow());
 
-    // Get guild ID from first bot
+    // Find guild: look for a guild that has a human player member (account < 100)
+    DetectPlayerGuild();
+}
+
+void GuildBotMgr::DetectPlayerGuild()
+{
+    // Check if bots are already in a guild
     if (!m_roster.empty())
     {
         std::unique_ptr<QueryResult> guildResult(CharacterDatabase.PQuery(
             "SELECT guild_id FROM guild_member WHERE guid = %u", m_roster[0].guid));
         if (guildResult)
+        {
             m_guildId = guildResult->Fetch()[0].GetUInt32();
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[GuildBotMgr] Bots already in guild %u.", m_guildId);
+            return;
+        }
     }
+
+    // No guild yet — find a guild owned by a human player
+    std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
+        "SELECT g.guild_id FROM guild g "
+        "JOIN guild_member gm ON g.guild_id = gm.guild_id "
+        "JOIN characters c ON gm.guid = c.guid "
+        "WHERE c.account < 100 "
+        "ORDER BY g.guild_id ASC LIMIT 1"));
+
+    if (!result)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+            "[GuildBotMgr] No player guild found. Bots will join when a player creates a guild.");
+        m_guildId = 0;
+        return;
+    }
+
+    m_guildId = result->Fetch()[0].GetUInt32();
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[GuildBotMgr] Found player guild %u. Adding bots...", m_guildId);
+
+    // Add all roster bots to this guild as rank 2 (Raider)
+    PopulateBotsIntoGuild();
+}
+
+void GuildBotMgr::PopulateBotsIntoGuild()
+{
+    if (m_guildId == 0)
+        return;
+
+    uint32 added = 0;
+    for (auto const& bot : m_roster)
+    {
+        // Check if already a member
+        std::unique_ptr<QueryResult> check(CharacterDatabase.PQuery(
+            "SELECT guid FROM guild_member WHERE guid = %u", bot.guid));
+        if (check)
+            continue;
+
+        // Determine player note based on role
+        const char* note = "";
+        switch (bot.role)
+        {
+            case GUILD_BOT_ROLE_TANK:   note = "Tank"; break;
+            case GUILD_BOT_ROLE_HEALER: note = "Healer"; break;
+            case GUILD_BOT_ROLE_DPS:    note = "DPS"; break;
+        }
+
+        CharacterDatabase.PExecute(
+            "INSERT INTO guild_member (guild_id, guid, `rank`, player_note, officer_note) "
+            "VALUES (%u, %u, 2, '%s', '')",
+            m_guildId, bot.guid, note);
+        ++added;
+    }
+
+    if (added > 0)
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[GuildBotMgr] Added %u bots to guild %u.", added, m_guildId);
 }
 
 void GuildBotMgr::LoadSpecWeights()
@@ -187,6 +253,14 @@ bool GuildBotMgr::AssembleRaid(Player* pLeader)
 {
     if (!pLeader || !m_enabled)
         return false;
+
+    // If no guild detected yet, try again (player may have just created one)
+    if (m_guildId == 0)
+    {
+        DetectPlayerGuild();
+        if (m_guildId == 0)
+            return false;
+    }
 
     uint32 spawned = 0;
 
