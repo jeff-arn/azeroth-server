@@ -1,0 +1,44 @@
+# ============ Build artifacts ============
+vmangos/build/
+*.o
+*.a
+*.so
+
+# ============ Binaries & extracted data ============
+vmangos/run/bin/mangosd
+vmangos/run/bin/realmd
+vmangos/run/bin/Extractors/
+vmangos/run/bin/maps/
+vmangos/run/bin/mmaps/
+vmangos/run/bin/vmaps/
+vmangos/run/bin/5875/
+
+# ============ Logs ============
+*.log
+*.Log
+vmangos/run/bin/DBErrorFixes.sql
+
+# ============ Config files with credentials ============
+vmangos/run/etc/mangosd.conf
+vmangos/run/etc/realmd.conf
+vmangos/run/etc/*.conf.dist
+.env
+
+# ============ Database dumps ============
+vmangos-database/db-latest.zip
+vmangos-database/db_dump/
+backups/
+
+# ============ Python ============
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# ============ IDE / editor ============
+.vscode/
+.vscode-server/
+.idea/
+*.swp
+*.swo
+*~
