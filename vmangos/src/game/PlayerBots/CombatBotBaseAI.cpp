@@ -10,6 +10,7 @@
 #include "SpellAuras.h"
 #include "Chat.h"
 #include "CharacterDatabaseCache.h"
+#include "GuildBotMgr.h"
 #include <random>
 
 enum CombatBotSpells
@@ -3432,11 +3433,59 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
 
             uint64 guid = *((uint64*)(*packet).contents());
             uint32 slot = *(((uint32*)(*packet).contents()) + 2);
+            uint32 itemId = *(((uint32*)(*packet).contents()) + 3);
+
+            uint8 rollType = 0; // default: pass
+
+            // Guild bots: roll Need if the item is an upgrade for their spec
+            if (sGuildBotMgr.IsGuildBot(me->GetGUIDLow()))
+            {
+                // Check if any human player is in the group and might need it
+                // Guild bots never contest a human Need roll — we pass by default
+                // and let CountTheRoll handle it. But we do roll Need if it's an upgrade.
+                bool humanInGroup = false;
+                if (Group* group = me->GetGroup())
+                {
+                    for (auto itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+                    {
+                        if (Player* member = itr->getSource())
+                        {
+                            if (member->GetGUIDLow() != me->GetGUIDLow() &&
+                                !sGuildBotMgr.IsGuildBot(member->GetGUIDLow()) &&
+                                member->GetSession() && !member->GetSession()->GetBot())
+                            {
+                                humanInGroup = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Only roll Need if item is an upgrade — but pass if humans are present
+                // (humans always get priority; bots pick up leftovers)
+                if (!humanInGroup)
+                {
+                    // Evaluate across all equippable slots for this item
+                    ItemPrototype const* pProto = sObjectMgr.GetItemPrototype(itemId);
+                    if (pProto)
+                    {
+                        for (uint8 equipSlot = EQUIPMENT_SLOT_START; equipSlot < EQUIPMENT_SLOT_END; ++equipSlot)
+                        {
+                            float delta = sGuildBotMgr.EvaluateUpgrade(me->GetGUIDLow(), itemId, equipSlot);
+                            if (delta > 0.0f)
+                            {
+                                rollType = 1; // ROLL_NEED
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
 
             std::unique_ptr<WorldPacket> data = std::make_unique<WorldPacket>(CMSG_LOOT_ROLL);
             *data << uint64(guid);
             *data << uint32(slot);
-            *data << uint8(0); // pass
+            *data << uint8(rollType);
             me->GetSession()->QueuePacket(std::move(data));
             return;
         }
