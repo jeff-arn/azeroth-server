@@ -109,6 +109,16 @@ class AuctionHouseBotMgr
         AHBotSellerType RollSellerType() const;
         AHBotSellerIdentity const& PickSeller(AHBotSellerType type) const;
         uint32 ComputeCategoryTarget(AHBotCategory cat) const;
+
+        // Bot buyer system — purchases player-listed auctions at fair prices.
+        void UpdateBotBuyers(AuctionHouseObject* ah);
+        uint32 GetFairBuyoutForItem(uint32 itemId, uint32 stackSize) const;
+        float  GetPurchaseProbability(uint32 listingBuyout, uint32 fairBuyout) const;
+        bool   IsBotOwned(uint32 ownerGuid) const;
+
+        time_t m_lastBuyerRunTime = 0;
+        uint32 m_buyerIntervalSecs = 1800;  // run buyer scan every 30 min
+        uint32 m_buyerBudgetPerCycle = 500000; // 50g max per cycle in copper
 };
 
 #define sAuctionHouseBotMgr MaNGOS::Singleton< AuctionHouseBotMgr >::Instance()

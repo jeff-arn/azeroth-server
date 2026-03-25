@@ -125,6 +125,9 @@ void AuctionHouseBotMgr::Load()
     m_config->quotaMin[AHBOT_CAT_LEVELING]    = sConfig.GetIntDefault("AHBot.Quota.Leveling.Min", 10);
     m_config->quotaMax[AHBOT_CAT_LEVELING]    = sConfig.GetIntDefault("AHBot.Quota.Leveling.Max", 15);
 
+    m_buyerIntervalSecs  = sConfig.GetIntDefault("AHBot.Buyer.IntervalSecs", 1800);
+    m_buyerBudgetPerCycle = sConfig.GetIntDefault("AHBot.Buyer.BudgetPerCycle", 500000);
+
     m_auctionHouseEntry = sAuctionMgr.GetAuctionHouseEntry(m_config->ahfid);
     if (!m_auctionHouseEntry)
     {
@@ -318,6 +321,13 @@ void AuctionHouseBotMgr::Update(bool force /* = false */)
                 toAdd, currentCount, m_config->itemcount);
             PopulateAuctions(auctionHouse);
         }
+    }
+
+    // Run bot buyer scan periodically.
+    if (static_cast<uint32>(now - m_lastBuyerRunTime) >= m_buyerIntervalSecs)
+    {
+        UpdateBotBuyers(auctionHouse);
+        m_lastBuyerRunTime = now;
     }
 }
 
@@ -575,6 +585,159 @@ void AuctionHouseBotMgr::AddItem(AuctionHouseBotEntry const& e,
     sAuctionMgr.AddAItem(item);
     ah->AddAuction(auctionEntry);
     auctionEntry->SaveToDB();
+}
+
+// ============================================================================
+// Bot buyer system — purchases player-listed auctions at fair prices.
+// ============================================================================
+
+void AuctionHouseBotMgr::UpdateBotBuyers(AuctionHouseObject* ah)
+{
+    if (!ah || m_sellers.empty())
+        return;
+
+    AuctionHouseObject::AuctionEntryMap* auctions = ah->GetAuctions();
+    if (!auctions || auctions->empty())
+        return;
+
+    uint32 budgetRemaining = m_buyerBudgetPerCycle;
+    uint32 purchaseCount = 0;
+
+    // Collect candidate auctions (player-listed, has buyout, not already bid on).
+    std::vector<AuctionEntry*> candidates;
+    for (auto& pair : *auctions)
+    {
+        AuctionEntry* entry = pair.second;
+        if (!entry || entry->buyout == 0)
+            continue;
+
+        // Skip bot-owned auctions.
+        if (IsBotOwned(entry->owner))
+            continue;
+
+        // Skip auctions already bid on.
+        if (entry->bidder != 0)
+            continue;
+
+        candidates.push_back(entry);
+    }
+
+    // Shuffle to avoid always buying the same items first.
+    for (uint32 i = static_cast<uint32>(candidates.size()) - 1; i > 0; --i)
+    {
+        uint32 j = urand(0, i);
+        std::swap(candidates[i], candidates[j]);
+    }
+
+    for (AuctionEntry* entry : candidates)
+    {
+        if (budgetRemaining == 0)
+            break;
+
+        // Get the item count from the actual item.
+        Item* item = sAuctionMgr.GetAItem(entry->itemGuidLow);
+        if (!item)
+            continue;
+
+        uint32 stackSize = item->GetCount();
+        uint32 fairBuyout = GetFairBuyoutForItem(entry->itemTemplate, stackSize);
+        if (fairBuyout == 0)
+            continue;  // Unknown item — don't buy.
+
+        float prob = GetPurchaseProbability(entry->buyout, fairBuyout);
+        if (prob <= 0.0f)
+            continue;
+
+        // Roll the dice.
+        float roll = static_cast<float>(urand(0, 10000)) / 100.0f;  // 0.00 - 100.00
+        if (roll > prob)
+            continue;
+
+        // Can we afford it?
+        if (entry->buyout > budgetRemaining)
+            continue;
+
+        // Execute the buyout! The buyer is a random bot seller identity.
+        AHBotSellerIdentity const& buyer = m_sellers[urand(0, static_cast<uint32>(m_sellers.size()) - 1)];
+
+        uint32 buyoutPrice = entry->buyout;
+
+        // Update the entry with the buyer info before sending mail.
+        entry->bidder = buyer.characterGuid;
+        entry->bid = buyoutPrice;
+
+        // Send gold to the player seller via mail (the auction system handles this).
+        sAuctionMgr.SendAuctionSuccessfulMail(entry);
+
+        // Remove auction and item from AH.
+        sAuctionMgr.RemoveAItem(entry->itemGuidLow);
+        entry->DeleteFromDB();
+        ah->RemoveAuction(entry);
+
+        // Delete the item instance (it was "purchased" by the bot, effectively consumed).
+        if (item)
+        {
+            item->DeleteFromDB();
+            delete item;
+        }
+
+        delete entry;
+
+        budgetRemaining -= buyoutPrice;
+        ++purchaseCount;
+    }
+
+    if (purchaseCount > 0)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+            "AHBot Buyer: Purchased %u player auctions (budget used: %ug %us %uc).",
+            purchaseCount,
+            (m_buyerBudgetPerCycle - budgetRemaining) / 10000,
+            ((m_buyerBudgetPerCycle - budgetRemaining) % 10000) / 100,
+            (m_buyerBudgetPerCycle - budgetRemaining) % 100);
+    }
+}
+
+uint32 AuctionHouseBotMgr::GetFairBuyoutForItem(uint32 itemId, uint32 stackSize) const
+{
+    // Look up the item in our bot item table. Use the per-unit buyout price.
+    for (auto const& e : m_items)
+    {
+        if (e.item == itemId)
+        {
+            // The stored buyout is per-stack at minStack, so calculate per-unit.
+            uint32 perUnit = e.buyout / std::max(e.minStack, 1u);
+            return perUnit * stackSize;
+        }
+    }
+    return 0;  // Unknown item.
+}
+
+float AuctionHouseBotMgr::GetPurchaseProbability(uint32 listingBuyout, uint32 fairBuyout) const
+{
+    if (fairBuyout == 0)
+        return 0.0f;
+
+    float ratio = static_cast<float>(listingBuyout) / static_cast<float>(fairBuyout);
+
+    // Price at or below fair market value — very likely to buy.
+    if (ratio <= 0.8f)  return 95.0f;   // bargain
+    if (ratio <= 1.0f)  return 80.0f;   // at market
+    if (ratio <= 1.2f)  return 50.0f;   // slightly over
+    if (ratio <= 1.5f)  return 20.0f;   // overpriced
+    if (ratio <= 2.0f)  return 5.0f;    // significantly overpriced
+    if (ratio <= 5.0f)  return 1.0f;    // absurd
+    return 0.0f;                         // Peacebloom for 1000g — never
+}
+
+bool AuctionHouseBotMgr::IsBotOwned(uint32 ownerGuid) const
+{
+    for (auto const& seller : m_sellers)
+    {
+        if (seller.characterGuid == ownerGuid)
+            return true;
+    }
+    return false;
 }
 
 // Chat command handlers.

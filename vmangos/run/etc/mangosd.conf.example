@@ -2968,6 +2968,17 @@ AHBot.Quota.Equipment.Max = 10
 AHBot.Quota.Leveling.Min = 10
 AHBot.Quota.Leveling.Max = 15
 
+#    AHBot.Buyer.IntervalSecs
+#        How often (in seconds) the bot buyer scans for player auctions to purchase.
+#        Default: 1800 (30 minutes)
+#
+#    AHBot.Buyer.BudgetPerCycle
+#        Maximum copper the bot buyer can spend per scan cycle.
+#        Default: 500000 (50g)
+#
+AHBot.Buyer.IntervalSecs = 1800
+AHBot.Buyer.BudgetPerCycle = 500000
+
 ###################################################################################################################
 # BOT CHAT
 #
