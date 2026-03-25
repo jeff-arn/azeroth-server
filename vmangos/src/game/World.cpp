@@ -69,6 +69,7 @@
 #include "AuctionHouseBotMgr.h"
 #include "BotChatManager.h"
 #include "BotServiceMgr.h"
+#include "GuildBotMgr.h"
 #include "Transports/TransportMgr.h"
 #include "PlayerBotMgr.h"
 #include "ZoneScriptMgr.h"
@@ -1838,6 +1839,9 @@ void World::SetInitialWorldSettings()
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading bot service manager");
     sBotServiceMgr.Load();
+
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading guild bot manager");
+    sGuildBotMgr.Load();
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Caching player phases (obsolete)");
     sObjectMgr.LoadPlayerPhaseFromDb();

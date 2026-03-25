@@ -3008,6 +3008,24 @@ BotChat.TradeChat.IntervalMax = 300
 BotService.Enable = 1
 
 ###################################################################################################################
+# GUILD BOTS
+#
+#    GuildBot.Enable
+#        Enable the persistent guild bot system. Guild bots are loaded from the
+#        guild_bot_roster table and can be assembled into raids via .guildraid.
+#        Default: 1 - on
+#                 0 - off
+#
+#    GuildBot.AccountId
+#        Account ID used for guild bot characters.
+#        Default: 98
+#
+###################################################################################################################
+
+GuildBot.Enable = 1
+GuildBot.AccountId = 98
+
+###################################################################################################################
 # PLAYER BOTS
 #
 #    RandomBot.Enable
