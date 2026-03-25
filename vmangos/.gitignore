@@ -37,7 +37,13 @@ cmake-build-*
 #
 /bin/
 /build/
-/run/
+/run/*
+!/run/etc/
+/run/etc/*
+!/run/etc/*.example
+!/run/bin/
+/run/bin/*
+!/run/bin/run-mangosd
 /opt/
 tags
 TAGS
