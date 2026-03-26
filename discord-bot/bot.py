@@ -35,6 +35,7 @@ client = discord.Client(intents=intents)
 # Track state
 last_server_status = None
 known_online_players = {}
+_tasks_started = False
 
 
 def is_server_running():
@@ -322,10 +323,13 @@ async def on_ready():
         embed.set_footer(text="Azeroth Private Server")
         await channel.send(embed=embed)
 
-    # Start background tasks
-    client.loop.create_task(server_status_loop())
-    client.loop.create_task(player_activity_loop())
-    client.loop.create_task(levelup_log_watcher())
+    # Start background tasks (only once — on_ready can fire multiple times on reconnect)
+    global _tasks_started
+    if not _tasks_started:
+        _tasks_started = True
+        client.loop.create_task(server_status_loop())
+        client.loop.create_task(player_activity_loop())
+        client.loop.create_task(levelup_log_watcher())
 
 
 @client.event
