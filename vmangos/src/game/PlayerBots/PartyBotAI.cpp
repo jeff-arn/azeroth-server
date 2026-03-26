@@ -15,6 +15,7 @@
 */
 
 #include "PartyBotAI.h"
+#include "GuildBotMgr.h"
 #include "BotServiceMgr.h"
 #include "Player.h"
 #include "CreatureAI.h"
@@ -981,7 +982,21 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 if (m_role == ROLE_INVALID)
                     AutoAssignRole();
 
-                AutoEquipGear(sWorld.getConfig(CONFIG_UINT32_PARTY_BOT_AUTO_EQUIP));
+                // Guild bots use gear tier setting; others use global config
+                if (sGuildBotMgr.IsEnabled() && sGuildBotMgr.IsGuildBot(me->GetGUIDLow()))
+                {
+                    if (!sGuildBotMgr.HasLootUpgrades(me->GetGUIDLow()))
+                    {
+                        GuildBotInfo const* gbi = sGuildBotMgr.GetBotInfo(me->GetGUIDLow());
+                        if (gbi)
+                            AutoEquipGear(sGuildBotMgr.GetAutoEquipOptionForTier(gbi->gearTier));
+                        else
+                            AutoEquipGear(sWorld.getConfig(CONFIG_UINT32_PARTY_BOT_AUTO_EQUIP));
+                    }
+                    // else: bot has loot upgrades, keep their current gear (loaded from DB)
+                }
+                else
+                    AutoEquipGear(sWorld.getConfig(CONFIG_UINT32_PARTY_BOT_AUTO_EQUIP));
 
                 // fix client bug causing some item slots to not be visible
                 if (Player* pLeader = GetPartyLeader())

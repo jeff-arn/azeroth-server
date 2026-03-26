@@ -48,9 +48,9 @@ void GuildBotMgr::LoadRoster()
     m_roster.clear();
     m_guidToIndex.clear();
 
-    //                                          0      1       2     3      4     5     6              7       8
+    //                                          0      1       2     3      4     5     6              7       8           9
     std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-        "SELECT r.guid, c.name, c.race, c.class, r.spec, r.role, r.raid_assigned, r.active, r.gear_score "
+        "SELECT r.guid, c.name, c.race, c.class, r.spec, r.role, r.raid_assigned, r.active, r.gear_score, r.gear_tier "
         "FROM guild_bot_roster r "
         "JOIN characters c ON r.guid = c.guid "
         "ORDER BY r.guid"));
@@ -75,7 +75,16 @@ void GuildBotMgr::LoadRoster()
         info.raidAssigned = fields[6].GetBool();
         info.active       = fields[7].GetBool();
         info.gearScore    = fields[8].GetFloat();
+        info.hasLootUpgrades = false;  // will be detected below
         info.online       = false;
+
+        std::string tierStr = fields[9].GetCppString();
+        if (tierStr == "fresh_60")
+            info.gearTier = GUILD_BOT_GEAR_FRESH_60;
+        else if (tierStr == "pre_raid_bis")
+            info.gearTier = GUILD_BOT_GEAR_PRE_RAID_BIS;
+        else
+            info.gearTier = GUILD_BOT_GEAR_DUNGEON_GEARED;
 
         std::string roleStr = fields[5].GetCppString();
         if (roleStr == "tank")
@@ -478,6 +487,11 @@ float GuildBotMgr::EvaluateUpgrade(uint32 botGuid, uint32 newItemId, uint8 slot)
 
 void GuildBotMgr::OnBotEquipItem(uint32 botGuid, uint32 itemId, uint8 slot)
 {
+    // Mark that this bot has received loot — gear tier changes should not wipe their gear
+    auto it = m_guidToIndex.find(botGuid);
+    if (it != m_guidToIndex.end())
+        m_roster[it->second].hasLootUpgrades = true;
+
     RecalculateGearScore(botGuid);
 }
 
@@ -524,4 +538,67 @@ void GuildBotMgr::RecalculateGearScore(uint32 botGuid)
     CharacterDatabase.PExecute(
         "UPDATE guild_bot_roster SET gear_score = %f WHERE guid = %u",
         totalScore, botGuid);
+}
+
+void GuildBotMgr::SetGearTier(uint32 botGuid, GuildBotGearTier tier)
+{
+    auto it = m_guidToIndex.find(botGuid);
+    if (it == m_guidToIndex.end())
+        return;
+
+    m_roster[it->second].gearTier = tier;
+
+    char const* tierStr = "dungeon_geared";
+    switch (tier)
+    {
+        case GUILD_BOT_GEAR_FRESH_60:       tierStr = "fresh_60"; break;
+        case GUILD_BOT_GEAR_PRE_RAID_BIS:   tierStr = "pre_raid_bis"; break;
+        default: break;
+    }
+
+    CharacterDatabase.PExecute(
+        "UPDATE guild_bot_roster SET gear_tier = '%s' WHERE guid = %u",
+        tierStr, botGuid);
+}
+
+bool GuildBotMgr::HasLootUpgrades(uint32 botGuid) const
+{
+    auto it = m_guidToIndex.find(botGuid);
+    if (it == m_guidToIndex.end())
+        return false;
+    return m_roster[it->second].hasLootUpgrades;
+}
+
+uint32 GuildBotMgr::GetAutoEquipOptionForTier(GuildBotGearTier tier) const
+{
+    switch (tier)
+    {
+        case GUILD_BOT_GEAR_FRESH_60:       return PLAYER_BOT_AUTO_EQUIP_RANDOM_GEAR;
+        case GUILD_BOT_GEAR_PRE_RAID_BIS:   return PLAYER_BOT_AUTO_EQUIP_PREMADE_GEAR;
+        case GUILD_BOT_GEAR_DUNGEON_GEARED:
+        default:                            return PLAYER_BOT_AUTO_EQUIP_PREMADE_GEAR;
+    }
+}
+
+void GuildBotMgr::ApplyGearTier(uint32 botGuid)
+{
+    // Called by PartyBotAI during initialization when a guild bot spawns.
+    // If the bot has received loot upgrades from raiding, their gear is sacred — do not touch.
+    auto it = m_guidToIndex.find(botGuid);
+    if (it == m_guidToIndex.end())
+        return;
+
+    GuildBotInfo& info = m_roster[it->second];
+
+    if (info.hasLootUpgrades)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL,
+            "[GuildBotMgr] Bot %s (GUID %u) has loot upgrades — gear tier change skipped.",
+            info.name.c_str(), botGuid);
+        return;
+    }
+
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL,
+        "[GuildBotMgr] Bot %s (GUID %u) will equip gear tier %u on spawn.",
+        info.name.c_str(), botGuid, (uint32)info.gearTier);
 }

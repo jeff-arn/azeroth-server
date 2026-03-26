@@ -18,6 +18,13 @@ enum GuildBotRole : uint8
     GUILD_BOT_ROLE_DPS    = 2,
 };
 
+enum GuildBotGearTier : uint8
+{
+    GUILD_BOT_GEAR_FRESH_60       = 0,
+    GUILD_BOT_GEAR_DUNGEON_GEARED = 1,
+    GUILD_BOT_GEAR_PRE_RAID_BIS   = 2,
+};
+
 struct GuildBotInfo
 {
     uint32 guid;
@@ -29,7 +36,9 @@ struct GuildBotInfo
     bool raidAssigned;
     bool active;
     float gearScore;
-    bool online;       // true if currently spawned as a bot in-world
+    GuildBotGearTier gearTier;
+    bool hasLootUpgrades;  // true if bot has received any items via loot (never wipe their gear)
+    bool online;           // true if currently spawned as a bot in-world
 };
 
 struct GuildBotSpecWeights
@@ -78,6 +87,12 @@ public:
     float EvaluateUpgrade(uint32 botGuid, uint32 newItemId, uint8 slot) const;
     void OnBotEquipItem(uint32 botGuid, uint32 itemId, uint8 slot);
     void RecalculateGearScore(uint32 botGuid);
+
+    // Gear tier management
+    void SetGearTier(uint32 botGuid, GuildBotGearTier tier);
+    void ApplyGearTier(uint32 botGuid);  // Log/validate on spawn; no-op if bot has loot upgrades
+    bool HasLootUpgrades(uint32 botGuid) const;
+    uint32 GetAutoEquipOptionForTier(GuildBotGearTier tier) const;
 
     // Guild info
     uint32 GetGuildId() const { return m_guildId; }
