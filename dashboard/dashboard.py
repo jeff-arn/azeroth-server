@@ -560,7 +560,8 @@ def api_guild_roster():
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
             SELECT r.guid, c.name, c.race, c.class AS cls, c.level,
-                   r.spec, r.role, r.gear_score, r.raid_assigned, r.active,
+                   r.spec, r.role, r.gear_score, r.gear_tier,
+                   r.raid_assigned, r.active,
                    g.name AS guild_name, gm.rank AS guild_rank
             FROM guild_bot_roster r
             JOIN characters c ON r.guid = c.guid
@@ -586,6 +587,7 @@ def api_guild_roster():
                     "spec": r["spec"] or "",
                     "role": r["role"] or "dps",
                     "gear_score": round(r["gear_score"], 1) if r["gear_score"] else 0,
+                    "gear_tier": r.get("gear_tier", "dungeon_geared"),
                     "raid_assigned": bool(r["raid_assigned"]),
                     "active": bool(r["active"]),
                     "guild_name": r["guild_name"] or "",
@@ -681,12 +683,18 @@ def api_guild_bot_update_spec(guid):
         cursor = conn.cursor()
         updates = []
         params = []
+        gear_tier = data.get("gear_tier")
         if spec is not None:
             updates.append("spec = %s")
             params.append(spec)
         if role is not None:
             updates.append("role = %s")
             params.append(role)
+        if gear_tier is not None:
+            if gear_tier not in ("fresh_60", "dungeon_geared", "pre_raid_bis"):
+                return jsonify({"error": "Invalid gear_tier"}), 400
+            updates.append("gear_tier = %s")
+            params.append(gear_tier)
         if not updates:
             return jsonify({"error": "Nothing to update"}), 400
         params.append(guid)
@@ -729,6 +737,39 @@ def api_guild_raid_plan():
         cursor.close()
         conn.close()
         return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/guild/gear-tier", methods=["POST"])
+@guild_write_required
+def api_guild_gear_tier():
+    """Set gear tier globally for all guild bots, or per-bot if guid provided."""
+    try:
+        data = request.get_json()
+        if not data or "gear_tier" not in data:
+            return jsonify({"error": "No gear_tier provided"}), 400
+        gear_tier = data["gear_tier"]
+        if gear_tier not in ("fresh_60", "dungeon_geared", "pre_raid_bis"):
+            return jsonify({"error": "Invalid gear_tier"}), 400
+        conn = get_db("characters")
+        cursor = conn.cursor()
+        guid = data.get("guid")
+        if guid:
+            cursor.execute(
+                "UPDATE guild_bot_roster SET gear_tier = %s WHERE guid = %s",
+                (gear_tier, guid),
+            )
+        else:
+            cursor.execute(
+                "UPDATE guild_bot_roster SET gear_tier = %s WHERE active = 1",
+                (gear_tier,),
+            )
+        conn.commit()
+        affected = cursor.rowcount
+        cursor.close()
+        conn.close()
+        return jsonify({"ok": True, "updated": affected})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

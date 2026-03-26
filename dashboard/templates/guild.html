@@ -160,7 +160,7 @@ nav a {
     gap: 6px;
 }
 
-.spec-select, .role-select {
+.spec-select, .role-select, .gear-tier-select {
     background: #1a1a2e;
     color: #e0d8c8;
     border: 1px solid #3d3d5c;
@@ -170,7 +170,7 @@ nav a {
     cursor: pointer;
 }
 
-.spec-select:focus, .role-select:focus {
+.spec-select:focus, .role-select:focus, .gear-tier-select:focus {
     border-color: #c9aa71;
     outline: none;
 }
@@ -366,6 +366,16 @@ input[type="checkbox"] {
         <div class="summary-stat"><div class="label">Healers</div><div class="value" id="stat-healers">--</div></div>
         <div class="summary-stat"><div class="label">DPS</div><div class="value" id="stat-dps">--</div></div>
         <div class="summary-stat"><div class="label">Raid Assigned</div><div class="value" id="stat-raid">--</div></div>
+        <div class="summary-stat">
+            <div class="label">Global Gear Tier</div>
+            <div class="value">
+                <select class="gear-tier-select" id="global-gear-tier" onchange="setGlobalGearTier(this.value)">
+                    <option value="fresh_60">Fresh 60</option>
+                    <option value="dungeon_geared" selected>Dungeon Geared</option>
+                    <option value="pre_raid_bis">Pre-Raid BiS</option>
+                </select>
+            </div>
+        </div>
     </div>
 
     <div class="section">
@@ -511,10 +521,16 @@ function renderRoster() {
                         <option value="healer" ${b.role === 'healer' ? 'selected' : ''}>Healer</option>
                         <option value="dps" ${b.role === 'dps' ? 'selected' : ''}>DPS</option>
                      </select></td>`;
+            const tierLabel = {"fresh_60": "Fresh 60", "dungeon_geared": "Dungeon Geared", "pre_raid_bis": "Pre-Raid BiS"};
+            html += `<td><select class="gear-tier-select" data-guid="${b.guid}" onchange="updateGearTier(${b.guid}, this.value)">
+                        <option value="fresh_60" ${b.gear_tier === 'fresh_60' ? 'selected' : ''}>Fresh 60</option>
+                        <option value="dungeon_geared" ${b.gear_tier === 'dungeon_geared' ? 'selected' : ''}>Dungeon Geared</option>
+                        <option value="pre_raid_bis" ${b.gear_tier === 'pre_raid_bis' ? 'selected' : ''}>Pre-Raid BiS</option>
+                     </select></td>`;
             html += `<td class="center"><span class="gear-score ${gsClass(b.gear_score)}">${b.gear_score}</span></td>`;
             html += `<td class="center"><input type="checkbox" data-guid="${b.guid}" ${b.raid_assigned ? 'checked' : ''} onchange="toggleRaid(${b.guid}, this.checked)"></td>`;
             html += `</tr>`;
-            html += `<tr class="gear-panel" id="gear-panel-${b.guid}"><td colspan="6"><div class="gear-detail" id="gear-detail-${b.guid}"><span class="gear-loading">Click to load gear...</span></div></td></tr>`;
+            html += `<tr class="gear-panel" id="gear-panel-${b.guid}"><td colspan="7"><div class="gear-detail" id="gear-detail-${b.guid}"><span class="gear-loading">Click to load gear...</span></div></td></tr>`;
         });
     });
 
@@ -590,6 +606,30 @@ async function updateRole(guid, role) {
         const bot = rosterData.find(b => b.guid === guid);
         if (bot) bot.role = role;
         // Re-render to move bot to correct role group
+        renderRoster();
+    }
+}
+
+async function updateGearTier(guid, tier) {
+    const resp = await fetch(`/api/guild/bot/${guid}/spec`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({gear_tier: tier}),
+    });
+    if (resp.ok) {
+        const bot = rosterData.find(b => b.guid === guid);
+        if (bot) bot.gear_tier = tier;
+    }
+}
+
+async function setGlobalGearTier(tier) {
+    const resp = await fetch("/api/guild/gear-tier", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({gear_tier: tier}),
+    });
+    if (resp.ok) {
+        rosterData.forEach(b => b.gear_tier = tier);
         renderRoster();
     }
 }
