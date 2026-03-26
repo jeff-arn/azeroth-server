@@ -2012,6 +2012,7 @@ void World::Update(uint32 diff)
         sAuctionHouseBotMgr.Update();
         sBotChatMgr.Update(m_timers[WUPDATE_AUCTIONS].GetInterval());
         sBotServiceMgr.Update(m_timers[WUPDATE_AUCTIONS].GetInterval());
+        sGuildBotMgr.Update(m_timers[WUPDATE_AUCTIONS].GetInterval());
         // Handle expired auctions
         sAuctionMgr.Update();
     }

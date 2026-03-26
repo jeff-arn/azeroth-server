@@ -99,6 +99,9 @@ public:
     bool IsGuildBot(uint32 guid) const;
     void DetectAndPopulateGuild();
 
+    // Update (called from World::Update)
+    void Update(uint32 diff);
+
     // Config
     bool IsEnabled() const { return m_enabled; }
     uint32 GetAccountId() const { return m_accountId; }
@@ -108,10 +111,13 @@ private:
     void LoadSpecWeights();
     void DetectPlayerGuild();
     void PopulateBotsIntoGuild();
+    void SyncBotLevels();
 
     bool m_enabled;
     uint32 m_guildId;
     uint32 m_accountId;
+    uint32 m_levelSyncTimer;
+    static const uint32 LEVEL_SYNC_INTERVAL = 5 * 60 * 1000;  // 5 minutes
 
     std::vector<GuildBotInfo> m_roster;
     std::unordered_map<uint32, size_t> m_guidToIndex;  // guid -> index into m_roster

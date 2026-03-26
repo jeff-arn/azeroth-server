@@ -10,6 +10,8 @@
 #include "Player.h"
 #include "Item.h"
 #include "ItemPrototype.h"
+#include "Guild.h"
+#include "GuildMgr.h"
 
 INSTANTIATE_SINGLETON_1(GuildBotMgr);
 
@@ -17,7 +19,7 @@ INSTANTIATE_SINGLETON_1(GuildBotMgr);
 #include <cmath>
 
 GuildBotMgr::GuildBotMgr()
-    : m_enabled(false), m_guildId(0), m_accountId(98)
+    : m_enabled(false), m_guildId(0), m_accountId(98), m_levelSyncTimer(0)
 {
 }
 
@@ -146,33 +148,126 @@ void GuildBotMgr::PopulateBotsIntoGuild()
     if (m_guildId == 0)
         return;
 
+    Guild* guild = sGuildMgr.GetGuildById(m_guildId);
+    if (!guild)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[GuildBotMgr] Guild %u not found in GuildMgr.", m_guildId);
+        return;
+    }
+
     uint32 added = 0;
     for (auto const& bot : m_roster)
     {
-        // Check if already a member
-        std::unique_ptr<QueryResult> check(CharacterDatabase.PQuery(
-            "SELECT guid FROM guild_member WHERE guid = %u", bot.guid));
-        if (check)
-            continue;
+        ObjectGuid botGuid(HIGHGUID_PLAYER, bot.guid);
 
-        // Determine player note based on role
-        const char* note = "";
+        // Use Guild::AddMember to update both DB and in-memory roster
+        GuildAddStatus status = guild->AddMember(botGuid, 2);
+        if (status == GuildAddStatus::ALREADY_IN_GUILD)
+            continue;
+        if (status != GuildAddStatus::OK)
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[GuildBotMgr] Failed to add bot %u to guild: status %u",
+                bot.guid, (uint32)status);
+            continue;
+        }
+
+        // Set player note based on role
+        std::string note;
         switch (bot.role)
         {
             case GUILD_BOT_ROLE_TANK:   note = "Tank"; break;
             case GUILD_BOT_ROLE_HEALER: note = "Healer"; break;
             case GUILD_BOT_ROLE_DPS:    note = "DPS"; break;
         }
+        if (MemberSlot* slot = guild->GetMemberSlot(botGuid))
+            slot->SetPNOTE(note);
 
-        CharacterDatabase.PExecute(
-            "INSERT INTO guild_member (guild_id, guid, `rank`, player_note, officer_note) "
-            "VALUES (%u, %u, 2, '%s', '')",
-            m_guildId, bot.guid, note);
         ++added;
     }
 
     if (added > 0)
+    {
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[GuildBotMgr] Added %u bots to guild %u.", added, m_guildId);
+        guild->Roster();  // Broadcast updated roster to online members
+    }
+}
+
+void GuildBotMgr::Update(uint32 diff)
+{
+    if (!m_enabled || m_guildId == 0)
+        return;
+
+    m_levelSyncTimer += diff;
+    if (m_levelSyncTimer >= LEVEL_SYNC_INTERVAL)
+    {
+        m_levelSyncTimer = 0;
+        SyncBotLevels();
+    }
+}
+
+void GuildBotMgr::SyncBotLevels()
+{
+    if (m_guildId == 0 || m_roster.empty())
+        return;
+
+    // Find the guild master's level
+    Guild* guild = sGuildMgr.GetGuildById(m_guildId);
+    if (!guild)
+        return;
+
+    uint32 leaderGuid = guild->GetLeaderGuid().GetCounter();
+
+    // Get leader level from DB (they may be offline)
+    uint32 leaderLevel = 0;
+    if (Player* leader = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, leaderGuid)))
+    {
+        leaderLevel = leader->GetLevel();
+    }
+    else
+    {
+        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+            "SELECT level FROM characters WHERE guid = %u", leaderGuid));
+        if (result)
+            leaderLevel = (*result)[0].GetUInt32();
+    }
+
+    if (leaderLevel == 0)
+        return;
+
+    uint32 updated = 0;
+    for (auto const& bot : m_roster)
+    {
+        // Target level: leader level ±3, clamped to [1, 60]
+        int32 offset = (int32)(rand() % 7) - 3;  // -3 to +3
+        uint32 targetLevel = std::max(1, std::min(60, (int32)leaderLevel + offset));
+
+        // Get current bot level
+        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+            "SELECT level FROM characters WHERE guid = %u", bot.guid));
+        if (!result)
+            continue;
+
+        uint32 currentLevel = (*result)[0].GetUInt32();
+        if (currentLevel == targetLevel)
+            continue;
+
+        CharacterDatabase.PExecute(
+            "UPDATE characters SET level = %u WHERE guid = %u",
+            targetLevel, bot.guid);
+
+        // Update in-memory guild roster too
+        if (MemberSlot* slot = guild->GetMemberSlot(ObjectGuid(HIGHGUID_PLAYER, bot.guid)))
+            slot->Level = targetLevel;
+
+        ++updated;
+    }
+
+    if (updated > 0)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[GuildBotMgr] Synced %u bot levels to GM level %u (±3).",
+            updated, leaderLevel);
+        guild->Roster();  // Refresh roster for online players
+    }
 }
 
 void GuildBotMgr::LoadSpecWeights()
