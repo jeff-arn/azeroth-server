@@ -187,7 +187,10 @@ void BotChatManager::UpdateTradeChat()
 {
     Player* bot = FindRandomCityBot();
     if (!bot)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotChat] Trade chat tick: no city bots found.");
         return;
+    }
 
     const char* message = PickTradeMessage(bot);
     if (!message)
@@ -198,14 +201,14 @@ void BotChatManager::UpdateTradeChat()
     if (!mgr)
         return;
 
-    Channel* tradeChannel = mgr->GetJoinChannel("Trade");
+    Channel* tradeChannel = mgr->GetJoinChannel("Trade - City");
     if (!tradeChannel)
         return;
 
     // Send to trade chat using skipCheck to bypass membership requirement.
     tradeChannel->Say(bot->GetObjectGuid(), message, LANG_UNIVERSAL, /*skipCheck=*/true);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s says in Trade: %s",
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotChat] %s says in Trade: %s",
         bot->GetName(), message);
 }
 
