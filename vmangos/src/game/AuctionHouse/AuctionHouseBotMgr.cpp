@@ -623,10 +623,13 @@ void AuctionHouseBotMgr::UpdateBotBuyers(AuctionHouseObject* ah)
     }
 
     // Shuffle to avoid always buying the same items first.
-    for (uint32 i = static_cast<uint32>(candidates.size()) - 1; i > 0; --i)
+    if (candidates.size() > 1)
     {
-        uint32 j = urand(0, i);
-        std::swap(candidates[i], candidates[j]);
+        for (uint32 i = static_cast<uint32>(candidates.size()) - 1; i > 0; --i)
+        {
+            uint32 j = urand(0, i);
+            std::swap(candidates[i], candidates[j]);
+        }
     }
 
     for (AuctionEntry* entry : candidates)
