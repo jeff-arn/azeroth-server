@@ -383,29 +383,48 @@ SRP6_g = 7
 
 
 def _verify_srp6_password(username, password, s_hex, v_hex):
-    """Verify password against stored SRP6 salt and verifier."""
+    """Verify password against stored SRP6 salt and verifier.
+
+    Matches the C++ flow in SRP6::CalculateVerifier + AccountMgr::CalculateShaPassHash:
+    1. rI = hex(SHA1("USERNAME:PASSWORD"))
+    2. BigNumber I from rI hex -> BN_bn2bin (big-endian) -> AsByteArray reverses to LE
+    3. Copy into mDigest[20], then std::reverse(mDigest) back to big-endian
+    4. s: SetHexStr (big-endian) -> AsByteArray (reversed to little-endian)
+    5. x = SHA1(s_LE || mDigest_BE)  -- A is zero/empty, contributes nothing
+    6. v = g^x mod N
+    """
     username = username.upper()
     password = password.upper()
 
-    # SHA1(USERNAME:PASSWORD) -> bytes
+    # Step 1: CalculateShaPassHash -> SHA1("USERNAME:PASSWORD") -> hex
     identity_hash = hashlib.sha1(f"{username}:{password}".encode()).digest()
+    ri_hex = identity_hash.hex().upper()
 
-    # Reverse to little-endian (matching vmangos BigNumber byte order)
-    identity_reversed = identity_hash[::-1]
+    # Step 2: BigNumber I from hex. BN_bn2bin = big-endian, AsByteArray reverses to LE
+    ri_int = int(ri_hex, 16)
+    num_bytes = (ri_int.bit_length() + 7) // 8
+    ri_be = ri_int.to_bytes(max(num_bytes, 1), byteorder="big")
+    ri_le = ri_be[::-1]
 
-    # Salt: hex string -> int -> little-endian bytes (32 bytes)
+    # Step 3: memset mDigest[20] = 0, memcpy LE bytes in, then std::reverse
+    m_digest = bytearray(20)
+    copy_len = min(len(ri_le), 20)
+    m_digest[:copy_len] = ri_le[:copy_len]
+    m_digest.reverse()  # back to big-endian
+
+    # Step 4: salt from hex (big-endian) -> AsByteArray reverses to little-endian
     s_int = int(s_hex, 16)
-    s_bytes = s_int.to_bytes(32, byteorder="little")
+    s_be = s_int.to_bytes(32, byteorder="big")
+    s_le = s_be[::-1]
 
-    # x = SHA1(salt_bytes || identity_reversed)
-    x_hash = hashlib.sha1(s_bytes + identity_reversed).digest()
-    # Convert from little-endian bytes to int
-    x = int.from_bytes(x_hash, byteorder="little")
+    # Step 5: x = SHA1(s_LE || mDigest_BE) -- A is empty, feeds 0 bytes
+    x_hash = hashlib.sha1(s_le + bytes(m_digest)).digest()
+    x = int.from_bytes(x_hash, byteorder="little")  # SetBinary = little-endian
 
-    # v = g^x mod N
+    # Step 6: v = g^x mod N
     computed_v = pow(SRP6_g, x, SRP6_N)
 
-    # Compare against stored verifier
+    # ProofVerifier compares AsHexStr() = big-endian hex
     stored_v = int(v_hex, 16)
     return computed_v == stored_v
 
