@@ -206,6 +206,7 @@ set (game_SRCS
     PlayerBots/PlayerBotMgr.cpp
     PlayerBots/BotChatManager.cpp
     PlayerBots/BotServiceMgr.cpp
+    PlayerBots/BotDirector.cpp
     PlayerBots/GuildBotMgr.cpp
     Server/Protocol/Opcodes.cpp
     Server/WorldSession.cpp
@@ -431,6 +432,7 @@ set (game_SRCS
     PlayerBots/PlayerBotAI.h
     PlayerBots/PlayerBotMgr.h
     PlayerBots/BotChatManager.h
+    PlayerBots/BotDirector.h
     PlayerBots/GuildBotMgr.h
     Server/Protocol/Opcodes.h
     Server/WorldPacket.h

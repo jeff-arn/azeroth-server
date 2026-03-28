@@ -2980,6 +2980,24 @@ AHBot.Buyer.IntervalSecs = 1800
 AHBot.Buyer.BudgetPerCycle = 500000
 
 ###################################################################################################################
+# BOT DIRECTOR
+#
+#    BotDirector.Enable
+#        Enable the bot director, which dynamically places bots in the world
+#        based on where real players are. Replaces the external Python service.
+#        Default: 1 - on
+#                 0 - off
+#
+#    BotDirector.UpdateInterval
+#        How often (in milliseconds) the director recalculates bot placements.
+#        Default: 120000 (2 minutes)
+#
+###################################################################################################################
+
+BotDirector.Enable = 1
+BotDirector.UpdateInterval = 120000
+
+###################################################################################################################
 # BOT CHAT
 #
 #    BotChat.Enable

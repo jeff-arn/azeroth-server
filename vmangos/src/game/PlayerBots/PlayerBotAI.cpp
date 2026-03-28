@@ -16,6 +16,7 @@
 
 #include "PlayerBotMgr.h"
 #include "PlayerBotAI.h"
+#include "BotDirector.h"
 #include "Player.h"
 #include "Log.h"
 #include "SocialMgr.h"
@@ -369,22 +370,17 @@ void DynamicBotAI::LoadAssignment()
     uint32 guid = botEntry ? botEntry->playerGUID : 0;
     if (!guid) return;
 
-    std::unique_ptr<QueryResult> result = CharacterDatabase.PQuery(
-        "SELECT target_map, target_x, target_y, target_z, radius, behavior, target_level, faction "
-        "FROM bot_assignments WHERE guid = %u", guid);
+    BotAssignment const* assignment = sBotDirector.GetAssignment(guid);
+    if (!assignment) return;
 
-    if (!result) return;
-
-    Field* fields = result->Fetch();
-    _map = fields[0].GetUInt32();
-    _x = fields[1].GetFloat();
-    _y = fields[2].GetFloat();
-    _z = fields[3].GetFloat();
-    _radius = fields[4].GetFloat();
-    std::string behavior = fields[5].GetCppString();
-    uint32 targetLevel = fields[6].GetUInt32();
-    _team = fields[7].GetUInt32();
-    _aggressive = (behavior == "aggressive");
+    _map = assignment->targetMap;
+    _x = assignment->targetX;
+    _y = assignment->targetY;
+    _z = assignment->targetZ;
+    _radius = assignment->radius;
+    uint32 targetLevel = assignment->targetLevel;
+    _team = assignment->faction;
+    _aggressive = assignment->aggressive;
 
     if (me)
     {
@@ -440,24 +436,17 @@ void DynamicBotAI::OnBotEntryLoad(PlayerBotEntry* entry)
 
 void DynamicBotAI::BeforeAddToMap(Player* player)
 {
-    // Read assignment from DB
     uint32 guid = botEntry ? botEntry->playerGUID : 0;
     if (!guid) return;
 
-    std::unique_ptr<QueryResult> result = CharacterDatabase.PQuery(
-        "SELECT target_map, target_x, target_y, target_z, radius, faction "
-        "FROM bot_assignments WHERE guid = %u", guid);
+    BotAssignment const* assignment = sBotDirector.GetAssignment(guid);
+    if (!assignment) return;
 
-    if (!result) return;
-
-    Field* fields = result->Fetch();
-    uint32 targetMap = fields[0].GetUInt32();
-    float tx = fields[1].GetFloat();
-    float ty = fields[2].GetFloat();
-    float tz = fields[3].GetFloat();
-    float tRadius = fields[4].GetFloat();
-    uint32 faction = fields[5].GetUInt32();
-
+    uint32 targetMap = assignment->targetMap;
+    float tx = assignment->targetX;
+    float ty = assignment->targetY;
+    float tz = assignment->targetZ;
+    float tRadius = assignment->radius;
 
     // Relocate to target area with some randomness
     if (player->GetMapId() != targetMap || !player->IsWithinDist3d(tx, ty, tz, tRadius * 2))
@@ -468,7 +457,6 @@ void DynamicBotAI::BeforeAddToMap(Player* player)
         Map* map = sMapMgr.CreateMap(targetMap, player);
         if (map)
         {
-            // Add some randomness within radius
             x += frand(-tRadius * 0.5f, tRadius * 0.5f);
             y += frand(-tRadius * 0.5f, tRadius * 0.5f);
             map->GetWalkRandomPosition(nullptr, x, y, z, tRadius);
@@ -488,16 +476,10 @@ void DynamicBotAI::OnPlayerLogin()
     uint32 guid = botEntry ? botEntry->playerGUID : 0;
     if (guid)
     {
-        std::unique_ptr<QueryResult> result = CharacterDatabase.PQuery(
-            "SELECT target_level FROM bot_assignments WHERE guid = %u", guid);
-        if (result)
-        {
-            uint32 targetLevel = result->Fetch()[0].GetUInt32();
-            if (targetLevel > 0 && me->GetLevel() != targetLevel)
-                me->GiveLevel(targetLevel);
-        }
+        BotAssignment const* assignment = sBotDirector.GetAssignment(guid);
+        if (assignment && assignment->targetLevel > 0 && me->GetLevel() != assignment->targetLevel)
+            me->GiveLevel(assignment->targetLevel);
     }
-
 }
 
 Unit* DynamicBotAI::FindEnemyPlayer(float range)
