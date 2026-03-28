@@ -107,7 +107,7 @@ echo "$RELEASE_NOTES"
 echo ""
 
 if [ "$DRY_RUN" = true ]; then
-    echo "[dry-run] Would tag $NEW_TAG and post to Discord."
+    echo "[dry-run] Would tag $NEW_TAG, create GitHub release, and post to Discord."
     exit 0
 fi
 
@@ -115,10 +115,15 @@ fi
 git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
 echo "Tagged $NEW_TAG"
 
+# Push tag and create GitHub release
+echo "Pushing tag and creating GitHub release..."
+git push origin main --tags
+gh release create "$NEW_TAG" --title "$NEW_TAG" --notes "$COMMIT_LOG"
+echo "GitHub release $NEW_TAG published."
+
 # Post to Discord
 echo "Posting release notes to Discord..."
 "$DISCORD_BOT_DIR/venv/bin/python3" "$DISCORD_BOT_DIR/post_patch_notes.py" "$RELEASE_NOTES"
 
 echo ""
 echo "Release $NEW_TAG complete."
-echo "Don't forget to push: git push origin main --tags"

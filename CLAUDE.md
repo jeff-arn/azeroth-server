@@ -202,7 +202,7 @@ scripts/release.sh minor        # force minor bump
 scripts/release.sh --dry-run    # preview without doing anything
 ```
 
-The script tags, then posts release notes to the Discord #patch-notes channel. Push tags after: `git push origin main --tags`
+The script tags, pushes to GitHub, creates a GitHub Release with notes, and posts release notes to the Discord #patch-notes channel.
 
 ## Common Commands
 
