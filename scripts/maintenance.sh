@@ -5,36 +5,26 @@
 # "on"  — creates /tmp/azeroth-maintenance, saves current MOTD, sets maintenance MOTD
 # "off" — removes the flag file, restores the original MOTD
 # "status" — prints current maintenance state
+#
+# The MOTD is the Motd line in mangosd.conf. Changes take effect on next server start.
 
 set -euo pipefail
 
 FLAG_FILE="/tmp/azeroth-maintenance"
 SAVED_MOTD_FILE="/tmp/azeroth-maintenance-saved-motd"
 MAINTENANCE_MOTD="Server is under active maintenance. Expect frequent restarts."
-
-# Load DB credentials from .env
-ENV_FILE="$(dirname "$0")/../.env"
-if [[ -f "$ENV_FILE" ]]; then
-    # shellcheck disable=SC1090
-    source "$ENV_FILE"
-fi
-
-DB_USER="${DB_USER:-mangos}"
-DB_PASSWORD="${DB_PASSWORD:-}"
-DB_HOST="${DB_HOST:-127.0.0.1}"
-DB_PORT="${DB_PORT:-3306}"
-
-mysql_cmd() {
-    mysql -u"$DB_USER" -p"$DB_PASSWORD" -h"$DB_HOST" -P"$DB_PORT" --batch --skip-column-names "$@"
-}
+MANGOSD_CONF="/home/wow/wow-private-server/vmangos/run/etc/mangosd.conf"
 
 get_current_motd() {
-    mysql_cmd -e "SELECT motd FROM realmd.realmlist WHERE id = 1;" 2>/dev/null || echo ""
+    grep -Po '^Motd\s*=\s*"\K[^"]*' "$MANGOSD_CONF" 2>/dev/null || echo ""
 }
 
 set_motd() {
     local motd="$1"
-    mysql_cmd -e "UPDATE realmd.realmlist SET motd = '$(printf '%s' "$motd" | sed "s/'/\\\\'/g")' WHERE id = 1;" 2>/dev/null
+    # Escape sed special characters in the replacement string
+    local escaped
+    escaped=$(printf '%s' "$motd" | sed 's/[&/\]/\\&/g')
+    sed -i "s/^Motd\s*=\s*\".*\"/Motd = \"${escaped}\"/" "$MANGOSD_CONF"
 }
 
 case "${1:-status}" in
@@ -48,7 +38,7 @@ case "${1:-status}" in
         echo "$current_motd" > "$SAVED_MOTD_FILE"
         set_motd "$MAINTENANCE_MOTD"
         touch "$FLAG_FILE"
-        echo "Maintenance mode ON. MOTD updated."
+        echo "Maintenance mode ON. MOTD updated (takes effect on next server start)."
         ;;
     off)
         if [[ ! -f "$FLAG_FILE" ]]; then
