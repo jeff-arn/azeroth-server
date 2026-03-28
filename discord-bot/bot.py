@@ -157,7 +157,8 @@ async def maintenance_check_loop():
     while not client.is_closed():
         try:
             in_maintenance = is_maintenance_mode()
-            if last_maintenance_state is not None and in_maintenance != last_maintenance_state:
+            # On first check, only post if we're already in maintenance
+            if in_maintenance != last_maintenance_state and (last_maintenance_state is not None or in_maintenance):
                 now = datetime.now(timezone.utc)
                 if in_maintenance:
                     embed = discord.Embed(
