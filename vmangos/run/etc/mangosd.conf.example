@@ -75,16 +75,16 @@ DataDir = "."
 LogsDir = ""
 HonorDir = ""
 LoginDatabase.Info              = "127.0.0.1;3306;mangos;YOUR_DB_PASSWORD_HERE;realmd"
-LoginDatabase.Connections       = 1
-LoginDatabase.WorkerThreads     = 1
+LoginDatabase.Connections       = 2
+LoginDatabase.WorkerThreads     = 2
 WorldDatabase.Info              = "127.0.0.1;3306;mangos;YOUR_DB_PASSWORD_HERE;mangos"
-WorldDatabase.Connections       = 1
-WorldDatabase.WorkerThreads     = 1
+WorldDatabase.Connections       = 3
+WorldDatabase.WorkerThreads     = 2
 CharacterDatabase.Info          = "127.0.0.1;3306;mangos;YOUR_DB_PASSWORD_HERE;characters"
-CharacterDatabase.Connections   = 1
-CharacterDatabase.WorkerThreads = 1
+CharacterDatabase.Connections   = 3
+CharacterDatabase.WorkerThreads = 2
 LogsDatabase.Info               = "127.0.0.1;3306;mangos;YOUR_DB_PASSWORD_HERE;logs"
-LogsDatabase.Connections        = 1
+LogsDatabase.Connections        = 2
 LogsDatabase.WorkerThreads      = 1
 Database.AliveCheckInternal     = 600
 WorldServerPort = 8085
@@ -255,7 +255,7 @@ BindIP = "0.0.0.0"
 
 UseProcessors = 0
 ProcessPriority = 1
-Compression.Level = 1
+Compression.Level = 4
 Compression.Update.Size = 128
 Compression.Movement.Count = 300
 PlayerLimit = 100
@@ -303,13 +303,13 @@ MapUpdate.MinVisibilityDistance             = 0
 MapUpdate.Empty.UpdateTime                  = 0
 
 # Per-map threading
-MapUpdate.Instanced.UpdateThreads       = 2
+MapUpdate.Instanced.UpdateThreads       = 4
 
 # Per-map subthreads (not for instanced maps)
 MapUpdate.ObjectsUpdate.MaxThreads      = 4
-MapUpdate.ObjectsUpdate.Timeout         = 100
+MapUpdate.ObjectsUpdate.Timeout         = 150
 MapUpdate.VisibilityUpdate.MaxThreads   = 4
-MapUpdate.VisibilityUpdate.Timeout      = 100
+MapUpdate.VisibilityUpdate.Timeout      = 150
 
 # Hardcode multithreading options
 MapUpdate.UpdatePacketsDiff             = 100
@@ -319,12 +319,12 @@ MapUpdate.UpdateCellsDiff               = 100
 # Parallelized execution of cells from same map
 #   MTCells.Threads       Number of different cells to update at the sametime
 #   MTCells.SafeDistance  2 cells wont be updated at the same time if they are at an inferior distance from each other (thread race issues)
-MapUpdate.Continents.MTCells.Threads               = 0
+MapUpdate.Continents.MTCells.Threads               = 3
 MapUpdate.Continents.MTCells.SafeDistance          = 1066
-Continents.MotionUpdate.Threads         = 0
+Continents.MotionUpdate.Threads         = 3
 
 # Number of threads for async tasks (/who, list AH items ...)
-AsyncTasks.Threads                      = 1
+AsyncTasks.Threads                      = 2
 AsyncQueriesTickTimeout = 0
 
 # Movement extrapolation system - not stable now
@@ -2817,11 +2817,11 @@ LFG.MatchmakingTimer = 600
 #
 ###################################################################################################################
 
-Network.Threads = 1
+Network.Threads = 2
 Network.SystemSendBuffer = -1
 Network.TcpNodelay = 1
 Network.KickOnBadPacket = 0
-Network.PacketBroadcast.Threads = 0
+Network.PacketBroadcast.Threads = 2
 Network.PacketBroadcast.Frequency = 50
 Network.PacketBroadcast.ReduceVisDistance.DiffAbove = 0
 Network.TrustedProxyServers = ""
