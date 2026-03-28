@@ -66,6 +66,12 @@ body {
     box-shadow: 0 0 6px #ff0000;
 }
 
+.status-dot.maintenance {
+    background: #ff8c00;
+    box-shadow: 0 0 6px #ff8c00;
+    animation: pulse 2s infinite;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
@@ -264,6 +270,9 @@ body {
             <span>Players: <span class="value" id="player-count">--</span></span>
             <span>Bots: <span class="value" id="bot-count">--</span></span>
         </div>
+        <div id="maintenance-banner" style="display:none; margin-top:12px; padding:8px 16px; background:#3d2800; border:1px solid #ff8c00; border-radius:4px; color:#ff8c00; text-align:center; font-size:13px;">
+            Server is under maintenance. Restarts may be frequent.
+        </div>
     </div>
 
     <div class="section">
@@ -327,8 +336,16 @@ function renderStatus(data) {
     const pcount = document.getElementById("player-count");
     const bcount = document.getElementById("bot-count");
 
-    dot.className = "status-dot " + (data.online ? "online" : "offline");
-    text.textContent = data.online ? "Online" : "Offline";
+    const banner = document.getElementById("maintenance-banner");
+    if (data.maintenance) {
+        dot.className = "status-dot maintenance";
+        text.textContent = "Maintenance";
+        banner.style.display = "block";
+    } else {
+        dot.className = "status-dot " + (data.online ? "online" : "offline");
+        text.textContent = data.online ? "Online" : "Offline";
+        banner.style.display = "none";
+    }
     uptime.textContent = data.uptime_display;
     pcount.textContent = data.players_online;
     bcount.textContent = data.bots_online;

@@ -23,6 +23,8 @@ DB_CONFIG = {
 
 LEVELUP_LOG = os.environ.get("LEVELUP_LOG", "/home/wow/wow-private-server/vmangos/run/bin/LevelUp.log")
 
+MAINTENANCE_FLAG = "/tmp/azeroth-maintenance"
+
 # How often to check (seconds)
 STATUS_CHECK_INTERVAL = 60
 PLAYER_CHECK_INTERVAL = 30
@@ -36,6 +38,12 @@ client = discord.Client(intents=intents)
 last_server_status = None
 known_online_players = {}
 _tasks_started = False
+last_maintenance_state = None
+
+
+def is_maintenance_mode():
+    """Check if the maintenance flag file exists."""
+    return os.path.exists(MAINTENANCE_FLAG)
 
 
 def is_server_running():
@@ -138,6 +146,41 @@ def get_faction_emoji_str(race_str):
 # ==================== TASKS ====================
 
 
+async def maintenance_check_loop():
+    """Monitor the maintenance flag file and post enter/exit messages."""
+    global last_maintenance_state
+    await client.wait_until_ready()
+    channel = client.get_channel(CHANNEL_SERVER_STATUS)
+    if not channel:
+        return
+
+    while not client.is_closed():
+        try:
+            in_maintenance = is_maintenance_mode()
+            if last_maintenance_state is not None and in_maintenance != last_maintenance_state:
+                now = datetime.now(timezone.utc)
+                if in_maintenance:
+                    embed = discord.Embed(
+                        title="🔧 Maintenance Mode",
+                        description="Server is entering maintenance mode. Restarts may be frequent while we are actively developing.",
+                        color=0xFF8C00,
+                        timestamp=now,
+                    )
+                else:
+                    embed = discord.Embed(
+                        title="🟢 Maintenance Complete",
+                        description="Maintenance complete. Server is back online.",
+                        color=0x00FF00,
+                        timestamp=now,
+                    )
+                embed.set_footer(text="Azeroth Private Server")
+                await channel.send(embed=embed)
+            last_maintenance_state = in_maintenance
+        except Exception as e:
+            print(f"Maintenance check error: {e}")
+        await asyncio.sleep(15)
+
+
 async def server_status_loop():
     """Monitor server status and post changes."""
     global last_server_status
@@ -149,26 +192,27 @@ async def server_status_loop():
 
     while not client.is_closed():
         try:
-            running = is_server_running()
-            if last_server_status is not None and running != last_server_status:
-                now = datetime.now(timezone.utc)
-                if running:
-                    embed = discord.Embed(
-                        title="🟢 Server Online",
-                        description="Azeroth is back online! Connect and play.",
-                        color=0x00FF00,
-                        timestamp=now,
-                    )
-                else:
-                    embed = discord.Embed(
-                        title="🔴 Server Offline",
-                        description="Azeroth has gone offline.",
-                        color=0xFF0000,
-                        timestamp=now,
-                    )
-                embed.set_footer(text="Azeroth Private Server")
-                await channel.send(embed=embed)
-            last_server_status = running
+            if not is_maintenance_mode():
+                running = is_server_running()
+                if last_server_status is not None and running != last_server_status:
+                    now = datetime.now(timezone.utc)
+                    if running:
+                        embed = discord.Embed(
+                            title="🟢 Server Online",
+                            description="Azeroth is back online! Connect and play.",
+                            color=0x00FF00,
+                            timestamp=now,
+                        )
+                    else:
+                        embed = discord.Embed(
+                            title="🔴 Server Offline",
+                            description="Azeroth has gone offline.",
+                            color=0xFF0000,
+                            timestamp=now,
+                        )
+                    embed.set_footer(text="Azeroth Private Server")
+                    await channel.send(embed=embed)
+                last_server_status = running
         except Exception as e:
             print(f"Status check error: {e}")
         await asyncio.sleep(STATUS_CHECK_INTERVAL)
@@ -199,6 +243,10 @@ async def levelup_log_watcher():
                 f.seek(file_pos)
                 new_lines = f.readlines()
                 file_pos = f.tell()
+
+            if is_maintenance_mode():
+                await asyncio.sleep(5)
+                continue
 
             for line in new_lines:
                 # Skip bot level-ups
@@ -259,6 +307,10 @@ async def player_activity_loop():
     first_run = True
     while not client.is_closed():
         try:
+            if is_maintenance_mode():
+                await asyncio.sleep(PLAYER_CHECK_INTERVAL)
+                continue
+
             players = get_online_players()
             current_online = {}
             for p in players:
@@ -327,6 +379,7 @@ async def on_ready():
     global _tasks_started
     if not _tasks_started:
         _tasks_started = True
+        client.loop.create_task(maintenance_check_loop())
         client.loop.create_task(server_status_loop())
         client.loop.create_task(player_activity_loop())
         client.loop.create_task(levelup_log_watcher())
@@ -338,6 +391,17 @@ async def on_message(message):
         return
 
     if message.content.strip() == "!status":
+        if is_maintenance_mode():
+            embed = discord.Embed(
+                title="🔧 Azeroth is Under Maintenance",
+                description="Server is under maintenance. Restarts may be frequent.",
+                color=0xFF8C00,
+                timestamp=datetime.now(timezone.utc),
+            )
+            embed.set_footer(text="Azeroth Private Server")
+            await message.channel.send(embed=embed)
+            return
+
         running = is_server_running()
         players = get_online_players()
         online = [p for p in players if p["online"]]

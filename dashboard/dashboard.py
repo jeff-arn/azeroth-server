@@ -20,6 +20,7 @@ DB_CONFIG = {
 }
 
 LEVELUP_LOG = os.environ.get("LEVELUP_LOG", "/home/wow/wow-private-server/vmangos/run/bin/LevelUp.log")
+MAINTENANCE_FLAG = "/tmp/azeroth-maintenance"
 
 RACES = {1: "Human", 2: "Orc", 3: "Dwarf", 4: "Night Elf", 5: "Undead", 6: "Tauren", 7: "Gnome", 8: "Troll"}
 CLASSES = {
@@ -167,6 +168,7 @@ def index():
 
 @app.route("/api/status")
 def api_status():
+    maintenance = os.path.exists(MAINTENANCE_FLAG)
     try:
         result = subprocess.run(["pgrep", "mangosd"], capture_output=True, text=True)
         online = result.returncode == 0
@@ -194,6 +196,7 @@ def api_status():
         return jsonify(
             {
                 "online": online,
+                "maintenance": maintenance,
                 "uptime_seconds": uptime_seconds,
                 "uptime_display": format_uptime(uptime_seconds),
                 "players_online": players,
@@ -202,7 +205,14 @@ def api_status():
         )
     except Exception as e:
         return jsonify(
-            {"online": False, "uptime_display": "0h 0m", "players_online": 0, "bots_online": 0, "error": str(e)}
+            {
+                "online": False,
+                "maintenance": maintenance,
+                "uptime_display": "0h 0m",
+                "players_online": 0,
+                "bots_online": 0,
+                "error": str(e),
+            }
         )
 
 
