@@ -1327,7 +1327,15 @@ static std::map<std::string, RaidTargetIcon> raidTargetIcons =
 
 bool ChatHandler::HandlePartyBotControlMarkCommand(char* args)
 {
-    std::string mark = args;
+    char* markArg = ExtractArg(&args);
+    if (!markArg)
+    {
+        SendSysMessage("Syntax: .partybot ccmark <mark> [botname]");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    std::string mark = markArg;
     auto itrMark = raidTargetIcons.find(mark);
     if (itrMark == raidTargetIcons.end())
     {
@@ -1337,7 +1345,37 @@ bool ChatHandler::HandlePartyBotControlMarkCommand(char* args)
     }
 
     Player* pPlayer = GetSession()->GetPlayer();
-    Player* pTarget = GetSelectedPlayer();
+
+    // Check for optional bot name argument, then fall back to selected target.
+    Player* pTarget = nullptr;
+    if (char* nameArg = ExtractArg(&args))
+    {
+        Group* pGroup = pPlayer->GetGroup();
+        if (pGroup)
+        {
+            for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+            {
+                if (Player* pMember = itr->getSource())
+                {
+                    if (pMember != pPlayer && strcmp(pMember->GetName(), nameArg) == 0)
+                    {
+                        pTarget = pMember;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!pTarget)
+        {
+            PSendSysMessage("Bot '%s' not found in your group.", nameArg);
+            SetSentErrorMessage(true);
+            return false;
+        }
+    }
+    else
+    {
+        pTarget = GetSelectedPlayer();
+    }
 
     if (pTarget && (pTarget != pPlayer))
     {
@@ -1345,7 +1383,13 @@ bool ChatHandler::HandlePartyBotControlMarkCommand(char* args)
         {
             if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
             {
-                PSendSysMessage("%s will crowd control %s.", pTarget->GetName(), args);
+                if (std::find(pAI->m_marksToCC.begin(), pAI->m_marksToCC.end(), itrMark->second) != pAI->m_marksToCC.end())
+                {
+                    PSendSysMessage("%s already has CC mark %s.", pTarget->GetName(), markArg);
+                    return false;
+                }
+
+                PSendSysMessage("%s will crowd control %s.", pTarget->GetName(), markArg);
                 pAI->m_marksToCC.push_back(itrMark->second);
                 return true;
             }
@@ -1374,19 +1418,29 @@ bool ChatHandler::HandlePartyBotControlMarkCommand(char* args)
             {
                 if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pMember->AI()))
                 {
+                    if (std::find(pAI->m_marksToCC.begin(), pAI->m_marksToCC.end(), itrMark->second) != pAI->m_marksToCC.end())
+                        continue;
                     pAI->m_marksToCC.push_back(itrMark->second);
                 }
             }
         }
     }
 
-    PSendSysMessage("All party bots will crowd control %s.", args);
+    PSendSysMessage("All party bots will crowd control %s.", markArg);
     return true;
 }
 
 bool ChatHandler::HandlePartyBotFocusMarkCommand(char* args)
 {
-    std::string mark = args;
+    char* markArg = ExtractArg(&args);
+    if (!markArg)
+    {
+        SendSysMessage("Syntax: .partybot focusmark <mark> [botname]");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    std::string mark = markArg;
     auto itrMark = raidTargetIcons.find(mark);
     if (itrMark == raidTargetIcons.end())
     {
@@ -1396,7 +1450,37 @@ bool ChatHandler::HandlePartyBotFocusMarkCommand(char* args)
     }
 
     Player* pPlayer = GetSession()->GetPlayer();
-    Player* pTarget = GetSelectedPlayer();
+
+    // Check for optional bot name argument, then fall back to selected target.
+    Player* pTarget = nullptr;
+    if (char* nameArg = ExtractArg(&args))
+    {
+        Group* pGroup = pPlayer->GetGroup();
+        if (pGroup)
+        {
+            for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+            {
+                if (Player* pMember = itr->getSource())
+                {
+                    if (pMember != pPlayer && strcmp(pMember->GetName(), nameArg) == 0)
+                    {
+                        pTarget = pMember;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!pTarget)
+        {
+            PSendSysMessage("Bot '%s' not found in your group.", nameArg);
+            SetSentErrorMessage(true);
+            return false;
+        }
+    }
+    else
+    {
+        pTarget = GetSelectedPlayer();
+    }
 
     if (pTarget && (pTarget != pPlayer))
     {
@@ -1406,11 +1490,11 @@ bool ChatHandler::HandlePartyBotFocusMarkCommand(char* args)
             {
                 if (std::find(pAI->m_marksToFocus.begin(), pAI->m_marksToFocus.end(), itrMark->second) != pAI->m_marksToFocus.end())
                 {
-                    PSendSysMessage("%s already have focus %s.", pTarget->GetName(), args);
+                    PSendSysMessage("%s already has focus %s.", pTarget->GetName(), markArg);
                     return false;
                 }
 
-                PSendSysMessage("%s will focus %s.", pTarget->GetName(), args);
+                PSendSysMessage("%s will focus %s.", pTarget->GetName(), markArg);
                 pAI->m_marksToFocus.push_back(itrMark->second);
                 return true;
             }
@@ -1440,24 +1524,55 @@ bool ChatHandler::HandlePartyBotFocusMarkCommand(char* args)
                 if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pMember->AI()))
                 {
                     if (std::find(pAI->m_marksToFocus.begin(), pAI->m_marksToFocus.end(), itrMark->second) != pAI->m_marksToFocus.end())
-                    {
-                        // Already have focus mark
                         continue;
-                    }
                     pAI->m_marksToFocus.push_back(itrMark->second);
                 }
             }
         }
     }
 
-    PSendSysMessage("All party bots will focus %s.", args);
+    PSendSysMessage("All party bots will focus %s.", markArg);
     return true;
 }
 
 bool ChatHandler::HandlePartyBotClearMarksCommand(char* args)
 {
     Player* pPlayer = GetSession()->GetPlayer();
-    Player* pTarget = GetSelectedPlayer();
+
+    // Check for optional bot name argument, then fall back to selected target.
+    Player* pTarget = nullptr;
+    if (args && *args)
+    {
+        char* nameArg = ExtractArg(&args);
+        if (nameArg)
+        {
+            Group* pGroup = pPlayer->GetGroup();
+            if (pGroup)
+            {
+                for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+                {
+                    if (Player* pMember = itr->getSource())
+                    {
+                        if (pMember != pPlayer && strcmp(pMember->GetName(), nameArg) == 0)
+                        {
+                            pTarget = pMember;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!pTarget)
+            {
+                PSendSysMessage("Bot '%s' not found in your group.", nameArg);
+                SetSentErrorMessage(true);
+                return false;
+            }
+        }
+    }
+    else
+    {
+        pTarget = GetSelectedPlayer();
+    }
 
     if (pTarget && (pTarget != pPlayer))
     {
