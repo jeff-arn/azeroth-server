@@ -132,6 +132,17 @@ public:
     static bool IsAlchemistBot(Player* bot);
     static bool IsTailorBot(Player* bot);
 
+    // Create a service request proactively (from trade chat monitoring).
+    // tradeChatMsg is the original message for parsing destination/details.
+    void CreateProactiveRequest(Player* bot, ObjectGuid playerGuid, BotServiceType type,
+                                const std::string& tradeChatMsg = "");
+
+    // Check if a player already has an active request with any bot.
+    bool HasActiveRequest(ObjectGuid playerGuid) const;
+
+    // Clear all requests for a player (called on logout).
+    void ClearRequestsForPlayer(ObjectGuid playerGuid);
+
     // === WTB Buy system ===
 
     // Called when a player whispers a bot about selling an item the bot wants.

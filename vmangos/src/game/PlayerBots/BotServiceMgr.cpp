@@ -665,7 +665,8 @@ void BotServiceMgr::DeliverPortal(Player* bot, Player* player, uint32 spellId)
         return;
     }
 
-    bot->CastSpell(bot, spellEntry, false);
+    // Use triggered=true to bypass spell-known checks (CrowdBots don't learn spells)
+    bot->CastSpell(bot, spellEntry, true);
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotService: %s casts Portal (spell %u) for %s",
         bot->GetName(), spellId, player->GetName());
@@ -762,6 +763,81 @@ BotServiceMgr::RequestKey BotServiceMgr::MakeKey(ObjectGuid botGuid, ObjectGuid 
 {
     return (static_cast<uint64>(botGuid.GetCounter()) << 32) |
             static_cast<uint64>(playerGuid.GetCounter());
+}
+
+void BotServiceMgr::CreateProactiveRequest(Player* bot, ObjectGuid playerGuid,
+                                            BotServiceType type, const std::string& tradeChatMsg)
+{
+    if (!bot)
+        return;
+
+    RequestKey key = MakeKey(bot->GetObjectGuid(), playerGuid);
+
+    BotServiceRequest req;
+    req.playerGuid = playerGuid;
+    req.botGuid = bot->GetObjectGuid();
+    req.serviceType = type;
+    req.spellId = 0;
+    req.createdAt = time(nullptr);
+    req.lastUpdate = time(nullptr);
+    req.buyItemId = 0;
+    req.buyMaxQuantity = 0;
+    req.buyPriceCopper = 0;
+
+    // For portals, try to parse the destination from the original trade chat message.
+    // e.g., "WTB port to darn" → resolve "darn" → Darnassus portal spell.
+    if (type == BOT_SERVICE_PORTAL && !tradeChatMsg.empty())
+    {
+        std::string lower = tradeChatMsg;
+        for (auto& c : lower) c = static_cast<char>(tolower(c));
+
+        uint32 spellId = ResolvePortalSpell(bot, lower);
+        if (spellId)
+        {
+            req.spellId = spellId;
+            req.state = SERVICE_STATE_WAITING_FOR_TRADE;
+            m_requests[key] = req;
+            return;
+        }
+    }
+
+    // Portal without resolved destination, or enchant: need clarification.
+    // Transmute and mooncloth go straight to WAITING_FOR_TRADE.
+    switch (type)
+    {
+        case BOT_SERVICE_PORTAL:
+        case BOT_SERVICE_ENCHANT:
+            req.state = SERVICE_STATE_ASKED_DESTINATION;
+            break;
+        default:
+            req.state = SERVICE_STATE_WAITING_FOR_TRADE;
+            break;
+    }
+
+    m_requests[key] = req;
+}
+
+bool BotServiceMgr::HasActiveRequest(ObjectGuid playerGuid) const
+{
+    uint32 playerCounter = playerGuid.GetCounter();
+    for (auto const& kv : m_requests)
+    {
+        if (kv.second.playerGuid.GetCounter() == playerCounter)
+            return true;
+    }
+    return false;
+}
+
+void BotServiceMgr::ClearRequestsForPlayer(ObjectGuid playerGuid)
+{
+    uint32 playerCounter = playerGuid.GetCounter();
+    for (auto it = m_requests.begin(); it != m_requests.end(); )
+    {
+        if (it->second.playerGuid.GetCounter() == playerCounter)
+            it = m_requests.erase(it);
+        else
+            ++it;
+    }
 }
 
 // ============================================================================

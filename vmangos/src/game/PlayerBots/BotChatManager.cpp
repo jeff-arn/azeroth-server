@@ -2,6 +2,7 @@
 #include "BotServiceMgr.h"
 #include "GuildBotMgr.h"
 #include "Group.h"
+#include "Opcodes.h"
 #include "Policies/SingletonImp.h"
 #include "Player.h"
 #include "ObjectAccessor.h"
@@ -917,6 +918,10 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
     if (!sender || !sender->GetSession() || sender->GetSession()->GetAccountId() >= 100)
         return;
 
+    // Don't create duplicate requests — one bot response per player at a time
+    if (sBotServiceMgr.HasActiveRequest(senderGuid))
+        return;
+
     // Lowercase for matching
     std::string lower = message;
     for (auto& c : lower)
@@ -928,9 +933,10 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
         if (lower.find(TRADE_TRIGGERS[i].keyword) == std::string::npos)
             continue;
 
-        // Find a suitable city bot to respond
+        // Find a suitable city bot in the same zone as the player
         Player* bot = nullptr;
         std::vector<Player*> candidates;
+        uint32 playerZone = sender->GetZoneId();
 
         HashMapHolder<Player>::MapType& players = sObjectAccessor.GetPlayers();
         for (auto& pair : players)
@@ -940,7 +946,7 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
                 continue;
             if (!p->GetSession() || p->GetSession()->GetAccountId() < 100)
                 continue;
-            if (!IsInCity(p))
+            if (p->GetZoneId() != playerZone)
                 continue;
 
             // Class check if required
@@ -957,20 +963,72 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
 
         bot = candidates[urand(0, static_cast<uint32>(candidates.size()) - 1)];
 
-        // Queue a delayed whisper (5-20 seconds)
+        // Build a service-specific proactive whisper and create the service request
         PendingWhisper pw;
         pw.botGuid = bot->GetObjectGuid();
         pw.playerGuid = senderGuid;
         pw.delayMs = urand(5000, 20000);
 
-        static const char* proactiveResponses[] = {
-            "hey I can help with that, PST me",
-            "I got you, whisper me",
-            "I can do that, PST",
-        };
-        pw.message = proactiveResponses[urand(0, 2)];
-        m_pendingWhispers.push_back(pw);
+        // Build location string from bot's zone
+        std::string location = "in town";
+        {
+            AreaEntry const* area = sAreaStorage.LookupEntry<AreaEntry>(bot->GetZoneId());
+            if (area && area->Name)
+                location = "at " + std::string(area->Name);
+        }
 
+        switch (TRADE_TRIGGERS[i].serviceType)
+        {
+            case BOT_SERVICE_PORTAL:
+            {
+                // Try to resolve destination from the trade chat message
+                sBotServiceMgr.CreateProactiveRequest(bot, senderGuid, BOT_SERVICE_PORTAL, message);
+                BotServiceRequest* req = sBotServiceMgr.GetPendingRequest(bot->GetObjectGuid(), senderGuid);
+                if (req && req->state == SERVICE_STATE_WAITING_FOR_TRADE)
+                {
+                    // Destination was parsed from trade message — go straight to "trade me"
+                    char buf[256];
+                    snprintf(buf, sizeof(buf), "yeah I can port you, 1g. I'm %s, trade me", location.c_str());
+                    pw.message = buf;
+                }
+                else
+                {
+                    char buf[256];
+                    snprintf(buf, sizeof(buf), "hey I can do ports, where do you need? 1g. I'm %s", location.c_str());
+                    pw.message = buf;
+                }
+                break;
+            }
+            case BOT_SERVICE_ENCHANT:
+            {
+                char buf[256];
+                snprintf(buf, sizeof(buf), "hey I can enchant, what do you need? I'm %s", location.c_str());
+                pw.message = buf;
+                sBotServiceMgr.CreateProactiveRequest(bot, senderGuid, BOT_SERVICE_ENCHANT, message);
+                break;
+            }
+            case BOT_SERVICE_TRANSMUTE:
+            {
+                char buf[256];
+                snprintf(buf, sizeof(buf), "transmute CD is up, 3g. I'm %s, trade me", location.c_str());
+                pw.message = buf;
+                sBotServiceMgr.CreateProactiveRequest(bot, senderGuid, BOT_SERVICE_TRANSMUTE, message);
+                break;
+            }
+            case BOT_SERVICE_MOONCLOTH:
+            {
+                char buf[256];
+                snprintf(buf, sizeof(buf), "mooncloth CD is up, 3g. I'm %s, trade me", location.c_str());
+                pw.message = buf;
+                sBotServiceMgr.CreateProactiveRequest(bot, senderGuid, BOT_SERVICE_MOONCLOTH, message);
+                break;
+            }
+            default:
+                pw.message = "hey I can help with that, PST me";
+                break;
+        }
+
+        m_pendingWhispers.push_back(pw);
         RecordChat(bot->GetGUIDLow(), CHAT_COOLDOWN_TRADE);
 
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL,
@@ -978,6 +1036,21 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
             bot->GetName(), sender->GetName(), pw.delayMs);
         return;  // only one bot responds per message
     }
+}
+
+void BotChatManager::SendMinimapPing(Player* bot, Player* target)
+{
+    if (!bot || !target || !target->GetSession())
+        return;
+
+    WorldPacket data(SMSG_GOSSIP_POI, (4 + 4 + 4 + 4 + 4 + 40));
+    data << uint32(99);    // Flags (standard POI flags)
+    data << float(bot->GetPositionX());
+    data << float(bot->GetPositionY());
+    data << uint32(6);     // Icon: red flag marker
+    data << uint32(0);     // Data
+    data << bot->GetName();
+    target->GetSession()->SendPacket(&data);
 }
 
 void BotChatManager::UpdatePendingWhispers(uint32 diff)
@@ -991,8 +1064,14 @@ void BotChatManager::UpdatePendingWhispers(uint32 diff)
         if (it->delayMs <= diff)
         {
             Player* bot = sObjectAccessor.FindPlayer(it->botGuid);
+            Player* target = sObjectAccessor.FindPlayer(it->playerGuid);
             if (bot)
+            {
                 SendWhisperToPlayer(bot, it->playerGuid, it->message.c_str());
+                // Send minimap marker so the player can find the bot
+                if (target)
+                    SendMinimapPing(bot, target);
+            }
             it = m_pendingWhispers.erase(it);
         }
         else

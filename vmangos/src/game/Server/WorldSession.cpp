@@ -37,6 +37,7 @@
 #include "SocialMgr.h"
 #include "PlayerBotMgr.h"
 #include "PlayerBotAI.h"
+#include "BotServiceMgr.h"
 #include "Anticheat.h"
 #include "Language.h"
 #include "Chat.h"
@@ -633,6 +634,10 @@ void WorldSession::LogoutPlayer(bool Save)
 
     if (_player)
     {
+        // Clear any pending bot service requests for this player
+        if (GetAccountId() < 100)
+            sBotServiceMgr.ClearRequestsForPlayer(_player->GetObjectGuid());
+
         bool inWorld = _player->IsInWorld() && _player->FindMap();
 
         sLog.Player(this, LOG_CHAR, "Logout", LOG_LVL_DETAIL, "");

@@ -99,6 +99,9 @@ public:
     // Whisper sending (used by BotServiceMgr too)
     void SendWhisperToPlayer(Player* bot, ObjectGuid targetGuid, const char* message);
 
+    // Send minimap marker to help player find a bot
+    static void SendMinimapPing(Player* bot, Player* target);
+
     // City detection
     static bool IsInCity(Player* player);
 

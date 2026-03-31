@@ -17,8 +17,11 @@
 #include "PlayerBotMgr.h"
 #include "PlayerBotAI.h"
 #include "BotChatManager.h"
+#include "BotServiceMgr.h"
 #include "GuildBotMgr.h"
 #include "BotDirector.h"
+#include "Opcodes.h"
+#include "TradeData.h"
 #include "Player.h"
 #include "Log.h"
 #include "SocialMgr.h"
@@ -668,6 +671,24 @@ void CrowdBotAI::UpdateAI(uint32 const diff)
 {
     PlayerBotAI::UpdateAI(diff);
 
+    // Handle pending trade accept timer (for service trades)
+    if (m_pendingTradeAcceptTimer)
+    {
+        if (m_pendingTradeAcceptTimer <= diff)
+        {
+            m_pendingTradeAcceptTimer = 0;
+            if (me->GetTradeData() && !me->GetTradeData()->IsAccepted())
+            {
+                std::unique_ptr<WorldPacket> acceptData =
+                    std::make_unique<WorldPacket>(CMSG_ACCEPT_TRADE, 4);
+                *acceptData << uint32(1);
+                me->GetSession()->QueuePacket(std::move(acceptData));
+            }
+        }
+        else
+            m_pendingTradeAcceptTimer -= diff;
+    }
+
     m_updateTimer += diff;
     if (m_updateTimer < 5000)
         return;
@@ -703,6 +724,44 @@ void CrowdBotAI::UpdateAI(uint32 const diff)
         float z = m_homeZ;
         me->UpdateGroundPositionZ(x, y, z);
         me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING | MOVE_EXCLUDE_STEEP_SLOPES);
+    }
+}
+
+void CrowdBotAI::OnPacketReceived(WorldPacket const* packet)
+{
+    if (!me)
+        return;
+
+    switch (packet->GetOpcode())
+    {
+        case SMSG_TRADE_STATUS:
+        {
+            WorldPacket pktCopy(*packet);
+            uint32 status;
+            pktCopy >> status;
+
+            if (status == TRADE_STATUS_BEGIN_TRADE)
+            {
+                // A player initiated trade with this crowd bot.
+                if (me->GetTradeData())
+                {
+                    Player* trader = me->GetTradeData()->GetTrader();
+                    if (trader && sBotServiceMgr.ShouldAcceptTrade(me, trader))
+                    {
+                        // Accept the trade initiation (open trade window).
+                        std::unique_ptr<WorldPacket> beginData =
+                            std::make_unique<WorldPacket>(CMSG_BEGIN_TRADE, 0);
+                        me->GetSession()->QueuePacket(std::move(beginData));
+                        m_pendingTradeAcceptTimer = 2000; // auto-accept after 2s
+                    }
+                    else
+                    {
+                        me->TradeCancel(true, TRADE_STATUS_BUSY);
+                    }
+                }
+            }
+            return;
+        }
     }
 }
 

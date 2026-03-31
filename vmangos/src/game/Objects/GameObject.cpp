@@ -1797,30 +1797,8 @@ void GameObject::Use(Unit* user)
             if (!info)
                 return;
 
-            if (info->spellcaster.partyOnly)
-            {
-                Unit* caster = GetOwner();
-                if (!caster)
-                {
-                    if (m_playerGroupId == 0)
-                       return;
-
-                    Group* group = ((Player*) user)->GetGroup();
-                    if (!group)
-                        return;
-
-                    if (group->GetId() != m_playerGroupId)
-                        return;
-                }
-                else
-                {
-                    if (caster->GetTypeId() != TYPEID_PLAYER)
-                        return;
-
-                    if (user->GetTypeId() != TYPEID_PLAYER || !((Player*)user)->IsInSameRaidWith((Player*)caster))
-                        return;
-                }
-            }
+            // Portal party restriction removed — any player can use any portal.
+            // Original vanilla behavior required group membership with the caster.
 
             spellId = info->spellcaster.spellId;
 
