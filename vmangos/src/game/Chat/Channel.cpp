@@ -683,6 +683,14 @@ void Channel::Say(ObjectGuid guid, char const* text, uint32 lang, bool skipCheck
     {
         sBotChatMgr.OnTradeChatMessage(guid, text);
     }
+
+    // General chat reactive hooks: fire when any player posts in a General channel.
+    // Bots posting via skipCheck are excluded — they only trigger hooks for human messages.
+    if (!skipCheck && m_name.find("General") != std::string::npos &&
+        pPlayer && pPlayer->GetSession()->GetAccountId() < 100)
+    {
+        sBotChatMgr.OnGeneralChatMessage(pPlayer->GetZoneId(), guid, text);
+    }
 }
 
 void Channel::Invite(ObjectGuid guid, char const* targetName)

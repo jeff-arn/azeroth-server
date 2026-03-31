@@ -10,6 +10,7 @@
 #include <string>
 #include <ctime>
 #include <unordered_map>
+#include <unordered_set>
 
 class Player;
 class Group;
@@ -57,6 +58,112 @@ struct BotChatCooldown
 };
 
 // ============================================================================
+// Conversational threading — topic pools, chains, debates, reactive hooks.
+// ============================================================================
+
+enum GeneralTopic : uint8
+{
+    TOPIC_LFG       = 0,
+    TOPIC_GOLD      = 1,
+    TOPIC_GEAR      = 2,
+    TOPIC_BORED     = 3,
+    TOPIC_NEWBIE    = 4,
+    TOPIC_SERVER    = 5,
+    TOPIC_PVP       = 6,
+    TOPIC_PROFESSION= 7,
+    TOPIC_MAX
+};
+
+// A single line in a pre-scripted conversation chain.
+struct ChainLine
+{
+    uint8 speakerRole;          // index into participants array (0, 1, 2)
+    const char* text;
+    uint32 delayMinMs;          // min delay before this line (0 for first)
+    uint32 delayMaxMs;
+};
+
+struct ConversationChain
+{
+    const char* tag;            // for logging
+    uint8 numParticipants;      // 2 or 3
+    ChainLine lines[6];         // null-terminated by text==nullptr
+    uint8 lineCount;
+};
+
+// A debate line with variant text for replay variety.
+struct DebateLine
+{
+    uint8 side;                 // 0 or 1
+    const char* variants[3];
+    uint8 variantCount;
+    uint32 delayMinMs;
+    uint32 delayMaxMs;
+};
+
+struct DebateTemplate
+{
+    const char* tag;
+    DebateLine lines[8];
+    uint8 lineCount;
+};
+
+// Keyword-triggered reactive follow-up.
+struct ReactiveHook
+{
+    const char* keyword;        // substring match (lowercased)
+    const char* responses[5];
+    uint8 responseCount;
+    uint8 triggerChance;        // percent (0-100)
+};
+
+// A pending General chat message scheduled for future delivery.
+struct PendingGeneralMessage
+{
+    uint32 botGuidLow;          // 0 = pick any available bot at fire time
+    uint32 zoneId;
+    std::string message;
+    uint32 remainingDelayMs;
+    uint32 chainId;             // unique ID to group chain/debate lines (0 = standalone)
+};
+
+// Per-zone conversational state.
+struct ZoneConversationState
+{
+    // Active topic
+    GeneralTopic activeTopic;
+    uint8 topicMessagesSent;
+    time_t topicStartTime;
+
+    // Active chain
+    bool chainActive;
+    uint32 chainIndex;
+    uint8 chainStep;
+    uint32 chainId;             // matches PendingGeneralMessage::chainId
+    uint32 chainParticipants[3];
+
+    // Active debate
+    bool debateActive;
+    uint32 debateIndex;
+    uint8 debateStep;
+    uint32 debateId;
+    uint32 debateSides[2];
+
+    // Reactive hook cooldown
+    time_t lastReactiveHookTime;
+
+    ZoneConversationState()
+        : activeTopic(TOPIC_MAX), topicMessagesSent(0), topicStartTime(0)
+        , chainActive(false), chainIndex(0), chainStep(0), chainId(0)
+        , debateActive(false), debateIndex(0), debateStep(0), debateId(0)
+        , lastReactiveHookTime(0)
+    {
+        memset(chainParticipants, 0, sizeof(chainParticipants));
+        memset(debateSides, 0, sizeof(debateSides));
+    }
+};
+
+// ============================================================================
 
 struct BotChatMessage
 {
@@ -95,6 +202,9 @@ public:
 
     // General channel for crowd bots (Phase 4)
     void SendGeneralChat(Player* bot, const char* message);
+
+    // Reactive hooks — called when anyone posts in General channel
+    void OnGeneralChatMessage(uint32 zoneId, ObjectGuid senderGuid, const std::string& message);
 
     // Whisper sending (used by BotServiceMgr too)
     void SendWhisperToPlayer(Player* bot, ObjectGuid targetGuid, const char* message);
@@ -159,6 +269,18 @@ private:
     // Zone-population-driven General chat
     static constexpr float GENERAL_MSGS_PER_MIN_PER_BOT = 0.09f;  // tuned: 50 bots ≈ 4.5 msgs/min
     void UpdateGeneralChat(uint32 diff);
+
+    // Conversational threading
+    void UpdatePendingGeneralMessages(uint32 diff);
+    void StartConversationChain(uint32 zoneId, std::vector<Player*>& zoneBots);
+    void StartDebate(uint32 zoneId, std::vector<Player*>& zoneBots);
+    void AbortChainOrDebate(uint32 zoneId, uint32 chainId);
+    Player* FindAvailableBotInZone(std::vector<Player*>& bots, std::unordered_set<uint32>& exclude);
+    const char* PickTopicMessage(GeneralTopic topic);
+
+    std::unordered_map<uint32 /*zoneId*/, ZoneConversationState> m_zoneConvoState;
+    std::vector<PendingGeneralMessage> m_pendingGeneralMessages;
+    uint32 m_nextChainId;
 
     bool m_enabled;
     bool m_loaded;
