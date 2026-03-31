@@ -72,6 +72,9 @@ class AuctionHouseBotMgr
         void Load();
         void Update(bool force = false);
 
+        // Fair market value for item (used by bot buyer and WTB trade system)
+        uint32 GetFairBuyoutForItem(uint32 itemId, uint32 stackSize) const;
+
     protected:
         // Data
         std::vector<AuctionHouseBotEntry> m_items;
@@ -112,7 +115,6 @@ class AuctionHouseBotMgr
 
         // Bot buyer system — purchases player-listed auctions at fair prices.
         void UpdateBotBuyers(AuctionHouseObject* ah);
-        uint32 GetFairBuyoutForItem(uint32 itemId, uint32 stackSize) const;
         float  GetPurchaseProbability(uint32 listingBuyout, uint32 fairBuyout) const;
         bool   IsBotOwned(uint32 ownerGuid) const;
 

@@ -6,6 +6,7 @@
 #include "Timer.h"
 
 #include <map>
+#include <unordered_map>
 #include <string>
 #include <vector>
 #include <ctime>
@@ -55,6 +56,7 @@ enum BotServiceType : uint8
     BOT_SERVICE_ENCHANT   = 2,
     BOT_SERVICE_TRANSMUTE = 3,
     BOT_SERVICE_MOONCLOTH = 4,
+    BOT_SERVICE_BUY       = 5,  // bot buys items from player
 };
 
 enum BotServiceState : uint8
@@ -80,6 +82,11 @@ struct BotServiceRequest
     static constexpr uint32 TRANSMUTE_TIP_MIN = 20000;   // 2g minimum
     static constexpr uint32 MOONCLOTH_TIP_MIN = 20000;   // 2g minimum
     static constexpr uint32 TIMEOUT_SECS      = 300;     // 5 min timeout
+
+    // For BOT_SERVICE_BUY: tracks what the bot wants to buy
+    uint32 buyItemId;       // item entry ID
+    uint32 buyMaxQuantity;  // max stack to buy
+    uint32 buyPriceCopper;  // price per unit in copper
 };
 
 // ============================================================================
@@ -125,6 +132,14 @@ public:
     static bool IsAlchemistBot(Player* bot);
     static bool IsTailorBot(Player* bot);
 
+    // === WTB Buy system ===
+
+    // Called when a player whispers a bot about selling an item the bot wants.
+    bool HandleBuyWhisper(Player* bot, ObjectGuid playerGuid, const std::string& message);
+
+    // Get the buy price for an item (based on AH fair market value, discounted)
+    uint32 GetBuyPriceForItem(uint32 itemId, uint32 quantity) const;
+
 private:
     // === Portal helpers ===
     uint32 ResolvePortalSpell(Player* bot, const std::string& message) const;
@@ -148,6 +163,29 @@ private:
     static RequestKey MakeKey(ObjectGuid botGuid, ObjectGuid playerGuid);
 
     std::map<RequestKey, BotServiceRequest> m_requests;
+
+    // === WTB Buy helpers ===
+    struct WtbItemDef
+    {
+        uint32 itemId;
+        const char* keyword;       // match in whisper
+        const char* displayName;   // for bot chat
+        uint32 maxQuantity;
+    };
+    static const WtbItemDef s_wtbItems[];
+    static const uint32 s_wtbItemCount;
+
+    WtbItemDef const* ResolveWtbItem(const std::string& message) const;
+
+    // Per-bot buy budget (resets daily)
+    struct BotBuyBudget
+    {
+        uint32 remainingCopper;
+        time_t lastResetTime;
+    };
+    std::unordered_map<uint32, BotBuyBudget> m_buyBudgets;
+    uint32 m_buyBudgetPerDay;  // config: copper per bot per day
+    void ResetBudgetIfNeeded(uint32 botGuid);
 
     ShortTimeTracker m_cleanupTimer;
     bool m_enabled;

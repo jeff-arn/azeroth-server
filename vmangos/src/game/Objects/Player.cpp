@@ -74,6 +74,7 @@
 #include "ZoneScriptMgr.h"
 #include "PlayerBotMgr.h"
 #include "PlayerBotAI.h"
+#include "BotChatManager.h"
 #include "AccountMgr.h"
 #include "Anticheat.h"
 #include "MovementBroadcaster.h"
@@ -3272,6 +3273,10 @@ void Player::GiveLevel(uint32 level)
     // update level to hunter/summon pet
     if (Pet* pet = GetPet())
         pet->SynchronizeLevelWithOwner();
+
+    // Notify party bots of level-up (triggers "gratz" chat)
+    if (GetGroup() && GetSession() && GetSession()->GetAccountId() < 100)
+        sBotChatMgr.OnGroupMemberLevelUp(this);
 }
 
 void Player::UpdateFreeTalentPoints(bool resetIfNeed)

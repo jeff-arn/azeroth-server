@@ -16,6 +16,7 @@
 
 #include "PartyBotAI.h"
 #include "GuildBotMgr.h"
+#include "BotChatManager.h"
 #include "BotServiceMgr.h"
 #include "Player.h"
 #include "CreatureAI.h"
@@ -618,6 +619,18 @@ bool PartyBotAI::AttackStart(Unit* pVictim)
 
     if (me->Attack(pVictim, true))
     {
+        // Tank announces pulling (with cooldown)
+        if (m_role == ROLE_TANK && m_pullChatCooldown == 0 && !me->IsInCombat())
+        {
+            if (sBotChatMgr.CanChat(me->GetGUIDLow(), CHAT_COOLDOWN_PARTY))
+            {
+                static const char* pullMsgs[] = { "pulling", "inc", "going in" };
+                sBotChatMgr.SendPartyChat(me, pullMsgs[urand(0, 2)]);
+                sBotChatMgr.RecordChat(me->GetGUIDLow(), CHAT_COOLDOWN_PARTY);
+                m_pullChatCooldown = 15000;  // 15s internal cooldown
+            }
+        }
+
         if (GetRole() == ROLE_RANGE_DPS &&
             me->GetPowerPercent(POWER_MANA) > 10.0f &&
             me->GetCombatDistance(pVictim) > 8.0f)
@@ -954,6 +967,30 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     else
         return;
 
+    // Social chat timer countdowns
+    if (m_oomChatCooldown > PB_UPDATE_INTERVAL)
+        m_oomChatCooldown -= PB_UPDATE_INTERVAL;
+    else
+        m_oomChatCooldown = 0;
+
+    if (m_pullChatCooldown > PB_UPDATE_INTERVAL)
+        m_pullChatCooldown -= PB_UPDATE_INTERVAL;
+    else
+        m_pullChatCooldown = 0;
+
+    // Delayed greeting after joining group
+    if (m_greetDelayTimer > 0)
+    {
+        if (m_greetDelayTimer <= PB_UPDATE_INTERVAL)
+        {
+            m_greetDelayTimer = 0;
+            if (me->GetGroup())
+                sBotChatMgr.OnGroupMemberJoined(me, me->GetGroup());
+        }
+        else
+            m_greetDelayTimer -= PB_UPDATE_INTERVAL;
+    }
+
     if (!me->IsInWorld() || me->IsBeingTeleported())
         return;
 
@@ -1032,6 +1069,14 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         me->UpdateZone(newzone, newarea);
 
         m_initialized = true;
+
+        // Schedule a greeting after a short random delay (2-5 seconds)
+        if (!m_greetedGroup)
+        {
+            m_greetedGroup = true;
+            m_greetDelayTimer = urand(2000, 5000);
+        }
+
         return;
     }
 
@@ -1089,6 +1134,26 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (me->IsDead())
     {
+        // Wipe detection: if all group members are dead, react once
+        if (!m_wipeReacted && me->GetGroup())
+        {
+            bool allDead = true;
+            for (GroupReference* itr = me->GetGroup()->GetFirstMember(); itr; itr = itr->next())
+            {
+                Player* member = itr->getSource();
+                if (member && member->IsInWorld() && member->IsAlive())
+                {
+                    allDead = false;
+                    break;
+                }
+            }
+            if (allDead)
+            {
+                m_wipeReacted = true;
+                sBotChatMgr.OnPartyWipe(me->GetGroup());
+            }
+        }
+
         if (me->InBattleGround())
         {
             if (me->GetDeathState() == CORPSE)
@@ -1106,7 +1171,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 me->CastSpell(me, PB_SPELL_HONORLESS_TARGET, true);
             }
         }
-        
+
         return;
     }
 
@@ -1326,6 +1391,47 @@ void PartyBotAI::UpdateOutOfCombatAI()
 
 void PartyBotAI::UpdateInCombatAI()
 {
+    m_wipeReacted = false;  // reset wipe flag when in combat
+
+    // === BOSS KILL DETECTION ===
+    // If our previous combat target just died, check if it was a boss
+    if (m_lastCombatTarget)
+    {
+        Unit* lastTarget = sObjectAccessor.GetUnit(*me, m_lastCombatTarget);
+        if (lastTarget && lastTarget->IsDead() && lastTarget->IsCreature())
+        {
+            Creature* pCreature = static_cast<Creature*>(lastTarget);
+            bool isBoss = GetBossOverride(pCreature->GetEntry()) != nullptr
+                       || pCreature->GetCreatureInfo()->rank >= 3;  // rank 3 = boss
+            if (isBoss && me->GetGroup())
+            {
+                sBotChatMgr.OnBossKilled(me->GetGroup(), pCreature->GetEntry());
+                m_lastCombatTarget.Clear();  // only fire once per kill
+            }
+        }
+    }
+
+    // Track current target for boss kill detection
+    if (Unit* pVictim = me->GetVictim())
+        m_lastCombatTarget = pVictim->GetObjectGuid();
+
+    // === OOM CALLOUT: healers/casters warn when low on mana ===
+    if (m_oomChatCooldown == 0 && me->GetPowerType() == POWER_MANA)
+    {
+        float manaPct = me->GetPowerPercent(POWER_MANA);
+        if (manaPct < 10.0f && (m_role == ROLE_HEALER || me->GetClass() == CLASS_MAGE
+            || me->GetClass() == CLASS_WARLOCK || me->GetClass() == CLASS_PRIEST))
+        {
+            if (sBotChatMgr.CanChat(me->GetGUIDLow(), CHAT_COOLDOWN_PARTY))
+            {
+                static const char* oomMsgs[] = { "oom", "oom need mana", "low mana", "need to drink" };
+                sBotChatMgr.SendPartyChat(me, oomMsgs[urand(0, 3)]);
+                sBotChatMgr.RecordChat(me->GetGUIDLow(), CHAT_COOLDOWN_PARTY);
+                m_oomChatCooldown = 30000;  // 30s internal cooldown
+            }
+        }
+    }
+
     // === OPENER DELAY: Non-tanks wait 2 seconds before engaging ===
     if (m_role != ROLE_TANK && m_role != ROLE_HEALER && !m_combatEngageDelayDone)
     {

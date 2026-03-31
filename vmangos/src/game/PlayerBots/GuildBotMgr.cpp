@@ -1,5 +1,6 @@
 #include "GuildBotMgr.h"
 #include "PlayerBotMgr.h"
+#include "PlayerBotAI.h"
 #include "PartyBotAI.h"
 #include "World.h"
 #include "ObjectMgr.h"
@@ -19,7 +20,10 @@ INSTANTIATE_SINGLETON_1(GuildBotMgr);
 #include <cmath>
 
 GuildBotMgr::GuildBotMgr()
-    : m_enabled(false), m_guildId(0), m_accountId(98), m_levelSyncTimer(0)
+    : m_presenceEnabled(false), m_presenceTimer(0), m_presenceCheckInterval(300000),
+      m_presencePeakCount(14), m_presenceOffPeakCount(3), m_presencePeakHour(20),
+      m_presenceTimezoneOffset(0),
+      m_enabled(false), m_guildId(0), m_accountId(98), m_levelSyncTimer(0)
 {
 }
 
@@ -38,11 +42,21 @@ void GuildBotMgr::Load()
 
     m_accountId = sConfig.GetIntDefault("GuildBot.AccountId", 98);
 
+    // Presence system config
+    m_presenceEnabled       = sConfig.GetBoolDefault("GuildBot.Presence.Enable", true);
+    m_presenceCheckInterval = sConfig.GetIntDefault("GuildBot.Presence.CheckInterval", 300) * 1000;
+    m_presencePeakHour      = sConfig.GetIntDefault("GuildBot.Presence.PeakHour", 20);
+    m_presencePeakCount     = sConfig.GetIntDefault("GuildBot.Presence.PeakCount", 14);
+    m_presenceOffPeakCount  = sConfig.GetIntDefault("GuildBot.Presence.OffPeakCount", 3);
+    m_presenceTimezoneOffset = sConfig.GetIntDefault("GuildBot.Presence.TimezoneOffset", 0);
+    m_presenceTimer = m_presenceCheckInterval - 30000;  // first check ~30s after startup
+
     LoadRoster();
     LoadSpecWeights();
 
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[GuildBotMgr] Loaded %u guild bots, %u spec weight entries.",
-        (uint32)m_roster.size(), (uint32)m_specWeights.size());
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[GuildBotMgr] Loaded %u guild bots, %u spec weight entries. Presence: %s (peak=%u, offpeak=%u, tz=%d)",
+        (uint32)m_roster.size(), (uint32)m_specWeights.size(),
+        m_presenceEnabled ? "ON" : "OFF", m_presencePeakCount, m_presenceOffPeakCount, m_presenceTimezoneOffset);
 }
 
 void GuildBotMgr::LoadRoster()
@@ -50,9 +64,9 @@ void GuildBotMgr::LoadRoster()
     m_roster.clear();
     m_guidToIndex.clear();
 
-    //                                          0      1       2     3      4     5     6              7       8           9
+    //                                          0      1       2     3      4     5     6              7       8           9          10
     std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-        "SELECT r.guid, c.name, c.race, c.class, r.spec, r.role, r.raid_assigned, r.active, r.gear_score, r.gear_tier "
+        "SELECT r.guid, c.name, c.race, c.class, r.spec, r.role, r.raid_assigned, r.active, r.gear_score, r.gear_tier, r.personality "
         "FROM guild_bot_roster r "
         "JOIN characters c ON r.guid = c.guid "
         "ORDER BY r.guid"));
@@ -79,6 +93,7 @@ void GuildBotMgr::LoadRoster()
         info.gearScore    = fields[8].GetFloat();
         info.hasLootUpgrades = false;  // will be detected below
         info.online       = false;
+        info.personality  = BotPersonalityFromString(fields[10].GetCppString());
 
         std::string tierStr = fields[9].GetCppString();
         if (tierStr == "fresh_60")
@@ -202,6 +217,17 @@ void GuildBotMgr::Update(uint32 diff)
     {
         m_levelSyncTimer = 0;
         SyncBotLevels();
+    }
+
+    // Presence system: simulate login/logout for guild bots
+    if (m_presenceEnabled)
+    {
+        m_presenceTimer += diff;
+        if (m_presenceTimer >= m_presenceCheckInterval)
+        {
+            m_presenceTimer = 0;
+            UpdatePresence();
+        }
     }
 }
 
@@ -696,4 +722,147 @@ void GuildBotMgr::ApplyGearTier(uint32 botGuid)
     sLog.Out(LOG_BASIC, LOG_LVL_DETAIL,
         "[GuildBotMgr] Bot %s (GUID %u) will equip gear tier %u on spawn.",
         info.name.c_str(), botGuid, (uint32)info.gearTier);
+}
+
+// ============================================================================
+// Guild Bot Online Presence
+// ============================================================================
+
+bool GuildBotMgr::IsPresenceBot(uint32 guid) const
+{
+    auto it = m_guidToIndex.find(guid);
+    if (it == m_guidToIndex.end())
+        return false;
+    return m_roster[it->second].online;
+}
+
+uint32 GuildBotMgr::GetTargetOnlineCount() const
+{
+    // Get current server hour adjusted for timezone
+    time_t now = time(nullptr);
+    struct tm* tmNow = gmtime(&now);
+    int hour = (tmNow->tm_hour + m_presenceTimezoneOffset + 24) % 24;
+
+    // Smooth curve: peak at m_presencePeakHour, trough 12 hours later
+    // Uses cosine curve between off-peak and peak counts
+    int distFromPeak = abs(hour - (int)m_presencePeakHour);
+    if (distFromPeak > 12)
+        distFromPeak = 24 - distFromPeak;
+
+    // 0 = at peak, 12 = at trough
+    float t = static_cast<float>(distFromPeak) / 12.0f;  // 0.0 to 1.0
+    // Cosine interpolation: smooth transition
+    float factor = (1.0f + cosf(t * 3.14159f)) / 2.0f;  // 1.0 at peak, 0.0 at trough
+
+    uint32 target = static_cast<uint32>(
+        m_presenceOffPeakCount + factor * (m_presencePeakCount - m_presenceOffPeakCount));
+
+    // Cap to roster size
+    return std::min(target, static_cast<uint32>(m_roster.size()));
+}
+
+void GuildBotMgr::LoginPresenceBot(GuildBotInfo& bot)
+{
+    if (bot.online)
+        return;
+
+    // Check if already logged in
+    if (sObjectAccessor.FindPlayerNotInWorld(ObjectGuid(HIGHGUID_PLAYER, bot.guid)))
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+            "[GuildBotMgr] Presence login skip (already in world): %s (GUID %u)",
+            bot.name.c_str(), bot.guid);
+        return;
+    }
+
+    // Spawn as CrowdBotAI in a capital city (idle presence, no combat)
+    CrowdBotAI* pAI = new CrowdBotAI();
+
+    if (sPlayerBotMgr.AddBot(bot.guid, false, pAI))
+    {
+        bot.online = true;
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+            "[GuildBotMgr] Presence login: %s (GUID %u)", bot.name.c_str(), bot.guid);
+    }
+    else
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+            "[GuildBotMgr] Presence login FAILED: %s (GUID %u) — AddBot returned false",
+            bot.name.c_str(), bot.guid);
+        delete pAI;
+    }
+}
+
+void GuildBotMgr::LogoutPresenceBot(GuildBotInfo& bot)
+{
+    if (!bot.online)
+        return;
+
+    if (sPlayerBotMgr.DeleteBot(bot.guid))
+    {
+        bot.online = false;
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+            "[GuildBotMgr] Presence logout: %s", bot.name.c_str());
+    }
+}
+
+void GuildBotMgr::UpdatePresence()
+{
+    if (!m_presenceEnabled || m_roster.empty())
+        return;
+
+    uint32 target = GetTargetOnlineCount();
+
+    // Count currently online guild bots
+    uint32 currentPresence = 0;
+    for (auto const& bot : m_roster)
+    {
+        if (bot.online)
+            ++currentPresence;
+    }
+
+    if (currentPresence < target)
+    {
+        uint32 toLogin = target - currentPresence;
+
+        // Collect offline bots eligible for presence login.
+        // raidAssigned only means "in the raid plan" — bots are available for
+        // presence unless they're currently online (e.g., actively assembled).
+        std::vector<size_t> offlineBots;
+        for (size_t i = 0; i < m_roster.size(); ++i)
+        {
+            if (!m_roster[i].online && m_roster[i].active)
+                offlineBots.push_back(i);
+        }
+
+        for (uint32 i = 0; i < toLogin && !offlineBots.empty(); ++i)
+        {
+            uint32 idx = urand(0, static_cast<uint32>(offlineBots.size()) - 1);
+            LoginPresenceBot(m_roster[offlineBots[idx]]);
+            offlineBots.erase(offlineBots.begin() + idx);
+        }
+    }
+    else if (currentPresence > target)
+    {
+        uint32 toLogout = currentPresence - target;
+
+        // Collect online bots eligible for presence logout
+        std::vector<size_t> onlineBots;
+        for (size_t i = 0; i < m_roster.size(); ++i)
+        {
+            if (m_roster[i].online)
+                onlineBots.push_back(i);
+        }
+
+        for (uint32 i = 0; i < toLogout && !onlineBots.empty(); ++i)
+        {
+            uint32 idx = urand(0, static_cast<uint32>(onlineBots.size()) - 1);
+            LogoutPresenceBot(m_roster[onlineBots[idx]]);
+            onlineBots.erase(onlineBots.begin() + idx);
+        }
+    }
+
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+        "[GuildBotMgr] Presence update: target=%u, current=%u",
+        target, currentPresence);
 }

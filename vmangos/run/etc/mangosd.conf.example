@@ -3016,6 +3016,18 @@ BotChat.TradeChat.IntervalMax = 300
 BotChat.GuildChat.IntervalMin = 300
 BotChat.GuildChat.IntervalMax = 900
 
+#    BotChat.Cooldown.*
+#        Per-bot cooldowns (in seconds) to prevent individual bots from spamming.
+#        When the total online bot count exceeds ScaleThreshold, cooldowns are
+#        multiplied by (botCount / threshold) to reduce chat density.
+#
+BotChat.Cooldown.TradeChat = 300
+BotChat.Cooldown.GuildChat = 180
+BotChat.Cooldown.PartyChat = 30
+BotChat.Cooldown.SayChat = 120
+BotChat.Cooldown.GeneralChat = 120
+BotChat.Cooldown.ScaleThreshold = 30
+
 ###################################################################################################################
 # BOT SERVICES
 #
@@ -3026,6 +3038,13 @@ BotChat.GuildChat.IntervalMax = 900
 #
 ###################################################################################################################
 BotService.Enable = 1
+
+#    BotService.Buy.BudgetPerDay
+#        Gold budget per bot per day for WTB direct trades with players.
+#        Bots will stop buying when their daily budget is exhausted.
+#        Default: 200 (gold)
+#
+BotService.Buy.BudgetPerDay = 200
 
 ###################################################################################################################
 # GUILD BOTS
@@ -3044,6 +3063,25 @@ BotService.Enable = 1
 
 GuildBot.Enable = 1
 GuildBot.AccountId = 98
+
+#    GuildBot.Presence.*
+#        Guild bots simulate login/logout patterns so the guild panel shows
+#        realistic online presence. More bots online during peak hours, fewer
+#        during off-hours. Separate from .guildraid assemble (raid bots).
+#
+#    GuildBot.Presence.Enable — toggle the presence simulation
+#    GuildBot.Presence.CheckInterval — seconds between presence checks
+#    GuildBot.Presence.PeakHour — server hour (UTC + offset) with most bots
+#    GuildBot.Presence.PeakCount — max bots online at peak
+#    GuildBot.Presence.OffPeakCount — min bots online at trough
+#    GuildBot.Presence.TimezoneOffset — hours offset from UTC
+#
+GuildBot.Presence.Enable = 1
+GuildBot.Presence.CheckInterval = 300
+GuildBot.Presence.PeakHour = 20
+GuildBot.Presence.PeakCount = 14
+GuildBot.Presence.OffPeakCount = 3
+GuildBot.Presence.TimezoneOffset = -4
 
 ###################################################################################################################
 # CROWD BOTS
@@ -3156,8 +3194,18 @@ MinPetitionSigns = 0
 #
 ###################################################################################################################
 RandomBot.Enable = 1
-RandomBot.MinBots = 30
-RandomBot.MaxBots = 60
+RandomBot.MinBots = 135
+RandomBot.MaxBots = 145
+
+#    RandomBot.PeakHour / OffPeakPercent / TimezoneOffset
+#        Time-of-day scaling for crowd bots. At PeakHour, 100% of MaxBots
+#        are online. At the trough (12h from peak), OffPeakPercent% are online.
+#        Uses a smooth cosine curve between the two.
+#        TimezoneOffset adjusts from UTC (e.g., -4 for EDT, -5 for EST).
+#
+RandomBot.PeakHour = 20
+RandomBot.OffPeakPercent = 50
+RandomBot.TimezoneOffset = -4
 RandomBot.Refresh = 15000
 
 PlayerBot.AllowSaving = 0

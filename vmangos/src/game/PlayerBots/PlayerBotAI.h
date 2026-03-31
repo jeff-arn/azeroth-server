@@ -119,7 +119,7 @@ class CrowdBotAI: public PlayerBotAI
 {
     public:
         explicit CrowdBotAI(Player* pPlayer = nullptr)
-            : PlayerBotAI(pPlayer), m_updateTimer(0), m_emoteTimer(0),
+            : PlayerBotAI(pPlayer), m_updateTimer(0), m_emoteTimer(0), m_chatTimer(0),
               m_homeX(0), m_homeY(0), m_homeZ(0), m_gearEquipped(false) {}
         void BeforeAddToMap(Player* player) override;
         void OnPlayerLogin() override;
@@ -127,6 +127,7 @@ class CrowdBotAI: public PlayerBotAI
     private:
         uint32 m_updateTimer;
         uint32 m_emoteTimer;
+        uint32 m_chatTimer;   // General channel idle chat timer
         float m_homeX, m_homeY, m_homeZ;
         bool m_gearEquipped;
 };

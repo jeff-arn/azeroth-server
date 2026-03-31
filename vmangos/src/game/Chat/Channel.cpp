@@ -23,6 +23,7 @@
 #include "ObjectMgr.h"
 #include "World.h"
 #include "SocialMgr.h"
+#include "BotChatManager.h"
 #include "MasterPlayer.h"
 #include "Chat.h"
 
@@ -675,6 +676,13 @@ void Channel::Say(ObjectGuid guid, char const* text, uint32 lang, bool skipCheck
         pPlayer->GetSession()->SendPacket(&data);
     else
         SendToAll(&data, (!skipCheck && !m_players[guid].IsModerator()) ? guid : ObjectGuid());
+
+    // Trade chat monitoring: notify bots when a human player posts in Trade channel
+    if (m_name.find("Trade") != std::string::npos &&
+        pPlayer && pPlayer->GetSession()->GetAccountId() < 100)
+    {
+        sBotChatMgr.OnTradeChatMessage(guid, text);
+    }
 }
 
 void Channel::Invite(ObjectGuid guid, char const* targetName)

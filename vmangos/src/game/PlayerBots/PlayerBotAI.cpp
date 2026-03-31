@@ -16,6 +16,8 @@
 
 #include "PlayerBotMgr.h"
 #include "PlayerBotAI.h"
+#include "BotChatManager.h"
+#include "GuildBotMgr.h"
 #include "BotDirector.h"
 #include "Player.h"
 #include "Log.h"
@@ -373,36 +375,36 @@ struct CrowdBotSpawn
 // City hotspot spawns: precise positions for dense clusters
 // Each entry is one bot's exact position (with small random offset from radius)
 
-// Ironforge AH (15 spots)
+// City crowd bot spawn points
 static const CrowdBotSpawn CITY_SPAWNS[] =
 {
-    // IF AH area (GUIDs 100-114)
-    { -4957.0f, -890.0f, 501.6f, 3.0f, 0 },
-    { -4960.0f, -895.0f, 501.6f, 3.0f, 0 },
-    { -4953.0f, -898.0f, 501.6f, 3.0f, 0 },
-    { -4964.0f, -886.0f, 501.6f, 3.0f, 0 },
-    { -4949.0f, -892.0f, 501.6f, 3.0f, 0 },
-    { -4958.0f, -882.0f, 501.6f, 2.0f, 0 },
-    { -4966.0f, -893.0f, 501.6f, 2.0f, 0 },
-    { -4951.0f, -885.0f, 501.6f, 2.0f, 0 },
-    { -4962.0f, -900.0f, 501.6f, 2.0f, 0 },
-    { -4955.0f, -878.0f, 501.6f, 3.0f, 0 },
-    { -4947.0f, -889.0f, 501.6f, 2.0f, 0 },
-    { -4968.0f, -888.0f, 501.6f, 2.0f, 0 },
-    { -4944.0f, -895.0f, 501.6f, 3.0f, 0 },
-    { -4959.0f, -905.0f, 501.6f, 2.0f, 0 },
-    { -4952.0f, -875.0f, 501.6f, 2.0f, 0 },
-    // IF Bank area (GUIDs 115-124)
-    { -4891.0f, -991.0f, 501.6f, 3.0f, 0 },
-    { -4886.0f, -986.0f, 501.6f, 2.0f, 0 },
-    { -4895.0f, -996.0f, 501.6f, 2.0f, 0 },
-    { -4882.0f, -993.0f, 501.6f, 3.0f, 0 },
-    { -4889.0f, -983.0f, 501.6f, 2.0f, 0 },
-    { -4898.0f, -988.0f, 501.6f, 2.0f, 0 },
-    { -4884.0f, -998.0f, 501.6f, 2.0f, 0 },
-    { -4893.0f, -980.0f, 501.6f, 3.0f, 0 },
-    { -4879.0f, -990.0f, 501.6f, 2.0f, 0 },
-    { -4900.0f, -994.0f, 501.6f, 2.0f, 0 },
+    // IF Bank front — main Alliance gathering area (GUIDs 100-124, 25 bots)
+    // Within 10 yards of center (-4919.8, -958.6, 501.5)
+    { -4919.8f, -958.6f, 501.5f, 2.0f, 0 },
+    { -4915.0f, -954.0f, 501.5f, 2.0f, 0 },
+    { -4924.5f, -963.0f, 501.5f, 2.0f, 0 },
+    { -4913.5f, -960.0f, 501.5f, 2.0f, 0 },
+    { -4926.0f, -957.0f, 501.5f, 2.0f, 0 },
+    { -4916.0f, -951.0f, 501.5f, 2.0f, 0 },
+    { -4923.5f, -966.0f, 501.5f, 2.0f, 0 },
+    { -4912.0f, -957.0f, 501.5f, 2.0f, 0 },
+    { -4927.5f, -960.0f, 501.5f, 2.0f, 0 },
+    { -4919.8f, -968.0f, 501.5f, 2.0f, 0 },
+    { -4919.8f, -949.0f, 501.5f, 2.0f, 0 },
+    { -4925.0f, -953.0f, 501.5f, 2.0f, 0 },
+    { -4914.5f, -964.0f, 501.5f, 2.0f, 0 },
+    { -4927.0f, -963.0f, 501.5f, 2.0f, 0 },
+    { -4912.5f, -954.0f, 501.5f, 2.0f, 0 },
+    { -4923.0f, -951.5f, 501.5f, 2.0f, 0 },
+    { -4916.5f, -965.5f, 501.5f, 2.0f, 0 },
+    { -4926.5f, -956.0f, 501.5f, 2.0f, 0 },
+    { -4913.0f, -961.5f, 501.5f, 2.0f, 0 },
+    { -4922.0f, -950.0f, 501.5f, 2.0f, 0 },
+    { -4917.5f, -967.0f, 501.5f, 2.0f, 0 },
+    { -4928.0f, -955.0f, 501.5f, 2.0f, 0 },
+    { -4911.5f, -962.0f, 501.5f, 2.0f, 0 },
+    { -4924.0f, -958.6f, 501.5f, 2.0f, 0 },
+    { -4915.5f, -958.6f, 501.5f, 2.0f, 0 },
     // SW AH area (GUIDs 125-134)
     { -8811.0f, 667.0f, 97.0f, 3.0f, 0 },
     { -8815.0f, 671.0f, 97.0f, 2.0f, 0 },
@@ -426,9 +428,59 @@ static const CrowdBotSpawn CITY_SPAWNS[] =
     { -9452.0f, 48.0f, 57.0f, 2.0f, 0 },
     { -9458.0f, 38.0f, 57.0f, 3.0f, 0 },
     { -9464.0f, 46.0f, 57.0f, 2.0f, 0 },
+    // IF Bank front — additional 25 bots (GUIDs 145-169)
+    { -4920.5f, -952.0f, 501.5f, 2.0f, 0 },
+    { -4919.0f, -965.0f, 501.5f, 2.0f, 0 },
+    { -4925.5f, -961.5f, 501.5f, 2.0f, 0 },
+    { -4914.0f, -955.5f, 501.5f, 2.0f, 0 },
+    { -4921.5f, -967.5f, 501.5f, 2.0f, 0 },
+    { -4918.0f, -949.5f, 501.5f, 2.0f, 0 },
+    { -4926.0f, -964.5f, 501.5f, 2.0f, 0 },
+    { -4913.5f, -952.5f, 501.5f, 2.0f, 0 },
+    { -4928.5f, -958.0f, 501.5f, 2.0f, 0 },
+    { -4911.0f, -959.0f, 501.5f, 2.0f, 0 },
+    { -4922.5f, -953.5f, 501.5f, 2.0f, 0 },
+    { -4917.0f, -963.5f, 501.5f, 2.0f, 0 },
+    { -4924.5f, -955.0f, 501.5f, 2.0f, 0 },
+    { -4915.0f, -962.0f, 501.5f, 2.0f, 0 },
+    { -4921.0f, -949.0f, 501.5f, 2.0f, 0 },
+    { -4918.5f, -968.0f, 501.5f, 2.0f, 0 },
+    { -4927.0f, -954.5f, 501.5f, 2.0f, 0 },
+    { -4912.5f, -962.5f, 501.5f, 2.0f, 0 },
+    { -4923.0f, -966.0f, 501.5f, 2.0f, 0 },
+    { -4916.5f, -951.0f, 501.5f, 2.0f, 0 },
+    { -4925.0f, -959.5f, 501.5f, 2.0f, 0 },
+    { -4914.5f, -957.5f, 501.5f, 2.0f, 0 },
+    { -4920.0f, -950.5f, 501.5f, 2.0f, 0 },
+    { -4919.5f, -966.5f, 501.5f, 2.0f, 0 },
+    { -4929.0f, -957.0f, 501.5f, 2.0f, 0 },
+    // IF Bank interior (GUIDs 170-174, 5 bots)
+    // Within 2 yards of (-4891.7, -990.8, 503.9)
+    { -4891.7f, -990.8f, 503.9f, 1.0f, 0 },
+    { -4890.5f, -989.8f, 503.9f, 1.0f, 0 },
+    { -4892.8f, -991.8f, 503.9f, 1.0f, 0 },
+    { -4890.0f, -991.5f, 503.9f, 1.0f, 0 },
+    { -4893.2f, -989.5f, 503.9f, 1.0f, 0 },
+    // IF AH area (GUIDs 175-189, 15 bots)
+    // Within 3 yards of AH vendor 1 (-4959.9, -906.4, 503.8)
+    { -4959.9f, -906.4f, 503.8f, 1.0f, 0 },
+    { -4958.0f, -904.5f, 503.8f, 1.0f, 0 },
+    { -4961.8f, -908.3f, 503.8f, 1.0f, 0 },
+    { -4957.5f, -907.5f, 503.8f, 1.0f, 0 },
+    { -4962.2f, -905.0f, 503.8f, 1.0f, 0 },
+    { -4958.5f, -909.0f, 503.8f, 1.0f, 0 },
+    { -4961.0f, -904.0f, 503.8f, 1.0f, 0 },
+    { -4957.0f, -906.0f, 503.8f, 1.0f, 0 },
+    { -4962.5f, -907.0f, 503.8f, 1.0f, 0 },
+    { -4959.0f, -909.2f, 503.8f, 1.0f, 0 },
+    { -4960.5f, -903.8f, 503.8f, 1.0f, 0 },
+    { -4957.8f, -908.5f, 503.8f, 1.0f, 0 },
+    { -4962.0f, -906.0f, 503.8f, 1.0f, 0 },
+    { -4958.2f, -904.0f, 503.8f, 1.0f, 0 },
+    { -4961.5f, -909.0f, 503.8f, 1.0f, 0 },
 };
 static const size_t NUM_CITY_SPAWNS = sizeof(CITY_SPAWNS) / sizeof(CITY_SPAWNS[0]);
-static const uint32 CITY_GUID_MIN = 100; // GUIDs 100-144
+static const uint32 CITY_GUID_MIN = 100; // GUIDs 100-189
 
 // Inn locations: 3 bots per inn, spread around center point
 struct CrowdBotInnLocation
@@ -476,7 +528,6 @@ static const uint32 BOTS_PER_INN = 3;
 static const uint32 CROWD_BOT_EMOTES[] =
 {
     1,   // EMOTE_ONESHOT_TALK
-    11,  // EMOTE_ONESHOT_LAUGH
     25,  // EMOTE_ONESHOT_POINT
     396, // EMOTE_ONESHOT_TALK_NOSHEATHE
     92,  // EMOTE_ONESHOT_EAT_NOSHEATHE
@@ -533,16 +584,20 @@ void CrowdBotAI::OnPlayerLogin()
 {
     if (!me) return;
 
-    // Set level: 70% chance 60, 30% chance 40-59
-    uint32 level = urand(0, 99) < 70 ? 60 : urand(40, 59);
-    if (me->GetLevel() != level)
+    // Guild bots keep their DB level (synced to player level ±3 by SyncBotLevels).
+    // Regular crowd bots randomize: 70% level 60, 30% level 40-59.
+    if (!sGuildBotMgr.IsGuildBot(me->GetGUIDLow()))
     {
-        me->GiveLevel(level);
-        me->InitTalentForLevel();
-        me->SetUInt32Value(PLAYER_XP, 0);
+        uint32 level = urand(0, 99) < 70 ? 60 : urand(40, 59);
+        if (me->GetLevel() != level)
+        {
+            me->GiveLevel(level);
+            me->InitTalentForLevel();
+            me->SetUInt32Value(PLAYER_XP, 0);
+        }
     }
 
-    // Equip premade gear
+    // Equip premade gear — use preraid-bis (dungeon blues), not phase6-bis
     if (!m_gearEquipped)
     {
         m_gearEquipped = true;
@@ -557,6 +612,13 @@ void CrowdBotAI::OnPlayerLogin()
                 itr.second.level <= me->GetLevel() &&
                 itr.second.level > bestLevel)
             {
+                // For level 60 crowd bots, prefer preraid-bis over phase6-bis
+                if (me->GetLevel() == 60 && itr.second.level == 60)
+                {
+                    // Skip phase6-bis entries (only use preraid-bis)
+                    if (itr.second.name.find("phase6") != std::string::npos)
+                        continue;
+                }
                 bestLevel = itr.second.level;
                 bestEntry = itr.second.entry;
             }
@@ -567,8 +629,30 @@ void CrowdBotAI::OnPlayerLogin()
             me->AddStartingItems();
     }
 
+    // ~25% of level 60 crowd bots sit on their race's epic mount
+    if (me->GetLevel() == 60 && urand(1, 100) <= 25)
+    {
+        // Epic mount spell IDs by Alliance race
+        static const uint32 HUMAN_MOUNTS[]   = { 23227, 23229, 23228 };  // Swift Palomino/Brown/White Steed
+        static const uint32 DWARF_MOUNTS[]   = { 23238, 23239, 23240 };  // Swift Brown/Gray/White Ram
+        static const uint32 NELF_MOUNTS[]    = { 23221, 23219, 23338 };  // Swift Frost/Mist/Stormsaber
+        static const uint32 GNOME_MOUNTS[]   = { 23225, 23223, 23222 };  // Swift Green/White/Yellow Mechanostrider
+
+        uint32 mountSpell = 0;
+        switch (me->GetRace())
+        {
+            case 1: mountSpell = HUMAN_MOUNTS[urand(0, 2)];  break;  // Human
+            case 3: mountSpell = DWARF_MOUNTS[urand(0, 2)];  break;  // Dwarf
+            case 4: mountSpell = NELF_MOUNTS[urand(0, 2)];   break;  // Night Elf
+            case 7: mountSpell = GNOME_MOUNTS[urand(0, 2)];  break;  // Gnome
+        }
+        if (mountSpell)
+            me->CastSpell(me, mountSpell, true);
+    }
+
     // Randomize initial emote timer so bots don't all emote at the same time
     m_emoteTimer = urand(5000, 30000);
+    m_chatTimer = urand(60000, 300000);
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[CrowdBot] %s (lvl %u) spawned at (%.1f, %.1f, %.1f)",
         me->GetName(), me->GetLevel(), m_homeX, m_homeY, m_homeZ);

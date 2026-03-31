@@ -34,6 +34,9 @@ PlayerBotMgr::PlayerBotMgr()
     m_confEnableRandomBots      = false;
     m_confDebug                 = false;
     m_confBattleBotAutoJoin     = false;
+    m_confPeakHour              = 20;
+    m_confOffPeakPercent        = 50;
+    m_confTimezoneOffset        = -4;
 
     // Time
     m_elapsedTime = 0;
@@ -57,6 +60,9 @@ void PlayerBotMgr::LoadConfig()
     m_confDebug = sConfig.GetBoolDefault("PlayerBot.Debug", false);
     m_confUpdateDiff = sConfig.GetIntDefault("PlayerBot.UpdateMs", 10000);
     m_confBattleBotAutoJoin = sConfig.GetBoolDefault("BattleBot.AutoJoin", false);
+    m_confPeakHour = sConfig.GetIntDefault("RandomBot.PeakHour", 20);
+    m_confOffPeakPercent = sConfig.GetIntDefault("RandomBot.OffPeakPercent", 50);
+    m_confTimezoneOffset = sConfig.GetIntDefault("RandomBot.TimezoneOffset", -4);
 
     if (!sWorld.getConfig(CONFIG_BOOL_FORCE_LOGOUT_DELAY))
         m_tempBots.clear();
@@ -367,22 +373,38 @@ void PlayerBotMgr::Update(uint32 diff)
     }
 }
 
-/*
-Toutes les X minutes, ajoute ou enleve un bot.
-*/
+uint32 PlayerBotMgr::GetScaledBotTarget() const
+{
+    // Cosine curve: 100% of max at peak hour, OffPeakPercent% at trough (12h away)
+    time_t now = time(nullptr);
+    struct tm* tmNow = gmtime(&now);
+    int hour = (tmNow->tm_hour + m_confTimezoneOffset + 24) % 24;
+
+    int distFromPeak = abs(hour - (int)m_confPeakHour);
+    if (distFromPeak > 12)
+        distFromPeak = 24 - distFromPeak;
+
+    float t = static_cast<float>(distFromPeak) / 12.0f;
+    float factor = (1.0f + cosf(t * 3.14159f)) / 2.0f;  // 1.0 at peak, 0.0 at trough
+
+    float offPeakFraction = static_cast<float>(m_confOffPeakPercent) / 100.0f;
+    float scaledFraction = offPeakFraction + factor * (1.0f - offPeakFraction);
+
+    uint32 target = static_cast<uint32>(m_confMaxRandomBots * scaledFraction);
+    return std::max(target, 1u);
+}
+
 bool PlayerBotMgr::AddOrRemoveBot()
 {
-    uint32 alea = urand(m_confMinRandomBots, m_confMaxRandomBots);
-    /*
-    10 --- --- --- --- --- --- --- --- --- --- 20 bots
-                NumActuel
-    [alea ici : remove    ][    ici, add    ]
-    */
+    uint32 target = GetScaledBotTarget();
+    // Add jitter: random between 90-100% of target
+    uint32 alea = urand(target * 9 / 10, target);
+
     if (alea > m_stats.onlineCount)
         return AddRandomBot();
-    else
+    else if (m_stats.onlineCount > target)
         return DeleteRandomBot();
-
+    return false;
 }
 
 bool PlayerBotMgr::AddBot(PlayerBotAI* ai)
@@ -403,20 +425,27 @@ bool PlayerBotMgr::AddBot(uint32 playerGUID, bool chatBot, PlayerBotAI* pAI)
     uint32 accountId = 0;
     auto iter = m_bots.find(playerGUID);
     if (iter == m_bots.end())
-        accountId = sObjectMgr.GetPlayerAccountIdByGUID(playerGUID);
+    {
+        // Verify the character exists
+        uint32 realAccountId = sObjectMgr.GetPlayerAccountIdByGUID(playerGUID);
+        if (!realAccountId)
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Player account for GUID %u not found...", playerGUID);
+            return false;
+        }
+        // Generate a unique fake account ID so multiple bots on the same
+        // real account (e.g., guild bots on account 98) can be online simultaneously.
+        accountId = GenBotAccountId();
+    }
     else
+    {
         accountId = iter->second->accountId;
 
-    if (!accountId)
-    {
-        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Player account %u not found...", playerGUID);
-        return false;
-    }
-
-    if (sWorld.FindSession(accountId))
-    {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PlayerBotMgr] Account %u is already online!", accountId);
-        return false;
+        if (sWorld.FindSession(accountId))
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PlayerBotMgr] Account %u is already online!", accountId);
+            return false;
+        }
     }
 
     std::shared_ptr<PlayerBotEntry> e;

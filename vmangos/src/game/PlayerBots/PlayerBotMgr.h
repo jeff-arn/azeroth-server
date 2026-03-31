@@ -128,6 +128,12 @@ class PlayerBotMgr
         bool m_confDebug;
         bool m_confEnableRandomBots;
         bool m_confBattleBotAutoJoin;
+
+        // Time-of-day scaling for crowd bots
+        uint32 GetScaledBotTarget() const;
+        uint32 m_confPeakHour;
+        uint32 m_confOffPeakPercent;  // percentage of max at trough (0-100)
+        int32  m_confTimezoneOffset;
 };
 
 #define sPlayerBotMgr MaNGOS::Singleton<PlayerBotMgr>::Instance()
