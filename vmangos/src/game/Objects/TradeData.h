@@ -70,6 +70,7 @@ public:                                                 // access functions
 
     void SetItem(TradeSlots slot, Item* item);
     void SetSpell(uint32 spellId, Item* castItem = nullptr);
+    void ForceSpell(uint32 spellId) { m_spell = spellId; m_spellCastItem.Clear(); }
     void SetMoney(uint32 money);
 
     void SetAccepted(bool state, bool crosssend = false);

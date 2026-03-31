@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Addon - Azeroth</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #1a1a2e;
+    color: #e0d8c8;
+    font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+nav { text-align: right; padding: 8px 0; }
+nav a {
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    margin-left: 16px;
+    color: #c9aa71;
+}
+nav a.active { color: #ffd100; }
+nav .user-info { float: left; color: #6b6860; font-size: 12px; }
+
+.header {
+    text-align: center;
+    padding: 24px 0 16px;
+    border-bottom: 2px solid #c9aa71;
+    margin-bottom: 24px;
+}
+
+.header h1 {
+    color: #ffd100;
+    font-size: 28px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.header h2 {
+    color: #c9aa71;
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 400;
+}
+
+.back-link {
+    display: inline-block;
+    color: #c9aa71;
+    text-decoration: none;
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+
+.back-link:hover { color: #ffd100; }
+
+.section {
+    background: #16213e;
+    border: 1px solid #c9aa71;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 10px rgba(201, 170, 113, 0.1);
+}
+
+.section-title {
+    color: #ffd100;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 1px solid #3d3d5c;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.addon-header-info {
+    margin-bottom: 16px;
+}
+
+.addon-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffd100;
+    margin-bottom: 4px;
+}
+
+.addon-author {
+    font-size: 13px;
+    color: #8b8878;
+    margin-bottom: 8px;
+}
+
+.addon-desc-text {
+    font-size: 14px;
+    color: #e0d8c8;
+    line-height: 1.6;
+}
+
+.btn {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn-primary {
+    background: #c9aa71;
+    color: #1a1a2e;
+}
+
+.btn-primary:hover { background: #ffd100; }
+
+.btn-download {
+    background: #1eff00;
+    color: #1a1a2e;
+    padding: 8px 18px;
+    font-size: 13px;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-download:hover { background: #17cc00; }
+
+.btn-danger {
+    background: #e94560;
+    color: #fff;
+}
+
+.btn-danger:hover { background: #c73a52; }
+
+/* Releases */
+.release-list { list-style: none; }
+
+.release-item {
+    padding: 14px 0;
+    border-bottom: 1px solid #1f2b47;
+}
+
+.release-item:last-child { border-bottom: none; }
+
+.release-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.release-version {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1eff00;
+}
+
+.release-date {
+    font-size: 12px;
+    color: #6b6860;
+}
+
+.release-changelog {
+    font-size: 13px;
+    color: #8b8878;
+    line-height: 1.5;
+    margin-bottom: 8px;
+    white-space: pre-wrap;
+}
+
+.empty { color: #4a4a4a; font-style: italic; font-size: 13px; }
+
+/* Upload form */
+.upload-form {
+    background: #1a1a2e;
+    border: 1px solid #3d3d5c;
+    border-radius: 4px;
+    padding: 16px;
+}
+
+.form-group { margin-bottom: 14px; }
+
+.form-group label {
+    display: block;
+    color: #8b8878;
+    font-size: 12px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 8px 10px;
+    background: #16213e;
+    border: 1px solid #3d3d5c;
+    border-radius: 4px;
+    color: #e0d8c8;
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.form-group input[type="file"] {
+    padding: 6px;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #c9aa71;
+}
+
+.form-group textarea { resize: vertical; min-height: 60px; }
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 12px;
+}
+
+.admin-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #3d3d5c;
+}
+
+/* Install instructions */
+.install-steps {
+    font-size: 13px;
+    color: #8b8878;
+    line-height: 1.8;
+    list-style: decimal;
+    padding-left: 20px;
+}
+
+.install-steps code {
+    background: #1a1a2e;
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: #1eff00;
+    font-size: 12px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <nav>
+        <span class="user-info">{{ char_name }}</span>
+        <a href="/">Dashboard</a>
+        <a href="/guild">Guild Roster</a>
+        <a href="/addons" class="active">Addons</a>
+        <a href="/logout">Logout</a>
+    </nav>
+
+    <div class="header">
+        <h1>Azeroth</h1>
+        <h2>Addon Details</h2>
+    </div>
+
+    <a href="/addons" class="back-link">&larr; Back to Addons</a>
+
+    <div class="section" id="addon-info">
+        <div class="empty">Loading...</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">
+            <span>Installation</span>
+        </div>
+        <ol class="install-steps">
+            <li>Download the latest release zip file below</li>
+            <li>Extract the zip into your <code>World of Warcraft/Interface/AddOns/</code> folder</li>
+            <li>Restart your WoW client (or type <code>/reload</code> if already in-game)</li>
+            <li>Verify the addon appears in your addon list on the character select screen</li>
+        </ol>
+    </div>
+
+    <div class="section">
+        <div class="section-title">
+            <span id="releases-title">Releases</span>
+            {% if is_admin %}
+            <button class="btn btn-primary" onclick="toggleUploadForm()">+ New Release</button>
+            {% endif %}
+        </div>
+
+        {% if is_admin %}
+        <div class="upload-form" id="upload-form" style="display:none; margin-bottom: 16px;">
+            <form id="release-form" enctype="multipart/form-data">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="release-version">Version</label>
+                        <input type="text" id="release-version" placeholder="e.g. 1.0.0">
+                    </div>
+                    <div class="form-group">
+                        <label for="release-file">Zip File</label>
+                        <input type="file" id="release-file" accept=".zip">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="release-changelog">Changelog</label>
+                    <textarea id="release-changelog" placeholder="What changed in this version?"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Upload Release</button>
+            </form>
+        </div>
+        {% endif %}
+
+        <ul class="release-list" id="release-list">
+            <li class="empty">Loading...</li>
+        </ul>
+    </div>
+
+    {% if is_admin %}
+    <div class="section">
+        <div class="section-title"><span>Admin</span></div>
+        <div class="admin-actions">
+            <button class="btn btn-danger" onclick="deleteAddon()">Delete Addon</button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+const ADDON_ID = "{{ addon_id }}";
+const isAdmin = {{ 'true' if is_admin else 'false' }};
+let addonData = null;
+
+async function fetchJSON(url) {
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(resp.status);
+        return await resp.json();
+    } catch (e) {
+        console.error("Fetch error:", url, e);
+        return null;
+    }
+}
+
+function renderAddonInfo(addon) {
+    const el = document.getElementById("addon-info");
+    el.innerHTML = `
+        <div class="addon-header-info">
+            <div class="addon-title">${addon.name}</div>
+            <div class="addon-author">by ${addon.author}</div>
+            <div class="addon-desc-text">${addon.description || 'No description provided.'}</div>
+        </div>
+    `;
+    document.title = `${addon.name} - Azeroth Addons`;
+}
+
+function renderReleases(releases) {
+    const list = document.getElementById("release-list");
+    const title = document.getElementById("releases-title");
+    title.textContent = `Releases (${releases.length})`;
+
+    if (!releases.length) {
+        list.innerHTML = '<li class="empty">No releases yet</li>';
+        return;
+    }
+
+    // Show newest first
+    const sorted = [...releases].reverse();
+    list.innerHTML = sorted.map((r, i) => `
+        <li class="release-item">
+            <div class="release-header">
+                <span class="release-version">v${r.version}${i === 0 ? ' (latest)' : ''}</span>
+                <span class="release-date">${r.date}</span>
+            </div>
+            ${r.changelog ? `<div class="release-changelog">${r.changelog}</div>` : ''}
+            <a href="/addons/download/${r.filename}" class="btn btn-download">Download v${r.version}</a>
+        </li>
+    `).join("");
+}
+
+function toggleUploadForm() {
+    const form = document.getElementById("upload-form");
+    form.style.display = form.style.display === "none" ? "" : "none";
+}
+
+async function init() {
+    const addon = await fetchJSON(`/api/addons/${ADDON_ID}`);
+    if (!addon || addon.error) {
+        document.getElementById("addon-info").innerHTML = '<div class="empty">Addon not found</div>';
+        return;
+    }
+    addonData = addon;
+    renderAddonInfo(addon);
+    renderReleases(addon.releases || []);
+}
+
+// Upload form handler
+const form = document.getElementById("release-form");
+if (form) {
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const version = document.getElementById("release-version").value.trim();
+        const changelog = document.getElementById("release-changelog").value.trim();
+        const fileInput = document.getElementById("release-file");
+
+        if (!version) { alert("Version is required"); return; }
+        if (!fileInput.files.length) { alert("Please select a zip file"); return; }
+
+        const fd = new FormData();
+        fd.append("version", version);
+        fd.append("changelog", changelog);
+        fd.append("file", fileInput.files[0]);
+
+        const resp = await fetch(`/api/addons/${ADDON_ID}/releases`, {
+            method: "POST",
+            body: fd,
+        });
+
+        if (resp.ok) {
+            document.getElementById("release-version").value = "";
+            document.getElementById("release-changelog").value = "";
+            fileInput.value = "";
+            document.getElementById("upload-form").style.display = "none";
+            // Reload addon data
+            init();
+        } else {
+            const err = await resp.json();
+            alert(err.error || "Upload failed");
+        }
+    });
+}
+
+async function deleteAddon() {
+    if (!confirm(`Delete "${addonData ? addonData.name : 'this addon'}" and all its releases? This cannot be undone.`)) return;
+
+    const resp = await fetch(`/api/addons/${ADDON_ID}`, { method: "DELETE" });
+    if (resp.ok) {
+        window.location = "/addons";
+    } else {
+        const err = await resp.json();
+        alert(err.error || "Delete failed");
+    }
+}
+
+init();
+</script>
+</body>
+</html>

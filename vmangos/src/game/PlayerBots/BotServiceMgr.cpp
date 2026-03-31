@@ -1,6 +1,7 @@
 #include "BotServiceMgr.h"
 #include "Policies/SingletonImp.h"
 #include "Player.h"
+#include "Item.h"
 #include "ObjectAccessor.h"
 #include "World.h"
 #include "Chat/Chat.h"
@@ -173,11 +174,36 @@ extern const char* TRADE_MESSAGES_PORTALS_HORDE[] = {
 extern const uint32 TRADE_PORTALS_HORDE_COUNT = sizeof(TRADE_MESSAGES_PORTALS_HORDE) / sizeof(TRADE_MESSAGES_PORTALS_HORDE[0]);
 
 // ============================================================================
+// WTB item definitions — items bots advertise wanting to buy.
+// Prices come from AH fair market value at runtime.
+// ============================================================================
+
+const BotServiceMgr::WtbItemDef BotServiceMgr::s_wtbItems[] = {
+    { 13463, "lotus",           "[Black Lotus]",          5  },
+    { 12363, "arcane crystal",  "[Arcane Crystal]",       5  },
+    { 12811, "righteous orb",   "[Righteous Orb]",        5  },
+    { 14344, "large brilliant", "[Large Brilliant Shard]", 5 },
+    { 4625,  "firebloom",       "[Firebloom]",            20 },
+    { 13467, "icecap",          "[Icecap]",               20 },
+    { 8838,  "sungrass",        "[Sungrass]",             20 },
+    { 13468, "black lotus",     "[Black Lotus]",          5  },
+    { 7076,  "essence of earth","[Essence of Earth]",     5  },
+    { 7078,  "essence of fire", "[Essence of Fire]",      5  },
+    { 7080,  "essence of water","[Essence of Water]",     5  },
+    { 7082,  "essence of air",  "[Essence of Air]",       5  },
+    { 12359, "thorium bar",     "[Thorium Bar]",          20 },
+    { 12655, "mooncloth",       "[Mooncloth]",            5  },
+    { 12360, "arcanite bar",    "[Arcanite Bar]",         3  },
+};
+const uint32 BotServiceMgr::s_wtbItemCount = sizeof(s_wtbItems) / sizeof(s_wtbItems[0]);
+
+// ============================================================================
 // Implementation
 // ============================================================================
 
 BotServiceMgr::BotServiceMgr()
     : m_cleanupTimer(30000)
+    , m_buyBudgetPerDay(2000000)  // 200g in copper
     , m_enabled(false)
     , m_loaded(false)
 {
@@ -186,9 +212,10 @@ BotServiceMgr::BotServiceMgr()
 void BotServiceMgr::Load()
 {
     m_enabled = sConfig.GetBoolDefault("BotService.Enable", true);
+    m_buyBudgetPerDay = sConfig.GetIntDefault("BotService.Buy.BudgetPerDay", 200) * 10000;  // gold -> copper
     m_loaded = true;
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotServiceMgr: Loaded. Enabled: %s",
-        m_enabled ? "yes" : "no");
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotServiceMgr: Loaded. Enabled: %s, Buy budget: %ug/day",
+        m_enabled ? "yes" : "no", m_buyBudgetPerDay / 10000);
 }
 
 void BotServiceMgr::Update(uint32 diff)
@@ -431,12 +458,13 @@ void BotServiceMgr::OnTradeWindowOpen(Player* bot, Player* player)
         return;
 
     // For enchanting services, set the enchant spell on the bot's trade data.
+    // Use ForceSpell to avoid clearing accept state (SetSpell unaccepts both sides).
     if (req->serviceType == BOT_SERVICE_ENCHANT && req->spellId)
     {
         TradeData* botTrade = bot->GetTradeData();
         if (botTrade)
         {
-            botTrade->SetSpell(req->spellId);
+            botTrade->ForceSpell(req->spellId);
             sLog.Out(LOG_BASIC, LOG_LVL_DETAIL,
                 "BotService: %s sets enchant spell %u on trade", bot->GetName(), req->spellId);
         }
@@ -454,6 +482,32 @@ void BotServiceMgr::OnTradeCompleted(Player* bot, Player* player, uint32 goldRec
         return;
 
     BotServiceRequest& req = it->second;
+
+    // Handle buy-side trades differently
+    if (req.serviceType == BOT_SERVICE_BUY)
+    {
+        // Bot was buying items from player. The trade completed, items transferred.
+        // Deduct from bot budget.
+        ResetBudgetIfNeeded(bot->GetGUIDLow());
+        auto budgetIt = m_buyBudgets.find(bot->GetGUIDLow());
+        if (budgetIt != m_buyBudgets.end())
+        {
+            uint32 cost = goldReceived;  // goldReceived is actually what the BOT paid (from bot's trade side)
+            if (cost <= budgetIt->second.remainingCopper)
+                budgetIt->second.remainingCopper -= cost;
+            else
+                budgetIt->second.remainingCopper = 0;
+        }
+
+        BotWhisper(bot, player->GetObjectGuid(), "thanks, pleasure doing business");
+
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+            "BotService: %s bought items from %s for %u copper",
+            bot->GetName(), player->GetName(), goldReceived);
+
+        m_requests.erase(it);
+        return;
+    }
 
     // Check minimum tip based on service type.
     uint32 minTip = 0;
@@ -482,11 +536,7 @@ void BotServiceMgr::OnTradeCompleted(Player* bot, Player* player, uint32 goldRec
             DeliverPortal(bot, player, req.spellId);
             break;
         case BOT_SERVICE_ENCHANT:
-            // Enchant was already applied via the trade window spell system.
-            // The trade handler cast the spell on the item in slot 6.
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-                "BotService: %s enchanted item for %s (spell %u)",
-                bot->GetName(), player->GetName(), req.spellId);
+            DeliverEnchant(bot, player, req.spellId);
             break;
         case BOT_SERVICE_TRANSMUTE:
             DeliverTransmute(bot, player);
@@ -525,13 +575,13 @@ bool BotServiceMgr::BotKnowsEnchant(Player* bot, EnchantDefinition const* enchan
     // Common and mid-tier enchants: all enchanter bots know them.
     if (!enchant->isRareRecipe)
         return true;
-    // Rare recipes: use bot GUID as seed for deterministic "recipe knowledge."
-    // ~60% of enchanter bots know Crusader, ~30% know SP/Healing.
+    // Rare recipes: on a small private server, most enchanters know everything.
+    // ~90% know rare recipes, ~70% know ultrarare.
     uint32 seed = bot->GetGUIDLow() + enchant->spellId;
     switch (enchant->tipTier)
     {
-        case ENCHANT_TIP_RARE:     return (seed % 100) < 60;
-        case ENCHANT_TIP_ULTRARARE:return (seed % 100) < 30;
+        case ENCHANT_TIP_RARE:     return (seed % 100) < 90;
+        case ENCHANT_TIP_ULTRARARE:return (seed % 100) < 70;
         default: return true;
     }
 }
@@ -548,10 +598,41 @@ uint32 BotServiceMgr::GetEnchantTipMin(EnchantTipTier tier) const
     return 0;
 }
 
-void BotServiceMgr::DeliverEnchant(Player* /*bot*/, Player* /*player*/, uint32 /*spellId*/)
+void BotServiceMgr::DeliverEnchant(Player* bot, Player* player, uint32 spellId)
 {
-    // Enchants are delivered via the trade window spell system automatically.
-    // This is a no-op — the trade handler's spell casting handles it.
+    if (!spellId || !bot || !player)
+        return;
+
+    SpellEntry const* spellEntry = sSpellMgr.GetSpellEntry(spellId);
+    if (!spellEntry)
+        return;
+
+    // Get the enchant ID from the spell's EffectMiscValue
+    uint32 enchantId = spellEntry->EffectMiscValue[0];
+    if (!enchantId)
+        return;
+
+    // Apply to player's main hand weapon
+    Item* weapon = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+    if (!weapon)
+    {
+        // Try off-hand
+        weapon = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
+    }
+    if (!weapon)
+    {
+        BotWhisper(bot, player->GetObjectGuid(), "you need to have a weapon equipped");
+        return;
+    }
+
+    // Remove old enchant and apply new one
+    player->ApplyEnchantment(weapon, PERM_ENCHANTMENT_SLOT, false);
+    weapon->SetEnchantment(PERM_ENCHANTMENT_SLOT, enchantId, 0, 0, bot->GetObjectGuid());
+    player->ApplyEnchantment(weapon, PERM_ENCHANTMENT_SLOT, true);
+
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+        "BotService: %s enchanted %s's weapon with enchant %u (spell %u)",
+        bot->GetName(), player->GetName(), enchantId, spellId);
 }
 
 // ============================================================================
@@ -613,7 +694,8 @@ void BotServiceMgr::DeliverPortal(Player* bot, Player* player, uint32 spellId)
         return;
     }
 
-    bot->CastSpell(bot, spellEntry, false);
+    // Use triggered=true to bypass spell-known checks (CrowdBots don't learn spells)
+    bot->CastSpell(bot, spellEntry, true);
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotService: %s casts Portal (spell %u) for %s",
         bot->GetName(), spellId, player->GetName());
@@ -710,4 +792,202 @@ BotServiceMgr::RequestKey BotServiceMgr::MakeKey(ObjectGuid botGuid, ObjectGuid 
 {
     return (static_cast<uint64>(botGuid.GetCounter()) << 32) |
             static_cast<uint64>(playerGuid.GetCounter());
+}
+
+void BotServiceMgr::CreateProactiveRequest(Player* bot, ObjectGuid playerGuid,
+                                            BotServiceType type, const std::string& tradeChatMsg)
+{
+    if (!bot)
+        return;
+
+    RequestKey key = MakeKey(bot->GetObjectGuid(), playerGuid);
+
+    BotServiceRequest req;
+    req.playerGuid = playerGuid;
+    req.botGuid = bot->GetObjectGuid();
+    req.serviceType = type;
+    req.spellId = 0;
+    req.createdAt = time(nullptr);
+    req.lastUpdate = time(nullptr);
+    req.buyItemId = 0;
+    req.buyMaxQuantity = 0;
+    req.buyPriceCopper = 0;
+
+    // For portals, try to parse the destination from the original trade chat message.
+    // e.g., "WTB port to darn" → resolve "darn" → Darnassus portal spell.
+    if (type == BOT_SERVICE_PORTAL && !tradeChatMsg.empty())
+    {
+        std::string lower = tradeChatMsg;
+        for (auto& c : lower) c = static_cast<char>(tolower(c));
+
+        uint32 spellId = ResolvePortalSpell(bot, lower);
+        if (spellId)
+        {
+            req.spellId = spellId;
+            req.state = SERVICE_STATE_WAITING_FOR_TRADE;
+            m_requests[key] = req;
+            return;
+        }
+    }
+
+    // For enchants, try to parse which enchant from the trade chat message.
+    // e.g., "LF enchanter for crusader PST" → resolve Crusader spell.
+    if (type == BOT_SERVICE_ENCHANT && !tradeChatMsg.empty())
+    {
+        std::string lower = tradeChatMsg;
+        for (auto& c : lower) c = static_cast<char>(tolower(c));
+
+        EnchantDefinition const* enchant = ResolveEnchant(lower);
+        if (enchant && BotKnowsEnchant(bot, enchant))
+        {
+            req.spellId = enchant->spellId;
+            req.state = SERVICE_STATE_WAITING_FOR_TRADE;
+            m_requests[key] = req;
+            return;
+        }
+    }
+
+    // Portal without resolved destination, or enchant without specific request: need clarification.
+    // Transmute and mooncloth go straight to WAITING_FOR_TRADE.
+    switch (type)
+    {
+        case BOT_SERVICE_PORTAL:
+        case BOT_SERVICE_ENCHANT:
+            req.state = SERVICE_STATE_ASKED_DESTINATION;
+            break;
+        default:
+            req.state = SERVICE_STATE_WAITING_FOR_TRADE;
+            break;
+    }
+
+    m_requests[key] = req;
+}
+
+bool BotServiceMgr::HasActiveRequest(ObjectGuid playerGuid) const
+{
+    uint32 playerCounter = playerGuid.GetCounter();
+    for (auto const& kv : m_requests)
+    {
+        if (kv.second.playerGuid.GetCounter() == playerCounter)
+            return true;
+    }
+    return false;
+}
+
+void BotServiceMgr::ClearRequestsForPlayer(ObjectGuid playerGuid)
+{
+    uint32 playerCounter = playerGuid.GetCounter();
+    for (auto it = m_requests.begin(); it != m_requests.end(); )
+    {
+        if (it->second.playerGuid.GetCounter() == playerCounter)
+            it = m_requests.erase(it);
+        else
+            ++it;
+    }
+}
+
+// ============================================================================
+// WTB Buy System
+// ============================================================================
+
+#include "AuctionHouse/AuctionHouseBotMgr.h"
+
+BotServiceMgr::WtbItemDef const* BotServiceMgr::ResolveWtbItem(const std::string& message) const
+{
+    std::string lower = message;
+    for (auto& c : lower)
+        c = static_cast<char>(tolower(c));
+
+    for (uint32 i = 0; i < s_wtbItemCount; ++i)
+    {
+        if (lower.find(s_wtbItems[i].keyword) != std::string::npos)
+            return &s_wtbItems[i];
+    }
+    return nullptr;
+}
+
+uint32 BotServiceMgr::GetBuyPriceForItem(uint32 itemId, uint32 quantity) const
+{
+    // Use AH fair market value, discounted 10% (bots buy cheaper than AH)
+    uint32 fairBuyout = sAuctionHouseBotMgr.GetFairBuyoutForItem(itemId, quantity);
+    if (fairBuyout == 0)
+        return 0;
+
+    return static_cast<uint32>(fairBuyout * 0.9f);
+}
+
+void BotServiceMgr::ResetBudgetIfNeeded(uint32 botGuid)
+{
+    time_t now = time(nullptr);
+    auto it = m_buyBudgets.find(botGuid);
+    if (it == m_buyBudgets.end())
+    {
+        m_buyBudgets[botGuid] = { m_buyBudgetPerDay, now };
+        return;
+    }
+
+    // Reset if more than 24 hours since last reset
+    if (now - it->second.lastResetTime >= 86400)
+    {
+        it->second.remainingCopper = m_buyBudgetPerDay;
+        it->second.lastResetTime = now;
+    }
+}
+
+bool BotServiceMgr::HandleBuyWhisper(Player* bot, ObjectGuid playerGuid, const std::string& message)
+{
+    if (!m_enabled || !bot)
+        return false;
+
+    // Check if player is mentioning an item we want to buy
+    WtbItemDef const* item = ResolveWtbItem(message);
+    if (!item)
+        return false;
+
+    // Check budget
+    ResetBudgetIfNeeded(bot->GetGUIDLow());
+    auto budgetIt = m_buyBudgets.find(bot->GetGUIDLow());
+    if (budgetIt == m_buyBudgets.end() || budgetIt->second.remainingCopper == 0)
+    {
+        BotWhisper(bot, playerGuid, "sorry, I'm tapped out for today");
+        return true;
+    }
+
+    // Get price
+    uint32 pricePerUnit = GetBuyPriceForItem(item->itemId, 1);
+    if (pricePerUnit == 0)
+    {
+        BotWhisper(bot, playerGuid, "hmm, not sure what those are worth right now");
+        return true;
+    }
+
+    // Create buy request
+    RequestKey key = MakeKey(bot->GetObjectGuid(), playerGuid);
+    BotServiceRequest& req = m_requests[key];
+    req.botGuid = bot->GetObjectGuid();
+    req.playerGuid = playerGuid;
+    req.serviceType = BOT_SERVICE_BUY;
+    req.state = SERVICE_STATE_WAITING_FOR_TRADE;
+    req.spellId = 0;
+    req.createdAt = time(nullptr);
+    req.lastUpdate = time(nullptr);
+    req.buyItemId = item->itemId;
+    req.buyMaxQuantity = item->maxQuantity;
+    req.buyPriceCopper = pricePerUnit;
+
+    // Format price as gold/silver for the whisper
+    uint32 totalPrice = pricePerUnit;
+    uint32 gold = totalPrice / 10000;
+    uint32 silver = (totalPrice % 10000) / 100;
+
+    char priceMsg[256];
+    if (silver > 0)
+        snprintf(priceMsg, sizeof(priceMsg), "I'll buy %s for %ug %us each, trade me",
+            item->displayName, gold, silver);
+    else
+        snprintf(priceMsg, sizeof(priceMsg), "I'll buy %s for %ug each, trade me",
+            item->displayName, gold);
+
+    BotWhisper(bot, playerGuid, priceMsg);
+    return true;
 }

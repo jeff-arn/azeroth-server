@@ -103,12 +103,38 @@ Research docs in `docs/` (gitignored): `CLASS_GROUP_BEHAVIOR_GUIDE.md`, `DUNGEON
 ### Bot Social & Services Architecture
 
 Bot social behavior and tradeskill services are managed by two singletons:
-- `BotChatManager` — trade chat advertising (rotation-based, frequency-scaled) and keyword-matched whisper responses
-- `BotServiceMgr` — stateful service interactions (portal, enchant, transmute, mooncloth)
+- `BotChatManager` — trade/guild/general chat, personality system, spam control, party chat, trade chat monitoring
+- `BotServiceMgr` — stateful service interactions (portal, enchant, transmute, mooncloth, WTB buying)
 
-**Service flow**: player whispers bot → bot asks clarifying questions → bot says "trade me" → player initiates trade → bot auto-accepts → service delivered (portal cast, enchant applied, etc.)
+**Personality system**: Guild bots have archetypes (enthusiastic, chill, sarcastic, quiet) stored in `guild_bot_roster.personality`. Affects chat style, message pool selection, and frequency (quiet bots speak 30% as often). World/city bots use generic personality.
 
-**Config** (`mangosd.conf`): `BotChat.Enable`, `BotChat.TradeChat.IntervalMin/Max`, `BotService.Enable`
+**Spam control**: Per-bot cooldowns by chat type (`BotChatCooldown`). Frequency scales up when bot count exceeds threshold. Cooldown types: trade, guild, party, say, general.
+
+**Party/raid chat**: Bots greet on group join (2-5s delay), say "gratz" on level-up, react to boss kills + emote /cheer, react to wipes + /cry, call out OOM and pulling.
+
+**General channel chat**: Zone-population-driven. Rate = `botCount × 0.09` msgs/min per zone (~4-5/min in IF at peak). `UpdateGeneralChat()` runs on the `WUPDATE_AUCTIONS` timer (60s interval) — **not** every world tick. Channel name resolved dynamically ("General - Ironforge").
+
+**Conversational threading** (#24): General chat uses a layered system instead of isolated random messages:
+- **8 topic pools** (LFG, gold, gear, bored, newbie, server, PVP, professions) — consecutive messages on the same topic carry forward up to 4 lines / 2 minutes before rotating
+- **15 conversation chains**: scripted 2-4 bot exchanges (lfg BRD, gold farming, ony attune, etc.) — 12% chance per message slot
+- **7 debate templates**: classic WoW arguments (fury vs arms, horde vs alliance racials, best gold farm, etc.) with variant lines — 8% chance per message slot
+- **19 reactive keyword hooks**: `Channel::Say` hook fires `OnGeneralChatMessage()` for human General chat messages; bots respond 15–45s later to keywords like "brd", "ony", "pvp", "gold", class names, etc.
+- **Scheduling**: All threaded messages use `PendingGeneralMessage::fireTime` (absolute `time_t`), **not** a ms countdown. This is critical because `Update()` fires every 60s — a countdown would collapse all chain lines into one burst. Always use `time_t` for any deferred message scheduling in this system.
+- **Per-zone state**: `ZoneConversationState` tracks active topic/chain/debate independently per city. Chains abort cleanly if a participant logs out mid-conversation.
+
+**Trade chat monitoring**: Hooks `Channel::Say()` to detect player service requests ("WTB port", "LF enchanter"). Bot whispers player proactively with location + minimap marker (`SMSG_GOSSIP_POI`). Creates `BotServiceRequest` with destination/enchant parsed from trade message. Only picks bots in the player's same zone. One response per player at a time (`HasActiveRequest` check).
+
+**Service flow**: Player posts in trade → bot whispers with minimap marker → player walks to bot → opens trade → puts gold + item → accepts → bot accepts (direct `HandleAcceptTradeOpcode` call, no packet queue) → service delivered.
+
+**Enchant delivery**: Applied directly to player's equipped weapon via `Item::SetEnchantment()` after trade completes. Does NOT use the trade window spell system (which causes accept loops due to `SetSpell` clearing both sides' accept state). `ForceSpell()` added to `TradeData` for cases where spell display is needed without side effects.
+
+**Portal delivery**: Cast as triggered spell (`CastSpell` with `triggered=true`) to bypass spell-known checks. Portal party restriction removed in `GameObject.cpp` so any player can use bot portals.
+
+**WTB buying** (#13): Bots follow through on WTB trade messages. 15-item registry with AH fair market pricing (10% discount). Gold budget 200g/day per bot.
+
+**Service request lifecycle**: 5-minute timeout, cleared on player logout (`WorldSession::LogoutPlayer`), duplicate prevention per player.
+
+**Config** (`mangosd.conf`): `BotChat.Enable`, `BotChat.TradeChat.IntervalMin/Max`, `BotChat.Cooldown.*`, `BotService.Enable`, `BotService.Buy.BudgetPerDay`
 
 ### Auction House Bot
 
@@ -134,15 +160,31 @@ Runs every 2 minutes. Assigns bots to zones based on player locations:
 
 ### Guild Bot System
 
-Persistent guild "Vanguard of Azeroth" with 20 bots (expandable to 40) managed by `GuildBotMgr` singleton:
+Persistent guild "Sweatlords" with 20 bots (expandable to 40) managed by `GuildBotMgr` singleton:
 - **Roster**: 2 tanks, 5 healers, 13 DPS across all classes, stored in `guild_bot_roster` table
+- **Personality**: each bot has an archetype (enthusiastic/chill/sarcastic/quiet) in `guild_bot_roster.personality`
 - **Gear persistence**: bots equip and save gear via standard `character_inventory` / `item_instance` tables
 - **Spec-aware upgrades**: `guild_bot_spec_weights` table drives item comparison using stat weights per class/spec
 - **Loot integration**: guild bots roll Need on upgrades during Group Loot, but always defer to human players. Never roll Greed.
 - **Raid lockouts**: vanilla-authentic — guild bots get locked to raid instances like real players
-- **Guild chat**: bots chat in /g on a timer (5-15min configurable) with idle banter
+- **Guild chat**: bots chat in /g on a timer (5-15min configurable), personality-flavored messages
+- **Level sync**: `SyncBotLevels()` runs every 5min, sets guild bots to GM's level ±3
 
 **Guild bot account**: 98, GUIDs 200-219
+
+**Online presence system**: Guild bots simulate login/logout on a cosine time-of-day curve.
+- Spawns as `CrowdBotAI` at IF bank front (idle presence, no combat)
+- Peak: 14 bots at 8pm, trough: 3 bots at 8am (configurable, UTC-4)
+- Full target count spawned immediately on first presence tick (no ramp-up)
+- Presence bots appear in guild panel and participate in guild chat
+- Skips raid-assembled bots (under `.guildraid` control)
+
+**Party invite conversion**: When a player invites a guild presence bot to a group:
+1. Bot auto-accepts the invite (hooked in `HandleGroupInviteOpcode`)
+2. CrowdBotAI despawned, respawned as PartyBotAI with combat AI, gear, and role from roster
+3. On group leave/disband, bot despawns and presence system respawns them next cycle
+- Low-level guild bots (<19) get random gear; higher levels get premade templates
+- `PlayerBotMgr::RemoveBotEntry()` used for clean AI swaps without session conflicts
 
 **In-game commands** (SEC_MODERATOR):
 - `.guildraid assemble` — spawn all raid-assigned guild bots
@@ -151,26 +193,26 @@ Persistent guild "Vanguard of Azeroth" with 20 bots (expandable to 40) managed b
 - `.guildraid roster` — list all guild bots with class, spec, role, gear score
 - `.guildraid botinfo <name>` — inspect a specific bot
 
-**Config** (`mangosd.conf`): `GuildBot.Enable`, `GuildBot.AccountId`, `BotChat.GuildChat.IntervalMin/Max`
+**Config** (`mangosd.conf`): `GuildBot.Enable`, `GuildBot.AccountId`, `BotChat.GuildChat.IntervalMin/Max`, `GuildBot.Presence.*`
 
 ### Crowd Bot System
 
-Lightweight "scenery" bots that stand around city hotspots and inns to make the world feel populated. Uses `CrowdBotAI` — a minimal `PlayerBotAI` subclass with no combat, no spells, just idle emotes and micro-wander.
+Lightweight "scenery" bots that stand around city hotspots and inns to make the world feel populated. Uses `CrowdBotAI` — a minimal `PlayerBotAI` subclass with idle emotes, micro-wander, and trade service handling.
 
 - **Account**: 97
-- **GUID ranges**: City bots 100-144, Inn bots 300-371 (intentionally skips 200-219 guild bots)
-- **AI**: `CrowdBotAI` — 5s update tick, idle emotes every 15-60s, 5% chance of 3yd micro-wander per tick
+- **GUID ranges**: IF bank front 100-169 (50 bots), IF bank interior 170-174 (5), IF AH 175-189 (15), SW AH 125-134 (10), SW Bank 135-139 (5), Goldshire 140-144 (5), Inn bots 300-371 (72)
+- **AI**: `CrowdBotAI` — 5s update tick, idle emotes every 15-60s (talk, point, wave, eat — no laugh), 5% chance of 3yd micro-wander per tick
 - **Spawning**: Always-on, not BotDirector-managed. Hardcoded spawn points in `PlayerBotAI.cpp`
-- **Appearance**: Premade gear templates (weighted 70% lvl 60, 30% lvl 40-59), Alliance races
-- **City hotspots** (100-144, 45 bots): Ironforge AH (15), IF Bank (10), Stormwind AH (10), SW Bank (5), Goldshire Inn (5)
-- **Inn bots** (300-371, 72 bots): 3 bots at 24 major Alliance/neutral inns across both continents
-- **Non-interactive**: no combat, no whisper responses, no trades
+- **Appearance**: Preraid-bis dungeon blues (not T3), weighted 70% lvl 60 / 30% lvl 40-59, Alliance races. ~25% of lvl 60 bots sit on race-appropriate epic mounts.
+- **Guild membership**: 15 bot guilds across 3 archetypes (hardcore: Oblivion, Nihilum, etc; social: Casually Late, AFK In Ironforge, etc; mix: Dawn of Azeroth, Silver Covenant, etc). ~10 members each.
+- **Trade services**: CrowdBots handle `SMSG_TRADE_STATUS` via `OnPacketReceived` — accept trades for pending service requests, auto-accept after player accepts via direct `HandleAcceptTradeOpcode` call.
+- **Time-of-day scaling**: Bot count scales with cosine curve — 50% of max at off-peak (8am), 100% at peak (8pm). Configurable via `RandomBot.PeakHour`, `RandomBot.OffPeakPercent`, `RandomBot.TimezoneOffset`.
 
 **Key design constraint**: Creatures cannot render full player gear — `PLAYER_VISIBLE_ITEM` fields (armor, clothing) are Player-only in the update field system. Crowd bots must be real `Player` objects to look correct. Cost is ~5KB RAM and negligible CPU each.
 
-**Spawn coordinate tuning**: z-height may need adjustment for inns on upper floors or near terrain transitions. Update coords in `PlayerBotAI.cpp` (`CITY_SPAWNS[]` or `INN_LOCATIONS[]`) and rebuild.
+**Spawn coordinate tuning**: Update coords in `PlayerBotAI.cpp` (`CITY_SPAWNS[]` or `INN_LOCATIONS[]`) and rebuild. IF bank front center: (-4919.8, -958.6, 501.5). IF bank interior: (-4891.7, -990.8, 503.9). IF AH: (-4959.9, -906.4, 503.8).
 
-**Config** (`mangosd.conf`): `CrowdBot.Enable`, `CrowdBot.AccountId`
+**Config** (`mangosd.conf`): `CrowdBot.Enable`, `CrowdBot.AccountId`, `RandomBot.MinBots/MaxBots`, `RandomBot.PeakHour`, `RandomBot.OffPeakPercent`, `RandomBot.TimezoneOffset`
 
 ## Dashboard API
 
@@ -188,6 +230,11 @@ Lightweight "scenery" bots that stand around city hotspots and inns to make the 
 | `GET /api/guild/bot/<guid>` | Guild bot detail with gear |
 | `POST /api/guild/bot/<guid>/spec` | Update bot spec/role |
 | `POST /api/guild/raid-plan` | Save raid assignments |
+| `GET /addons` | Addon listing page |
+| `GET /addons/<addon_id>` | Addon detail + release downloads |
+| `GET /api/addons` | List all addons (JSON) |
+| `POST /api/addons` | Create new addon (admin) |
+| `POST /api/addons/<id>/releases` | Upload release zip (admin) |
 
 Player vs bot distinction: account ID < 100 = human, >= 100 = bot.
 

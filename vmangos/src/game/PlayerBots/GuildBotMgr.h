@@ -4,6 +4,7 @@
 #include "Common.h"
 #include "Policies/Singleton.h"
 #include "ObjectGuid.h"
+#include "BotChatManager.h"
 
 #include <vector>
 #include <string>
@@ -39,6 +40,7 @@ struct GuildBotInfo
     GuildBotGearTier gearTier;
     bool hasLootUpgrades;  // true if bot has received any items via loot (never wipe their gear)
     bool online;           // true if currently spawned as a bot in-world
+    BotPersonality personality;
 };
 
 struct GuildBotSpecWeights
@@ -102,6 +104,14 @@ public:
     // Update (called from World::Update)
     void Update(uint32 diff);
 
+    // Presence: is this bot under presence control (not raid-assembled)?
+    bool IsPresenceBot(uint32 guid) const;
+
+    // Party invite: convert a presence bot to a party bot and back
+    bool ConvertPresenceToParty(uint32 botGuid, ObjectGuid leaderGuid);
+    void ConvertPartyToPresence(uint32 botGuid);
+    void OnBotRemovedFromGroup(uint32 botGuid);
+
     // Config
     bool IsEnabled() const { return m_enabled; }
     uint32 GetAccountId() const { return m_accountId; }
@@ -112,6 +122,20 @@ private:
     void DetectPlayerGuild();
     void PopulateBotsIntoGuild();
     void SyncBotLevels();
+
+    // Presence system
+    void UpdatePresence();
+    uint32 GetTargetOnlineCount() const;
+    void LoginPresenceBot(GuildBotInfo& bot);
+    void LogoutPresenceBot(GuildBotInfo& bot);
+
+    bool m_presenceEnabled;
+    uint32 m_presenceTimer;
+    uint32 m_presenceCheckInterval;  // ms
+    uint32 m_presencePeakCount;
+    uint32 m_presenceOffPeakCount;
+    uint32 m_presencePeakHour;
+    int32  m_presenceTimezoneOffset;
 
     bool m_enabled;
     uint32 m_guildId;

@@ -143,6 +143,14 @@ public:
 
     // Trade service support (portal tips, etc.)
     uint32 m_pendingTradeAcceptTimer = 0;
+
+    // Social chat cooldowns
+    bool m_greetedGroup = false;
+    uint32 m_greetDelayTimer = 0;      // countdown ms before greeting
+    uint32 m_oomChatCooldown = 0;      // ms until OOM chat allowed again
+    uint32 m_pullChatCooldown = 0;     // ms until pull announcement allowed
+    ObjectGuid m_lastCombatTarget;     // track target death for boss kill detection
+    bool m_wipeReacted = false;        // prevent spamming wipe reaction
 };
 
 #endif
