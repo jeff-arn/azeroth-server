@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Addons - Azeroth</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #1a1a2e;
+    color: #e0d8c8;
+    font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+nav { text-align: right; padding: 8px 0; }
+nav a {
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    margin-left: 16px;
+    color: #c9aa71;
+}
+nav a.active { color: #ffd100; }
+nav .user-info { float: left; color: #6b6860; font-size: 12px; }
+
+.header {
+    text-align: center;
+    padding: 24px 0 16px;
+    border-bottom: 2px solid #c9aa71;
+    margin-bottom: 24px;
+}
+
+.header h1 {
+    color: #ffd100;
+    font-size: 28px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.header h2 {
+    color: #c9aa71;
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 400;
+}
+
+.section {
+    background: #16213e;
+    border: 1px solid #c9aa71;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 10px rgba(201, 170, 113, 0.1);
+}
+
+.section-title {
+    color: #ffd100;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 1px solid #3d3d5c;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.btn {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn-primary {
+    background: #c9aa71;
+    color: #1a1a2e;
+}
+
+.btn-primary:hover { background: #ffd100; }
+
+/* Addon list */
+.addon-list { list-style: none; }
+
+.addon-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid #1f2b47;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin: 0 -8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-radius: 4px;
+}
+
+.addon-item:last-child { border-bottom: none; }
+.addon-item:hover { background: #1f2b47; }
+
+.addon-info { flex: 1; }
+
+.addon-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffd100;
+    margin-bottom: 2px;
+}
+
+.addon-desc {
+    font-size: 13px;
+    color: #8b8878;
+    margin-bottom: 4px;
+}
+
+.addon-meta {
+    font-size: 11px;
+    color: #6b6860;
+}
+
+.addon-meta span { margin-right: 12px; }
+
+.addon-version {
+    background: #1a1a2e;
+    color: #1eff00;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.empty { color: #4a4a4a; font-style: italic; font-size: 13px; }
+
+/* Modal */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-overlay.active { display: flex; }
+
+.modal {
+    background: #16213e;
+    border: 1px solid #c9aa71;
+    border-radius: 6px;
+    padding: 24px;
+    width: 420px;
+    max-width: 90vw;
+}
+
+.modal h3 {
+    color: #ffd100;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+}
+
+.form-group { margin-bottom: 14px; }
+
+.form-group label {
+    display: block;
+    color: #8b8878;
+    font-size: 12px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 8px 10px;
+    background: #1a1a2e;
+    border: 1px solid #3d3d5c;
+    border-radius: 4px;
+    color: #e0d8c8;
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #c9aa71;
+}
+
+.form-group textarea { resize: vertical; min-height: 60px; }
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.btn-cancel {
+    background: transparent;
+    color: #8b8878;
+    border: 1px solid #3d3d5c;
+}
+
+.btn-cancel:hover { border-color: #8b8878; color: #e0d8c8; }
+</style>
+</head>
+<body>
+<div class="container">
+    <nav>
+        <span class="user-info">{{ char_name }}</span>
+        <a href="/">Dashboard</a>
+        <a href="/guild">Guild Roster</a>
+        <a href="/addons" class="active">Addons</a>
+        <a href="/logout">Logout</a>
+    </nav>
+
+    <div class="header">
+        <h1>Azeroth</h1>
+        <h2>Client Addons</h2>
+    </div>
+
+    <div class="section">
+        <div class="section-title">
+            <span>Available Addons</span>
+            <button class="btn btn-primary" id="btn-new-addon" style="display:none;" onclick="openNewAddonModal()">+ New Addon</button>
+        </div>
+        <ul class="addon-list" id="addon-list">
+            <li class="empty">Loading...</li>
+        </ul>
+    </div>
+</div>
+
+<!-- New Addon Modal -->
+<div class="modal-overlay" id="new-addon-modal">
+    <div class="modal">
+        <h3>New Addon</h3>
+        <div class="form-group">
+            <label for="addon-name">Name</label>
+            <input type="text" id="addon-name" placeholder="e.g. AzerothUI">
+        </div>
+        <div class="form-group">
+            <label for="addon-author">Author</label>
+            <input type="text" id="addon-author" placeholder="e.g. Azeroth">
+        </div>
+        <div class="form-group">
+            <label for="addon-description">Description</label>
+            <textarea id="addon-description" placeholder="What does this addon do?"></textarea>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-cancel" onclick="closeNewAddonModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="createAddon()">Create</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const isAdmin = {{ 'true' if session.get('gmlevel', 0) >= 2 else 'false' }};
+
+async function fetchJSON(url) {
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(resp.status);
+        return await resp.json();
+    } catch (e) {
+        console.error("Fetch error:", url, e);
+        return null;
+    }
+}
+
+function renderAddons(addons) {
+    const list = document.getElementById("addon-list");
+    if (!addons || !addons.length) {
+        list.innerHTML = '<li class="empty">No addons available yet</li>';
+        return;
+    }
+    list.innerHTML = addons.map(a => `
+        <li class="addon-item" onclick="window.location='/addons/${a.id}'">
+            <div class="addon-info">
+                <div class="addon-name">${a.name}</div>
+                <div class="addon-desc">${a.description || 'No description'}</div>
+                <div class="addon-meta">
+                    <span>by ${a.author}</span>
+                    <span>${a.release_count} release${a.release_count !== 1 ? 's' : ''}</span>
+                    ${a.latest_date ? `<span>Updated ${a.latest_date}</span>` : ''}
+                </div>
+            </div>
+            ${a.latest_version ? `<span class="addon-version">v${a.latest_version}</span>` : ''}
+        </li>
+    `).join("");
+}
+
+function openNewAddonModal() {
+    document.getElementById("new-addon-modal").classList.add("active");
+    document.getElementById("addon-name").focus();
+}
+
+function closeNewAddonModal() {
+    document.getElementById("new-addon-modal").classList.remove("active");
+    document.getElementById("addon-name").value = "";
+    document.getElementById("addon-author").value = "";
+    document.getElementById("addon-description").value = "";
+}
+
+async function createAddon() {
+    const name = document.getElementById("addon-name").value.trim();
+    const author = document.getElementById("addon-author").value.trim();
+    const description = document.getElementById("addon-description").value.trim();
+    if (!name) { alert("Name is required"); return; }
+
+    const resp = await fetch("/api/addons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, author, description }),
+    });
+    if (resp.ok) {
+        const addon = await resp.json();
+        closeNewAddonModal();
+        window.location = `/addons/${addon.id}`;
+    } else {
+        const err = await resp.json();
+        alert(err.error || "Failed to create addon");
+    }
+}
+
+async function init() {
+    if (isAdmin) {
+        document.getElementById("btn-new-addon").style.display = "";
+    }
+    const addons = await fetchJSON("/api/addons");
+    renderAddons(addons);
+}
+
+init();
+</script>
+</body>
+</html>

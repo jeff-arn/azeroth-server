@@ -38,6 +38,9 @@ __pycache__/
 # ============ Reference docs ============
 docs/
 
+# ============ Addon zip uploads ============
+dashboard/static/addons/*.zip
+
 # ============ IDE / editor ============
 .vscode/
 .vscode-server/

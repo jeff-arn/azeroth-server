@@ -2,15 +2,21 @@
 
 import functools
 import hashlib
+import json
 import os
 import re
 import subprocess
+import uuid
 
 import mysql.connector
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(32))
+
+ADDONS_DIR = os.path.join(os.path.dirname(__file__), "static", "addons")
+ADDONS_JSON = os.path.join(ADDONS_DIR, "addons.json")
 
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "127.0.0.1"),
@@ -801,6 +807,175 @@ def api_guild_gear_tier():
         return jsonify({"ok": True, "updated": affected})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# Addons — JSON-backed addon registry with file uploads
+# ============================================================================
+
+
+def _load_addons():
+    if not os.path.exists(ADDONS_JSON):
+        return []
+    with open(ADDONS_JSON, "r") as f:
+        return json.load(f)
+
+
+def _save_addons(addons):
+    with open(ADDONS_JSON, "w") as f:
+        json.dump(addons, f, indent=2)
+
+
+def admin_required(f):
+    """Decorator: require GM level >= 2 (SEC_MODERATOR)."""
+
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if "account_id" not in session:
+            return jsonify({"error": "Not authenticated"}), 401
+        if session.get("gmlevel", 0) < 2:
+            return jsonify({"error": "Admin access required"}), 403
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+@app.route("/addons")
+@login_required
+def addons_page():
+    return render_template("addons.html", char_name=session.get("char_name", ""))
+
+
+@app.route("/addons/<addon_id>")
+@login_required
+def addon_detail_page(addon_id):
+    is_admin = session.get("gmlevel", 0) >= 2
+    return render_template(
+        "addon_detail.html",
+        addon_id=addon_id,
+        char_name=session.get("char_name", ""),
+        is_admin=is_admin,
+    )
+
+
+@app.route("/api/addons")
+def api_addons():
+    addons = _load_addons()
+    # Return summary list (without full release file details)
+    result = []
+    for a in addons:
+        latest = a["releases"][-1] if a.get("releases") else None
+        result.append(
+            {
+                "id": a["id"],
+                "name": a["name"],
+                "description": a["description"],
+                "author": a["author"],
+                "latest_version": latest["version"] if latest else None,
+                "latest_date": latest["date"] if latest else None,
+                "release_count": len(a.get("releases", [])),
+            }
+        )
+    return jsonify(result)
+
+
+@app.route("/api/addons/<addon_id>")
+def api_addon_detail(addon_id):
+    addons = _load_addons()
+    addon = next((a for a in addons if a["id"] == addon_id), None)
+    if not addon:
+        return jsonify({"error": "Addon not found"}), 404
+    return jsonify(addon)
+
+
+@app.route("/api/addons", methods=["POST"])
+@admin_required
+def api_create_addon():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    name = data.get("name", "").strip()
+    description = data.get("description", "").strip()
+    author = data.get("author", "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+
+    addons = _load_addons()
+    addon = {
+        "id": str(uuid.uuid4())[:8],
+        "name": name,
+        "description": description,
+        "author": author or "Azeroth",
+        "releases": [],
+    }
+    addons.append(addon)
+    _save_addons(addons)
+    return jsonify(addon), 201
+
+
+@app.route("/api/addons/<addon_id>/releases", methods=["POST"])
+@admin_required
+def api_upload_release(addon_id):
+    addons = _load_addons()
+    addon = next((a for a in addons if a["id"] == addon_id), None)
+    if not addon:
+        return jsonify({"error": "Addon not found"}), 404
+
+    version = request.form.get("version", "").strip()
+    changelog = request.form.get("changelog", "").strip()
+    if not version:
+        return jsonify({"error": "Version is required"}), 400
+
+    zip_file = request.files.get("file")
+    if not zip_file or not zip_file.filename:
+        return jsonify({"error": "Zip file is required"}), 400
+
+    filename = secure_filename(zip_file.filename)
+    if not filename.endswith(".zip"):
+        return jsonify({"error": "File must be a .zip"}), 400
+
+    # Save as <addon_id>_v<version>.zip
+    safe_version = secure_filename(version)
+    stored_name = f"{addon_id}_v{safe_version}.zip"
+    zip_file.save(os.path.join(ADDONS_DIR, stored_name))
+
+    from datetime import datetime, timezone
+
+    release = {
+        "version": version,
+        "changelog": changelog,
+        "filename": stored_name,
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+    }
+    addon["releases"].append(release)
+    _save_addons(addons)
+    return jsonify(release), 201
+
+
+@app.route("/api/addons/<addon_id>", methods=["DELETE"])
+@admin_required
+def api_delete_addon(addon_id):
+    addons = _load_addons()
+    addon = next((a for a in addons if a["id"] == addon_id), None)
+    if not addon:
+        return jsonify({"error": "Addon not found"}), 404
+
+    # Delete associated zip files
+    for release in addon.get("releases", []):
+        filepath = os.path.join(ADDONS_DIR, release["filename"])
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+    addons = [a for a in addons if a["id"] != addon_id]
+    _save_addons(addons)
+    return jsonify({"ok": True})
+
+
+@app.route("/addons/download/<filename>")
+@login_required
+def download_addon(filename):
+    safe = secure_filename(filename)
+    return send_from_directory(ADDONS_DIR, safe, as_attachment=True)
 
 
 if __name__ == "__main__":
