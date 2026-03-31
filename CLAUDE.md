@@ -112,7 +112,15 @@ Bot social behavior and tradeskill services are managed by two singletons:
 
 **Party/raid chat**: Bots greet on group join (2-5s delay), say "gratz" on level-up, react to boss kills + emote /cheer, react to wipes + /cry, call out OOM and pulling.
 
-**General channel chat**: Zone-population-driven. Rate = `botCount × 0.09` msgs/min per zone (~4-5/min in IF at peak). Runs from `BotChatManager::UpdateGeneralChat()`, called every world update tick. Channel name resolved dynamically ("General - Ironforge").
+**General channel chat**: Zone-population-driven. Rate = `botCount × 0.09` msgs/min per zone (~4-5/min in IF at peak). `UpdateGeneralChat()` runs on the `WUPDATE_AUCTIONS` timer (60s interval) — **not** every world tick. Channel name resolved dynamically ("General - Ironforge").
+
+**Conversational threading** (#24): General chat uses a layered system instead of isolated random messages:
+- **8 topic pools** (LFG, gold, gear, bored, newbie, server, PVP, professions) — consecutive messages on the same topic carry forward up to 4 lines / 2 minutes before rotating
+- **15 conversation chains**: scripted 2-4 bot exchanges (lfg BRD, gold farming, ony attune, etc.) — 12% chance per message slot
+- **7 debate templates**: classic WoW arguments (fury vs arms, horde vs alliance racials, best gold farm, etc.) with variant lines — 8% chance per message slot
+- **19 reactive keyword hooks**: `Channel::Say` hook fires `OnGeneralChatMessage()` for human General chat messages; bots respond 15–45s later to keywords like "brd", "ony", "pvp", "gold", class names, etc.
+- **Scheduling**: All threaded messages use `PendingGeneralMessage::fireTime` (absolute `time_t`), **not** a ms countdown. This is critical because `Update()` fires every 60s — a countdown would collapse all chain lines into one burst. Always use `time_t` for any deferred message scheduling in this system.
+- **Per-zone state**: `ZoneConversationState` tracks active topic/chain/debate independently per city. Chains abort cleanly if a participant logs out mid-conversation.
 
 **Trade chat monitoring**: Hooks `Channel::Say()` to detect player service requests ("WTB port", "LF enchanter"). Bot whispers player proactively with location + minimap marker (`SMSG_GOSSIP_POI`). Creates `BotServiceRequest` with destination/enchant parsed from trade message. Only picks bots in the player's same zone. One response per player at a time (`HasActiveRequest` check).
 
