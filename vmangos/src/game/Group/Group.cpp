@@ -38,6 +38,7 @@
 #include "LFGMgr.h"
 #include "LFGQueue.h"
 #include "UpdateMask.h"
+#include "GuildBotMgr.h"
 
 #include <array>
 
@@ -437,6 +438,10 @@ bool Group::AddMember(ObjectGuid guid, char const* name, uint8 joinMethod)
 
 uint32 Group::RemoveMember(ObjectGuid guid, uint8 removeMethod)
 {
+    // Revert guild bots back to presence mode when removed from group
+    if (guid.IsPlayer())
+        sGuildBotMgr.OnBotRemovedFromGroup(guid.GetCounter());
+
     // remove member and change leader (if need) only if strong more 2 members _before_ member remove
     if (GetMembersCount() > GetMembersMinCount())
     {
@@ -546,6 +551,13 @@ void Group::ChangeLeader(ObjectGuid guid)
 
 void Group::Disband(bool hideDestroy, ObjectGuid initiator)
 {
+    // Revert any guild bots in this group back to presence mode
+    for (const auto& itr : m_memberSlots)
+    {
+        if (itr.guid.IsPlayer())
+            sGuildBotMgr.OnBotRemovedFromGroup(itr.guid.GetCounter());
+    }
+
     Player* player;
     Player* remainingPlayer = nullptr;
 

@@ -866,3 +866,148 @@ void GuildBotMgr::UpdatePresence()
         "[GuildBotMgr] Presence update: target=%u, current=%u",
         target, currentPresence);
 }
+
+// ============================================================================
+// Party Invite: Convert presence bot <-> party bot
+// ============================================================================
+
+bool GuildBotMgr::ConvertPresenceToParty(uint32 botGuid, ObjectGuid leaderGuid)
+{
+    auto it = m_guidToIndex.find(botGuid);
+    if (it == m_guidToIndex.end())
+        return false;
+
+    GuildBotInfo& info = m_roster[it->second];
+    if (!info.online)
+        return false;
+
+    Player* pLeader = sObjectAccessor.FindPlayer(leaderGuid);
+    if (!pLeader)
+        return false;
+
+    // Get bot's current position before despawn
+    Player* pBot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, botGuid));
+    float x, y, z, o;
+    uint32 mapId = 0;
+    uint32 instanceId = 0;
+    if (pBot)
+    {
+        x = pBot->GetPositionX();
+        y = pBot->GetPositionY();
+        z = pBot->GetPositionZ();
+        o = pBot->GetOrientation();
+        mapId = pBot->GetMapId();
+        instanceId = pBot->GetMap() ? pBot->GetMap()->GetInstanceId() : 0;
+    }
+    else
+    {
+        // Fallback to leader position
+        x = pLeader->GetPositionX();
+        y = pLeader->GetPositionY();
+        z = pLeader->GetPositionZ();
+        o = pLeader->GetOrientation();
+        mapId = pLeader->GetMapId();
+        instanceId = pLeader->GetMap() ? pLeader->GetMap()->GetInstanceId() : 0;
+    }
+
+    // Despawn the CrowdBotAI bot and remove its entry so AddBot gets a fresh account ID
+    sPlayerBotMgr.DeleteBot(botGuid);
+    sPlayerBotMgr.RemoveBotEntry(botGuid);
+    info.online = false;
+
+    // Respawn as PartyBotAI
+    PartyBotAI* pAI = new PartyBotAI(pLeader, mapId, instanceId, x, y, z, o);
+
+    // Set role from guild roster
+    switch (info.role)
+    {
+        case GUILD_BOT_ROLE_TANK:   pAI->m_role = ROLE_TANK; break;
+        case GUILD_BOT_ROLE_HEALER: pAI->m_role = ROLE_HEALER; break;
+        case GUILD_BOT_ROLE_DPS:
+            switch (info.cls)
+            {
+                case 1: case 4:  // Warrior, Rogue
+                    pAI->m_role = ROLE_MELEE_DPS; break;
+                case 2:  // Paladin
+                    pAI->m_role = (info.spec == "retribution") ? ROLE_MELEE_DPS : ROLE_RANGE_DPS; break;
+                case 7:  // Shaman
+                    pAI->m_role = (info.spec == "enhancement") ? ROLE_MELEE_DPS : ROLE_RANGE_DPS; break;
+                case 11: // Druid
+                    pAI->m_role = (info.spec == "feral_cat") ? ROLE_MELEE_DPS : ROLE_RANGE_DPS; break;
+                default:
+                    pAI->m_role = ROLE_RANGE_DPS; break;
+            }
+            break;
+    }
+
+    if (sPlayerBotMgr.AddBot(botGuid, false, pAI))
+    {
+        info.online = true;
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+            "[GuildBotMgr] %s converted to PartyBot for %s",
+            info.name.c_str(), pLeader->GetName());
+        return true;
+    }
+    else
+    {
+        delete pAI;
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+            "[GuildBotMgr] %s failed to convert to PartyBot",
+            info.name.c_str());
+        return false;
+    }
+}
+
+void GuildBotMgr::ConvertPartyToPresence(uint32 botGuid)
+{
+    auto it = m_guidToIndex.find(botGuid);
+    if (it == m_guidToIndex.end())
+        return;
+
+    GuildBotInfo& info = m_roster[it->second];
+
+    // Despawn the PartyBotAI bot and remove entry for clean respawn
+    if (info.online)
+    {
+        sPlayerBotMgr.DeleteBot(botGuid);
+        sPlayerBotMgr.RemoveBotEntry(botGuid);
+        info.online = false;
+    }
+
+    // Respawn as CrowdBotAI (presence mode)
+    if (m_presenceEnabled)
+    {
+        LoginPresenceBot(info);
+    }
+
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+        "[GuildBotMgr] %s reverted to presence bot",
+        info.name.c_str());
+}
+
+void GuildBotMgr::OnBotRemovedFromGroup(uint32 botGuid)
+{
+    if (!IsGuildBot(botGuid))
+        return;
+
+    auto it = m_guidToIndex.find(botGuid);
+    if (it == m_guidToIndex.end())
+        return;
+
+    GuildBotInfo& info = m_roster[it->second];
+
+    // Only revert if bot is online (avoid double-fire from RemoveMember + Disband)
+    if (!info.online)
+        return;
+
+    // Despawn the PartyBotAI bot
+    sPlayerBotMgr.DeleteBot(botGuid);
+    sPlayerBotMgr.RemoveBotEntry(botGuid);
+    info.online = false;
+
+    // Don't respawn immediately — the player object is still being cleaned up.
+    // The presence system will pick this bot up on its next cycle (~30s-5min).
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+        "[GuildBotMgr] %s removed from group, will rejoin via presence",
+        info.name.c_str());
+}

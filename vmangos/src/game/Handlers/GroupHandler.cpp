@@ -31,6 +31,7 @@
 #include "Group.h"
 #include "SocialMgr.h"
 #include "Util.h"
+#include "GuildBotMgr.h"
 
 /* differeces from off:
     -you can uninvite yourself - is is useful
@@ -151,6 +152,30 @@ void WorldSession::HandleGroupInviteOpcode(WorldPacket& recv_data)
     player->GetSession()->SendPacket(&data);
 
     SendPartyResult(PARTY_OP_INVITE, membername, ERR_PARTY_RESULT_OK);
+
+    // Guild presence bot: auto-accept invite and convert to party bot
+    if (sGuildBotMgr.IsEnabled() && sGuildBotMgr.IsPresenceBot(player->GetGUIDLow()))
+    {
+        ObjectGuid leaderGuid = GetPlayer()->GetObjectGuid();
+        uint32 botGuid = player->GetGUIDLow();
+
+        // Remove from invite list first (like HandleGroupAcceptOpcode does)
+        group->RemoveInvite(player);
+
+        // Create the group if it's new
+        if (!group->IsCreated())
+        {
+            Player* leader = sObjectMgr.GetPlayer(group->GetLeaderGuid());
+            if (leader)
+                group->RemoveInvite(leader);
+            if (!group->Create(group->GetLeaderGuid(), group->GetLeaderName()))
+                return;
+            sObjectMgr.AddGroup(group);
+        }
+
+        // Convert: despawn CrowdBotAI, respawn as PartyBotAI, join group
+        sGuildBotMgr.ConvertPresenceToParty(botGuid, leaderGuid);
+    }
 }
 
 void WorldSession::HandleGroupAcceptOpcode(WorldPacket& /*recv_data*/)

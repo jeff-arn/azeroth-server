@@ -998,7 +998,29 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     {
         AddToPlayerGroup();
 
-        if (m_race && m_class) // temporary character
+        // Guild bots converted from presence: existing character, needs spec + gear
+        if (!m_race && !m_class && sGuildBotMgr.IsEnabled() && sGuildBotMgr.IsGuildBot(me->GetGUIDLow()))
+        {
+            LearnPremadeSpecForClass();
+
+            if (m_role == ROLE_INVALID)
+                AutoAssignRole();
+
+            if (!sGuildBotMgr.HasLootUpgrades(me->GetGUIDLow()))
+            {
+                if (me->GetLevel() < 19)
+                    AutoEquipGear(PLAYER_BOT_AUTO_EQUIP_RANDOM_GEAR);
+                else
+                {
+                    GuildBotInfo const* gbi = sGuildBotMgr.GetBotInfo(me->GetGUIDLow());
+                    if (gbi)
+                        AutoEquipGear(sGuildBotMgr.GetAutoEquipOptionForTier(gbi->gearTier));
+                    else
+                        AutoEquipGear(PLAYER_BOT_AUTO_EQUIP_RANDOM_GEAR);
+                }
+            }
+        }
+        else if (m_race && m_class) // temporary character
         {
             if (m_level && m_level != me->GetLevel())
             {
@@ -1026,7 +1048,13 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                     {
                         GuildBotInfo const* gbi = sGuildBotMgr.GetBotInfo(me->GetGUIDLow());
                         if (gbi)
-                            AutoEquipGear(sGuildBotMgr.GetAutoEquipOptionForTier(gbi->gearTier));
+                        {
+                            // Low-level guild bots (<19) have no premade templates, use random gear
+                            if (me->GetLevel() < 19)
+                                AutoEquipGear(PLAYER_BOT_AUTO_EQUIP_RANDOM_GEAR);
+                            else
+                                AutoEquipGear(sGuildBotMgr.GetAutoEquipOptionForTier(gbi->gearTier));
+                        }
                         else
                             AutoEquipGear(sWorld.getConfig(CONFIG_UINT32_PARTY_BOT_AUTO_EQUIP));
                     }

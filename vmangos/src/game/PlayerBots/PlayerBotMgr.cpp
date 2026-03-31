@@ -550,6 +550,11 @@ bool PlayerBotMgr::DeleteBot(std::map<uint64, std::shared_ptr<PlayerBotEntry>>::
     return true;
 }
 
+void PlayerBotMgr::RemoveBotEntry(uint32 playerGUID)
+{
+    m_bots.erase(playerGUID);
+}
+
 bool PlayerBotMgr::DeleteRandomBot()
 {
     if (m_stats.onlineCount < 1)

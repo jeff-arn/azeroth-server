@@ -566,7 +566,13 @@ void CrowdBotAI::BeforeAddToMap(Player* player)
         mapId = INN_LOCATIONS[innIndex].mapId;
     }
     else
+    {
+        // Guild bots or other non-crowd bots: use their DB position as-is
+        m_homeX = player->GetPositionX();
+        m_homeY = player->GetPositionY();
+        m_homeZ = player->GetPositionZ();
         return;
+    }
 
     float x = cx + frand(-radius, radius);
     float y = cy + frand(-radius, radius);

@@ -83,6 +83,7 @@ class PlayerBotMgr
         bool AddBot(uint32 playerGuid, bool chatBot = false, PlayerBotAI* pAI = nullptr);
         bool DeleteBot(std::map<uint64, std::shared_ptr<PlayerBotEntry>>::iterator iter);
         bool DeleteBot(uint32 playerGuid);
+        void RemoveBotEntry(uint32 playerGUID);
 
         bool AddRandomBot();
         bool DeleteRandomBot();

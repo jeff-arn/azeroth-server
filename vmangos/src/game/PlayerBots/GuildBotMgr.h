@@ -107,6 +107,11 @@ public:
     // Presence: is this bot under presence control (not raid-assembled)?
     bool IsPresenceBot(uint32 guid) const;
 
+    // Party invite: convert a presence bot to a party bot and back
+    bool ConvertPresenceToParty(uint32 botGuid, ObjectGuid leaderGuid);
+    void ConvertPartyToPresence(uint32 botGuid);
+    void OnBotRemovedFromGroup(uint32 botGuid);
+
     // Config
     bool IsEnabled() const { return m_enabled; }
     uint32 GetAccountId() const { return m_accountId; }
