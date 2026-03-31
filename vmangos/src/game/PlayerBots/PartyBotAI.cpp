@@ -910,13 +910,10 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
             }
             else if (status == TRADE_STATUS_TRADE_ACCEPT)
             {
-                // The other player accepted. If we haven't yet, accept now.
+                // The other player accepted. Schedule accept (timer will re-apply enchant + accept).
                 if (me->GetTradeData() && !me->GetTradeData()->IsAccepted())
                 {
-                    std::unique_ptr<WorldPacket> acceptData =
-                        std::make_unique<WorldPacket>(CMSG_ACCEPT_TRADE, 4);
-                    *acceptData << uint32(1);
-                    me->GetSession()->QueuePacket(std::move(acceptData));
+                    m_pendingTradeAcceptTimer = 500;
                 }
             }
             else if (status == TRADE_STATUS_TRADE_COMPLETE)
@@ -951,10 +948,14 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             m_pendingTradeAcceptTimer = 0;
             if (me->GetTradeData() && !me->GetTradeData()->IsAccepted())
             {
-                std::unique_ptr<WorldPacket> acceptData =
-                    std::make_unique<WorldPacket>(CMSG_ACCEPT_TRADE, 4);
-                *acceptData << uint32(1);
-                me->GetSession()->QueuePacket(std::move(acceptData));
+                // Don't set enchant spell — it causes accept loops.
+                // Enchant will be applied directly after trade completes.
+                me->GetTradeData()->SetLastModificationTime(0);
+                me->GetTradeData()->SetScamPreventionDelay(0);
+
+                WorldPacket acceptData(CMSG_ACCEPT_TRADE, 4);
+                acceptData << uint32(1);
+                me->GetSession()->HandleAcceptTradeOpcode(acceptData);
             }
         }
         else

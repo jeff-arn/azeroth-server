@@ -949,9 +949,18 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
             if (p->GetZoneId() != playerZone)
                 continue;
 
-            // Class check if required
+            // Class/profession check
             if (TRADE_TRIGGERS[i].requiredClass != 0 &&
                 p->GetClass() != TRADE_TRIGGERS[i].requiredClass)
+                continue;
+            if (TRADE_TRIGGERS[i].serviceType == BOT_SERVICE_ENCHANT &&
+                !BotServiceMgr::IsEnchanterBot(p))
+                continue;
+            if (TRADE_TRIGGERS[i].serviceType == BOT_SERVICE_TRANSMUTE &&
+                !BotServiceMgr::IsAlchemistBot(p))
+                continue;
+            if (TRADE_TRIGGERS[i].serviceType == BOT_SERVICE_MOONCLOTH &&
+                !BotServiceMgr::IsTailorBot(p))
                 continue;
 
             if (CanChat(p->GetGUIDLow(), CHAT_COOLDOWN_TRADE))
@@ -1001,10 +1010,20 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
             }
             case BOT_SERVICE_ENCHANT:
             {
-                char buf[256];
-                snprintf(buf, sizeof(buf), "hey I can enchant, what do you need? I'm %s", location.c_str());
-                pw.message = buf;
                 sBotServiceMgr.CreateProactiveRequest(bot, senderGuid, BOT_SERVICE_ENCHANT, message);
+                BotServiceRequest* req = sBotServiceMgr.GetPendingRequest(bot->GetObjectGuid(), senderGuid);
+                if (req && req->state == SERVICE_STATE_WAITING_FOR_TRADE)
+                {
+                    char buf[256];
+                    snprintf(buf, sizeof(buf), "yeah I can do that, your mats + tip. I'm %s, trade me", location.c_str());
+                    pw.message = buf;
+                }
+                else
+                {
+                    char buf[256];
+                    snprintf(buf, sizeof(buf), "hey I can enchant, what do you need? I'm %s", location.c_str());
+                    pw.message = buf;
+                }
                 break;
             }
             case BOT_SERVICE_TRANSMUTE:

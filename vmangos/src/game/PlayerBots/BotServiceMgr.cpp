@@ -1,6 +1,7 @@
 #include "BotServiceMgr.h"
 #include "Policies/SingletonImp.h"
 #include "Player.h"
+#include "Item.h"
 #include "ObjectAccessor.h"
 #include "World.h"
 #include "Chat/Chat.h"
@@ -457,12 +458,13 @@ void BotServiceMgr::OnTradeWindowOpen(Player* bot, Player* player)
         return;
 
     // For enchanting services, set the enchant spell on the bot's trade data.
+    // Use ForceSpell to avoid clearing accept state (SetSpell unaccepts both sides).
     if (req->serviceType == BOT_SERVICE_ENCHANT && req->spellId)
     {
         TradeData* botTrade = bot->GetTradeData();
         if (botTrade)
         {
-            botTrade->SetSpell(req->spellId);
+            botTrade->ForceSpell(req->spellId);
             sLog.Out(LOG_BASIC, LOG_LVL_DETAIL,
                 "BotService: %s sets enchant spell %u on trade", bot->GetName(), req->spellId);
         }
@@ -534,11 +536,7 @@ void BotServiceMgr::OnTradeCompleted(Player* bot, Player* player, uint32 goldRec
             DeliverPortal(bot, player, req.spellId);
             break;
         case BOT_SERVICE_ENCHANT:
-            // Enchant was already applied via the trade window spell system.
-            // The trade handler cast the spell on the item in slot 6.
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-                "BotService: %s enchanted item for %s (spell %u)",
-                bot->GetName(), player->GetName(), req.spellId);
+            DeliverEnchant(bot, player, req.spellId);
             break;
         case BOT_SERVICE_TRANSMUTE:
             DeliverTransmute(bot, player);
@@ -577,13 +575,13 @@ bool BotServiceMgr::BotKnowsEnchant(Player* bot, EnchantDefinition const* enchan
     // Common and mid-tier enchants: all enchanter bots know them.
     if (!enchant->isRareRecipe)
         return true;
-    // Rare recipes: use bot GUID as seed for deterministic "recipe knowledge."
-    // ~60% of enchanter bots know Crusader, ~30% know SP/Healing.
+    // Rare recipes: on a small private server, most enchanters know everything.
+    // ~90% know rare recipes, ~70% know ultrarare.
     uint32 seed = bot->GetGUIDLow() + enchant->spellId;
     switch (enchant->tipTier)
     {
-        case ENCHANT_TIP_RARE:     return (seed % 100) < 60;
-        case ENCHANT_TIP_ULTRARARE:return (seed % 100) < 30;
+        case ENCHANT_TIP_RARE:     return (seed % 100) < 90;
+        case ENCHANT_TIP_ULTRARARE:return (seed % 100) < 70;
         default: return true;
     }
 }
@@ -600,10 +598,41 @@ uint32 BotServiceMgr::GetEnchantTipMin(EnchantTipTier tier) const
     return 0;
 }
 
-void BotServiceMgr::DeliverEnchant(Player* /*bot*/, Player* /*player*/, uint32 /*spellId*/)
+void BotServiceMgr::DeliverEnchant(Player* bot, Player* player, uint32 spellId)
 {
-    // Enchants are delivered via the trade window spell system automatically.
-    // This is a no-op — the trade handler's spell casting handles it.
+    if (!spellId || !bot || !player)
+        return;
+
+    SpellEntry const* spellEntry = sSpellMgr.GetSpellEntry(spellId);
+    if (!spellEntry)
+        return;
+
+    // Get the enchant ID from the spell's EffectMiscValue
+    uint32 enchantId = spellEntry->EffectMiscValue[0];
+    if (!enchantId)
+        return;
+
+    // Apply to player's main hand weapon
+    Item* weapon = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+    if (!weapon)
+    {
+        // Try off-hand
+        weapon = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
+    }
+    if (!weapon)
+    {
+        BotWhisper(bot, player->GetObjectGuid(), "you need to have a weapon equipped");
+        return;
+    }
+
+    // Remove old enchant and apply new one
+    player->ApplyEnchantment(weapon, PERM_ENCHANTMENT_SLOT, false);
+    weapon->SetEnchantment(PERM_ENCHANTMENT_SLOT, enchantId, 0, 0, bot->GetObjectGuid());
+    player->ApplyEnchantment(weapon, PERM_ENCHANTMENT_SLOT, true);
+
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+        "BotService: %s enchanted %s's weapon with enchant %u (spell %u)",
+        bot->GetName(), player->GetName(), enchantId, spellId);
 }
 
 // ============================================================================
@@ -801,7 +830,24 @@ void BotServiceMgr::CreateProactiveRequest(Player* bot, ObjectGuid playerGuid,
         }
     }
 
-    // Portal without resolved destination, or enchant: need clarification.
+    // For enchants, try to parse which enchant from the trade chat message.
+    // e.g., "LF enchanter for crusader PST" → resolve Crusader spell.
+    if (type == BOT_SERVICE_ENCHANT && !tradeChatMsg.empty())
+    {
+        std::string lower = tradeChatMsg;
+        for (auto& c : lower) c = static_cast<char>(tolower(c));
+
+        EnchantDefinition const* enchant = ResolveEnchant(lower);
+        if (enchant && BotKnowsEnchant(bot, enchant))
+        {
+            req.spellId = enchant->spellId;
+            req.state = SERVICE_STATE_WAITING_FOR_TRADE;
+            m_requests[key] = req;
+            return;
+        }
+    }
+
+    // Portal without resolved destination, or enchant without specific request: need clarification.
     // Transmute and mooncloth go straight to WAITING_FOR_TRADE.
     switch (type)
     {

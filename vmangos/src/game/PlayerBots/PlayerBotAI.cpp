@@ -679,10 +679,19 @@ void CrowdBotAI::UpdateAI(uint32 const diff)
             m_pendingTradeAcceptTimer = 0;
             if (me->GetTradeData() && !me->GetTradeData()->IsAccepted())
             {
-                std::unique_ptr<WorldPacket> acceptData =
-                    std::make_unique<WorldPacket>(CMSG_ACCEPT_TRADE, 4);
-                *acceptData << uint32(1);
-                me->GetSession()->QueuePacket(std::move(acceptData));
+                // Don't set enchant spell here — it causes accept loops.
+                // The enchant will be applied directly after trade completes.
+
+                // Clear scam prevention delay and call accept handler directly
+                me->GetTradeData()->SetLastModificationTime(0);
+                me->GetTradeData()->SetScamPreventionDelay(0);
+
+                WorldPacket acceptData(CMSG_ACCEPT_TRADE, 4);
+                acceptData << uint32(1);
+                me->GetSession()->HandleAcceptTradeOpcode(acceptData);
+
+                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+                    "[CrowdBot] %s called HandleAcceptTradeOpcode directly", me->GetName());
             }
         }
         else
@@ -746,18 +755,38 @@ void CrowdBotAI::OnPacketReceived(WorldPacket const* packet)
                 if (me->GetTradeData())
                 {
                     Player* trader = me->GetTradeData()->GetTrader();
-                    if (trader && sBotServiceMgr.ShouldAcceptTrade(me, trader))
+                    bool accepted = trader && sBotServiceMgr.ShouldAcceptTrade(me, trader);
+                    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
+                        "[CrowdBot] %s trade request from %s — ShouldAcceptTrade=%s",
+                        me->GetName(), trader ? trader->GetName() : "null", accepted ? "YES" : "NO");
+                    if (accepted)
                     {
-                        // Accept the trade initiation (open trade window).
                         std::unique_ptr<WorldPacket> beginData =
                             std::make_unique<WorldPacket>(CMSG_BEGIN_TRADE, 0);
                         me->GetSession()->QueuePacket(std::move(beginData));
-                        m_pendingTradeAcceptTimer = 2000; // auto-accept after 2s
                     }
                     else
                     {
                         me->TradeCancel(true, TRADE_STATUS_BUSY);
                     }
+                }
+            }
+            else if (status == TRADE_STATUS_OPEN_WINDOW)
+            {
+                // Trade window open — set up bot's side (enchant spell, etc.)
+                if (me->GetTradeData())
+                {
+                    Player* trader = me->GetTradeData()->GetTrader();
+                    if (trader)
+                        sBotServiceMgr.OnTradeWindowOpen(me, trader);
+                }
+            }
+            else if (status == TRADE_STATUS_TRADE_ACCEPT)
+            {
+                // Player accepted — set enchant spell and accept via timer.
+                if (me->GetTradeData() && !me->GetTradeData()->IsAccepted())
+                {
+                    m_pendingTradeAcceptTimer = 500;
                 }
             }
             return;
