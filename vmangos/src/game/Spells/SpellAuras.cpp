@@ -19,6 +19,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "AuraTracker.h"
 #include "Common.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
@@ -374,6 +375,8 @@ void SpellAuraHolder::Refresh(Unit* caster, Unit* target, SpellAuraHolder* pRefr
     }
     UpdateAuraDuration();
     UpdateAuraApplication();
+
+    AuraTracker::SendAuraRefresh(this);
 }
 
 bool SpellAuraHolder::CanBeRefreshedBy(SpellAuraHolder* other) const
@@ -5852,6 +5855,7 @@ void Aura::PeriodicTick(SpellEntry const* sProto, AuraType auraType, uint32 data
 
             SpellPeriodicAuraLogInfo pInfo(this, pdamage, absorb, resist, 0.0f);
             target->SendPeriodicAuraLog(&pInfo, sProto ? auraType : SPELL_AURA_NONE);
+            AuraTracker::SendPeriodicTick(this, pdamage);
 
             if (pdamage)
                 procVictim |= PROC_FLAG_TAKEN_ANY_DAMAGE;
@@ -6019,6 +6023,7 @@ void Aura::PeriodicTick(SpellEntry const* sProto, AuraType auraType, uint32 data
             int32 gain = target->ModifyHealth(pdamage);
             SpellPeriodicAuraLogInfo pInfo(this, pdamage, 0, 0, 0.0f);
             target->SendPeriodicAuraLog(&pInfo);
+            AuraTracker::SendPeriodicTick(this, pdamage);
 
             // Set trigger flag
             uint32 procAttacker = PROC_FLAG_DEAL_HARMFUL_PERIODIC;
@@ -6925,6 +6930,7 @@ void SpellAuraHolder::SetStackAmount(uint32 stackAmount)
         return;
 
     bool refresh = stackAmount >= m_stackAmount;
+    bool increased = stackAmount > m_stackAmount;
     if (stackAmount != m_stackAmount)
     {
         m_stackAmount = stackAmount;
@@ -6947,6 +6953,8 @@ void SpellAuraHolder::SetStackAmount(uint32 stackAmount)
                 }
             }
         }
+
+        AuraTracker::SendAuraDose(this, increased);
     }
 
     if (refresh)

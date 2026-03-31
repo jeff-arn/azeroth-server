@@ -212,6 +212,7 @@ set (game_SRCS
     Server/WorldSession.cpp
     Server/WorldSocket.cpp
     Server/WorldSocketMgr.cpp
+    Spells/AuraTracker.cpp
     Spells/Spell.cpp
     Spells/SpellAuras.cpp
     Spells/SpellEffects.cpp
@@ -439,6 +440,7 @@ set (game_SRCS
     Server/WorldSession.h
     Server/WorldSocket.h
     Server/WorldSocketMgr.h
+    Spells/AuraTracker.h
     Spells/Spell.h
     Spells/SpellAuraDefines.h
     Spells/SpellAuras.h

@@ -33,6 +33,7 @@
 #include "SpellMgr.h"
 #include "Spell.h"
 #include "Group.h"
+#include "AuraTracker.h"
 #include "SpellAuras.h"
 #include "SpellModifier.h"
 #include "ObjectAccessor.h"
@@ -3525,6 +3526,9 @@ bool Unit::AddSpellAuraHolder(SpellAuraHolder* holder)
     }
     holder->HandleSpellSpecificBoosts(true);
 
+    // Notify addons of the new aura via CHAT_MSG_ADDON.
+    AuraTracker::SendAuraApplied(holder);
+
     // Check debuff limit
     //sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "AddSpellAuraHolder: Adding spell %d, debuff limit affected: %d", holder->GetId(), holder->IsAffectedByVisibleSlotLimit());
     if (holder->IsAffectedByVisibleSlotLimit())
@@ -4083,6 +4087,11 @@ void Unit::RemoveSpellAuraHolder(SpellAuraHolder* holder, AuraRemoveMode mode)
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Crash/Auras] Removing aura holder *not* in holders map ! Aura %u on %s", holder->GetId(), GetName());
 
     holder->SetRemoveMode(mode);
+
+    // Notify addons before the aura effects are torn down.
+    if (mode != AURA_REMOVE_BY_DELETE)
+        AuraTracker::SendAuraRemoved(holder, mode);
+
     holder->UnregisterSingleCastHolder();
     holder->HandleCastOnAuraRemoval();
 
