@@ -123,7 +123,7 @@ struct PendingGeneralMessage
     uint32 botGuidLow;          // 0 = pick any available bot at fire time
     uint32 zoneId;
     std::string message;
-    uint32 remainingDelayMs;
+    time_t fireTime;            // absolute time_t — fire when time(nullptr) >= fireTime
     uint32 chainId;             // unique ID to group chain/debate lines (0 = standalone)
 };
 

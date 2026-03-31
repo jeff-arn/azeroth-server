@@ -1472,22 +1472,28 @@ void BotChatManager::StartConversationChain(uint32 zoneId, std::vector<Player*>&
     state.chainId     = chainId;
     memcpy(state.chainParticipants, participants, sizeof(participants));
 
-    // Schedule all lines into the pending queue with cumulative delays.
-    uint32 cumulativeDelay = 0;
+    // Schedule all lines using absolute fire times (cumulative seconds from now).
+    // Using time_t is robust against the 60s Update() interval — delays won't be
+    // swallowed whole when diff >> individual line spacing.
+    time_t baseTime = time(nullptr);
+    uint32 cumulativeDelaySec = 0;
     for (uint8 lineIdx = 0; lineIdx < chain.lineCount; ++lineIdx)
     {
         const ChainLine& line = chain.lines[lineIdx];
 
-        // First line fires immediately (delay 0); subsequent lines get jitter.
+        // First line fires immediately; subsequent lines get jitter.
         if (lineIdx > 0)
-            cumulativeDelay += urand(line.delayMinMs, line.delayMaxMs);
+        {
+            uint32 jitterMs = urand(line.delayMinMs, line.delayMaxMs);
+            cumulativeDelaySec += (jitterMs + 500) / 1000;  // round to nearest second
+        }
 
         PendingGeneralMessage pending;
-        pending.botGuidLow      = participants[line.speakerRole];
-        pending.zoneId          = zoneId;
-        pending.message         = line.text;
-        pending.remainingDelayMs = cumulativeDelay;
-        pending.chainId         = chainId;
+        pending.botGuidLow = participants[line.speakerRole];
+        pending.zoneId     = zoneId;
+        pending.message    = line.text;
+        pending.fireTime   = baseTime + cumulativeDelaySec;
+        pending.chainId    = chainId;
         m_pendingGeneralMessages.push_back(std::move(pending));
     }
 
@@ -1522,23 +1528,27 @@ void BotChatManager::StartDebate(uint32 zoneId, std::vector<Player*>& zoneBots)
     state.debateId     = debateId;
     memcpy(state.debateSides, sides, sizeof(sides));
 
-    // Schedule all debate lines with cumulative delays.
-    uint32 cumulativeDelay = 0;
+    // Schedule all debate lines using absolute fire times.
+    time_t baseTime = time(nullptr);
+    uint32 cumulativeDelaySec = 0;
     for (uint8 lineIdx = 0; lineIdx < debate.lineCount; ++lineIdx)
     {
         const DebateLine& line = debate.lines[lineIdx];
         if (lineIdx > 0)
-            cumulativeDelay += urand(line.delayMinMs, line.delayMaxMs);
+        {
+            uint32 jitterMs = urand(line.delayMinMs, line.delayMaxMs);
+            cumulativeDelaySec += (jitterMs + 500) / 1000;
+        }
 
         // Pick a random variant.
         const char* text = line.variants[urand(0, line.variantCount - 1)];
 
         PendingGeneralMessage pending;
-        pending.botGuidLow       = sides[line.side];
-        pending.zoneId           = zoneId;
-        pending.message          = text;
-        pending.remainingDelayMs = cumulativeDelay;
-        pending.chainId          = debateId;
+        pending.botGuidLow = sides[line.side];
+        pending.zoneId     = zoneId;
+        pending.message    = text;
+        pending.fireTime   = baseTime + cumulativeDelaySec;
+        pending.chainId    = debateId;
         m_pendingGeneralMessages.push_back(std::move(pending));
     }
 
@@ -1584,14 +1594,15 @@ void BotChatManager::UpdatePendingGeneralMessages(uint32 diff)
         if (pm.chainId)
             ++chainMsgCount[pm.chainId];
 
+    time_t now = time(nullptr);
+
     std::vector<PendingGeneralMessage> stillPending;
     stillPending.reserve(m_pendingGeneralMessages.size());
 
     for (auto& pm : m_pendingGeneralMessages)
     {
-        if (pm.remainingDelayMs > diff)
+        if (now < pm.fireTime)
         {
-            pm.remainingDelayMs -= diff;
             stillPending.push_back(std::move(pm));
             continue;
         }
@@ -1706,13 +1717,13 @@ void BotChatManager::OnGeneralChatMessage(uint32 zoneId, ObjectGuid senderGuid, 
         Player* responder = zoneBots[urand(0, static_cast<uint32>(zoneBots.size()) - 1)];
         const char* response = hook.responses[urand(0, hook.responseCount - 1)];
 
-        // Schedule reactive response with 15-45s jitter.
+        // Schedule reactive response 15-45s from now using absolute fire time.
         PendingGeneralMessage pending;
-        pending.botGuidLow       = responder->GetGUIDLow();
-        pending.zoneId           = zoneId;
-        pending.message          = response;
-        pending.remainingDelayMs = urand(15000, 45000);
-        pending.chainId          = 0;  // standalone, not part of a chain
+        pending.botGuidLow = responder->GetGUIDLow();
+        pending.zoneId     = zoneId;
+        pending.message    = response;
+        pending.fireTime   = time(nullptr) + urand(15, 45);
+        pending.chainId    = 0;  // standalone, not part of a chain
         m_pendingGeneralMessages.push_back(std::move(pending));
 
         state.lastReactiveHookTime = now;
