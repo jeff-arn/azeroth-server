@@ -153,6 +153,25 @@ Persistent guild "Vanguard of Azeroth" with 20 bots (expandable to 40) managed b
 
 **Config** (`mangosd.conf`): `GuildBot.Enable`, `GuildBot.AccountId`, `BotChat.GuildChat.IntervalMin/Max`
 
+### Crowd Bot System
+
+Lightweight "scenery" bots that stand around city hotspots and inns to make the world feel populated. Uses `CrowdBotAI` — a minimal `PlayerBotAI` subclass with no combat, no spells, just idle emotes and micro-wander.
+
+- **Account**: 97
+- **GUID ranges**: City bots 100-144, Inn bots 300-371 (intentionally skips 200-219 guild bots)
+- **AI**: `CrowdBotAI` — 5s update tick, idle emotes every 15-60s, 5% chance of 3yd micro-wander per tick
+- **Spawning**: Always-on, not BotDirector-managed. Hardcoded spawn points in `PlayerBotAI.cpp`
+- **Appearance**: Premade gear templates (weighted 70% lvl 60, 30% lvl 40-59), Alliance races
+- **City hotspots** (100-144, 45 bots): Ironforge AH (15), IF Bank (10), Stormwind AH (10), SW Bank (5), Goldshire Inn (5)
+- **Inn bots** (300-371, 72 bots): 3 bots at 24 major Alliance/neutral inns across both continents
+- **Non-interactive**: no combat, no whisper responses, no trades
+
+**Key design constraint**: Creatures cannot render full player gear — `PLAYER_VISIBLE_ITEM` fields (armor, clothing) are Player-only in the update field system. Crowd bots must be real `Player` objects to look correct. Cost is ~5KB RAM and negligible CPU each.
+
+**Spawn coordinate tuning**: z-height may need adjustment for inns on upper floors or near terrain transitions. Update coords in `PlayerBotAI.cpp` (`CITY_SPAWNS[]` or `INN_LOCATIONS[]`) and rebuild.
+
+**Config** (`mangosd.conf`): `CrowdBot.Enable`, `CrowdBot.AccountId`
+
 ## Dashboard API
 
 | Endpoint | Description |

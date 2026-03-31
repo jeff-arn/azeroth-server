@@ -360,6 +360,263 @@ void PopulateAreaBotAI::OnPlayerLogin()
 }
 
 
+// ==================== CrowdBotAI ====================
+
+// Spawn location for crowd bots — either a precise spot or an inn center point
+struct CrowdBotSpawn
+{
+    float x, y, z;
+    float radius;
+    uint32 mapId;
+};
+
+// City hotspot spawns: precise positions for dense clusters
+// Each entry is one bot's exact position (with small random offset from radius)
+
+// Ironforge AH (15 spots)
+static const CrowdBotSpawn CITY_SPAWNS[] =
+{
+    // IF AH area (GUIDs 100-114)
+    { -4957.0f, -890.0f, 501.6f, 3.0f, 0 },
+    { -4960.0f, -895.0f, 501.6f, 3.0f, 0 },
+    { -4953.0f, -898.0f, 501.6f, 3.0f, 0 },
+    { -4964.0f, -886.0f, 501.6f, 3.0f, 0 },
+    { -4949.0f, -892.0f, 501.6f, 3.0f, 0 },
+    { -4958.0f, -882.0f, 501.6f, 2.0f, 0 },
+    { -4966.0f, -893.0f, 501.6f, 2.0f, 0 },
+    { -4951.0f, -885.0f, 501.6f, 2.0f, 0 },
+    { -4962.0f, -900.0f, 501.6f, 2.0f, 0 },
+    { -4955.0f, -878.0f, 501.6f, 3.0f, 0 },
+    { -4947.0f, -889.0f, 501.6f, 2.0f, 0 },
+    { -4968.0f, -888.0f, 501.6f, 2.0f, 0 },
+    { -4944.0f, -895.0f, 501.6f, 3.0f, 0 },
+    { -4959.0f, -905.0f, 501.6f, 2.0f, 0 },
+    { -4952.0f, -875.0f, 501.6f, 2.0f, 0 },
+    // IF Bank area (GUIDs 115-124)
+    { -4891.0f, -991.0f, 501.6f, 3.0f, 0 },
+    { -4886.0f, -986.0f, 501.6f, 2.0f, 0 },
+    { -4895.0f, -996.0f, 501.6f, 2.0f, 0 },
+    { -4882.0f, -993.0f, 501.6f, 3.0f, 0 },
+    { -4889.0f, -983.0f, 501.6f, 2.0f, 0 },
+    { -4898.0f, -988.0f, 501.6f, 2.0f, 0 },
+    { -4884.0f, -998.0f, 501.6f, 2.0f, 0 },
+    { -4893.0f, -980.0f, 501.6f, 3.0f, 0 },
+    { -4879.0f, -990.0f, 501.6f, 2.0f, 0 },
+    { -4900.0f, -994.0f, 501.6f, 2.0f, 0 },
+    // SW AH area (GUIDs 125-134)
+    { -8811.0f, 667.0f, 97.0f, 3.0f, 0 },
+    { -8815.0f, 671.0f, 97.0f, 2.0f, 0 },
+    { -8808.0f, 663.0f, 97.0f, 2.0f, 0 },
+    { -8818.0f, 675.0f, 97.0f, 3.0f, 0 },
+    { -8805.0f, 660.0f, 97.0f, 2.0f, 0 },
+    { -8813.0f, 669.0f, 97.0f, 2.0f, 0 },
+    { -8820.0f, 664.0f, 97.0f, 2.0f, 0 },
+    { -8807.0f, 673.0f, 97.0f, 3.0f, 0 },
+    { -8816.0f, 660.0f, 97.0f, 2.0f, 0 },
+    { -8810.0f, 676.0f, 97.0f, 2.0f, 0 },
+    // SW Bank area (GUIDs 135-139)
+    { -8880.0f, 644.0f, 96.0f, 3.0f, 0 },
+    { -8876.0f, 648.0f, 96.0f, 2.0f, 0 },
+    { -8884.0f, 640.0f, 96.0f, 2.0f, 0 },
+    { -8872.0f, 646.0f, 96.0f, 3.0f, 0 },
+    { -8878.0f, 650.0f, 96.0f, 2.0f, 0 },
+    // Goldshire Inn (GUIDs 140-144)
+    { -9456.0f, 45.0f, 57.0f, 3.0f, 0 },
+    { -9460.0f, 42.0f, 57.0f, 2.0f, 0 },
+    { -9452.0f, 48.0f, 57.0f, 2.0f, 0 },
+    { -9458.0f, 38.0f, 57.0f, 3.0f, 0 },
+    { -9464.0f, 46.0f, 57.0f, 2.0f, 0 },
+};
+static const size_t NUM_CITY_SPAWNS = sizeof(CITY_SPAWNS) / sizeof(CITY_SPAWNS[0]);
+static const uint32 CITY_GUID_MIN = 100; // GUIDs 100-144
+
+// Inn locations: 3 bots per inn, spread around center point
+struct CrowdBotInnLocation
+{
+    float x, y, z;
+    float radius;
+    uint32 mapId;
+    const char* name;
+};
+
+static const CrowdBotInnLocation INN_LOCATIONS[] =
+{
+    // Eastern Kingdoms (map 0)
+    { -5582.0f,  -525.0f, 398.0f, 4.0f, 0, "Kharanos" },
+    { -5405.0f, -2930.0f, 340.0f, 4.0f, 0, "Thelsamar" },
+    { -10628.0f, 1036.0f,  34.0f, 4.0f, 0, "Sentinel Hill" },
+    { -9278.0f, -2216.0f,  66.0f, 4.0f, 0, "Lakeshire" },
+    { -10559.0f,-1189.0f,  28.0f, 4.0f, 0, "Darkshire" },
+    { -3745.0f,  -751.0f,  10.0f, 4.0f, 0, "Menethil Harbor" },
+    {  -808.0f,  -564.0f,  18.0f, 4.0f, 0, "Southshore" },
+    { -1247.0f, -2516.0f,  22.0f, 4.0f, 0, "Refuge Pointe" },
+    {   320.0f, -2066.0f, 122.0f, 4.0f, 0, "Aerie Peak" },
+    {  2271.0f, -5312.0f,  82.0f, 4.0f, 0, "Light's Hope Chapel" },
+    { -7510.0f, -1038.0f, 228.0f, 4.0f, 0, "Morgan's Vigil" },
+    { -10920.0f,-3439.0f,  22.0f, 4.0f, 0, "Nethergarde Keep" },
+    { -14414.0f,  419.0f,  22.0f, 4.0f, 0, "Booty Bay" },
+    { -6554.0f, -1101.0f, 310.0f, 4.0f, 0, "Thorium Point" },
+    // Kalimdor (map 1)
+    {  9837.0f,   966.0f,1306.0f, 4.0f, 1, "Dolanaar" },
+    {  6456.0f,   683.0f,   9.0f, 4.0f, 1, "Auberdine" },
+    {  2715.0f,  -379.0f, 107.0f, 4.0f, 1, "Astranaar" },
+    {  -472.0f,  1546.0f,  88.0f, 4.0f, 1, "Nijel's Point" },
+    { -4371.0f,  3338.0f,  12.0f, 4.0f, 1, "Feathermoon" },
+    { -3680.0f, -4389.0f,  10.0f, 4.0f, 1, "Theramore" },
+    { -7167.0f, -3785.0f,   8.0f, 4.0f, 1, "Gadgetzan" },
+    {  6724.0f, -4606.0f, 720.0f, 4.0f, 1, "Everlook" },
+    { -6815.0f,   836.0f,  42.0f, 4.0f, 1, "Cenarion Hold" },
+    {  -996.0f, -3827.0f,   6.0f, 4.0f, 1, "Ratchet" },
+};
+static const size_t NUM_INN_LOCATIONS = sizeof(INN_LOCATIONS) / sizeof(INN_LOCATIONS[0]);
+static const uint32 INN_GUID_MIN = 300;  // GUIDs 300-371 (3 per inn)
+static const uint32 BOTS_PER_INN = 3;
+
+// Idle emotes that look natural for AFK city players
+static const uint32 CROWD_BOT_EMOTES[] =
+{
+    1,   // EMOTE_ONESHOT_TALK
+    11,  // EMOTE_ONESHOT_LAUGH
+    25,  // EMOTE_ONESHOT_POINT
+    396, // EMOTE_ONESHOT_TALK_NOSHEATHE
+    92,  // EMOTE_ONESHOT_EAT_NOSHEATHE
+    3,   // EMOTE_ONESHOT_WAVE
+};
+static const size_t NUM_CROWD_BOT_EMOTES = sizeof(CROWD_BOT_EMOTES) / sizeof(CROWD_BOT_EMOTES[0]);
+
+void CrowdBotAI::BeforeAddToMap(Player* player)
+{
+    uint32 guid = botEntry ? botEntry->playerGUID : 0;
+    if (!guid) return;
+
+    float cx, cy, cz, radius;
+    uint32 mapId;
+
+    // City crowd bots (GUIDs 100-144): precise spawn points
+    if (guid >= CITY_GUID_MIN && guid < CITY_GUID_MIN + NUM_CITY_SPAWNS)
+    {
+        uint32 index = guid - CITY_GUID_MIN;
+        cx = CITY_SPAWNS[index].x;
+        cy = CITY_SPAWNS[index].y;
+        cz = CITY_SPAWNS[index].z;
+        radius = CITY_SPAWNS[index].radius;
+        mapId = CITY_SPAWNS[index].mapId;
+    }
+    // Inn crowd bots (GUIDs 300+): 3 per inn, centered on inn location
+    else if (guid >= INN_GUID_MIN)
+    {
+        uint32 innIndex = (guid - INN_GUID_MIN) / BOTS_PER_INN;
+        if (innIndex >= NUM_INN_LOCATIONS)
+            innIndex = 0;
+        cx = INN_LOCATIONS[innIndex].x;
+        cy = INN_LOCATIONS[innIndex].y;
+        cz = INN_LOCATIONS[innIndex].z;
+        radius = INN_LOCATIONS[innIndex].radius;
+        mapId = INN_LOCATIONS[innIndex].mapId;
+    }
+    else
+        return;
+
+    float x = cx + frand(-radius, radius);
+    float y = cy + frand(-radius, radius);
+    float z = cz;
+
+    player->Relocate(x, y, z);
+    player->SetLocationMapId(mapId);
+
+    m_homeX = x;
+    m_homeY = y;
+    m_homeZ = z;
+}
+
+void CrowdBotAI::OnPlayerLogin()
+{
+    if (!me) return;
+
+    // Set level: 70% chance 60, 30% chance 40-59
+    uint32 level = urand(0, 99) < 70 ? 60 : urand(40, 59);
+    if (me->GetLevel() != level)
+    {
+        me->GiveLevel(level);
+        me->InitTalentForLevel();
+        me->SetUInt32Value(PLAYER_XP, 0);
+    }
+
+    // Equip premade gear
+    if (!m_gearEquipped)
+    {
+        m_gearEquipped = true;
+        for (int i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
+            me->AutoUnequipItemFromSlot(i);
+
+        uint32 bestEntry = 0;
+        uint32 bestLevel = 0;
+        for (auto const& itr : sObjectMgr.GetPlayerPremadeGearTemplates())
+        {
+            if (itr.second.requiredClass == me->GetClass() &&
+                itr.second.level <= me->GetLevel() &&
+                itr.second.level > bestLevel)
+            {
+                bestLevel = itr.second.level;
+                bestEntry = itr.second.entry;
+            }
+        }
+        if (bestEntry)
+            sObjectMgr.ApplyPremadeGearTemplateToPlayer(bestEntry, me);
+        else
+            me->AddStartingItems();
+    }
+
+    // Randomize initial emote timer so bots don't all emote at the same time
+    m_emoteTimer = urand(5000, 30000);
+
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[CrowdBot] %s (lvl %u) spawned at (%.1f, %.1f, %.1f)",
+        me->GetName(), me->GetLevel(), m_homeX, m_homeY, m_homeZ);
+}
+
+void CrowdBotAI::UpdateAI(uint32 const diff)
+{
+    PlayerBotAI::UpdateAI(diff);
+
+    m_updateTimer += diff;
+    if (m_updateTimer < 5000)
+        return;
+    uint32 elapsed = m_updateTimer;
+    m_updateTimer = 0;
+
+    if (!me || !me->IsAlive())
+    {
+        // Instant resurrect if somehow killed
+        if (me && me->GetDeathState() == CORPSE)
+        {
+            me->ResurrectPlayer(1.0f);
+            me->SpawnCorpseBones();
+        }
+        return;
+    }
+
+    // Idle emotes on a timer
+    m_emoteTimer = (m_emoteTimer > elapsed) ? m_emoteTimer - elapsed : 0;
+    if (m_emoteTimer == 0)
+    {
+        uint32 emote = CROWD_BOT_EMOTES[urand(0, NUM_CROWD_BOT_EMOTES - 1)];
+        me->HandleEmoteCommand(emote);
+        m_emoteTimer = urand(15000, 60000); // next emote in 15-60 seconds
+    }
+
+    // 5% chance per tick to micro-wander (2-3 yards from home)
+    if (urand(0, 99) < 5 &&
+        me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
+    {
+        float x = m_homeX + frand(-3.0f, 3.0f);
+        float y = m_homeY + frand(-3.0f, 3.0f);
+        float z = m_homeZ;
+        me->UpdateGroundPositionZ(x, y, z);
+        me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING | MOVE_EXCLUDE_STEEP_SLOPES);
+    }
+}
+
+
 // ==================== DynamicBotAI ====================
 
 void DynamicBotAI::LoadAssignment()
@@ -851,5 +1108,7 @@ PlayerBotAI* CreatePlayerBotAI(std::string ainame)
         return new AggressiveHordeBotAI(1, -7193.4f, -3793.5f, 9.8f, HORDE, 150.0f);
     if (ainame == "DynamicBotAI")
         return new DynamicBotAI();
+    if (ainame == "CrowdBotAI")
+        return new CrowdBotAI();
     return new PlayerBotAI();
 }
