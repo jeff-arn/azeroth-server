@@ -110,6 +110,10 @@ void PartyBotAI::UpdateInCombatAI_Mage()
 {
     if (Unit* pVictim = me->GetVictim())
     {
+        // Mages never melee auto-attack — cancel it each tick.
+        // AttackStart enables melee for all classes; we suppress it here.
+        me->AttackStop();
+
         // === HIGHEST PRIORITY: Counterspell interrupt ===
         if (m_spells.mage.pCounterspell &&
             pVictim->IsNonMeleeSpellCasted(false, false, true) &&

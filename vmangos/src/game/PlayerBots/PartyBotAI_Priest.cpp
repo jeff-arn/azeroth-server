@@ -137,14 +137,15 @@ void PartyBotAI::UpdateOutOfCombatAI_Priest()
         m_isBuffing = false;
     }
 
-    // Pre-pull: Shield tank before combat starts
+    // Pre-pull: Shield tank before combat starts (skip warriors — prevents rage generation)
     if (GetRole() == ROLE_HEALER && me->GetVictim())
     {
         if (m_spells.priest.pPowerWordShield)
         {
             if (Player* pTank = FindPartyTank())
             {
-                if (CanTryToCastSpell(pTank, m_spells.priest.pPowerWordShield))
+                if (pTank->GetClass() != CLASS_WARRIOR &&
+                    CanTryToCastSpell(pTank, m_spells.priest.pPowerWordShield))
                 {
                     if (DoCastSpell(pTank, m_spells.priest.pPowerWordShield) == SPELL_CAST_OK)
                         return;
@@ -163,6 +164,9 @@ void PartyBotAI::UpdateOutOfCombatAI_Priest()
 
 void PartyBotAI::UpdateInCombatAI_Priest()
 {
+    // Priests never melee auto-attack — cancel it each tick.
+    me->AttackStop();
+
     // === HOLY/DISCIPLINE PRIEST (Healer) ===
     if (GetRole() == ROLE_HEALER)
     {
@@ -212,9 +216,11 @@ void PartyBotAI::UpdateInCombatAI_Priest()
             float tankHp = pTank->GetHealthPercent();
 
             // CRITICAL (<30%): Shield + Greater Heal
+            // Warriors only get shielded below 15% — shielding blocks rage generation
             if (tankHp < 30.0f)
             {
                 if (m_spells.priest.pPowerWordShield &&
+                    (pTank->GetClass() != CLASS_WARRIOR || tankHp < 15.0f) &&
                     CanTryToCastSpell(pTank, m_spells.priest.pPowerWordShield))
                 {
                     DoCastSpell(pTank, m_spells.priest.pPowerWordShield);
@@ -249,12 +255,15 @@ void PartyBotAI::UpdateInCombatAI_Priest()
             }
         }
 
-        // Shield allies being attacked
+        // Shield allies being attacked (skip warrior tanks — blocks rage generation)
         if (m_spells.priest.pPowerWordShield)
         {
             if (Player* pTarget = SelectShieldTarget())
             {
-                if (CanTryToCastSpell(pTarget, m_spells.priest.pPowerWordShield))
+                Player* pTank = FindPartyTank();
+                bool isWarriorTank = (pTank && pTarget == pTank && pTarget->GetClass() == CLASS_WARRIOR);
+                if (!isWarriorTank &&
+                    CanTryToCastSpell(pTarget, m_spells.priest.pPowerWordShield))
                 {
                     if (DoCastSpell(pTarget, m_spells.priest.pPowerWordShield) == SPELL_CAST_OK)
                         return;

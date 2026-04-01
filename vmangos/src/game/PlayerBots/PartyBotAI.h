@@ -69,6 +69,10 @@ public:
         m_updateTimer.Reset(2000);
     }
 
+    // Explicit role assignments for human players, set via .partyrole command.
+    static void SetPlayerRole(ObjectGuid guid, CombatBotRoles role);
+    static CombatBotRoles GetPlayerRole(ObjectGuid guid);
+
     bool OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess) final;
     void OnPlayerLogin() final;
     void UpdateAI(uint32 const diff) final;

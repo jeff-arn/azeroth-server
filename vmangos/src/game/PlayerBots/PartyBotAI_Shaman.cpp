@@ -157,6 +157,11 @@ void PartyBotAI::UpdateOutOfCombatAI_Shaman()
 
 void PartyBotAI::UpdateInCombatAI_Shaman()
 {
+    // Elemental and Resto shamans never melee auto-attack — cancel it each tick.
+    // Enhancement (ROLE_MELEE_DPS) is a melee spec and should auto-attack normally.
+    if (GetRole() != ROLE_MELEE_DPS)
+        me->AttackStop();
+
     // === INTERRUPT — highest priority for ALL specs ===
     if (Unit* pVictim = me->GetVictim())
     {

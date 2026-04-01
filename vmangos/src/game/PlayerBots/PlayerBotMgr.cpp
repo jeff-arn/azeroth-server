@@ -1119,6 +1119,59 @@ bool ChatHandler::HandlePartyBotSetRoleCommand(char* args)
     return false;
 }
 
+bool ChatHandler::HandlePartyRoleCommand(char* args)
+{
+    Player* pPlayer = m_session->GetPlayer();
+    if (!pPlayer)
+        return false;
+
+    if (!args || !*args)
+    {
+        CombatBotRoles current = PartyBotAI::GetPlayerRole(pPlayer->GetObjectGuid());
+        if (current == ROLE_INVALID)
+            SendSysMessage("Your role is unset (bots use heuristics to identify you).");
+        else if (current == ROLE_TANK)
+            SendSysMessage("Your role is: tank.");
+        else if (current == ROLE_HEALER)
+            SendSysMessage("Your role is: healer.");
+        else
+            SendSysMessage("Your role is: dps.");
+        SendSysMessage("Usage: .partyrole tank|healer|dps|clear");
+        return true;
+    }
+
+    std::string roleStr = args;
+
+    if (roleStr == "tank")
+    {
+        PartyBotAI::SetPlayerRole(pPlayer->GetObjectGuid(), ROLE_TANK);
+        SendSysMessage("Role set to tank. Bots will treat you as the tank.");
+    }
+    else if (roleStr == "healer")
+    {
+        PartyBotAI::SetPlayerRole(pPlayer->GetObjectGuid(), ROLE_HEALER);
+        SendSysMessage("Role set to healer. Bots will not shield you in tank role.");
+    }
+    else if (roleStr == "dps")
+    {
+        PartyBotAI::SetPlayerRole(pPlayer->GetObjectGuid(), ROLE_MELEE_DPS);
+        SendSysMessage("Role set to dps. Bots will not treat you as tank or healer.");
+    }
+    else if (roleStr == "clear")
+    {
+        PartyBotAI::SetPlayerRole(pPlayer->GetObjectGuid(), ROLE_INVALID);
+        SendSysMessage("Role cleared. Bots will use heuristics to identify your role.");
+    }
+    else
+    {
+        SendSysMessage("Usage: .partyrole tank|healer|dps|clear");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    return true;
+}
+
 bool ChatHandler::HandlePartyBotAttackStartCommand(char* args)
 {
     Player* pPlayer = GetSession()->GetPlayer();

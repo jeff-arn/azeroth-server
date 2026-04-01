@@ -282,28 +282,25 @@ void BotDirector::RunDirectorCycle()
             cp.zoneInfo->name, numBots, cp.info.name.c_str());
     }
 
-    // === Friendly zones: alliance bots near player level ===
+    // === Friendly zones: alliance bots within zone level range ===
     for (auto const& cp : friendlyPlayers)
     {
         if (!cp.zoneInfo) continue;
-        uint32 plevel = cp.info.level;
         uint32 numBots = std::min((uint32)5, (uint32)availableWorld.size());
         for (uint32 j = 0; j < numBots; ++j)
         {
             uint32 guid = popGuid(availableWorld);
-            int32 level = (int32)plevel + irand(-5, 5);
-            level = std::max(1, std::min(60, level));
-            addAssignment(guid, cp.zoneInfo, 150.0f, false, (uint32)level, 469);
+            uint32 level = RandLevel(cp.zoneInfo->levelMin, cp.zoneInfo->levelMax);
+            addAssignment(guid, cp.zoneInfo, 150.0f, false, level, 469);
         }
-        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[BotDirector]   Friendly %s: %u world bots for %s (lvl %u)",
-            cp.zoneInfo->name, numBots, cp.info.name.c_str(), plevel);
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[BotDirector]   Friendly %s: %u world bots for %s (zone lvl %u-%u)",
+            cp.zoneInfo->name, numBots, cp.info.name.c_str(), cp.zoneInfo->levelMin, cp.zoneInfo->levelMax);
     }
 
     // === Contested zones: horde gankers + friendly alliance ===
     for (auto const& cp : contestedPlayers)
     {
         if (!cp.zoneInfo) continue;
-        uint32 plevel = cp.info.level;
 
         // 3-5 Horde enemies (aggressive)
         uint32 numHorde = std::min((uint32)5, (uint32)availableHorde.size());
@@ -320,8 +317,7 @@ void BotDirector::RunDirectorCycle()
             }
             else
             {
-                int32 l = (int32)plevel + irand(-5, 5);
-                level = (uint32)std::max(1, std::min(60, l));
+                level = RandLevel(cp.zoneInfo->levelMin, cp.zoneInfo->levelMax);
             }
             addAssignment(guid, cp.zoneInfo, 200.0f, true, level, 67);
         }
@@ -341,14 +337,13 @@ void BotDirector::RunDirectorCycle()
             }
             else
             {
-                int32 l = (int32)plevel + irand(-5, 5);
-                level = (uint32)std::max(1, std::min(60, l));
+                level = RandLevel(cp.zoneInfo->levelMin, cp.zoneInfo->levelMax);
             }
             addAssignment(guid, cp.zoneInfo, 200.0f, false, level, 469);
         }
 
-        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[BotDirector]   Contested %s: %u horde + %u alliance for %s (lvl %u)",
-            cp.zoneInfo->name, numHorde, numFriendly, cp.info.name.c_str(), plevel);
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[BotDirector]   Contested %s: %u horde + %u alliance for %s (zone lvl %u-%u)",
+            cp.zoneInfo->name, numHorde, numFriendly, cp.info.name.c_str(), cp.zoneInfo->levelMin, cp.zoneInfo->levelMax);
     }
 
     // Swap in new assignments

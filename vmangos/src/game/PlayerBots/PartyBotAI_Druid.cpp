@@ -165,6 +165,11 @@ void PartyBotAI::UpdateOutOfCombatAI_Druid()
 
 void PartyBotAI::UpdateInCombatAI_Druid()
 {
+    // Balance and Resto druids never melee auto-attack — cancel it each tick.
+    // Feral (tank and melee DPS) should auto-attack normally.
+    if (GetRole() != ROLE_TANK && GetRole() != ROLE_MELEE_DPS)
+        me->AttackStop();
+
     // === REBIRTH — highest priority for all specs (combat rez a dead party member) ===
     if (m_spells.druid.pRebirth)
     {

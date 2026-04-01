@@ -14,10 +14,6 @@ VMaNGOS-based WoW 1.12.1 private server with custom bot AI, a web dashboard, and
 ├── .env.example                   ← template for .env
 ├── .gitignore
 ├── CLAUDE.md
-├── bot-director/                  ← dynamic bot placement service
-│   ├── bot_director.py
-│   ├── requirements.txt
-│   └── venv/                      (gitignored)
 ├── dashboard/                     ← Flask web UI
 │   ├── dashboard.py
 │   ├── templates/dashboard.html
@@ -51,8 +47,6 @@ All Python services use `EnvironmentFile=/home/wow/wow-private-server/.env` for 
 |---------|-------------|-------------|
 | Web Dashboard | `azeroth-dashboard.service` | `dashboard/dashboard.py` |
 | Discord Bot | `azeroth-discord-bot.service` | `discord-bot/bot.py` |
-| Bot Director | `bot-director.service` | `bot-director/bot_director.py` |
-
 | Realm Server | `azeroth-realmd.service` | `vmangos/run/bin/realmd` (port 3724) |
 | World Server | `azeroth-mangosd.service` | `vmangos/run/bin/mangosd` (port 8085) |
 
@@ -97,6 +91,12 @@ Bot AI is split into per-class files for independent iteration:
 - **Warlock**: done (curse priority system, Life Tap safety, Banish CC, no Searing Pain)
 - **Rogue**: done (deterministic SnD>Evisc finishers, Feint threat, Kick priority)
 - **Druid**: done (Rebirth combat rez, Innervate on healers, Bear offtank, Faerie Fire uptime)
+
+**Caster melee suppression**: All caster classes (Mage, Warlock, Priest, Hunter, Elemental/Resto Shaman, Balance/Resto Druid) call `me->AttackStop()` at the top of their in-combat AI tick to prevent melee auto-attack. Enhancement Shaman, Feral Druid (tank/DPS), Warrior, Rogue, and Paladin are excluded. Hunter Auto Shot is a separate autorepeat spell unaffected by `AttackStop()`.
+
+**Tank detection** (`FindPartyTank()`): Checks in priority order — (1) explicit `.partyrole` assignment via `s_playerRoleAssignments` static map, (2) bot AI `ROLE_TANK`, (3) heuristics: Bear Form or shield equipped. Human players with an explicit non-tank role skip heuristics entirely (prevents paladin DPS with shield being misidentified). Command: `.partyrole tank|healer|dps|clear` — available to all players (`SEC_PLAYER`).
+
+**Priest shield (PW:S) rules**: Never cast on warrior tanks except below 15% HP (emergency). Applies in three places: pre-pull, in-combat critical threshold (<30%), and `SelectShieldTarget()`.
 
 Research docs in `docs/` (gitignored): `CLASS_GROUP_BEHAVIOR_GUIDE.md`, `DUNGEON_RAID_GUIDE.md`, `bot_class_behavior_instructions.md`
 
@@ -151,12 +151,34 @@ Realistic AH pricing model in `AuctionHouseBotMgr`:
 
 ## Bot Director
 
-Runs every 2 minutes. Assigns bots to zones based on player locations:
-- **Capital Cities** (Stormwind, Ironforge): wide level range (10-60), passive
-- **Friendly Zones** (7 zones): player_level +/- 5, same faction, passive
-- **Contested Zones** (13 zones): both factions, aggressive enemies, 10% chance of lvl 60
-- No bots when no players are online
-- Bot GUIDs: Horde 33-52, Alliance city 53-72, Alliance world 73-92
+C++ singleton (`BotDirector`) in `vmangos/src/game/PlayerBots/BotDirector.cpp`. Runs a placement cycle every 2 minutes (configurable via `BotDirector.UpdateInterval`). Scans all online human players (account ID < 100), categorizes them by zone, and assigns dynamic bots from GUID pools.
+
+**GUID pools** (shuffled each cycle):
+- Horde: GUIDs 33-52 (20 bots)
+- Alliance city: GUIDs 53-72 (20 bots)
+- Alliance world: GUIDs 73-92 (20 bots)
+
+**Capital Cities** (Stormwind, Ironforge):
+- 5 always-on Alliance city bots per capital (even with no players)
+- +5 extra city bots per human player in the city
+- Level distribution: 40% lvl 60, 30% lvl 40-59, 30% lvl 10-39
+- Passive, 80yd spawn radius
+
+**Friendly Zones** (7 zones: Elwynn, Westfall, Loch Modan, Redridge, Darkshore, Duskwood, Wetlands):
+- 5 Alliance world bots per human player
+- Level = random within zone's level range (e.g. 1-10 for Elwynn)
+- Passive, 150yd spawn radius
+
+**Contested Zones** (16 zones: Hillsbrad through Silithus, including Un'Goro, Desolace, Stonetalon):
+- Up to 5 Horde bots per human player — **aggressive**, 10% chance each is a lvl 60 ganker, otherwise random within zone range
+- Up to 3 Alliance bots per human player — passive, 10% chance of lvl 60 "hero", otherwise random within zone range
+- 200yd spawn radius
+
+**Spawn mechanism**: After building assignments, `UpdateBotChances()` sets `chance = 30` in the `playerbot` DB table for assigned GUIDs, `chance = 1` for unassigned. `PlayerBotMgr` reads these to decide which bots log in.
+
+**DynamicBotAI behavior**: Reads assignment from BotDirector. Wanders within assigned radius. Aggressive bots search for enemy players within 30yd and engage (melee chase or caster kite). Auto-resurrects 30s after death. Reloads assignment every 2 minutes.
+
+**Config** (`mangosd.conf`): `BotDirector.Enable`, `BotDirector.UpdateInterval`
 
 ### Guild Bot System
 
@@ -252,7 +274,7 @@ Uses [commitizen](https://commitizen-tools.github.io/commitizen/) conventional c
 
 **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
 
-**Scopes**: `vmangos`, `dashboard`, `discord-bot`, `bot-director`, `scripts`, `db`
+**Scopes**: `vmangos`, `dashboard`, `discord-bot`, `scripts`, `db`
 
 **Version bumps** (current: v0.4.x):
 - `fix` commit → patch bump (+0.0.1), git tag, Discord release notes
@@ -278,7 +300,7 @@ pgrep mangosd && echo "World OK" || echo "World DOWN"
 pgrep realmd && echo "Realm OK" || echo "Realm DOWN"
 
 # Python services
-sudo systemctl status azeroth-dashboard azeroth-discord-bot bot-director
+sudo systemctl status azeroth-dashboard azeroth-discord-bot
 sudo systemctl restart azeroth-dashboard
 
 # Logs

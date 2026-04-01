@@ -62,6 +62,10 @@ void PartyBotAI::UpdateOutOfCombatAI_Hunter()
 
 void PartyBotAI::UpdateInCombatAI_Hunter()
 {
+    // Hunters never melee auto-attack — cancel it each tick.
+    // Auto Shot is a separate autorepeat spell and is unaffected by AttackStop().
+    me->AttackStop();
+
     // === PROACTIVE FEIGN DEATH at >=80% threat ratio ===
     if (m_spells.hunter.pFeignDeath && me->GetVictim() &&
         GetThreatRatio(me->GetVictim()) >= 0.80f &&

@@ -357,6 +357,24 @@ Player* PartyBotAI::GetPartyLeader() const
     return nullptr;
 }
 
+// Explicit player role assignments set via .partyrole command.
+// Maps human player GUID -> role. Checked before heuristics in FindPartyTank().
+static std::unordered_map<ObjectGuid, CombatBotRoles> s_playerRoleAssignments;
+
+void PartyBotAI::SetPlayerRole(ObjectGuid guid, CombatBotRoles role)
+{
+    if (role == ROLE_INVALID)
+        s_playerRoleAssignments.erase(guid);
+    else
+        s_playerRoleAssignments[guid] = role;
+}
+
+CombatBotRoles PartyBotAI::GetPlayerRole(ObjectGuid guid)
+{
+    auto it = s_playerRoleAssignments.find(guid);
+    return it != s_playerRoleAssignments.end() ? it->second : ROLE_INVALID;
+}
+
 // Find the party member acting as tank.
 Player* PartyBotAI::FindPartyTank() const
 {
@@ -373,7 +391,17 @@ Player* PartyBotAI::FindPartyTank() const
             if (pMember->GetMap() != me->GetMap())
                 continue;
 
-            // Check by role: bots with ROLE_TANK, or players in tanking form/shield
+            // Explicit .partyrole assignment takes priority over all heuristics
+            auto it = s_playerRoleAssignments.find(pMember->GetObjectGuid());
+            if (it != s_playerRoleAssignments.end())
+            {
+                if (it->second == ROLE_TANK)
+                    return pMember;
+                else
+                    continue; // explicitly assigned a non-tank role — skip heuristics
+            }
+
+            // Bot role assignment
             if (pMember->AI())
             {
                 if (CombatBotBaseAI* pBotAI = dynamic_cast<CombatBotBaseAI*>(pMember->AI()))
@@ -382,6 +410,8 @@ Player* PartyBotAI::FindPartyTank() const
                         return pMember;
                 }
             }
+
+            // Heuristic fallback for unassigned human players
             if (IsTankingForm(pMember->GetShapeshiftForm()) || IsWearingShield(pMember))
                 return pMember;
         }

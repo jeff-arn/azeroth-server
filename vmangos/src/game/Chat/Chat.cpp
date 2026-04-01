@@ -1227,6 +1227,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "service",        SEC_ADMINISTRATOR,  true, nullptr,                                         "", serviceCommandTable  },
         { "bot",            SEC_ADMINISTRATOR,  true, nullptr,                              "Manage bots", botCommandTable      },
         { "ahbot",          SEC_ADMINISTRATOR,  true, nullptr,                            "Manage AH bot", ahbotCommandTable    },
+        { "partyrole",      SEC_PLAYER,         false, &ChatHandler::HandlePartyRoleCommand, "Set your role for party bots (tank/healer/dps/clear)", nullptr },
         { "partybot",       SEC_ADMINISTRATOR,  false, nullptr,                       "Manage party bots", partyBotCommandTable },
         { "guildraid",      SEC_MODERATOR,      false, nullptr,                      "Manage guild raids", guildRaidCommandTable },
         { "battlebot",      SEC_ADMINISTRATOR,  true, nullptr,                      "Manage battle bots", battleBotCommandTable},

@@ -83,6 +83,9 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
 {
     if (Unit* pVictim = me->GetVictim())
     {
+        // Warlocks never melee auto-attack — cancel it each tick.
+        me->AttackStop();
+
         bool const highThreat = ShouldThrottleDPS(pVictim);
 
         // === RANGE POSITIONING: stay at 25 yards ===
