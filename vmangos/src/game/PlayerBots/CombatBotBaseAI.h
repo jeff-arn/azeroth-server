@@ -92,8 +92,10 @@ public:
     void ResetSpellData();
     void AddAllSpellReagents();
     void SummonPetIfNeeded();
+    void TeachWarlockPetSpells();
     void LearnArmorProficiencies();
     void LearnPremadeSpecForClass();
+    void LearnClassSpellsForLevel();
     void EquipPremadeGearTemplate();
     void EquipRandomGearInEmptySlots();
     void AutoEquipGear(uint32 option);
@@ -586,6 +588,7 @@ public:
     bool m_preventCasting = false;
     bool m_receivedBgInvite = false;
     uint8 m_visualHonorRank = 0;
+    uint32 m_lastTaughtPetGuid = 0;
     CombatBotRoles m_role = ROLE_INVALID;
 };
 

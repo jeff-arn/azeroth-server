@@ -1119,7 +1119,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         PopulateSpellData();
         AddAllSpellReagents();
         me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
-        SummonPetIfNeeded();
+        // Warlock pet summoned from out-of-combat AI (has tank-aware pet selection).
+        if (me->GetClass() != CLASS_WARLOCK)
+            SummonPetIfNeeded();
         me->SetHealthPercent(100.0f);
         me->SetPowerPercent(me->GetPowerType(), 100.0f);
 
