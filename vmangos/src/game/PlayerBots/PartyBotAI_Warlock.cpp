@@ -21,6 +21,10 @@
 enum PartyBotSpells_Warlock
 {
     PB_SPELL_SHOOT_WAND_W = 5019,
+    PB_SPELL_SUMMON_IMP = 688,
+    PB_SPELL_SUMMON_VOIDWALKER = 697,
+    PB_SPELL_SUMMON_FELHUNTER = 691,
+    PB_SPELL_SUMMON_SUCCUBUS = 712,
 };
 
 void PartyBotAI::UpdateOutOfCombatAI_Warlock()
@@ -76,7 +80,35 @@ void PartyBotAI::UpdateOutOfCombatAI_Warlock()
         UpdateInCombatAI_Warlock();
     }
     else
-        SummonPetIfNeeded();
+    {
+        // Summon a demon if we don't have one. Skip Voidwalker when a tank is present
+        // to avoid conflicting with the tank's threat.
+        if (!me->GetPetGuid() && !me->GetCharmGuid())
+        {
+            bool hasTank = (FindPartyTank() != nullptr);
+            std::vector<uint32> vSummons;
+            if (me->HasSpell(PB_SPELL_SUMMON_IMP))
+                vSummons.push_back(PB_SPELL_SUMMON_IMP);
+            if (me->HasSpell(PB_SPELL_SUMMON_VOIDWALKER) && !hasTank)
+                vSummons.push_back(PB_SPELL_SUMMON_VOIDWALKER);
+            if (me->HasSpell(PB_SPELL_SUMMON_FELHUNTER))
+                vSummons.push_back(PB_SPELL_SUMMON_FELHUNTER);
+            if (me->HasSpell(PB_SPELL_SUMMON_SUCCUBUS))
+                vSummons.push_back(PB_SPELL_SUMMON_SUCCUBUS);
+            if (!vSummons.empty())
+                me->CastSpell(me, SelectRandomContainerElement(vSummons), true);
+        }
+
+        // Teach pet grimoire spells once after summoning.
+        if (Pet* pPet = me->GetPet())
+        {
+            if (pPet->GetGUIDLow() != m_lastTaughtPetGuid)
+            {
+                TeachWarlockPetSpells();
+                m_lastTaughtPetGuid = pPet->GetGUIDLow();
+            }
+        }
+    }
 }
 
 void PartyBotAI::UpdateInCombatAI_Warlock()
@@ -114,16 +146,7 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
                 return;
         }
 
-        // === SELF-DEFENSE: Fear when primary target is hitting you ===
-        // Only as last-resort when no other peel is available
-        if (m_spells.warlock.pFear &&
-            pVictim->GetVictim() == me &&
-            me->GetAttackers().size() == 1 &&
-            CanTryToCastSpell(pVictim, m_spells.warlock.pFear))
-        {
-            if (DoCastSpell(pVictim, m_spells.warlock.pFear) == SPELL_CAST_OK)
-                return;
-        }
+        // Fear intentionally omitted — too likely to pull extra packs in dungeons.
 
         // === CC: Banish a second attacker to reduce incoming damage ===
         if (m_spells.warlock.pBanish &&
@@ -173,55 +196,68 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
         }
 
         // === INTELLIGENT CURSE PRIORITY ===
-        // Curse of Tongues on caster mobs (cripples their cast speed)
-        if (m_spells.warlock.pCurseofTongues &&
-           (pVictim->GetPowerType() == POWER_MANA) &&
-            CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofTongues))
+        // Only one curse per warlock can be active on a target. Check if we already
+        // have any curse applied before trying to cast — prevents infinite overwrite loop.
         {
-            if (DoCastSpell(pVictim, m_spells.warlock.pCurseofTongues) == SPELL_CAST_OK)
-                return;
-        }
+            bool hasCurse = false;
+            SpellEntry const* curseSpells[] = {
+                m_spells.warlock.pCurseofTongues, m_spells.warlock.pCurseoftheElements,
+                m_spells.warlock.pCurseofShadow, m_spells.warlock.pCurseofDoom,
+                m_spells.warlock.pCurseofRecklessness, m_spells.warlock.pCurseofAgony,
+            };
+            for (auto const* pCurse : curseSpells)
+            {
+                if (pCurse && pVictim->HasAura(pCurse->Id))
+                {
+                    hasCurse = true;
+                    break;
+                }
+            }
 
-        // Curse of the Elements (best for shadow/fire group DPS, highest priority debuff)
-        if (m_spells.warlock.pCurseoftheElements &&
-            CanTryToCastSpell(pVictim, m_spells.warlock.pCurseoftheElements))
-        {
-            if (DoCastSpell(pVictim, m_spells.warlock.pCurseoftheElements) == SPELL_CAST_OK)
-                return;
-        }
+            if (!hasCurse)
+            {
+                // Curse of Tongues on caster mobs (cripples their cast speed)
+                if (m_spells.warlock.pCurseofTongues &&
+                   (pVictim->GetPowerType() == POWER_MANA) &&
+                    CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofTongues))
+                {
+                    if (DoCastSpell(pVictim, m_spells.warlock.pCurseofTongues) == SPELL_CAST_OK)
+                        return;
+                }
 
-        // Curse of Shadow (second best for shadow damage amplification)
-        if (m_spells.warlock.pCurseofShadow &&
-            CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofShadow))
-        {
-            if (DoCastSpell(pVictim, m_spells.warlock.pCurseofShadow) == SPELL_CAST_OK)
-                return;
-        }
+                // Curse of the Elements (best for shadow/fire group DPS)
+                if (m_spells.warlock.pCurseoftheElements &&
+                    CanTryToCastSpell(pVictim, m_spells.warlock.pCurseoftheElements))
+                {
+                    if (DoCastSpell(pVictim, m_spells.warlock.pCurseoftheElements) == SPELL_CAST_OK)
+                        return;
+                }
 
-        // Curse of Doom on bosses with very high HP (long fights, big damage tick)
-        if (m_spells.warlock.pCurseofDoom &&
-           (pVictim->GetHealth() > (uint32)(me->GetMaxHealth() * 5)) &&
-            CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofDoom))
-        {
-            if (DoCastSpell(pVictim, m_spells.warlock.pCurseofDoom) == SPELL_CAST_OK)
-                return;
-        }
+                // Curse of Shadow (shadow damage amplification)
+                if (m_spells.warlock.pCurseofShadow &&
+                    CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofShadow))
+                {
+                    if (DoCastSpell(pVictim, m_spells.warlock.pCurseofShadow) == SPELL_CAST_OK)
+                        return;
+                }
 
-        // Curse of Recklessness (increases attack power of target, removes fear immunity —
-        // use to prevent fleeing and as filler when other curses are unavailable)
-        if (m_spells.warlock.pCurseofRecklessness &&
-            CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofRecklessness))
-        {
-            if (DoCastSpell(pVictim, m_spells.warlock.pCurseofRecklessness) == SPELL_CAST_OK)
-                return;
-        }
+                // Curse of Doom on bosses with very high HP
+                if (m_spells.warlock.pCurseofDoom &&
+                   (pVictim->GetHealth() > (uint32)(me->GetMaxHealth() * 5)) &&
+                    CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofDoom))
+                {
+                    if (DoCastSpell(pVictim, m_spells.warlock.pCurseofDoom) == SPELL_CAST_OK)
+                        return;
+                }
 
-        // Curse of Agony (filler DPS curse — apply if nothing better is available)
-        if (m_spells.warlock.pCurseofAgony &&
-            CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofAgony))
-        {
-            if (DoCastSpell(pVictim, m_spells.warlock.pCurseofAgony) == SPELL_CAST_OK)
-                return;
+                // Curse of Agony (filler DPS curse)
+                if (m_spells.warlock.pCurseofAgony &&
+                    CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofAgony))
+                {
+                    if (DoCastSpell(pVictim, m_spells.warlock.pCurseofAgony) == SPELL_CAST_OK)
+                        return;
+                }
+            }
         }
 
         // === DoT PRIORITY: Corruption first (instant cast), then Immolate ===
