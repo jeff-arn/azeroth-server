@@ -1107,9 +1107,41 @@ bool ChatHandler::HandlePartyBotSetRoleCommand(char* args)
         if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
         {
             pAI->m_role = role;
-            pAI->ResetSpellData();
-            pAI->PopulateSpellData();
+            pAI->m_resetSpellData = true; // triggers full rebuild including behavior sets
             PSendSysMessage("%s is now a %s.", pTarget->GetName(), roleStr.c_str());
+            return true;
+        }
+    }
+
+    SendSysMessage("Target is not a party bot.");
+    SetSentErrorMessage(true);
+    return false;
+}
+
+bool ChatHandler::HandlePartyBotDebugCommand(char* args)
+{
+    Player* pTarget = GetSelectedPlayer();
+    if (!pTarget)
+    {
+        SendSysMessage(LANG_NO_CHAR_SELECTED);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (pTarget->AI())
+    {
+        if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
+        {
+            // Toggle debug logging on both behavior sets
+            bool enabling = (pAI->m_combatBehaviors && !pAI->m_combatBehaviors->GetDebugTarget());
+
+            if (pAI->m_combatBehaviors)
+                pAI->m_combatBehaviors->SetDebugTarget(enabling ? pTarget : nullptr);
+            if (pAI->m_oocBehaviors)
+                pAI->m_oocBehaviors->SetDebugTarget(enabling ? pTarget : nullptr);
+
+            PSendSysMessage("Behavior debug %s for %s. Check Server.log.",
+                enabling ? "ENABLED" : "DISABLED", pTarget->GetName());
             return true;
         }
     }

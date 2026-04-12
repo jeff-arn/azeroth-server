@@ -123,6 +123,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "unpause",    SEC_MODERATOR,        false, &ChatHandler::HandlePartyBotUnpauseCommand,     "", nullptr },
         { "unequip",    SEC_MODERATOR,        false, &ChatHandler::HandlePartyBotUnequipCommand,     "", nullptr },
         { "remove",     SEC_MODERATOR,        false, &ChatHandler::HandlePartyBotRemoveCommand,      "", nullptr },
+        { "debug",      SEC_MODERATOR,        false, &ChatHandler::HandlePartyBotDebugCommand,       "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 

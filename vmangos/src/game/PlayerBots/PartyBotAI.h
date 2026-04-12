@@ -20,33 +20,12 @@
 #include "CombatBotBaseAI.h"
 #include "Group.h"
 #include "ObjectAccessor.h"
+#include "BotBehavior.h"
+#include "BotSpellKit.h"
+#include "BotSituationContext.h"
 #include <unordered_map>
 #include <vector>
-
-// ============================================================
-// Boss/Encounter Override System
-// Provides per-creature behavior modifications for dungeon bosses.
-// If a BossOverride exists for the current target, it takes priority
-// over default class behavior for interrupt targets, AoE avoidance, etc.
-// ============================================================
-struct BossOverride
-{
-    uint32 creatureEntry;              // creature_template entry ID
-    std::vector<uint32> interruptSpellIds; // spells that MUST be interrupted
-    std::vector<uint32> avoidAoeSpellIds;  // spells that trigger "move out" for melee
-    float avoidAoeRange;               // how far to move from AoE
-    bool disableAoe;                   // don't use AoE abilities (breaks CC, etc.)
-    bool spreadOut;                    // don't clump (e.g., cleave bosses)
-    bool saveCooldownsForPhase;        // save DPS cooldowns for later phase
-    float cooldownPhaseHpPercent;      // HP% threshold to use cooldowns
-
-    BossOverride() : creatureEntry(0), avoidAoeRange(10.0f), disableAoe(false),
-        spreadOut(false), saveCooldownsForPhase(false), cooldownPhaseHpPercent(0.0f) {}
-};
-
-// Global boss override registry
-BossOverride const* GetBossOverride(uint32 creatureEntry);
-void InitBossOverrides();
+#include <memory>
 
 
 class PartyBotAI : public CombatBotBaseAI
@@ -102,30 +81,13 @@ public:
     bool EnterStealthIfNeeded(SpellEntry const* pStealthSpell);
 
     bool CheckForDispelTargets();
-    BossOverride const* GetCurrentBossOverride() const;
-    bool HandleBossInterrupt(Unit* pVictim, BossOverride const* pOverride);
-    bool HandleBossAoeAvoidance(Unit* pVictim, BossOverride const* pOverride);
     void UpdateInCombatAI() final;
     void UpdateOutOfCombatAI() final;
-    void UpdateInCombatAI_Paladin() final;
-    void UpdateOutOfCombatAI_Paladin() final;
-    void UpdateInCombatAI_Shaman() final;
-    void UpdateOutOfCombatAI_Shaman() final;
-    bool SummonShamanTotemsContext();
-    void UpdateInCombatAI_Hunter() final;
-    void UpdateOutOfCombatAI_Hunter() final;
-    void UpdateInCombatAI_Mage() final;
-    void UpdateOutOfCombatAI_Mage() final;
-    void UpdateInCombatAI_Priest() final;
-    void UpdateOutOfCombatAI_Priest() final;
-    void UpdateInCombatAI_Warlock() final;
-    void UpdateOutOfCombatAI_Warlock() final;
-    void UpdateInCombatAI_Warrior() final;
-    void UpdateOutOfCombatAI_Warrior() final;
-    void UpdateInCombatAI_Rogue() final;
-    void UpdateOutOfCombatAI_Rogue() final;
-    void UpdateInCombatAI_Druid() final;
-    void UpdateOutOfCombatAI_Druid() final;
+
+    // Behavior system members (initialized after PopulateSpellData)
+    std::unique_ptr<BotBehaviorSet> m_combatBehaviors;
+    std::unique_ptr<BotBehaviorSet> m_oocBehaviors;
+    std::unique_ptr<BotSpellKit> m_kit;
 
     std::vector<RaidTargetIcon> m_marksToCC;
     std::vector<RaidTargetIcon> m_marksToFocus;

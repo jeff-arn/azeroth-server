@@ -20,6 +20,7 @@
  */
 
 #include "Spell.h"
+#include "BotCombatEventBuffer.h"
 #include "Log.h"
 #include "Opcodes.h"
 #include "WorldPacket.h"
@@ -3783,6 +3784,12 @@ void Spell::cast(bool skipCheck)
         SetExecutedCurrently(false);
         return;
     }
+
+    // Bot AI: record spell cast initiation for pattern learning
+    if (m_casterUnit && m_casterUnit->IsCreature() && !m_IsTriggeredSpell)
+        sBotPatternMgr.RecordCastStart(m_casterUnit, m_targets.getUnitTarget(),
+            m_spellInfo, m_casterUnit->GetMapId(),
+            static_cast<Creature*>(m_casterUnit)->GetEntry());
 
     // update pointers base at GUIDs to prevent access to already nonexistent object
     UpdatePointers();

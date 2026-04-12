@@ -2700,6 +2700,8 @@ void CombatBotBaseAI::TeachWarlockPetSpells()
         if (!pPet->HasSpell(ps.spellId))
         {
             // Enable auto-cast for buff/utility spells so the pet AI uses them.
+            // Phase Shift auto-casts normally (keeps Imp safe when idle).
+            // It gets stripped explicitly when we send the pet to attack.
             SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(ps.spellId);
             bool shouldAutocast = spellInfo && !spellInfo->IsPassiveSpell();
             pPet->AddSpell(ps.spellId, shouldAutocast ? ACT_ENABLED : ACT_DECIDE);

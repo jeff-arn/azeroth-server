@@ -143,24 +143,26 @@ public:
 
     virtual void UpdateInCombatAI() = 0;
     virtual void UpdateOutOfCombatAI() = 0;
-    virtual void UpdateInCombatAI_Paladin() = 0;
-    virtual void UpdateOutOfCombatAI_Paladin() = 0;
-    virtual void UpdateInCombatAI_Shaman() = 0;
-    virtual void UpdateOutOfCombatAI_Shaman() = 0;
-    virtual void UpdateInCombatAI_Hunter() = 0;
-    virtual void UpdateOutOfCombatAI_Hunter() = 0;
-    virtual void UpdateInCombatAI_Mage() = 0;
-    virtual void UpdateOutOfCombatAI_Mage() = 0;
-    virtual void UpdateInCombatAI_Priest() = 0;
-    virtual void UpdateOutOfCombatAI_Priest() = 0;
-    virtual void UpdateInCombatAI_Warlock() = 0;
-    virtual void UpdateOutOfCombatAI_Warlock() = 0;
-    virtual void UpdateInCombatAI_Warrior() = 0;
-    virtual void UpdateOutOfCombatAI_Warrior() = 0;
-    virtual void UpdateInCombatAI_Rogue() = 0;
-    virtual void UpdateOutOfCombatAI_Rogue() = 0;
-    virtual void UpdateInCombatAI_Druid() = 0;
-    virtual void UpdateOutOfCombatAI_Druid() = 0;
+    // Per-class virtuals — empty defaults for PartyBotAI (uses behavior system).
+    // BattleBotAI overrides these with its own implementations.
+    virtual void UpdateInCombatAI_Paladin() {}
+    virtual void UpdateOutOfCombatAI_Paladin() {}
+    virtual void UpdateInCombatAI_Shaman() {}
+    virtual void UpdateOutOfCombatAI_Shaman() {}
+    virtual void UpdateInCombatAI_Hunter() {}
+    virtual void UpdateOutOfCombatAI_Hunter() {}
+    virtual void UpdateInCombatAI_Mage() {}
+    virtual void UpdateOutOfCombatAI_Mage() {}
+    virtual void UpdateInCombatAI_Priest() {}
+    virtual void UpdateOutOfCombatAI_Priest() {}
+    virtual void UpdateInCombatAI_Warlock() {}
+    virtual void UpdateOutOfCombatAI_Warlock() {}
+    virtual void UpdateInCombatAI_Warrior() {}
+    virtual void UpdateOutOfCombatAI_Warrior() {}
+    virtual void UpdateInCombatAI_Rogue() {}
+    virtual void UpdateOutOfCombatAI_Rogue() {}
+    virtual void UpdateInCombatAI_Druid() {}
+    virtual void UpdateOutOfCombatAI_Druid() {}
 
     static bool IsPhysicalDamageClass(uint8 playerClass)
     {

@@ -24,6 +24,7 @@
 */
 
 #include "World.h"
+#include "BotCombatEventBuffer.h"
 #include "Database/DatabaseEnv.h"
 #include "Config/Config.h"
 #include "Platform/Define.h"
@@ -1908,6 +1909,9 @@ void World::SetInitialWorldSettings()
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "==========================================================");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
 
+    // Load bot learned encounter patterns from DB
+    sBotPatternMgr.LoadFromDB();
+
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "World initialized.");
 
     uint32 uStartInterval = WorldTimer::getMSTimeDiff(uStartTime, WorldTimer::getMSTime());
@@ -2701,6 +2705,9 @@ void World::_UpdateGameTime()
 // Shutdown the server
 void World::ShutdownServ(uint32 time, uint32 options, uint8 exitcode)
 {
+    // Save bot learned patterns before shutdown
+    sBotPatternMgr.SaveToDB();
+
     // ignore if server shutdown at next tick
     if (m_stopEvent)
         return;

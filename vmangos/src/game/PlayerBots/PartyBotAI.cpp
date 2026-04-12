@@ -15,6 +15,8 @@
 */
 
 #include "PartyBotAI.h"
+#include "BotRoleConfig.h"
+#include "BotCombatEventBuffer.h"
 #include "GuildBotMgr.h"
 #include "BotChatManager.h"
 #include "BotServiceMgr.h"
@@ -47,229 +49,8 @@ enum PartyBotSpells
 #define PB_MIN_FOLLOW_ANGLE 0.0f
 #define PB_MAX_FOLLOW_ANGLE 6.0f
 
-// ============================================================
-// Boss Override Registry
-// Populated with data from DUNGEON_RAID_GUIDE.md
-// ============================================================
-static std::unordered_map<uint32, BossOverride> s_bossOverrides;
-static bool s_bossOverridesInitialized = false;
-
-void InitBossOverrides()
-{
-    if (s_bossOverridesInitialized)
-        return;
-    s_bossOverridesInitialized = true;
-
-    // --- Ragefire Chasm ---
-    // Jergosh the Invoker: interrupt Shadow Bolt Volley
-    {
-        BossOverride o;
-        o.creatureEntry = 11518;
-        // Shadow Bolt Volley spell ID 15245 (generic NPC version)
-        o.interruptSpellIds = {15245};
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-    // Taragaman: melee should avoid Fire Nova AoE
-    {
-        BossOverride o;
-        o.creatureEntry = 11520;
-        o.avoidAoeSpellIds = {11970}; // Fire Nova
-        o.avoidAoeRange = 10.0f;
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-
-    // --- Deadmines ---
-    // Rhahk'Zor: frontal Slam - melee must be behind (spreadOut flag)
-    {
-        BossOverride o;
-        o.creatureEntry = 644;
-        o.spreadOut = true; // Ensures melee stays behind
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-    // Mr. Smite: save cooldowns for Phase 3 (<33% HP)
-    {
-        BossOverride o;
-        o.creatureEntry = 646;
-        o.saveCooldownsForPhase = true;
-        o.cooldownPhaseHpPercent = 33.0f;
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-    // Edwin VanCleef: interrupt Sinister Strike not needed, but disable AoE
-    // so CC on adds isn't broken
-    {
-        BossOverride o;
-        o.creatureEntry = 639;
-        o.disableAoe = true; // Don't break CC on adds
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-
-    // --- Wailing Caverns ---
-    // Lord Serpentis: interrupt Lightning Bolt, healing spells
-    {
-        BossOverride o;
-        o.creatureEntry = 3673;
-        o.interruptSpellIds = {9532, 23381}; // Lightning Bolt, Healing Touch (NPC versions)
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-
-    // --- Shadowfang Keep ---
-    // Baron Silverlaine: interrupt Veil of Shadow
-    {
-        BossOverride o;
-        o.creatureEntry = 3887;
-        o.interruptSpellIds = {7068}; // Veil of Shadow
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-
-    // --- Blackfathom Deeps ---
-    // Lady Sarevess: interrupt Forked Lightning
-    {
-        BossOverride o;
-        o.creatureEntry = 4831;
-        o.interruptSpellIds = {8435}; // Forked Lightning
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-
-    // --- Stockades ---
-    // Bazil Thredd: no special mechanics, simple fight
-    // Dextren Ward: no special mechanics
-
-    // --- Gnomeregan ---
-    // Electrocutioner 6000: avoid Chain Lightning (spread out)
-    {
-        BossOverride o;
-        o.creatureEntry = 6235;
-        o.spreadOut = true;
-        o.interruptSpellIds = {11824}; // Chain Lightning (NPC)
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-
-    // --- Scarlet Monastery ---
-    // High Inquisitor Whitemane: interrupt heals
-    {
-        BossOverride o;
-        o.creatureEntry = 3977;
-        o.interruptSpellIds = {12039, 9474}; // Heal, Holy Smite
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-    // Herod: avoid Whirlwind (melee run out)
-    {
-        BossOverride o;
-        o.creatureEntry = 3975;
-        o.avoidAoeSpellIds = {8989}; // Whirlwind
-        o.avoidAoeRange = 12.0f;
-        s_bossOverrides[o.creatureEntry] = o;
-    }
-}
-
-BossOverride const* GetBossOverride(uint32 creatureEntry)
-{
-    InitBossOverrides();
-    auto it = s_bossOverrides.find(creatureEntry);
-    return (it != s_bossOverrides.end()) ? &it->second : nullptr;
-}
-
-// ============================================================
-// PartyBotAI Boss Override Helpers
-// ============================================================
-BossOverride const* PartyBotAI::GetCurrentBossOverride() const
-{
-    if (Unit* pVictim = me->GetVictim())
-    {
-        if (Creature* pCreature = pVictim->ToCreature())
-            return GetBossOverride(pCreature->GetEntry());
-    }
-    return nullptr;
-}
-
-bool PartyBotAI::HandleBossInterrupt(Unit* pVictim, BossOverride const* pOverride)
-{
-    if (!pOverride || pOverride->interruptSpellIds.empty())
-        return false;
-
-    if (!pVictim->IsNonMeleeSpellCasted(false, false, true))
-        return false;
-
-    // Check if the spell being cast is one we must interrupt
-    Spell* pSpell = pVictim->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-    if (!pSpell)
-        pSpell = pVictim->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-    if (!pSpell)
-        return false;
-
-    uint32 castingSpellId = pSpell->m_spellInfo->Id;
-    bool shouldInterrupt = false;
-    for (uint32 spellId : pOverride->interruptSpellIds)
-    {
-        if (castingSpellId == spellId)
-        {
-            shouldInterrupt = true;
-            break;
-        }
-    }
-
-    if (!shouldInterrupt)
-        return false;
-
-    // Try all available interrupts
-    switch (me->GetClass())
-    {
-        case CLASS_WARRIOR:
-            if (m_spells.warrior.pPummel && CanTryToCastSpell(pVictim, m_spells.warrior.pPummel))
-                return DoCastSpell(pVictim, m_spells.warrior.pPummel) == SPELL_CAST_OK;
-            if (m_spells.warrior.pShieldBash && CanTryToCastSpell(pVictim, m_spells.warrior.pShieldBash))
-                return DoCastSpell(pVictim, m_spells.warrior.pShieldBash) == SPELL_CAST_OK;
-            break;
-        case CLASS_ROGUE:
-            if (m_spells.rogue.pKick && CanTryToCastSpell(pVictim, m_spells.rogue.pKick))
-                return DoCastSpell(pVictim, m_spells.rogue.pKick) == SPELL_CAST_OK;
-            break;
-        case CLASS_MAGE:
-            if (m_spells.mage.pCounterspell && CanTryToCastSpell(pVictim, m_spells.mage.pCounterspell))
-                return DoCastSpell(pVictim, m_spells.mage.pCounterspell) == SPELL_CAST_OK;
-            break;
-        case CLASS_SHAMAN:
-            if (m_spells.shaman.pEarthShock && CanTryToCastSpell(pVictim, m_spells.shaman.pEarthShock))
-                return DoCastSpell(pVictim, m_spells.shaman.pEarthShock) == SPELL_CAST_OK;
-            break;
-        case CLASS_PRIEST:
-            if (m_spells.priest.pSilence && CanTryToCastSpell(pVictim, m_spells.priest.pSilence))
-                return DoCastSpell(pVictim, m_spells.priest.pSilence) == SPELL_CAST_OK;
-            break;
-    }
-    return false;
-}
-
-bool PartyBotAI::HandleBossAoeAvoidance(Unit* pVictim, BossOverride const* pOverride)
-{
-    if (!pOverride || pOverride->avoidAoeSpellIds.empty())
-        return false;
-
-    // Check if boss is casting an AoE we should avoid
-    Spell* pSpell = pVictim->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-    if (!pSpell)
-        return false;
-
-    uint32 castingSpellId = pSpell->m_spellInfo->Id;
-    for (uint32 spellId : pOverride->avoidAoeSpellIds)
-    {
-        if (castingSpellId == spellId)
-        {
-            // Only melee needs to run out
-            if (m_role == ROLE_MELEE_DPS || m_role == ROLE_TANK)
-            {
-                if (me->GetDistance(pVictim) < pOverride->avoidAoeRange)
-                {
-                    // Run away from the boss temporarily
-                    me->GetMotionMaster()->MoveDistance(pVictim, pOverride->avoidAoeRange + 3.0f);
-                    return true;
-                }
-            }
-            break;
-        }
-    }
-    return false;
-}
+// Boss Override Registry has been migrated to BotCombatEventBuffer.cpp
+// (InitEncounterOverrides) as permanent learned patterns.
 
 
 
@@ -498,15 +279,17 @@ bool PartyBotAI::DrinkAndEat()
     if (me->GetVictim())
         return false;
 
-    // Per CLASS_GROUP_BEHAVIOR_GUIDE: eat at <60% HP, drink at <40% mana
-    bool const needToEat = me->GetHealthPercent() < 60.0f;
-    bool const needToDrink = (me->GetPowerType() == POWER_MANA) && (me->GetPowerPercent(POWER_MANA) < 40.0f);
+    bool const isEating = me->HasAura(PB_SPELL_FOOD);
+    bool const isDrinking = me->HasAura(PB_SPELL_DRINK);
+
+    // Hysteresis: start eating/drinking at low thresholds, but once started
+    // keep going until nearly full to avoid sit-stand-sit loops.
+    bool const needToEat = me->GetHealthPercent() < (isEating ? 90.0f : 60.0f);
+    bool const needToDrink = (me->GetPowerType() == POWER_MANA) &&
+        (me->GetPowerPercent(POWER_MANA) < (isDrinking ? 90.0f : 40.0f));
 
     if (!needToEat && !needToDrink)
         return false;
-
-    bool const isEating = me->HasAura(PB_SPELL_FOOD);
-    bool const isDrinking = me->HasAura(PB_SPELL_DRINK);
 
     if (!isEating && needToEat)
     {
@@ -647,6 +430,15 @@ bool PartyBotAI::AttackStart(Unit* pVictim)
     if (me->IsMounted())
         me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
 
+    // Don't initiate attack if stealthed — let the opener behavior handle
+    // the first strike. Just set up the chase from behind.
+    if (me->HasAuraType(SPELL_AURA_MOD_STEALTH))
+    {
+        me->SetTargetGuid(pVictim->GetObjectGuid());
+        me->GetMotionMaster()->MoveChase(pVictim, 1.0f, 3.0f); // behind
+        return true;
+    }
+
     if (me->Attack(pVictim, true))
     {
         // Tank announces pulling (with cooldown)
@@ -668,7 +460,10 @@ bool PartyBotAI::AttackStart(Unit* pVictim)
         else if (me->HasDistanceCasterMovement())
             me->SetCasterChaseDistance(0.0f);
 
-        me->GetMotionMaster()->MoveChase(pVictim, 1.0f, GetRole() == ROLE_MELEE_DPS ? 3.0f : 0.0f);
+        if (GetRole() == ROLE_RANGE_DPS || GetRole() == ROLE_HEALER)
+            me->GetMotionMaster()->MoveChase(pVictim, 25.0f);
+        else
+            me->GetMotionMaster()->MoveChase(pVictim, 1.0f, GetRole() == ROLE_MELEE_DPS ? 3.0f : 0.0f);
         return true;
     }
 
@@ -1117,6 +912,13 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
         ResetSpellData();
         PopulateSpellData();
+
+        // Initialize behavior system
+        m_kit = std::make_unique<BotSpellKit>(me->GetClass(), this);
+        m_combatBehaviors = BuildBehaviorSet(me->GetClass(), m_role, true, this, this);
+        m_oocBehaviors = BuildBehaviorSet(me->GetClass(), m_role, false, this, this);
+        sBotPatternMgr.SetActive(true);
+
         AddAllSpellReagents();
         me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
         // Warlock pet summoned from out-of-combat AI (has tank-aware pet selection).
@@ -1145,6 +947,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     {
         ResetSpellData();
         PopulateSpellData();
+        m_kit = std::make_unique<BotSpellKit>(me->GetClass(), this);
+        m_combatBehaviors = BuildBehaviorSet(me->GetClass(), m_role, true, this, this);
+        m_oocBehaviors = BuildBehaviorSet(me->GetClass(), m_role, false, this, this);
         m_resetSpellData = false;
     }
 
@@ -1371,12 +1176,25 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
     }
 
+    // Don't override movement if stealthed and approaching a target
+    if (me->HasAuraType(SPELL_AURA_MOD_STEALTH) && me->GetTargetGuid())
+        return;
+
     if (!me->IsMoving())
     {
         if (!pVictim)
         {
             if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
-                me->GetMotionMaster()->MoveFollow(pLeader, urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
+            {
+                // Healers/ranged follow at 20-25yd when the group is in combat
+                // to stay out of melee range. Otherwise use normal 3-6yd.
+                bool groupInCombat = pLeader->IsInCombat();
+                bool isCaster = (m_role == ROLE_HEALER || m_role == ROLE_RANGE_DPS);
+                float dist = (groupInCombat && isCaster)
+                    ? frand(12.0f, 18.0f)
+                    : frand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST);
+                me->GetMotionMaster()->MoveFollow(pLeader, dist, frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
+            }
         }
         else
         {
@@ -1415,38 +1233,37 @@ void PartyBotAI::UpdateOutOfCombatAI()
             return;
     }
 
+    // Dispel: free pre-step, runs before behavior scoring
     if (CheckForDispelTargets())
         return;
 
-    switch (me->GetClass())
+    if (m_kit)
     {
-        case CLASS_PALADIN:
-            UpdateOutOfCombatAI_Paladin();
-            break;
-        case CLASS_SHAMAN:
-            UpdateOutOfCombatAI_Shaman();
-            break;
-        case CLASS_HUNTER:
-            UpdateOutOfCombatAI_Hunter();
-            break;
-        case CLASS_MAGE:
-            UpdateOutOfCombatAI_Mage();
-            break;
-        case CLASS_PRIEST:
-            UpdateOutOfCombatAI_Priest();
-            break;
-        case CLASS_WARLOCK:
-            UpdateOutOfCombatAI_Warlock();
-            break;
-        case CLASS_WARRIOR:
-            UpdateOutOfCombatAI_Warrior();
-            break;
-        case CLASS_ROGUE:
-            UpdateOutOfCombatAI_Rogue();
-            break;
-        case CLASS_DRUID:
-            UpdateOutOfCombatAI_Druid();
-            break;
+        SituationContext ctx;
+        EvaluateSituation(this, ctx);
+
+        // If we have a victim (from AttackStart) but aren't technically in combat
+        // yet, use combat behaviors — mirrors the old class-file pattern where
+        // UpdateOutOfCombatAI_X() called UpdateInCombatAI_X() when victim present.
+        if (me->GetVictim() && m_combatBehaviors)
+        {
+            // Pet attack: free action before behavior scoring
+            if (Pet* pPet = me->GetPet())
+            {
+                if (!pPet->GetVictim())
+                {
+                    if (pPet->GetEntry() == 416)
+                        pPet->RemoveAurasDueToSpell(4511);
+                    pPet->GetCharmInfo()->SetIsCommandAttack(true);
+                    pPet->AI()->AttackStart(me->GetVictim());
+                }
+            }
+            m_combatBehaviors->RunBestBehavior(ctx, *m_kit);
+        }
+        else if (m_oocBehaviors)
+        {
+            m_oocBehaviors->RunBestBehavior(ctx, *m_kit);
+        }
     }
 }
 
@@ -1455,19 +1272,18 @@ void PartyBotAI::UpdateInCombatAI()
     m_wipeReacted = false;  // reset wipe flag when in combat
 
     // === BOSS KILL DETECTION ===
-    // If our previous combat target just died, check if it was a boss
     if (m_lastCombatTarget)
     {
         Unit* lastTarget = sObjectAccessor.GetUnit(*me, m_lastCombatTarget);
         if (lastTarget && lastTarget->IsDead() && lastTarget->IsCreature())
         {
             Creature* pCreature = static_cast<Creature*>(lastTarget);
-            bool isBoss = GetBossOverride(pCreature->GetEntry()) != nullptr
-                       || pCreature->GetCreatureInfo()->rank >= 3;  // rank 3 = boss
+            bool isBoss = sBotPatternMgr.HasPatternsForCreature(pCreature->GetEntry())
+                       || pCreature->GetCreatureInfo()->rank >= 3;
             if (isBoss && me->GetGroup())
             {
                 sBotChatMgr.OnBossKilled(me->GetGroup(), pCreature->GetEntry());
-                m_lastCombatTarget.Clear();  // only fire once per kill
+                m_lastCombatTarget.Clear();
             }
         }
     }
@@ -1476,7 +1292,7 @@ void PartyBotAI::UpdateInCombatAI()
     if (Unit* pVictim = me->GetVictim())
         m_lastCombatTarget = pVictim->GetObjectGuid();
 
-    // === OOM CALLOUT: healers/casters warn when low on mana ===
+    // === OOM CALLOUT ===
     if (m_oomChatCooldown == 0 && me->GetPowerType() == POWER_MANA)
     {
         float manaPct = me->GetPowerPercent(POWER_MANA);
@@ -1488,7 +1304,7 @@ void PartyBotAI::UpdateInCombatAI()
                 static const char* oomMsgs[] = { "oom", "oom need mana", "low mana", "need to drink" };
                 sBotChatMgr.SendPartyChat(me, oomMsgs[urand(0, 3)]);
                 sBotChatMgr.RecordChat(me->GetGUIDLow(), CHAT_COOLDOWN_PARTY);
-                m_oomChatCooldown = 30000;  // 30s internal cooldown
+                m_oomChatCooldown = 30000;
             }
         }
     }
@@ -1498,105 +1314,114 @@ void PartyBotAI::UpdateInCombatAI()
     {
         m_combatEngageTimer += PB_UPDATE_INTERVAL;
         if (m_combatEngageTimer < 2000)
-            return; // Wait for tank to build threat before DPS engages
+            return;
         m_combatEngageDelayDone = true;
     }
 
-    // === DPS THREAT THROTTLE: Stop damage abilities when close to tank threat ===
-    if (m_role != ROLE_TANK && m_role != ROLE_HEALER && me->GetVictim())
-    {
-        if (ShouldThrottleDPS(me->GetVictim()))
-        {
-            // At high threat: stop casting, only auto-attack/wand
-            // Healers and tanks are exempt from this check
-            return;
-        }
-    }
-
-    // === BOSS OVERRIDE: check for encounter-specific behavior ===
-    if (BossOverride const* pBossOverride = GetCurrentBossOverride())
-    {
-        if (Unit* pVictim = me->GetVictim())
-        {
-            // Priority interrupt for boss spells
-            if (HandleBossInterrupt(pVictim, pBossOverride))
-                return;
-
-            // AoE avoidance (melee run out)
-            if (HandleBossAoeAvoidance(pVictim, pBossOverride))
-                return;
-        }
-    }
-
-    if (!IsInDuel())
-    {
-        if (m_role == ROLE_TANK)
-        {
-            Unit* pVictim = me->GetVictim();
-
-            // Defend party members.
-            if (!pVictim || pVictim->GetVictim() == me)
-            {
-                if (pVictim = SelectPartyAttackTarget())
-                {
-                    me->AttackStop(true);
-                    AttackStart(pVictim);
-                }
-            }
-
-            // Taunt target if its attacking someone else.
-            if (pVictim && pVictim->GetVictim() != me)
-            {
-                for (const auto& pSpellEntry : m_spellListTaunt)
-                {
-                    if (CanTryToCastSpell(pVictim, pSpellEntry))
-                    {
-                        if (DoCastSpell(pVictim, pSpellEntry) == SPELL_CAST_OK)
-                            return;
-                    }
-                }
-            }
-        }
-        else if (CrowdControlMarkedTargets())
-            return;
-    }
-
+    // === DISPEL: free pre-step ===
     if (CheckForDispelTargets())
         return;
 
-    switch (me->GetClass())
+    // === PET ATTACK: free action, runs before behavior scoring ===
+    if (Unit* pVictim = me->GetVictim())
     {
-        case CLASS_PALADIN:
-            UpdateInCombatAI_Paladin();
-            break;
-        case CLASS_SHAMAN:
-            UpdateInCombatAI_Shaman();
-            break;
-        case CLASS_HUNTER:
-            UpdateInCombatAI_Hunter();
-            break;
-        case CLASS_MAGE:
-            UpdateInCombatAI_Mage();
-            break;
-        case CLASS_PRIEST:
-            UpdateInCombatAI_Priest();
-            break;
-        case CLASS_WARLOCK:
-            UpdateInCombatAI_Warlock();
-            break;
-        case CLASS_WARRIOR:
-            UpdateInCombatAI_Warrior();
-            break;
-        case CLASS_ROGUE:
-            UpdateInCombatAI_Rogue();
-            break;
-        case CLASS_DRUID:
-            UpdateInCombatAI_Druid();
-            break;
+        if (Pet* pPet = me->GetPet())
+        {
+            if (!pPet->GetVictim())
+            {
+                // Strip Phase Shift from Imp and disable its auto-cast so
+                // the pet AI doesn't immediately re-apply it.
+                if (pPet->GetEntry() == 416) // Imp
+                {
+                    pPet->RemoveAurasDueToSpell(4511);
+                    pPet->GetCharmInfo()->ToggleCreatureAutocast(4511, false);
+                }
+                pPet->GetCharmInfo()->SetIsCommandAttack(true);
+                pPet->AI()->AttackStart(pVictim);
+            }
+        }
+    }
+
+    // === HUNTER AUTO SHOT: free pre-step, keep autorepeat running ===
+    if (me->GetClass() == CLASS_HUNTER)
+    {
+        if (Unit* pVictim = me->GetVictim())
+        {
+            if (me->HasSpell(PB_SPELL_AUTO_SHOT) &&
+                !me->IsMoving() &&
+                !me->IsNonMeleeSpellCasted() &&
+                !me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+            {
+                switch (me->CastSpell(pVictim, PB_SPELL_AUTO_SHOT, false))
+                {
+                    case SPELL_FAILED_NEED_AMMO:
+                    case SPELL_FAILED_NO_AMMO:
+                        AddHunterAmmo();
+                        break;
+                }
+            }
+        }
+    }
+
+    // === BEHAVIOR SYSTEM ===
+    if (m_combatBehaviors && m_kit)
+    {
+        SituationContext ctx;
+        EvaluateSituation(this, ctx);
+
+        m_combatBehaviors->RunBestBehavior(ctx, *m_kit);
     }
 
     if (me->GetVictim())
         UseTrinketEffects();
+}
+
+bool PartyBotAI::ShouldEnterStealth() const
+{
+    if (me->IsMounted())
+        return false;
+
+    if (me->GetVictim() || me->InBattleGround() || me->IsFFAPvP())
+        return true;
+
+    if (me->GetHealthPercent() < 10.0f)
+        return true;
+
+    if (Player* pLeader = GetPartyLeader())
+    {
+        // Stealth when leader is in combat (about to get a target)
+        if (pLeader->IsInCombat())
+            return true;
+
+        if (pLeader->IsDead() || pLeader->IsFeigningDeathSuccessfully() ||
+            pLeader->HasAuraType(SPELL_AURA_MOD_STEALTH) ||
+            pLeader->HasAuraType(SPELL_AURA_MOD_INVISIBILITY))
+            return true;
+    }
+
+    return false;
+}
+
+bool PartyBotAI::EnterStealthIfNeeded(SpellEntry const* pStealthSpell)
+{
+    if (pStealthSpell)
+    {
+        bool const shouldStealth = ShouldEnterStealth();
+
+        if (me->HasAura(pStealthSpell->Id))
+        {
+            if (!shouldStealth)
+                me->RemoveAurasDueToSpellByCancel(pStealthSpell->Id);
+        }
+        else
+        {
+            if (shouldStealth &&
+                CanTryToCastSpell(me, pStealthSpell) &&
+                DoCastSpell(me, pStealthSpell) == SPELL_CAST_OK)
+                return true;
+        }
+    }
+    return false;
 }
 
 bool PartyBotAI::CheckForDispelTargets()

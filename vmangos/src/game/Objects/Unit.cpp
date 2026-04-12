@@ -19,6 +19,7 @@
  */
 
 #include "Unit.h"
+#include "BotCombatEventBuffer.h"
 #include "Creature.h"
 #include "Pet.h"
 #include "Totem.h"
@@ -775,6 +776,12 @@ uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDa
             pVictim->UnitDamaged(ObjectGuid(), damage);
     }
 
+    // Bot AI: record damage event for pattern learning
+    if (damage > 0 && IsCreature())
+        sBotPatternMgr.RecordDamage(this, pVictim, damage,
+            spellProto ? spellProto->Id : 0, GetMapId(),
+            ToCreature()->GetEntry());
+
     // Rage from Damage made (only from direct weapon damage)
     if (damage && damagetype == DIRECT_DAMAGE && this != pVictim && IsPlayer() && (GetPowerType() == POWER_RAGE))
         ((Player*)this)->RewardRage(damage, true);
@@ -956,6 +963,11 @@ uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDa
 
 void Unit::Kill(Unit* pVictim, SpellEntry const* spellProto, bool durabilityLoss)
 {
+    // Bot AI: record death event for pattern learning
+    if (IsCreature())
+        sBotPatternMgr.RecordDeath(this, pVictim, GetMapId(),
+            ToCreature()->GetEntry());
+
     // find player: owner of controlled `this` or `this` itself maybe
     // for loot will be sued only if pGroupTap == nullptr
     Player* pPlayerTap = GetCharmerOrOwnerPlayerOrPlayerItself();
