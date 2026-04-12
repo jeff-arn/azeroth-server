@@ -70,29 +70,61 @@ VMaNGOS configs (`mangosd.conf`, `realmd.conf`) also contain DB credentials and 
 
 The vmangos source is fully owned — no upstream relationship. Key customizations:
 - PartyBot commands downgraded from SEC_ADMINISTRATOR to SEC_MODERATOR
-- Boss Override Registry: interrupt spell IDs, spread mechanics, AoE avoidance for 20+ bosses
+- Behavior Layer AI: scored behavior system replacing per-class if/else chains (v0.9.0)
+- Combat Event Ring Buffer: encounter pattern learning with DB persistence
 - DPS threat throttling and combat opener logic
 
-### PartyBot AI Architecture
+### PartyBot AI Architecture (v0.9.0 — Behavior Layer System)
 
-Bot AI is split into per-class files for independent iteration:
-- `PartyBotAI.cpp` — core dispatch, boss overrides, shared utilities (1464 lines)
-- `PartyBotAI_<Class>.cpp` — one file per class (9 files)
-- `CombatBotBaseAI.h` — spell pointer structs per class
-- `CombatBotBaseAI.cpp` — spell population by name, totem/heal helpers, talent build system, pet spell teaching
+Bot AI uses a three-layer scored behavior system (replaced per-class if/else chains in v0.9.0). Architecture doc: `docs/BOT_ARCHITECTURE_PROPOSAL.md`.
 
-**Class overhaul status** (tracked in GitHub issue #1):
-- **Warrior**: done (v0.4 — Protection rewrite, Revenge, Challenging Shout)
-- **Shaman**: done (Resto/Enhance/Elemental, context-aware totems, NS emergency)
-- **Priest**: done (HP-threshold healing, Prayer of Healing, Shadow threat awareness)
-- **Paladin**: done (intelligent blessing selection, Holy/Prot/Ret role-aware, Cleanse priority)
-- **Hunter**: done (shot weaving, Freezing Trap CC, Feign Death threat, Aspect swapping)
-- **Mage**: done (Counterspell priority, Polymorph CC maintenance, Evocation safety)
-- **Warlock**: done (curse priority system, Life Tap safety, Banish CC, no Searing Pain, no Fear)
-- **Rogue**: done (deterministic SnD>Evisc finishers, Feint threat, Kick priority)
-- **Druid**: done (Rebirth combat rez, Innervate on healers, Bear offtank, Faerie Fire uptime)
+**Source files:**
+- `PartyBotAI.cpp` — main UpdateAI loop, pre-steps (pet attack, dispel, Auto Shot), behavior dispatch
+- `BotSituationContext.h/.cpp` — `SituationContext` struct computed once per tick (self HP/mana, threat, target, party state, encounter patterns)
+- `BotBehavior.h/.cpp` — `BotBehavior` base class + `BotBehaviorSet` runner (scores all, tries in descending order with fallthrough)
+- `BotBehaviors_Shared.h/.cpp` — 18 shared behaviors (interrupt, kite, heal, tank, CC, position, wand filler, etc.)
+- `BotBehaviors_ClassUnique.h/.cpp` — 19 class-specific behaviors (stealth opener, combo finishers, totem management, form shifting, etc.)
+- `BotSpellKit.h/.cpp` — abstract capability interface over `m_spells` union (`GetInterrupt()`, `GetFiller()`, `GetTaunt()`, etc.)
+- `BotRoleConfig.h/.cpp` — factory wiring behaviors to class + role with weight multipliers
+- `BotCombatEventBuffer.h/.cpp` — ring buffer for encounter learning, pattern detection, DB persistence
+- `CombatBotBaseAI.h/.cpp` — spell pointer structs, spell population, shared healing system (unchanged)
 
-**Caster melee suppression**: All caster classes (Mage, Warlock, Priest, Hunter, Elemental/Resto Shaman, Balance/Resto Druid) call `me->AttackStop()` at the top of their in-combat AI tick to prevent melee auto-attack. Enhancement Shaman, Feral Druid (tank/DPS), Warrior, Rogue, and Paladin are excluded. Hunter Auto Shot is a separate autorepeat spell unaffected by `AttackStop()`.
+**How it works:**
+1. `EvaluateSituation()` fills a `SituationContext` snapshot (HP, mana, threat, target, party state)
+2. Each behavior's `Score(ctx)` returns 0-100 urgency, multiplied by role weight
+3. `RunBestBehavior()` sorts by score, tries each in descending order until one's `Execute()` returns true
+4. If Execute fails (spell on CD, out of range, etc.), the runner falls through to the next-highest scorer
+
+**Pre-steps (free actions before behavior scoring):**
+- Pet attack command (warlock imp Phase Shift strip, hunter pet)
+- Dispel check (`CheckForDispelTargets()`)
+- Hunter Auto Shot autorepeat maintenance
+- Caster ranged positioning via `AttackStart()` (25yd `MoveChase` for ROLE_RANGE_DPS/ROLE_HEALER)
+
+**Role weights** (Tank / Healer / Melee DPS / Ranged DPS):
+- Healing: 0.3 / 1.5 / 0.0 / 0.0
+- Tank threat/taunt: 1.5 / 0.0 / 0.0 / 0.0
+- Kite: 0.0 / 1.0 / 0.0 / 1.2
+- DPS: 0.5 / 0.2 / 1.0 / 1.0
+
+**Healer positioning**: Healers follow leader at 12-18yd during combat (instead of 3-6yd). `BehaviorPosition` and `BehaviorWandFiller` fall back to tank's target when healer has no victim.
+
+**Rogue stealth opener**: `AttackStart()` skips `me->Attack()` when stealthed (preserves stealth). `BehaviorRogueStealthOpener` calculates a point behind the target via `MovePoint` (not `MoveChase` — MoveChase can't reposition to a specific angle once in range). Explicit `IsBehindTarget()` check before casting. Main loop skips follow logic when stealthed with target set.
+
+**Imp Phase Shift**: `TeachWarlockPetSpells()` teaches Phase Shift with `ACT_ENABLED` (auto-casts when idle). Pet attack pre-step strips Phase Shift aura + disables auto-cast via `ToggleCreatureAutocast(4511, false)` before sending to attack.
+
+**Debug**: `.partybot debug` (SEC_MODERATOR) toggles per-tick behavior logging for a selected bot. Logs all non-zero scores and the winning behavior + result to Server.log as `[BotAI]` lines.
+
+**BattleBotAI compatibility**: 18 per-class virtual methods changed from `= 0` to `{}` empty defaults. BattleBotAI's `final` overrides still work unchanged.
+
+**Key design lessons (v0.9.0):**
+- Behaviors MUST check preconditions in `Score()`, not just `Execute()`. A behavior that scores >0 but always fails blocks lower behaviors.
+- Free actions (pet commands, dispels, Auto Shot) should be pre-steps in the dispatcher, not scored behaviors.
+- Never set legacy state flags (`m_isBuffing`) from behaviors — the main UpdateAI loop checks these.
+- `AttackStop()` clears `m_attacking` (the victim reference). Never call it before `EvaluateSituation()`.
+- `MoveChase` angle parameter is a pathfinding hint, not a positional constraint. Use `MovePoint` to a calculated coordinate for precise positioning (e.g., rogue behind-target).
+- The main loop's `MoveFollow` overrides behavior-issued movement. Role-aware follow distance and stealth guards are needed.
+- `.partybot setrole` must set `m_resetSpellData = true` to trigger behavior set rebuild.
 
 **Tank detection** (`FindPartyTank()`): Checks in priority order — (1) explicit `.partyrole` assignment via `s_playerRoleAssignments` static map, (2) bot AI `ROLE_TANK`, (3) heuristics: Bear Form or shield equipped. Human players with an explicit non-tank role skip heuristics entirely (prevents paladin DPS with shield being misidentified). Command: `.partyrole tank|healer|dps|clear` — available to all players (`SEC_PLAYER`).
 
@@ -107,9 +139,9 @@ Bot AI is split into per-class files for independent iteration:
 - Talent build data generated by `scripts/generate_talent_builds.py` from DBC files.
 - `LearnRandomTalents()` kept as legacy fallback but no longer the primary path.
 
-**Warlock pet spells**: `TeachWarlockPetSpells()` in `CombatBotBaseAI.cpp` teaches all grimoire-learned abilities (Blood Pact, Fire Shield, Torment, Suffering, Sacrifice, Seduction, Spell Lock, etc.) to the pet via `Pet::AddSpell()` with `ACT_ENABLED` for auto-cast. Keyed by creature entry (416=Imp, 1860=VW, 1863=Succubus, 417=Felhunter) and owner level. Called once per pet instance from `UpdateOutOfCombatAI_Warlock()`, tracked by `m_lastTaughtPetGuid`. Warlock pet summoning is deferred to the out-of-combat AI (not during init) so it can check `FindPartyTank()` — Voidwalker is excluded from the summon pool when a tank is present.
+**Warlock pet spells**: `TeachWarlockPetSpells()` in `CombatBotBaseAI.cpp` teaches all grimoire-learned abilities (Blood Pact, Fire Shield, Torment, Suffering, Sacrifice, Seduction, Spell Lock, etc.) to the pet via `Pet::AddSpell()` with `ACT_ENABLED` for auto-cast. Keyed by creature entry (416=Imp, 1860=VW, 1863=Succubus, 417=Felhunter) and owner level. Called once per pet instance from `BehaviorWarlockPetSummon`, tracked by `m_lastTaughtPetGuid`. Warlock pet summoning is handled by the OOC behavior set so it can check `FindPartyTank()` — Voidwalker is excluded from the summon pool when a tank is present.
 
-**Warlock curse overwrite prevention**: Only one curse per warlock can be active on a target. The curse priority block in `PartyBotAI_Warlock.cpp` checks `pVictim->HasAura()` for all known curse spell pointers before attempting to cast any curse. Prevents the infinite overwrite loop where Curse of Agony and Curse of Recklessness replaced each other every tick. Curse of Recklessness removed from rotation (increases mob attack power). Fear also removed (too risky in dungeons).
+**Warlock curse overwrite prevention**: Only one curse per warlock can be active on a target. `BehaviorWarlockCurseManage` checks `HasAura()` for all known curse spell pointers in `Score()` — returns 0 if any curse is already applied. Priority: Tongues (casters) > Elements > Shadow > Agony. Curse of Recklessness removed (increases mob attack power). Fear also removed (too risky in dungeons).
 
 **Account password limit**: WoW 1.12.1 client enforces a 16-character password maximum. The server's `.account set password` command rejects passwords longer than 16 characters. SRP6 auth (v/s fields in `realmd.account`) cannot be computed externally — must use the mangosd console with `Console.Enable = 1`.
 
