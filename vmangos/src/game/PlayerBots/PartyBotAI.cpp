@@ -15,6 +15,8 @@
 */
 
 #include "PartyBotAI.h"
+#include <algorithm>
+#include "BotFormation.h"
 #include "BotRoleConfig.h"
 #include "BotCombatEventBuffer.h"
 #include "GuildBotMgr.h"
@@ -43,7 +45,7 @@ enum PartyBotSpells
     PB_SPELL_HONORLESS_TARGET = 2479,
 };
 
-#define PB_UPDATE_INTERVAL 1000
+#define PB_UPDATE_INTERVAL 500
 #define PB_MIN_FOLLOW_DIST 3.0f
 #define PB_MAX_FOLLOW_DIST 6.0f
 #define PB_MIN_FOLLOW_ANGLE 0.0f
@@ -357,6 +359,12 @@ bool PartyBotAI::ShouldAutoRevive() const
     return alivePlayerNearby;
 }
 
+bool PartyBotAI::IsInDungeonOrRaid() const
+{
+    Map* map = me->GetMap();
+    return map && map->IsDungeon();
+}
+
 bool PartyBotAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
     if (!CombatBotBaseAI::CanTryToCastSpell(pTarget, pSpellEntry))
@@ -498,6 +506,29 @@ Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
                     if (Unit* pVictim = me->GetMap()->GetUnit(targetGuid))
                         if (IsValidHostileTarget(pVictim))
                             return pVictim;
+            }
+        }
+
+        // Kill fleeing mobs before they pull additional packs.
+        if (me->IsInCombat())
+        {
+            if (Group* pGroup = me->GetGroup())
+            {
+                for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+                {
+                    if (Player* pMember = itr->getSource())
+                    {
+                        for (const auto pAttacker : pMember->GetAttackers())
+                        {
+                            if (!IsValidHostileTarget(pAttacker) || !me->IsWithinDist(pAttacker, 50.0f))
+                                continue;
+                            auto mt = pAttacker->GetMotionMaster()->GetCurrentMovementGeneratorType();
+                            if (mt == FLEEING_MOTION_TYPE || mt == TIMED_FLEEING_MOTION_TYPE ||
+                                mt == ASSISTANCE_MOTION_TYPE)
+                                return pAttacker;
+                        }
+                    }
+                }
             }
         }
 
@@ -644,6 +675,110 @@ bool PartyBotAI::CrowdControlMarkedTargets()
         }
     }
     return false;
+}
+
+Unit* PartyBotAI::SelectAutoCCTarget() const
+{
+    SpellEntry const* pCC = GetCrowdControlSpell();
+    if (!pCC)
+        return nullptr;
+
+    Player* pTank = FindPartyTank();
+    Unit* pTankTarget = pTank ? pTank->GetVictim() : nullptr;
+    // Fallback: don't CC whatever the leader is attacking.
+    Player* pLeader = GetPartyLeader();
+    Unit* pLeaderTarget = pLeader ? pLeader->GetVictim() : nullptr;
+    Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return nullptr;
+
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        if (Player* pMember = itr->getSource())
+        {
+            if (!pMember->IsAlive())
+                continue;
+
+            for (const auto pAttacker : pMember->GetAttackers())
+            {
+                if (pAttacker == pTankTarget || pAttacker == pLeaderTarget)
+                    continue;
+                if (pAttacker->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL))
+                    continue;
+                if (!IsValidHostileTarget(pAttacker))
+                    continue;
+                if (!me->IsWithinDist(pAttacker, 30.0f))
+                    continue;
+
+                // Skip if already raid-marked (another bot is handling it).
+                bool isMarked = false;
+                for (uint8 i = 0; i < TARGET_ICON_COUNT; ++i)
+                {
+                    if (pGroup->GetTargetWithIcon((RaidTargetIcon)i) == pAttacker->GetObjectGuid())
+                    {
+                        isMarked = true;
+                        break;
+                    }
+                }
+                if (isMarked)
+                    continue;
+
+                // Check if our CC spell actually works on this target.
+                if (!CanTryToCastSpell(pAttacker, pCC))
+                    continue;
+
+                return pAttacker;
+            }
+        }
+    }
+    return nullptr;
+}
+
+bool PartyBotAI::AutoMarkForCC(Unit* pTarget)
+{
+    Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return false;
+
+    // CC mark priority: Moon > Square > Diamond > Triangle.
+    // Skull/Cross reserved for kill targets, Star for sap.
+    static const RaidTargetIcon ccIcons[] = {
+        RAID_TARGET_ICON_MOON,
+        RAID_TARGET_ICON_SQUARE,
+        RAID_TARGET_ICON_DIAMOND,
+        RAID_TARGET_ICON_TRIANGLE,
+    };
+
+    for (auto icon : ccIcons)
+    {
+        if (!pGroup->GetTargetWithIcon(icon))
+        {
+            pGroup->SetTargetIcon(icon, pTarget->GetObjectGuid());
+            m_marksToCC.push_back(icon);
+            m_autoMarksToCC.push_back(icon);
+            return true;
+        }
+    }
+    return false; // all CC marks in use
+}
+
+void PartyBotAI::ClearAutoMarks()
+{
+    if (m_autoMarksToCC.empty())
+        return;
+
+    Group* pGroup = me->GetGroup();
+    for (auto mark : m_autoMarksToCC)
+    {
+        // Remove from manual CC list.
+        m_marksToCC.erase(
+            std::remove(m_marksToCC.begin(), m_marksToCC.end(), mark),
+            m_marksToCC.end());
+        // Clear the raid icon.
+        if (pGroup)
+            pGroup->SetTargetIcon(mark, ObjectGuid());
+    }
+    m_autoMarksToCC.clear();
 }
 
 void PartyBotAI::AddToPlayerGroup()
@@ -933,6 +1068,13 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
         m_initialized = true;
 
+        // Initial formation slot assignment.
+        if (Group* pGroup = me->GetGroup())
+        {
+            if (FormationState* fs = sBotFormationMgr.GetFormation(m_leaderGuid))
+                fs->AssignSlots(pGroup);
+        }
+
         // Schedule a greeting after a short random delay (2-5 seconds)
         if (!m_greetedGroup)
         {
@@ -962,6 +1104,19 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (!pLeader->IsInWorld())
         return;
+
+    // Formation: record leader's trail breadcrumb.
+    sBotFormationMgr.UpdateTrail(m_leaderGuid, pLeader, WorldTimer::getMSTime());
+
+    // Formation: reassign slots if group composition changed.
+    if (Group* pGroup = me->GetGroup())
+    {
+        if (FormationState* fs = sBotFormationMgr.GetFormation(m_leaderGuid))
+        {
+            if (fs->lastGroupSize != pGroup->GetMembersCount())
+                fs->AssignSlots(pGroup);
+        }
+    }
 
     if (pLeader->InBattleGround() &&
         !me->InBattleGround())
@@ -1017,6 +1172,15 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             {
                 m_wipeReacted = true;
                 sBotChatMgr.OnPartyWipe(me->GetGroup());
+
+                // If inside a dungeon/raid, activate wipe respawn logic
+                if (IsInDungeonOrRaid())
+                {
+                    m_dungeonWipeDetected = true;
+                    // Stagger delay: 2-3 seconds per bot, based on formation slot
+                    int slotIndex = (m_formationSlotIndex >= 0) ? m_formationSlotIndex : urand(0, 4);
+                    m_dungeonRespawnDelay = (slotIndex + 1) * urand(2000, 3000);
+                }
             }
         }
 
@@ -1028,17 +1192,87 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 me->RepopAtGraveyard();
             }
         }
+        else if (m_dungeonWipeDetected)
+        {
+            // Dungeon wipe path: count down stagger delay, then teleport+revive
+            // when leader is alive. Teleport BEFORE revive to avoid mob aggro
+            // at the corpse location.
+            if (m_dungeonRespawnDelay > PB_UPDATE_INTERVAL)
+            {
+                m_dungeonRespawnDelay -= PB_UPDATE_INTERVAL;
+            }
+            else
+            {
+                m_dungeonRespawnDelay = 0;
+                Player* pLeader = GetPartyLeader();
+                if (pLeader && pLeader->IsAlive() && pLeader->IsInWorld())
+                {
+                    // Teleport to leader while still dead (no aggro)
+                    if (!me->IsStopped())
+                        me->StopMoving();
+                    me->GetMotionMaster()->Clear(false, true);
+                    me->GetMotionMaster()->MoveIdle();
+
+                    if (FormationState* fs = sBotFormationMgr.GetFormation(m_leaderGuid))
+                        fs->trail.Clear();
+
+                    char name[128] = {};
+                    strcpy(name, pLeader->GetName());
+                    ChatHandler(me).HandleGonameCommand(name);
+
+                    // Now revive at the leader's location
+                    me->ResurrectPlayer(0.5f);
+                    me->SpawnCorpseBones();
+                    me->CastSpell(me, PB_SPELL_HONORLESS_TARGET, true);
+
+                    // Reset wipe state
+                    m_dungeonWipeDetected = false;
+                    m_wipeReacted = false;
+                }
+            }
+        }
         else
         {
+            // Normal path (outside instances, or partial wipe in dungeon)
             if (ShouldAutoRevive())
             {
                 me->ResurrectPlayer(0.5f);
                 me->SpawnCorpseBones();
                 me->CastSpell(me, PB_SPELL_HONORLESS_TARGET, true);
+
+                // In dungeon: flag for teleport to leader if far away
+                if (IsInDungeonOrRaid())
+                {
+                    Player* pLeader = GetPartyLeader();
+                    if (pLeader && pLeader->IsAlive() && !me->IsWithinDistInMap(pLeader, 100.0f))
+                        m_needPostReviveTeleport = true;
+                }
             }
         }
 
         return;
+    }
+
+    // Post-revive teleport for partial dungeon wipes: bot revived normally
+    // but leader is far away at the instance entrance.
+    if (m_needPostReviveTeleport)
+    {
+        m_needPostReviveTeleport = false;
+        Player* pLeader = GetPartyLeader();
+        if (pLeader && pLeader->IsAlive() && !me->IsWithinDistInMap(pLeader, 100.0f))
+        {
+            if (!me->IsStopped())
+                me->StopMoving();
+            me->GetMotionMaster()->Clear(false, true);
+            me->GetMotionMaster()->MoveIdle();
+
+            if (FormationState* fs = sBotFormationMgr.GetFormation(m_leaderGuid))
+                fs->trail.Clear();
+
+            char name[128] = {};
+            strcpy(name, pLeader->GetName());
+            ChatHandler(me).HandleGonameCommand(name);
+        }
     }
 
     if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
@@ -1098,13 +1332,18 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             return;
         }
 
-        // Teleport to leader if too far away.
-        if (!me->IsWithinDistInMap(pLeader, 100.0f) && !IsInDuel())
+        // Teleport to leader if too far away (but not if leader is a ghost).
+        if (!me->IsWithinDistInMap(pLeader, 100.0f) && !IsInDuel() && pLeader->IsAlive())
         {
             if (!me->IsStopped())
                 me->StopMoving();
             me->GetMotionMaster()->Clear(false, true);
             me->GetMotionMaster()->MoveIdle();
+
+            // Clear breadcrumb trail on teleport.
+            if (FormationState* fs = sBotFormationMgr.GetFormation(m_leaderGuid))
+                fs->trail.Clear();
+
             char name[128] = {};
             strcpy(name, pLeader->GetName());
             ChatHandler(me).HandleGonameCommand(name);
@@ -1133,16 +1372,26 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (GetRole() != ROLE_HEALER)
     {
+        // Always re-evaluate target for focus fire (tank assist, marks).
+        Unit* pBestTarget = SelectAttackTarget(pLeader);
+
         if (!pVictim || !IsValidHostileTarget(pVictim))
         {
             if (pVictim)
                 me->AttackStop();
 
-            if (Unit* pVictim = SelectAttackTarget(pLeader))
+            if (pBestTarget)
             {
-                AttackStart(pVictim);
+                AttackStart(pBestTarget);
                 return;
             }
+        }
+        else if (pBestTarget && pBestTarget != pVictim)
+        {
+            // Switch to higher-priority target (tank's target, marked target).
+            me->AttackStop();
+            AttackStart(pBestTarget);
+            return;
         }
     }
 
@@ -1182,18 +1431,50 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (!me->IsMoving())
     {
-        if (!pVictim)
+        if (!pVictim && pLeader->IsAlive())
         {
-            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
+            bool groupInCombat = pLeader->IsInCombat();
+            bool isCaster = (m_role == ROLE_HEALER || m_role == ROLE_RANGE_DPS);
+            float desiredDist = (groupInCombat && isCaster)
+                ? frand(12.0f, 18.0f)
+                : frand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST);
+
+            // Re-issue follow if not following, or if combat state changed and
+            // we're a caster too close to the leader (was following at melee range)
+            bool needFollow = me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE
+                && me->GetMotionMaster()->GetCurrentMovementGeneratorType() != POINT_MOTION_TYPE;
+            if (!needFollow && isCaster && groupInCombat && me->GetDistance(pLeader) < 10.0f)
+                needFollow = true;
+
+            if (needFollow)
             {
-                // Healers/ranged follow at 20-25yd when the group is in combat
-                // to stay out of melee range. Otherwise use normal 3-6yd.
-                bool groupInCombat = pLeader->IsInCombat();
-                bool isCaster = (m_role == ROLE_HEALER || m_role == ROLE_RANGE_DPS);
-                float dist = (groupInCombat && isCaster)
-                    ? frand(12.0f, 18.0f)
-                    : frand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST);
-                me->GetMotionMaster()->MoveFollow(pLeader, dist, frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
+                // Formation-aware follow: use breadcrumb trail + slot positioning.
+                FormationState* fs = sBotFormationMgr.GetFormation(m_leaderGuid);
+                if (fs && m_formationSlotIndex >= 0 && !fs->trail.IsEmpty())
+                {
+                    float fx, fy, fz;
+                    if (fs->CalculateSlotPosition(m_formationSlotIndex, me->GetMap(), me,
+                                                  fx, fy, fz))
+                    {
+                        float distToSlot = me->GetDistance(fx, fy, fz);
+                        if (distToSlot > BotFormationDefaults::MOVE_DEADZONE)
+                        {
+                            me->GetMotionMaster()->MovePoint(0, fx, fy, fz, MOVE_PATHFINDING);
+                        }
+                    }
+                    else
+                    {
+                        // Fallback: old follow behavior.
+                        me->GetMotionMaster()->MoveFollow(pLeader, desiredDist,
+                            frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
+                    }
+                }
+                else
+                {
+                    // No formation data yet — use old follow.
+                    me->GetMotionMaster()->MoveFollow(pLeader, desiredDist,
+                        frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
+                }
             }
         }
         else
@@ -1221,6 +1502,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
 void PartyBotAI::UpdateOutOfCombatAI()
 {
+    // Clear auto-assigned CC marks between pulls.
+    ClearAutoMarks();
+
     if (!IsInDuel())
     {
         if (m_resurrectionSpell)
@@ -1270,6 +1554,8 @@ void PartyBotAI::UpdateOutOfCombatAI()
 void PartyBotAI::UpdateInCombatAI()
 {
     m_wipeReacted = false;  // reset wipe flag when in combat
+    m_dungeonWipeDetected = false;
+    m_needPostReviveTeleport = false;
 
     // === BOSS KILL DETECTION ===
     if (m_lastCombatTarget)

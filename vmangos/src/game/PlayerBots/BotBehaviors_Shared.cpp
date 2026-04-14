@@ -1,4 +1,5 @@
 #include "BotBehaviors_Shared.h"
+#include "BotFormation.h"
 #include "BotSituationContext.h"
 #include "BotSpellKit.h"
 #include "BotCombatEventBuffer.h"
@@ -186,22 +187,70 @@ float BehaviorHealParty::Score(SituationContext const& ctx) const
 
 bool BehaviorHealParty::Execute(SituationContext const& ctx, BotSpellKit& kit)
 {
-    // Use the existing shared healing system
-    // Periodic heal first for light damage
-    if (Unit* pTarget = m_ai->SelectPeriodicHealTarget(80.0f, 90.0f))
+    // Mana-aware, tank-prioritized healing.
+    // Tank gets healed at generous thresholds; DPS only when genuinely hurt.
+    // As mana drops, tighten thresholds to conserve for emergencies.
+
+    if (ctx.manaPct < 30.0f)
     {
-        if (m_ai->HealInjuredTargetPeriodic(pTarget))
+        // Emergency mana: only heal critical targets (< 30%).
+        if (Unit* pTarget = m_ai->SelectHealTarget(30.0f, 30.0f))
+        {
+            if (m_ai->HealInjuredTargetDirect(pTarget))
+                return true;
+        }
+        return false;
+    }
+
+    if (ctx.manaPct < 50.0f)
+    {
+        // Conserve mana: tank at 70%, non-tank only if < 40%.
+        // HoT on tank only.
+        if (ctx.tankUnit && ctx.tankHealthPct < 70.0f &&
+            !ctx.tankUnit->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
+        {
+            if (m_ai->HealInjuredTargetPeriodic(ctx.tankUnit))
+                return true;
+        }
+        if (Unit* pTarget = m_ai->SelectHealTarget(50.0f, 40.0f))
+        {
+            if (m_ai->HealInjuredTargetDirect(pTarget))
+                return true;
+        }
+        // Heal tank at a more generous threshold than the rest.
+        if (ctx.tankUnit && ctx.tankHealthPct < 70.0f)
+        {
+            if (m_ai->HealInjuredTargetDirect(ctx.tankUnit))
+                return true;
+        }
+        return false;
+    }
+
+    // Normal mana (>= 50%): full healing logic.
+
+    // HoT on tank if below 80% (proactive).
+    if (ctx.tankUnit && ctx.tankHealthPct < 80.0f &&
+        !ctx.tankUnit->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
+    {
+        if (m_ai->HealInjuredTargetPeriodic(ctx.tankUnit))
             return true;
     }
 
-    // Direct heal for urgent damage
-    if (Unit* pTarget = m_ai->SelectHealTarget(60.0f, 70.0f))
+    // Direct heal: tank at 60%, non-tank at 50%.
+    // SelectHealTarget returns lowest-HP member below threshold.
+    // Check tank first with generous threshold, then group with strict.
+    if (ctx.tankUnit && ctx.tankHealthPct < 60.0f)
+    {
+        if (m_ai->HealInjuredTargetDirect(ctx.tankUnit))
+            return true;
+    }
+    if (Unit* pTarget = m_ai->SelectHealTarget(50.0f, 50.0f))
     {
         if (m_ai->HealInjuredTargetDirect(pTarget))
             return true;
     }
 
-    // Pre-heal based on incoming damage
+    // Pre-heal based on incoming damage (skip when conserving mana).
     if (m_ai->FindAndPreHealTarget())
         return true;
 
@@ -318,35 +367,40 @@ bool BehaviorThreatDump::Execute(SituationContext const& ctx, BotSpellKit& kit)
 
 float BehaviorCrowdControl::Score(SituationContext const& ctx) const
 {
-    if (ctx.meleeAttackerCount < 2 && !m_ai->CrowdControlMarkedTargets())
+    if (!m_ai->GetCrowdControlSpell())
         return 0.0f;
 
-    SpellEntry const* pCC = m_ai->GetCrowdControlSpell();
-    if (!pCC)
-        return 0.0f;
+    // Always handle manually-assigned CC marks.
+    if (!m_ai->m_marksToCC.empty())
+        return 68.0f;
 
-    return 68.0f;
+    // Auto-CC: only DPS roles, and only when there are loose adds.
+    if (ctx.role == ROLE_TANK || ctx.role == ROLE_HEALER)
+        return 0.0f;
+    if (ctx.hasLooseAdds)
+        return 66.0f;
+
+    return 0.0f;
 }
 
 bool BehaviorCrowdControl::Execute(SituationContext const& ctx, BotSpellKit& kit)
 {
-    // Try marked targets first
+    // Try manually/auto-assigned marked targets first.
     if (m_ai->CrowdControlMarkedTargets())
         return true;
 
-    // CC a secondary attacker
-    SpellEntry const* pCC = kit.GetCrowdControl();
-    if (!pCC || !ctx.currentTarget)
-        return false;
-
-    if (Unit* pOther = m_ai->SelectAttackerDifferentFrom(ctx.currentTarget))
+    // Auto-CC: find a loose add, mark it, and CC it.
+    if (ctx.role != ROLE_TANK && ctx.role != ROLE_HEALER && ctx.hasLooseAdds)
     {
-        if (m_ai->CanTryToCastSpell(pOther, pCC))
+        if (Unit* pCCTarget = m_ai->SelectAutoCCTarget())
         {
-            if (m_ai->DoCastSpell(pOther, pCC) == SPELL_CAST_OK)
+            m_ai->AutoMarkForCC(pCCTarget);
+            // Cast CC via the marked-target system (validates and casts).
+            if (m_ai->CrowdControlMarkedTargets())
                 return true;
         }
     }
+
     return false;
 }
 
@@ -359,6 +413,12 @@ float BehaviorKite::Score(SituationContext const& ctx) const
     if (!ctx.isBeingMeleed)
         return 0.0f;
     if (!IsCasterRole(ctx.role, ctx.playerClass, ctx.currentForm))
+        return 0.0f;
+
+    // Healers: suppress kiting when the tank is dying and we're not in
+    // serious danger ourselves.  Stand and heal instead.
+    if (ctx.role == ROLE_HEALER && ctx.tankIsAlive && ctx.tankHealthPct < 30.0f
+        && ctx.healthPct > 50.0f)
         return 0.0f;
 
     // Scale with HP: lower HP = more urgent to escape
@@ -377,7 +437,16 @@ bool BehaviorKite::Execute(SituationContext const& ctx, BotSpellKit& kit)
             return true;
     }
 
-    // Run toward tank (safe direction)
+    // Formation-aware flee: run backward along cleared trail.
+    if (ctx.hasFleeTarget)
+    {
+        m_ai->me->GetMotionMaster()->MovePoint(0,
+            ctx.fleeTargetX, ctx.fleeTargetY, ctx.fleeTargetZ,
+            MOVE_PATHFINDING);
+        return true;
+    }
+
+    // Fallback: run toward tank (old behavior).
     if (ctx.currentTarget)
     {
         if (m_ai->RunAwayFromTarget(ctx.currentTarget))
@@ -574,6 +643,10 @@ bool BehaviorSelfBuff::Execute(SituationContext const& ctx, BotSpellKit& kit)
 
 float BehaviorPosition::Score(SituationContext const& ctx) const
 {
+    // Formation-aware: only when NOT in combat (no target). Combat uses MoveChase distances.
+    if (!ctx.currentTarget && ctx.hasFormationTarget && ctx.distToFormationPos > BotFormationDefaults::MOVE_DEADZONE)
+        return 35.0f;
+
     Unit* posTarget = ctx.currentTarget;
     bool isCaster = IsCasterRole(ctx.role, ctx.playerClass, ctx.currentForm);
 
@@ -593,10 +666,15 @@ float BehaviorPosition::Score(SituationContext const& ctx) const
 
         float dist = m_ai->me->GetCombatDistance(posTarget);
 
-        // Too far: need to close
-        if (dist > 30.0f &&
-            m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
-            return 35.0f;
+        // Too far: need to close.  Healers always score when OOR
+        // (post-kite recovery) so they walk back into heal range.
+        if (dist > 30.0f)
+        {
+            if (ctx.role == ROLE_HEALER)
+                return 35.0f;
+            if (m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
+                return 35.0f;
+        }
 
         // Too close: need to back away — but only if not already moving away
         if (dist < 10.0f &&
@@ -620,6 +698,15 @@ float BehaviorPosition::Score(SituationContext const& ctx) const
 
 bool BehaviorPosition::Execute(SituationContext const& ctx, BotSpellKit& kit)
 {
+    // Formation-aware: only when NOT in combat (no target). Combat uses MoveChase distances.
+    if (!ctx.currentTarget && ctx.hasFormationTarget && ctx.distToFormationPos > BotFormationDefaults::MOVE_DEADZONE)
+    {
+        m_ai->me->GetMotionMaster()->MovePoint(0,
+            ctx.formationTargetX, ctx.formationTargetY, ctx.formationTargetZ,
+            MOVE_PATHFINDING);
+        return true;
+    }
+
     Unit* posTarget = ctx.currentTarget;
     bool isCaster = IsCasterRole(ctx.role, ctx.playerClass, ctx.currentForm);
 
@@ -835,6 +922,11 @@ float BehaviorWandFiller::Score(SituationContext const& ctx) const
     if (ctx.isCasting || ctx.isMoving)
         return 0.0f;
     if (m_ai->me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+        return 0.0f;
+
+    // Don't wand if the tank needs healing — let the tick fall through
+    // to follow/position logic so the healer moves back into heal range.
+    if (ctx.tankNeedsHeal || ctx.criticalHealNeeded)
         return 0.0f;
 
     // Need a target — use own victim or find tank's target

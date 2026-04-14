@@ -42,13 +42,16 @@ struct SituationContext
     float tankHealthPct = 100.0f;
     bool tankIsAlive = false;
     bool hasTank = false;
+    Unit* tankUnit = nullptr;
     float lowestAllyHealthPct = 100.0f;
     Unit* mostInjuredAlly = nullptr;
     uint8 alivePartyMembers = 0;
     uint8 deadPartyMembers = 0;
-    bool anyAllyNeedsHeal = false;      // anyone < 70%
+    bool anyAllyNeedsHeal = false;      // tank < 80% OR non-tank < 50%
+    bool tankNeedsHeal = false;         // tank < 80%
     bool criticalHealNeeded = false;    // anyone < 30%
     bool healerAvailable = false;
+    bool hasLooseAdds = false;          // party has un-CC'd mobs that aren't the tank's target
 
     // Encounter
     LearnedPattern const* activePattern = nullptr;
@@ -56,6 +59,17 @@ struct SituationContext
 
     // Role (cached from bot)
     uint8 role = 0; // CombatBotRoles value
+
+    // Formation (populated when formation system is active)
+    float formationTargetX = 0.0f;
+    float formationTargetY = 0.0f;
+    float formationTargetZ = 0.0f;
+    float distToFormationPos = 0.0f;
+    bool hasFormationTarget = false;
+    float fleeTargetX = 0.0f;
+    float fleeTargetY = 0.0f;
+    float fleeTargetZ = 0.0f;
+    bool hasFleeTarget = false;
 };
 
 // Fills a SituationContext from the bot's current state.

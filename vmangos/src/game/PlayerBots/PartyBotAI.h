@@ -71,11 +71,15 @@ public:
     bool CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit* pTarget) const;
     bool DrinkAndEat();
     bool ShouldAutoRevive() const;
+    bool IsInDungeonOrRaid() const;
     bool RunAwayFromTarget(Unit* pEnemy);
     Player* FindPartyTank() const;
     float GetThreatRatio(Unit* pEnemy) const;
     bool ShouldThrottleDPS(Unit* pEnemy) const;
     bool CrowdControlMarkedTargets();
+    Unit* SelectAutoCCTarget() const;
+    bool AutoMarkForCC(Unit* pTarget);
+    void ClearAutoMarks();
     bool EnterCombatDruidForm();
     bool ShouldEnterStealth() const;
     bool EnterStealthIfNeeded(SpellEntry const* pStealthSpell);
@@ -91,6 +95,7 @@ public:
 
     std::vector<RaidTargetIcon> m_marksToCC;
     std::vector<RaidTargetIcon> m_marksToFocus;
+    std::vector<RaidTargetIcon> m_autoMarksToCC;  // auto-assigned CC marks, cleared between pulls
     ShortTimeTracker m_updateTimer;
     ObjectGuid m_leaderGuid;
     ObjectGuid m_cloneGuid;
@@ -117,6 +122,14 @@ public:
     uint32 m_pullChatCooldown = 0;     // ms until pull announcement allowed
     ObjectGuid m_lastCombatTarget;     // track target death for boss kill detection
     bool m_wipeReacted = false;        // prevent spamming wipe reaction
+
+    // Dungeon wipe respawn system
+    bool m_dungeonWipeDetected = false;   // full wipe detected inside dungeon/raid
+    uint32 m_dungeonRespawnDelay = 0;     // ms countdown before revive+teleport after wipe
+    bool m_needPostReviveTeleport = false; // partial wipe: teleport to leader after reviving
+
+    // Formation system
+    int8 m_formationSlotIndex = -1;    // assigned by FormationState::AssignSlots
 };
 
 #endif

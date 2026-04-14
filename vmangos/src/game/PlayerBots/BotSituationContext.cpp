@@ -1,4 +1,5 @@
 #include "BotSituationContext.h"
+#include "BotFormation.h"
 #include "BotCombatEventBuffer.h"
 #include "CombatBotBaseAI.h"
 #include "PartyBotAI.h"
@@ -75,21 +76,28 @@ void EvaluateSituation(CombatBotBaseAI* ai, SituationContext& ctx)
     ctx.hasTank = false;
     ctx.tankIsAlive = false;
     ctx.tankHealthPct = 0.0f;
+    ctx.tankUnit = nullptr;
     ctx.lowestAllyHealthPct = 100.0f;
     ctx.mostInjuredAlly = nullptr;
     ctx.alivePartyMembers = 0;
     ctx.deadPartyMembers = 0;
     ctx.anyAllyNeedsHeal = false;
+    ctx.tankNeedsHeal = false;
     ctx.criticalHealNeeded = false;
     ctx.healerAvailable = false;
 
+    Player* pTankPlayer = nullptr;
     if (partyAI)
     {
-        if (Player* pTank = partyAI->FindPartyTank())
+        pTankPlayer = partyAI->FindPartyTank();
+        if (pTankPlayer)
         {
             ctx.hasTank = true;
-            ctx.tankIsAlive = pTank->IsAlive();
-            ctx.tankHealthPct = pTank->IsAlive() ? pTank->GetHealthPercent() : 0.0f;
+            ctx.tankIsAlive = pTankPlayer->IsAlive();
+            ctx.tankHealthPct = pTankPlayer->IsAlive() ? pTankPlayer->GetHealthPercent() : 0.0f;
+            ctx.tankUnit = pTankPlayer;
+            if (ctx.tankIsAlive && ctx.tankHealthPct < 80.0f)
+                ctx.tankNeedsHeal = true;
         }
     }
 
@@ -114,8 +122,15 @@ void EvaluateSituation(CombatBotBaseAI* ai, SituationContext& ctx)
                     ctx.mostInjuredAlly = pMember;
                 }
 
-                if (hp < 70.0f && pMember != me)
-                    ctx.anyAllyNeedsHeal = true;
+                // Role-aware heal thresholds: tank is healed more aggressively.
+                if (pMember != me)
+                {
+                    bool isTank = (pTankPlayer && pMember == pTankPlayer);
+                    if (isTank && hp < 80.0f)
+                        ctx.anyAllyNeedsHeal = true;
+                    else if (!isTank && hp < 50.0f)
+                        ctx.anyAllyNeedsHeal = true;
+                }
                 if (hp < 30.0f && pMember != me)
                     ctx.criticalHealNeeded = true;
 
@@ -125,6 +140,29 @@ void EvaluateSituation(CombatBotBaseAI* ai, SituationContext& ctx)
                     pMember->GetPowerPercent(POWER_MANA) > 10.0f)
                 {
                     ctx.healerAvailable = true;
+                }
+            }
+        }
+    }
+
+    // Detect loose adds: mobs attacking party that aren't the tank's target
+    // and aren't already crowd-controlled.
+    ctx.hasLooseAdds = false;
+    if (Group* pGroup = me->GetGroup())
+    {
+        Unit* pTankTarget = (pTankPlayer && pTankPlayer->IsAlive()) ? pTankPlayer->GetVictim() : nullptr;
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr && !ctx.hasLooseAdds; itr = itr->next())
+        {
+            if (Player* pMember = itr->getSource())
+            {
+                for (const auto pAttacker : pMember->GetAttackers())
+                {
+                    if (pAttacker != pTankTarget &&
+                        !pAttacker->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL))
+                    {
+                        ctx.hasLooseAdds = true;
+                        break;
+                    }
                 }
             }
         }
@@ -148,5 +186,40 @@ void EvaluateSituation(CombatBotBaseAI* ai, SituationContext& ctx)
 
         if (sBotPatternMgr.HasPatternsForCreature(ctx.targetCreatureEntry))
             ctx.isBossEncounter = true;
+    }
+
+    // === Formation ===
+    ctx.hasFormationTarget = false;
+    ctx.hasFleeTarget = false;
+
+    if (partyAI && partyAI->m_formationSlotIndex >= 0)
+    {
+        FormationState* fs = sBotFormationMgr.GetFormation(partyAI->m_leaderGuid);
+        if (fs && !fs->trail.IsEmpty())
+        {
+            float fx, fy, fz;
+            if (fs->CalculateSlotPosition(partyAI->m_formationSlotIndex, me->GetMap(), me,
+                                          fx, fy, fz))
+            {
+                ctx.formationTargetX = fx;
+                ctx.formationTargetY = fy;
+                ctx.formationTargetZ = fz;
+                ctx.distToFormationPos = me->GetDistance(fx, fy, fz);
+                ctx.hasFormationTarget = true;
+            }
+
+            // Precompute flee point only when being meleed (avoid costly hostile scans).
+            if (ctx.isBeingMeleed)
+            {
+                float flX, flY, flZ;
+                if (fs->CalculateFleePoint(me, me->GetMap(), flX, flY, flZ))
+                {
+                    ctx.fleeTargetX = flX;
+                    ctx.fleeTargetY = flY;
+                    ctx.fleeTargetZ = flZ;
+                    ctx.hasFleeTarget = true;
+                }
+            }
+        }
     }
 }
