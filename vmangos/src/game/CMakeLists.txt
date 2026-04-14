@@ -197,6 +197,7 @@ set (game_SRCS
     PlayerBots/BotSpellKit.cpp
     PlayerBots/BotCombatEventBuffer.cpp
     PlayerBots/BotRoleConfig.cpp
+    PlayerBots/BotFormation.cpp
     PlayerBots/CombatBotBaseAI.cpp
     PlayerBots/BattleBotAI.cpp
     PlayerBots/BattleBotWaypoints.cpp
