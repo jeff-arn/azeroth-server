@@ -305,6 +305,17 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
         }
     }
 
+    // Client telemetry — intercept AZTL addon messages and log to Server.log
+    if (lang == LANG_ADDON && msg && msgLen > 5 && strncmp(msg, "AZTL\t", 5) == 0)
+    {
+        if (Player* player = GetPlayer())
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Telemetry] %s: %s",
+                player->GetName(), msg + 5);
+        }
+        return;
+    }
+
     /** Enable various spam chat detections */
     if (lang != LANG_ADDON)
     {
