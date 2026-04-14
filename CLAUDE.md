@@ -80,13 +80,14 @@ Bot AI uses a three-layer scored behavior system (replaced per-class if/else cha
 
 **Source files:**
 - `PartyBotAI.cpp` — main UpdateAI loop, pre-steps (pet attack, dispel, Auto Shot), behavior dispatch
-- `BotSituationContext.h/.cpp` — `SituationContext` struct computed once per tick (self HP/mana, threat, target, party state, encounter patterns)
+- `BotSituationContext.h/.cpp` — `SituationContext` struct computed once per tick (self HP/mana, threat, target, party state, encounter patterns, formation position)
 - `BotBehavior.h/.cpp` — `BotBehavior` base class + `BotBehaviorSet` runner (scores all, tries in descending order with fallthrough)
 - `BotBehaviors_Shared.h/.cpp` — 18 shared behaviors (interrupt, kite, heal, tank, CC, position, wand filler, etc.)
 - `BotBehaviors_ClassUnique.h/.cpp` — 19 class-specific behaviors (stealth opener, combo finishers, totem management, form shifting, etc.)
 - `BotSpellKit.h/.cpp` — abstract capability interface over `m_spells` union (`GetInterrupt()`, `GetFiller()`, `GetTaunt()`, etc.)
 - `BotRoleConfig.h/.cpp` — factory wiring behaviors to class + role with weight multipliers
 - `BotCombatEventBuffer.h/.cpp` — ring buffer for encounter learning, pattern detection, DB persistence
+- `BotFormation.h/.cpp` — breadcrumb trail, slot-based formation, navmesh-validated positioning, safe flee points
 - `CombatBotBaseAI.h/.cpp` — spell pointer structs, spell population, shared healing system (unchanged)
 
 **How it works:**
@@ -146,6 +147,50 @@ Bot AI uses a three-layer scored behavior system (replaced per-class if/else cha
 **Account password limit**: WoW 1.12.1 client enforces a 16-character password maximum. The server's `.account set password` command rejects passwords longer than 16 characters. SRP6 auth (v/s fields in `realmd.account`) cannot be computed externally — must use the mangosd console with `Console.Enable = 1`.
 
 Research docs in `docs/` (gitignored): `CLASS_GROUP_BEHAVIOR_GUIDE.md`, `DUNGEON_RAID_GUIDE.md`, `bot_class_behavior_instructions.md`
+
+### Bot Formation & Movement System
+
+Replaces the old random-angle `MoveFollow` system. Bots follow the leader's actual path through dungeons in a role-ordered column, with navmesh-validated lateral spread that auto-collapses to single-file in narrow corridors.
+
+**Source files:**
+- `BotFormation.h/.cpp` — `BreadcrumbTrail`, `FormationSlot`, `FormationState`, `BotFormationMgr` singleton
+
+**Breadcrumb trail**: Ring buffer of 40 `BreadcrumbPoint` entries recorded every 1s when the leader moves >2yd. Arc-length interpolation walks the trail to find positions at exact distances behind the leader. Cleared on teleport (>100yd jump).
+
+**Slot-based formation** (role → distance behind leader, lateral offset):
+- Tank: 2yd, 0yd lateral
+- Melee DPS: 4yd, +/-1yd alternating
+- Ranged DPS: 8yd, +/-1yd alternating
+- Healer: 10yd, 0yd lateral
+
+**Lateral offset validation** (two-layer safety):
+1. **Navmesh check**: `Map::GetWalkHitPosition()` from trail center to candidate lateral position. If walk-hit moves dest >3yd from intended → collapse to trail center (corridor too narrow).
+2. **Aggro safety check**: `AnyHostileUnitInObjectRangeCheck` scan within 12yd of candidate position. If hostiles found → collapse to trail center (avoid pulling nearby packs).
+
+**OOC movement**: `MovePoint` to computed slot position with `MOVE_PATHFINDING` flag and 2yd dead-zone. Falls back to old `MoveFollow` when trail is empty (first few ticks after spawn/teleport).
+
+**Combat movement**: Formation does NOT override combat positioning. `BehaviorPosition` and `BehaviorKite` only use formation data when `!ctx.currentTarget`. During combat, the existing `MoveChase` distances apply (25yd for ranged/healers, 1yd for melee/tanks).
+
+**Kite/flee behavior**: `BehaviorKite` checks `ctx.hasFleeTarget` (precomputed in `EvaluateSituation` only when `isBeingMeleed`). Flee point is found by walking backward along the breadcrumb trail, scanning each candidate for hostiles within 12yd, and navmesh-validating the result. Search range: 15-30yd back along trail, 5yd steps. Falls back to `RunAwayFromTarget()` (run toward tank) if no safe trail point found.
+
+**Integration points in PartyBotAI.cpp:**
+- Trail recording: after leader validation, before BG check
+- Trail clear: inside teleport-to-leader block
+- Slot assignment: on init + whenever group size changes (detected per-tick)
+- OOC follow replacement: `MoveFollow` block replaced with formation `MovePoint`
+
+**SituationContext formation fields** (populated per-tick in `EvaluateSituation`):
+- `formationTargetX/Y/Z`, `distToFormationPos`, `hasFormationTarget`
+- `fleeTargetX/Y/Z`, `hasFleeTarget` (only computed when `isBeingMeleed`)
+
+**Key design lessons (formation system):**
+- Formation positioning must NOT fire during combat (`!ctx.currentTarget` guard). First version had a bug where `BehaviorPosition` pulled bots toward their trail slot instead of maintaining combat range — caused stacking on mobs.
+- `MovePoint` (one-shot) instead of `MoveFollow` (continuous) for formation. Bot moves to slot and stops. Next 1s tick recalculates. 2yd dead-zone prevents jitter.
+- Aggro safety scan on lateral offsets is critical — navmesh only checks walkability, not whether a position is dangerously close to live mobs.
+- Breadcrumb `RecordPoint()` timestamp guard naturally deduplicates when multiple bots call `UpdateTrail()` in the same tick.
+- `POINT_MOTION_TYPE` must be excluded from `needFollow` check alongside `FOLLOW_MOTION_TYPE`, or the follow logic immediately overwrites formation movement.
+
+**Status**: First dungeon test (Deadmines) reached forge room. Movement between pulls felt improved. Combat spacing bug fixed (was stacking, now uses proper MoveChase ranges). Needs further testing for ship deck, elevation changes, and kite scenarios.
 
 ### Bot Social & Services Architecture
 
