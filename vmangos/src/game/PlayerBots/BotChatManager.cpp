@@ -598,6 +598,17 @@ uint32 BotChatManager::GetOnlineBotCount() const
     return count;
 }
 
+bool IsChatCooldownExpired(time_t now, time_t lastChat, uint32 cooldownSeconds)
+{
+    // Bots that have never chatted (lastChat == 0) are always allowed.
+    if (lastChat == 0)
+        return true;
+    // Guard against clocks going backward (NTP step, container migration).
+    if (now < lastChat)
+        return false;
+    return static_cast<uint32>(now - lastChat) >= cooldownSeconds;
+}
+
 bool BotChatManager::CanChat(uint32 botGuid, ChatCooldownType type) const
 {
     auto it = m_cooldowns.find(botGuid);
@@ -606,14 +617,11 @@ bool BotChatManager::CanChat(uint32 botGuid, ChatCooldownType type) const
 
     time_t now = time(nullptr);
     time_t lastChat = it->second.lastChat[type];
-    if (lastChat == 0)
-        return true;
-
     uint32 baseCooldown = GetCooldownForType(type);
     float scale = GetFrequencyScale();
     uint32 effectiveCooldown = static_cast<uint32>(baseCooldown * scale);
 
-    return (now - lastChat) >= effectiveCooldown;
+    return IsChatCooldownExpired(now, lastChat, effectiveCooldown);
 }
 
 void BotChatManager::RecordChat(uint32 botGuid, ChatCooldownType type)

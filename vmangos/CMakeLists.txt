@@ -286,3 +286,11 @@ add_subdirectory(dep)
 if (USE_EXTRACTORS OR USE_REALMMERGE)
     add_subdirectory(contrib)
 endif()
+
+# Unit tests (doctest). Off by default; enable with -DBUILD_TESTS=ON.
+# CI runs this on main only; full game lib links so first build is slow.
+option(BUILD_TESTS "Build the vmangos_tests unit-test executable" OFF)
+if (BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

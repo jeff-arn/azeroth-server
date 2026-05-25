@@ -16,6 +16,12 @@ class Player;
 class Group;
 
 // ============================================================================
+// Free function — pure time math for cooldown expiration, extracted so it
+// can be tested with an injected clock (no time(nullptr) dependency).
+// ============================================================================
+bool IsChatCooldownExpired(time_t now, time_t lastChat, uint32 cooldownSeconds);
+
+// ============================================================================
 // Personality system — affects chat style and frequency.
 // ============================================================================
 
