@@ -1,3 +1,6 @@
 [tool.pytest.ini_options]
 testpaths = ["scripts/tests", "dashboard/tests", "discord-bot/tests"]
 pythonpath = ["scripts", "dashboard", "discord-bot"]
+# Use importlib mode so duplicate package names (e.g. multiple "tests"
+# directories under separate service trees) don't collide.
+addopts = "--import-mode=importlib"
