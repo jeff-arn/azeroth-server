@@ -36,7 +36,11 @@ __pycache__/
 *.pyo
 
 # ============ Reference docs ============
-docs/
+# docs/ is for free-form research notes (gitignored by default).
+# Canonical reference files are tracked explicitly via the allowlist below.
+docs/*
+!docs/ARCHITECTURE.md
+!docs/BOT_ARCHITECTURE_PROPOSAL.md
 
 # ============ Addon zip uploads ============
 dashboard/static/addons/*.zip

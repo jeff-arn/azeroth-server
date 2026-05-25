@@ -1,0 +1,56 @@
+#!/bin/bash
+# commit-msg hook: enforce Conventional Commits 1.0 with this project's scopes.
+# See .claude/rules/commits.md for the full rules.
+#
+# Format: <type>[(<scope>)][!]: <subject>
+#   type:    feat|fix|perf|refactor|docs|style|test|build|ci|chore|revert
+#   scope:   vmangos|dashboard|discord-bot|scripts|db|bots|docs  (optional)
+#   !:       optional, indicates a BREAKING CHANGE
+#   subject: 1..72 chars, imperative mood, lowercase start, no trailing period
+
+set -uo pipefail
+
+MSG_FILE="$1"
+# Read the first non-empty, non-comment line (this is the subject).
+SUBJECT=$(grep -vE '^\s*(#|$)' "$MSG_FILE" | head -n 1)
+
+# Bypass auto-generated subjects — they aren't authored by humans and the format is fixed by git.
+case "$SUBJECT" in
+    "Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! "*)
+        exit 0
+        ;;
+esac
+
+TYPE_RE='(feat|fix|perf|refactor|docs|style|test|build|ci|chore|revert)'
+SCOPE_RE='(vmangos|dashboard|discord-bot|scripts|db|bots|docs)'
+# Subject body: starts lowercase letter or digit, no trailing period, length 1..72.
+SUBJECT_RE='[a-z0-9].{0,71}[^\.]'
+
+# Two acceptable shapes:
+#   <type>(<scope>)[!]: <subject>
+#   <type>[!]: <subject>   (scope optional)
+if [[ "$SUBJECT" =~ ^${TYPE_RE}(\(${SCOPE_RE}\))?!?:\ ${SUBJECT_RE}$ ]]; then
+    exit 0
+fi
+
+cat >&2 <<EOF
+commit-msg: subject line does not match Conventional Commits.
+
+Got:      $SUBJECT
+
+Expected: <type>[(<scope>)][!]: <subject>
+
+  type:    feat | fix | perf | refactor | docs | style | test | build | ci | chore | revert
+  scope:   vmangos | dashboard | discord-bot | scripts | db | bots | docs  (optional)
+  !:       optional, indicates BREAKING CHANGE
+  subject: 1..72 chars, lowercase first letter, no trailing period
+
+Examples:
+  feat(bots): add rogue stealth opener behavior
+  fix(vmangos): exclude warrior tank from PW:S above 15% HP
+  chore(db): add personality column to guild_bot_roster
+  docs: document time_t fireTime rule
+
+See .claude/rules/commits.md for the full rules.
+EOF
+exit 1

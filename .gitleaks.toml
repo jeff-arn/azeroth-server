@@ -1,0 +1,29 @@
+# gitleaks config — extends the default ruleset.
+# Used by the pre-commit hook (`gitleaks protect --staged`) and the CI workflow.
+# See .claude/rules/security.md for the policy.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths that never legitimately contain repo secrets"
+paths = [
+    # Vendored C++ dependencies — third-party source, not our credentials
+    '''vmangos/dep/.*''',
+
+    # Build artifacts (gitignored, but if a stray file gets staged, allow it)
+    '''vmangos/build/.*''',
+    '''vmangos/run/bin/.*''',
+
+    # Config templates — committed with placeholders, no real credentials
+    '''.*\.example$''',
+    '''vmangos/run/etc/.*\.conf\.example$''',
+
+    # Migration files containing example/placeholder data
+    '''vmangos/sql/migrations/.*\.sql''',
+
+    # Architecture and rules docs may reference key names (not values)
+    '''CLAUDE\.md''',
+    '''\.claude/rules/.*\.md''',
+    '''docs/.*\.md''',
+]
