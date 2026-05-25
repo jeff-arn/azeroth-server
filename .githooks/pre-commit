@@ -1,34 +1,98 @@
 #!/bin/bash
-# Pre-commit hook: lint and format Python files before committing.
+# Pre-commit hook: secret scan + format/lint checks on staged files.
+#
+# Wiring (once per clone):
+#   git config core.hooksPath .githooks
+#
+# What this hook does (in order):
+#   1. gitleaks scan of staged changes — HARD FAIL if gitleaks is missing
+#   2. clang-format --dry-run -Werror on staged C/C++ files
+#   3. ruff check + ruff format --check on staged Python files
+#
+# What this hook does NOT do:
+#   - Build the C++ server (too slow for a commit hook — CI handles it)
+#   - Run any tests
 
-RUFF="$HOME/.local/bin/ruff"
+set -uo pipefail
 
-if ! command -v "$RUFF" &>/dev/null; then
-    echo "ruff not found at $RUFF — skipping lint"
-    exit 0
+RED=$(tput setaf 1 2>/dev/null || echo "")
+YELLOW=$(tput setaf 3 2>/dev/null || echo "")
+RESET=$(tput sgr0 2>/dev/null || echo "")
+
+fail() {
+    echo "${RED}pre-commit: $*${RESET}" >&2
+    exit 1
+}
+
+warn() {
+    echo "${YELLOW}pre-commit: $*${RESET}" >&2
+}
+
+# ----------------------------------------------------------------------------
+# 1) gitleaks — hard fail if missing
+# ----------------------------------------------------------------------------
+if ! command -v gitleaks >/dev/null 2>&1; then
+    fail "gitleaks not found on PATH. Install it (https://github.com/gitleaks/gitleaks) — secret scanning is not optional."
 fi
 
-# Get staged .py files (excluding deletions)
+echo "pre-commit: scanning staged changes for secrets via gitleaks..."
+if ! gitleaks protect --staged --redact --no-banner; then
+    fail "gitleaks found potential secrets in staged changes. Remove them and re-stage, or update .gitleaks.toml if this is a false positive."
+fi
+
+# ----------------------------------------------------------------------------
+# 2) clang-format on staged C/C++ files
+# ----------------------------------------------------------------------------
+STAGED_CPP=$(git diff --cached --name-only --diff-filter=d \
+    | grep -E '\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$' \
+    | grep -v '^vmangos/dep/' \
+    || true)
+
+if [ -n "$STAGED_CPP" ]; then
+    if ! command -v clang-format >/dev/null 2>&1; then
+        warn "clang-format not found — skipping C++ format check. Install it to enforce style locally."
+    else
+        echo "pre-commit: checking C++ formatting via clang-format..."
+        CPP_FAIL=0
+        while IFS= read -r file; do
+            if ! clang-format --dry-run -Werror --style=file "$file" >/dev/null 2>&1; then
+                echo "  ${RED}badly formatted:${RESET} $file"
+                CPP_FAIL=1
+            fi
+        done <<< "$STAGED_CPP"
+
+        if [ "$CPP_FAIL" -ne 0 ]; then
+            fail "clang-format found formatting issues. Fix with: clang-format -i <file>"
+        fi
+    fi
+fi
+
+# ----------------------------------------------------------------------------
+# 3) ruff on staged Python files
+# ----------------------------------------------------------------------------
+# Prefer a ruff on PATH, then fall back to common install locations.
+RUFF=""
+if command -v ruff >/dev/null 2>&1; then
+    RUFF="ruff"
+elif [ -x "$HOME/.local/bin/ruff" ]; then
+    RUFF="$HOME/.local/bin/ruff"
+fi
+
 STAGED_PY=$(git diff --cached --name-only --diff-filter=d | grep '\.py$' || true)
 
-if [ -z "$STAGED_PY" ]; then
-    exit 0
+if [ -n "$STAGED_PY" ]; then
+    if [ -z "$RUFF" ]; then
+        warn "ruff not found — skipping Python lint/format check. Install with: pip install ruff"
+    else
+        echo "pre-commit: checking Python lint via ruff..."
+        if ! $RUFF check $STAGED_PY; then
+            fail "ruff lint failed. Fix with: ruff check --fix ."
+        fi
+        echo "pre-commit: checking Python formatting via ruff..."
+        if ! $RUFF format --check $STAGED_PY; then
+            fail "ruff format check failed. Fix with: ruff format ."
+        fi
+    fi
 fi
 
-echo "Running ruff on staged Python files..."
-
-# Check lint
-if ! $RUFF check $STAGED_PY; then
-    echo ""
-    echo "Lint errors found. Fix with: ruff check --fix ."
-    exit 1
-fi
-
-# Check format
-if ! $RUFF format --check $STAGED_PY; then
-    echo ""
-    echo "Formatting issues found. Fix with: ruff format ."
-    exit 1
-fi
-
-echo "Lint passed."
+echo "pre-commit: all checks passed."
