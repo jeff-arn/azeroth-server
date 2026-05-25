@@ -4,3 +4,4 @@ pythonpath = ["scripts", "dashboard", "discord-bot"]
 # Use importlib mode so duplicate package names (e.g. multiple "tests"
 # directories under separate service trees) don't collide.
 addopts = "--import-mode=importlib"
+asyncio_mode = "strict"

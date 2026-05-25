@@ -219,6 +219,13 @@ async def server_status_loop():
         await asyncio.sleep(STATUS_CHECK_INTERVAL)
 
 
+# Regex for parsing LevelUp.log entries:
+#   Character <name>:<guid> [c<class> r<race>] reaches level <N>
+# Exposed at module scope so the parser is testable without spinning up
+# the async watcher loop.
+LEVELUP_PATTERN = re.compile(r"Character (\w+):\d+ \[(c\d+) (r\d+)\] reaches level\s+(\d+)")
+
+
 async def levelup_log_watcher():
     """Watch LevelUp.log for instant level-up announcements."""
     await client.wait_until_ready()
@@ -235,9 +242,6 @@ async def levelup_log_watcher():
     except FileNotFoundError:
         file_pos = 0
 
-    # Pattern: Character Name:guid [cX rY] reaches level  Z
-    pattern = re.compile(r"Character (\w+):\d+ \[(c\d+) (r\d+)\] reaches level\s+(\d+)")
-
     while not client.is_closed():
         try:
             with open(LEVELUP_LOG, "r") as f:
@@ -253,7 +257,7 @@ async def levelup_log_watcher():
                 # Skip bot level-ups
                 if "<BOT>" in line:
                     continue
-                match = pattern.search(line)
+                match = LEVELUP_PATTERN.search(line)
                 if match:
                     name = match.group(1)
                     class_str = match.group(2)
