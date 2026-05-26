@@ -14,12 +14,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
- /*
-  *
-  * This code was written by namreeb (legal@namreeb.org) and is released with
-  * permission as part of vmangos (https://github.com/vmangos/core)
-  *
-  */
+/*
+ *
+ * This code was written by namreeb (legal@namreeb.org) and is released with
+ * permission as part of vmangos (https://github.com/vmangos/core)
+ *
+ */
 
 #ifndef __WARDENMODULE_HPP_
 #define __WARDENMODULE_HPP_

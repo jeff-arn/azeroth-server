@@ -35,30 +35,27 @@ EndContentData */
 
 enum
 {
-    SAY_TOOGA_RANDOM_START      = 2221,
-    SAY_TOOGA_RANDOM_END        = 2228,
+    SAY_TOOGA_RANDOM_START = 2221,
+    SAY_TOOGA_RANDOM_END = 2228,
 
-    SAY_TOOG_POST_1             = 2137,
-    SAY_TORT_POST_2             = 2138,
-    SAY_TOOG_POST_3             = 2139,
-    SAY_TORT_POST_4             = 2140,
-    SAY_TOOG_POST_5             = 2141,
-    SAY_TORT_POST_6             = 2145,
+    SAY_TOOG_POST_1 = 2137,
+    SAY_TORT_POST_2 = 2138,
+    SAY_TOOG_POST_3 = 2139,
+    SAY_TORT_POST_4 = 2140,
+    SAY_TOOG_POST_5 = 2141,
+    SAY_TORT_POST_6 = 2145,
 
-    QUEST_TOOGA                 = 1560,
-    NPC_TORTA                   = 6015,
+    QUEST_TOOGA = 1560,
+    NPC_TORTA = 6015,
 
-    POINT_ID_TO_WATER           = 1
+    POINT_ID_TO_WATER = 1
 };
 
-float const m_afToWaterLoc[] = { -7032.664551f, -4906.199219f, -1.606446f};
+float const m_afToWaterLoc[] = {-7032.664551f, -4906.199219f, -1.606446f};
 
 struct npc_toogaAI : public FollowerAI
 {
-    npc_toogaAI(Creature* pCreature) : FollowerAI(pCreature)
-    {
-        Reset();
-    }
+    npc_toogaAI(Creature* pCreature) : FollowerAI(pCreature) { Reset(); }
 
     uint32 m_uiCheckSpeechTimer;
     uint32 m_uiPostEventTimer;
@@ -111,7 +108,7 @@ struct npc_toogaAI : public FollowerAI
     {
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
-            //we are doing the post-event, or...
+            // we are doing the post-event, or...
             if (HasFollowState(STATE_FOLLOW_POSTEVENT))
             {
                 if (m_uiPostEventTimer < uiDiff)
@@ -121,32 +118,32 @@ struct npc_toogaAI : public FollowerAI
 
                     if (!pTorta || !pTorta->IsAlive())
                     {
-                        //something happened, so just complete
+                        // something happened, so just complete
                         SetFollowComplete();
                         return;
                     }
 
                     switch (m_uiPhasePostEvent)
                     {
-                        case 1:
-                            DoScriptText(SAY_TOOG_POST_1, m_creature);
-                            break;
-                        case 2:
-                            DoScriptText(SAY_TORT_POST_2, pTorta);
-                            break;
-                        case 3:
-                            DoScriptText(SAY_TOOG_POST_3, m_creature);
-                            break;
-                        case 4:
-                            DoScriptText(SAY_TORT_POST_4, pTorta);
-                            break;
-                        case 5:
-                            DoScriptText(SAY_TOOG_POST_5, m_creature);
-                            break;
-                        case 6:
-                            DoScriptText(SAY_TORT_POST_6, pTorta);
-                            m_creature->GetMotionMaster()->MovePoint(POINT_ID_TO_WATER, m_afToWaterLoc[0], m_afToWaterLoc[1], m_afToWaterLoc[2]);
-                            break;
+                    case 1:
+                        DoScriptText(SAY_TOOG_POST_1, m_creature);
+                        break;
+                    case 2:
+                        DoScriptText(SAY_TORT_POST_2, pTorta);
+                        break;
+                    case 3:
+                        DoScriptText(SAY_TOOG_POST_3, m_creature);
+                        break;
+                    case 4:
+                        DoScriptText(SAY_TORT_POST_4, pTorta);
+                        break;
+                    case 5:
+                        DoScriptText(SAY_TOOG_POST_5, m_creature);
+                        break;
+                    case 6:
+                        DoScriptText(SAY_TORT_POST_6, pTorta);
+                        m_creature->GetMotionMaster()->MovePoint(POINT_ID_TO_WATER, m_afToWaterLoc[0], m_afToWaterLoc[1], m_afToWaterLoc[2]);
+                        break;
                     }
 
                     ++m_uiPhasePostEvent;
@@ -175,10 +172,7 @@ struct npc_toogaAI : public FollowerAI
     }
 };
 
-CreatureAI* GetAI_npc_tooga(Creature* pCreature)
-{
-    return new npc_toogaAI(pCreature);
-}
+CreatureAI* GetAI_npc_tooga(Creature* pCreature) { return new npc_toogaAI(pCreature); }
 
 bool QuestAccept_npc_tooga(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
 {
@@ -203,7 +197,7 @@ enum
     GO_PIRATES_TREASURE = 142194
 };
 
-struct go_inconspicuous_landmarkAI: public GameObjectAI
+struct go_inconspicuous_landmarkAI : public GameObjectAI
 {
     go_inconspicuous_landmarkAI(GameObject* pGo) : GameObjectAI(pGo)
     {
@@ -211,7 +205,7 @@ struct go_inconspicuous_landmarkAI: public GameObjectAI
         state = 0;
     }
     uint32 timer;
-    bool state;//0 = usual, can launch. //1 = in use, cannot launch
+    bool state; // 0 = usual, can launch. //1 = in use, cannot launch
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -227,10 +221,7 @@ struct go_inconspicuous_landmarkAI: public GameObjectAI
                 timer -= uiDiff;
         }
     }
-    bool CheckCanStartEvent()
-    {
-        return !state;
-    }
+    bool CheckCanStartEvent() { return !state; }
 
     void SetInUse()
     {
@@ -240,10 +231,7 @@ struct go_inconspicuous_landmarkAI: public GameObjectAI
         timer = 600000;
     }
 };
-GameObjectAI* GetAIgo_inconspicuous_landmark(GameObject *pGo)
-{
-    return new go_inconspicuous_landmarkAI(pGo);
-}
+GameObjectAI* GetAIgo_inconspicuous_landmark(GameObject* pGo) { return new go_inconspicuous_landmarkAI(pGo); }
 bool GOHello_go_inconspicuous_landmark(Player* pPlayer, GameObject* pGo)
 {
     if (go_inconspicuous_landmarkAI* pMarkAI = dynamic_cast<go_inconspicuous_landmarkAI*>(pGo->AI()))
@@ -272,19 +260,19 @@ bool GOHello_go_inconspicuous_landmark(Player* pPlayer, GameObject* pGo)
                     if (pirate3 = pGo->SummonCreature(NPC_PIRATES_3, -10127.80f, -4047.04f, 4.50f, 5.07f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 310000))
                         pirate3->AI()->AttackStart(pPlayer);
 
-                    for (int & pirateEntry : extraPirateType)
+                    for (int& pirateEntry : extraPirateType)
                     {
                         switch (urand(0, 2))
                         {
-                            case 0:
-                                pirateEntry = NPC_PIRATES_1;
-                                break;
-                            case 1:
-                                pirateEntry = NPC_PIRATES_2;
-                                break;
-                            case 2:
-                                pirateEntry = NPC_PIRATES_3;
-                                break;
+                        case 0:
+                            pirateEntry = NPC_PIRATES_1;
+                            break;
+                        case 1:
+                            pirateEntry = NPC_PIRATES_2;
+                            break;
+                        case 2:
+                            pirateEntry = NPC_PIRATES_3;
+                            break;
                         }
                     }
                     if (pirate4 = pGo->SummonCreature(extraPirateType[0], -10113.952148f, -4040.484375f, 5.174251f, 4.300828f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 310000))
@@ -314,15 +302,12 @@ enum Yehkinya : uint32
 
 struct npc_yehkinyaAI : public npc_escortAI
 {
-    npc_yehkinyaAI(Creature* pCreature) : npc_escortAI(pCreature)
-    {
-        Reset();
-    }
-    
+    npc_yehkinyaAI(Creature* pCreature) : npc_escortAI(pCreature) { Reset(); }
+
     uint32 m_uiEventTimer;
-    bool   m_isEventStarted;
+    bool m_isEventStarted;
     uint32 m_uiPoint;
- 
+
     void Reset() override
     {
         m_isEventStarted = false;
@@ -337,7 +322,7 @@ struct npc_yehkinyaAI : public npc_escortAI
     {
         switch (i)
         {
-            case 1:
+        case 1:
             {
                 m_creature->SetWalk(false);
                 m_isEventStarted = true;
@@ -371,10 +356,7 @@ struct npc_yehkinyaAI : public npc_escortAI
     }
 };
 
-CreatureAI* GetAI_npc_yehkinya(Creature* pCreature)
-{
-    return new npc_yehkinyaAI(pCreature);
-}
+CreatureAI* GetAI_npc_yehkinya(Creature* pCreature) { return new npc_yehkinyaAI(pCreature); }
 
 bool QuestRewarded_npc_yehkinya(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
 {

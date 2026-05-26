@@ -24,9 +24,9 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-//#include <string_view>
+// #include <string_view>
 
-//using namespace std::string_view_literals;
+// using namespace std::string_view_literals;
 
 /*
  * A basic utility class for sending emails using SendGrid's API via CURL
@@ -38,14 +38,16 @@ public:
 
     enum class Result
     {
-        OK, RECIPIENT_MISSING, FROM_MISSING, INTERNAL_ERROR, EXTENDED_ERROR
+        OK,
+        RECIPIENT_MISSING,
+        FROM_MISSING,
+        INTERNAL_ERROR,
+        EXTENDED_ERROR
     };
 
     typedef std::function<void(Result)> SendCallback;
 
-    SendgridMail(std::string api_key, std::string template_name)
-        : _api_key(std::move(api_key)), _template_name(std::move(template_name)),
-        _extended_error(CURLE_OK) { }
+    SendgridMail(std::string api_key, std::string template_name) : _api_key(std::move(api_key)), _template_name(std::move(template_name)), _extended_error(CURLE_OK) {}
 
     void substitution(const std::string& key, const std::string& value);
     void recipient(std::string recipient);
@@ -54,7 +56,7 @@ public:
     ExResult extended_error() const;
 
 private:
-    //static constexpr std::string_view uri = "https://api.sendgrid.com/v3/mail/send"sv;
+    // static constexpr std::string_view uri = "https://api.sendgrid.com/v3/mail/send"sv;
     static constexpr char* uri = "https://api.sendgrid.com/v3/mail/send";
 
     const std::string _api_key;

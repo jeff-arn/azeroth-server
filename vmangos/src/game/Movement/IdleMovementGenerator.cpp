@@ -20,18 +20,14 @@
  */
 
 #include "IdleMovementGenerator.h"
-#include "CreatureAI.h"
 #include "Creature.h"
+#include "CreatureAI.h"
 
 IdleMovementGenerator si_idleMovement;
 
-void
-IdleMovementGenerator::Reset(Unit& /*owner*/)
-{
-}
+void IdleMovementGenerator::Reset(Unit& /*owner*/) {}
 
-void
-DistractMovementGenerator::Initialize(Unit& owner)
+void DistractMovementGenerator::Initialize(Unit& owner)
 {
     // Distracted creatures stand up if not standing
     if (!owner.IsStandingUp())
@@ -40,8 +36,7 @@ DistractMovementGenerator::Initialize(Unit& owner)
     owner.AddUnitState(UNIT_STATE_DISTRACTED);
 }
 
-void
-DistractMovementGenerator::Finalize(Unit& owner)
+void DistractMovementGenerator::Finalize(Unit& owner)
 {
     // If this is a creature, then return orientation to original position (for idle movement creatures)
     if (owner.GetTypeId() == TYPEID_UNIT && owner.ToCreature())
@@ -53,19 +48,11 @@ DistractMovementGenerator::Finalize(Unit& owner)
     owner.ClearUnitState(UNIT_STATE_DISTRACTED);
 }
 
-void
-DistractMovementGenerator::Reset(Unit& owner)
-{
-    Initialize(owner);
-}
+void DistractMovementGenerator::Reset(Unit& owner) { Initialize(owner); }
 
-void
-DistractMovementGenerator::Interrupt(Unit& /*owner*/)
-{
-}
+void DistractMovementGenerator::Interrupt(Unit& /*owner*/) {}
 
-bool
-DistractMovementGenerator::Update(Unit& /*owner*/, uint32 const& time_diff)
+bool DistractMovementGenerator::Update(Unit& /*owner*/, uint32 const& time_diff)
 {
     if (time_diff > m_timer)
         return false;
@@ -74,8 +61,7 @@ DistractMovementGenerator::Update(Unit& /*owner*/, uint32 const& time_diff)
     return true;
 }
 
-void
-AssistanceDistractMovementGenerator::Finalize(Unit &unit)
+void AssistanceDistractMovementGenerator::Finalize(Unit& unit)
 {
     unit.ClearUnitState(UNIT_STATE_DISTRACTED);
     if (Unit* victim = unit.GetVictim())

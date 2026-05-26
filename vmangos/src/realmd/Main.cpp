@@ -23,32 +23,32 @@
 // @{
 // \file
 
+#include "ClientPatchCache.h"
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
 #include "RealmList.h"
-#include "ClientPatchCache.h"
 
-#include "Config/Config.h"
-#include "Log.h"
-#include "Errors.h"
+#include <openssl/crypto.h>
+#include <openssl/opensslv.h>
+#include "ArgparserForServer.h"
 #include "AuthSocket.h"
+#include "Config/Config.h"
+#include "Crypto/Encoding/Base32.h"
+#include "Errors.h"
+#include "Log.h"
+#include "ProxyProtocol/ProxyV2Reader.h"
 #include "SystemConfig.h"
-#include "revision.h"
 #include "Util.h"
 #include "migrations_list.h"
-#include <openssl/opensslv.h>
-#include <openssl/crypto.h>
-#include "ArgparserForServer.h"
-#include "Crypto/Encoding/Base32.h"
-#include "ProxyProtocol/ProxyV2Reader.h"
+#include "revision.h"
 
+#include "IO/Multithreading/CreateThread.h"
 #include "IO/Networking/AsyncSocketAcceptor.h"
 #include "IO/Timer/AsyncSystemTimer.h"
-#include "IO/Multithreading/CreateThread.h"
 
 #ifdef ENABLE_MAILSENDER
-#include "MailerService.h"
 #include <curl/curl.h>
+#include "MailerService.h"
 #endif
 
 #ifdef WIN32
@@ -73,9 +73,9 @@ void UnhookSignals();
 void HookSignals();
 
 // Global initialization
-char const* g_mainLogFileName = "Realmd.log";   // Log file path for sLog
-volatile bool stopEvent = false;                // Setting it to true stops the server
-DatabaseType LoginDatabase;                     // Accessor to the realm server database
+char const* g_mainLogFileName = "Realmd.log"; // Log file path for sLog
+volatile bool stopEvent = false; // Setting it to true stops the server
+DatabaseType LoginDatabase; // Accessor to the realm server database
 
 // Launch the realm server
 extern int main(int argc, char** argv)
@@ -239,41 +239,43 @@ extern int main(int argc, char** argv)
 
     std::vector<std::string> trustedProxyIps = SplitStringByDelimiter(sConfig.GetStringDefault("TrustedProxyServers", ""), ',');
 
-    listener->AutoAcceptSocketsUntilClose([ctx = ioCtx.get(), trustedProxyIps](IO::Networking::SocketDescriptor socketDescriptor)
-    {
-        // Create a socket and attach it to our global ioCtx
-        auto authSocket = std::make_shared<AuthSocket>(std::move(IO::Networking::AsyncSocket(ctx, std::move(socketDescriptor))));
-
-        if (IO::NetworkError initError = authSocket->m_socket.InitializeAndFixateMemoryLocation())
+    listener->AutoAcceptSocketsUntilClose(
+        [ctx = ioCtx.get(), trustedProxyIps](IO::Networking::SocketDescriptor socketDescriptor)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[%s] Failed to initialize AuthSocket %s", authSocket->m_socket.GetRemoteIpString().c_str(), initError.ToString().c_str());
-            return; // implicit close()
-        }
+            // Create a socket and attach it to our global ioCtx
+            auto authSocket = std::make_shared<AuthSocket>(std::move(IO::Networking::AsyncSocket(ctx, std::move(socketDescriptor))));
 
-
-        // Check if the remote endpoint is actually a trusted proxy, so we can retrieve the real client ip
-        if (!trustedProxyIps.empty() && std::find(trustedProxyIps.begin(), trustedProxyIps.end(), authSocket->m_socket.GetRemoteIpString()) != trustedProxyIps.end())
-        {
-            // parse proxy header
-            ProxyProtocol::ReadProxyV2Handshake(&(authSocket->m_socket), [authSocket](nonstd::expected<IO::Networking::IpAddress, IO::NetworkError> const& maybeIp)
+            if (IO::NetworkError initError = authSocket->m_socket.InitializeAndFixateMemoryLocation())
             {
-                if (!maybeIp.has_value())
-                {
-                    sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "[%s] Failed to parse proxy header. Error: %s", authSocket->m_socket.GetRemoteIpString().c_str(), maybeIp.error().ToString().c_str());
-                    return; // implicit close()
-                }
-                authSocket->m_remoteIpAddressStringAfterProxy = maybeIp.value().ToString();
-                sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] Connection accepted (proxy ip: %s)", authSocket->GetRemoteIpString().c_str(), authSocket->m_socket.GetRemoteIpString().c_str());
+                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[%s] Failed to initialize AuthSocket %s", authSocket->m_socket.GetRemoteIpString().c_str(), initError.ToString().c_str());
+                return; // implicit close()
+            }
+
+
+            // Check if the remote endpoint is actually a trusted proxy, so we can retrieve the real client ip
+            if (!trustedProxyIps.empty() && std::find(trustedProxyIps.begin(), trustedProxyIps.end(), authSocket->m_socket.GetRemoteIpString()) != trustedProxyIps.end())
+            {
+                // parse proxy header
+                ProxyProtocol::ReadProxyV2Handshake(&(authSocket->m_socket),
+                                                    [authSocket](nonstd::expected<IO::Networking::IpAddress, IO::NetworkError> const& maybeIp)
+                                                    {
+                                                        if (!maybeIp.has_value())
+                                                        {
+                                                            sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "[%s] Failed to parse proxy header. Error: %s", authSocket->m_socket.GetRemoteIpString().c_str(), maybeIp.error().ToString().c_str());
+                                                            return; // implicit close()
+                                                        }
+                                                        authSocket->m_remoteIpAddressStringAfterProxy = maybeIp.value().ToString();
+                                                        sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] Connection accepted (proxy ip: %s)", authSocket->GetRemoteIpString().c_str(), authSocket->m_socket.GetRemoteIpString().c_str());
+                                                        authSocket->Start();
+                                                    });
+            }
+            else
+            {
+                // no proxy, we can start directly
+                sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] Connection accepted", authSocket->GetRemoteIpString().c_str());
                 authSocket->Start();
-            });
-        }
-        else
-        {
-            // no proxy, we can start directly
-            sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] Connection accepted", authSocket->GetRemoteIpString().c_str());
-            authSocket->Start();
-        }
-    });
+            }
+        });
 
     // Catch termination signals
     HookSignals();
@@ -291,11 +293,11 @@ extern int main(int argc, char** argv)
 
             if (::GetProcessAffinityMask(hProcess, &appAff, &sysAff))
             {
-                ULONG_PTR curAff = Aff & appAff;            // remove non accessible processors
+                ULONG_PTR curAff = Aff & appAff; // remove non accessible processors
 
                 if (!curAff)
                 {
-                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Processors marked in UseProcessors bitmask (hex) %x not accessible for realmd. Accessible processors bitmask (hex): %x",Aff,appAff);
+                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Processors marked in UseProcessors bitmask (hex) %x not accessible for realmd. Accessible processors bitmask (hex): %x", Aff, appAff);
                 }
                 else
                 {
@@ -311,9 +313,9 @@ extern int main(int argc, char** argv)
         bool Prio = sConfig.GetBoolDefault("ProcessPriority", false);
 
         // if(Prio && (m_ServiceStatus == -1)/* need set to default process priority class in service mode*/)
-        if(Prio)
+        if (Prio)
         {
-            if (::SetPriorityClass(hProcess,HIGH_PRIORITY_CLASS))
+            if (::SetPriorityClass(hProcess, HIGH_PRIORITY_CLASS))
                 sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "realmd process priority class set to HIGH");
             else
                 sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Can't set realmd process priority class.");
@@ -321,17 +323,14 @@ extern int main(int argc, char** argv)
     }
 #endif
 
-    //server has started up successfully => enable async DB requests
+    // server has started up successfully => enable async DB requests
     LoginDatabase.AllowAsyncTransactions();
 
     // maximum counter for next ping
     uint32 numLoops = (sConfig.GetIntDefault("MaxPingTime", 30) * (MINUTE * 1000000 / 100000)); // TODO make this loop like mangosd
     uint32 loopCounter = 0;
 
-    auto ioThread = IO::Multithreading::CreateThread("MainIoCtx", [&ioCtx]()
-    {
-        ioCtx->RunUntilShutdown();
-    });
+    auto ioThread = IO::Multithreading::CreateThread("MainIoCtx", [&ioCtx]() { ioCtx->RunUntilShutdown(); });
 
 #ifndef WIN32
     detachDaemon();
@@ -349,8 +348,10 @@ extern int main(int argc, char** argv)
         }
 
 #ifdef WIN32
-        if (m_ServiceStatus == 0) stopEvent = true;
-        while (m_ServiceStatus == 2) Sleep(1000);
+        if (m_ServiceStatus == 0)
+            stopEvent = true;
+        while (m_ServiceStatus == 2)
+            Sleep(1000);
 #endif
     }
 
@@ -378,14 +379,14 @@ void OnSignal(int s)
 {
     switch (s)
     {
-        case SIGINT:
-        case SIGTERM:
-            stopEvent = true;
-            break;
+    case SIGINT:
+    case SIGTERM:
+        stopEvent = true;
+        break;
 #ifdef _WIN32
-        case SIGBREAK:
-            stopEvent = true;
-            break;
+    case SIGBREAK:
+        stopEvent = true;
+        break;
 #endif
     }
 

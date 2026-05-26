@@ -1,13 +1,13 @@
 #include "BotBehaviors_Shared.h"
+#include "BotCombatEventBuffer.h"
 #include "BotFormation.h"
 #include "BotSituationContext.h"
 #include "BotSpellKit.h"
-#include "BotCombatEventBuffer.h"
 #include "CombatBotBaseAI.h"
+#include "Creature.h"
+#include "Group.h"
 #include "PartyBotAI.h"
 #include "Player.h"
-#include "Group.h"
-#include "Creature.h"
 
 // Helper: is this role a caster that should not melee?
 static bool IsCasterRole(uint8 role, uint8 playerClass, ShapeshiftForm form)
@@ -206,8 +206,7 @@ bool BehaviorHealParty::Execute(SituationContext const& ctx, BotSpellKit& kit)
     {
         // Conserve mana: tank at 70%, non-tank only if < 40%.
         // HoT on tank only.
-        if (ctx.tankUnit && ctx.tankHealthPct < 70.0f &&
-            !ctx.tankUnit->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
+        if (ctx.tankUnit && ctx.tankHealthPct < 70.0f && !ctx.tankUnit->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
         {
             if (m_ai->HealInjuredTargetPeriodic(ctx.tankUnit))
                 return true;
@@ -229,8 +228,7 @@ bool BehaviorHealParty::Execute(SituationContext const& ctx, BotSpellKit& kit)
     // Normal mana (>= 50%): full healing logic.
 
     // HoT on tank if below 80% (proactive).
-    if (ctx.tankUnit && ctx.tankHealthPct < 80.0f &&
-        !ctx.tankUnit->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
+    if (ctx.tankUnit && ctx.tankHealthPct < 80.0f && !ctx.tankUnit->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
     {
         if (m_ai->HealInjuredTargetPeriodic(ctx.tankUnit))
             return true;
@@ -332,13 +330,13 @@ float BehaviorThreatDump::Score(SituationContext const& ctx) const
     // Check if class actually has a threat dump ability
     switch (ctx.playerClass)
     {
-        case CLASS_ROGUE:   // Feint
-        case CLASS_PRIEST:  // Fade
-        case CLASS_DRUID:   // Cower
-        case CLASS_HUNTER:  // Feign Death
-            break;
-        default:
-            return 0.0f;
+    case CLASS_ROGUE: // Feint
+    case CLASS_PRIEST: // Fade
+    case CLASS_DRUID: // Cower
+    case CLASS_HUNTER: // Feign Death
+        break;
+    default:
+        return 0.0f;
     }
 
     // Scale 70-78, capped at 78
@@ -417,8 +415,7 @@ float BehaviorKite::Score(SituationContext const& ctx) const
 
     // Healers: suppress kiting when the tank is dying and we're not in
     // serious danger ourselves.  Stand and heal instead.
-    if (ctx.role == ROLE_HEALER && ctx.tankIsAlive && ctx.tankHealthPct < 30.0f
-        && ctx.healthPct > 50.0f)
+    if (ctx.role == ROLE_HEALER && ctx.tankIsAlive && ctx.tankHealthPct < 30.0f && ctx.healthPct > 50.0f)
         return 0.0f;
 
     // Scale with HP: lower HP = more urgent to escape
@@ -440,9 +437,7 @@ bool BehaviorKite::Execute(SituationContext const& ctx, BotSpellKit& kit)
     // Formation-aware flee: run backward along cleared trail.
     if (ctx.hasFleeTarget)
     {
-        m_ai->me->GetMotionMaster()->MovePoint(0,
-            ctx.fleeTargetX, ctx.fleeTargetY, ctx.fleeTargetZ,
-            MOVE_PATHFINDING);
+        m_ai->me->GetMotionMaster()->MovePoint(0, ctx.fleeTargetX, ctx.fleeTargetY, ctx.fleeTargetZ, MOVE_PATHFINDING);
         return true;
     }
 
@@ -487,12 +482,12 @@ bool BehaviorExecuteTarget::kit_has_execute(SituationContext const& ctx) const
 {
     switch (ctx.playerClass)
     {
-        case CLASS_WARRIOR:
-        case CLASS_WARLOCK:
-        case CLASS_PALADIN:
-            return true;
-        default:
-            return false;
+    case CLASS_WARRIOR:
+    case CLASS_WARLOCK:
+    case CLASS_PALADIN:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -510,16 +505,16 @@ float BehaviorApplyDots::Score(SituationContext const& ctx) const
     // Only score if the class actually has DoT spells
     switch (ctx.playerClass)
     {
-        case CLASS_WARLOCK:
-        case CLASS_PRIEST:
-        case CLASS_DRUID:
-        case CLASS_HUNTER:
-        case CLASS_SHAMAN:
-        case CLASS_ROGUE:
-        case CLASS_WARRIOR:
-            break;
-        default:
-            return 0.0f; // Mage, Paladin have no DoTs
+    case CLASS_WARLOCK:
+    case CLASS_PRIEST:
+    case CLASS_DRUID:
+    case CLASS_HUNTER:
+    case CLASS_SHAMAN:
+    case CLASS_ROGUE:
+    case CLASS_WARRIOR:
+        break;
+    default:
+        return 0.0f; // Mage, Paladin have no DoTs
     }
 
     return 55.0f;
@@ -554,8 +549,7 @@ float BehaviorAoeDamage::Score(SituationContext const& ctx) const
     if (ctx.currentTarget)
     {
         // Use enemy count around target for ranged AoE
-        enemyCount = std::max(enemyCount,
-            (uint8)m_ai->me->GetEnemyCountInRadiusAround(ctx.currentTarget, 10.0f));
+        enemyCount = std::max(enemyCount, (uint8)m_ai->me->GetEnemyCountInRadiusAround(ctx.currentTarget, 10.0f));
     }
 
     if (enemyCount < 3)
@@ -608,12 +602,23 @@ float BehaviorSelfBuff::Score(SituationContext const& ctx) const
     SpellEntry const* pBuff = nullptr;
     switch (ctx.playerClass)
     {
-        case CLASS_MAGE:    pBuff = m_ai->m_spells.mage.pIceArmor; break;
-        case CLASS_WARLOCK: pBuff = m_ai->m_spells.warlock.pDemonArmor; break;
-        case CLASS_PRIEST:  pBuff = m_ai->m_spells.priest.pInnerFire; break;
-        case CLASS_SHAMAN:  pBuff = m_ai->m_spells.shaman.pLightningShield; break;
-        case CLASS_WARRIOR: pBuff = m_ai->m_spells.warrior.pBattleShout; break;
-        default: return 0.0f;
+    case CLASS_MAGE:
+        pBuff = m_ai->m_spells.mage.pIceArmor;
+        break;
+    case CLASS_WARLOCK:
+        pBuff = m_ai->m_spells.warlock.pDemonArmor;
+        break;
+    case CLASS_PRIEST:
+        pBuff = m_ai->m_spells.priest.pInnerFire;
+        break;
+    case CLASS_SHAMAN:
+        pBuff = m_ai->m_spells.shaman.pLightningShield;
+        break;
+    case CLASS_WARRIOR:
+        pBuff = m_ai->m_spells.warrior.pBattleShout;
+        break;
+    default:
+        return 0.0f;
     }
 
     if (!pBuff)
@@ -677,9 +682,7 @@ float BehaviorPosition::Score(SituationContext const& ctx) const
         }
 
         // Too close: need to back away — but only if not already moving away
-        if (dist < 10.0f &&
-            m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE &&
-            m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() != CHASE_MOTION_TYPE)
+        if (dist < 10.0f && m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE && m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() != CHASE_MOTION_TYPE)
             return 35.0f;
     }
     else
@@ -688,8 +691,7 @@ float BehaviorPosition::Score(SituationContext const& ctx) const
             return 0.0f;
 
         // Melee: need to close gap
-        if (!m_ai->me->CanReachWithMeleeAutoAttack(posTarget) &&
-            m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
+        if (!m_ai->me->CanReachWithMeleeAutoAttack(posTarget) && m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
             return 35.0f;
     }
 
@@ -701,9 +703,7 @@ bool BehaviorPosition::Execute(SituationContext const& ctx, BotSpellKit& kit)
     // Formation-aware: only when NOT in combat (no target). Combat uses MoveChase distances.
     if (!ctx.currentTarget && ctx.hasFormationTarget && ctx.distToFormationPos > BotFormationDefaults::MOVE_DEADZONE)
     {
-        m_ai->me->GetMotionMaster()->MovePoint(0,
-            ctx.formationTargetX, ctx.formationTargetY, ctx.formationTargetZ,
-            MOVE_PATHFINDING);
+        m_ai->me->GetMotionMaster()->MovePoint(0, ctx.formationTargetX, ctx.formationTargetY, ctx.formationTargetZ, MOVE_PATHFINDING);
         return true;
     }
 
@@ -748,10 +748,7 @@ float BehaviorDispel::Score(SituationContext const& ctx) const
     return 0.0f;
 }
 
-bool BehaviorDispel::Execute(SituationContext const& ctx, BotSpellKit& kit)
-{
-    return m_ai->CheckForDispelTargets();
-}
+bool BehaviorDispel::Execute(SituationContext const& ctx, BotSpellKit& kit) { return m_ai->CheckForDispelTargets(); }
 
 // ============================================================
 // 17. BehaviorPartyBuff
@@ -761,40 +758,48 @@ float BehaviorPartyBuff::Score(SituationContext const& ctx) const
 {
     // Check if we actually have any party buff that needs applying.
     // Returns 0 if no buffs are available or all are already applied.
-    auto HasBuffTarget = [this](SpellEntry const* pSpell) -> bool
-    {
-        return pSpell && m_ai->SelectBuffTarget(pSpell) != nullptr;
-    };
+    auto HasBuffTarget = [this](SpellEntry const* pSpell) -> bool { return pSpell && m_ai->SelectBuffTarget(pSpell) != nullptr; };
 
     switch (ctx.playerClass)
     {
-        case CLASS_DRUID:
-            if (HasBuffTarget(m_ai->m_spells.druid.pGiftoftheWild)) return 52.0f;
-            if (HasBuffTarget(m_ai->m_spells.druid.pMarkoftheWild)) return 52.0f;
-            if (HasBuffTarget(m_ai->m_spells.druid.pThorns)) return 52.0f;
-            break;
-        case CLASS_PRIEST:
-            if (HasBuffTarget(m_ai->m_spells.priest.pPrayerofFortitude)) return 52.0f;
-            if (HasBuffTarget(m_ai->m_spells.priest.pPowerWordFortitude)) return 52.0f;
-            if (HasBuffTarget(m_ai->m_spells.priest.pPrayerofSpirit)) return 52.0f;
-            if (HasBuffTarget(m_ai->m_spells.priest.pDivineSpirit)) return 52.0f;
-            if (HasBuffTarget(m_ai->m_spells.priest.pPrayerofShadowProtection)) return 52.0f;
-            if (HasBuffTarget(m_ai->m_spells.priest.pShadowProtection)) return 52.0f;
-            break;
-        case CLASS_MAGE:
-            if (HasBuffTarget(m_ai->m_spells.mage.pArcaneBrilliance)) return 52.0f;
-            if (HasBuffTarget(m_ai->m_spells.mage.pArcaneIntellect)) return 52.0f;
-            break;
-        case CLASS_WARLOCK:
-            if (HasBuffTarget(m_ai->m_spells.warlock.pDetectInvisibility)) return 52.0f;
-            break;
-        case CLASS_PALADIN:
-            if (m_ai->m_spells.paladin.pAura &&
-                m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.paladin.pAura))
-                return 52.0f;
-            break;
-        default:
-            break;
+    case CLASS_DRUID:
+        if (HasBuffTarget(m_ai->m_spells.druid.pGiftoftheWild))
+            return 52.0f;
+        if (HasBuffTarget(m_ai->m_spells.druid.pMarkoftheWild))
+            return 52.0f;
+        if (HasBuffTarget(m_ai->m_spells.druid.pThorns))
+            return 52.0f;
+        break;
+    case CLASS_PRIEST:
+        if (HasBuffTarget(m_ai->m_spells.priest.pPrayerofFortitude))
+            return 52.0f;
+        if (HasBuffTarget(m_ai->m_spells.priest.pPowerWordFortitude))
+            return 52.0f;
+        if (HasBuffTarget(m_ai->m_spells.priest.pPrayerofSpirit))
+            return 52.0f;
+        if (HasBuffTarget(m_ai->m_spells.priest.pDivineSpirit))
+            return 52.0f;
+        if (HasBuffTarget(m_ai->m_spells.priest.pPrayerofShadowProtection))
+            return 52.0f;
+        if (HasBuffTarget(m_ai->m_spells.priest.pShadowProtection))
+            return 52.0f;
+        break;
+    case CLASS_MAGE:
+        if (HasBuffTarget(m_ai->m_spells.mage.pArcaneBrilliance))
+            return 52.0f;
+        if (HasBuffTarget(m_ai->m_spells.mage.pArcaneIntellect))
+            return 52.0f;
+        break;
+    case CLASS_WARLOCK:
+        if (HasBuffTarget(m_ai->m_spells.warlock.pDetectInvisibility))
+            return 52.0f;
+        break;
+    case CLASS_PALADIN:
+        if (m_ai->m_spells.paladin.pAura && m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.paladin.pAura))
+            return 52.0f;
+        break;
+    default:
+        break;
     }
     return 0.0f;
 }
@@ -858,49 +863,60 @@ bool BehaviorPartyBuff::Execute(SituationContext const& ctx, BotSpellKit& kit)
 
     switch (ctx.playerClass)
     {
-        case CLASS_DRUID:
-            // Gift of the Wild > Mark of the Wild
-            if (TryBuff(m_ai->m_spells.druid.pGiftoftheWild)) return true;
-            if (TryBuff(m_ai->m_spells.druid.pMarkoftheWild)) return true;
-            // Thorns on tank
-            if (TryBuffTankFirst(m_ai->m_spells.druid.pThorns)) return true;
-            break;
+    case CLASS_DRUID:
+        // Gift of the Wild > Mark of the Wild
+        if (TryBuff(m_ai->m_spells.druid.pGiftoftheWild))
+            return true;
+        if (TryBuff(m_ai->m_spells.druid.pMarkoftheWild))
+            return true;
+        // Thorns on tank
+        if (TryBuffTankFirst(m_ai->m_spells.druid.pThorns))
+            return true;
+        break;
 
-        case CLASS_PRIEST:
-            // Prayer of Fortitude > Power Word: Fortitude
-            if (TryBuff(m_ai->m_spells.priest.pPrayerofFortitude)) return true;
-            if (TryBuff(m_ai->m_spells.priest.pPowerWordFortitude)) return true;
-            // Prayer of Spirit > Divine Spirit
-            if (TryBuff(m_ai->m_spells.priest.pPrayerofSpirit)) return true;
-            if (TryBuff(m_ai->m_spells.priest.pDivineSpirit)) return true;
-            // Shadow Protection
-            if (TryBuff(m_ai->m_spells.priest.pPrayerofShadowProtection)) return true;
-            if (TryBuff(m_ai->m_spells.priest.pShadowProtection)) return true;
-            break;
+    case CLASS_PRIEST:
+        // Prayer of Fortitude > Power Word: Fortitude
+        if (TryBuff(m_ai->m_spells.priest.pPrayerofFortitude))
+            return true;
+        if (TryBuff(m_ai->m_spells.priest.pPowerWordFortitude))
+            return true;
+        // Prayer of Spirit > Divine Spirit
+        if (TryBuff(m_ai->m_spells.priest.pPrayerofSpirit))
+            return true;
+        if (TryBuff(m_ai->m_spells.priest.pDivineSpirit))
+            return true;
+        // Shadow Protection
+        if (TryBuff(m_ai->m_spells.priest.pPrayerofShadowProtection))
+            return true;
+        if (TryBuff(m_ai->m_spells.priest.pShadowProtection))
+            return true;
+        break;
 
-        case CLASS_MAGE:
-            // Arcane Brilliance > Arcane Intellect
-            if (TryBuff(m_ai->m_spells.mage.pArcaneBrilliance)) return true;
-            if (TryBuff(m_ai->m_spells.mage.pArcaneIntellect)) return true;
-            break;
+    case CLASS_MAGE:
+        // Arcane Brilliance > Arcane Intellect
+        if (TryBuff(m_ai->m_spells.mage.pArcaneBrilliance))
+            return true;
+        if (TryBuff(m_ai->m_spells.mage.pArcaneIntellect))
+            return true;
+        break;
 
-        case CLASS_WARLOCK:
-            if (TryBuff(m_ai->m_spells.warlock.pDetectInvisibility)) return true;
-            break;
+    case CLASS_WARLOCK:
+        if (TryBuff(m_ai->m_spells.warlock.pDetectInvisibility))
+            return true;
+        break;
 
-        case CLASS_PALADIN:
-            // Aura
-            if (m_ai->m_spells.paladin.pAura &&
-                m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.paladin.pAura))
-            {
-                if (m_ai->DoCastSpell(m_ai->me, m_ai->m_spells.paladin.pAura) == SPELL_CAST_OK)
-                    return true;
-            }
-            // Blessings handled by BehaviorPaladinBlessing (class-unique)
-            break;
+    case CLASS_PALADIN:
+        // Aura
+        if (m_ai->m_spells.paladin.pAura && m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.paladin.pAura))
+        {
+            if (m_ai->DoCastSpell(m_ai->me, m_ai->m_spells.paladin.pAura) == SPELL_CAST_OK)
+                return true;
+        }
+        // Blessings handled by BehaviorPaladinBlessing (class-unique)
+        break;
 
-        default:
-            break;
+    default:
+        break;
     }
 
     return false;

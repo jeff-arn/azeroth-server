@@ -23,14 +23,15 @@ typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
 
 class RC4
 {
-    public:
-        RC4(uint8 len);
-        RC4(uint8* seed, uint8 len);
-        ~RC4();
-        void Init(const uint8* seed);
-        void UpdateData(uint8* data, size_t len);
-    private:
-        EVP_CIPHER_CTX* m_ctx;
+public:
+    RC4(uint8 len);
+    RC4(uint8* seed, uint8 len);
+    ~RC4();
+    void Init(const uint8* seed);
+    void UpdateData(uint8* data, size_t len);
+
+private:
+    EVP_CIPHER_CTX* m_ctx;
 };
 
 #endif

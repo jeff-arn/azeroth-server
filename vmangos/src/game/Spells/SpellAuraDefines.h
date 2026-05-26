@@ -22,18 +22,18 @@
 #ifndef MANGOS_SPELLAURADEFINES_H
 #define MANGOS_SPELLAURADEFINES_H
 
-#define MAX_AURAS 48                                        // 12*4 (byte per aura) slots in UNIT_FIELD_AURA*
+#define MAX_AURAS 48 // 12*4 (byte per aura) slots in UNIT_FIELD_AURA*
 #define MAX_POSITIVE_AURAS 32
 
 enum AuraFlags
 {
-    AFLAG_NONE                  = 0x00,
-    AFLAG_CANCELABLE            = 0x01,
-    AFLAG_EFF_INDEX_2           = 0x02,
-    AFLAG_EFF_INDEX_1           = 0x04,
-    AFLAG_EFF_INDEX_0           = 0x08,
+    AFLAG_NONE = 0x00,
+    AFLAG_CANCELABLE = 0x01,
+    AFLAG_EFF_INDEX_2 = 0x02,
+    AFLAG_EFF_INDEX_1 = 0x04,
+    AFLAG_EFF_INDEX_0 = 0x08,
 
-    AFLAG_MASK_ALL              = 0x0F
+    AFLAG_MASK_ALL = 0x0F
 };
 
 /**
@@ -130,7 +130,7 @@ enum AuraType
      * what kind of invisibility the Unit should be able to detect.
      */
     SPELL_AURA_MOD_INVISIBILITY_DETECTION = 19,
-    SPELL_AURA_OBS_MOD_HEALTH = 20,                         //20,21 unofficial
+    SPELL_AURA_OBS_MOD_HEALTH = 20, // 20,21 unofficial
     SPELL_AURA_OBS_MOD_MANA = 21,
     /**
      * Handled by Aura::HandleAuraModResistance, changes the resistance for a unit
@@ -284,15 +284,15 @@ enum AuraType
     SPELL_AURA_PERSUADED = 146,
     SPELL_AURA_MECHANIC_IMMUNITY_MASK = 147,
     SPELL_AURA_RETAIN_COMBO_POINTS = 148,
-    SPELL_AURA_RESIST_PUSHBACK  = 149,                      //    Resist Pushback
+    SPELL_AURA_RESIST_PUSHBACK = 149, //    Resist Pushback
     SPELL_AURA_MOD_SHIELD_BLOCKVALUE_PCT = 150,
-    SPELL_AURA_TRACK_STEALTHED  = 151,                      //    Track Stealthed
-    SPELL_AURA_MOD_DETECTED_RANGE = 152,                    //    Mod Detected Range
-    SPELL_AURA_SPLIT_DAMAGE_FLAT = 153,                     //    Split Damage Flat
-    SPELL_AURA_MOD_STEALTH_LEVEL = 154,                     //    Stealth Level Modifier
-    SPELL_AURA_MOD_WATER_BREATHING = 155,                   //    Mod Water Breathing
-    SPELL_AURA_MOD_REPUTATION_GAIN = 156,                   //    Mod Reputation Gain
-    SPELL_AURA_PET_DAMAGE_MULTI = 157,                      //    Mod Pet Damage
+    SPELL_AURA_TRACK_STEALTHED = 151, //    Track Stealthed
+    SPELL_AURA_MOD_DETECTED_RANGE = 152, //    Mod Detected Range
+    SPELL_AURA_SPLIT_DAMAGE_FLAT = 153, //    Split Damage Flat
+    SPELL_AURA_MOD_STEALTH_LEVEL = 154, //    Stealth Level Modifier
+    SPELL_AURA_MOD_WATER_BREATHING = 155, //    Mod Water Breathing
+    SPELL_AURA_MOD_REPUTATION_GAIN = 156, //    Mod Reputation Gain
+    SPELL_AURA_PET_DAMAGE_MULTI = 157, //    Mod Pet Damage
     SPELL_AURA_MOD_SHIELD_BLOCKVALUE = 158,
     SPELL_AURA_NO_PVP_CREDIT = 159,
     SPELL_AURA_MOD_AOE_AVOIDANCE = 160,
@@ -309,18 +309,18 @@ enum AuraType
     SPELL_AURA_MOD_SPEED_NOT_STACK = 171,
     SPELL_AURA_MOD_MOUNTED_SPEED_NOT_STACK = 172,
     SPELL_AURA_ALLOW_CHAMPION_SPELLS = 173,
-    SPELL_AURA_MOD_SPELL_DAMAGE_OF_STAT_PERCENT = 174,      // in 1.12.1 only dependent spirit case
+    SPELL_AURA_MOD_SPELL_DAMAGE_OF_STAT_PERCENT = 174, // in 1.12.1 only dependent spirit case
     SPELL_AURA_MOD_SPELL_HEALING_OF_STAT_PERCENT = 175,
     SPELL_AURA_SPIRIT_OF_REDEMPTION = 176,
     SPELL_AURA_AOE_CHARM = 177,
     SPELL_AURA_MOD_DEBUFF_RESISTANCE = 178,
     SPELL_AURA_MOD_ATTACKER_SPELL_CRIT_CHANCE = 179,
     SPELL_AURA_MOD_FLAT_SPELL_DAMAGE_VERSUS = 180,
-    SPELL_AURA_MOD_FLAT_SPELL_CRIT_DAMAGE_VERSUS = 181,     // unused - possible flat spell crit damage versus
+    SPELL_AURA_MOD_FLAT_SPELL_CRIT_DAMAGE_VERSUS = 181, // unused - possible flat spell crit damage versus
     SPELL_AURA_MOD_RESISTANCE_OF_STAT_PERCENT = 182,
     SPELL_AURA_MOD_CRITICAL_THREAT = 183,
     SPELL_AURA_MOD_ATTACKER_MELEE_HIT_CHANCE = 184,
-    SPELL_AURA_MOD_ATTACKER_RANGED_HIT_CHANCE= 185,
+    SPELL_AURA_MOD_ATTACKER_RANGED_HIT_CHANCE = 185,
     SPELL_AURA_MOD_ATTACKER_SPELL_HIT_CHANCE = 186,
     SPELL_AURA_MOD_ATTACKER_MELEE_CRIT_CHANCE = 187,
     SPELL_AURA_MOD_ATTACKER_RANGED_CRIT_CHANCE = 188,
@@ -329,7 +329,7 @@ enum AuraType
     SPELL_AURA_USE_NORMAL_MOVEMENT_SPEED = 191,
     // Nostalrius
     SPELL_AURA_AURA_SPELL = 192, // Ajoute les auras d'un sort tant que cet aura est actif.
-    TOTAL_AURAS=193
+    TOTAL_AURAS = 193
 };
 
 enum AreaAuraType

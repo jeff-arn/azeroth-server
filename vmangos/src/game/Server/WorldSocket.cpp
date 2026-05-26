@@ -21,61 +21,49 @@
  */
 
 #include "WorldSocket.h"
-#include "WorldSocketMgr.h"
 #include "WorldSession.h"
+#include "WorldSocketMgr.h"
 
-#include "Auth/AuthCrypt.h"
-#include "World.h"
 #include "AccountMgr.h"
-#include "SharedDefines.h"
 #include "AddonHandler.h"
-#include "Opcodes.h"
-#include "Crypto/Hash/SHA1.h"
-#include "Database/SqlPreparedStatement.h"
-#include "Database/DatabaseEnv.h"
-#include "DBCStores.h"
+#include "Auth/AuthCrypt.h"
 #include "Config/Config.h"
-#include "Util.h"
+#include "Crypto/Hash/SHA1.h"
+#include "DBCStores.h"
+#include "Database/DatabaseEnv.h"
+#include "Database/SqlPreparedStatement.h"
 #include "Errors.h"
+#include "Opcodes.h"
+#include "SharedDefines.h"
+#include "Util.h"
+#include "World.h"
 
 #include "IO/Networking/DNS.h"
 #include "IO/Timer/AsyncSystemTimer.h"
 
 #include <memory>
 
-#if defined( __GNUC__ )
+#if defined(__GNUC__)
 #pragma pack(1)
 #else
-#pragma pack(push,1)
+#pragma pack(push, 1)
 #endif
 struct ServerPktHeader
 {
     uint16 size;
     uint16 cmd;
 
-    char const* data() const
-    {
-        return reinterpret_cast<char const*>(this);
-    }
+    char const* data() const { return reinterpret_cast<char const*>(this); }
 
-    std::size_t headerSize() const
-    {
-        return sizeof(ServerPktHeader);
-    }
+    std::size_t headerSize() const { return sizeof(ServerPktHeader); }
 };
-#if defined( __GNUC__ )
+#if defined(__GNUC__)
 #pragma pack()
 #else
 #pragma pack(pop)
 #endif
 
-WorldSocket::WorldSocket(IO::Networking::AsyncSocket socket)
-    : m_socket(std::move(socket)),
-      m_lastPingTime(std::chrono::system_clock::time_point::min()),
-      m_overSpeedPings(0),
-      m_Session(nullptr),
-      m_authSeed(static_cast<uint32>(rand32())),
-      m_remoteIpAddressStringAfterProxy(m_socket.GetRemoteIpString())
+WorldSocket::WorldSocket(IO::Networking::AsyncSocket socket) : m_socket(std::move(socket)), m_lastPingTime(std::chrono::system_clock::time_point::min()), m_overSpeedPings(0), m_Session(nullptr), m_authSeed(static_cast<uint32>(rand32())), m_remoteIpAddressStringAfterProxy(m_socket.GetRemoteIpString())
 {
     m_sendQueueIsRunning.clear(); // there is no atomic_flag::constructor on windows to initialize it with false by default (and if left out, linux is uninitialized and will fail randomly)
 }
@@ -95,58 +83,60 @@ void WorldSocket::DoRecvIncomingData()
 {
     std::shared_ptr<ClientPktHeader> header = std::make_shared<ClientPktHeader>();
 
-    m_socket.Read((char*)header.get(), sizeof(ClientPktHeader), [self = shared_from_this(), header](IO::NetworkError const& error, std::size_t) -> void
-    {
-        if (error)
-        {
-            if (error.GetErrorType() != IO::NetworkError::ErrorType::SocketClosed || !self->IsClosing()) // only print error if it's not "normal close" related
-            {
-                sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] WorldSocket::DoRecvIncomingData: IoError: %s", self->m_socket.GetRemoteIpString().c_str(), error.ToString().c_str());
-                self->CloseSocket(); // This call to CloseSocket is actually necessary for once, so that others can see that this socket is not usable anymore
-            }
-            return;
-        }
+    m_socket.Read((char*)header.get(), sizeof(ClientPktHeader),
+                  [self = shared_from_this(), header](IO::NetworkError const& error, std::size_t) -> void
+                  {
+                      if (error)
+                      {
+                          if (error.GetErrorType() != IO::NetworkError::ErrorType::SocketClosed || !self->IsClosing()) // only print error if it's not "normal close" related
+                          {
+                              sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] WorldSocket::DoRecvIncomingData: IoError: %s", self->m_socket.GetRemoteIpString().c_str(), error.ToString().c_str());
+                              self->CloseSocket(); // This call to CloseSocket is actually necessary for once, so that others can see that this socket is not usable anymore
+                          }
+                          return;
+                      }
 
-        // thread safe due to always being called from service context
-        self->m_Crypt.DecryptRecv((uint8*)header.get(), sizeof(ClientPktHeader));
+                      // thread safe due to always being called from service context
+                      self->m_Crypt.DecryptRecv((uint8*)header.get(), sizeof(ClientPktHeader));
 
-        EndianConvertReverse(header->size);
-        EndianConvert(header->cmd);
+                      EndianConvertReverse(header->size);
+                      EndianConvert(header->cmd);
 
-        if ((header->size < 4) || (header->size > 0x2800) || (header->cmd >= NUM_MSG_TYPES))
-        {
-            sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] WorldSocket::DoRecvIncomingData: client sent malformed packet size = %u, cmd = %u", self->m_socket.GetRemoteIpString().c_str(), header->size, header->cmd);
-            return;
-        }
+                      if ((header->size < 4) || (header->size > 0x2800) || (header->cmd >= NUM_MSG_TYPES))
+                      {
+                          sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] WorldSocket::DoRecvIncomingData: client sent malformed packet size = %u, cmd = %u", self->m_socket.GetRemoteIpString().c_str(), header->size, header->cmd);
+                          return;
+                      }
 
-        size_t remainingPacketSize = header->size - sizeof(header->cmd);
-        if (remainingPacketSize == 0)
-        { // Fastpath, it's probably an OpCode without any data
-            auto packet = std::make_unique<WorldPacket>(header->cmd, 0);
-            if (self->_HandleCompleteReceivedPacket(std::move(packet)) == HandlerResult::Okay)
-                self->DoRecvIncomingData();
-        }
-        else
-        {
-            // Allocate WorldPacket once and write into the memory inplace, no need to move or copy stuff
-            // Cannot move std::unique_ptr into function capture, so it's wrapped into std::shared_ptr
-            std::shared_ptr<std::unique_ptr<WorldPacket>> packetTmpSharedPtr(new std::unique_ptr<WorldPacket>(new WorldPacket(header->cmd, remainingPacketSize)));
-            (*packetTmpSharedPtr)->resize(remainingPacketSize);
-            self->m_socket.Read((char*)((*packetTmpSharedPtr)->contents()), (*packetTmpSharedPtr)->size(), [self, packetTmpSharedPtr](IO::NetworkError const& error, std::size_t) -> void
-            {
-                if (error)
-                {
-                    sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "WorldSocket::DoRecvIncomingData: Error %s", error.ToString().c_str());
-                    self->CloseSocket();
-                    return;
-                }
+                      size_t remainingPacketSize = header->size - sizeof(header->cmd);
+                      if (remainingPacketSize == 0)
+                      { // Fastpath, it's probably an OpCode without any data
+                          auto packet = std::make_unique<WorldPacket>(header->cmd, 0);
+                          if (self->_HandleCompleteReceivedPacket(std::move(packet)) == HandlerResult::Okay)
+                              self->DoRecvIncomingData();
+                      }
+                      else
+                      {
+                          // Allocate WorldPacket once and write into the memory inplace, no need to move or copy stuff
+                          // Cannot move std::unique_ptr into function capture, so it's wrapped into std::shared_ptr
+                          std::shared_ptr<std::unique_ptr<WorldPacket>> packetTmpSharedPtr(new std::unique_ptr<WorldPacket>(new WorldPacket(header->cmd, remainingPacketSize)));
+                          (*packetTmpSharedPtr)->resize(remainingPacketSize);
+                          self->m_socket.Read((char*)((*packetTmpSharedPtr)->contents()), (*packetTmpSharedPtr)->size(),
+                                              [self, packetTmpSharedPtr](IO::NetworkError const& error, std::size_t) -> void
+                                              {
+                                                  if (error)
+                                                  {
+                                                      sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "WorldSocket::DoRecvIncomingData: Error %s", error.ToString().c_str());
+                                                      self->CloseSocket();
+                                                      return;
+                                                  }
 
-                // by std::moving the content of the shared_ptr, we will separate the unique_ptr out of the shared_ptr.
-                if (self->_HandleCompleteReceivedPacket(std::move(*packetTmpSharedPtr)) == HandlerResult::Okay)
-                    self->DoRecvIncomingData();
-            });
-        }
-    });
+                                                  // by std::moving the content of the shared_ptr, we will separate the unique_ptr out of the shared_ptr.
+                                                  if (self->_HandleCompleteReceivedPacket(std::move(*packetTmpSharedPtr)) == HandlerResult::Okay)
+                                                      self->DoRecvIncomingData();
+                                              });
+                      }
+                  });
 }
 
 WorldSocket::HandlerResult WorldSocket::_HandleCompleteReceivedPacket(std::unique_ptr<WorldPacket> packet)
@@ -168,24 +158,24 @@ WorldSocket::HandlerResult WorldSocket::_HandleCompleteReceivedPacket(std::uniqu
     {
         switch (opcode)
         {
-            case CMSG_PING:
-                return _HandlePing(*packet);
-            case CMSG_AUTH_SESSION:
-                if (m_Session != nullptr)
-                {
-                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WorldSocket::ProcessIncoming: Player send CMSG_AUTH_SESSION again");
-                    return HandlerResult::Fail;
-                }
-                return _HandleAuthSession(*packet);
-            default:
-                if (m_Session == nullptr)
-                {
-                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WorldSocket::ProcessIncoming: Client not authed opcode = %u", uint32(opcode));
-                    return HandlerResult::Fail;
-                }
+        case CMSG_PING:
+            return _HandlePing(*packet);
+        case CMSG_AUTH_SESSION:
+            if (m_Session != nullptr)
+            {
+                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WorldSocket::ProcessIncoming: Player send CMSG_AUTH_SESSION again");
+                return HandlerResult::Fail;
+            }
+            return _HandleAuthSession(*packet);
+        default:
+            if (m_Session == nullptr)
+            {
+                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WorldSocket::ProcessIncoming: Client not authed opcode = %u", uint32(opcode));
+                return HandlerResult::Fail;
+            }
 
-                m_Session->QueuePacket(std::move(packet));
-                return HandlerResult::Okay;
+            m_Session->QueuePacket(std::move(packet));
+            return HandlerResult::Okay;
         }
     }
     catch (ByteBufferException&)
@@ -200,8 +190,7 @@ WorldSocket::HandlerResult WorldSocket::_HandleCompleteReceivedPacket(std::uniqu
 
         if (sWorld.getConfig(CONFIG_BOOL_KICK_PLAYER_ON_BAD_PACKET))
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Disconnecting session [account id %i / address %s] for badly formatted packet.",
-                       m_Session ? m_Session->GetAccountId() : -1, GetRemoteIpString().c_str());
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Disconnecting session [account id %i / address %s] for badly formatted packet.", m_Session ? m_Session->GetAccountId() : -1, GetRemoteIpString().c_str());
 
             return HandlerResult::Fail;
         }
@@ -253,11 +242,7 @@ WorldSocket::HandlerResult WorldSocket::_HandleAuthSession(WorldPacket& recvPack
     recvPacket >> clientSeed;
     recvPacket.read(digest.data(), digest.size());
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "WorldSocket::HandleAuthSession: client %u, serverId %u, account %s, clientseed %u",
-              clientBuild,
-              serverId,
-              account.c_str(),
-              clientSeed);
+    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "WorldSocket::HandleAuthSession: client %u, serverId %u, account %s, clientseed %u", clientBuild, serverId, account.c_str(), clientSeed);
 
     // Check the version of client trying to connect
     if (!IsAcceptableClientBuild(clientBuild))
@@ -275,26 +260,26 @@ WorldSocket::HandlerResult WorldSocket::_HandleAuthSession(WorldPacket& recvPack
     std::string safe_account = account; // Duplicate, else will screw the SHA hash verification below
     LoginDatabase.escape_string(safe_account);
     // No SQL injection, username escaped.
-    auto accountQueryResult =
-        LoginDatabase.PQuery("SELECT "
-                             "a.`id`, "             // 0
-                             "aa.`gmLevel`, "       // 1
-                             "a.`sessionkey`, "     // 2
-                             "a.`last_ip`, "        // 3
-                             "a.`v`, "              // 4
-                             "a.`s`, "              // 5
-                             "a.`mutetime`, "       // 6
-                             "a.`locale`, "         // 7
-                             "a.`os`, "             // 8
-                             "a.`platform`, "       // 9
-                             "a.`flags`, "          // 10
-                             "a.`email`, "          // 11
-                             "a.`email_verif`, "    // 12
-                             "ab.`unbandate` > UNIX_TIMESTAMP() OR ab.`unbandate` = ab.`bandate` " // 13
-                             "FROM `account` a "
-                             "LEFT JOIN `account_access` aa ON a.`id` = aa.`id` AND aa.`RealmID` IN (-1, %u) "
-                             "LEFT JOIN `account_banned` ab ON a.`id` = ab.`id` AND ab.`active` = 1 WHERE a.`username` = '%s' && DATEDIFF(NOW(), a.`last_login`) < 1 "
-                             "ORDER BY aa.`RealmID` DESC LIMIT 1", realmID, safe_account.c_str());
+    auto accountQueryResult = LoginDatabase.PQuery("SELECT "
+                                                   "a.`id`, " // 0
+                                                   "aa.`gmLevel`, " // 1
+                                                   "a.`sessionkey`, " // 2
+                                                   "a.`last_ip`, " // 3
+                                                   "a.`v`, " // 4
+                                                   "a.`s`, " // 5
+                                                   "a.`mutetime`, " // 6
+                                                   "a.`locale`, " // 7
+                                                   "a.`os`, " // 8
+                                                   "a.`platform`, " // 9
+                                                   "a.`flags`, " // 10
+                                                   "a.`email`, " // 11
+                                                   "a.`email_verif`, " // 12
+                                                   "ab.`unbandate` > UNIX_TIMESTAMP() OR ab.`unbandate` = ab.`bandate` " // 13
+                                                   "FROM `account` a "
+                                                   "LEFT JOIN `account_access` aa ON a.`id` = aa.`id` AND aa.`RealmID` IN (-1, %u) "
+                                                   "LEFT JOIN `account_banned` ab ON a.`id` = ab.`id` AND ab.`active` = 1 WHERE a.`username` = '%s' && DATEDIFF(NOW(), a.`last_login`) < 1 "
+                                                   "ORDER BY aa.`RealmID` DESC LIMIT 1",
+                                                   realmID, safe_account.c_str());
 
     // Stop if the account is not found
     if (!accountQueryResult)
@@ -372,9 +357,9 @@ WorldSocket::HandlerResult WorldSocket::_HandleAuthSession(WorldPacket& recvPack
     uint32 seed = m_authSeed;
 
     sha.UpdateData(account);
-    sha.UpdateData((uint8 *) &t, 4);
-    sha.UpdateData((uint8 *) &clientSeed, 4);
-    sha.UpdateData((uint8 *) &seed, 4);
+    sha.UpdateData((uint8*)&t, 4);
+    sha.UpdateData((uint8*)&clientSeed, 4);
+    sha.UpdateData((uint8*)&seed, 4);
     sha.UpdateData(K);
     auto expectedDigest = sha.GetDigest();
 
@@ -390,9 +375,7 @@ WorldSocket::HandlerResult WorldSocket::_HandleAuthSession(WorldPacket& recvPack
 
     std::string address = GetRemoteIpString();
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "WorldSocket::HandleAuthSession: Client '%s' authenticated successfully from %s.",
-              account.c_str(),
-              address.c_str());
+    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "WorldSocket::HandleAuthSession: Client '%s' authenticated successfully from %s.", account.c_str(), address.c_str());
 
     // Update the last_ip in the database
     // No SQL injection, username escaped.
@@ -470,7 +453,7 @@ WorldSocket::HandlerResult WorldSocket::_HandlePing(WorldPacket& recvPacket)
 #endif
 
     if (m_lastPingTime == std::chrono::system_clock::time_point::min())
-        m_lastPingTime = std::chrono::system_clock::now();              // for 1st ping
+        m_lastPingTime = std::chrono::system_clock::now(); // for 1st ping
     else
     {
         auto now = std::chrono::system_clock::now();
@@ -551,10 +534,7 @@ void WorldSocket::SendPacket(WorldPacket packet)
     if (m_sendQueueIsRunning.test_and_set())
         return; // already running
 
-    m_socket.EnterIoContext([self = shared_from_this()](IO::NetworkError error)
-    {
-        self->HandleResultOfAsyncWrite(error, std::make_shared<ByteBuffer>());
-    });
+    m_socket.EnterIoContext([self = shared_from_this()](IO::NetworkError error) { self->HandleResultOfAsyncWrite(error, std::make_shared<ByteBuffer>()); });
 }
 
 void WorldSocket::HandleResultOfAsyncWrite(IO::NetworkError const& error, std::shared_ptr<ByteBuffer> const& alreadyAllocatedBuffer)
@@ -606,10 +586,7 @@ void WorldSocket::HandleResultOfAsyncWrite(IO::NetworkError const& error, std::s
             alreadyAllocatedBuffer->append(packet.contents(), packet.size());
     }
 
-    m_socket.Write({ alreadyAllocatedBuffer /* dont move, re-used in lambda */ }, [self = shared_from_this(), alreadyAllocatedBuffer](IO::NetworkError const& error)
-    {
-        self->HandleResultOfAsyncWrite(error, alreadyAllocatedBuffer);
-    });
+    m_socket.Write({alreadyAllocatedBuffer /* dont move, re-used in lambda */}, [self = shared_from_this(), alreadyAllocatedBuffer](IO::NetworkError const& error) { self->HandleResultOfAsyncWrite(error, alreadyAllocatedBuffer); });
 }
 
 void WorldSocket::Start()
@@ -617,18 +594,16 @@ void WorldSocket::Start()
     // Start auto timeout loop
     if (int secs = sConfig.GetIntDefault("Network.TimeoutSecsIfNoAuth", 10))
     {
-        m_sessionNoAuthTimeout = sAsyncSystemTimer.ScheduleFunctionOnce(std::chrono::seconds(secs), [this]()
-        {
-            sLog.Out(LOG_NETWORK, LOG_LVL_DETAIL, "[%s] Connection has reached TimeoutSecsIfNoAuth. Closing socket...", this->GetRemoteIpString().c_str());
-            // It's correct that we capture _this_ and not a shared_ptr, since the timer will be canceled in destructor
-            this->CloseSocket();
-        });
+        m_sessionNoAuthTimeout = sAsyncSystemTimer.ScheduleFunctionOnce(std::chrono::seconds(secs),
+                                                                        [this]()
+                                                                        {
+                                                                            sLog.Out(LOG_NETWORK, LOG_LVL_DETAIL, "[%s] Connection has reached TimeoutSecsIfNoAuth. Closing socket...", this->GetRemoteIpString().c_str());
+                                                                            // It's correct that we capture _this_ and not a shared_ptr, since the timer will be canceled in destructor
+                                                                            this->CloseSocket();
+                                                                        });
     }
 
     SendInitialPacketAndStartRecvLoop();
 }
 
-void WorldSocket::CloseSocket()
-{
-    m_socket.CloseSocket();
-}
+void WorldSocket::CloseSocket() { m_socket.CloseSocket(); }

@@ -1,23 +1,20 @@
 #include "AsyncSocket.h"
-#include "IO/SystemErrorToString.h"
 #include "Errors.h"
+#include "IO/SystemErrorToString.h"
 #include "Log.h"
 
 #if defined(__linux__)
 #include <sys/epoll.h>
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-#include <sys/socket.h>
 #include <sys/event.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #endif
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <thread>
 
-IO::Networking::AsyncSocket::AsyncSocket(IO::IoContext* ctx, IO::Networking::SocketDescriptor socketDescriptor)
-    : m_ctx(ctx), m_descriptor(std::move(socketDescriptor))
-{
-}
+IO::Networking::AsyncSocket::AsyncSocket(IO::IoContext* ctx, IO::Networking::SocketDescriptor socketDescriptor) : m_ctx(ctx), m_descriptor(std::move(socketDescriptor)) {}
 
 IO::NetworkError IO::Networking::AsyncSocket::InitializeAndFixateMemoryLocation()
 {
@@ -48,7 +45,7 @@ IO::NetworkError IO::Networking::AsyncSocket::InitializeAndFixateMemoryLocation(
         return IO::NetworkError(NetworkError::ErrorType::InternalError, errno);
     }
 #else
-    #error "Unsupported"
+#error "Unsupported"
 #endif
     return IO::NetworkError(NetworkError::ErrorType::NoError);
 }
@@ -424,10 +421,7 @@ void IO::Networking::AsyncSocket::StopPendingTransactionsAndForceClose()
         return; // maybe another thread also called StopPendingTransactionsAndForceClose
 
     // we must wait for the other threads to finish
-    int const pendingTransferMask = SocketStateFlags::WRITE_PENDING_SET |
-                                    SocketStateFlags::WRITE_PENDING_LOAD |
-                                    SocketStateFlags::READ_PENDING_SET |
-                                    SocketStateFlags::READ_PENDING_LOAD;
+    int const pendingTransferMask = SocketStateFlags::WRITE_PENDING_SET | SocketStateFlags::WRITE_PENDING_LOAD | SocketStateFlags::READ_PENDING_SET | SocketStateFlags::READ_PENDING_LOAD;
     if (state & pendingTransferMask)
     {
         while ((state = m_atomicState.load()) & pendingTransferMask)
@@ -491,7 +485,7 @@ void IO::Networking::AsyncSocket::OnIoEvent(uint32_t event)
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
         EVFILT_USER;
 #else
-    #error "Unsupported"
+#error "Unsupported"
 #endif
 
     if (event == CALLBACK_EVENT_FLAG)
@@ -535,7 +529,7 @@ void IO::Networking::AsyncSocket::OnIoEvent(uint32_t event)
     switch ((int)event) // it's a "filter" from kqueue
     {
 #if defined(__APPLE__) || defined(__OpenBSD__)
-        case EVFILT_EXCEPT:
+    case EVFILT_EXCEPT:
         {
             int error = 0;
             socklen_t errLen = sizeof(error);
@@ -554,21 +548,21 @@ void IO::Networking::AsyncSocket::OnIoEvent(uint32_t event)
             break;
         }
 #endif
-        case EVFILT_READ:
+    case EVFILT_READ:
         {
             PerformNonBlockingRead();
             break;
         }
-        case EVFILT_WRITE:
+    case EVFILT_WRITE:
         {
             PerformNonBlockingWrite();
             break;
         }
-        default:
-            sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "Unhandled event %d", (int)event);
+    default:
+        sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "Unhandled event %d", (int)event);
     }
 #else
-    #error "Unsupported"
+#error "Unsupported"
 #endif
 }
 
@@ -578,7 +572,7 @@ IO::NetworkError IO::Networking::AsyncSocket::SetNativeSocketOption_NoDelay(bool
         return IO::NetworkError(IO::NetworkError::ErrorType::SocketClosed);
 
     int optionValue = doNoDelay ? 1 : 0;
-    if (::setsockopt(m_descriptor.GetNativeSocket(), IPPROTO_TCP, TCP_NODELAY, (char*) &optionValue, sizeof(optionValue)) != 0)
+    if (::setsockopt(m_descriptor.GetNativeSocket(), IPPROTO_TCP, TCP_NODELAY, (char*)&optionValue, sizeof(optionValue)) != 0)
         return IO::NetworkError::FromSystemError(errno);
 
     return IO::NetworkError(IO::NetworkError::ErrorType::NoError);
@@ -592,7 +586,7 @@ IO::NetworkError IO::Networking::AsyncSocket::SetNativeSocketOption_SystemOutgoi
         return IO::NetworkError(IO::NetworkError::ErrorType::SocketClosed);
 
     int optionValue = bytes;
-    if (::setsockopt(m_descriptor.GetNativeSocket(), SOL_SOCKET, SO_SNDBUF, (char*) &optionValue, sizeof(optionValue)) != 0)
+    if (::setsockopt(m_descriptor.GetNativeSocket(), SOL_SOCKET, SO_SNDBUF, (char*)&optionValue, sizeof(optionValue)) != 0)
         return IO::NetworkError::FromSystemError(errno);
 
     return IO::NetworkError(IO::NetworkError::ErrorType::NoError);

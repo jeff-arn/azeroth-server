@@ -1,71 +1,71 @@
 /*
-* This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 /**
-* @addtogroup npc_linking
-* @{
-*
-* @file CreatureLinkingMgr.cpp
-* This file contains the code needed for MaNGOS to link npcs together
-* Currently implemented
-* - Aggro on boss aggro, also reversed
-* - Despawning/ Selfkill on death of mob if the NPC it is linked to dies
-* - Respawning on leaving combat if the linked to NPC evades, also reversed
-* - Respawning on death of the linked to NPC
-* - (Re)Spawning dependend on boss Alive/ Dead
-* - Following NPCs
-*
-*/
+ * @addtogroup npc_linking
+ * @{
+ *
+ * @file CreatureLinkingMgr.cpp
+ * This file contains the code needed for MaNGOS to link npcs together
+ * Currently implemented
+ * - Aggro on boss aggro, also reversed
+ * - Despawning/ Selfkill on death of mob if the NPC it is linked to dies
+ * - Respawning on leaving combat if the linked to NPC evades, also reversed
+ * - Respawning on death of the linked to NPC
+ * - (Re)Spawning dependend on boss Alive/ Dead
+ * - Following NPCs
+ *
+ */
 
 #include "CreatureLinkingMgr.h"
-#include "Policies/Singleton.h"
-#include "ProgressBar.h"
-#include "Database/DatabaseEnv.h"
-#include "ObjectMgr.h"
-#include "SharedDefines.h"
 #include "Creature.h"
 #include "CreatureAI.h"
+#include "Database/DatabaseEnv.h"
+#include "ObjectMgr.h"
+#include "Policies/Singleton.h"
+#include "ProgressBar.h"
+#include "SharedDefines.h"
 
 INSTANTIATE_SINGLETON_1(CreatureLinkingMgr);
 
-#define INVALID_MAP_ID      0xFFFFFFFF
+#define INVALID_MAP_ID 0xFFFFFFFF
 
 /* *********************************************************
-* Method to Load From DB
-* DB Format:   entry, map, master_entry, flag, search_radius   for `creature_linking_template` (by entry)
-*              0      1    2             3     4
-* DB Format:   guid, master_guid, flag                         for `creature_linking` (by guid)
-*              0     1            2
-* **************************************
-* entry/guid:                  creature_template.entry/guid
-* map:                         Map on which the NPC has to be
-* master_entry/master_guid     creature_template.entry of the npc, that shall trigger the actions
-* flag:                        flag value, of type CreatureLinkingFlags
-* search_radius:               radius, in which master and slave must be spawned so that they are linked together
-*
-* ***************************************************** */
+ * Method to Load From DB
+ * DB Format:   entry, map, master_entry, flag, search_radius   for `creature_linking_template` (by entry)
+ *              0      1    2             3     4
+ * DB Format:   guid, master_guid, flag                         for `creature_linking` (by guid)
+ *              0     1            2
+ * **************************************
+ * entry/guid:                  creature_template.entry/guid
+ * map:                         Map on which the NPC has to be
+ * master_entry/master_guid     creature_template.entry of the npc, that shall trigger the actions
+ * flag:                        flag value, of type CreatureLinkingFlags
+ * search_radius:               radius, in which master and slave must be spawned so that they are linked together
+ *
+ * ***************************************************** */
 
 void CreatureLinkingMgr::LoadFromDB()
 {
     // Clear maps
     m_creatureLinkingMap.clear();
     m_creatureLinkingGuidMap.clear();
-    m_eventTriggers.clear();                              // master
+    m_eventTriggers.clear(); // master
     m_eventGuidTriggers.clear();
 
     // Load `creature_linking_template`
@@ -90,12 +90,12 @@ void CreatureLinkingMgr::LoadFromDB()
 
             CreatureLinkingInfo tmp;
 
-            uint32 entry 	= fields[0].GetUInt32();
-            tmp.mapId 		= fields[1].GetUInt32();
-            tmp.masterId 	= fields[2].GetUInt32();
-            tmp.linkingFlag 	= fields[3].GetUInt16();
-            tmp.searchRange 	= fields[4].GetUInt16();
-            tmp.masterDBGuid 	= 0;                        // Will be initialized for unique mobs in IsLinkingEntryValid (only for spawning dependend)
+            uint32 entry = fields[0].GetUInt32();
+            tmp.mapId = fields[1].GetUInt32();
+            tmp.masterId = fields[2].GetUInt32();
+            tmp.linkingFlag = fields[3].GetUInt16();
+            tmp.searchRange = fields[4].GetUInt16();
+            tmp.masterDBGuid = 0; // Will be initialized for unique mobs in IsLinkingEntryValid (only for spawning dependend)
 
             if (!IsLinkingEntryValid(entry, &tmp, true))
                 continue;
@@ -107,7 +107,8 @@ void CreatureLinkingMgr::LoadFromDB()
 
             // Store master_entry
             m_eventTriggers.insert(tmp.masterId);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded creature linking for %u creature-entries", count);
@@ -135,12 +136,12 @@ void CreatureLinkingMgr::LoadFromDB()
         Field* fields = result->Fetch();
         CreatureLinkingInfo tmp;
 
-        uint32 guid 		= fields[0].GetUInt32();
-        tmp.mapId 		= INVALID_MAP_ID;           // some invalid value, this marks the guid-linking
-        tmp.masterId 		= fields[1].GetUInt32();
-        tmp.linkingFlag 	= fields[2].GetUInt16();
-        tmp.masterDBGuid 	= tmp.masterId;
-        tmp.searchRange 	= 0;
+        uint32 guid = fields[0].GetUInt32();
+        tmp.mapId = INVALID_MAP_ID; // some invalid value, this marks the guid-linking
+        tmp.masterId = fields[1].GetUInt32();
+        tmp.linkingFlag = fields[2].GetUInt16();
+        tmp.masterDBGuid = tmp.masterId;
+        tmp.searchRange = 0;
 
         if (!IsLinkingEntryValid(guid, &tmp, false))
             continue;
@@ -152,24 +153,25 @@ void CreatureLinkingMgr::LoadFromDB()
 
         // Store master_guid
         m_eventGuidTriggers.insert(tmp.masterId);
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded creature linking for %u creature-Guids", count);
 }
 
 /** This function is used to check if a DB-Entry is valid
-*
-*  @param byEntry: is the first parameter of the function a npc entry or a npc guid?
-*  @param slaveEntry: dependend on byEntry param this is either the slave's npc-entry or the npc-guid
-*  @param pTmp: Information about the CreatureLinking of the npc. Note that this information may be changed in some cases
-*
-*  In case of checking by entry and in case of linked spawning and searchRange == 0, pTmp will be changed to keep information about the (unique!) master's db-guid
-*/
+ *
+ *  @param byEntry: is the first parameter of the function a npc entry or a npc guid?
+ *  @param slaveEntry: dependend on byEntry param this is either the slave's npc-entry or the npc-guid
+ *  @param pTmp: Information about the CreatureLinking of the npc. Note that this information may be changed in some cases
+ *
+ *  In case of checking by entry and in case of linked spawning and searchRange == 0, pTmp will be changed to keep information about the (unique!) master's db-guid
+ */
 bool CreatureLinkingMgr::IsLinkingEntryValid(uint32 slaveEntry, CreatureLinkingInfo* pTmp, bool byEntry)
 {
     // Basic checks first
-    if (byEntry)                                            // Entry given
+    if (byEntry) // Entry given
     {
         CreatureInfo const* pInfo = sObjectMgr.GetCreatureTemplate(slaveEntry);
         CreatureInfo const* pMasterInfo = sObjectMgr.GetCreatureTemplate(pTmp->masterId);
@@ -192,7 +194,7 @@ bool CreatureLinkingMgr::IsLinkingEntryValid(uint32 slaveEntry, CreatureLinkingI
             return false;
         }
     }
-    else                                                    // guid given
+    else // guid given
     {
         CreatureData const* slaveData = sObjectMgr.GetCreatureData(slaveEntry);
         CreatureData const* masterData = sObjectMgr.GetCreatureData(pTmp->masterId);
@@ -258,12 +260,12 @@ bool CreatureLinkingMgr::IsLinkingEntryValid(uint32 slaveEntry, CreatureLinkingI
 // Linked actions and corresponding flags
 enum EventMask
 {
-    EVENT_MASK_ON_AGGRO 	= FLAG_AGGRO_ON_AGGRO,
-    EVENT_MASK_ON_EVADE 	= FLAG_RESPAWN_ON_EVADE | FLAG_DESPAWN_ON_EVADE | FLAG_EVADE_ON_EVADE,
-    EVENT_MASK_ON_DIE 		= FLAG_DESPAWN_ON_DEATH | FLAG_SELFKILL_ON_DEATH | FLAG_RESPAWN_ON_DEATH | FLAG_FOLLOW,
-    EVENT_MASK_ON_RESPAWN 	= FLAG_RESPAWN_ON_RESPAWN | FLAG_DESPAWN_ON_RESPAWN | FLAG_FOLLOW,
-    EVENT_MASK_TRIGGER_TO 	= FLAG_TO_AGGRO_ON_AGGRO | FLAG_TO_RESPAWN_ON_EVADE | FLAG_FOLLOW,
-    EVENT_MASK_ON_DESPAWN 	= FLAG_DESPAWN_ON_DESPAWN,
+    EVENT_MASK_ON_AGGRO = FLAG_AGGRO_ON_AGGRO,
+    EVENT_MASK_ON_EVADE = FLAG_RESPAWN_ON_EVADE | FLAG_DESPAWN_ON_EVADE | FLAG_EVADE_ON_EVADE,
+    EVENT_MASK_ON_DIE = FLAG_DESPAWN_ON_DEATH | FLAG_SELFKILL_ON_DEATH | FLAG_RESPAWN_ON_DEATH | FLAG_FOLLOW,
+    EVENT_MASK_ON_RESPAWN = FLAG_RESPAWN_ON_RESPAWN | FLAG_DESPAWN_ON_RESPAWN | FLAG_FOLLOW,
+    EVENT_MASK_TRIGGER_TO = FLAG_TO_AGGRO_ON_AGGRO | FLAG_TO_RESPAWN_ON_EVADE | FLAG_FOLLOW,
+    EVENT_MASK_ON_DESPAWN = FLAG_DESPAWN_ON_DESPAWN,
 };
 
 // This functions checks if the NPC has linked NPCs for dynamic action
@@ -286,27 +288,15 @@ bool CreatureLinkingMgr::IsLinkedEventTrigger(Creature* pCreature) const
 
 // This function check if the NPC is a master to other NPCs
 // return true only for masters stored by entry - this prevents adding them to master-holder maps
-bool CreatureLinkingMgr::IsLinkedMaster(Creature* pCreature) const
-{
-    return m_eventTriggers.find(pCreature->GetEntry()) != m_eventTriggers.end();
-}
+bool CreatureLinkingMgr::IsLinkedMaster(Creature* pCreature) const { return m_eventTriggers.find(pCreature->GetEntry()) != m_eventTriggers.end(); }
 
 // This function checks if the spawning of this NPC is dependend on other NPCs
-bool CreatureLinkingMgr::IsSpawnedByLinkedMob(Creature* pCreature) const
-{
-    return IsSpawnedByLinkedMob(GetLinkedTriggerInformation(pCreature));
-}
-bool CreatureLinkingMgr::IsSpawnedByLinkedMob(CreatureLinkingInfo const* pInfo) const
-{
-    return pInfo && pInfo->linkingFlag & (FLAG_CANT_SPAWN_IF_BOSS_DEAD | FLAG_CANT_SPAWN_IF_BOSS_ALIVE) && (pInfo->masterDBGuid || pInfo->searchRange);
-}
+bool CreatureLinkingMgr::IsSpawnedByLinkedMob(Creature* pCreature) const { return IsSpawnedByLinkedMob(GetLinkedTriggerInformation(pCreature)); }
+bool CreatureLinkingMgr::IsSpawnedByLinkedMob(CreatureLinkingInfo const* pInfo) const { return pInfo && pInfo->linkingFlag & (FLAG_CANT_SPAWN_IF_BOSS_DEAD | FLAG_CANT_SPAWN_IF_BOSS_ALIVE) && (pInfo->masterDBGuid || pInfo->searchRange); }
 
 // This gives the information of a linked NPC (describes action when its ActionTrigger triggers)
 // Depends of the map
-CreatureLinkingInfo const* CreatureLinkingMgr::GetLinkedTriggerInformation(Creature* pCreature) const
-{
-    return GetLinkedTriggerInformation(pCreature->GetEntry(), pCreature->GetGUIDLow(), pCreature->GetMapId());
-}
+CreatureLinkingInfo const* CreatureLinkingMgr::GetLinkedTriggerInformation(Creature* pCreature) const { return GetLinkedTriggerInformation(pCreature->GetEntry(), pCreature->GetGUIDLow(), pCreature->GetMapId()); }
 CreatureLinkingInfo const* CreatureLinkingMgr::GetLinkedTriggerInformation(uint32 entry, uint32 lowGuid, uint32 mapId) const
 {
     // guid case
@@ -332,7 +322,7 @@ void CreatureLinkingHolder::AddSlaveToHolder(Creature* pCreature)
     if (!pInfo)
         return;
 
-    if (pInfo->mapId == INVALID_MAP_ID)                     // Guid case, store master->slaves for fast access
+    if (pInfo->mapId == INVALID_MAP_ID) // Guid case, store master->slaves for fast access
     {
         HolderMapBounds bounds = m_holderGuidMap.equal_range(pInfo->masterId);
         for (HolderMap::iterator itr = bounds.first; itr != bounds.second; ++itr)
@@ -340,7 +330,7 @@ void CreatureLinkingHolder::AddSlaveToHolder(Creature* pCreature)
             if (itr->second.linkingFlag == pInfo->linkingFlag)
             {
                 itr->second.linkedGuids.push_back(pCreature->GetObjectGuid());
-                pCreature = nullptr;                           // Store that is was handled
+                pCreature = nullptr; // Store that is was handled
                 break;
             }
         }
@@ -364,7 +354,7 @@ void CreatureLinkingHolder::AddSlaveToHolder(Creature* pCreature)
         if (itr->second.linkingFlag == pInfo->linkingFlag && itr->second.searchRange == pInfo->searchRange)
         {
             itr->second.linkedGuids.push_back(pCreature->GetObjectGuid());
-            pCreature = nullptr;                               // Store that is was handled
+            pCreature = nullptr; // Store that is was handled
             break;
         }
     }
@@ -394,7 +384,7 @@ void CreatureLinkingHolder::AddMasterToHolder(Creature* pCreature)
     BossGuidMapBounds bounds = m_masterGuid.equal_range(pCreature->GetEntry());
     for (BossGuidMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
         if (itr->second == pCreature->GetObjectGuid())
-            return;                                         // Already added
+            return; // Already added
 
     m_masterGuid.insert(BossGuidMap::value_type(pCreature->GetEntry(), pCreature->GetObjectGuid()));
 }
@@ -418,11 +408,26 @@ void CreatureLinkingHolder::DoCreatureLinkingEvent(CreatureLinkingEvent eventTyp
 
     switch (eventType)
     {
-        case LINKING_EVENT_AGGRO:   eventFlagFilter = EVENT_MASK_ON_AGGRO;   reverseEventFlagFilter = FLAG_TO_AGGRO_ON_AGGRO;   break;
-        case LINKING_EVENT_EVADE:   eventFlagFilter = EVENT_MASK_ON_EVADE;   reverseEventFlagFilter = FLAG_TO_RESPAWN_ON_EVADE; break;
-        case LINKING_EVENT_DIE:     eventFlagFilter = EVENT_MASK_ON_DIE;     reverseEventFlagFilter = 0;                        break;
-        case LINKING_EVENT_RESPAWN: eventFlagFilter = EVENT_MASK_ON_RESPAWN; reverseEventFlagFilter = FLAG_FOLLOW;              break;
-        case LINKING_EVENT_DESPAWN: eventFlagFilter = EVENT_MASK_ON_DESPAWN; reverseEventFlagFilter = 0;                        break;
+    case LINKING_EVENT_AGGRO:
+        eventFlagFilter = EVENT_MASK_ON_AGGRO;
+        reverseEventFlagFilter = FLAG_TO_AGGRO_ON_AGGRO;
+        break;
+    case LINKING_EVENT_EVADE:
+        eventFlagFilter = EVENT_MASK_ON_EVADE;
+        reverseEventFlagFilter = FLAG_TO_RESPAWN_ON_EVADE;
+        break;
+    case LINKING_EVENT_DIE:
+        eventFlagFilter = EVENT_MASK_ON_DIE;
+        reverseEventFlagFilter = 0;
+        break;
+    case LINKING_EVENT_RESPAWN:
+        eventFlagFilter = EVENT_MASK_ON_RESPAWN;
+        reverseEventFlagFilter = FLAG_FOLLOW;
+        break;
+    case LINKING_EVENT_DESPAWN:
+        eventFlagFilter = EVENT_MASK_ON_DESPAWN;
+        reverseEventFlagFilter = 0;
+        break;
     }
 
     // Process Slaves (by entry)
@@ -441,7 +446,7 @@ void CreatureLinkingHolder::DoCreatureLinkingEvent(CreatureLinkingEvent eventTyp
         if (pInfo->linkingFlag & reverseEventFlagFilter)
         {
             Creature* pMaster = nullptr;
-            if (pInfo->mapId != INVALID_MAP_ID)             // entry case
+            if (pInfo->mapId != INVALID_MAP_ID) // entry case
             {
                 BossGuidMapBounds finds = m_masterGuid.equal_range(pInfo->masterId);
                 for (BossGuidMap::const_iterator itr = finds.first; itr != finds.second; ++itr)
@@ -454,7 +459,7 @@ void CreatureLinkingHolder::DoCreatureLinkingEvent(CreatureLinkingEvent eventTyp
                     }
                 }
             }
-            else                                            // guid case
+            else // guid case
             {
                 CreatureData const* masterData = sObjectMgr.GetCreatureData(pInfo->masterDBGuid);
                 CreatureInfo const* cInfo = sObjectMgr.GetCreatureTemplate(masterData->creature_id[0]);
@@ -465,21 +470,21 @@ void CreatureLinkingHolder::DoCreatureLinkingEvent(CreatureLinkingEvent eventTyp
             {
                 switch (eventType)
                 {
-                    case LINKING_EVENT_AGGRO:
-                        if (pMaster->IsControlledByPlayer())
-                            return;
-                        pMaster->EnterCombatWithTarget(pEnemy);
-                    case LINKING_EVENT_EVADE:
-                        if (!pMaster->IsAlive())
-                            pMaster->Respawn();
-                        break;
-                    case LINKING_EVENT_RESPAWN:
-                        if (pMaster->IsAlive())
-                            SetFollowing(pSource, pMaster);
-                        break;
-                    case LINKING_EVENT_DIE:                 // Nothing linked for this case
-                    case LINKING_EVENT_DESPAWN:             // Nothing linked for this case
-                        break;
+                case LINKING_EVENT_AGGRO:
+                    if (pMaster->IsControlledByPlayer())
+                        return;
+                    pMaster->EnterCombatWithTarget(pEnemy);
+                case LINKING_EVENT_EVADE:
+                    if (!pMaster->IsAlive())
+                        pMaster->Respawn();
+                    break;
+                case LINKING_EVENT_RESPAWN:
+                    if (pMaster->IsAlive())
+                        SetFollowing(pSource, pMaster);
+                    break;
+                case LINKING_EVENT_DIE: // Nothing linked for this case
+                case LINKING_EVENT_DESPAWN: // Nothing linked for this case
+                    break;
                 }
             }
         }
@@ -637,7 +642,7 @@ bool CreatureLinkingHolder::IsRespawnReady(uint32 dbLowGuid, Map* _map) const
 // Function to check if a passive spawning condition is met
 bool CreatureLinkingHolder::CanSpawn(Creature* pCreature) const
 {
-    CreatureLinkingInfo const*  pInfo = sCreatureLinkingMgr.GetLinkedTriggerInformation(pCreature);
+    CreatureLinkingInfo const* pInfo = sCreatureLinkingMgr.GetLinkedTriggerInformation(pCreature);
     if (!pInfo)
         return true;
 
@@ -647,18 +652,18 @@ bool CreatureLinkingHolder::CanSpawn(Creature* pCreature) const
 }
 
 /** Worker function to check if a spawning condition is met
-*
-*  This function is used directly from above function, and for recursive use
-*   in case of recursive use it is used only on _map with information of lowGuid.
-*
-*  @param lowGuid (only relevant in case of recursive uses) -- db-guid of the npc that is checked
-*  @param _map Map on which things are checked
-*  @param pInfo (only shipped in case of initial use) -- used as marker of first use, also in first use filled directly
-*  @param sx, sy (spawn position of the checked npc with initial use)
-*/
-bool CreatureLinkingHolder::CanSpawn(uint32 lowGuid, Map* _map, CreatureLinkingInfo const*  pInfo, float sx, float sy) const
+ *
+ *  This function is used directly from above function, and for recursive use
+ *   in case of recursive use it is used only on _map with information of lowGuid.
+ *
+ *  @param lowGuid (only relevant in case of recursive uses) -- db-guid of the npc that is checked
+ *  @param _map Map on which things are checked
+ *  @param pInfo (only shipped in case of initial use) -- used as marker of first use, also in first use filled directly
+ *  @param sx, sy (spawn position of the checked npc with initial use)
+ */
+bool CreatureLinkingHolder::CanSpawn(uint32 lowGuid, Map* _map, CreatureLinkingInfo const* pInfo, float sx, float sy) const
 {
-    if (!pInfo)                                             // Prepare data for recursive use
+    if (!pInfo) // Prepare data for recursive use
     {
         CreatureData const* data = sObjectMgr.GetCreatureData(lowGuid);
         if (!data)
@@ -670,14 +675,14 @@ bool CreatureLinkingHolder::CanSpawn(uint32 lowGuid, Map* _map, CreatureLinkingI
         if (!sCreatureLinkingMgr.IsSpawnedByLinkedMob(pInfo))
             return true;
 
-        sx = data->position.x;                              // Fill position data
+        sx = data->position.x; // Fill position data
         sy = data->position.y;
     }
 
-    if (pInfo->searchRange == 0)                            // Map wide case
+    if (pInfo->searchRange == 0) // Map wide case
     {
         if (!pInfo->masterDBGuid)
-            return false;                                   // This should never happen
+            return false; // This should never happen
 
         if (pInfo->linkingFlag & FLAG_CANT_SPAWN_IF_BOSS_DEAD)
             return IsRespawnReady(pInfo->masterDBGuid, _map);
@@ -703,18 +708,18 @@ bool CreatureLinkingHolder::CanSpawn(uint32 lowGuid, Map* _map, CreatureLinkingI
         }
     }
 
-    return true;                                            // local boss does not exist - spawn
+    return true; // local boss does not exist - spawn
 }
 
 // This function lets a slave refollow his master
 bool CreatureLinkingHolder::TryFollowMaster(Creature* pCreature)
 {
-    CreatureLinkingInfo const*  pInfo = sCreatureLinkingMgr.GetLinkedTriggerInformation(pCreature);
+    CreatureLinkingInfo const* pInfo = sCreatureLinkingMgr.GetLinkedTriggerInformation(pCreature);
     if (!pInfo || !(pInfo->linkingFlag & FLAG_FOLLOW))
         return false;
 
     Creature* pMaster = nullptr;
-    if (pInfo->mapId != INVALID_MAP_ID)                     // entry case
+    if (pInfo->mapId != INVALID_MAP_ID) // entry case
     {
         BossGuidMapBounds finds = m_masterGuid.equal_range(pInfo->masterId);
         for (BossGuidMap::const_iterator itr = finds.first; itr != finds.second; ++itr)
@@ -724,7 +729,7 @@ bool CreatureLinkingHolder::TryFollowMaster(Creature* pCreature)
                 break;
         }
     }
-    else                                                    // guid case
+    else // guid case
     {
         CreatureData const* masterData = sObjectMgr.GetCreatureData(pInfo->masterDBGuid);
         CreatureInfo const* cInfo = sObjectMgr.GetCreatureTemplate(masterData->creature_id[0]);

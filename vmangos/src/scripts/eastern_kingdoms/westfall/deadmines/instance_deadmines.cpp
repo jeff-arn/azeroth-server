@@ -21,15 +21,12 @@ SDComment: Placeholder
 SDCategory: Deadmines
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "deadmines.h"
+#include "scriptPCH.h"
 
 struct instance_deadmines : public ScriptedInstance
 {
-    instance_deadmines(Map* pMap) : ScriptedInstance(pMap)
-    {
-        Initialize();
-    };
+    instance_deadmines(Map* pMap) : ScriptedInstance(pMap) { Initialize(); };
 
     uint32 m_auiEncounter[INSTANCE_DM_MAX_ENCOUNTER];
 
@@ -44,9 +41,9 @@ struct instance_deadmines : public ScriptedInstance
     uint64 m_uiDoor3GUID;
 
     uint32 m_uiSpawnPatrolOnRhahkDeath;
-    bool   m_isRhahkDead;
+    bool m_isRhahkDead;
     uint32 m_isGunPowderEventDone;
-    bool   m_isGilnidDead;
+    bool m_isGilnidDead;
     uint32 m_uiSpawnPatrolOnGilnidDeath;
 
     uint32 m_uiIronDoorTimer;
@@ -97,32 +94,32 @@ struct instance_deadmines : public ScriptedInstance
         }
     }
 
-    void OnCreatureDeath(Creature *who) override
+    void OnCreatureDeath(Creature* who) override
     {
         switch (who->GetEntry())
         {
-            case NPC_RHAHKZOR :
-                if (GameObject* pGo = instance->GetGameObject(m_uiDoor1GUID))
-                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                        DoUseDoorOrButton(m_uiDoor1GUID);
+        case NPC_RHAHKZOR:
+            if (GameObject* pGo = instance->GetGameObject(m_uiDoor1GUID))
+                if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                    DoUseDoorOrButton(m_uiDoor1GUID);
 
-                m_isRhahkDead = true;
-                m_uiSpawnPatrolOnRhahkDeath = 60000;
-                break;
-            case NPC_SNEED :
-                if (GameObject* pGo = instance->GetGameObject(m_uiDoor2GUID))
-                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                        DoUseDoorOrButton(m_uiDoor2GUID);
-                break;
-            case NPC_GILDNID :
-                if (GameObject* pGo = instance->GetGameObject(m_uiDoor3GUID))
-                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                        DoUseDoorOrButton(m_uiDoor3GUID);
+            m_isRhahkDead = true;
+            m_uiSpawnPatrolOnRhahkDeath = 60000;
+            break;
+        case NPC_SNEED:
+            if (GameObject* pGo = instance->GetGameObject(m_uiDoor2GUID))
+                if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                    DoUseDoorOrButton(m_uiDoor2GUID);
+            break;
+        case NPC_GILDNID:
+            if (GameObject* pGo = instance->GetGameObject(m_uiDoor3GUID))
+                if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                    DoUseDoorOrButton(m_uiDoor3GUID);
 
-                m_isGilnidDead = true;
-                m_uiSpawnPatrolOnGilnidDeath = 30000;
+            m_isGilnidDead = true;
+            m_uiSpawnPatrolOnGilnidDeath = 30000;
 
-                break;
+            break;
         }
     }
 
@@ -260,22 +257,22 @@ struct instance_deadmines : public ScriptedInstance
 
                     switch (m_uiIronDoorStep)
                     {
-                        case 0:
-                            DoScriptText(INST_SAY_ALARM1, pMrSmite);
-                            GetCreatureListWithEntryInGrid(escortList, pMrSmite, 657, 400.0f);
-                            for (const auto& it : escortList)
-                                if (it->GetRespawnDelay() == 43202)
-                                    it->GetMotionMaster()->MovePoint(0, -99.6611f, -671.071655f, 7.42241f, MOVE_PATHFINDING | MOVE_RUN_MODE);
-                            escortList.clear();
-                            ++m_uiIronDoorStep;
-                            m_uiIronDoorTimer = 15000;
-                            break;
-                        case 1:
-                            DoScriptText(INST_SAY_ALARM2, pMrSmite);
-                            m_uiIronDoorStep = 0;
-                            m_uiIronDoorTimer = 0;
-                            sLog.Out(LOG_SCRIPTS, LOG_LVL_DEBUG, "Instance Deadmines: Iron door event reached end.");
-                            break;
+                    case 0:
+                        DoScriptText(INST_SAY_ALARM1, pMrSmite);
+                        GetCreatureListWithEntryInGrid(escortList, pMrSmite, 657, 400.0f);
+                        for (const auto& it : escortList)
+                            if (it->GetRespawnDelay() == 43202)
+                                it->GetMotionMaster()->MovePoint(0, -99.6611f, -671.071655f, 7.42241f, MOVE_PATHFINDING | MOVE_RUN_MODE);
+                        escortList.clear();
+                        ++m_uiIronDoorStep;
+                        m_uiIronDoorTimer = 15000;
+                        break;
+                    case 1:
+                        DoScriptText(INST_SAY_ALARM2, pMrSmite);
+                        m_uiIronDoorStep = 0;
+                        m_uiIronDoorTimer = 0;
+                        sLog.Out(LOG_SCRIPTS, LOG_LVL_DEBUG, "Instance Deadmines: Iron door event reached end.");
+                        break;
                     }
                 }
                 else
@@ -287,10 +284,7 @@ struct instance_deadmines : public ScriptedInstance
     }
 };
 
-InstanceData* GetInstanceData_instance_deadmines(Map* pMap)
-{
-    return new instance_deadmines(pMap);
-}
+InstanceData* GetInstanceData_instance_deadmines(Map* pMap) { return new instance_deadmines(pMap); }
 
 bool AreaTrigger_at_dmf_chest_dm(Player* pPlayer, AreaTriggerEntry const* pAt)
 {

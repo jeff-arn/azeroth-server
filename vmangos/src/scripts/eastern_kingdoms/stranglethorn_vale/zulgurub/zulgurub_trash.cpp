@@ -4,9 +4,9 @@
 
 enum
 {
-    SPELL_THROW              =   16075,
-    SPELL_AXE_FLURRY         =   24018,
-    SPELL_FRENZY             =    8269,
+    SPELL_THROW = 16075,
+    SPELL_AXE_FLURRY = 24018,
+    SPELL_FRENZY = 8269,
 };
 
 struct GurubashiAxeThrowerAI : public ScriptedAI
@@ -21,19 +21,16 @@ struct GurubashiAxeThrowerAI : public ScriptedAI
 
     uint32 m_uiThrow_Timer;
     uint32 m_uiAxeFlurry_Timer;
-    bool   m_bEnrage;
+    bool m_bEnrage;
 
     void Reset() override
     {
-        m_uiAxeFlurry_Timer   = 10000;
-        m_uiThrow_Timer       = 5000;
-        m_bEnrage             = false;
+        m_uiAxeFlurry_Timer = 10000;
+        m_uiThrow_Timer = 5000;
+        m_bEnrage = false;
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -69,17 +66,14 @@ struct GurubashiAxeThrowerAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_GurubashiAxeThrower(Creature* pCreature)
-{
-    return new GurubashiAxeThrowerAI(pCreature);
-}
+CreatureAI* GetAI_GurubashiAxeThrower(Creature* pCreature) { return new GurubashiAxeThrowerAI(pCreature); }
 
 enum
 {
-    SPELL_THUNDERCLAP        =   15588,
-    SPELL_FEAR               =   16508,
-    SPELL_ENRAGE             =    8269,
-    SPELL_KNOCKBACK          =   11130,
+    SPELL_THUNDERCLAP = 15588,
+    SPELL_FEAR = 16508,
+    SPELL_ENRAGE = 8269,
+    SPELL_KNOCKBACK = 11130,
 };
 
 struct GurubashiBerserkerAI : public ScriptedAI
@@ -95,20 +89,17 @@ struct GurubashiBerserkerAI : public ScriptedAI
     uint32 m_uiKnockBack_Timer;
     uint32 m_uiThunderClap_Timer;
     uint32 m_uiFear_Timer;
-    bool   m_bEnrage;
+    bool m_bEnrage;
 
     void Reset() override
     {
-        m_uiKnockBack_Timer   = 10000;
+        m_uiKnockBack_Timer = 10000;
         m_uiThunderClap_Timer = 5000;
-        m_uiFear_Timer        = 15000;
-        m_bEnrage             = false;
+        m_uiFear_Timer = 15000;
+        m_bEnrage = false;
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -155,10 +146,7 @@ struct GurubashiBerserkerAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_GurubashiBerserker(Creature* pCreature)
-{
-    return new GurubashiBerserkerAI(pCreature);
-}
+CreatureAI* GetAI_GurubashiBerserker(Creature* pCreature) { return new GurubashiBerserkerAI(pCreature); }
 
 
 // npc_hakkari_doctor (11831)
@@ -251,16 +239,10 @@ struct npc_hakkari_doctor : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 
-    void JustDied(Unit* pKiller) override
-    {
-        m_creature->SummonCreatureAndAttack(15009, pKiller);
-    }
+    void JustDied(Unit* pKiller) override { m_creature->SummonCreatureAndAttack(15009, pKiller); }
 };
 
-CreatureAI* GetAI_npc_hakkari_doctor(Creature* pCreature)
-{
-    return new npc_hakkari_doctor(pCreature);
-}
+CreatureAI* GetAI_npc_hakkari_doctor(Creature* pCreature) { return new npc_hakkari_doctor(pCreature); }
 
 // npc_esprit_vaudou (15009)
 struct npc_esprit_vaudou : public ScriptedAI
@@ -272,9 +254,7 @@ struct npc_esprit_vaudou : public ScriptedAI
         Reset();
     }
 
-    void Reset() override
-    {
-    }
+    void Reset() override {}
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -290,18 +270,12 @@ struct npc_esprit_vaudou : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_esprit_vaudou(Creature* pCreature)
-{
-    return new npc_esprit_vaudou(pCreature);
-}
+CreatureAI* GetAI_npc_esprit_vaudou(Creature* pCreature) { return new npc_esprit_vaudou(pCreature); }
 
 // npc_fils_hakkar (11357)
 struct npc_fils_hakkar : public ScriptedAI
 {
-    npc_fils_hakkar(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_fils_hakkar(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiKnockDownTimer;
     uint32 m_uiTrashTimer;
@@ -338,14 +312,11 @@ struct npc_fils_hakkar : public ScriptedAI
 
     void JustDied(Unit* pKiller) override
     {
-        m_creature->CastSpell(m_creature, 24320, true);//24840
+        m_creature->CastSpell(m_creature, 24320, true); // 24840
     }
 };
 
-CreatureAI* GetAI_npc_fils_hakkar(Creature* pCreature)
-{
-    return new npc_fils_hakkar(pCreature);
-}
+CreatureAI* GetAI_npc_fils_hakkar(Creature* pCreature) { return new npc_fils_hakkar(pCreature); }
 
 enum
 {
@@ -354,17 +325,11 @@ enum
 
 struct npc_jinxed_voodoo_pileAI : public ScriptedAI
 {
-    npc_jinxed_voodoo_pileAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_jinxed_voodoo_pileAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     bool m_castedMindControl;
 
-    void Reset() override
-    {
-        m_castedMindControl = false;
-    }
+    void Reset() override { m_castedMindControl = false; }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -389,10 +354,7 @@ struct npc_jinxed_voodoo_pileAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_jinxed_voodoo_pile(Creature* pCreature)
-{
-    return new npc_jinxed_voodoo_pileAI(pCreature);
-}
+CreatureAI* GetAI_npc_jinxed_voodoo_pile(Creature* pCreature) { return new npc_jinxed_voodoo_pileAI(pCreature); }
 
 void AddSC_zg_trash()
 {

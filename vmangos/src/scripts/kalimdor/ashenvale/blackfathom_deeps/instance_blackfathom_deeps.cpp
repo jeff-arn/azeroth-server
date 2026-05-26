@@ -21,8 +21,8 @@ SDComment:
 SDCategory: Blackfathom Deeps
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "blackfathom_deeps.h"
+#include "scriptPCH.h"
 
 /* Encounter 0 = Twilight Lord Kelris
    Encounter 1 = Shrine event
@@ -54,14 +54,9 @@ struct Locations
 };
 
 static const Locations aSpawnLocations[6] = // Should be near the correct positions
-{
-    { -768.949f, -174.413f, -25.87f, 3.09f}, // Left side
-    { -768.888f, -164.238f, -25.87f, 3.09f},
-    { -768.951f, -153.911f, -25.88f, 3.09f},
-    { -867.782f, -174.352f, -25.87f, 6.27f}, // Right side
-    { -867.875f, -164.089f, -25.87f, 6.27f},
-    { -867.859f, -153.927f, -25.88f, 6.27f}
-};
+    {{-768.949f, -174.413f, -25.87f, 3.09f}, // Left side
+     {-768.888f, -164.238f, -25.87f, 3.09f}, {-768.951f, -153.911f, -25.88f, 3.09f}, {-867.782f, -174.352f, -25.87f, 6.27f}, // Right side
+     {-867.875f, -164.089f, -25.87f, 6.27f}, {-867.859f, -153.927f, -25.88f, 6.27f}};
 
 struct PosCount
 {
@@ -75,23 +70,11 @@ struct SummonInformation
     PosCount m_aCountAndPos[3];
 };
 
-static const SummonInformation aWaveSummonInformation[] =
-{
-    {0, NPC_AKUMAI_SNAPJAW, {{1, 0}, {1, 1}, {1, 5}}},
-    {0, NPC_AKUMAI_SNAPJAW, {{1, 4}, {0, 0}, {0, 0}}},
-    {1, NPC_AKUMAI_SERVANT, {{1, 1}, {1, 4}, {0, 0}}},
-    {2, NPC_MURKSHALLOW_SNAPCLAW, {{1, 0}, {1, 2}, {0, 0}}},
-    {2, NPC_MURKSHALLOW_SNAPCLAW, {{1, 3}, {1, 4}, {0, 0}}},
-    {3, NPC_MURKSHALLOW_SOFTSHELL, {{2, 0}, {1, 1}, {1, 2}}},
-    {3, NPC_MURKSHALLOW_SOFTSHELL, {{1, 3}, {1, 4}, {2, 5}}}
-};
+static const SummonInformation aWaveSummonInformation[] = {{0, NPC_AKUMAI_SNAPJAW, {{1, 0}, {1, 1}, {1, 5}}}, {0, NPC_AKUMAI_SNAPJAW, {{1, 4}, {0, 0}, {0, 0}}}, {1, NPC_AKUMAI_SERVANT, {{1, 1}, {1, 4}, {0, 0}}}, {2, NPC_MURKSHALLOW_SNAPCLAW, {{1, 0}, {1, 2}, {0, 0}}}, {2, NPC_MURKSHALLOW_SNAPCLAW, {{1, 3}, {1, 4}, {0, 0}}}, {3, NPC_MURKSHALLOW_SOFTSHELL, {{2, 0}, {1, 1}, {1, 2}}}, {3, NPC_MURKSHALLOW_SOFTSHELL, {{1, 3}, {1, 4}, {2, 5}}}};
 
 struct instance_blackfathom_deeps : public ScriptedInstance
 {
-    instance_blackfathom_deeps(Map* pMap) : ScriptedInstance(pMap)
-    {
-        Initialize();
-    };
+    instance_blackfathom_deeps(Map* pMap) : ScriptedInstance(pMap) { Initialize(); };
 
     uint64 m_uiTwilightLordKelrisGUID;
     uint64 m_uiShrine1GUID;
@@ -101,7 +84,7 @@ struct instance_blackfathom_deeps : public ScriptedInstance
     uint64 m_uiShrineOfGelihastGUID;
     uint64 m_uiAltarOfTheDeepsGUID;
     uint64 m_uiMainDoorGUID;
-    uint8  m_uiShrinesLit;
+    uint8 m_uiShrinesLit;
     uint32 m_uiSpawnMobsTimer[4];
     std::list<uint64> m_lWaveMobsGUIDList;
     uint32 m_uiCheckEventEnd;
@@ -125,7 +108,7 @@ struct instance_blackfathom_deeps : public ScriptedInstance
         m_lWaveMobsGUIDList.clear();
         m_uiCheckEventEnd = 1000;
 
-        for (uint32 & i : m_uiSpawnMobsTimer)
+        for (uint32& i : m_uiSpawnMobsTimer)
             i = 0;
     }
 
@@ -139,29 +122,29 @@ struct instance_blackfathom_deeps : public ScriptedInstance
     {
         switch (pGo->GetEntry())
         {
-            case GO_SHRINE_1:
-                m_uiShrine1GUID = pGo->GetGUID();
-                break;
-            case GO_SHRINE_2:
-                m_uiShrine2GUID = pGo->GetGUID();
-                break;
-            case GO_SHRINE_3:
-                m_uiShrine3GUID = pGo->GetGUID();
-                break;
-            case GO_SHRINE_4:
-                m_uiShrine4GUID = pGo->GetGUID();
-                break;
-            case 103015:
-                m_uiShrineOfGelihastGUID = pGo->GetGUID();
-                break;
-            case 103016:
-                m_uiAltarOfTheDeepsGUID = pGo->GetGUID();
-                break;
-            case GO_PORTAL_DOOR:
-                m_uiMainDoorGUID = pGo->GetGUID();
-                if (m_auiEncounter[BFD_ENCOUNTER_SHRINE] == DONE && m_auiEncounter[BFD_ENCOUNTER_KELRIS] == DONE)
-                    pGo->SetGoState(GO_STATE_ACTIVE);
-                break;
+        case GO_SHRINE_1:
+            m_uiShrine1GUID = pGo->GetGUID();
+            break;
+        case GO_SHRINE_2:
+            m_uiShrine2GUID = pGo->GetGUID();
+            break;
+        case GO_SHRINE_3:
+            m_uiShrine3GUID = pGo->GetGUID();
+            break;
+        case GO_SHRINE_4:
+            m_uiShrine4GUID = pGo->GetGUID();
+            break;
+        case 103015:
+            m_uiShrineOfGelihastGUID = pGo->GetGUID();
+            break;
+        case 103016:
+            m_uiAltarOfTheDeepsGUID = pGo->GetGUID();
+            break;
+        case GO_PORTAL_DOOR:
+            m_uiMainDoorGUID = pGo->GetGUID();
+            if (m_auiEncounter[BFD_ENCOUNTER_SHRINE] == DONE && m_auiEncounter[BFD_ENCOUNTER_KELRIS] == DONE)
+                pGo->SetGoState(GO_STATE_ACTIVE);
+            break;
         }
     }
 
@@ -169,30 +152,30 @@ struct instance_blackfathom_deeps : public ScriptedInstance
     {
         switch (uiType)
         {
-            case TYPE_KELRIS:
-                if (uiData == DONE && m_auiEncounter[BFD_ENCOUNTER_SHRINE] == DONE)
-                    DoUseDoorOrButton(m_uiMainDoorGUID);
+        case TYPE_KELRIS:
+            if (uiData == DONE && m_auiEncounter[BFD_ENCOUNTER_SHRINE] == DONE)
+                DoUseDoorOrButton(m_uiMainDoorGUID);
 
-                m_auiEncounter[BFD_ENCOUNTER_KELRIS] = uiData;
-                break;
-            case TYPE_SHRINE:
-                if (uiData == IN_PROGRESS)
-                {
-                    ASSERT(m_uiShrinesLit < 4);
-                    m_uiSpawnMobsTimer[m_uiShrinesLit] = 3000;
-                    m_uiCheckEventEnd = 5000;
-                    ++m_uiShrinesLit;
-                }
-                /*if (m_uiShrinesLit > 3)
-                    uiData = DONE;*/
-                else if (uiData == DONE && m_auiEncounter[BFD_ENCOUNTER_KELRIS] == DONE)
-                    DoUseDoorOrButton(m_uiMainDoorGUID);
+            m_auiEncounter[BFD_ENCOUNTER_KELRIS] = uiData;
+            break;
+        case TYPE_SHRINE:
+            if (uiData == IN_PROGRESS)
+            {
+                ASSERT(m_uiShrinesLit < 4);
+                m_uiSpawnMobsTimer[m_uiShrinesLit] = 3000;
+                m_uiCheckEventEnd = 5000;
+                ++m_uiShrinesLit;
+            }
+            /*if (m_uiShrinesLit > 3)
+                uiData = DONE;*/
+            else if (uiData == DONE && m_auiEncounter[BFD_ENCOUNTER_KELRIS] == DONE)
+                DoUseDoorOrButton(m_uiMainDoorGUID);
 
-                m_auiEncounter[BFD_ENCOUNTER_SHRINE] = uiData;
-                break;
-            case TYPE_AQUANIS:
-                m_auiEncounter[BFD_ENCOUNTER_AQUANIS] = uiData;
-                break;
+            m_auiEncounter[BFD_ENCOUNTER_SHRINE] = uiData;
+            break;
+        case TYPE_AQUANIS:
+            m_auiEncounter[BFD_ENCOUNTER_AQUANIS] = uiData;
+            break;
         }
 
         if (uiData == DONE)
@@ -209,21 +192,18 @@ struct instance_blackfathom_deeps : public ScriptedInstance
         }
     }
 
-    char const* Save() override
-    {
-        return strInstData.c_str();
-    }
+    char const* Save() override { return strInstData.c_str(); }
 
     uint32 GetData(uint32 uiType) override
     {
         switch (uiType)
         {
-            case TYPE_KELRIS:
-                return m_auiEncounter[BFD_ENCOUNTER_KELRIS];
-            case TYPE_SHRINE:
-                return m_auiEncounter[BFD_ENCOUNTER_SHRINE];
-            case TYPE_AQUANIS:
-                return m_auiEncounter[BFD_ENCOUNTER_AQUANIS];
+        case TYPE_KELRIS:
+            return m_auiEncounter[BFD_ENCOUNTER_KELRIS];
+        case TYPE_SHRINE:
+            return m_auiEncounter[BFD_ENCOUNTER_SHRINE];
+        case TYPE_AQUANIS:
+            return m_auiEncounter[BFD_ENCOUNTER_AQUANIS];
         }
 
         return 0;
@@ -233,20 +213,20 @@ struct instance_blackfathom_deeps : public ScriptedInstance
     {
         switch (uiData)
         {
-            case DATA_TWILIGHT_LORD_KELRIS:
-                return m_uiTwilightLordKelrisGUID;
-            case DATA_SHRINE1:
-                return m_uiShrine1GUID;
-            case DATA_SHRINE2:
-                return m_uiShrine2GUID;
-            case DATA_SHRINE3:
-                return m_uiShrine3GUID;
-            case DATA_SHRINE4:
-                return m_uiShrine4GUID;
-            case DATA_SHRINE_OF_GELIHAST:
-                return m_uiShrineOfGelihastGUID;
-            case DATA_MAINDOOR:
-                return m_uiMainDoorGUID;
+        case DATA_TWILIGHT_LORD_KELRIS:
+            return m_uiTwilightLordKelrisGUID;
+        case DATA_SHRINE1:
+            return m_uiShrine1GUID;
+        case DATA_SHRINE2:
+            return m_uiShrine2GUID;
+        case DATA_SHRINE3:
+            return m_uiShrine3GUID;
+        case DATA_SHRINE4:
+            return m_uiShrine4GUID;
+        case DATA_SHRINE_OF_GELIHAST:
+            return m_uiShrineOfGelihastGUID;
+        case DATA_MAINDOOR:
+            return m_uiMainDoorGUID;
         }
 
         return 0;
@@ -265,7 +245,7 @@ struct instance_blackfathom_deeps : public ScriptedInstance
         std::istringstream loadStream(chrIn);
         loadStream >> m_auiEncounter[BFD_ENCOUNTER_KELRIS] >> m_auiEncounter[BFD_ENCOUNTER_SHRINE] >> m_auiEncounter[BFD_ENCOUNTER_AQUANIS];
 
-        for (uint32 & i : m_auiEncounter)
+        for (uint32& i : m_auiEncounter)
             if (i == IN_PROGRESS)
                 i = NOT_STARTED;
 
@@ -310,10 +290,10 @@ struct instance_blackfathom_deeps : public ScriptedInstance
                     if (Creature* pSummoned = pKelris->SummonCreature(i.m_uiNpcEntry, fPosX, fPosY, fPosZ, fPosO, TEMPSUMMON_DEAD_DESPAWN, 0))
                     {
                         pSummoned->SetWalk(true);
-                        pSummoned->CastSpell(pSummoned, 7741, true);  // Summoned Demon (Visual)
+                        pSummoned->CastSpell(pSummoned, 7741, true); // Summoned Demon (Visual)
                         pSummoned->SetHomePosition(fX_resp, fY_resp, fZ_resp, 0);
                         pSummoned->SetInCombatWithZone();
-                        //pSummoned->GetMotionMaster()->MovePoint(0, fX_resp, fY_resp, fZ_resp);
+                        // pSummoned->GetMotionMaster()->MovePoint(0, fX_resp, fY_resp, fZ_resp);
                         m_lWaveMobsGUIDList.push_back(pSummoned->GetGUID());
                     }
                 }
@@ -370,12 +350,9 @@ struct instance_blackfathom_deeps : public ScriptedInstance
     }
 };
 
-InstanceData* GetInstanceData_instance_blackfathom_deeps(Map* pMap)
-{
-    return new instance_blackfathom_deeps(pMap);
-}
+InstanceData* GetInstanceData_instance_blackfathom_deeps(Map* pMap) { return new instance_blackfathom_deeps(pMap); }
 
-struct go_fire_of_akumaiAI: public GameObjectAI
+struct go_fire_of_akumaiAI : public GameObjectAI
 {
     go_fire_of_akumaiAI(GameObject* pGo) : GameObjectAI(pGo) {}
 
@@ -397,10 +374,7 @@ struct go_fire_of_akumaiAI: public GameObjectAI
     }
 };
 
-GameObjectAI* GetAIgo_fire_of_akumai(GameObject *pGo)
-{
-    return new go_fire_of_akumaiAI(pGo);
-}
+GameObjectAI* GetAIgo_fire_of_akumai(GameObject* pGo) { return new go_fire_of_akumaiAI(pGo); }
 
 void AddSC_instance_blackfathom_deeps()
 {

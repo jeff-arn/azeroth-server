@@ -19,10 +19,10 @@
 #ifndef _GUILDMGR_H
 #define _GUILDMGR_H
 
+#include <shared_mutex>
 #include "Common.h"
 #include "Policies/Singleton.h"
 #include "World.h"
-#include <shared_mutex>
 
 class Guild;
 class ObjectGuid;
@@ -34,65 +34,63 @@ typedef std::list<PetitionSignature*> PetitionSignatureList;
 typedef std::unordered_map<uint32, Guild*> GuildMap;
 class GuildMgr
 {
-    public:
-        GuildMgr();
-        ~GuildMgr();
+public:
+    GuildMgr();
+    ~GuildMgr();
 
-        void AddGuild(Guild* guild);
-        void RemoveGuild(uint32 guildId);
+    void AddGuild(Guild* guild);
+    void RemoveGuild(uint32 guildId);
 
-        Guild* GetGuildById(uint32 guildId) const;
-        Guild* GetGuildByName(std::string const& name) const;
-        Guild* GetGuildByLeader(ObjectGuid const& guid) const;
-        std::string GetGuildNameById(uint32 guildId) const;
+    Guild* GetGuildById(uint32 guildId) const;
+    Guild* GetGuildByName(std::string const& name) const;
+    Guild* GetGuildByLeader(ObjectGuid const& guid) const;
+    std::string GetGuildNameById(uint32 guildId) const;
 
-        void GuildMemberAdded(uint32 guildId, uint32 memberGuid)
-        {
-            std::lock_guard<std::shared_timed_mutex> guard(m_guid2GuildMutex);
-            m_guid2guild[memberGuid] = guildId;
-        }
-        void GuildMemberRemoved(uint32 memberGuid)
-        {
-            std::lock_guard<std::shared_timed_mutex> guard(m_guid2GuildMutex);
-            m_guid2guild.erase(memberGuid);
-        }
-        Guild* GetPlayerGuild(uint32 lowguid)
-        {
-            std::shared_lock<std::shared_timed_mutex> guard(m_guid2GuildMutex);
-            std::map<uint32, uint32>::iterator it = m_guid2guild.find(lowguid);
-            if (it != m_guid2guild.end())
-                return GetGuildById(it->second);
-            return nullptr;
-        }
+    void GuildMemberAdded(uint32 guildId, uint32 memberGuid)
+    {
+        std::lock_guard<std::shared_timed_mutex> guard(m_guid2GuildMutex);
+        m_guid2guild[memberGuid] = guildId;
+    }
+    void GuildMemberRemoved(uint32 memberGuid)
+    {
+        std::lock_guard<std::shared_timed_mutex> guard(m_guid2GuildMutex);
+        m_guid2guild.erase(memberGuid);
+    }
+    Guild* GetPlayerGuild(uint32 lowguid)
+    {
+        std::shared_lock<std::shared_timed_mutex> guard(m_guid2GuildMutex);
+        std::map<uint32, uint32>::iterator it = m_guid2guild.find(lowguid);
+        if (it != m_guid2guild.end())
+            return GetGuildById(it->second);
+        return nullptr;
+    }
 
-        void CreatePetition(uint32 id, Player* player, ObjectGuid const& charterGuid, std::string& name);
-        void DeletePetition(Petition* petition);
-        Petition* GetPetitionByCharterGuid(ObjectGuid const& charterGuid);
-        Petition* GetPetitionById(uint32 id);
-        Petition* GetPetitionByOwnerGuid(ObjectGuid const& ownerGuid);
-        void DeletePetitionSignaturesByPlayer(ObjectGuid guid, uint32 exceptPetitionId = 0);
+    void CreatePetition(uint32 id, Player* player, ObjectGuid const& charterGuid, std::string& name);
+    void DeletePetition(Petition* petition);
+    Petition* GetPetitionByCharterGuid(ObjectGuid const& charterGuid);
+    Petition* GetPetitionById(uint32 id);
+    Petition* GetPetitionByOwnerGuid(ObjectGuid const& ownerGuid);
+    void DeletePetitionSignaturesByPlayer(ObjectGuid guid, uint32 exceptPetitionId = 0);
 
-        void LoadGuilds();
-        void LoadPetitions();
-    private:
-        void CleanUpPetitions();
-        mutable std::shared_timed_mutex m_guildMutex;
-        GuildMap m_GuildMap;
-        std::shared_timed_mutex m_guid2GuildMutex;
-        std::map<uint32, uint32> m_guid2guild;
+    void LoadGuilds();
+    void LoadPetitions();
 
-        std::shared_timed_mutex m_petitionsMutex;
-        PetitionMap m_petitionMap;
+private:
+    void CleanUpPetitions();
+    mutable std::shared_timed_mutex m_guildMutex;
+    GuildMap m_GuildMap;
+    std::shared_timed_mutex m_guid2GuildMutex;
+    std::map<uint32, uint32> m_guid2guild;
+
+    std::shared_timed_mutex m_petitionsMutex;
+    PetitionMap m_petitionMap;
 };
 
 class Petition
 {
 public:
-    Petition() : m_id(0) {};
-    Petition(uint32 id, ObjectGuid charterGuid, ObjectGuid ownerGuid, std::string& name)
-        : m_id(id), m_charterGuid(charterGuid), m_ownerGuid(ownerGuid), m_name(name)
-    {
-    }
+    Petition() : m_id(0){};
+    Petition(uint32 id, ObjectGuid charterGuid, ObjectGuid ownerGuid, std::string& name) : m_id(id), m_charterGuid(charterGuid), m_ownerGuid(ownerGuid), m_name(name) {}
 
     ~Petition();
 
@@ -125,11 +123,11 @@ public:
 
 private:
     uint32 m_id;
-    ObjectGuid m_charterGuid;           // item guid for charter the petition belongs to
-    ObjectGuid m_ownerGuid;             // guid of the player who owns the charter
-    std::string m_name;                 // name of the guild (or team) the petition is for
+    ObjectGuid m_charterGuid; // item guid for charter the petition belongs to
+    ObjectGuid m_ownerGuid; // guid of the player who owns the charter
+    std::string m_name; // name of the guild (or team) the petition is for
 
-    Team m_team;                        // Team of the player who created this petition
+    Team m_team; // Team of the player who created this petition
 
     PetitionSignatureList m_signatures; // a list of all signatures for this petition
 };
@@ -137,10 +135,7 @@ private:
 class PetitionSignature
 {
 public:
-    PetitionSignature(Petition* petition, ObjectGuid signer, uint32 signerAccount)
-        : m_petition(petition), m_playerGuid(signer), m_playerAccount(signerAccount)
-    {
-    }
+    PetitionSignature(Petition* petition, ObjectGuid signer, uint32 signerAccount) : m_petition(petition), m_playerGuid(signer), m_playerAccount(signerAccount) {}
 
     PetitionSignature(Petition* petition, Player* player);
 

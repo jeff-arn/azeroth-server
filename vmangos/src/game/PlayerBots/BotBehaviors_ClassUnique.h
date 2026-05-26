@@ -17,6 +17,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "WarriorStanceDance"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -28,6 +29,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "WarriorRageDump"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -43,6 +45,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "RogueStealthOpener"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -54,6 +57,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "RogueComboFinisher"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -65,6 +69,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "RogueStealth"; }
+
 private:
     PartyBotAI* m_ai;
 };
@@ -76,6 +81,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "RoguePoisonWeapons"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -91,6 +97,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "HunterPetManage"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -102,6 +109,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "HunterAspectSwap"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -113,6 +121,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "HunterDeadZone"; }
+
 private:
     PartyBotAI* m_ai;
 };
@@ -128,6 +137,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "PaladinBlessing"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -139,6 +149,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "PaladinSealJudge"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -154,6 +165,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "ShamanTotemManage"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -169,6 +181,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "PriestShadowformToggle"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -180,6 +193,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "PriestShieldLogic"; }
+
 private:
     PartyBotAI* m_ai;
 };
@@ -195,6 +209,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "WarlockPetSummon"; }
+
 private:
     PartyBotAI* m_ai;
 };
@@ -206,6 +221,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "WarlockCurseManage"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -217,6 +233,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "WarlockLifeTap"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -232,6 +249,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "DruidFormShift"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };
@@ -243,6 +261,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "DruidRebirth"; }
+
 private:
     PartyBotAI* m_ai;
 };
@@ -254,6 +273,7 @@ public:
     float Score(SituationContext const& ctx) const override;
     bool Execute(SituationContext const& ctx, BotSpellKit& kit) override;
     char const* GetName() const override { return "DruidInnervate"; }
+
 private:
     CombatBotBaseAI* m_ai;
 };

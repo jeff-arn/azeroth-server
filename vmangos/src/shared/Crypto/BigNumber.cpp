@@ -17,19 +17,13 @@
  */
 
 #include "Crypto/BigNumber.h"
-#include <openssl/bn.h>
 #include <algorithm>
 #include <cstring>
+#include <openssl/bn.h>
 
-BigNumber::BigNumber()
-{
-    _bn = BN_new();
-}
+BigNumber::BigNumber() { _bn = BN_new(); }
 
-BigNumber::BigNumber(BigNumber const& bn)
-{
-    _bn = BN_dup(bn._bn);
-}
+BigNumber::BigNumber(BigNumber const& bn) { _bn = BN_dup(bn._bn); }
 
 BigNumber::BigNumber(uint32 val)
 {
@@ -37,15 +31,9 @@ BigNumber::BigNumber(uint32 val)
     BN_set_word(_bn, val);
 }
 
-BigNumber::~BigNumber()
-{
-    BN_free(_bn);
-}
+BigNumber::~BigNumber() { BN_free(_bn); }
 
-void BigNumber::SetDword(uint32 val)
-{
-    BN_set_word(_bn, val);
-}
+void BigNumber::SetDword(uint32 val) { BN_set_word(_bn, val); }
 
 void BigNumber::SetQword(uint64 val)
 {
@@ -62,15 +50,9 @@ void BigNumber::SetBinary(uint8 const* bytes, int len)
     BN_bin2bn(t, len, _bn);
 }
 
-int BigNumber::SetHexStr(const char* str)
-{
-    return BN_hex2bn(&_bn, str);
-}
+int BigNumber::SetHexStr(const char* str) { return BN_hex2bn(&_bn, str); }
 
-void BigNumber::SetRand(int numbits)
-{
-    BN_rand(_bn, numbits, 0, 1);
-}
+void BigNumber::SetRand(int numbits) { BN_rand(_bn, numbits, 0, 1); }
 
 BigNumber& BigNumber::operator=(BigNumber const& bn)
 {
@@ -92,7 +74,7 @@ BigNumber& BigNumber::operator-=(BigNumber const& bn)
 
 BigNumber& BigNumber::operator*=(BigNumber const& bn)
 {
-    BN_CTX *bnctx;
+    BN_CTX* bnctx;
 
     bnctx = BN_CTX_new();
     BN_mul(_bn, _bn, bn._bn, bnctx);
@@ -103,7 +85,7 @@ BigNumber& BigNumber::operator*=(BigNumber const& bn)
 
 BigNumber& BigNumber::operator/=(BigNumber const& bn)
 {
-    BN_CTX *bnctx;
+    BN_CTX* bnctx;
 
     bnctx = BN_CTX_new();
     BN_div(_bn, nullptr, _bn, bn._bn, bnctx);
@@ -114,7 +96,7 @@ BigNumber& BigNumber::operator/=(BigNumber const& bn)
 
 BigNumber& BigNumber::operator%=(BigNumber const& bn)
 {
-    BN_CTX *bnctx;
+    BN_CTX* bnctx;
 
     bnctx = BN_CTX_new();
     BN_mod(_bn, _bn, bn._bn, bnctx);
@@ -126,7 +108,7 @@ BigNumber& BigNumber::operator%=(BigNumber const& bn)
 BigNumber BigNumber::Exp(BigNumber const& bn)
 {
     BigNumber ret;
-    BN_CTX *bnctx;
+    BN_CTX* bnctx;
 
     bnctx = BN_CTX_new();
     BN_exp(ret._bn, _bn, bn._bn, bnctx);
@@ -138,7 +120,7 @@ BigNumber BigNumber::Exp(BigNumber const& bn)
 BigNumber BigNumber::ModExp(BigNumber const& bn1, BigNumber const& bn2)
 {
     BigNumber ret;
-    BN_CTX *bnctx;
+    BN_CTX* bnctx;
 
     bnctx = BN_CTX_new();
     BN_mod_exp(ret._bn, _bn, bn1._bn, bn2._bn, bnctx);
@@ -147,27 +129,18 @@ BigNumber BigNumber::ModExp(BigNumber const& bn1, BigNumber const& bn2)
     return ret;
 }
 
-int BigNumber::GetNumBytes(void) const
-{
-    return BN_num_bytes(_bn);
-}
+int BigNumber::GetNumBytes(void) const { return BN_num_bytes(_bn); }
 
-uint32 BigNumber::AsDword()
-{
-    return (uint32)BN_get_word(_bn);
-}
+uint32 BigNumber::AsDword() { return (uint32)BN_get_word(_bn); }
 
-bool BigNumber::isZero() const
-{
-    return BN_is_zero(_bn)!=0;
-}
+bool BigNumber::isZero() const { return BN_is_zero(_bn) != 0; }
 
 std::vector<uint8> BigNumber::AsByteArray(int minSize, bool reverse) const
 {
     int length = (minSize >= GetNumBytes()) ? minSize : GetNumBytes();
 
     std::vector<uint8> byteArray(length);
-    
+
     // If we need more bytes than length of BigNumber set the rest to 0
     if (length > GetNumBytes())
         memset((void*)byteArray.data(), 0, length);

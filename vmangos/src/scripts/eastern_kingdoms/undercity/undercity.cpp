@@ -33,11 +33,11 @@ EndContentData */
 enum eSpells
 {
     // Sylvanas
-    SPELL_SUMMON_SKEL   = 20464,
-    SPELL_FADE          = 20672,
-    SPELL_BLACK_ARROW   = 20733,
-    SPELL_MULTI_SHOT    = 20735,
-    SPELL_SHOOT         = 20463,
+    SPELL_SUMMON_SKEL = 20464,
+    SPELL_FADE = 20672,
+    SPELL_BLACK_ARROW = 20733,
+    SPELL_MULTI_SHOT = 20735,
+    SPELL_SHOOT = 20463,
 };
 
 /*
@@ -47,10 +47,7 @@ TODO : TIMERS TO CHECK
 struct boss_sylvanasAI : public ScriptedAI
 {
 public:
-    boss_sylvanasAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_sylvanasAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     void Reset() override
     {
@@ -62,10 +59,7 @@ public:
         m_uiShootTimer = 10000;
     }
 
-    void EnterCombat(Unit* enemy) override
-    {
-        me->PlayDistanceSound(5886);
-    }
+    void EnterCombat(Unit* enemy) override { me->PlayDistanceSound(5886); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -149,10 +143,7 @@ private:
     uint32 m_uiShootTimer;
 };
 
-CreatureAI* GetAI_boss_sylvanas(Creature* pCreature)
-{
-    return new boss_sylvanasAI(pCreature);
-}
+CreatureAI* GetAI_boss_sylvanas(Creature* pCreature) { return new boss_sylvanasAI(pCreature); }
 
 /*######
 ## AddSC

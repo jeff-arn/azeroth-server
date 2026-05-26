@@ -22,8 +22,8 @@
 #ifndef MANGOS_DEFINE_H
 #define MANGOS_DEFINE_H
 
-#include "Platform/CompilerDefs.h"
 #include <cstdint>
+#include "Platform/CompilerDefs.h"
 
 #if PLATFORM == PLATFORM_WINDOWS
 // Unfortunately, every library (e.g. MySQL, G3D) includes <Windows.h> in their **HEADER**
@@ -46,46 +46,46 @@
 #endif // WINDOWS
 
 #define MANGOS_LITTLEENDIAN 0
-#define MANGOS_BIGENDIAN    1
+#define MANGOS_BIGENDIAN 1
 
 #if !defined(MANGOS_ENDIAN)
-#  if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#    define MANGOS_ENDIAN MANGOS_BIGENDIAN
-#  else //__BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
-#    define MANGOS_ENDIAN MANGOS_LITTLEENDIAN
-#  endif //__BYTE_ORDER__
-#endif //MANGOS_ENDIAN
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define MANGOS_ENDIAN MANGOS_BIGENDIAN
+#else //__BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+#define MANGOS_ENDIAN MANGOS_LITTLEENDIAN
+#endif //__BYTE_ORDER__
+#endif // MANGOS_ENDIAN
 
 #if PLATFORM == PLATFORM_WINDOWS
-#  ifndef DECLSPEC_NORETURN
-#    define DECLSPEC_NORETURN __declspec(noreturn)
-#  endif //DECLSPEC_NORETURN
-#else //PLATFORM != PLATFORM_WINDOWS
-#  define DECLSPEC_NORETURN
-#endif //PLATFORM
+#ifndef DECLSPEC_NORETURN
+#define DECLSPEC_NORETURN __declspec(noreturn)
+#endif // DECLSPEC_NORETURN
+#else // PLATFORM != PLATFORM_WINDOWS
+#define DECLSPEC_NORETURN
+#endif // PLATFORM
 
 #if COMPILER == COMPILER_GNU
-#  define ATTR_NORETURN __attribute__((noreturn))
-#  define ATTR_PRINTF(F,V) __attribute__ ((format (printf, F, V)))
-#else //COMPILER != COMPILER_GNU
-#  define ATTR_NORETURN
-#  define ATTR_PRINTF(F,V)
-#endif //COMPILER == COMPILER_GNU
+#define ATTR_NORETURN __attribute__((noreturn))
+#define ATTR_PRINTF(F, V) __attribute__((format(printf, F, V)))
+#else // COMPILER != COMPILER_GNU
+#define ATTR_NORETURN
+#define ATTR_PRINTF(F, V)
+#endif // COMPILER == COMPILER_GNU
 
-typedef std::int64_t  int64;
-typedef std::int32_t  int32;
-typedef std::int16_t  int16;
-typedef std::int8_t   int8;
+typedef std::int64_t int64;
+typedef std::int32_t int32;
+typedef std::int16_t int16;
+typedef std::int8_t int8;
 typedef std::uint64_t uint64;
 typedef std::uint32_t uint32;
 typedef std::uint16_t uint16;
-typedef std::uint8_t  uint8;
+typedef std::uint8_t uint8;
 
 #ifndef _WIN32
-typedef uint16      WORD;
-typedef uint32      DWORD;
-#endif //COMPILER
+typedef uint16 WORD;
+typedef uint32 DWORD;
+#endif // COMPILER
 
 typedef uint64 OBJECT_HANDLE;
 
-#endif //MANGOS_DEFINE_H
+#endif // MANGOS_DEFINE_H

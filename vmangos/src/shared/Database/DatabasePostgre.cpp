@@ -21,19 +21,19 @@
 
 #ifdef DO_POSTGRESQL
 
-#include "Util.h"
-#include "Policies/SingletonImp.h"
-#include "Platform/Define.h"
-#include "DatabaseEnv.h"
 #include "Database/SqlOperations.h"
+#include "DatabaseEnv.h"
+#include "Platform/Define.h"
+#include "Policies/SingletonImp.h"
 #include "Timer.h"
+#include "Util.h"
 
 size_t DatabasePostgre::db_count = 0;
 
 DatabasePostgre::DatabasePostgre()
 {
     // before first connection
-    if(db_count++ == 0)
+    if (db_count++ == 0)
     {
         if (!PQisthreadsafe())
         {
@@ -43,20 +43,11 @@ DatabasePostgre::DatabasePostgre()
     }
 }
 
-DatabasePostgre::~DatabasePostgre()
-{
+DatabasePostgre::~DatabasePostgre() {}
 
-}
+SqlConnection* DatabasePostgre::CreateConnection() { return new PostgreSQLConnection(); }
 
-SqlConnection* DatabasePostgre::CreateConnection()
-{
-    return new PostgreSQLConnection();
-}
-
-PostgreSQLConnection::~PostgreSQLConnection()
-{
-    PQfinish(mPGconn);
-}
+PostgreSQLConnection::~PostgreSQLConnection() { PQfinish(mPGconn); }
 
 bool PostgreSQLConnection::OpenConnection(bool reconnect)
 {
@@ -68,8 +59,7 @@ bool PostgreSQLConnection::OpenConnection(bool reconnect)
     /* check to see that the backend connection was successfully made */
     if (PQstatus(mPGconn) != CONNECTION_OK)
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Could not connect to Postgre database at %s: %s",
-            m_host.c_str(), PQerrorMessage(mPGconn));
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Could not connect to Postgre database at %s: %s", m_host.c_str(), PQerrorMessage(mPGconn));
         PQfinish(mPGconn);
         mPGconn = nullptr;
         return false;
@@ -88,7 +78,7 @@ bool PostgreSQLConnection::_Query(std::string const& sql, PGresult** pResult, ui
     uint32 _s = WorldTimer::getMSTime();
     // Send the query
     *pResult = PQexec(mPGconn, sql.c_str());
-    if(!*pResult)
+    if (!*pResult)
         return false;
 
     if (PQresultStatus(*pResult) != PGRES_TUPLES_OK)
@@ -100,7 +90,7 @@ bool PostgreSQLConnection::_Query(std::string const& sql, PGresult** pResult, ui
     }
     else
     {
-        DEBUG_FILTER_LOG(LOG_FILTER_SQL_TEXT, "[%u ms] SQL: %s", WorldTimer::getMSTimeDiff(_s,WorldTimer::getMSTime()), sql.c_str());
+        DEBUG_FILTER_LOG(LOG_FILTER_SQL_TEXT, "[%u ms] SQL: %s", WorldTimer::getMSTimeDiff(_s, WorldTimer::getMSTime()), sql.c_str());
     }
 
     *pRowCount = PQntuples(*pResult);
@@ -125,7 +115,7 @@ std::unique_ptr<QueryResult> PostgreSQLConnection::Query(std::string const& sql)
     uint64 rowCount = 0;
     uint32 fieldCount = 0;
 
-    if(!_Query(sql, &result, &rowCount, &fieldCount))
+    if (!_Query(sql, &result, &rowCount, &fieldCount))
         return nullptr;
 
     std::unique_ptr<QueryResultPostgre> queryResult(new QueryResultPostgre(result, rowCount, fieldCount));
@@ -143,7 +133,7 @@ std::unique_ptr<QueryNamedResult> PostgreSQLConnection::QueryNamed(std::string c
     uint64 rowCount = 0;
     uint32 fieldCount = 0;
 
-    if(!_Query(sql, &result, &rowCount, &fieldCount))
+    if (!_Query(sql, &result, &rowCount, &fieldCount))
         return nullptr;
 
     QueryFieldNames names(fieldCount);
@@ -172,7 +162,7 @@ bool PostgreSQLConnection::Execute(std::string const& sql)
     }
     else
     {
-        DEBUG_FILTER_LOG(LOG_FILTER_SQL_TEXT, "[%u ms] SQL: %s", WorldTimer::getMSTimeDiff(_s,WorldTimer::getMSTime()), sql.c_str());
+        DEBUG_FILTER_LOG(LOG_FILTER_SQL_TEXT, "[%u ms] SQL: %s", WorldTimer::getMSTimeDiff(_s, WorldTimer::getMSTime()), sql.c_str());
     }
 
     PQclear(res);
@@ -198,20 +188,11 @@ bool PostgreSQLConnection::_TransactionCmd(std::string const& sql)
     return true;
 }
 
-bool PostgreSQLConnection::BeginTransaction()
-{
-    return _TransactionCmd("START TRANSACTION");
-}
+bool PostgreSQLConnection::BeginTransaction() { return _TransactionCmd("START TRANSACTION"); }
 
-bool PostgreSQLConnection::CommitTransaction()
-{
-    return _TransactionCmd("COMMIT");
-}
+bool PostgreSQLConnection::CommitTransaction() { return _TransactionCmd("COMMIT"); }
 
-bool PostgreSQLConnection::RollbackTransaction()
-{
-    return _TransactionCmd("ROLLBACK");
-}
+bool PostgreSQLConnection::RollbackTransaction() { return _TransactionCmd("ROLLBACK"); }
 
 unsigned long PostgreSQLConnection::escape_string(char* to, char const* from, unsigned long length)
 {

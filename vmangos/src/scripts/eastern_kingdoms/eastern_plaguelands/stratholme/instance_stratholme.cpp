@@ -3,76 +3,70 @@
 
 enum
 {
-    GO_SERVICE_ENTRANCE         = 175368,
-    GO_GAUNTLET_GATE1           = 175357,
-    GO_SLAUGHTER_SQUARE_GATE    = 175358,
-    GO_ZIGGURAT1                = 175380,                   // baroness
-    GO_ZIGGURAT2                = 175379,                   // nerub'enkan
-    GO_ZIGGURAT3                = 175381,                   // maleki
-    GO_ZIGGURAT4                = 175405,                   // rammstein
-    GO_ZIGGURAT5                = 175796,                   // baron
-    GO_PORT_GAUNTLET            = 175374,                   // port from gauntlet to slaugther
-    GO_PORT_SLAUGTHER           = 175373,                   // port at slaugther
-    GO_PORT_ELDERS              = 175377,                   // port at elders square
-    GO_PORT_TRAP_GATE_1         = 175351,                   // Portcullis used in the gate traps (rats trap)
-    GO_PORT_TRAP_GATE_2         = 175350,                   // Scarlet side
-    GO_PORT_TRAP_GATE_3         = 175355,                   // Undead side
-    GO_PORT_TRAP_GATE_4         = 175354,
-    GO_CAGE_YSIDA               = 181071,                   // in 2 parts, the base is: 181072
+    GO_SERVICE_ENTRANCE = 175368,
+    GO_GAUNTLET_GATE1 = 175357,
+    GO_SLAUGHTER_SQUARE_GATE = 175358,
+    GO_ZIGGURAT1 = 175380, // baroness
+    GO_ZIGGURAT2 = 175379, // nerub'enkan
+    GO_ZIGGURAT3 = 175381, // maleki
+    GO_ZIGGURAT4 = 175405, // rammstein
+    GO_ZIGGURAT5 = 175796, // baron
+    GO_PORT_GAUNTLET = 175374, // port from gauntlet to slaugther
+    GO_PORT_SLAUGTHER = 175373, // port at slaugther
+    GO_PORT_ELDERS = 175377, // port at elders square
+    GO_PORT_TRAP_GATE_1 = 175351, // Portcullis used in the gate traps (rats trap)
+    GO_PORT_TRAP_GATE_2 = 175350, // Scarlet side
+    GO_PORT_TRAP_GATE_3 = 175355, // Undead side
+    GO_PORT_TRAP_GATE_4 = 175354,
+    GO_CAGE_YSIDA = 181071, // in 2 parts, the base is: 181072
 
-    NPC_CRYSTAL                 = 10415,                    // three ziggurat crystals
-    NPC_BARON                   = 10440,
-    NPC_YSIDA_TRIGGER           = 16100,
-    NPC_TIMMY                   = 10808,
-    NPC_DATHROHAN               = 10812,
-    NPC_MAGISTRATE              = 10435,
+    NPC_CRYSTAL = 10415, // three ziggurat crystals
+    NPC_BARON = 10440,
+    NPC_YSIDA_TRIGGER = 16100,
+    NPC_TIMMY = 10808,
+    NPC_DATHROHAN = 10812,
+    NPC_MAGISTRATE = 10435,
 
-    NPC_RAMSTEIN                = 10439,
-    NPC_ABOM_BILE               = 10416,
-    NPC_ABOM_VENOM              = 10417,
-    NPC_BLACK_GUARD             = 10394,
-    NPC_YSIDA                   = 16031,
-    NPC_PLAGUED_RAT             = 10441,
-    NPC_PLAGUED_INSECT          = 10461,
-    NPC_PLAGUED_MAGGOT          = 10536,
-    NPC_MINDLESS_UNDEAD         = 11030,
-    NPC_VENGEFUL_PHANTOM        = 10387,
-    NPC_THE_UNFORGIVEN          = 10516,
+    NPC_RAMSTEIN = 10439,
+    NPC_ABOM_BILE = 10416,
+    NPC_ABOM_VENOM = 10417,
+    NPC_BLACK_GUARD = 10394,
+    NPC_YSIDA = 16031,
+    NPC_PLAGUED_RAT = 10441,
+    NPC_PLAGUED_INSECT = 10461,
+    NPC_PLAGUED_MAGGOT = 10536,
+    NPC_MINDLESS_UNDEAD = 11030,
+    NPC_VENGEFUL_PHANTOM = 10387,
+    NPC_THE_UNFORGIVEN = 10516,
 
-    RIVENDARE_YELL_45MIN        = 11812,
-    RIVENDARE_YELL_10MIN        = 11813,
-    RIVENDARE_YELL_5MIN         = 11815,
-    YSIDA_YELL_5MIN             = 11816,
-    RIVENDARE_YELL_FAILED       = 11814,
-    RIVENDARE_YELL_RAMMSTEIN    = 6398,
-    RAMMSTEIN_YELL_SPAWN        = 6425,
-    BLACKGUARD_YELL_SPAWN       = 6415,
-    RIVENDARE_YELL_READY        = 6401,
-    YSIDA_YELL_FAILED           = 11817,
-    YSIDA_SAY_REWARD            = 11931,
+    RIVENDARE_YELL_45MIN = 11812,
+    RIVENDARE_YELL_10MIN = 11813,
+    RIVENDARE_YELL_5MIN = 11815,
+    YSIDA_YELL_5MIN = 11816,
+    RIVENDARE_YELL_FAILED = 11814,
+    RIVENDARE_YELL_RAMMSTEIN = 6398,
+    RAMMSTEIN_YELL_SPAWN = 6425,
+    BLACKGUARD_YELL_SPAWN = 6415,
+    RIVENDARE_YELL_READY = 6401,
+    YSIDA_YELL_FAILED = 11817,
+    YSIDA_SAY_REWARD = 11931,
 
-    SPELL_YSIDA_FREED           = 27773
+    SPELL_YSIDA_FREED = 27773
 };
 
-static Position const aGateTrap[] =                    // Positions of the two Gate Traps
-{
-    {3612.29f, -3335.39f, 124.077f, 3.14159f},              // Scarlet side
-    {3919.88f, -3547.34f, 134.269f, 2.94961f}               // Undead side
+static Position const aGateTrap[] = // Positions of the two Gate Traps
+    {
+        {3612.29f, -3335.39f, 124.077f, 3.14159f}, // Scarlet side
+        {3919.88f, -3547.34f, 134.269f, 2.94961f} // Undead side
 };
 
-static uint32 const aPlaguedCritters[] =
-{
-    NPC_PLAGUED_RAT, NPC_PLAGUED_MAGGOT, NPC_PLAGUED_INSECT
-};
+static uint32 const aPlaguedCritters[] = {NPC_PLAGUED_RAT, NPC_PLAGUED_MAGGOT, NPC_PLAGUED_INSECT};
 
 static Position const unforgivenTriggerSpot(3712.607f, -3429.338f, 131.001f, 0.0f);
 
 struct instance_stratholme : public ScriptedInstance
 {
-    instance_stratholme(Map* pMap) : ScriptedInstance(pMap)
-    {
-        Initialize();
-    };
+    instance_stratholme(Map* pMap) : ScriptedInstance(pMap) { Initialize(); };
 
     uint32 m_auiEncounter[STRAT_MAX_ENCOUNTER];
 
@@ -123,7 +117,7 @@ struct instance_stratholme : public ScriptedInstance
             for (uint8 j = 0; j < 3; ++j)
                 trapTimer[j] = 0;
 
-        for (bool & i : IsSilverHandDead)
+        for (bool& i : IsSilverHandDead)
             i = false;
 
         m_phaseBaron = 0;
@@ -199,7 +193,7 @@ struct instance_stratholme : public ScriptedInstance
         }
     }
 
-    //if withRestoreTime true, then newState will be ignored and GO should be restored to original state after 10 seconds
+    // if withRestoreTime true, then newState will be ignored and GO should be restored to original state after 10 seconds
     void UpdateGoState(uint64 goGuid, uint32 newState, bool withRestoreTime)
     {
         if (!goGuid)
@@ -218,37 +212,37 @@ struct instance_stratholme : public ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_BARON:
-                m_uiBaronGUID = pCreature->GetGUID();
-                if (GetData(TYPE_RAMSTEIN) != DONE)
-                    pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_SPAWNING);
-                break;
-            case NPC_YSIDA_TRIGGER:
-                m_uiYsidaTriggerGUID = pCreature->GetGUID();
-                break;
-            case NPC_YSIDA:
-                m_uiYsidaGUID = pCreature->GetGUID();
-                break;
-            case NPC_CRYSTAL:
-                crystalsGUID.insert(pCreature->GetGUID());
-                break;
-            case NPC_ABOM_BILE:
-            case NPC_ABOM_VENOM:
-                abomnationGUID.insert(pCreature->GetGUID());
-                slaugtherAboGUID.push_back(pCreature->GetGUID());
-                break;
-            case NPC_RAMSTEIN:
-                m_uiRamsteinGUID = pCreature->GetGUID();
-                break;
-            case NPC_TIMMY:
-                m_uiTimmyGUID = pCreature->GetGUID();
-                break;
-            case NPC_DATHROHAN:
-                m_uiDathrohanGUID = pCreature->GetGUID();
-                break;
-            case NPC_MAGISTRATE:
-                pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
-                break;
+        case NPC_BARON:
+            m_uiBaronGUID = pCreature->GetGUID();
+            if (GetData(TYPE_RAMSTEIN) != DONE)
+                pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_SPAWNING);
+            break;
+        case NPC_YSIDA_TRIGGER:
+            m_uiYsidaTriggerGUID = pCreature->GetGUID();
+            break;
+        case NPC_YSIDA:
+            m_uiYsidaGUID = pCreature->GetGUID();
+            break;
+        case NPC_CRYSTAL:
+            crystalsGUID.insert(pCreature->GetGUID());
+            break;
+        case NPC_ABOM_BILE:
+        case NPC_ABOM_VENOM:
+            abomnationGUID.insert(pCreature->GetGUID());
+            slaugtherAboGUID.push_back(pCreature->GetGUID());
+            break;
+        case NPC_RAMSTEIN:
+            m_uiRamsteinGUID = pCreature->GetGUID();
+            break;
+        case NPC_TIMMY:
+            m_uiTimmyGUID = pCreature->GetGUID();
+            break;
+        case NPC_DATHROHAN:
+            m_uiDathrohanGUID = pCreature->GetGUID();
+            break;
+        case NPC_MAGISTRATE:
+            pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
+            break;
         }
 
         // on add tous les pnj (le tri sera fait chaque uptade) sinon on a un probleme de coodon�e (il nous donne x, y et z = 0)
@@ -259,85 +253,85 @@ struct instance_stratholme : public ScriptedInstance
     {
         switch (pGo->GetEntry())
         {
-            case GO_SERVICE_ENTRANCE:
-                m_uiServiceEntranceGUID = pGo->GetGUID();
-                break;
-            case GO_GAUNTLET_GATE1:
-                //weird, but unless flag is set, client will not respond as expected. DB bug?
-                pGo->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_LOCKED);
-                m_uiGauntletGate1GUID = pGo->GetGUID();
-                break;
-            case GO_SLAUGHTER_SQUARE_GATE:
-                m_uiSlaughterSquareGateGUID = pGo->GetGUID();
-                break;
-            case GO_ZIGGURAT1:
-                m_uiZiggurat1GUID = pGo->GetGUID();
-                if (GetData(TYPE_NERUB) == DONE)
-                    pGo->UseDoorOrButton();
-                break;
-            case GO_ZIGGURAT2:
-                m_uiZiggurat2GUID = pGo->GetGUID();
-                if (GetData(TYPE_NERUB) == DONE)
-                    pGo->UseDoorOrButton();
-                break;
-            case GO_ZIGGURAT3:
-                m_uiZiggurat3GUID = pGo->GetGUID();
-                if (GetData(TYPE_PALLID) == DONE)
-                    pGo->UseDoorOrButton();
-                break;
-            case GO_ZIGGURAT4:
-                if (GetData(TYPE_RAMSTEIN) == DONE)
-                    pGo->UseDoorOrButton();
-                m_uiZiggurat4GUID = pGo->GetGUID();
-                break;
-            case GO_ZIGGURAT5:
-                if (GetData(TYPE_RAMSTEIN) == DONE)
-                    pGo->UseDoorOrButton();
-                m_uiZiggurat5GUID = pGo->GetGUID();
-                break;
-            case GO_PORT_GAUNTLET:
-                m_uiPortGauntletGUID = pGo->GetGUID();
-                if (GetData(TYPE_CRISTAL_ALL_DIE) == DONE)
-                    pGo->UseDoorOrButton();
-                break;
-            case GO_PORT_SLAUGTHER:
-                m_uiPortSlaugtherGUID = pGo->GetGUID();
-                if (GetData(TYPE_CRISTAL_ALL_DIE) == DONE)
-                    pGo->UseDoorOrButton();
-                break;
-            case GO_PORT_ELDERS:
-                m_uiPortElderGUID = pGo->GetGUID();
-                break;
-            case GO_PORT_TRAP_GATE_1:
-                m_ratTrapGateGUID[0] = pGo->GetGUID();
-                break;
-            case GO_PORT_TRAP_GATE_2:
-                m_ratTrapGateGUID[1] = pGo->GetGUID();
-                break;
-            case GO_PORT_TRAP_GATE_3:
-                m_ratTrapGateGUID[2] = pGo->GetGUID();
-                break;
-            case GO_PORT_TRAP_GATE_4:
-                m_ratTrapGateGUID[3] = pGo->GetGUID();
-                break;
-            case GO_CAGE_YSIDA:
-                m_cageYsidaGUID = pGo->GetGUID();
-                break;
+        case GO_SERVICE_ENTRANCE:
+            m_uiServiceEntranceGUID = pGo->GetGUID();
+            break;
+        case GO_GAUNTLET_GATE1:
+            // weird, but unless flag is set, client will not respond as expected. DB bug?
+            pGo->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_LOCKED);
+            m_uiGauntletGate1GUID = pGo->GetGUID();
+            break;
+        case GO_SLAUGHTER_SQUARE_GATE:
+            m_uiSlaughterSquareGateGUID = pGo->GetGUID();
+            break;
+        case GO_ZIGGURAT1:
+            m_uiZiggurat1GUID = pGo->GetGUID();
+            if (GetData(TYPE_NERUB) == DONE)
+                pGo->UseDoorOrButton();
+            break;
+        case GO_ZIGGURAT2:
+            m_uiZiggurat2GUID = pGo->GetGUID();
+            if (GetData(TYPE_NERUB) == DONE)
+                pGo->UseDoorOrButton();
+            break;
+        case GO_ZIGGURAT3:
+            m_uiZiggurat3GUID = pGo->GetGUID();
+            if (GetData(TYPE_PALLID) == DONE)
+                pGo->UseDoorOrButton();
+            break;
+        case GO_ZIGGURAT4:
+            if (GetData(TYPE_RAMSTEIN) == DONE)
+                pGo->UseDoorOrButton();
+            m_uiZiggurat4GUID = pGo->GetGUID();
+            break;
+        case GO_ZIGGURAT5:
+            if (GetData(TYPE_RAMSTEIN) == DONE)
+                pGo->UseDoorOrButton();
+            m_uiZiggurat5GUID = pGo->GetGUID();
+            break;
+        case GO_PORT_GAUNTLET:
+            m_uiPortGauntletGUID = pGo->GetGUID();
+            if (GetData(TYPE_CRISTAL_ALL_DIE) == DONE)
+                pGo->UseDoorOrButton();
+            break;
+        case GO_PORT_SLAUGTHER:
+            m_uiPortSlaugtherGUID = pGo->GetGUID();
+            if (GetData(TYPE_CRISTAL_ALL_DIE) == DONE)
+                pGo->UseDoorOrButton();
+            break;
+        case GO_PORT_ELDERS:
+            m_uiPortElderGUID = pGo->GetGUID();
+            break;
+        case GO_PORT_TRAP_GATE_1:
+            m_ratTrapGateGUID[0] = pGo->GetGUID();
+            break;
+        case GO_PORT_TRAP_GATE_2:
+            m_ratTrapGateGUID[1] = pGo->GetGUID();
+            break;
+        case GO_PORT_TRAP_GATE_3:
+            m_ratTrapGateGUID[2] = pGo->GetGUID();
+            break;
+        case GO_PORT_TRAP_GATE_4:
+            m_ratTrapGateGUID[3] = pGo->GetGUID();
+            break;
+        case GO_CAGE_YSIDA:
+            m_cageYsidaGUID = pGo->GetGUID();
+            break;
         }
     }
 
-    void OnCreatureDeath(Creature *who) override
+    void OnCreatureDeath(Creature* who) override
     {
         switch (who->GetEntry())
         {
-            case NPC_BLACK_GUARD:
-                m_uiBlackguardCount--;
-                if (!m_uiBlackguardCount)
-                {
-                    if (Creature* pBaron = instance->GetCreature(m_uiBaronGUID))
-                        DoScriptText(RIVENDARE_YELL_READY, pBaron);
-                }
-                break;
+        case NPC_BLACK_GUARD:
+            m_uiBlackguardCount--;
+            if (!m_uiBlackguardCount)
+            {
+                if (Creature* pBaron = instance->GetCreature(m_uiBaronGUID))
+                    DoScriptText(RIVENDARE_YELL_READY, pBaron);
+            }
+            break;
         }
     }
 
@@ -345,10 +339,10 @@ struct instance_stratholme : public ScriptedInstance
     {
         switch (uiType)
         {
-            case TYPE_SH_QUEST:
-                if (IsSilverHandDead[0] && IsSilverHandDead[1] && IsSilverHandDead[2] && IsSilverHandDead[3] && IsSilverHandDead[4])
-                    return 1;
-                return 0;
+        case TYPE_SH_QUEST:
+            if (IsSilverHandDead[0] && IsSilverHandDead[1] && IsSilverHandDead[2] && IsSilverHandDead[3] && IsSilverHandDead[4])
+                return 1;
+            return 0;
         }
         if (uiType < STRAT_MAX_ENCOUNTER)
             return m_auiEncounter[uiType];
@@ -359,12 +353,12 @@ struct instance_stratholme : public ScriptedInstance
     {
         switch (uiData)
         {
-            case DATA_BARON:
-                return m_uiBaronGUID;
-            case DATA_YSIDA_TRIGGER:
-                return m_uiYsidaTriggerGUID;
-            case NPC_DATHROHAN:
-                return m_uiDathrohanGUID;
+        case DATA_BARON:
+            return m_uiBaronGUID;
+        case DATA_YSIDA_TRIGGER:
+            return m_uiYsidaTriggerGUID;
+        case NPC_DATHROHAN:
+            return m_uiDathrohanGUID;
         }
         return 0;
     }
@@ -373,63 +367,61 @@ struct instance_stratholme : public ScriptedInstance
     {
         switch (uiType)
         {
-            case TYPE_BARON_RUN:
+        case TYPE_BARON_RUN:
             {
                 switch (uiData)
                 {
-                    case IN_PROGRESS:
-                        if (m_auiEncounter[TYPE_BARON_RUN] == IN_PROGRESS || m_auiEncounter[TYPE_BARON_RUN] == FAIL)
-                            break;
-                        m_uiBaronRun_Timer = 45*MINUTE*IN_MILLISECONDS;
-                        m_phaseBaron = 0;
-                        sLog.Out(LOG_SCRIPTS, LOG_LVL_DEBUG, "Instance Stratholme: Baron run in progress.");
-                        if (Creature* pYsidaT = instance->GetCreature(m_uiYsidaTriggerGUID))
-                            pYsidaT->SummonCreature(NPC_YSIDA,
-                                                    4044.163f, -3334.2f, 115.0596f, 4.2f,
-                                                    TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 1*HOUR*IN_MILLISECONDS);
+                case IN_PROGRESS:
+                    if (m_auiEncounter[TYPE_BARON_RUN] == IN_PROGRESS || m_auiEncounter[TYPE_BARON_RUN] == FAIL)
                         break;
-                    case FAIL:
-                        //may add code to remove aura from players, but in theory the time should be up already and removed.
-                        break;
-                    case DONE:
-                        if (instance->GetGameObject(m_cageYsidaGUID))
-                            instance->GetGameObject(m_cageYsidaGUID)->SetGoState(GO_STATE_ACTIVE);
-                        if (Creature* pYsida = instance->GetCreature(m_uiYsidaGUID))
-                        {
-                            pYsida->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
-                            pYsida->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
-                            pYsida->SetWalk(true);
-                            pYsida->GetMotionMaster()->MovePoint(1, 4041.2f, -3339.0f, 115.1f, MOVE_PATHFINDING);
-                        }
-                        m_uiYsidaReward_Timer = 5000;
-                        m_uiBaronRun_Timer = 0;
-                        break;
+                    m_uiBaronRun_Timer = 45 * MINUTE * IN_MILLISECONDS;
+                    m_phaseBaron = 0;
+                    sLog.Out(LOG_SCRIPTS, LOG_LVL_DEBUG, "Instance Stratholme: Baron run in progress.");
+                    if (Creature* pYsidaT = instance->GetCreature(m_uiYsidaTriggerGUID))
+                        pYsidaT->SummonCreature(NPC_YSIDA, 4044.163f, -3334.2f, 115.0596f, 4.2f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 1 * HOUR * IN_MILLISECONDS);
+                    break;
+                case FAIL:
+                    // may add code to remove aura from players, but in theory the time should be up already and removed.
+                    break;
+                case DONE:
+                    if (instance->GetGameObject(m_cageYsidaGUID))
+                        instance->GetGameObject(m_cageYsidaGUID)->SetGoState(GO_STATE_ACTIVE);
+                    if (Creature* pYsida = instance->GetCreature(m_uiYsidaGUID))
+                    {
+                        pYsida->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+                        pYsida->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+                        pYsida->SetWalk(true);
+                        pYsida->GetMotionMaster()->MovePoint(1, 4041.2f, -3339.0f, 115.1f, MOVE_PATHFINDING);
+                    }
+                    m_uiYsidaReward_Timer = 5000;
+                    m_uiBaronRun_Timer = 0;
+                    break;
                 }
                 m_auiEncounter[TYPE_BARON_RUN] = uiData;
                 break;
             }
-            case TYPE_BARONESS:
+        case TYPE_BARONESS:
             {
                 m_auiEncounter[TYPE_BARONESS] = uiData;
                 if (uiData == DONE)
                     UpdateGoState(m_uiZiggurat1GUID, GO_STATE_ACTIVE, false);
                 break;
             }
-            case TYPE_NERUB:
+        case TYPE_NERUB:
             {
                 m_auiEncounter[TYPE_NERUB] = uiData;
                 if (uiData == DONE)
                     UpdateGoState(m_uiZiggurat2GUID, GO_STATE_ACTIVE, false);
                 break;
             }
-            case TYPE_PALLID:
+        case TYPE_PALLID:
             {
                 m_auiEncounter[TYPE_PALLID] = uiData;
                 if (uiData == DONE)
                     UpdateGoState(m_uiZiggurat3GUID, GO_STATE_ACTIVE, false);
                 break;
             }
-            case TYPE_RAMSTEIN:
+        case TYPE_RAMSTEIN:
             {
                 if (uiData == SPECIAL) // on mob Aggro OK
                 {
@@ -494,7 +486,7 @@ struct instance_stratholme : public ScriptedInstance
                             pUndead->GetMotionMaster()->MovePoint(1, 3941.29f, -3394.84f, 119.69f, MOVE_FORCE_DESTINATION | MOVE_STRAIGHT_PATH);
                         }
                     }
-                    //UpdateGoState(m_uiZiggurat4GUID,GO_STATE_ACTIVE,false);
+                    // UpdateGoState(m_uiZiggurat4GUID,GO_STATE_ACTIVE,false);
                     m_uiSlaugtherSquare_Timer = 60000;
                     sLog.Out(LOG_SCRIPTS, LOG_LVL_DEBUG, "Instance Stratholme: Slaugther event will continue in 60 sec.");
                 }
@@ -508,7 +500,7 @@ struct instance_stratholme : public ScriptedInstance
                 m_auiEncounter[TYPE_RAMSTEIN] = uiData;
                 break;
             }
-            case TYPE_BARON:
+        case TYPE_BARON:
             {
                 if (uiData == IN_PROGRESS)
                 {
@@ -571,45 +563,45 @@ struct instance_stratholme : public ScriptedInstance
                 m_auiEncounter[TYPE_BARON] = uiData;
                 break;
             }
-            case TYPE_CRISTAL_DIE:
+        case TYPE_CRISTAL_DIE:
             {
                 StartSlaugtherSquare();
                 break;
             }
-            case TYPE_CRISTAL_ALL_DIE:
-            case TYPE_EVENT_AURIUS:
-            case TYPE_RAMSTEIN_EVENT:
-            case TYPE_UNFORGIVEN:
+        case TYPE_CRISTAL_ALL_DIE:
+        case TYPE_EVENT_AURIUS:
+        case TYPE_RAMSTEIN_EVENT:
+        case TYPE_UNFORGIVEN:
             {
                 m_auiEncounter[uiType] = uiData;
                 break;
             }
-            case TYPE_SH_AELMAR:
+        case TYPE_SH_AELMAR:
             {
                 IsSilverHandDead[0] = (uiData) != 0;
                 break;
             }
-            case TYPE_SH_CATHELA:
+        case TYPE_SH_CATHELA:
             {
                 IsSilverHandDead[1] = (uiData) != 0;
                 break;
             }
-            case TYPE_SH_GREGOR:
+        case TYPE_SH_GREGOR:
             {
                 IsSilverHandDead[2] = (uiData) != 0;
                 break;
             }
-            case TYPE_SH_NEMAS:
+        case TYPE_SH_NEMAS:
             {
                 IsSilverHandDead[3] = (uiData) != 0;
                 break;
             }
-            case TYPE_SH_VICAR:
+        case TYPE_SH_VICAR:
             {
                 IsSilverHandDead[4] = (uiData) != 0;
                 break;
             }
-            case TYPE_POSTMASTER:
+        case TYPE_POSTMASTER:
             {
                 m_auiEncounter[uiType] = uiData;
                 if (uiData == IN_PROGRESS)
@@ -623,7 +615,6 @@ struct instance_stratholme : public ScriptedInstance
                 // No need to save anything here, so return
                 return;
             }
-
         }
         if (uiData == DONE)
         {
@@ -638,17 +629,14 @@ struct instance_stratholme : public ScriptedInstance
 
     /** Load / save system */
     std::string strInstData;
-    char const* Save() override
-    {
-        return strInstData.c_str();
-    }
+    char const* Save() override { return strInstData.c_str(); }
 
     void Load(char const* chrIn) override
     {
         if (!chrIn)
             return;
         std::istringstream loadStream(chrIn);
-        for (uint32 & i : m_auiEncounter)
+        for (uint32& i : m_auiEncounter)
         {
             loadStream >> i;
             if (i == IN_PROGRESS)
@@ -661,16 +649,16 @@ struct instance_stratholme : public ScriptedInstance
 
     bool JoueurDansPiegeRat1()
     {
-        //float x1 = 3907.45f;
-        //float y1 = -3550.41f;
+        // float x1 = 3907.45f;
+        // float y1 = -3550.41f;
         float x2 = 3909.34f;
         float y2 = -3540.14f;
         float x3 = 3930.1f;
         float y3 = -3554.4f;
-        //float x4 = 3931.9f;
-        //float y4 = -3544.6f;
+        // float x4 = 3931.9f;
+        // float y4 = -3544.6f;
 
-        Map::PlayerList const &listeJoueur = instance->GetPlayers();
+        Map::PlayerList const& listeJoueur = instance->GetPlayers();
         for (const auto& itr : listeJoueur)
         {
             /*
@@ -684,13 +672,12 @@ struct instance_stratholme : public ScriptedInstance
             */
             if (itr.getSource()->IsAlive() && !itr.getSource()->IsGameMaster() && itr.getSource()->IsGMVisible())
             {
-                //hauteur corect ?
+                // hauteur corect ?
                 if (itr.getSource()->GetPositionZ() < 135 && itr.getSource()->GetPositionZ() > 130)
                     continue;
 
-                //carre central ?
-                if (itr.getSource()->GetPositionX() < x3 && itr.getSource()->GetPositionX() > x2 &&
-                        itr.getSource()->GetPositionY() < y3 && itr.getSource()->GetPositionY() > y2 + 4)
+                // carre central ?
+                if (itr.getSource()->GetPositionX() < x3 && itr.getSource()->GetPositionX() > x2 && itr.getSource()->GetPositionY() < y3 && itr.getSource()->GetPositionY() > y2 + 4)
                     continue;
 
                 return true;
@@ -701,13 +688,10 @@ struct instance_stratholme : public ScriptedInstance
 
     bool JoueurDansPiegeRat2()
     {
-        Map::PlayerList const &listeJoueur = instance->GetPlayers();
+        Map::PlayerList const& listeJoueur = instance->GetPlayers();
         for (const auto& itr : listeJoueur)
         {
-            if (itr.getSource()->IsAlive() && !itr.getSource()->IsGameMaster() && itr.getSource()->IsGMVisible() &&
-                    itr.getSource()->GetPositionX() < 3621.32 && itr.getSource()->GetPositionX() > 3603.18 &&
-                    itr.getSource()->GetPositionY() < -3335 && itr.getSource()->GetPositionY() > -3340.46 &&
-                    itr.getSource()->GetPositionZ() < 130 && itr.getSource()->GetPositionZ() > 123)
+            if (itr.getSource()->IsAlive() && !itr.getSource()->IsGameMaster() && itr.getSource()->IsGMVisible() && itr.getSource()->GetPositionX() < 3621.32 && itr.getSource()->GetPositionX() > 3603.18 && itr.getSource()->GetPositionY() < -3335 && itr.getSource()->GetPositionY() > -3340.46 && itr.getSource()->GetPositionZ() < 130 && itr.getSource()->GetPositionZ() > 123)
                 return true;
         }
         return false;
@@ -727,8 +711,8 @@ struct instance_stratholme : public ScriptedInstance
                 if (pAbom->IsAlive() && !pAbom->IsInCombat())
                 {
                     pAbom->GetMotionMaster()->MovePoint(0, 4037.194f, -3473.741943f, 121.738808f);
-                    //pAbom->GetMotionMaster()->MovePoint(1, 4038.45288f, -3487.635498f, 121.742157f);
-                    //pAbom->SetHomePosition(4036.40527f, -3470.181152f, 121.749062f, 4.7418f);
+                    // pAbom->GetMotionMaster()->MovePoint(1, 4038.45288f, -3487.635498f, 121.742157f);
+                    // pAbom->SetHomePosition(4036.40527f, -3470.181152f, 121.749062f, 4.7418f);
                 }
                 m_uiSlaugtherAboMob_Timer = (pAbom->GetEntry() == NPC_ABOM_BILE) ? 45000 : urand(35000, 40000);
                 slaugtherAboGUID.remove(*Iter);
@@ -745,8 +729,7 @@ struct instance_stratholme : public ScriptedInstance
             {
                 if (Player* pPlayer = player.getSource())
                 {
-                    if (pPlayer->IsTargetableBy(nullptr) &&
-                        pPlayer->GetDistance3dToCenter(unforgivenTriggerSpot) < 10.0f)
+                    if (pPlayer->IsTargetableBy(nullptr) && pPlayer->GetDistance3dToCenter(unforgivenTriggerSpot) < 10.0f)
                     {
                         SetData(TYPE_UNFORGIVEN, DONE);
                         instance->SummonCreature(NPC_THE_UNFORGIVEN, 3719.82f, -3426.25f, 131.844f, 3.3412f, TEMPSUMMON_DEAD_DESPAWN, 1 * HOUR * IN_MILLISECONDS);
@@ -817,7 +800,7 @@ struct instance_stratholme : public ScriptedInstance
 
         if (m_uiBaronRun_Timer)
         {
-            if (m_uiBaronRun_Timer <= 45*MINUTE*IN_MILLISECONDS && m_phaseBaron == 0)
+            if (m_uiBaronRun_Timer <= 45 * MINUTE * IN_MILLISECONDS && m_phaseBaron == 0)
             {
                 m_phaseBaron++;
 
@@ -830,7 +813,7 @@ struct instance_stratholme : public ScriptedInstance
                         if (!player.getSource()->HasAura(SPELL_BARON_ULTIMATUM_45MIN, EFFECT_INDEX_0))
                             player.getSource()->CastSpell(player.getSource(), SPELL_BARON_ULTIMATUM_45MIN, true);
             }
-            if (m_uiBaronRun_Timer <= 10*MINUTE*IN_MILLISECONDS && m_phaseBaron == 1)
+            if (m_uiBaronRun_Timer <= 10 * MINUTE * IN_MILLISECONDS && m_phaseBaron == 1)
             {
                 m_phaseBaron++;
 
@@ -843,7 +826,7 @@ struct instance_stratholme : public ScriptedInstance
                         if (!player.getSource()->HasAura(SPELL_BARON_ULTIMATUM_10MIN, EFFECT_INDEX_0))
                             player.getSource()->CastSpell(player.getSource(), SPELL_BARON_ULTIMATUM_10MIN, true);
             }
-            if (m_uiBaronRun_Timer <= 5*MINUTE*IN_MILLISECONDS && m_phaseBaron == 2)
+            if (m_uiBaronRun_Timer <= 5 * MINUTE * IN_MILLISECONDS && m_phaseBaron == 2)
             {
                 m_phaseBaron++;
 
@@ -856,14 +839,14 @@ struct instance_stratholme : public ScriptedInstance
                         if (!player.getSource()->HasAura(SPELL_BARON_ULTIMATUM_5MIN, EFFECT_INDEX_0))
                             player.getSource()->CastSpell(player.getSource(), SPELL_BARON_ULTIMATUM_5MIN, true);
             }
-            if (m_uiBaronRun_Timer <= 5*MINUTE*IN_MILLISECONDS - 3000 && m_phaseBaron == 3)
+            if (m_uiBaronRun_Timer <= 5 * MINUTE * IN_MILLISECONDS - 3000 && m_phaseBaron == 3)
             {
                 m_phaseBaron++;
 
                 if (Creature* pYsida = instance->GetCreature(m_uiYsidaGUID))
                     DoScriptText(YSIDA_YELL_5MIN, pYsida);
             }
-            if (m_uiBaronRun_Timer <= 1*MINUTE*IN_MILLISECONDS && m_phaseBaron == 4)
+            if (m_uiBaronRun_Timer <= 1 * MINUTE * IN_MILLISECONDS && m_phaseBaron == 4)
             {
                 m_phaseBaron++;
 
@@ -1017,10 +1000,7 @@ struct instance_stratholme : public ScriptedInstance
     }
 };
 
-InstanceData* GetInstanceData_instance_stratholme(Map* pMap)
-{
-    return new instance_stratholme(pMap);
-}
+InstanceData* GetInstanceData_instance_stratholme(Map* pMap) { return new instance_stratholme(pMap); }
 
 void AddSC_instance_stratholme()
 {

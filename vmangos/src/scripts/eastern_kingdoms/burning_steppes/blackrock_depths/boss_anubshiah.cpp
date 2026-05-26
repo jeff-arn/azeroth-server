@@ -23,18 +23,15 @@ EndScriptData */
 
 #include "scriptPCH.h"
 
-#define SPELL_SHADOWBOLT            15472
-#define SPELL_CURSEOFTONGUES        15470
-#define SPELL_CURSEOFWEAKNESS       12493
-#define SPELL_DEMONARMOR            13787
-#define SPELL_ENVELOPINGWEB         15471
+#define SPELL_SHADOWBOLT 15472
+#define SPELL_CURSEOFTONGUES 15470
+#define SPELL_CURSEOFWEAKNESS 12493
+#define SPELL_DEMONARMOR 13787
+#define SPELL_ENVELOPINGWEB 15471
 
 struct boss_anubshiahAI : public ScriptedAI
 {
-    boss_anubshiahAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_anubshiahAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 ShadowBolt_Timer;
     uint32 CurseOfTongues_Timer;
@@ -53,61 +50,65 @@ struct boss_anubshiahAI : public ScriptedAI
 
     void UpdateAI(uint32 const diff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //ShadowBolt_Timer
+        // ShadowBolt_Timer
         if (ShadowBolt_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHADOWBOLT);
             ShadowBolt_Timer = 7000;
         }
-        else ShadowBolt_Timer -= diff;
+        else
+            ShadowBolt_Timer -= diff;
 
-        //CurseOfTongues_Timer
+        // CurseOfTongues_Timer
         if (CurseOfTongues_Timer < diff)
         {
             Unit* target = nullptr;
             target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
-            if (target) DoCastSpellIfCan(target, SPELL_CURSEOFTONGUES);
+            if (target)
+                DoCastSpellIfCan(target, SPELL_CURSEOFTONGUES);
             CurseOfTongues_Timer = 18000;
         }
-        else CurseOfTongues_Timer -= diff;
+        else
+            CurseOfTongues_Timer -= diff;
 
-        //CurseOfWeakness_Timer
+        // CurseOfWeakness_Timer
         if (CurseOfWeakness_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CURSEOFWEAKNESS);
             CurseOfWeakness_Timer = 45000;
         }
-        else CurseOfWeakness_Timer -= diff;
+        else
+            CurseOfWeakness_Timer -= diff;
 
-        //DemonArmor_Timer
+        // DemonArmor_Timer
         if (DemonArmor_Timer < diff)
         {
             DoCastSpellIfCan(m_creature, SPELL_DEMONARMOR);
             DemonArmor_Timer = 300000;
         }
-        else DemonArmor_Timer -= diff;
+        else
+            DemonArmor_Timer -= diff;
 
-        //EnvelopingWeb_Timer
+        // EnvelopingWeb_Timer
         if (EnvelopingWeb_Timer < diff)
         {
             Unit* target = nullptr;
             target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
-            if (target) DoCastSpellIfCan(target, SPELL_ENVELOPINGWEB);
+            if (target)
+                DoCastSpellIfCan(target, SPELL_ENVELOPINGWEB);
             EnvelopingWeb_Timer = 12000;
         }
-        else EnvelopingWeb_Timer -= diff;
+        else
+            EnvelopingWeb_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_anubshiah(Creature* pCreature)
-{
-    return new boss_anubshiahAI(pCreature);
-}
+CreatureAI* GetAI_boss_anubshiah(Creature* pCreature) { return new boss_anubshiahAI(pCreature); }
 
 void AddSC_boss_anubshiah()
 {

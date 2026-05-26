@@ -18,15 +18,15 @@
 
 #pragma once
 
-#include <G3D/Table.h>
 #include <G3D/Array.h>
 #include <G3D/Set.h>
+#include <G3D/Table.h>
 #include "BIH.h"
 
-template<class T, class BoundsFunc = BoundsTrait<T> >
+template <class T, class BoundsFunc = BoundsTrait<T>>
 class BIHWrap
 {
-    template<class RayCallback>
+    template <class RayCallback>
     struct MDLCallback
     {
         const T* const* objects;
@@ -64,7 +64,6 @@ class BIHWrap
     int unbalanced_times;
 
 public:
-
     BIHWrap() : unbalanced_times(0) {}
 
     void insert(const T& obj)
@@ -97,7 +96,7 @@ public:
         m_tree.build(m_objects, BoundsFunc::getBounds2);
     }
 
-    template<typename RayCallback>
+    template <typename RayCallback>
     void intersectRay(const Ray& r, RayCallback& intersectCallback, float& maxDist, bool ignoreM2Model)
     {
         balance();
@@ -105,7 +104,7 @@ public:
         m_tree.intersectRay(r, temp_cb, maxDist, true, ignoreM2Model);
     }
 
-    template<typename IsectCallback>
+    template <typename IsectCallback>
     void intersectPoint(const Vector3& p, IsectCallback& intersectCallback)
     {
         balance();
@@ -113,4 +112,3 @@ public:
         m_tree.intersectPoint(p, temp_cb);
     }
 };
-

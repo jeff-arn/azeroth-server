@@ -16,17 +16,14 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
-#include "scriptPCH.h"
 #include "razorfen_downs.h"
+#include "scriptPCH.h"
 
-#define    MAX_ENCOUNTER  1
+#define MAX_ENCOUNTER 1
 
 struct instance_razorfen_downs : public ScriptedInstance
 {
-    instance_razorfen_downs(Map* pMap) : ScriptedInstance(pMap)
-    {
-        Initialize();
-    };
+    instance_razorfen_downs(Map* pMap) : ScriptedInstance(pMap) { Initialize(); };
 
     uint64 uiGongGUID;
     uint64 uiCupFire1GUID;
@@ -66,7 +63,7 @@ struct instance_razorfen_downs : public ScriptedInstance
         loadStream >> m_auiEncounter[0];
 
 
-        for (uint32 & i : m_auiEncounter)
+        for (uint32& i : m_auiEncounter)
             if (i == IN_PROGRESS)
                 i = NOT_STARTED;
 
@@ -77,19 +74,19 @@ struct instance_razorfen_downs : public ScriptedInstance
     {
         switch (pGo->GetEntry())
         {
-            case GO_GONG:
-                uiGongGUID = pGo->GetGUID();
-                if (m_auiEncounter[0] == DONE)
-                    pGo->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
-                break;
-            case GO_IDOL_CUP_FIRE:
-                if (uiCupFire1GUID != 0)
-                    uiCupFire2GUID = pGo->GetGUID();
-                else
-                    uiCupFire1GUID = pGo->GetGUID();
-                break;
-            default:
-                break;
+        case GO_GONG:
+            uiGongGUID = pGo->GetGUID();
+            if (m_auiEncounter[0] == DONE)
+                pGo->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
+            break;
+        case GO_IDOL_CUP_FIRE:
+            if (uiCupFire1GUID != 0)
+                uiCupFire2GUID = pGo->GetGUID();
+            else
+                uiCupFire1GUID = pGo->GetGUID();
+            break;
+        default:
+            break;
         }
     }
 
@@ -100,14 +97,14 @@ struct instance_razorfen_downs : public ScriptedInstance
             uiGongWaves = uiData;
             switch (uiGongWaves)
             {
-                case 9:
-                case 14:
-                    if (GameObject* pGo = instance->GetGameObject(uiGongGUID))
-                        pGo->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
-                    break;
-                case 1:
-                case 10:
-                case 15:
+            case 9:
+            case 14:
+                if (GameObject* pGo = instance->GetGameObject(uiGongGUID))
+                    pGo->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
+                break;
+            case 1:
+            case 10:
+            case 15:
                 {
                     GameObject* pGo = instance->GetGameObject(uiGongGUID);
 
@@ -121,19 +118,19 @@ struct instance_razorfen_downs : public ScriptedInstance
 
                     switch (uiGongWaves)
                     {
-                        case 1:
-                            uiCreature = CREATURE_TOMB_FIEND;
-                            uiSummonTimes = 7;
-                            break;
-                        case 10:
-                            uiCreature = CREATURE_TOMB_REAVER;
-                            uiSummonTimes = 3;
-                            break;
-                        case 15:
-                            uiCreature = CREATURE_TUTEN_KASH;
-                            break;
-                        default:
-                            break;
+                    case 1:
+                        uiCreature = CREATURE_TOMB_FIEND;
+                        uiSummonTimes = 7;
+                        break;
+                    case 10:
+                        uiCreature = CREATURE_TOMB_REAVER;
+                        uiSummonTimes = 3;
+                        break;
+                    case 15:
+                        uiCreature = CREATURE_TUTEN_KASH;
+                        break;
+                    default:
+                        break;
                     }
 
                     if (Creature* pCreature = pGo->SummonCreature(uiCreature, 2502.635f, 844.140f, 46.896f, 0.633f))
@@ -167,8 +164,8 @@ struct instance_razorfen_downs : public ScriptedInstance
                     }
                     break;
                 }
-                default:
-                    break;
+            default:
+                break;
             }
         }
 
@@ -200,15 +197,14 @@ struct instance_razorfen_downs : public ScriptedInstance
             SaveToDB();
             OUT_SAVE_INST_DATA_COMPLETE;
         }
-
     }
 
     uint32 GetData(uint32 uiType) override
     {
         switch (uiType)
         {
-            case DATA_GONG_WAVES:
-                return uiGongWaves;
+        case DATA_GONG_WAVES:
+            return uiGongWaves;
         }
 
         return 0;
@@ -218,18 +214,15 @@ struct instance_razorfen_downs : public ScriptedInstance
     {
         switch (uiType)
         {
-            case DATA_GONG:
-                return uiGongGUID;
+        case DATA_GONG:
+            return uiGongGUID;
         }
 
         return 0;
     }
 };
 
-InstanceData* GetInstanceData_instance_razorfen_downs(Map* pMap)
-{
-    return new instance_razorfen_downs(pMap);
-}
+InstanceData* GetInstanceData_instance_razorfen_downs(Map* pMap) { return new instance_razorfen_downs(pMap); }
 
 void AddSC_instance_razorfen_downs()
 {

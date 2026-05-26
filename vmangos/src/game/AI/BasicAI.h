@@ -21,23 +21,23 @@
 
 class BasicAI : public CreatureAI
 {
-    public:
+public:
+    explicit BasicAI(Creature* c);
 
-        explicit BasicAI(Creature* c);
+    void MoveInLineOfSight(Unit*) override;
+    bool IsProximityAggroAllowedFor(Unit*) const;
+    void UpdateAI(uint32 const) override;
 
-        void MoveInLineOfSight(Unit*) override;
-        bool IsProximityAggroAllowedFor(Unit*) const;
-        void UpdateAI(uint32 const) override;
+    // Used for civillians that can summon guards.
+    void JustRespawned() override;
+    virtual void SummonedCreatureDespawn(Creature* /*pSummon*/) override;
+    bool CanSummonGuards() const { return m_bCanSummonGuards; }
+    void SummonGuard(Unit* /*pEnemy*/);
 
-        // Used for civillians that can summon guards.
-        void JustRespawned() override;
-        virtual void SummonedCreatureDespawn(Creature* /*pSummon*/) override;
-        bool CanSummonGuards() const { return m_bCanSummonGuards; }
-        void SummonGuard(Unit* /*pEnemy*/);
+    static int Permissible(Creature const*);
 
-        static int Permissible(Creature const*);
-    protected:
-        bool m_bCanSummonGuards;
+protected:
+    bool m_bCanSummonGuards;
 };
 
 #endif

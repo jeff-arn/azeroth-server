@@ -14,18 +14,18 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "ObjectMgr.h"
 #include "SpellCaster.h"
+#include "Chat.h"
+#include "CreatureAI.h"
 #include "DynamicObject.h"
 #include "GameObject.h"
-#include "Totem.h"
-#include "CreatureAI.h"
-#include "Chat.h"
+#include "ObjectMgr.h"
+#include "Opcodes.h"
 #include "Spell.h"
 #include "SpellAuras.h"
+#include "Totem.h"
 #include "World.h"
 #include "WorldPacket.h"
-#include "Opcodes.h"
 
 Unit* SpellCaster::SelectMagnetTarget(Unit* victim, Spell* spell, SpellEffectIndex eff)
 {
@@ -33,7 +33,8 @@ Unit* SpellCaster::SelectMagnetTarget(Unit* victim, Spell* spell, SpellEffectInd
         return nullptr;
 
     SpellEntry const* pProto = spell->m_spellInfo;
-    if (!pProto) return nullptr;
+    if (!pProto)
+        return nullptr;
     // Example spell: Cause Insanity (Hakkar)
     if (pProto->AttributesEx & SPELL_ATTR_EX_NO_REDIRECTION)
         return victim;
@@ -91,12 +92,12 @@ uint32 SpellCaster::GetLevelForTarget(SpellCaster const* target) const
 
         switch (pGo->GetGOInfo()->type)
         {
-            case GAMEOBJECT_TYPE_CHEST:
-                level = pGo->GetGOInfo()->chest.level;
-                break;
-            case GAMEOBJECT_TYPE_TRAP:
-                level = pGo->GetGOInfo()->trap.level;
-                break;
+        case GAMEOBJECT_TYPE_CHEST:
+            level = pGo->GetGOInfo()->chest.level;
+            break;
+        case GAMEOBJECT_TYPE_TRAP:
+            level = pGo->GetGOInfo()->trap.level;
+            break;
         }
 
         if (!level)
@@ -123,16 +124,16 @@ uint32 SpellCaster::GetWeaponSkillValue(WeaponAttackType attType, SpellCaster co
             return 0;
 
         if (pPlayer->IsNoWeaponShapeShift())
-            return GetSkillMaxForLevel();              // always maximized SKILL_FERAL_COMBAT in fact
+            return GetSkillMaxForLevel(); // always maximized SKILL_FERAL_COMBAT in fact
 
         // weapon skill or (unarmed for base attack)
-        uint32  skill = item ? item->GetProto()->GetProficiencySkill() : SKILL_UNARMED;
+        uint32 skill = item ? item->GetProto()->GetProficiencySkill() : SKILL_UNARMED;
 
-// Daemon: pas en preBC !
-//        // in PvP use full skill instead current skill value
-//        value = (target && target->GetTypeId() == TYPEID_PLAYER)
-//            ? ((Player*)this)->GetSkillMax(skill)
-//            : ((Player*)this)->GetSkillValue(skill);
+        // Daemon: pas en preBC !
+        //        // in PvP use full skill instead current skill value
+        //        value = (target && target->GetTypeId() == TYPEID_PLAYER)
+        //            ? ((Player*)this)->GetSkillMax(skill)
+        //            : ((Player*)this)->GetSkillValue(skill);
         return pPlayer->GetSkillValue(skill);
     }
 
@@ -144,9 +145,7 @@ uint32 SpellCaster::GetDefenseSkillValue(SpellCaster const* target) const
     if (Player const* pPlayer = ToPlayer())
     {
         // in PvP use full skill instead current skill value
-        uint32 value = (target && target->IsPlayer())
-            ? pPlayer->GetSkillMax(SKILL_DEFENSE)
-            : pPlayer->GetSkillValue(SKILL_DEFENSE);
+        uint32 value = (target && target->IsPlayer()) ? pPlayer->GetSkillMax(SKILL_DEFENSE) : pPlayer->GetSkillValue(SKILL_DEFENSE);
         return value;
     }
 
@@ -213,21 +212,18 @@ SpellMissInfo SpellCaster::SpellHitResult(Unit* pVictim, SpellEntry const* spell
 
     switch (spell->DmgClass)
     {
-        case SPELL_DAMAGE_CLASS_NONE:
-            return SPELL_MISS_NONE;
-        case SPELL_DAMAGE_CLASS_MAGIC:
-            return MagicSpellHitResult(pVictim, spell, spellPtr);
-        case SPELL_DAMAGE_CLASS_MELEE:
-        case SPELL_DAMAGE_CLASS_RANGED:
-            return MeleeSpellHitResult(pVictim, spell, spellPtr);
+    case SPELL_DAMAGE_CLASS_NONE:
+        return SPELL_MISS_NONE;
+    case SPELL_DAMAGE_CLASS_MAGIC:
+        return MagicSpellHitResult(pVictim, spell, spellPtr);
+    case SPELL_DAMAGE_CLASS_MELEE:
+    case SPELL_DAMAGE_CLASS_RANGED:
+        return MeleeSpellHitResult(pVictim, spell, spellPtr);
     }
     return SPELL_MISS_NONE;
 }
 
-ProcSystemArguments::ProcSystemArguments(Unit* pVictim_, uint32 procFlagsAttacker_, uint32 procFlagsVictim_, uint32 procExtra_, uint32 amount_, uint32 originalAmount_, WeaponAttackType attType_,
-    SpellEntry const* procSpell_, Spell const* spell)
-    : pVictim(pVictim_), procFlagsAttacker(procFlagsAttacker_), procFlagsVictim(procFlagsVictim_), procExtra(procExtra_), amount(amount_), originalAmount(originalAmount_),
-    attType(attType_), procSpell(procSpell_), isSpellTriggeredByAuraOrItem(spell && (spell->IsTriggeredByAura() || spell->IsTriggered() && spell->IsCastByItem())), procTime(sWorld.GetGameTime())
+ProcSystemArguments::ProcSystemArguments(Unit* pVictim_, uint32 procFlagsAttacker_, uint32 procFlagsVictim_, uint32 procExtra_, uint32 amount_, uint32 originalAmount_, WeaponAttackType attType_, SpellEntry const* procSpell_, Spell const* spell) : pVictim(pVictim_), procFlagsAttacker(procFlagsAttacker_), procFlagsVictim(procFlagsVictim_), procExtra(procExtra_), amount(amount_), originalAmount(originalAmount_), attType(attType_), procSpell(procSpell_), isSpellTriggeredByAuraOrItem(spell && (spell->IsTriggeredByAura() || spell->IsTriggered() && spell->IsCastByItem())), procTime(sWorld.GetGameTime())
 {
     if (spell)
         appliedSpellModifiers = spell->m_appliedMods;
@@ -304,8 +300,8 @@ void SpellCaster::ProcDamageAndSpell_real(ProcSystemArguments& data, ProcessProc
 
     // There are no auras with the SPELL_ATTR_EX3_INSTANT_TARGET_PROCS for victims
     if (processAurasType != PROC_PROCESS_INSTANT &&
-    // Now go on with a victim's events'n'auras
-    // Not much to do if no flags are set or there is no victim
+        // Now go on with a victim's events'n'auras
+        // Not much to do if no flags are set or there is no victim
         data.pVictim && data.pVictim->IsAlive() && data.procFlagsVictim)
     {
         data.pVictim->ProcDamageAndSpellFor(true, IsUnit() ? static_cast<Unit*>(this) : data.pVictim, data, procTriggered, processAurasType);
@@ -351,7 +347,7 @@ float SpellCaster::MeleeSpellMissChance(Unit const* pVictim, WeaponAttackType at
 
         // Bonuses from attacker aura and ratings
         hitChance += pUnit->GetWeaponBasedAuraModifier(attType, SPELL_AURA_MOD_HIT_CHANCE);
-    } 
+    }
 
     // There is some code in 1.12 that explicitly adds a modifier that causes the first 1% of +hit gained from
     // talents or gear to be ignored against monsters with more than 10 Defense Skill above the attacking players Weapon Skill.
@@ -382,8 +378,7 @@ SpellMissInfo SpellCaster::MeleeSpellHitResult(Unit const* pVictim, SpellEntry c
 
     // Hammer of Wrath should not use weapon skill, but Bloodthirst should.
     // bonus from skills is 0.04% per skill Diff
-    int32 attackerWeaponSkill = (spell->rangeIndex == SPELL_RANGE_IDX_COMBAT || spell->EquippedItemClass == ITEM_CLASS_WEAPON) ?
-                                int32(GetWeaponSkillValue(attType, pVictim)) : GetSkillMaxForLevel();
+    int32 attackerWeaponSkill = (spell->rangeIndex == SPELL_RANGE_IDX_COMBAT || spell->EquippedItemClass == ITEM_CLASS_WEAPON) ? int32(GetWeaponSkillValue(attType, pVictim)) : GetSkillMaxForLevel();
     int32 skillDiff = attackerWeaponSkill - int32(pVictim->GetSkillMaxForLevel(this));
     int32 fullSkillDiff = attackerWeaponSkill - int32(pVictim->GetDefenseSkillValue(this));
     int32 minWeaponSkill = GetSkillMaxForLevel(pVictim) < attackerWeaponSkill ? GetSkillMaxForLevel(pVictim) : attackerWeaponSkill;
@@ -433,7 +428,7 @@ SpellMissInfo SpellCaster::MeleeSpellHitResult(Unit const* pVictim, SpellEntry c
     }
     // Check creatures flags_extra for disable parry
     if (Creature const* pCreatureVictim = pVictim->ToCreature())
-    { 
+    {
         if (pCreatureVictim->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_PARRY))
             canParry = false;
         if (pCreatureVictim->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_BLOCK))
@@ -520,7 +515,7 @@ SpellMissInfo SpellCaster::MagicSpellHitResult(Unit const* pVictim, SpellEntry c
 
 int32 SpellCaster::MagicSpellHitChance(Unit const* pVictim, SpellEntry const* spell, Spell* spellPtr)
 {
-     if (spell->AttributesEx3 & SPELL_ATTR_EX3_ALWAYS_HIT)
+    if (spell->AttributesEx3 & SPELL_ATTR_EX3_ALWAYS_HIT)
         return 10000;
 
     SpellSchoolMask schoolMask = spell->GetSpellSchoolMask();
@@ -541,9 +536,7 @@ int32 SpellCaster::MagicSpellHitChance(Unit const* pVictim, SpellEntry const* sp
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_6_1
     int32 leveldif = int32(pVictim->GetLevelForTarget(this)) - int32(GetLevelForTarget(pVictim));
 #else
-    int32 leveldif = (spellPtr ? spellPtr->GetOriginalCasterGuid().IsGameObject() : spell->HasEffect(SPELL_EFFECT_PERSISTENT_AREA_AURA)) ?
-        int32(pVictim->GetLevelForTarget(this)) - std::max<int32>(1, spell->spellLevel) :
-        int32(pVictim->GetLevelForTarget(this)) - int32(GetLevelForTarget(pVictim));
+    int32 leveldif = (spellPtr ? spellPtr->GetOriginalCasterGuid().IsGameObject() : spell->HasEffect(SPELL_EFFECT_PERSISTENT_AREA_AURA)) ? int32(pVictim->GetLevelForTarget(this)) - std::max<int32>(1, spell->spellLevel) : int32(pVictim->GetLevelForTarget(this)) - int32(GetLevelForTarget(pVictim));
 #endif
 
     // Base hit chance from attacker and victim levels
@@ -567,10 +560,10 @@ int32 SpellCaster::MagicSpellHitChance(Unit const* pVictim, SpellEntry const* sp
             modOwner->ApplySpellMod(spell->Id, SPELLMOD_RESIST_MISS_CHANCE, modHitChance, spellPtr);
         }
     }
-    
+
     // Chance hit from victim SPELL_AURA_MOD_ATTACKER_SPELL_HIT_CHANCE auras
     modHitChance += pVictim->GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_ATTACKER_SPELL_HIT_CHANCE, schoolMask);
-    
+
     // Reduce spell hit chance for Area of effect spells from victim SPELL_AURA_MOD_AOE_AVOIDANCE aura
     if (spell->IsAreaOfEffectSpell())
     {
@@ -583,14 +576,14 @@ int32 SpellCaster::MagicSpellHitChance(Unit const* pVictim, SpellEntry const* sp
         resist_mech = pVictim->GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_MECHANIC_RESISTANCE, spell->Mechanic);
     // Apply mod
     modHitChance -= resist_mech;
-    
+
     // Chance resist debuff
     modHitChance -= pVictim->GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_DEBUFF_RESISTANCE, int32(spell->Dispel));
-    
+
     // Increase hit chance from attacker SPELL_AURA_MOD_SPELL_HIT_CHANCE and attacker ratings
     if (Unit* pUnit = ToUnit())
         modHitChance += int32(pUnit->m_modSpellHitChance);
-    
+
     // Nostalrius: sorts binaires.
     if (spell->IsBinary())
     {
@@ -600,8 +593,10 @@ int32 SpellCaster::MagicSpellHitChance(Unit const* pVictim, SpellEntry const* sp
     }
 
     int32 HitChance = modHitChance * 100;
-    if (HitChance < 100) HitChance = 100;
-    if (HitChance > 9900) HitChance = 9900;
+    if (HitChance < 100)
+        HitChance = 100;
+    if (HitChance > 9900)
+        HitChance = 9900;
     return HitChance;
 }
 
@@ -655,10 +650,10 @@ void SpellCaster::SendSpellMiss(Unit const* target, uint32 spellId, SpellMissInf
     WorldPacket data(SMSG_SPELLLOGMISS, (4 + 8 + 1 + 4 + 8 + 1));
     data << uint32(spellId);
     data << GetObjectGuid();
-    data << uint8(0);                                       // unk8
-    data << uint32(1);                                      // target count
+    data << uint8(0); // unk8
+    data << uint32(1); // target count
     // for(i = 0; i < target count; ++i)
-    data << target->GetObjectGuid();                        // target GUID
+    data << target->GetObjectGuid(); // target GUID
     data << uint8(missInfo);
     // Nostalrius: + 2 * float if unk8=1
     // end loop
@@ -691,13 +686,13 @@ uint32 SpellCaster::SpellCriticalDamageBonus(SpellEntry const* spellProto, uint3
     int32 crit_bonus;
     switch (spellProto->DmgClass)
     {
-        case SPELL_DAMAGE_CLASS_MELEE:                      // for melee based spells is 100%
-        case SPELL_DAMAGE_CLASS_RANGED:
-            crit_bonus = damage;
-            break;
-        default:
-            crit_bonus = damage / 2;                        // for spells is 50%
-            break;
+    case SPELL_DAMAGE_CLASS_MELEE: // for melee based spells is 100%
+    case SPELL_DAMAGE_CLASS_RANGED:
+        crit_bonus = damage;
+        break;
+    default:
+        crit_bonus = damage / 2; // for spells is 50%
+        break;
     }
 
     Unit const* pUnit = ToUnit();
@@ -708,7 +703,7 @@ uint32 SpellCaster::SpellCriticalDamageBonus(SpellEntry const* spellProto, uint3
         if (Player* modOwner = pUnit->GetSpellModOwner())
             modOwner->ApplySpellMod(spellProto->Id, SPELLMOD_CRIT_DAMAGE_BONUS, crit_bonus, spell);
     }
-    
+
 
     if (!pVictim)
         return damage += crit_bonus;
@@ -728,14 +723,14 @@ float SpellCaster::SpellCriticalHealingBonus(SpellEntry const* spellProto, uint3
     float crit_bonus;
     switch (spellProto->DmgClass)
     {
-        case SPELL_DAMAGE_CLASS_MELEE:                      // for melee based spells is 100%
-        case SPELL_DAMAGE_CLASS_RANGED:
-            // TODO: write here full calculation for melee/ranged spells
-            crit_bonus = damage;
-            break;
-        default:
-            crit_bonus = damage / 2;                        // for spells is 50%
-            break;
+    case SPELL_DAMAGE_CLASS_MELEE: // for melee based spells is 100%
+    case SPELL_DAMAGE_CLASS_RANGED:
+        // TODO: write here full calculation for melee/ranged spells
+        crit_bonus = damage;
+        break;
+    default:
+        crit_bonus = damage / 2; // for spells is 50%
+        break;
     }
 
     if (pVictim)
@@ -820,15 +815,15 @@ void SpellCaster::SendSpellNonMeleeDamageLog(SpellNonMeleeDamage const* log) con
     data << log->attacker->GetGUID();
 #endif
     data << uint32(log->SpellID);
-    data << uint32(log->damage);                            // damage amount
-    data << uint8(log->school);                             // damage school
-    data << uint32(log->absorb);                            // AbsorbedDamage
-    data << int32(log->resist);                             // resist
-    data << uint8(log->periodicLog);                        // if 1, then client show spell name (example: %s's ranged shot hit %s for %u school or %s suffers %u school damage from %s's spell_name
-    data << uint8(false);                                   // unused
-    data << uint32(log->blocked);                           // blocked
+    data << uint32(log->damage); // damage amount
+    data << uint8(log->school); // damage school
+    data << uint32(log->absorb); // AbsorbedDamage
+    data << int32(log->resist); // resist
+    data << uint8(log->periodicLog); // if 1, then client show spell name (example: %s's ranged shot hit %s for %u school or %s suffers %u school damage from %s's spell_name
+    data << uint8(false); // unused
+    data << uint32(log->blocked); // blocked
     data << uint32(log->HitInfo);
-    data << uint8(0);                                       // flag to use extend data
+    data << uint8(0); // flag to use extend data
     SendMessageToSet(&data, true);
 }
 
@@ -850,10 +845,7 @@ void SpellCaster::SendSpellNonMeleeDamageLog(Unit const* target, uint32 spellId,
     SendSpellNonMeleeDamageLog(&log);
 }
 
-SpellSchoolMask SpellCaster::GetMeleeDamageSchoolMask() const
-{
-    return SPELL_SCHOOL_MASK_NORMAL;
-}
+SpellSchoolMask SpellCaster::GetMeleeDamageSchoolMask() const { return SPELL_SCHOOL_MASK_NORMAL; }
 
 float SpellCaster::CalcArmorReducedDamage(Unit const* pVictim, uint32 const damage) const
 {
@@ -899,9 +891,7 @@ float SpellCaster::CalculateSpellEffectValue(Unit const* target, SpellEntry cons
     int32 baseDice = int32(spellProto->EffectBaseDice[effect_index]);
     float basePointsPerLevel = spellProto->EffectRealPointsPerLevel[effect_index];
     float randomPointsPerLevel = spellProto->EffectDicePerLevel[effect_index];
-    float value = effBasePoints
-                       ? *effBasePoints - baseDice
-                       : spellProto->EffectBasePoints[effect_index];
+    float value = effBasePoints ? *effBasePoints - baseDice : spellProto->EffectBasePoints[effect_index];
 
     value += level * basePointsPerLevel;
     int32 randomPoints = int32(spellProto->EffectDieSides[effect_index] + level * randomPointsPerLevel);
@@ -909,16 +899,14 @@ float SpellCaster::CalculateSpellEffectValue(Unit const* target, SpellEntry cons
 
     switch (randomPoints)
     {
-        case 0:
-        case 1:
-            value += baseDice;
-            break;              // range 1..1
-        default:
+    case 0:
+    case 1:
+        value += baseDice;
+        break; // range 1..1
+    default:
         {
             // range can have positive (1..rand) and negative (rand..1) values, so order its for irand
-            int32 randvalue = baseDice >= randomPoints
-                              ? irand(randomPoints, baseDice)
-                              : irand(baseDice, randomPoints);
+            int32 randvalue = baseDice >= randomPoints ? irand(randomPoints, baseDice) : irand(baseDice, randomPoints);
 
             value += randvalue;
             break;
@@ -939,20 +927,17 @@ float SpellCaster::CalculateSpellEffectValue(Unit const* target, SpellEntry cons
             // Fixes Curse of Exhaustion not removing Amplify Curse.
             switch (spellProto->EffectApplyAuraName[effect_index])
             {
-                case SPELL_AURA_MOD_INCREASE_SPEED:
-                case SPELL_AURA_MOD_SPEED_ALWAYS:
-                case SPELL_AURA_MOD_SPEED_NOT_STACK:
-                case SPELL_AURA_MOD_DECREASE_SPEED:
-                    modOwner->ApplySpellMod(spellProto->Id, SPELLMOD_SPEED, value, spell);
-                    break;
+            case SPELL_AURA_MOD_INCREASE_SPEED:
+            case SPELL_AURA_MOD_SPEED_ALWAYS:
+            case SPELL_AURA_MOD_SPEED_NOT_STACK:
+            case SPELL_AURA_MOD_DECREASE_SPEED:
+                modOwner->ApplySpellMod(spellProto->Id, SPELLMOD_SPEED, value, spell);
+                break;
             }
         }
     }
 
-    if (spellProto->HasAttribute(SPELL_ATTR_SCALES_WITH_CREATURE_LEVEL) && spellProto->spellLevel &&
-        spellProto->Effect[effect_index] != SPELL_EFFECT_WEAPON_PERCENT_DAMAGE &&
-        spellProto->Effect[effect_index] != SPELL_EFFECT_KNOCK_BACK &&
-        (spellProto->Effect[effect_index] != SPELL_EFFECT_APPLY_AURA || spellProto->EffectApplyAuraName[effect_index] != SPELL_AURA_MOD_DECREASE_SPEED))
+    if (spellProto->HasAttribute(SPELL_ATTR_SCALES_WITH_CREATURE_LEVEL) && spellProto->spellLevel && spellProto->Effect[effect_index] != SPELL_EFFECT_WEAPON_PERCENT_DAMAGE && spellProto->Effect[effect_index] != SPELL_EFFECT_KNOCK_BACK && (spellProto->Effect[effect_index] != SPELL_EFFECT_APPLY_AURA || spellProto->EffectApplyAuraName[effect_index] != SPELL_AURA_MOD_DECREASE_SPEED))
     {
         CreatureClassLevelStats const* pCLS = sObjectMgr.GetCreatureClassLevelStats(1, GetLevel());
         float CLSPowerCreature = pCLS->melee_damage;
@@ -979,11 +964,11 @@ void SpellCaster::CalculateSpellDamage(SpellNonMeleeDamage* damageInfo, float da
     // damage bonus (per damage class)
     switch (spellInfo->DmgClass)
     {
-        // Melee and Ranged Spells
-        case SPELL_DAMAGE_CLASS_RANGED:
-        case SPELL_DAMAGE_CLASS_MELEE:
+    // Melee and Ranged Spells
+    case SPELL_DAMAGE_CLASS_RANGED:
+    case SPELL_DAMAGE_CLASS_MELEE:
         {
-            //Calculate damage bonus
+            // Calculate damage bonus
             damage = MeleeDamageBonusDone(pVictim, damage, attackType, spellInfo, effectIndex, SPELL_DIRECT_DAMAGE, 1, spell);
             damage = pVictim->MeleeDamageBonusTaken(this, damage, attackType, spellInfo, effectIndex, SPELL_DIRECT_DAMAGE, 1, spell);
 
@@ -995,9 +980,9 @@ void SpellCaster::CalculateSpellDamage(SpellNonMeleeDamage* damageInfo, float da
             }
             break;
         }
-        // Magical Attacks
-        case SPELL_DAMAGE_CLASS_NONE:
-        case SPELL_DAMAGE_CLASS_MAGIC:
+    // Magical Attacks
+    case SPELL_DAMAGE_CLASS_NONE:
+    case SPELL_DAMAGE_CLASS_MAGIC:
         {
             // Calculate damage bonus
             damage = SpellDamageBonusDone(pVictim, spellInfo, effectIndex, damage, SPELL_DIRECT_DAMAGE, 1, spell);
@@ -1040,14 +1025,14 @@ float SpellCaster::MeleeDamageBonusDone(Unit const* pVictim, float pdamage, Weap
 
     // differentiate for weapon damage based spells
     bool isWeaponDamageBasedSpell = !(spellProto && (damagetype == DOT || spellProto->HasEffect(SPELL_EFFECT_SCHOOL_DAMAGE)));
-    Item* pWeapon          = GetTypeId() == TYPEID_PLAYER ? ((Player*)this)->GetWeaponForAttack(attType, true, false) : nullptr;
+    Item* pWeapon = GetTypeId() == TYPEID_PLAYER ? ((Player*)this)->GetWeaponForAttack(attType, true, false) : nullptr;
     uint32 creatureTypeMask = pVictim->GetCreatureTypeMask();
     uint32 schoolMask = spell ? spell->m_spellSchoolMask : (spellProto ? spellProto->GetSpellSchoolMask() : GetMeleeDamageSchoolMask());
 
     // FLAT damage bonus auras
     // =======================
-    float DoneFlat  = 0;
-    float APbonus   = 0;
+    float DoneFlat = 0;
+    float APbonus = 0;
 
     Unit* pUnit = ToUnit();
 
@@ -1057,11 +1042,11 @@ float SpellCaster::MeleeDamageBonusDone(Unit const* pVictim, float pdamage, Weap
         Unit::AuraList const& mModDamageDone = pUnit->GetAurasByType(SPELL_AURA_MOD_DAMAGE_DONE);
         for (const auto i : mModDamageDone)
         {
-            if (i->GetModifier()->m_miscvalue & schoolMask &&                         // schoolmask has to fit with the intrinsic spell school
-                    (i->GetModifier()->m_miscvalue & GetMeleeDamageSchoolMask() ||    // AND schoolmask has to fit with weapon damage school (essential for non-physical spells)
-                     spellProto->DmgClass == SPELL_DAMAGE_CLASS_RANGED) &&               // Some ranged physical attacks use magic damage, ex. Arcane Shot
-                    ((i->GetSpellProto()->EquippedItemClass == -1) ||                     // general, weapon independent
-                     (pWeapon && pWeapon->IsFitToSpellRequirements(i->GetSpellProto()))))  // OR used weapon fits aura requirements
+            if (i->GetModifier()->m_miscvalue & schoolMask && // schoolmask has to fit with the intrinsic spell school
+                (i->GetModifier()->m_miscvalue & GetMeleeDamageSchoolMask() || // AND schoolmask has to fit with weapon damage school (essential for non-physical spells)
+                 spellProto->DmgClass == SPELL_DAMAGE_CLASS_RANGED) && // Some ranged physical attacks use magic damage, ex. Arcane Shot
+                ((i->GetSpellProto()->EquippedItemClass == -1) || // general, weapon independent
+                 (pWeapon && pWeapon->IsFitToSpellRequirements(i->GetSpellProto())))) // OR used weapon fits aura requirements
                 DoneFlat += i->GetModifier()->m_amount;
         }
 
@@ -1090,7 +1075,7 @@ float SpellCaster::MeleeDamageBonusDone(Unit const* pVictim, float pdamage, Weap
 
     // PERCENT damage auras
     // ====================
-    float DonePercent   = 1.0f;
+    float DonePercent = 1.0f;
 
     if (!isWeaponDamageBasedSpell && GetTypeId() == TYPEID_UNIT && !(IsPet() && ((Creature*)this)->GetOwnerGuid().IsPlayer()))
         DonePercent *= Creature::_GetSpellDamageMod(((Creature*)this)->GetCreatureInfo()->rank);
@@ -1101,15 +1086,15 @@ float SpellCaster::MeleeDamageBonusDone(Unit const* pVictim, float pdamage, Weap
         Unit::AuraList const& mModDamagePercentDone = pUnit->GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
         for (const auto i : mModDamagePercentDone)
         {
-            if (i->GetModifier()->m_miscvalue & schoolMask &&                         // schoolmask has to fit with the intrinsic spell school
-                    i->GetModifier()->m_miscvalue & GetMeleeDamageSchoolMask() &&         // AND schoolmask has to fit with weapon damage school (essential for non-physical spells)
-                    ((i->GetSpellProto()->EquippedItemClass == -1) ||                     // general, weapon independent
-                     (pWeapon && pWeapon->IsFitToSpellRequirements(i->GetSpellProto()))))  // OR used weapon fits aura requirements
+            if (i->GetModifier()->m_miscvalue & schoolMask && // schoolmask has to fit with the intrinsic spell school
+                i->GetModifier()->m_miscvalue & GetMeleeDamageSchoolMask() && // AND schoolmask has to fit with weapon damage school (essential for non-physical spells)
+                ((i->GetSpellProto()->EquippedItemClass == -1) || // general, weapon independent
+                 (pWeapon && pWeapon->IsFitToSpellRequirements(i->GetSpellProto())))) // OR used weapon fits aura requirements
                 DonePercent *= (i->GetModifier()->m_amount + 100.0f) / 100.0f;
         }
 
         if (pUnit && attType == OFF_ATTACK)
-            DonePercent *= pUnit->GetModifierValue(UNIT_MOD_DAMAGE_OFFHAND, TOTAL_PCT);                    // no school check required
+            DonePercent *= pUnit->GetModifierValue(UNIT_MOD_DAMAGE_OFFHAND, TOTAL_PCT); // no school check required
     }
 
     // Pet happiness increases damage of Hunter pet melee spells
@@ -1119,9 +1104,14 @@ float SpellCaster::MeleeDamageBonusDone(Unit const* pVictim, float pdamage, Weap
         {
             switch (pet->GetHappinessState())
             {
-                case HAPPY:     DonePercent *= 1.25; break;
-                case CONTENT:   break;
-                case UNHAPPY:   DonePercent *= 0.75; break;
+            case HAPPY:
+                DonePercent *= 1.25;
+                break;
+            case CONTENT:
+                break;
+            case UNHAPPY:
+                DonePercent *= 0.75;
+                break;
             }
         }
     }
@@ -1153,16 +1143,16 @@ float SpellCaster::MeleeDamageBonusDone(Unit const* pVictim, float pdamage, Weap
         UnitMods unitMod;
         switch (attType)
         {
-            default:
-            case BASE_ATTACK:
-                unitMod = UNIT_MOD_DAMAGE_MAINHAND;
-                break;
-            case OFF_ATTACK:
-                unitMod = UNIT_MOD_DAMAGE_OFFHAND;
-                break;
-            case RANGED_ATTACK:
-                unitMod = UNIT_MOD_DAMAGE_RANGED;
-                break;
+        default:
+        case BASE_ATTACK:
+            unitMod = UNIT_MOD_DAMAGE_MAINHAND;
+            break;
+        case OFF_ATTACK:
+            unitMod = UNIT_MOD_DAMAGE_OFFHAND;
+            break;
+        case RANGED_ATTACK:
+            unitMod = UNIT_MOD_DAMAGE_RANGED;
+            break;
         }
 
         DoneTotal += DoneFlat;
@@ -1201,16 +1191,15 @@ float SpellCaster::SpellHealingBonusDone(Unit const* pVictim, SpellEntry const* 
             return owner->SpellHealingBonusDone(pVictim, spellProto, effectIndex, healamount, damagetype, stack, spell);
 
     // No heal amount for this class spells
-    if (((spellProto->DmgClass == SPELL_DAMAGE_CLASS_NONE) && spellProto->HasAttribute(SPELL_ATTR_PASSIVE)) ||
-        (spellProto->Custom & SPELL_CUSTOM_FIXED_DAMAGE) || spellProto->HasAttribute(SPELL_ATTR_EX3_IGNORE_CASTER_MODIFIERS))
+    if (((spellProto->DmgClass == SPELL_DAMAGE_CLASS_NONE) && spellProto->HasAttribute(SPELL_ATTR_PASSIVE)) || (spellProto->Custom & SPELL_CUSTOM_FIXED_DAMAGE) || spellProto->HasAttribute(SPELL_ATTR_EX3_IGNORE_CASTER_MODIFIERS))
     {
         return healamount < 0 ? 0 : healamount;
     }
 
     // Healing Done
     // Done total percent damage auras
-    float  DoneTotalMod = 1.0f;
-    float  DoneTotal = 0;
+    float DoneTotalMod = 1.0f;
+    float DoneTotal = 0;
 
     if (pUnit)
     {
@@ -1231,20 +1220,20 @@ float SpellCaster::SpellHealingBonusDone(Unit const* pVictim, SpellEntry const* 
                 continue;
             switch (i->GetModifier()->m_miscvalue)
             {
-                case 4415: // Increased Rejuvenation Healing
-                    DoneTotal += i->GetModifier()->m_amount / 4; // 4 ticks
-                    break;
-                case 3736: // Hateful Totem of the Third Wind / Increased Lesser Healing Wave / Savage Totem of the Third Wind
-                    DoneTotal += i->GetModifier()->m_amount;
-                    break;
-                default:
-                    break;
+            case 4415: // Increased Rejuvenation Healing
+                DoneTotal += i->GetModifier()->m_amount / 4; // 4 ticks
+                break;
+            case 3736: // Hateful Totem of the Third Wind / Increased Lesser Healing Wave / Savage Totem of the Third Wind
+                DoneTotal += i->GetModifier()->m_amount;
+                break;
+            default:
+                break;
             }
         }
     }
 
     // Done fixed damage bonus auras
-    float DoneAdvertisedBenefit  = SpellBaseHealingBonusDone(spellProto->GetSpellSchoolMask());
+    float DoneAdvertisedBenefit = SpellBaseHealingBonusDone(spellProto->GetSpellSchoolMask());
 
     // apply ap bonus and benefit affected by spell power implicit coeffs and spell level penalties
     DoneTotal = SpellBonusWithCoeffs(spellProto, effectIndex, DoneTotal, DoneAdvertisedBenefit, damagetype, true, this, spell);
@@ -1258,11 +1247,11 @@ float SpellCaster::SpellHealingBonusDone(Unit const* pVictim, SpellEntry const* 
         if (Player* modOwner = pUnit->GetSpellModOwner())
             modOwner->ApplySpellMod(spellProto->Id, damagetype == DOT ? SPELLMOD_DOT : SPELLMOD_DAMAGE, heal, spell);
     }
-    
+
     return heal < 0 ? 0 : heal;
 }
 
-float SpellCaster:: SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+float SpellCaster::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
 {
     float AdvertisedBenefit = 0;
 
@@ -1286,7 +1275,7 @@ float SpellCaster:: SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
             }
         }
     }
-    
+
     return AdvertisedBenefit;
 }
 
@@ -1331,20 +1320,15 @@ float SpellCaster::SpellDamageBonusDone(Unit const* pVictim, SpellEntry const* s
         Unit::AuraList const& mModDamagePercentDone = pUnit->GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
         for (const auto i : mModDamagePercentDone)
         {
-            if ((i->GetModifier()->m_miscvalue & spellProto->GetSpellSchoolMask()) &&
-                i->GetSpellProto()->EquippedItemClass == -1 &&
-                spellProto->EquippedItemClass == -1 &&
+            if ((i->GetModifier()->m_miscvalue & spellProto->GetSpellSchoolMask()) && i->GetSpellProto()->EquippedItemClass == -1 && spellProto->EquippedItemClass == -1 &&
                 // -1 == any item class (not wand then)
                 i->GetSpellProto()->EquippedItemInventoryTypeMask == 0)
-                // 0 == any inventory type (not wand then)
+            // 0 == any inventory type (not wand then)
             {
                 DoneTotalMod *= (i->GetModifier()->m_amount + 100.0f) / 100.0f;
             }
             // Paladin seals benefit from weapon modifiers
-            else if (i->GetModifier()->m_miscvalue & GetMeleeDamageSchoolMask() &&
-                spellProto->SpellFamilyName == SPELLFAMILY_PALADIN && spellProto->IsFitToFamilyMask<CF_PALADIN_SEALS>() &&
-                ((i->GetSpellProto()->EquippedItemClass == -1) ||
-                (pWeapon && pWeapon->IsFitToSpellRequirements(i->GetSpellProto()))))
+            else if (i->GetModifier()->m_miscvalue & GetMeleeDamageSchoolMask() && spellProto->SpellFamilyName == SPELLFAMILY_PALADIN && spellProto->IsFitToFamilyMask<CF_PALADIN_SEALS>() && ((i->GetSpellProto()->EquippedItemClass == -1) || (pWeapon && pWeapon->IsFitToSpellRequirements(i->GetSpellProto()))))
             {
                 DoneTotalMod *= (i->GetModifier()->m_amount + 100.0f) / 100.0f;
             }
@@ -1363,7 +1347,8 @@ float SpellCaster::SpellDamageBonusDone(Unit const* pVictim, SpellEntry const* s
 
     // done scripted mod (take it from owner)
     Unit* owner = pUnit ? pUnit->GetOwner() : nullptr;
-    if (!owner) owner = pUnit;
+    if (!owner)
+        owner = pUnit;
     if (owner)
     {
         Unit::AuraList const& mOverrideClassScript = owner->GetAurasByType(SPELL_AURA_OVERRIDE_CLASS_SCRIPTS);
@@ -1373,13 +1358,13 @@ float SpellCaster::SpellDamageBonusDone(Unit const* pVictim, SpellEntry const* s
                 continue;
             switch (i->GetModifier()->m_miscvalue)
             {
-                case 4418: // Increased Shock Damage
-                case 4554: // Increased Lightning Damage
+            case 4418: // Increased Shock Damage
+            case 4554: // Increased Lightning Damage
                 {
                     DoneTotal += i->GetModifier()->m_amount;
                     break;
                 }
-                case 4555: // Improved Moonfire (Idol of the moon)
+            case 4555: // Improved Moonfire (Idol of the moon)
                 {
                     // Idol of the moon was bugged during vanilla 1.12
                     // Following math is based on reported numbers from classic and an old post on allakhazam and wowhead classic
@@ -1404,9 +1389,14 @@ float SpellCaster::SpellDamageBonusDone(Unit const* pVictim, SpellEntry const* s
         {
             switch (pet->GetHappinessState())
             {
-                case HAPPY:     DoneTotalMod *= 1.25; break;
-                case CONTENT:   break;
-                case UNHAPPY:   DoneTotalMod *= 0.75; break;
+            case HAPPY:
+                DoneTotalMod *= 1.25;
+                break;
+            case CONTENT:
+                break;
+            case UNHAPPY:
+                DoneTotalMod *= 0.75;
+                break;
             }
         }
     }
@@ -1446,9 +1436,8 @@ int32 SpellCaster::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
         Unit::AuraList const& mDamageDone = pUnit->GetAurasByType(SPELL_AURA_MOD_DAMAGE_DONE);
         for (const auto i : mDamageDone)
         {
-            if ((i->GetModifier()->m_miscvalue & schoolMask) != 0 &&
-                i->GetSpellProto()->EquippedItemClass == -1 &&                   // -1 == any item class (not wand then)
-                i->GetSpellProto()->EquippedItemInventoryTypeMask == 0)          //  0 == any inventory type (not wand then)
+            if ((i->GetModifier()->m_miscvalue & schoolMask) != 0 && i->GetSpellProto()->EquippedItemClass == -1 && // -1 == any item class (not wand then)
+                i->GetSpellProto()->EquippedItemInventoryTypeMask == 0) //  0 == any inventory type (not wand then)
                 DoneAdvertisedBenefit += i->GetModifier()->m_amount;
         }
 
@@ -1467,7 +1456,7 @@ int32 SpellCaster::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
             }
         }
     }
-    
+
     return DoneAdvertisedBenefit;
 }
 
@@ -1512,10 +1501,7 @@ void SpellCaster::DealDamageMods(Unit* victim, uint32& damage, uint32* absorb)
 {
     Unit* pUnit = ToUnit();
     // [Nostalrius] Pas de degats sous esprit de redemption
-    if (!victim->IsAlive() ||
-        victim->IsTaxiFlying() ||
-        (victim->IsCreature() && static_cast<Creature*>(victim)->IsInEvadeMode()) ||
-        (pUnit && pUnit->GetClass() == CLASS_PRIEST && pUnit->HasAura(27827)))
+    if (!victim->IsAlive() || victim->IsTaxiFlying() || (victim->IsCreature() && static_cast<Creature*>(victim)->IsInEvadeMode()) || (pUnit && pUnit->GetClass() == CLASS_PRIEST && pUnit->HasAura(27827)))
     {
         if (absorb)
             *absorb += damage;
@@ -1525,12 +1511,12 @@ void SpellCaster::DealDamageMods(Unit* victim, uint32& damage, uint32* absorb)
 
     uint32 originalDamage = damage;
 
-    //Script Event damage Deal
+    // Script Event damage Deal
     if (Creature* pCreature = ToCreature())
         if (pCreature->AI())
             pCreature->AI()->DamageDeal(victim, damage);
 
-    //Script Event damage taken
+    // Script Event damage taken
     if (Creature* pCreature = victim->ToCreature())
         if (pCreature->AI() && pUnit)
             pCreature->AI()->DamageTaken(pUnit, damage);
@@ -1571,21 +1557,21 @@ float SpellCaster::GetAPMultiplier(WeaponAttackType attType, bool normalized) co
 
     Item* Weapon = ((Player*)this)->GetWeaponForAttack(attType, true, false);
     if (!Weapon)
-        return 2.4f;                                         // fist attack
+        return 2.4f; // fist attack
 
     switch (Weapon->GetProto()->InventoryType)
     {
-        case INVTYPE_2HWEAPON:
-            return 3.3f;
-        case INVTYPE_RANGED:
-        case INVTYPE_RANGEDRIGHT:
-        case INVTYPE_THROWN:
-            return 2.8f;
-        case INVTYPE_WEAPON:
-        case INVTYPE_WEAPONMAINHAND:
-        case INVTYPE_WEAPONOFFHAND:
-        default:
-            return Weapon->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_DAGGER ? 1.7f : 2.4f;
+    case INVTYPE_2HWEAPON:
+        return 3.3f;
+    case INVTYPE_RANGED:
+    case INVTYPE_RANGEDRIGHT:
+    case INVTYPE_THROWN:
+        return 2.8f;
+    case INVTYPE_WEAPON:
+    case INVTYPE_WEAPONMAINHAND:
+    case INVTYPE_WEAPONOFFHAND:
+    default:
+        return Weapon->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_DAGGER ? 1.7f : 2.4f;
     }
 }
 
@@ -1653,18 +1639,19 @@ void SpellCaster::MoveChannelledSpellWithCastTime(Spell* pSpell)
 
 void SpellCaster::SetCurrentCastedSpell(Spell* pSpell)
 {
-    MANGOS_ASSERT(pSpell);                                  // nullptr may be never passed here, use InterruptSpell or InterruptNonMeleeSpells
+    MANGOS_ASSERT(pSpell); // nullptr may be never passed here, use InterruptSpell or InterruptNonMeleeSpells
 
     CurrentSpellTypes CSpellType = pSpell->GetCurrentContainer();
 
-    if (pSpell == m_currentSpells[CSpellType]) return;      // avoid breaking self
+    if (pSpell == m_currentSpells[CSpellType])
+        return; // avoid breaking self
     // break same type spell if it is not delayed
     InterruptSpell(CSpellType, false);
 
     // special breakage effects:
     switch (CSpellType)
     {
-        case CURRENT_GENERIC_SPELL:
+    case CURRENT_GENERIC_SPELL:
         {
             // a channelled spell with a cast time is considered generic before channeling starts,
             // but it does not break itself if you start to recast it, only once channeling starts
@@ -1684,20 +1671,19 @@ void SpellCaster::SetCurrentCastedSpell(Spell* pSpell)
         }
         break;
 
-        case CURRENT_CHANNELED_SPELL:
+    case CURRENT_CHANNELED_SPELL:
         {
             // channel spells always break generic non-delayed and any channeled spells
             InterruptSpell(CURRENT_GENERIC_SPELL, false);
             InterruptSpell(CURRENT_CHANNELED_SPELL);
 
             // it also does break autorepeat if not Auto Shot
-            if (m_currentSpells[CURRENT_AUTOREPEAT_SPELL] &&
-                    m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo->Category == 351)
+            if (m_currentSpells[CURRENT_AUTOREPEAT_SPELL] && m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo->Category == 351)
                 InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
         }
         break;
 
-        case CURRENT_AUTOREPEAT_SPELL:
+    case CURRENT_AUTOREPEAT_SPELL:
         {
             // only Auto Shoot does not break anything
             if (pSpell->m_spellInfo->Category == 351)
@@ -1712,10 +1698,11 @@ void SpellCaster::SetCurrentCastedSpell(Spell* pSpell)
         }
         break;
 
-        default:
+    default:
         {
             // other spell types don't break anything now
-        } break;
+        }
+        break;
     }
 
     // current spell (if it is still here) may be safely deleted now
@@ -1743,14 +1730,11 @@ bool SpellCaster::IsNonMeleeSpellCasted(bool withDelayed, bool skipChanneled, bo
     // Maybe later some special spells will be excluded too.
 
     // generic spells are casted when they are not finished and not delayed
-    if (m_currentSpells[CURRENT_GENERIC_SPELL] &&
-            (m_currentSpells[CURRENT_GENERIC_SPELL]->getState() != SPELL_STATE_FINISHED) &&
-            (withDelayed || m_currentSpells[CURRENT_GENERIC_SPELL]->getState() != SPELL_STATE_DELAYED))
+    if (m_currentSpells[CURRENT_GENERIC_SPELL] && (m_currentSpells[CURRENT_GENERIC_SPELL]->getState() != SPELL_STATE_FINISHED) && (withDelayed || m_currentSpells[CURRENT_GENERIC_SPELL]->getState() != SPELL_STATE_DELAYED))
         return (true);
 
     // channeled spells may be delayed, but they are still considered casted
-    else if (!skipChanneled && m_currentSpells[CURRENT_CHANNELED_SPELL] &&
-             (m_currentSpells[CURRENT_CHANNELED_SPELL]->getState() != SPELL_STATE_FINISHED))
+    else if (!skipChanneled && m_currentSpells[CURRENT_CHANNELED_SPELL] && (m_currentSpells[CURRENT_CHANNELED_SPELL]->getState() != SPELL_STATE_FINISHED))
         return (true);
 
     // autorepeat spells may be finished or delayed, but they are still considered casted
@@ -1770,15 +1754,9 @@ bool SpellCaster::IsNextSwingSpellCasted() const
 
 bool SpellCaster::IsNoMovementSpellCasted() const
 {
-    if (m_currentSpells[CURRENT_GENERIC_SPELL] &&
-            (m_currentSpells[CURRENT_GENERIC_SPELL]->getState() != SPELL_STATE_FINISHED) &&
-             m_currentSpells[CURRENT_GENERIC_SPELL]->getState() != SPELL_STATE_DELAYED &&
-             m_currentSpells[CURRENT_GENERIC_SPELL]->m_spellInfo->HasSpellInterruptFlag(SPELL_INTERRUPT_FLAG_MOVEMENT))
+    if (m_currentSpells[CURRENT_GENERIC_SPELL] && (m_currentSpells[CURRENT_GENERIC_SPELL]->getState() != SPELL_STATE_FINISHED) && m_currentSpells[CURRENT_GENERIC_SPELL]->getState() != SPELL_STATE_DELAYED && m_currentSpells[CURRENT_GENERIC_SPELL]->m_spellInfo->HasSpellInterruptFlag(SPELL_INTERRUPT_FLAG_MOVEMENT))
         return (true);
-    else if (m_currentSpells[CURRENT_CHANNELED_SPELL] &&
-             m_currentSpells[CURRENT_CHANNELED_SPELL]->getState() != SPELL_STATE_FINISHED &&
-            (m_currentSpells[CURRENT_CHANNELED_SPELL]->m_spellInfo->HasSpellInterruptFlag(SPELL_INTERRUPT_FLAG_MOVEMENT) ||
-             m_currentSpells[CURRENT_CHANNELED_SPELL]->m_spellInfo->HasChannelInterruptFlag(AURA_INTERRUPT_MOVING_CANCELS)))
+    else if (m_currentSpells[CURRENT_CHANNELED_SPELL] && m_currentSpells[CURRENT_CHANNELED_SPELL]->getState() != SPELL_STATE_FINISHED && (m_currentSpells[CURRENT_CHANNELED_SPELL]->m_spellInfo->HasSpellInterruptFlag(SPELL_INTERRUPT_FLAG_MOVEMENT) || m_currentSpells[CURRENT_CHANNELED_SPELL]->m_spellInfo->HasChannelInterruptFlag(AURA_INTERRUPT_MOVING_CANCELS)))
         return (true);
     // don't need to check for AUTOREPEAT_SPELL
 
@@ -2288,15 +2266,9 @@ void SpellCaster::RemoveSpellCooldown(uint32 spellId, bool updateClient /*= true
     RemoveSpellCooldown(*spellEntry, updateClient);
 }
 
-void SpellCaster::RemoveSpellCooldown(SpellEntry const& spellEntry, bool /*updateClient = true*/)
-{
-    m_cooldownMap.RemoveBySpellId(spellEntry.Id);
-}
+void SpellCaster::RemoveSpellCooldown(SpellEntry const& spellEntry, bool /*updateClient = true*/) { m_cooldownMap.RemoveBySpellId(spellEntry.Id); }
 
-void SpellCaster::RemoveSpellCategoryCooldown(uint32 category, bool /*updateClient = true*/)
-{
-    m_cooldownMap.RemoveByCategory(category);
-}
+void SpellCaster::RemoveSpellCategoryCooldown(uint32 category, bool /*updateClient = true*/) { m_cooldownMap.RemoveByCategory(category); }
 
 void SpellCaster::ResetGCD(SpellEntry const* spellEntry /*= nullptr*/)
 {
@@ -2391,7 +2363,7 @@ void SpellCaster::PrintCooldownList(ChatHandler& chat) const
     }
 
     // print spell lockout
-    static std::string schoolName[] = { "SPELL_SCHOOL_NORMAL", "SPELL_SCHOOL_HOLY", "SPELL_SCHOOL_FIRE", "SPELL_SCHOOL_NATURE", "SPELL_SCHOOL_FROST", "SPELL_SCHOOL_SHADOW", "SPELL_SCHOOL_ARCANE" };
+    static std::string schoolName[] = {"SPELL_SCHOOL_NORMAL", "SPELL_SCHOOL_HOLY", "SPELL_SCHOOL_FIRE", "SPELL_SCHOOL_NATURE", "SPELL_SCHOOL_FROST", "SPELL_SCHOOL_SHADOW", "SPELL_SCHOOL_ARCANE"};
 
     for (auto& lockoutItr : m_lockoutMap)
     {

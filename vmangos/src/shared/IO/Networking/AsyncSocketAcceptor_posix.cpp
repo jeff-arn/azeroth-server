@@ -1,19 +1,19 @@
 #include "./AsyncSocketAcceptor.h"
 
-#include "IO/Utils_Unix.h"
 #include "IO/Context/IoContext.h"
-#include "IO/Networking/SocketDescriptor.h"
-#include "IO/Networking/IpAddress.h"
 #include "IO/Networking/Internal.h"
+#include "IO/Networking/IpAddress.h"
+#include "IO/Networking/SocketDescriptor.h"
 #include "IO/SystemErrorToString.h"
+#include "IO/Utils_Unix.h"
 
-#include "Log.h"
 #include "Errors.h"
+#include "Log.h"
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #endif
 
 #if defined(__linux__)
@@ -35,14 +35,13 @@
 
 #endif
 
-#include <vector>
-#include <memory>
-#include <string>
 #include <chrono>
 #include <functional>
+#include <memory>
+#include <string>
+#include <vector>
 
-IO::Networking::AsyncSocketAcceptor::AsyncSocketAcceptor(IO::IoContext* ctx, IO::Native::SocketHandle acceptorNativeSocket)
-    : m_ctx(ctx), m_acceptorNativeSocket(acceptorNativeSocket), m_wasClosed(false), m_onNewSocketCallback{nullptr} {}
+IO::Networking::AsyncSocketAcceptor::AsyncSocketAcceptor(IO::IoContext* ctx, IO::Native::SocketHandle acceptorNativeSocket) : m_ctx(ctx), m_acceptorNativeSocket(acceptorNativeSocket), m_wasClosed(false), m_onNewSocketCallback{nullptr} {}
 
 std::unique_ptr<IO::Networking::AsyncSocketAcceptor> IO::Networking::AsyncSocketAcceptor::CreateAndBindServer(IO::IoContext* ctx, std::string const& bindIpStr, uint16_t port)
 {
@@ -100,7 +99,9 @@ std::unique_ptr<IO::Networking::AsyncSocketAcceptor> IO::Networking::AsyncSocket
         return nullptr;
     }
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    struct ::kevent addedEvents{};
+    struct ::kevent addedEvents
+    {
+    };
     static_assert(std::is_base_of<IO::SystemIoEventReceiver, typename std::pointer_traits<decltype(server)>::element_type>::value, "Must implement SystemIoEventReceiver interface!");
     EV_SET(&addedEvents, listenNativeSocket, EVFILT_READ, EV_ADD | EV_ERROR, 0, 0, server.get());
     if (::kevent(ctx->GetKqueueDescriptor(), &addedEvents, 1, nullptr, 0, nullptr) == -1)
@@ -109,16 +110,13 @@ std::unique_ptr<IO::Networking::AsyncSocketAcceptor> IO::Networking::AsyncSocket
         return nullptr;
     }
 #else
-    #error "Unsupported"
+#error "Unsupported"
 #endif
 
     return server;
 }
 
-IO::Networking::AsyncSocketAcceptor::~AsyncSocketAcceptor()
-{
-    MANGOS_ASSERT(m_wasClosed);
-}
+IO::Networking::AsyncSocketAcceptor::~AsyncSocketAcceptor() { MANGOS_ASSERT(m_wasClosed); }
 
 void IO::Networking::AsyncSocketAcceptor::ClosePortAndStopAcceptingNewConnections()
 {
@@ -127,10 +125,7 @@ void IO::Networking::AsyncSocketAcceptor::ClosePortAndStopAcceptingNewConnection
     ::close(m_acceptorNativeSocket);
 }
 
-void IO::Networking::AsyncSocketAcceptor::AutoAcceptSocketsUntilClose(std::function<void(IO::Networking::SocketDescriptor)> const& onNewSocket)
-{
-    m_onNewSocketCallback = onNewSocket;
-}
+void IO::Networking::AsyncSocketAcceptor::AutoAcceptSocketsUntilClose(std::function<void(IO::Networking::SocketDescriptor)> const& onNewSocket) { m_onNewSocketCallback = onNewSocket; }
 
 void IO::Networking::AsyncSocketAcceptor::OnNewClientToAcceptAvailable()
 {

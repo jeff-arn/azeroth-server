@@ -16,21 +16,21 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Common.h"
 #include "Transport.h"
-#include "Geometry.h"
-#include "ObjectMgr.h"
-#include "Path.h"
-#include "WorldPacket.h"
-#include "World.h"
-#include "GameObjectAI.h"
-#include "MapReference.h"
-#include "Player.h"
 #include "Cell.h"
 #include "CellImpl.h"
+#include "Common.h"
+#include "GameObjectAI.h"
 #include "GameObjectModel.h"
-#include "ObjectAccessor.h"
+#include "Geometry.h"
 #include "MapManager.h"
+#include "MapReference.h"
+#include "ObjectAccessor.h"
+#include "ObjectMgr.h"
+#include "Path.h"
+#include "Player.h"
+#include "World.h"
+#include "WorldPacket.h"
 
 #include <G3D/Quat.h>
 
@@ -57,8 +57,7 @@ bool ShipTransport::Create(uint32 guidlow, KeyFrameVec::const_iterator startFram
 
     if (!IsPositionValid())
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Transport (GUID: %u) not created. Suggested coordinates aren't valid (X: %f Y: %f)",
-                      guidlow, x, y);
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Transport (GUID: %u) not created. Suggested coordinates aren't valid (X: %f Y: %f)", guidlow, x, y);
         return false;
     }
 
@@ -135,7 +134,7 @@ bool ShipTransport::TeleportTransport(uint32 newMapid, float x, float y, float z
 
         switch (passenger->GetTypeId())
         {
-            case TYPEID_UNIT:
+        case TYPEID_UNIT:
             {
                 // Units teleport on transport not implemented.
                 Creature* creature = static_cast<Creature*>(passenger);
@@ -156,10 +155,10 @@ bool ShipTransport::TeleportTransport(uint32 newMapid, float x, float y, float z
                         creature->NearTeleportTo(x, y, z, o);
                     }
                 }
-                
+
                 break;
             }
-            case TYPEID_PLAYER:
+        case TYPEID_PLAYER:
             {
                 // Remove some auras to prevent undermap
                 Player* player = static_cast<Player*>(passenger);
@@ -186,13 +185,12 @@ bool ShipTransport::TeleportTransport(uint32 newMapid, float x, float y, float z
                         sMapMgr.ScheduleInstanceSwitch(player, newInstanceId);
                 }
                 else
-                    player->TeleportTo(newMapid, destX, destY, destZ, destO,
-                        TELE_TO_NOT_LEAVE_TRANSPORT);
+                    player->TeleportTo(newMapid, destX, destY, destZ, destO, TELE_TO_NOT_LEAVE_TRANSPORT);
 
                 break;
             }
-            default:
-                break;
+        default:
+            break;
         }
     }
 
@@ -304,14 +302,14 @@ void ShipTransport::Update(uint32 /*update_diff*/, uint32 /*time_diff*/)
         if (pathProgress >= m_currentFrame->ArriveTime && pathProgress < m_currentFrame->DepartureTime)
         {
             SetMoving(false);
-            break;  // its a stop frame and we are waiting
+            break; // its a stop frame and we are waiting
         }
 
         // not waiting anymore
         SetMoving(true);
 
         if (pathProgress >= m_currentFrame->DepartureTime && pathProgress < m_currentFrame->NextArriveTime)
-            break;  // found current waypoint
+            break; // found current waypoint
 
         MoveToNextWayPoint();
 
@@ -430,14 +428,11 @@ void ElevatorTransport::Update(uint32 /*update_diff*/, uint32 /*time_diff*/)
         UpdateModelPosition();
         UpdatePassengerPositions();
 
-        //SummonCreature(1, currentPos.x, currentPos.y, currentPos.z, GetOrientation(), TEMPSUMMON_TIMED_DESPAWN, 1000);
+        // SummonCreature(1, currentPos.x, currentPos.y, currentPos.z, GetOrientation(), TEMPSUMMON_TIMED_DESPAWN, 1000);
     }
 }
 
-uint32 GenericTransport::GetTimeSinceCreation()
-{
-    return WorldTimer::getMSTimeDiffToNow(m_creationTime);
-}
+uint32 GenericTransport::GetTimeSinceCreation() { return WorldTimer::getMSTimeDiffToNow(m_creationTime); }
 
 void GenericTransport::UpdatePosition(float x, float y, float z, float o)
 {
@@ -476,7 +471,7 @@ void GenericTransport::UpdatePassengerPosition(Unit* passenger)
 
     switch (passenger->GetTypeId())
     {
-        case TYPEID_UNIT:
+    case TYPEID_UNIT:
         {
             Creature* creature = static_cast<Creature*>(passenger);
             if (passenger->IsInWorld())
@@ -486,26 +481,23 @@ void GenericTransport::UpdatePassengerPosition(Unit* passenger)
             passenger->m_movementInfo.ctime = 0;
             break;
         }
-        case TYPEID_PLAYER:
-            //relocate only passengers in world and skip any player that might be still logging in/teleporting
-            if (passenger->IsInWorld())
-                GetMap()->PlayerRelocation(static_cast<Player*>(passenger), x, y, z, o);
-            else
-            {
-                passenger->Relocate(x, y, z, o);
-                static_cast<Player*>(passenger)->m_movementInfo.t_guid = GetObjectGuid();
-            }
-            passenger->m_movementInfo.ctime = 0;
-            break;
-        default:
-            break;
+    case TYPEID_PLAYER:
+        // relocate only passengers in world and skip any player that might be still logging in/teleporting
+        if (passenger->IsInWorld())
+            GetMap()->PlayerRelocation(static_cast<Player*>(passenger), x, y, z, o);
+        else
+        {
+            passenger->Relocate(x, y, z, o);
+            static_cast<Player*>(passenger)->m_movementInfo.t_guid = GetObjectGuid();
+        }
+        passenger->m_movementInfo.ctime = 0;
+        break;
+    default:
+        break;
     }
 }
 
-void GenericTransport::CalculatePassengerOrientation(float& o) const
-{
-    o = Geometry::NormalizeOrientation(GetOrientation() + o);
-}
+void GenericTransport::CalculatePassengerOrientation(float& o) const { o = Geometry::NormalizeOrientation(GetOrientation() + o); }
 
 void GenericTransport::CalculatePassengerPosition(float& x, float& y, float& z, float* o, float transX, float transY, float transZ, float transO)
 {

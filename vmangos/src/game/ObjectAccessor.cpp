@@ -20,16 +20,16 @@
  */
 
 #include "ObjectAccessor.h"
-#include "ObjectMgr.h"
-#include "Policies/SingletonImp.h"
-#include "Player.h"
+#include "CellImpl.h"
 #include "Corpse.h"
 #include "GridNotifiers.h"
-#include "MapManager.h"
-#include "Map.h"
-#include "CellImpl.h"
 #include "GridNotifiersImpl.h"
+#include "Map.h"
+#include "MapManager.h"
 #include "ObjectGuid.h"
+#include "ObjectMgr.h"
+#include "Player.h"
+#include "Policies/SingletonImp.h"
 
 #include <cmath>
 
@@ -168,8 +168,8 @@ void ObjectAccessor::KickPlayer(ObjectGuid guid)
     if (Player* p = HashMapHolder<Player>::Find(guid))
     {
         WorldSession* s = p->GetSession();
-        s->KickPlayer();                            // mark session to remove at next session list update
-        s->LogoutPlayer(false);                     // logout player without waiting next session list update
+        s->KickPlayer(); // mark session to remove at next session list update
+        s->LogoutPlayer(false); // logout player without waiting next session list update
     }
 }
 
@@ -319,8 +319,10 @@ void ObjectAccessor::RemoveObject(MasterPlayer* player)
 }
 // Define the static member of HashMapHolder
 
-template <class T> typename HashMapHolder<T>::MapType HashMapHolder<T>::m_objectMap;
-template <class T> std::shared_timed_mutex HashMapHolder<T>::i_lock;
+template <class T>
+typename HashMapHolder<T>::MapType HashMapHolder<T>::m_objectMap;
+template <class T>
+std::shared_timed_mutex HashMapHolder<T>::i_lock;
 
 // Global definitions for the hashmap storage
 

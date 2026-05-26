@@ -22,19 +22,19 @@
 #include "IO/Networking/AsyncSocket.h"
 
 #include <functional>
-#include <vector>
 #include <string>
+#include <vector>
 
 /// Remote Administration socket
 class RASocket final : public std::enable_shared_from_this<RASocket>
 {
- public:
+public:
     RASocket(IO::Networking::AsyncSocket socket);
     virtual ~RASocket();
 
     void Start();
 
- private:
+private:
     IO::Networking::AsyncSocket m_socket;
 
     enum class ConnectionState

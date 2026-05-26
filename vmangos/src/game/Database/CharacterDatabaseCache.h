@@ -2,8 +2,8 @@
 #define _CHARACTER_DATABASE_CACHE_H
 
 #include "Common.h"
-#include "ObjectGuid.h"
 #include "DBCEnums.h"
+#include "ObjectGuid.h"
 
 // pet_spell_cooldown
 struct PetSpellCoodown
@@ -18,7 +18,7 @@ typedef std::vector<PetSpellCoodown> PetSpellCDs;
 struct PetSpellCache
 {
     uint32 spell = 0;
-    uint8  active = 0;
+    uint8 active = 0;
 };
 typedef std::vector<PetSpellCache> PetSpells;
 
@@ -29,8 +29,8 @@ struct AuraSaveStruct
     uint32 spellId = 0;
     uint32 stacks = 0;
     uint32 charges = 0;
-    float  damage[MAX_EFFECT_INDEX] = { 0 };
-    uint32 periodicTime[MAX_EFFECT_INDEX] = { 0 };
+    float damage[MAX_EFFECT_INDEX] = {0};
+    uint32 periodicTime[MAX_EFFECT_INDEX] = {0};
     int32 maxDuration = 0;
     int32 duration = 0;
     uint8 effIndexMask = 0;
@@ -65,11 +65,11 @@ struct CharacterPetCache
     std::string name, actionBarData, teachSpellData;
     bool renamed = false;
     // pet_spell
-    PetSpells   spells;
+    PetSpells spells;
     // pet_spell_cooldown
     PetSpellCDs spellCooldowns;
     // pet_aura
-    PetAuras    auras;
+    PetAuras auras;
 };
 
 typedef std::vector<CharacterPetCache*> CharPetVector;
@@ -78,38 +78,37 @@ typedef std::map<uint32 /*pet guid*/, CharacterPetCache*> PetGuidToPetMap;
 
 class CharacterDatabaseCache
 {
-    public:
-        CharacterDatabaseCache();
-        ~CharacterDatabaseCache();
+public:
+    CharacterDatabaseCache();
+    ~CharacterDatabaseCache();
 
-        static CharacterDatabaseCache* instance()
-        {
-            static CharacterDatabaseCache* i = new CharacterDatabaseCache();
-            return i;
-        }
-        void LoadAll(uint32 singlePetId = 0);
+    static CharacterDatabaseCache* instance()
+    {
+        static CharacterDatabaseCache* i = new CharacterDatabaseCache();
+        return i;
+    }
+    void LoadAll(uint32 singlePetId = 0);
 
-        void LoadCharacterPet(uint32 singlePetId);
-        void LoadPetSpell(uint32 singlePetId);
-        void LoadPetSpellCooldown(uint32 singlePetId);
-        void LoadPetAura(uint32 singlePetId);
+    void LoadCharacterPet(uint32 singlePetId);
+    void LoadPetSpell(uint32 singlePetId);
+    void LoadPetSpellCooldown(uint32 singlePetId);
+    void LoadPetAura(uint32 singlePetId);
 
-        CharacterPetCache* GetCharacterPetCacheByOwnerAndId(uint32 ownerGuidLow, uint32 id);
-        CharacterPetCache* GetCharacterCurrentPet(uint32 owner);
-        CharacterPetCache* GetCharacterPetByOwnerAndEntry(uint32 owner, uint32 entry);
-        CharacterPetCache* GetCharacterPetByOwner(uint32 owner);
-        CharacterPetCache* GetCharacterPetById(uint32 id); // Very slow method (iterates over all the stored pets)
-        void CharacterPetSetOthersNotInSlot(CharacterPetCache* pCache);
-        void InsertCharacterPet(CharacterPetCache* cache);
-        void DeleteCharacterPetById(uint32 id);
-        CharPetMap const& GetCharPetsMap() const { return m_petsByCharacter; }
-        uint32 GetNextAvailablePetNumber(uint32 minimumValue) const;
+    CharacterPetCache* GetCharacterPetCacheByOwnerAndId(uint32 ownerGuidLow, uint32 id);
+    CharacterPetCache* GetCharacterCurrentPet(uint32 owner);
+    CharacterPetCache* GetCharacterPetByOwnerAndEntry(uint32 owner, uint32 entry);
+    CharacterPetCache* GetCharacterPetByOwner(uint32 owner);
+    CharacterPetCache* GetCharacterPetById(uint32 id); // Very slow method (iterates over all the stored pets)
+    void CharacterPetSetOthersNotInSlot(CharacterPetCache* pCache);
+    void InsertCharacterPet(CharacterPetCache* cache);
+    void DeleteCharacterPetById(uint32 id);
+    CharPetMap const& GetCharPetsMap() const { return m_petsByCharacter; }
+    uint32 GetNextAvailablePetNumber(uint32 minimumValue) const;
 
-    protected:
-        // @TODO: Lock these structures for thread safety, and process stable opcodes per map
-        CharPetMap      m_petsByCharacter;
-        PetGuidToPetMap m_petsByGuid;
-
+protected:
+    // @TODO: Lock these structures for thread safety, and process stable opcodes per map
+    CharPetMap m_petsByCharacter;
+    PetGuidToPetMap m_petsByGuid;
 };
 
 #define sCharacterDatabaseCache (*(CharacterDatabaseCache::instance()))

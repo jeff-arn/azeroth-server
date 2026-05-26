@@ -2,8 +2,8 @@
 #include "BotSituationContext.h"
 #include "BotSpellKit.h"
 #include "CombatBotBaseAI.h"
-#include "Player.h"
 #include "Log.h"
+#include "Player.h"
 
 void BotBehaviorSet::Add(std::unique_ptr<BotBehavior> b, float roleWeight)
 {
@@ -40,10 +40,7 @@ bool BotBehaviorSet::RunBestBehavior(SituationContext const& ctx, BotSpellKit& k
 
         if (m_debugTarget)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-                "[BotAI] %s | %-20s raw=%.1f weight=%.1f → %.1f",
-                m_debugTarget->GetName(), entry.behavior->GetName(),
-                raw, entry.roleWeight, weighted);
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotAI] %s | %-20s raw=%.1f weight=%.1f → %.1f", m_debugTarget->GetName(), entry.behavior->GetName(), raw, entry.roleWeight, weighted);
         }
 
         if (count < 32)
@@ -58,19 +55,13 @@ bool BotBehaviorSet::RunBestBehavior(SituationContext const& ctx, BotSpellKit& k
     {
         if (m_debugTarget)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-                "[BotAI] %s → NO BEHAVIOR SCORED (all zero) target=%s hp=%.0f%% mana=%.0f%% role=%u inCombat=%u",
-                m_debugTarget->GetName(),
-                ctx.currentTarget ? "yes" : "NO",
-                ctx.healthPct, ctx.manaPct, ctx.role,
-                m_debugTarget->IsInCombat() ? 1u : 0u);
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotAI] %s → NO BEHAVIOR SCORED (all zero) target=%s hp=%.0f%% mana=%.0f%% role=%u inCombat=%u", m_debugTarget->GetName(), ctx.currentTarget ? "yes" : "NO", ctx.healthPct, ctx.manaPct, ctx.role, m_debugTarget->IsInCombat() ? 1u : 0u);
         }
         return false;
     }
 
     // Sort descending by score
-    std::sort(candidates, candidates + count,
-        [](Candidate const& a, Candidate const& b) { return a.score > b.score; });
+    std::sort(candidates, candidates + count, [](Candidate const& a, Candidate const& b) { return a.score > b.score; });
 
     // Try each in order until one succeeds
     for (uint8 i = 0; i < count; ++i)
@@ -79,10 +70,7 @@ bool BotBehaviorSet::RunBestBehavior(SituationContext const& ctx, BotSpellKit& k
 
         if (m_debugTarget)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-                "[BotAI] %s → %s (%.1f) %s",
-                m_debugTarget->GetName(), candidates[i].behavior->GetName(),
-                candidates[i].score, result ? "OK" : "FAILED");
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotAI] %s → %s (%.1f) %s", m_debugTarget->GetName(), candidates[i].behavior->GetName(), candidates[i].score, result ? "OK" : "FAILED");
         }
 
         if (result)

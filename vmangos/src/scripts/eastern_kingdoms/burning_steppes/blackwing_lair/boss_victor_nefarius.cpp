@@ -14,80 +14,72 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "blackwing_lair.h"
+#include "scriptPCH.h"
 
 enum VictorNefarius : uint32
 {
-    SAY_GAMESBEGIN_1             = 9907,
-    SAY_GAMESBEGIN_2             = 9845,
+    SAY_GAMESBEGIN_1 = 9907,
+    SAY_GAMESBEGIN_2 = 9845,
 
-    SAY_SCEPTER_RUN_START        = 11267,
-    SAY_SCEPTER_TAUNT_0          = 11214,
-    SAY_SCEPTER_TAUNT_1          = 11215,
-    SAY_SCEPTER_TAUNT_2          = 11216,
-    SAY_SCEPTER_TAUNT_3          = 11217,
-    SAY_SCEPTER_TAUNT_4          = 11218,
-    SAY_SCEPTER_RUN_LAUGHTER     = 11230,
-    SAY_SCEPTER_FAIL_LAUGHTER    = 11231,
-    SAY_SCEPTER_FAIL             = 11219,
+    SAY_SCEPTER_RUN_START = 11267,
+    SAY_SCEPTER_TAUNT_0 = 11214,
+    SAY_SCEPTER_TAUNT_1 = 11215,
+    SAY_SCEPTER_TAUNT_2 = 11216,
+    SAY_SCEPTER_TAUNT_3 = 11217,
+    SAY_SCEPTER_TAUNT_4 = 11218,
+    SAY_SCEPTER_RUN_LAUGHTER = 11230,
+    SAY_SCEPTER_FAIL_LAUGHTER = 11231,
+    SAY_SCEPTER_FAIL = 11219,
 
-    MAX_SCEPTER_TAUNTS           = 6,
+    MAX_SCEPTER_TAUNTS = 6,
 
     // GOSSIP_TEXT_NEFARIUS_1    = 7134,
     // GOSSIP_TEXT_NEFARIUS_2    = 7198,
     // GOSSIP_TEXT_NEFARIUS_3    = 7199,
 
-    MAX_DRAKES                   = 5,
-    MAX_DRAKE_KILLED             = 42,
+    MAX_DRAKES = 5,
+    MAX_DRAKE_KILLED = 42,
 
-    SPELL_NEFARIUS_BARRIER       = 22663, // immunity in phase 1
-    SPELL_SHADOWBOLT             = 22677,
-    SPELL_SHADOWBOLT_VOLLEY      = 22665,
-    SPELL_FEAR                   = 22678,
-    SPELL_SILENCE                = 22666,
-    SPELL_SHADOW_COMMAND         = 22667, // charm a player
+    SPELL_NEFARIUS_BARRIER = 22663, // immunity in phase 1
+    SPELL_SHADOWBOLT = 22677,
+    SPELL_SHADOWBOLT_VOLLEY = 22665,
+    SPELL_FEAR = 22678,
+    SPELL_SILENCE = 22666,
+    SPELL_SHADOW_COMMAND = 22667, // charm a player
     // SPELL_SHADOW_BLINK        = 22664, // 22681 ? // teleport around the room, possibly random
-    SPELL_ROOT                   = 17507,
-    SPELL_VISUAL_EFFECT          = 24180,
-    SPELL_HOVER                  = 17131,
+    SPELL_ROOT = 17507,
+    SPELL_VISUAL_EFFECT = 24180,
+    SPELL_HOVER = 17131,
 };
 
-static constexpr uint32 aPossibleDrake[MAX_DRAKES] =
-{
-    NPC_BRONZE_DRAKANOID,
-    NPC_BLUE_DRAKANOID,
-    NPC_RED_DRAKANOID,
-    NPC_GREEN_DRAKANOID,
-    NPC_BLACK_DRAKANOID
-};
+static constexpr uint32 aPossibleDrake[MAX_DRAKES] = {NPC_BRONZE_DRAKANOID, NPC_BLUE_DRAKANOID, NPC_RED_DRAKANOID, NPC_GREEN_DRAKANOID, NPC_BLACK_DRAKANOID};
 
-static constexpr uint32 MAX_SCEPTER_RUN_TIME   = 5 * HOUR * IN_MILLISECONDS ;
+static constexpr uint32 MAX_SCEPTER_RUN_TIME = 5 * HOUR * IN_MILLISECONDS;
 static constexpr uint32 SCEPTER_TAUNT_INTERVAL = MAX_SCEPTER_RUN_TIME / MAX_SCEPTER_TAUNTS;
-static constexpr uint32 SCEPTER_TAUNT_OFFSET   =  SCEPTER_TAUNT_INTERVAL / 2;
+static constexpr uint32 SCEPTER_TAUNT_OFFSET = SCEPTER_TAUNT_INTERVAL / 2;
 
 struct SpawnLocation
 {
     float m_fX, m_fY, m_fZ;
 };
 
-static constexpr SpawnLocation const aNefarianLocs[5] =
-{
-    { -7599.32f,  -1191.72f,  475.545f }, // opening where red/blue/black darknid spawner appear (ori 3.05433)
-    { -7526.27f,  -1135.04f,  473.445f }, // same as above, closest to door (ori 5.75959)
-    { -7515.644f, -1222.698f, 534.7169f}, // nefarian spawn location (ori 1.798)
-    { -7592.0f,   -1264.0f,   481.0f   }, // hide pos (useless; remove this)
-    { -7502.002f, -1256.503f, 486.758f }  // nefarian fly to this position
+static constexpr SpawnLocation const aNefarianLocs[5] = {
+    {-7599.32f, -1191.72f, 475.545f}, // opening where red/blue/black darknid spawner appear (ori 3.05433)
+    {-7526.27f, -1135.04f, 473.445f}, // same as above, closest to door (ori 5.75959)
+    {-7515.644f, -1222.698f, 534.7169f}, // nefarian spawn location (ori 1.798)
+    {-7592.0f, -1264.0f, 481.0f}, // hide pos (useless; remove this)
+    {-7502.002f, -1256.503f, 486.758f} // nefarian fly to this position
 };
 
-//This script is complicated
-//Instead of morphing Victor Nefarius we will have him control phase 1
-//And then have him spawn "Nefarian" for phase 2
-//When phase 2 starts Victor Nefarius will go invisible and stop attacking
-//If Nefarian reched home because nef killed the players then nef will trigger this guy to EnterEvadeMode
-//and allow players to start the event over
-//If nefarian dies then he will kill himself then he will be despawned in Nefarian script
-//To prevent players from doing the event twice
+// This script is complicated
+// Instead of morphing Victor Nefarius we will have him control phase 1
+// And then have him spawn "Nefarian" for phase 2
+// When phase 2 starts Victor Nefarius will go invisible and stop attacking
+// If Nefarian reched home because nef killed the players then nef will trigger this guy to EnterEvadeMode
+// and allow players to start the event over
+// If nefarian dies then he will kill himself then he will be despawned in Nefarian script
+// To prevent players from doing the event twice
 
 // Dev note: Lord Victor Nefarius should despawn completely, then ~5 seconds later Nefarian should appear.
 
@@ -148,31 +140,31 @@ struct boss_victor_nefariusAI : ScriptedAI
 
     void Reset() override
     {
-        m_uiKilledAdds            = 0;
-        m_uiAddSpawnTimer         = 6000;
-        m_uiAddChromaSpawnTimer   = urand(7000, 9000);
-        m_uiShadowBoltTimer       = 5000;
+        m_uiKilledAdds = 0;
+        m_uiAddSpawnTimer = 6000;
+        m_uiAddChromaSpawnTimer = urand(7000, 9000);
+        m_uiShadowBoltTimer = 5000;
         m_uiShadowBoltVolleyTimer = 15000;
-        m_uiFearTimer             = 8000;
-        m_uiSilenceTimer          = 20000;
-        m_uiMindControlTimer      = 25000;
-        m_uiShadowBlinkTimer      = 1000;
+        m_uiFearTimer = 8000;
+        m_uiSilenceTimer = 20000;
+        m_uiMindControlTimer = 25000;
+        m_uiShadowBlinkTimer = 1000;
         // m_uiResetTimer         = 15 * MINUTE * IN_MILLISECONDS;
-        scepterRunTime            = 0;
-        nextScepterTauntTime      = 0;
-        scepterTauntID            = 0;
+        scepterRunTime = 0;
+        nextScepterTauntTime = 0;
+        scepterTauntID = 0;
 
         m_uiMindControledPlayerGuid.Clear();
         m_uiMindControledPlayerAggro = 0;
 
-        m_uiEventTimer  = 1000;
-        blaBlaCount     = 0;
-        NefaEventStart  = false;
-        phase1          = false;
-        phase2          = false;
-        phase2bis       = false;
-        Smoke           = false;
-        scepterRun      = false;
+        m_uiEventTimer = 1000;
+        blaBlaCount = 0;
+        NefaEventStart = false;
+        phase1 = false;
+        phase2 = false;
+        phase2bis = false;
+        Smoke = false;
+        scepterRun = false;
         watchScepterRun = false;
 
         m_creature->SetFactionTemplateId(FACTION_FRIENDLY);
@@ -210,7 +202,7 @@ struct boss_victor_nefariusAI : ScriptedAI
             // Restore next scepter taunt ID
             scepterTauntID = elapsedTime / SCEPTER_TAUNT_INTERVAL;
             // Restore time to next taunt
-            nextScepterTauntTime  = SCEPTER_TAUNT_INTERVAL - (elapsedTime % SCEPTER_TAUNT_INTERVAL);
+            nextScepterTauntTime = SCEPTER_TAUNT_INTERVAL - (elapsedTime % SCEPTER_TAUNT_INTERVAL);
         }
     }
 
@@ -235,10 +227,7 @@ struct boss_victor_nefariusAI : ScriptedAI
         m_creature->SetInCombatWithZone();
     }
 
-    void EnterEvadeMode() override
-    {
-        ScriptedAI::EnterEvadeMode();
-    }
+    void EnterEvadeMode() override { ScriptedAI::EnterEvadeMode(); }
 
     void JustReachedHome() override
     {
@@ -254,7 +243,7 @@ struct boss_victor_nefariusAI : ScriptedAI
             pGo->DeleteLater();
 
         // @TODO: Find out why there is this reset bug !!
-        //m_creature->SetRespawnDelay(900); // 15mn 900
+        // m_creature->SetRespawnDelay(900); // 15mn 900
         m_creature->SetRespawnDelay(10);
         m_creature->DisappearAndDie();
     }
@@ -287,7 +276,6 @@ struct boss_victor_nefariusAI : ScriptedAI
                 if (Player* scepterChampion = m_creature->GetMap()->GetPlayer(m_pInstance->GetData64(DATA_SCEPTER_CHAMPION)))
                     if (scepterChampion->GetQuestStatus(QUEST_NEFARIUS_CORRUPTION) == QUEST_STATUS_INCOMPLETE)
                         scepterRunResult = DONE;
-
             }
 
             m_pInstance->SetData(TYPE_SCEPTER_RUN, scepterRunResult);
@@ -309,26 +297,26 @@ struct boss_victor_nefariusAI : ScriptedAI
                 ++blaBlaCount;
                 switch (blaBlaCount)
                 {
-                    case 1:
-                        DoScriptText(SAY_GAMESBEGIN_1, m_creature);
-                        m_uiEventTimer = 7000;
-                        break;
-                    case 2:
-                        DoScriptText(SAY_GAMESBEGIN_2, m_creature);
-                        m_uiEventTimer = 4000;
-                        break;
-                    case 3:
-                        DoCastSpellIfCan(m_creature, SPELL_NEFARIUS_BARRIER);
-                        m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                        m_creature->SetFactionTemplateId(FACTION_MONSTER);
+                case 1:
+                    DoScriptText(SAY_GAMESBEGIN_1, m_creature);
+                    m_uiEventTimer = 7000;
+                    break;
+                case 2:
+                    DoScriptText(SAY_GAMESBEGIN_2, m_creature);
+                    m_uiEventTimer = 4000;
+                    break;
+                case 3:
+                    DoCastSpellIfCan(m_creature, SPELL_NEFARIUS_BARRIER);
+                    m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
+                    m_creature->SetFactionTemplateId(FACTION_MONSTER);
 
-                        Map::PlayerList const& liste = m_creature->GetMap()->GetPlayers();
-                        for (const auto& i : liste)
-                            if (i.getSource() && i.getSource()->IsAlive())
-                                m_creature->AddThreat(i.getSource(), 10000.0f);
+                    Map::PlayerList const& liste = m_creature->GetMap()->GetPlayers();
+                    for (const auto& i : liste)
+                        if (i.getSource() && i.getSource()->IsAlive())
+                            m_creature->AddThreat(i.getSource(), 10000.0f);
 
-                        DoCastSpellIfCan(m_creature, SPELL_ROOT, CF_TRIGGERED); // root
-                        break;
+                    DoCastSpellIfCan(m_creature, SPELL_ROOT, CF_TRIGGERED); // root
+                    break;
                 }
             }
             else
@@ -373,16 +361,8 @@ struct boss_victor_nefariusAI : ScriptedAI
         // Add spawning mechanism
         if (m_uiAddSpawnTimer < uiDiff)
         {
-            m_creature->SummonCreature(m_uiDrakeTypeOne,
-                aNefarianLocs[0].m_fX,
-                aNefarianLocs[0].m_fY,
-                aNefarianLocs[0].m_fZ,
-                5.000f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS);
-            m_creature->SummonCreature(m_uiDrakeTypeTwo,
-                aNefarianLocs[1].m_fX,
-                aNefarianLocs[1].m_fY,
-                aNefarianLocs[1].m_fZ,
-                5.000f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS);
+            m_creature->SummonCreature(m_uiDrakeTypeOne, aNefarianLocs[0].m_fX, aNefarianLocs[0].m_fY, aNefarianLocs[0].m_fZ, 5.000f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS);
+            m_creature->SummonCreature(m_uiDrakeTypeTwo, aNefarianLocs[1].m_fX, aNefarianLocs[1].m_fY, aNefarianLocs[1].m_fZ, 5.000f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS);
 
             m_uiAddSpawnTimer = urand(6000, 7000);
         }
@@ -391,16 +371,8 @@ struct boss_victor_nefariusAI : ScriptedAI
 
         if (m_uiAddChromaSpawnTimer < uiDiff)
         {
-            m_creature->SummonCreature(NPC_CHROMATIC_DRAKANOID,
-                aNefarianLocs[0].m_fX,
-                aNefarianLocs[0].m_fY,
-                aNefarianLocs[0].m_fZ,
-                5.000f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS);
-            m_creature->SummonCreature(NPC_CHROMATIC_DRAKANOID,
-                aNefarianLocs[1].m_fX,
-                aNefarianLocs[1].m_fY,
-                aNefarianLocs[1].m_fZ,
-                5.000f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS);
+            m_creature->SummonCreature(NPC_CHROMATIC_DRAKANOID, aNefarianLocs[0].m_fX, aNefarianLocs[0].m_fY, aNefarianLocs[0].m_fZ, 5.000f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS);
+            m_creature->SummonCreature(NPC_CHROMATIC_DRAKANOID, aNefarianLocs[1].m_fX, aNefarianLocs[1].m_fY, aNefarianLocs[1].m_fZ, 5.000f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS);
             m_uiAddChromaSpawnTimer = 35000;
         }
         else
@@ -424,11 +396,7 @@ struct boss_victor_nefariusAI : ScriptedAI
 
             // Spawn Nefarian
             // Summon as active, to be able to work proper!
-            if (Creature* pNefarian = m_creature->SummonCreature(NPC_NEFARIAN,
-                aNefarianLocs[2].m_fX,
-                aNefarianLocs[2].m_fY,
-                aNefarianLocs[2].m_fZ,
-                0, TEMPSUMMON_MANUAL_DESPAWN, 0, true))
+            if (Creature* pNefarian = m_creature->SummonCreature(NPC_NEFARIAN, aNefarianLocs[2].m_fX, aNefarianLocs[2].m_fY, aNefarianLocs[2].m_fZ, 0, TEMPSUMMON_MANUAL_DESPAWN, 0, true))
             {
                 pNefarian->CastSpell(pNefarian, SPELL_HOVER, true);
                 pNefarian->SetFly(true);
@@ -517,7 +485,7 @@ struct boss_victor_nefariusAI : ScriptedAI
                 {
                     m_creature->GetThreatManager().modifyThreatPercent(pTarget, -100);
                     m_creature->GetThreatManager().addThreatDirectly(pTarget, m_uiMindControledPlayerAggro);
-                    DoCastSpellIfCan(m_creature, SPELL_ROOT, CF_TRIGGERED);    // Root self
+                    DoCastSpellIfCan(m_creature, SPELL_ROOT, CF_TRIGGERED); // Root self
                     m_uiMindControledPlayerGuid.Clear();
                     m_uiMindControledPlayerAggro = 0;
                 }
@@ -554,32 +522,30 @@ struct boss_victor_nefariusAI : ScriptedAI
         {
             switch (scepterTauntID)
             {
-                case 0:
-                    DoScriptText(SAY_SCEPTER_TAUNT_0, m_creature);
-                    DoScriptText(SAY_SCEPTER_RUN_LAUGHTER, m_creature);
-                    break;
+            case 0:
+                DoScriptText(SAY_SCEPTER_TAUNT_0, m_creature);
+                DoScriptText(SAY_SCEPTER_RUN_LAUGHTER, m_creature);
+                break;
 
-                case 1:
-                    DoScriptText(SAY_SCEPTER_TAUNT_1, m_creature);
-                    break;
+            case 1:
+                DoScriptText(SAY_SCEPTER_TAUNT_1, m_creature);
+                break;
 
-                case 2:
-                    DoScriptText(SAY_SCEPTER_TAUNT_2, m_creature);
-                    break;
+            case 2:
+                DoScriptText(SAY_SCEPTER_TAUNT_2, m_creature);
+                break;
 
-                case 3:
-                    DoScriptText(SAY_SCEPTER_TAUNT_3, m_creature);
-                    break;
+            case 3:
+                DoScriptText(SAY_SCEPTER_TAUNT_3, m_creature);
+                break;
 
-                case 4:
-                    DoScriptText(SAY_SCEPTER_TAUNT_4, m_creature);
-                    break;
-
+            case 4:
+                DoScriptText(SAY_SCEPTER_TAUNT_4, m_creature);
+                break;
             }
 
             ++scepterTauntID;
             nextScepterTauntTime = SCEPTER_TAUNT_INTERVAL;
-
         }
         else
             nextScepterTauntTime -= uiDiff;
@@ -599,7 +565,7 @@ struct boss_victor_nefariusAI : ScriptedAI
         if (!m_pInstance)
             return;
 
-        scepterRun =  false;
+        scepterRun = false;
         watchScepterRun = false;
         m_pInstance->SetData(TYPE_SCEPTER_RUN, FAIL);
 
@@ -610,7 +576,7 @@ struct boss_victor_nefariusAI : ScriptedAI
 
 CreatureAI* GetAI_boss_victor_nefarius(Creature* creature)
 {
-    if (creature->GetMapId() == MAP_BLACKWING_LAIR) //BWL
+    if (creature->GetMapId() == MAP_BLACKWING_LAIR) // BWL
         return new boss_victor_nefariusAI(creature);
 
     // UBRS

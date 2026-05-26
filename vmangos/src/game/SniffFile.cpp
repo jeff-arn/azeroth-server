@@ -18,10 +18,7 @@
 #include "Errors.h"
 #include "Log.h"
 
-SniffFile::SniffFile(FILE* pFile) : m_file(pFile)
-{
-    MANGOS_ASSERT(m_file);
-}
+SniffFile::SniffFile(FILE* pFile) : m_file(pFile) { MANGOS_ASSERT(m_file); }
 
 SniffFile::SniffFile(char const* fileName)
 {

@@ -20,40 +20,40 @@
  */
 
 #include "ObjectMgr.h"
+#include <limits>
+#include "AccountMgr.h"
+#include "Bag.h"
+#include "CharacterDatabaseCache.h"
+#include "Conditions.h"
 #include "Database/DatabaseEnv.h"
 #include "Database/DatabaseImpl.h"
 #include "Database/SQLStorageImpl.h"
-#include "Policies/SingletonImp.h"
-#include "SQLStorages.h"
-#include "Log.h"
-#include "MapManager.h"
-#include "ObjectGuid.h"
-#include "ScriptMgr.h"
-#include "SpellMgr.h"
-#include "UpdateMask.h"
-#include "World.h"
-#include "Group.h"
-#include "Bag.h"
-#include "Transport.h"
-#include "ProgressBar.h"
-#include "Language.h"
-#include "PoolManager.h"
+#include "Formulas.h"
 #include "GameEventMgr.h"
-#include "Spell.h"
-#include "AccountMgr.h"
+#include "GossipDef.h"
+#include "Group.h"
+#include "HardcodedEvents.h"
+#include "InstanceData.h"
+#include "Language.h"
+#include "Log.h"
+#include "Mail.h"
+#include "MapManager.h"
 #include "MapPersistentStateMgr.h"
+#include "ObjectGuid.h"
+#include "Policies/SingletonImp.h"
+#include "PoolManager.h"
+#include "ProgressBar.h"
+#include "RealmZone.h"
+#include "SQLStorages.h"
+#include "ScriptMgr.h"
+#include "Spell.h"
 #include "SpellAuras.h"
+#include "SpellMgr.h"
+#include "Transport.h"
+#include "UpdateMask.h"
 #include "Util.h"
 #include "WaypointManager.h"
-#include "GossipDef.h"
-#include "Mail.h"
-#include "Formulas.h"
-#include "InstanceData.h"
-#include "CharacterDatabaseCache.h"
-#include "HardcodedEvents.h"
-#include "Conditions.h"
-#include "RealmZone.h"
-#include <limits>
+#include "World.h"
 
 INSTANTIATE_SINGLETON_1(ObjectMgr);
 
@@ -79,23 +79,8 @@ bool normalizePlayerName(std::string& name, size_t max_len)
     return WStrToUtf8(wstr_buf, name);
 }
 
-LanguageDesc lang_description[LANGUAGES_COUNT] =
-{
-    { LANG_ADDON,           0, 0                       },
-    { LANG_UNIVERSAL,       0, 0                       },
-    { LANG_ORCISH,        669, SKILL_LANG_ORCISH       },
-    { LANG_DARNASSIAN,    671, SKILL_LANG_DARNASSIAN   },
-    { LANG_TAURAHE,       670, SKILL_LANG_TAURAHE      },
-    { LANG_DWARVISH,      672, SKILL_LANG_DWARVEN      },
-    { LANG_COMMON,        668, SKILL_LANG_COMMON       },
-    { LANG_DEMONIC,       815, SKILL_LANG_DEMON_TONGUE },
-    { LANG_TITAN,         816, SKILL_LANG_TITAN        },
-    { LANG_THALASSIAN,    813, SKILL_LANG_THALASSIAN   },
-    { LANG_DRACONIC,      814, SKILL_LANG_DRACONIC     },
-    { LANG_KALIMAG,       817, SKILL_LANG_OLD_TONGUE   },
-    { LANG_GNOMISH,      7340, SKILL_LANG_GNOMISH      },
-    { LANG_TROLL,        7341, SKILL_LANG_TROLL        },
-    { LANG_GUTTERSPEAK, 17737, SKILL_LANG_GUTTERSPEAK  },
+LanguageDesc lang_description[LANGUAGES_COUNT] = {
+    {LANG_ADDON, 0, 0}, {LANG_UNIVERSAL, 0, 0}, {LANG_ORCISH, 669, SKILL_LANG_ORCISH}, {LANG_DARNASSIAN, 671, SKILL_LANG_DARNASSIAN}, {LANG_TAURAHE, 670, SKILL_LANG_TAURAHE}, {LANG_DWARVISH, 672, SKILL_LANG_DWARVEN}, {LANG_COMMON, 668, SKILL_LANG_COMMON}, {LANG_DEMONIC, 815, SKILL_LANG_DEMON_TONGUE}, {LANG_TITAN, 816, SKILL_LANG_TITAN}, {LANG_THALASSIAN, 813, SKILL_LANG_THALASSIAN}, {LANG_DRACONIC, 814, SKILL_LANG_DRACONIC}, {LANG_KALIMAG, 817, SKILL_LANG_OLD_TONGUE}, {LANG_GNOMISH, 7340, SKILL_LANG_GNOMISH}, {LANG_TROLL, 7341, SKILL_LANG_TROLL}, {LANG_GUTTERSPEAK, 17737, SKILL_LANG_GUTTERSPEAK},
 };
 
 LanguageDesc const* GetLanguageDescByID(uint32 lang)
@@ -109,7 +94,7 @@ LanguageDesc const* GetLanguageDescByID(uint32 lang)
     return nullptr;
 }
 
-template<typename T>
+template <typename T>
 T IdGenerator<T>::Generate()
 {
     if (m_nextGuid >= std::numeric_limits<T>::max() - 1)
@@ -120,7 +105,7 @@ T IdGenerator<T>::Generate()
     return m_nextGuid++;
 }
 
-template<typename T>
+template <typename T>
 void IdGenerator<T>::SetMaxUsedGuid(T val, char const* guidType)
 {
     if (val == std::numeric_limits<T>::max())
@@ -139,16 +124,11 @@ template void IdGenerator<uint32>::SetMaxUsedGuid(uint32, char const*);
 template void IdGenerator<uint64>::SetMaxUsedGuid(uint64, char const*);
 
 ObjectMgr::ObjectMgr() :
-    m_GuildIds("Guild ids"),
-    m_MailIds("Mail ids"),
-    m_GroupIds("Group ids"),
-    m_PetitionIds("Petition ids"),
-    m_FirstTemporaryCreatureGuid(1),
-    m_FirstTemporaryGameObjectGuid(1),
+    m_GuildIds("Guild ids"), m_MailIds("Mail ids"), m_GroupIds("Group ids"), m_PetitionIds("Petition ids"), m_FirstTemporaryCreatureGuid(1), m_FirstTemporaryGameObjectGuid(1),
     // Nostalrius
-    DBCLocaleIndex(0),
-    m_OldMailCounter(0)
-{}
+    DBCLocaleIndex(0), m_OldMailCounter(0)
+{
+}
 
 ObjectMgr::~ObjectMgr()
 {
@@ -191,9 +171,10 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_ItemIdSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
-    
+
     m_QuestIdSet.clear();
     result = WorldDatabase.Query("SELECT DISTINCT `entry` FROM `quest_template`");
 
@@ -204,7 +185,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_QuestIdSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     m_CreatureIdSet.clear();
@@ -217,7 +199,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_CreatureIdSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     m_GameObjectIdSet.clear();
@@ -230,7 +213,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_GameObjectIdSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     m_CreatureGuidSet.clear();
@@ -243,7 +227,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_CreatureGuidSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     m_GameObjectGuidSet.clear();
@@ -256,7 +241,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_GameObjectGuidSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     m_AreaTriggerIdSet.clear();
@@ -269,7 +255,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_AreaTriggerIdSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     m_CreatureSpellsIdSet.clear();
@@ -282,7 +269,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_CreatureSpellsIdSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     m_VendorTemplateIdSet.clear();
@@ -295,7 +283,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_VendorTemplateIdSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     m_GossipMenuIdSet.clear();
@@ -308,7 +297,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_GossipMenuIdSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     m_ConditionIdSet.clear();
@@ -321,7 +311,8 @@ void ObjectMgr::LoadAllIdentifiers()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             m_ConditionIdSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     sSpellMgr.LoadExistingSpellIds();
@@ -330,7 +321,7 @@ void ObjectMgr::LoadAllIdentifiers()
 // Nostalrius
 void ObjectMgr::LoadSpellDisabledEntrys()
 {
-    m_DisabledSpells.clear();                                // need for reload case
+    m_DisabledSpells.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `entry` FROM `spell_disabled`"));
 
@@ -371,7 +362,7 @@ void ObjectMgr::LoadSpellDisabledEntrys()
 
 void ObjectMgr::LoadMapLootDisabled()
 {
-    m_DisabledMapLoots.clear();                                // need for reload case
+    m_DisabledMapLoots.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `map_id` FROM `map_loot_disabled`"));
 
@@ -432,10 +423,10 @@ void ObjectMgr::LoadCinematicsWaypoints()
         CinematicWaypointEntry tmp;
 
         tmp.cinematic_id = fields[0].GetUInt32();
-        tmp.time         = fields[1].GetUInt32();
-        tmp.position.x   = fields[2].GetFloat();
-        tmp.position.y   = fields[3].GetFloat();
-        tmp.position.z   = fields[4].GetFloat();
+        tmp.time = fields[1].GetUInt32();
+        tmp.position.x = fields[2].GetFloat();
+        tmp.position.y = fields[3].GetFloat();
+        tmp.position.z = fields[4].GetFloat();
 
         m_CinematicWaypoints.push_back(tmp);
         ++total_count;
@@ -453,7 +444,7 @@ Position const* ObjectMgr::GetCinematicPosition(uint32 cinematicId, uint32 elaps
     // 2- biggest possible
     // 3- With a time < elapsed_time (otherwise we always stay at the same)
     Position const* tmpBestPos = nullptr;
-    uint32 tmpBestTimer  = 0;
+    uint32 tmpBestTimer = 0;
     std::vector<CinematicWaypointEntry>::const_iterator it;
     for (it = m_CinematicWaypoints.begin(); it != m_CinematicWaypoints.end(); ++it)
     {
@@ -464,7 +455,7 @@ Position const* ObjectMgr::GetCinematicPosition(uint32 cinematicId, uint32 elaps
                 if (it->time > tmpBestTimer)
                 {
                     tmpBestTimer = it->time;
-                    tmpBestPos   = &(it->position);
+                    tmpBestPos = &(it->position);
                 }
             }
         }
@@ -526,17 +517,14 @@ void ObjectMgr::LoadPlayerPhaseFromDb()
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u character phases", total_count);
 }
 
-uint32 ObjectMgr::GetPlayerWorldMaskByGUID(uint64 const guid)
-{
-    return m_PlayerPhases[GUID_LOPART(guid)];
-}
+uint32 ObjectMgr::GetPlayerWorldMaskByGUID(uint64 const guid) { return m_PlayerPhases[GUID_LOPART(guid)]; }
 void ObjectMgr::SetPlayerWorldMask(uint64 const guid, uint32 newWorldMask)
 {
     if (m_PlayerPhases[GUID_LOPART(guid)] == newWorldMask)
         return;
 
     m_PlayerPhases[GUID_LOPART(guid)] = newWorldMask;
-    //CharacterDatabase.PQuery("UPDATE characters SET world_phase_mask = %u WHERE guid = %u", newWorldMask, GUID_LOPART(guid));
+    // CharacterDatabase.PQuery("UPDATE characters SET world_phase_mask = %u WHERE guid = %u", newWorldMask, GUID_LOPART(guid));
 }
 
 uint32 ObjectMgr::GetSavedVariable(uint32 index, uint32 defaultValue, bool* exist)
@@ -559,12 +547,12 @@ uint32 ObjectMgr::GetSavedVariable(uint32 index, uint32 defaultValue, bool* exis
 SavedVariable& ObjectMgr::_InsertVariable(uint32 index, uint32 value, bool saved)
 {
     SavedVariable tmp;
-    tmp.uiIndex      = index;
-    tmp.uiValue      = value;
-    tmp.bSavedInDb   = saved;
+    tmp.uiIndex = index;
+    tmp.uiValue = value;
+    tmp.bSavedInDb = saved;
 
     m_SavedVariables.push_back(tmp);
-    return m_SavedVariables[m_SavedVariables.size()-1];
+    return m_SavedVariables[m_SavedVariables.size() - 1];
 }
 
 void ObjectMgr::_SaveVariable(SavedVariable const& toSave)
@@ -584,7 +572,7 @@ void ObjectMgr::InitSavedVariable(uint32 index, uint32 value)
     for (it = m_SavedVariables.begin(); it != m_SavedVariables.end(); ++it)
         if (it->uiIndex == index)
             return;
-    
+
     // If we are there, it means that the variable does not exist.
     SavedVariable& variable = _InsertVariable(index, value, true);
     _SaveVariable(variable);
@@ -719,11 +707,9 @@ void ObjectMgr::LoadPlayerCacheData(uint32 lowGuid)
         std::string name = fields[5].GetCppString();
         if (normalizePlayerName(name))
         {
-            PlayerCacheData* data = InsertPlayerInCache(fields[0].GetUInt32(), fields[1].GetUInt32(), fields[2].GetUInt32(),
-                fields[3].GetUInt32(), fields[4].GetUInt32(), name, fields[6].GetUInt32(), fields[7].GetUInt32());
+            PlayerCacheData* data = InsertPlayerInCache(fields[0].GetUInt32(), fields[1].GetUInt32(), fields[2].GetUInt32(), fields[3].GetUInt32(), fields[4].GetUInt32(), name, fields[6].GetUInt32(), fields[7].GetUInt32());
 
-            UpdatePlayerCachedPosition(data, fields[8].GetUInt32(), fields[9].GetFloat(), fields[10].GetFloat(),
-                fields[11].GetFloat(), fields[12].GetFloat(), !fields[13].GetCppString().empty());
+            UpdatePlayerCachedPosition(data, fields[8].GetUInt32(), fields[9].GetFloat(), fields[10].GetFloat(), fields[11].GetFloat(), fields[12].GetFloat(), !fields[13].GetCppString().empty());
         }
         ++totalCount;
     }
@@ -767,7 +753,7 @@ ObjectGuid ObjectMgr::GetPlayerGuidByName(std::string const& name) const
     return ObjectGuid();
 }
 
-bool ObjectMgr::GetPlayerNameByGUID(ObjectGuid guid, std::string &name) const
+bool ObjectMgr::GetPlayerNameByGUID(ObjectGuid guid, std::string& name) const
 {
     if (auto pData = GetPlayerDataByGUID(guid.GetCounter()))
     {
@@ -855,8 +841,7 @@ void ObjectMgr::UpdatePlayerCachedPosition(Player* pPlayer)
     if (!data)
         return;
 
-    UpdatePlayerCachedPosition(data, pPlayer->GetMapId(), pPlayer->GetPositionX(), pPlayer->GetPositionY(),
-        pPlayer->GetPositionZ(), pPlayer->GetOrientation(), pPlayer->IsTaxiFlying());
+    UpdatePlayerCachedPosition(data, pPlayer->GetMapId(), pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), pPlayer->GetOrientation(), pPlayer->IsTaxiFlying());
 }
 
 void ObjectMgr::UpdatePlayerCachedPosition(uint32 lowGuid, uint32 mapId, float posX, float posY, float posZ, float o, bool inFlight)
@@ -966,7 +951,7 @@ Group* ObjectMgr::GetGroupByMember(ObjectGuid memberGuid)
 
 void ObjectMgr::LoadCreatureLocales()
 {
-    m_CreatureLocaleMap.clear();                              // need for reload case
+    m_CreatureLocaleMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `entry`, `name_loc1`, `subname_loc1`, `name_loc2`, `subname_loc2`, `name_loc3`, `subname_loc3`, `name_loc4`, `subname_loc4`, `name_loc5`, `subname_loc5`, `name_loc6`, `subname_loc6`, `name_loc7`, `subname_loc7`, `name_loc8`, `subname_loc8` FROM `locales_creature`"));
 
@@ -1034,14 +1019,14 @@ void ObjectMgr::LoadCreatureLocales()
 
 void ObjectMgr::LoadGossipMenuItemsLocales()
 {
-    m_GossipMenuItemsLocaleMap.clear();                      // need for reload case
+    m_GossipMenuItemsLocaleMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `menu_id`, `id`,"
-                          "`option_text_loc1`, `box_text_loc1`, `option_text_loc2`, `box_text_loc2`,"
-                          "`option_text_loc3`, `box_text_loc3`, `option_text_loc4`, `box_text_loc4`,"
-                          "`option_text_loc5`, `box_text_loc5`, `option_text_loc6`, `box_text_loc6`,"
-                          "`option_text_loc7`, `box_text_loc7`, `option_text_loc8`, `box_text_loc8` "
-                          "FROM `locales_gossip_menu_option`"));
+                                                            "`option_text_loc1`, `box_text_loc1`, `option_text_loc2`, `box_text_loc2`,"
+                                                            "`option_text_loc3`, `box_text_loc3`, `option_text_loc4`, `box_text_loc4`,"
+                                                            "`option_text_loc5`, `box_text_loc5`, `option_text_loc6`, `box_text_loc6`,"
+                                                            "`option_text_loc7`, `box_text_loc7`, `option_text_loc8`, `box_text_loc8` "
+                                                            "FROM `locales_gossip_menu_option`"));
 
     if (!result)
     {
@@ -1060,8 +1045,8 @@ void ObjectMgr::LoadGossipMenuItemsLocales()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint16 menuId   = fields[0].GetUInt16();
-        uint16 id       = fields[1].GetUInt16();
+        uint16 menuId = fields[0].GetUInt16();
+        uint16 id = fields[1].GetUInt16();
 
         GossipMenuItemsMapBounds bounds = GetGossipMenuItemsMapBounds(menuId);
 
@@ -1123,7 +1108,7 @@ void ObjectMgr::LoadGossipMenuItemsLocales()
 
 void ObjectMgr::LoadPointOfInterestLocales()
 {
-    m_PointOfInterestLocaleMap.clear();                              // need for reload case
+    m_PointOfInterestLocaleMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `entry`, `icon_name_loc1`, `icon_name_loc2`, `icon_name_loc3`, `icon_name_loc4`, `icon_name_loc5`, `icon_name_loc6`, `icon_name_loc7`, `icon_name_loc8` FROM `locales_points_of_interest`"));
 
@@ -1178,7 +1163,7 @@ void ObjectMgr::LoadPointOfInterestLocales()
 
 struct SQLCreatureLoader : public SQLStorageLoaderBase<SQLCreatureLoader, SQLStorage>
 {
-    template<class D>
+    template <class D>
     void convert_from_str(uint32 /*field_pos*/, char const* src, D& dst)
     {
         dst = D(sScriptMgr.GetScriptId(src));
@@ -1187,8 +1172,11 @@ struct SQLCreatureLoader : public SQLStorageLoaderBase<SQLCreatureLoader, SQLSto
 
 void ObjectMgr::LoadCreatureTemplates()
 {
-    //                                                                0        1       2          3            4            5          6            7                 8              9              10             11             12                13                14                15                16                      17                       18                     19                      20                           21                  22            23           24                 25                     26             27      28            29      30            31               32                   33                 34                  35                   36                 37               38                  39                    40          41          42            43           44            45            46              47               48               49               50         51                    52                  53          54          55           56           57           58           59               60                   61                62       63         64               65              66          67               68              69            70           71                      72                    73                74               75               76             77
-    std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `name`, `subname`, `level_min`, `level_max`, `faction`, `npc_flags`, `gossip_menu_id`, `display_id1`, `display_id2`, `display_id3`, `display_id4`, `display_scale1`, `display_scale2`, `display_scale3`, `display_scale4`, `display_probability1`, `display_probability2`, `display_probability3`, `display_probability4`, `display_total_probability`, `mount_display_id`, `speed_walk`, `speed_run`, `detection_range`, `call_for_help_range`, `leash_range`, `type`, `pet_family`, `rank`, `unit_class`, `xp_multiplier`, `health_multiplier`, `mana_multiplier`, `armor_multiplier`, `damage_multiplier`, `damage_variance`, `damage_school`, `base_attack_time`, `ranged_attack_time`, `holy_res`, `fire_res`, `nature_res`, `frost_res`, `shadow_res`, `arcane_res`, `trainer_type`, `trainer_spell`, `trainer_class`, `trainer_race`,  `loot_id`, `pickpocket_loot_id`, `skinning_loot_id`, `gold_min`, `gold_max`, `spell_id1`, `spell_id2`, `spell_id3`, `spell_id4`, `spell_list_id`, `pet_spell_list_id`, `spawn_spell_id`, `auras`, `ai_name`, `movement_type`, `inhabit_type`, `civilian`, `racial_leader`, `equipment_id`, `trainer_id`, `vendor_id`, `mechanic_immune_mask`, `school_immune_mask`, `immunity_flags`, `static_flags1`, `static_flags2`, `flags_extra`, `script_name` FROM `creature_template` t1 WHERE `patch`=(SELECT max(`patch`) FROM `creature_template` t2 WHERE t1.`entry`=t2.`entry` && `patch` <= %u)", sWorld.GetWowPatch()));
+    //                                                                0        1       2          3            4            5          6            7                 8              9              10             11             12                13                14                15                16                      17                       18                     19                      20                           21                  22            23           24                 25                     26             27      28            29      30            31               32                   33                 34                  35                   36                 37               38                  39                    40          41          42            43           44            45            46              47               48               49               50         51                    52                  53          54          55           56           57
+    //                                                                58           59               60                   61                62       63         64               65              66          67               68              69            70           71                      72                    73                74               75               76             77
+    std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `name`, `subname`, `level_min`, `level_max`, `faction`, `npc_flags`, `gossip_menu_id`, `display_id1`, `display_id2`, `display_id3`, `display_id4`, `display_scale1`, `display_scale2`, `display_scale3`, `display_scale4`, `display_probability1`, `display_probability2`, `display_probability3`, `display_probability4`, `display_total_probability`, `mount_display_id`, `speed_walk`, `speed_run`, `detection_range`, `call_for_help_range`, `leash_range`, `type`, `pet_family`, `rank`, `unit_class`, `xp_multiplier`, `health_multiplier`, `mana_multiplier`, `armor_multiplier`, `damage_multiplier`, `damage_variance`, `damage_school`, `base_attack_time`, `ranged_attack_time`, `holy_res`, `fire_res`, `nature_res`, `frost_res`, `shadow_res`, `arcane_res`, `trainer_type`, `trainer_spell`, `trainer_class`, `trainer_race`,  `loot_id`, `pickpocket_loot_id`, `skinning_loot_id`, `gold_min`, `gold_max`, `spell_id1`, `spell_id2`, "
+                                                             "`spell_id3`, `spell_id4`, `spell_list_id`, `pet_spell_list_id`, `spawn_spell_id`, `auras`, `ai_name`, `movement_type`, `inhabit_type`, `civilian`, `racial_leader`, `equipment_id`, `trainer_id`, `vendor_id`, `mechanic_immune_mask`, `school_immune_mask`, `immunity_flags`, `static_flags1`, `static_flags2`, `flags_extra`, `script_name` FROM `creature_template` t1 WHERE `patch`=(SELECT max(`patch`) FROM `creature_template` t2 WHERE t1.`entry`=t2.`entry` && `patch` <= %u)",
+                                                             sWorld.GetWowPatch()));
 
     if (!result)
         return;
@@ -1197,8 +1185,8 @@ void ObjectMgr::LoadCreatureTemplates()
     {
         Field* fields = result->Fetch();
         LoadCreatureInfo(fields);
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u creature definitions", m_creatureInfoMap.size());
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
@@ -1206,8 +1194,11 @@ void ObjectMgr::LoadCreatureTemplates()
 
 void ObjectMgr::LoadCreatureTemplate(uint32 entry)
 {
-    //                                                                0        1       2          3            4            5          6            7                 8              9              10             11             12                13                14                15                16                      17                       18                     19                      20                           21                  22            23           24                 25                     26             27      28            29      30            31               32                   33                 34                  35                   36                 37               38                  39                    40          41          42            43           44            45            46              47               48               49               50         51                    52                  53          54          55           56           57           58           59               60                   61                62       63         64               65              66          67               68              69            70           71                      72                    73                74               75               76             77
-    std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `name`, `subname`, `level_min`, `level_max`, `faction`, `npc_flags`, `gossip_menu_id`, `display_id1`, `display_id2`, `display_id3`, `display_id4`, `display_scale1`, `display_scale2`, `display_scale3`, `display_scale4`, `display_probability1`, `display_probability2`, `display_probability3`, `display_probability4`, `display_total_probability`, `mount_display_id`, `speed_walk`, `speed_run`, `detection_range`, `call_for_help_range`, `leash_range`, `type`, `pet_family`, `rank`, `unit_class`, `xp_multiplier`, `health_multiplier`, `mana_multiplier`, `armor_multiplier`, `damage_multiplier`, `damage_variance`, `damage_school`, `base_attack_time`, `ranged_attack_time`, `holy_res`, `fire_res`, `nature_res`, `frost_res`, `shadow_res`, `arcane_res`, `trainer_type`, `trainer_spell`, `trainer_class`, `trainer_race`,  `loot_id`, `pickpocket_loot_id`, `skinning_loot_id`, `gold_min`, `gold_max`, `spell_id1`, `spell_id2`, `spell_id3`, `spell_id4`, `spell_list_id`, `pet_spell_list_id`, `spawn_spell_id`, `auras`, `ai_name`, `movement_type`, `inhabit_type`, `civilian`, `racial_leader`, `equipment_id`, `trainer_id`, `vendor_id`, `mechanic_immune_mask`, `school_immune_mask`, `immunity_flags`, `static_flags1`, `static_flags2`, `flags_extra`, `script_name` FROM `creature_template` t1 WHERE `entry`=%u && `patch`=(SELECT max(`patch`) FROM `creature_template` t2 WHERE t1.`entry`=t2.`entry` && `patch` <= %u)", entry, sWorld.GetWowPatch()));
+    //                                                                0        1       2          3            4            5          6            7                 8              9              10             11             12                13                14                15                16                      17                       18                     19                      20                           21                  22            23           24                 25                     26             27      28            29      30            31               32                   33                 34                  35                   36                 37               38                  39                    40          41          42            43           44            45            46              47               48               49               50         51                    52                  53          54          55           56           57
+    //                                                                58           59               60                   61                62       63         64               65              66          67               68              69            70           71                      72                    73                74               75               76             77
+    std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `name`, `subname`, `level_min`, `level_max`, `faction`, `npc_flags`, `gossip_menu_id`, `display_id1`, `display_id2`, `display_id3`, `display_id4`, `display_scale1`, `display_scale2`, `display_scale3`, `display_scale4`, `display_probability1`, `display_probability2`, `display_probability3`, `display_probability4`, `display_total_probability`, `mount_display_id`, `speed_walk`, `speed_run`, `detection_range`, `call_for_help_range`, `leash_range`, `type`, `pet_family`, `rank`, `unit_class`, `xp_multiplier`, `health_multiplier`, `mana_multiplier`, `armor_multiplier`, `damage_multiplier`, `damage_variance`, `damage_school`, `base_attack_time`, `ranged_attack_time`, `holy_res`, `fire_res`, `nature_res`, `frost_res`, `shadow_res`, `arcane_res`, `trainer_type`, `trainer_spell`, `trainer_class`, `trainer_race`,  `loot_id`, `pickpocket_loot_id`, `skinning_loot_id`, `gold_min`, `gold_max`, `spell_id1`, `spell_id2`, "
+                                                             "`spell_id3`, `spell_id4`, `spell_list_id`, `pet_spell_list_id`, `spawn_spell_id`, `auras`, `ai_name`, `movement_type`, `inhabit_type`, `civilian`, `racial_leader`, `equipment_id`, `trainer_id`, `vendor_id`, `mechanic_immune_mask`, `school_immune_mask`, `immunity_flags`, `static_flags1`, `static_flags2`, `flags_extra`, `script_name` FROM `creature_template` t1 WHERE `entry`=%u && `patch`=(SELECT max(`patch`) FROM `creature_template` t2 WHERE t1.`entry`=t2.`entry` && `patch` <= %u)",
+                                                             entry, sWorld.GetWowPatch()));
 
     if (!result)
         return;
@@ -1216,8 +1207,8 @@ void ObjectMgr::LoadCreatureTemplate(uint32 entry)
     {
         Field* fields = result->Fetch();
         LoadCreatureInfo(fields);
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u creature definitions", result->GetRowCount());
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
@@ -1359,7 +1350,7 @@ template <class T>
 void ConvertCreatureAurasField(T* addon, char const* table, char const* guidEntryStr, uint32 guidOrEntry)
 {
     // Now add the auras, format "spell1 spell2 ..."
-    char* p,* s;
+    char *p, *s;
     std::vector<int> val;
     s = p = (char*)reinterpret_cast<char const*>(addon->auras);
     if (p)
@@ -1377,7 +1368,7 @@ void ConvertCreatureAurasField(T* addon, char const* table, char const* guidEntr
             val.push_back(atoi(s));
 
         // free char* loaded memory
-        delete[](char*)reinterpret_cast<char const*>(addon->auras);
+        delete[] (char*)reinterpret_cast<char const*>(addon->auras);
     }
 
     // empty list
@@ -1559,7 +1550,7 @@ void ObjectMgr::CheckCreatureTemplate(CreatureInfo* cInfo)
         cInfo->movement_type = IDLE_MOTION_TYPE;
     }
 
-    if (cInfo->equipment_id > 0)                         // 0 no equipment
+    if (cInfo->equipment_id > 0) // 0 no equipment
     {
         if (!GetEquipmentTemplate(cInfo->equipment_id))
         {
@@ -1747,8 +1738,8 @@ void ObjectMgr::LoadEquipmentTemplates()
             equipTemplate.equipment.push_back(equipEntry);
             m_CreatureEquipmentMap.insert(std::make_pair(entry, equipTemplate));
         }
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     for (auto& itrTemplate : m_CreatureEquipmentMap)
     {
@@ -1767,16 +1758,7 @@ void ObjectMgr::LoadEquipmentTemplates()
                     continue;
                 }
 
-                if (itemProto->InventoryType != INVTYPE_WEAPON &&
-                    itemProto->InventoryType != INVTYPE_SHIELD &&
-                    itemProto->InventoryType != INVTYPE_RANGED &&
-                    itemProto->InventoryType != INVTYPE_2HWEAPON &&
-                    itemProto->InventoryType != INVTYPE_WEAPONMAINHAND &&
-                    itemProto->InventoryType != INVTYPE_WEAPONOFFHAND &&
-                    itemProto->InventoryType != INVTYPE_HOLDABLE &&
-                    itemProto->InventoryType != INVTYPE_THROWN &&
-                    itemProto->InventoryType != INVTYPE_RANGEDRIGHT &&
-                    itemProto->InventoryType != INVTYPE_RELIC)
+                if (itemProto->InventoryType != INVTYPE_WEAPON && itemProto->InventoryType != INVTYPE_SHIELD && itemProto->InventoryType != INVTYPE_RANGED && itemProto->InventoryType != INVTYPE_2HWEAPON && itemProto->InventoryType != INVTYPE_WEAPONMAINHAND && itemProto->InventoryType != INVTYPE_WEAPONOFFHAND && itemProto->InventoryType != INVTYPE_HOLDABLE && itemProto->InventoryType != INVTYPE_THROWN && itemProto->InventoryType != INVTYPE_RANGEDRIGHT && itemProto->InventoryType != INVTYPE_RELIC)
                 {
                     sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Item (entry=%u) in creature_equip_template.item%u for entry = %u is not equipable in a hand, forced to 0.", itrEntry.item[j], j + 1, itrTemplate.first);
                     itrEntry.item[j] = 0;
@@ -1789,10 +1771,7 @@ void ObjectMgr::LoadEquipmentTemplates()
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
 }
 
-CreatureDisplayInfoAddon const* ObjectMgr::GetCreatureDisplayInfoAddon(uint32 display_id)
-{
-    return sCreatureDisplayInfoAddonStorage.LookupEntry<CreatureDisplayInfoAddon>(display_id);
-}
+CreatureDisplayInfoAddon const* ObjectMgr::GetCreatureDisplayInfoAddon(uint32 display_id) { return sCreatureDisplayInfoAddonStorage.LookupEntry<CreatureDisplayInfoAddon>(display_id); }
 
 CreatureDisplayInfoAddon const* ObjectMgr::GetCreatureDisplayInfoRandomGender(uint32 display_id)
 {
@@ -1807,7 +1786,7 @@ CreatureDisplayInfoAddon const* ObjectMgr::GetCreatureDisplayInfoRandomGender(ui
         if (!minfo_tmp)
         {
             sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Model (Entry: %u) has display_id_other_gender %u not found in table `creature_display_info_addon`. ", minfo->display_id, minfo->display_id_other_gender);
-            return minfo;                                   // not fatal, just use the previous one
+            return minfo; // not fatal, just use the previous one
         }
         return minfo_tmp;
     }
@@ -1916,7 +1895,6 @@ void ObjectMgr::LoadCreatureDisplayInfoAddon()
         }
         else
             sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `creature_display_info_addon` expect have data for character race %u male display id %u", race, raceEntry->model_m);
-
     }
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u creature display based info", sCreatureDisplayInfoAddonStorage.GetRecordCount());
@@ -1928,8 +1906,8 @@ void ObjectMgr::LoadCreatureSpells()
     // First we need to collect all script ids.
     std::set<uint32> spellScriptSet;
 
-    std::unique_ptr<QueryResult> result (WorldDatabase.Query("SELECT `id` FROM `creature_spells_scripts`"));
-    
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `id` FROM `creature_spells_scripts`"));
+
     if (result)
     {
         do
@@ -1937,7 +1915,8 @@ void ObjectMgr::LoadCreatureSpells()
             Field* fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             spellScriptSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     std::set<uint32> spellScriptSetFull = spellScriptSet;
@@ -1945,22 +1924,22 @@ void ObjectMgr::LoadCreatureSpells()
     // Now we load creature_spells.
     m_CreatureSpellsMap.clear(); // for reload case
 
-                                     //       0        1            2                3               4                 5                 6              7                    8                    9                   10                  11
+    //       0        1            2                3               4                 5                 6              7                    8                    9                   10                  11
     result = WorldDatabase.Query("SELECT `entry`, `spellId_1`, `probability_1`, `castTarget_1`, `targetParam1_1`, `targetParam2_1`, `castFlags_1`, `delayInitialMin_1`, `delayInitialMax_1`, `delayRepeatMin_1`, `delayRepeatMax_1`, `scriptId_1`, "
-                                      //               12           13               14              15                16                17             18                   19                   20                  21                  22
-                                                     "`spellId_2`, `probability_2`, `castTarget_2`, `targetParam1_2`, `targetParam2_2`, `castFlags_2`, `delayInitialMin_2`, `delayInitialMax_2`, `delayRepeatMin_2`, `delayRepeatMax_2`, `scriptId_2`, "
-                                     //                23           24               25              26                27                28             29                   30                   31                  32                  33
-                                                     "`spellId_3`, `probability_3`, `castTarget_3`, `targetParam1_3`, `targetParam2_3`, `castFlags_3`, `delayInitialMin_3`, `delayInitialMax_3`, `delayRepeatMin_3`, `delayRepeatMax_3`, `scriptId_3`, "
-                                     //                34           35               36              37                38                39             40                   41                   42                  43                  44
-                                                     "`spellId_4`, `probability_4`, `castTarget_4`, `targetParam1_4`, `targetParam2_4`, `castFlags_4`, `delayInitialMin_4`, `delayInitialMax_4`, `delayRepeatMin_4`, `delayRepeatMax_4`, `scriptId_4`, "
-                                     //                45           46               47              48                49                50             51                   52                   53                  54                  55
-                                                     "`spellId_5`, `probability_5`, `castTarget_5`, `targetParam1_5`, `targetParam2_5`, `castFlags_5`, `delayInitialMin_5`, `delayInitialMax_5`, `delayRepeatMin_5`, `delayRepeatMax_5`, `scriptId_5`, "
-                                     //                56           57               58              59                60                61             62                   63                   64                  65                  66
-                                                     "`spellId_6`, `probability_6`, `castTarget_6`, `targetParam1_6`, `targetParam2_6`, `castFlags_6`, `delayInitialMin_6`, `delayInitialMax_6`, `delayRepeatMin_6`, `delayRepeatMax_6`, `scriptId_6`, "
-                                     //                67           68               69              70                71                72             73                   74                   75                  76                  77
-                                                     "`spellId_7`, `probability_7`, `castTarget_7`, `targetParam1_7`, `targetParam2_7`, `castFlags_7`, `delayInitialMin_7`, `delayInitialMax_7`, `delayRepeatMin_7`, `delayRepeatMax_7`, `scriptId_7`, "
-                                     //                78           79               80              81                82                83             84                   85                   86                  87                  88
-                                                     "`spellId_8`, `probability_8`, `castTarget_8`, `targetParam1_8`, `targetParam2_8`, `castFlags_8`, `delayInitialMin_8`, `delayInitialMax_8`, `delayRepeatMin_8`, `delayRepeatMax_8`, `scriptId_8` FROM `creature_spells`");
+                                 //               12           13               14              15                16                17             18                   19                   20                  21                  22
+                                 "`spellId_2`, `probability_2`, `castTarget_2`, `targetParam1_2`, `targetParam2_2`, `castFlags_2`, `delayInitialMin_2`, `delayInitialMax_2`, `delayRepeatMin_2`, `delayRepeatMax_2`, `scriptId_2`, "
+                                 //                23           24               25              26                27                28             29                   30                   31                  32                  33
+                                 "`spellId_3`, `probability_3`, `castTarget_3`, `targetParam1_3`, `targetParam2_3`, `castFlags_3`, `delayInitialMin_3`, `delayInitialMax_3`, `delayRepeatMin_3`, `delayRepeatMax_3`, `scriptId_3`, "
+                                 //                34           35               36              37                38                39             40                   41                   42                  43                  44
+                                 "`spellId_4`, `probability_4`, `castTarget_4`, `targetParam1_4`, `targetParam2_4`, `castFlags_4`, `delayInitialMin_4`, `delayInitialMax_4`, `delayRepeatMin_4`, `delayRepeatMax_4`, `scriptId_4`, "
+                                 //                45           46               47              48                49                50             51                   52                   53                  54                  55
+                                 "`spellId_5`, `probability_5`, `castTarget_5`, `targetParam1_5`, `targetParam2_5`, `castFlags_5`, `delayInitialMin_5`, `delayInitialMax_5`, `delayRepeatMin_5`, `delayRepeatMax_5`, `scriptId_5`, "
+                                 //                56           57               58              59                60                61             62                   63                   64                  65                  66
+                                 "`spellId_6`, `probability_6`, `castTarget_6`, `targetParam1_6`, `targetParam2_6`, `castFlags_6`, `delayInitialMin_6`, `delayInitialMax_6`, `delayRepeatMin_6`, `delayRepeatMax_6`, `scriptId_6`, "
+                                 //                67           68               69              70                71                72             73                   74                   75                  76                  77
+                                 "`spellId_7`, `probability_7`, `castTarget_7`, `targetParam1_7`, `targetParam2_7`, `castFlags_7`, `delayInitialMin_7`, `delayInitialMax_7`, `delayRepeatMin_7`, `delayRepeatMax_7`, `scriptId_7`, "
+                                 //                78           79               80              81                82                83             84                   85                   86                  87                  88
+                                 "`spellId_8`, `probability_8`, `castTarget_8`, `targetParam1_8`, `targetParam2_8`, `castFlags_8`, `delayInitialMin_8`, `delayInitialMax_8`, `delayRepeatMin_8`, `delayRepeatMax_8`, `scriptId_8` FROM `creature_spells`");
     if (!result)
     {
         BarGoLink bar(1);
@@ -1995,7 +1974,7 @@ void ObjectMgr::LoadCreatureSpells()
                     continue;
                 }
 
-                uint8 probability      = fields[2 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt8();
+                uint8 probability = fields[2 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt8();
 
                 if ((probability == 0) || (probability > 100))
                 {
@@ -2003,14 +1982,14 @@ void ObjectMgr::LoadCreatureSpells()
                     probability = 100;
                 }
 
-                uint8 castTarget       = fields[3 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt8();
-                uint32 targetParam1    = fields[4 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt32();
-                uint32 targetParam2    = fields[5 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt32();
+                uint8 castTarget = fields[3 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt8();
+                uint32 targetParam1 = fields[4 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt32();
+                uint32 targetParam2 = fields[5 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt32();
 
                 if (!sScriptMgr.CheckScriptTargets(castTarget, targetParam1, targetParam2, "creature_spells", entry))
                     continue;
 
-                uint16 castFlags        = fields[6 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt16();
+                uint16 castFlags = fields[6 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt16();
 
                 // in the database we store timers as seconds
                 // based on screenshot of blizzard creature spells editor
@@ -2023,8 +2002,8 @@ void ObjectMgr::LoadCreatureSpells()
                     continue;
                 }
 
-                uint32 delayRepeatMin  = fields[9 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt16() * IN_MILLISECONDS;
-                uint32 delayRepeatMax  = fields[10 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt16() * IN_MILLISECONDS;
+                uint32 delayRepeatMin = fields[9 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt16() * IN_MILLISECONDS;
+                uint32 delayRepeatMax = fields[10 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt16() * IN_MILLISECONDS;
 
                 if (delayRepeatMin > delayRepeatMax)
                 {
@@ -2051,8 +2030,8 @@ void ObjectMgr::LoadCreatureSpells()
 
         if (!spellsList.empty())
             m_CreatureSpellsMap.insert(CreatureSpellsMap::value_type(entry, spellsList));
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     for (const auto itr : spellScriptSet)
         sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `creature_spells_scripts` contains unused script, id %u.", itr);
@@ -2075,7 +2054,8 @@ void ObjectMgr::LoadCreatureClassLevelStats()
             Field* fields = result->Fetch();
             uint32 unitClass = fields[0].GetUInt32();
             creatureClasses.insert(unitClass);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     for (auto unitClass : creatureClasses)
@@ -2091,7 +2071,8 @@ void ObjectMgr::LoadCreatureClassLevelStats()
                 uint32 maxLevel = fields[0].GetUInt32();
                 if (maxLevel > requiredMaxLevel)
                     requiredMaxLevel = maxLevel;
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
 
         result = WorldDatabase.PQuery("SELECT MAX(`level`) FROM `creature_classlevelstats` WHERE `class`=%u", unitClass);
@@ -2110,8 +2091,8 @@ void ObjectMgr::LoadCreatureClassLevelStats()
                     sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Missing creature CLS data for `class` = %u used in creature_template!", unitClass);
 
                 m_CreatureCLSMap[unitClass].resize(std::max(requiredMaxLevel, currentMaxLevel));
-                
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
 
         //                                     0        1               2                3               4                      5         6              7       8            9           10         11         12           13        14
@@ -2230,8 +2211,8 @@ void ObjectMgr::LoadCreatureClassLevelStats()
                     sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Invalid `armor` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
                     cls.armor = abs(cls.armor);
                 }
-
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
 
         for (uint32 i = 0; i < currentMaxLevel; i++)
@@ -2239,7 +2220,7 @@ void ObjectMgr::LoadCreatureClassLevelStats()
             CreatureClassLevelStats& cls = m_CreatureCLSMap[unitClass][i];
             if (!cls.health)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Missing creature CLS data for `class` = %u and `level` = %u!", unitClass, i+1);
+                sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Missing creature CLS data for `class` = %u and `level` = %u!", unitClass, i + 1);
                 Log::WaitBeforeContinueIfNeed();
                 exit(1);
             }
@@ -2281,7 +2262,7 @@ CreatureClassLevelStats const* ObjectMgr::GetCreatureClassLevelStats(uint32 unit
     if (itr == m_CreatureCLSMap.end() || itr->second.empty())
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Missing creature CLS data for class = %u!", unitClass);
-        static CreatureClassLevelStats ph{ 1.5f, 1.3f, 20, 20, 40, 20, 40, 20, 20, 20, 20, 20, 20, 20 };
+        static CreatureClassLevelStats ph{1.5f, 1.3f, 20, 20, 40, 20, 40, 20, 20, 20, 20, 20, 20, 20};
         return &ph;
     }
 
@@ -2295,16 +2276,16 @@ void ObjectMgr::LoadCreatures(bool reload)
 {
     //                                                                          0                  1                2                 3                 4                 5      6
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `creature`.`guid`, `creature`.`id`, `creature`.`id2`, `creature`.`id3`, `creature`.`id4`, `creature`.`id5`, `map`,"
-    //                      7             8             9             10             11                  12                  13
-                          "`position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `wander_distance`, "
-    //                      14                15              16               17
-                          "`health_percent`, `mana_percent`, `movement_type`, `event`,"
-    //                                      18                                     19            20             21                           22                      23
-                          "`pool_creature`.`pool_entry`, `pool_creature_template`.`pool_entry`, `spawn_flags`, `visibility_mod`, `creature`.`patch_min`, `creature`.`patch_max`  "
-                          "FROM `creature` "
-                          "LEFT OUTER JOIN `game_event_creature` ON `creature`.`guid` = `game_event_creature`.`guid` "
-                          "LEFT OUTER JOIN `pool_creature` ON `creature`.`guid` = `pool_creature`.`guid` "
-                          "LEFT OUTER JOIN `pool_creature_template` ON `creature`.`id` = `pool_creature_template`.`id`"));
+                                                            //                      7             8             9             10             11                  12                  13
+                                                            "`position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `wander_distance`, "
+                                                            //                      14                15              16               17
+                                                            "`health_percent`, `mana_percent`, `movement_type`, `event`,"
+                                                            //                                      18                                     19            20             21                           22                      23
+                                                            "`pool_creature`.`pool_entry`, `pool_creature_template`.`pool_entry`, `spawn_flags`, `visibility_mod`, `creature`.`patch_min`, `creature`.`patch_max`  "
+                                                            "FROM `creature` "
+                                                            "LEFT OUTER JOIN `game_event_creature` ON `creature`.`guid` = `game_event_creature`.`guid` "
+                                                            "LEFT OUTER JOIN `pool_creature` ON `creature`.`guid` = `pool_creature`.`guid` "
+                                                            "LEFT OUTER JOIN `pool_creature_template` ON `creature`.`id` = `pool_creature_template`.`id`"));
 
     if (!result)
     {
@@ -2323,15 +2304,15 @@ void ObjectMgr::LoadCreatures(bool reload)
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 guid         = fields[ 0].GetUInt32();
-        uint32 first_entry  = fields[ 1].GetUInt32();
-        float curhealth     = fields[14].GetFloat();
-        float curmana       = fields[15].GetFloat();
-        uint32 spawnFlags   = fields[20].GetUInt32();
-        bool is_dead        = spawnFlags & SPAWN_FLAG_DEAD;
-        uint8 patch_min     = fields[22].GetUInt8();
-        uint8 patch_max     = fields[23].GetUInt8();
-        bool existsInPatch  = true;
+        uint32 guid = fields[0].GetUInt32();
+        uint32 first_entry = fields[1].GetUInt32();
+        float curhealth = fields[14].GetFloat();
+        float curmana = fields[15].GetFloat();
+        uint32 spawnFlags = fields[20].GetUInt32();
+        bool is_dead = spawnFlags & SPAWN_FLAG_DEAD;
+        uint8 patch_min = fields[22].GetUInt8();
+        uint8 patch_max = fields[23].GetUInt8();
+        bool existsInPatch = true;
 
         if (!first_entry)
         {
@@ -2403,28 +2384,28 @@ void ObjectMgr::LoadCreatures(bool reload)
         bool alreadyPresent = reload && m_CreatureDataMap.find(guid) != m_CreatureDataMap.end();
         CreatureData& data = m_CreatureDataMap[guid];
 
-        data.creature_id[0]     = fields[ 1].GetUInt32();
-        data.creature_id[1]     = fields[ 2].GetUInt32();
-        data.creature_id[2]     = fields[ 3].GetUInt32();
-        data.creature_id[3]     = fields[ 4].GetUInt32();
-        data.creature_id[4]     = fields[ 5].GetUInt32();
-        data.position.mapId     = fields[ 6].GetUInt16();
-        data.position.x         = fields[ 7].GetFloat();
-        data.position.y         = fields[ 8].GetFloat();
-        data.position.z         = fields[ 9].GetFloat();
-        data.position.o         = fields[10].GetFloat();
-        data.spawntimesecsmin   = fields[11].GetUInt32();
-        data.spawntimesecsmax   = fields[12].GetUInt32();
-        data.wander_distance    = fields[13].GetFloat();
-        data.health_percent     = curhealth;
-        data.mana_percent       = curmana;
-        data.movement_type      = fields[16].GetUInt8();
-        data.spawn_flags        = spawnFlags;
-        data.visibility_mod     = fields[21].GetFloat();
+        data.creature_id[0] = fields[1].GetUInt32();
+        data.creature_id[1] = fields[2].GetUInt32();
+        data.creature_id[2] = fields[3].GetUInt32();
+        data.creature_id[3] = fields[4].GetUInt32();
+        data.creature_id[4] = fields[5].GetUInt32();
+        data.position.mapId = fields[6].GetUInt16();
+        data.position.x = fields[7].GetFloat();
+        data.position.y = fields[8].GetFloat();
+        data.position.z = fields[9].GetFloat();
+        data.position.o = fields[10].GetFloat();
+        data.spawntimesecsmin = fields[11].GetUInt32();
+        data.spawntimesecsmax = fields[12].GetUInt32();
+        data.wander_distance = fields[13].GetFloat();
+        data.health_percent = curhealth;
+        data.mana_percent = curmana;
+        data.movement_type = fields[16].GetUInt8();
+        data.spawn_flags = spawnFlags;
+        data.visibility_mod = fields[21].GetFloat();
         data.instanciatedContinentInstanceId = sMapMgr.GetContinentInstanceId(data.position.mapId, data.position.x, data.position.y);
-        int16 gameEvent         = fields[17].GetInt16();
-        int16 GuidPoolId        = fields[18].GetInt16();
-        int16 EntryPoolId       = fields[19].GetInt16();
+        int16 gameEvent = fields[17].GetInt16();
+        int16 GuidPoolId = fields[18].GetInt16();
+        int16 EntryPoolId = fields[19].GetInt16();
 
         MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(data.position.mapId);
         if (!mapEntry)
@@ -2439,8 +2420,7 @@ void ObjectMgr::LoadCreatures(bool reload)
 
         if (data.spawntimesecsmax < data.spawntimesecsmin)
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `creature` have creature (GUID: %u Entry: %u) with `spawntimesecsmax` (%u) value lower than `spawntimesecsmin` (%u), it will be adjusted to %u.",
-                guid, data.creature_id[0], uint32(data.spawntimesecsmax), uint32(data.spawntimesecsmin), uint32(data.spawntimesecsmin));
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `creature` have creature (GUID: %u Entry: %u) with `spawntimesecsmax` (%u) value lower than `spawntimesecsmin` (%u), it will be adjusted to %u.", guid, data.creature_id[0], uint32(data.spawntimesecsmax), uint32(data.spawntimesecsmin), uint32(data.spawntimesecsmin));
             data.spawntimesecsmax = data.spawntimesecsmin;
         }
 
@@ -2502,14 +2482,14 @@ void ObjectMgr::LoadGameobjects(bool reload)
 {
     //                                                                            0                    1     2      3             4             5             6
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `gameobject`.`guid`, `gameobject`.`id`, `map`, `position_x`, `position_y`, `position_z`, `orientation`,"
-    //                      7            8            9            10           11                12              13       14      15
-                          "`rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, `spawntimesecsmax`, `animprogress`, `state`, `event`, "
-    //                                        16                                       17            18             19                             20                        21
-                          "`pool_gameobject`.`pool_entry`, `pool_gameobject_template`.`pool_entry`, `spawn_flags`, `visibility_mod`, `gameobject`.`patch_min`, `gameobject`.`patch_max` "
-                          "FROM `gameobject` "
-                          "LEFT OUTER JOIN `game_event_gameobject` ON `gameobject`.`guid` = `game_event_gameobject`.`guid` "
-                          "LEFT OUTER JOIN `pool_gameobject` ON `gameobject`.`guid` = `pool_gameobject`.`guid` "
-                          "LEFT OUTER JOIN `pool_gameobject_template` ON `gameobject`.`id` = `pool_gameobject_template`.`id`"));
+                                                            //                      7            8            9            10           11                12              13       14      15
+                                                            "`rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, `spawntimesecsmax`, `animprogress`, `state`, `event`, "
+                                                            //                                        16                                       17            18             19                             20                        21
+                                                            "`pool_gameobject`.`pool_entry`, `pool_gameobject_template`.`pool_entry`, `spawn_flags`, `visibility_mod`, `gameobject`.`patch_min`, `gameobject`.`patch_max` "
+                                                            "FROM `gameobject` "
+                                                            "LEFT OUTER JOIN `game_event_gameobject` ON `gameobject`.`guid` = `game_event_gameobject`.`guid` "
+                                                            "LEFT OUTER JOIN `pool_gameobject` ON `gameobject`.`guid` = `pool_gameobject`.`guid` "
+                                                            "LEFT OUTER JOIN `pool_gameobject_template` ON `gameobject`.`id` = `pool_gameobject_template`.`id`"));
 
     if (!result)
     {
@@ -2528,10 +2508,10 @@ void ObjectMgr::LoadGameobjects(bool reload)
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 guid         = fields[ 0].GetUInt32();
-        uint32 entry        = fields[ 1].GetUInt32();
-        uint8 patch_min     = fields[20].GetUInt8();
-        uint8 patch_max     = fields[21].GetUInt8();
+        uint32 guid = fields[0].GetUInt32();
+        uint32 entry = fields[1].GetUInt32();
+        uint8 patch_min = fields[20].GetUInt8();
+        uint8 patch_max = fields[21].GetUInt8();
 
         if ((patch_min > patch_max) || (patch_max > 10))
         {
@@ -2561,20 +2541,20 @@ void ObjectMgr::LoadGameobjects(bool reload)
         bool alreadyPresent = reload && m_GameObjectDataMap.find(guid) != m_GameObjectDataMap.end();
         GameObjectData& data = m_GameObjectDataMap[guid];
 
-        data.id               = entry;
-        data.position.mapId   = fields[ 2].GetUInt32();
-        data.position.x       = fields[ 3].GetFloat();
-        data.position.y       = fields[ 4].GetFloat();
-        data.position.z       = fields[ 5].GetFloat();
-        data.position.o       = fields[ 6].GetFloat();
-        data.rotation0        = fields[ 7].GetFloat();
-        data.rotation1        = fields[ 8].GetFloat();
-        data.rotation2        = fields[ 9].GetFloat();
-        data.rotation3        = fields[10].GetFloat();
+        data.id = entry;
+        data.position.mapId = fields[2].GetUInt32();
+        data.position.x = fields[3].GetFloat();
+        data.position.y = fields[4].GetFloat();
+        data.position.z = fields[5].GetFloat();
+        data.position.o = fields[6].GetFloat();
+        data.rotation0 = fields[7].GetFloat();
+        data.rotation1 = fields[8].GetFloat();
+        data.rotation2 = fields[9].GetFloat();
+        data.rotation3 = fields[10].GetFloat();
         data.spawntimesecsmin = fields[11].GetInt32();
         data.spawntimesecsmax = fields[12].GetInt32();
-        data.spawn_flags      = fields[18].GetUInt32();
-        data.visibility_mod   = fields[19].GetFloat();
+        data.spawn_flags = fields[18].GetUInt32();
+        data.visibility_mod = fields[19].GetFloat();
         data.instanciatedContinentInstanceId = sMapMgr.GetContinentInstanceId(data.position.mapId, data.position.x, data.position.y);
 
         MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(data.position.mapId);
@@ -2589,24 +2569,23 @@ void ObjectMgr::LoadGameobjects(bool reload)
 
         if (data.spawntimesecsmax < data.spawntimesecsmin)
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `gameobject` have gameobject (GUID: %u Entry: %u) with `spawntimesecsmax` (%u) value lower than `spawntimesecsmin` (%u), it will be adjusted to %u.",
-                guid, data.id, uint32(data.spawntimesecsmax), uint32(data.spawntimesecsmin), uint32(data.spawntimesecsmin));
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `gameobject` have gameobject (GUID: %u Entry: %u) with `spawntimesecsmax` (%u) value lower than `spawntimesecsmin` (%u), it will be adjusted to %u.", guid, data.id, uint32(data.spawntimesecsmax), uint32(data.spawntimesecsmin), uint32(data.spawntimesecsmin));
             data.spawntimesecsmax = data.spawntimesecsmin;
         }
 
-        data.animprogress   = fields[13].GetUInt32();
+        data.animprogress = fields[13].GetUInt32();
 
-        uint32 go_state     = fields[14].GetUInt32();
+        uint32 go_state = fields[14].GetUInt32();
         if (go_state >= MAX_GO_STATE)
         {
             sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `gameobject` have gameobject (GUID: %u Entry: %u) with invalid `state` (%u) value, skip", guid, data.id, go_state);
             continue;
         }
-        data.go_state       = GOState(go_state);
+        data.go_state = GOState(go_state);
 
-        int16 gameEvent     = fields[15].GetInt16();
-        int16 GuidPoolId    = fields[16].GetInt16();
-        int16 EntryPoolId   = fields[17].GetInt16();
+        int16 gameEvent = fields[15].GetInt16();
+        int16 GuidPoolId = fields[16].GetInt16();
+        int16 EntryPoolId = fields[17].GetInt16();
 
         if (data.rotation0 < -1.0f || data.rotation0 > 1.0f)
         {
@@ -2703,796 +2682,796 @@ void ObjectMgr::CorrectItemEffects(uint32 itemId, _ItemSpell& itemSpell)
     if ((itemSpell.SpellId == 21153) && (itemId == 17076) && (sWorld.GetWowPatch() < WOW_PATCH_110))
         itemSpell.SpellId = 15280;
 #endif
-    // Substitute spell power spells that were changed in the 1.4 client.
+        // Substitute spell power spells that were changed in the 1.4 client.
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_3_1
     if (sWorld.GetWowPatch() < WOW_PATCH_104)
     {
         switch (itemSpell.SpellId)
         {
-            case 7678: // Increase Healing 8 (OLD) to Increase Healing 7 (NEW)
-                itemSpell.SpellId = 7677;
-                return;
-            case 7679: // Increase Healing 10 (OLD) to Increase Healing 9 (NEW)
-                itemSpell.SpellId = 7678;
-                return;
-            case 7680: // Increase Healing 12 (OLD) to Increase Healing 11 (NEW)
-                itemSpell.SpellId = 7679;
-                return;
-            case 7681: // Increase Healing 14 (OLD) to Increase Healing 13 (NEW)
-                itemSpell.SpellId = 7680;
-                return;
-            case 7684: // Increase Fire Dam 2 (OLD) to Increase Fire Dam 1 (NEW)
-                itemSpell.SpellId = 7683;
-                return;
-            case 7685: // Increase Fire Dam 3 (OLD) to Increase Fire Dam 3 (NEW)
-                itemSpell.SpellId = 7684;
-                return;
-            case 7686: // Increase Fire Dam 4 (OLD) to Increase Fire Dam 4 (NEW)
-            case 7687: // Increase Fire Dam 5 (OLD) to Increase Fire Dam 4 (NEW)
-                itemSpell.SpellId = 7685;
-                return;
-            case 7688: // Increase Fire Dam 6 (OLD) to Increase Fire Dam 6 (NEW)
-                itemSpell.SpellId = 7686;
-                return;
-            case 7689: // Increase Fire Dam 7 (OLD) to Increase Fire Dam 7 (NEW)
-                itemSpell.SpellId = 7687;
-                return;
-            case 7691: // Increase Nature Dam 2 (OLD) to Increase Nature Dam 1 (NEW)
-                itemSpell.SpellId = 7690;
-                return;
-            case 7692: // Increase Nature Dam 3 (OLD) to Increase Nature Dam 3 (NEW)
-                itemSpell.SpellId = 7691;
-                return;
-            case 7693: // Increase Nature Dam 4 (OLD) to Increase Nature Dam 4 (NEW)
-            case 7694: // Increase Nature Dam 5 (OLD) to Increase Nature Dam 4 (NEW)
-                itemSpell.SpellId = 7692;
-                return;
-            case 7695: // Increase Nature Dam 6 (OLD) to Increase Nature Dam 6 (NEW)
-                itemSpell.SpellId = 7693;
-                return;
-            case 7696: // Increase Nature Dam 7 (OLD) to Increase Nature Dam 7 (NEW)
-                itemSpell.SpellId = 7694;
-                return;
-            case 7698: // Increase Frost Dam 2 (OLD) to Increase Frost Dam 1 (NEW)
-                itemSpell.SpellId = 7697;
-                return;
-            case 7699: // Increase Frost Dam 3 (OLD) to Increase Frost Dam 3 (NEW)
-                itemSpell.SpellId = 7698;
-                return;
-            case 7700: // Increase Frost Dam 4 (OLD) to Increase Frost Dam 4 (NEW)
-            case 7701: // Increase Frost Dam 5 (OLD) to Increase Frost Dam 4 (NEW)
-                itemSpell.SpellId = 7699;
-                return;
-            case 7702: // Increase Frost Dam 6 (OLD) to Increase Frost Dam 6 (NEW)
-                itemSpell.SpellId = 7700;
-                return;
-            case 7703: // Increase Frost Dam 7 (OLD) to Increase Frost Dam 7 (NEW)
-                itemSpell.SpellId = 7701;
-                return;
-            case 7705: // Increase Shadow Dam 2 (OLD) to Increase Shadow Dam 1 (NEW)
-                itemSpell.SpellId = 7704;
-                return;
-            case 7706: // Increase Shadow Dam 3 (OLD) to Increase Shadow Dam 3 (NEW)
-                itemSpell.SpellId = 7705;
-                return;
-            case 7707: // Increase Shadow Dam 4 (OLD) to Increase Shadow Dam 4 (NEW)
-                itemSpell.SpellId = 7706;
-                return;
-            case 7708: // Increase Shadow Dam 5 (OLD) to Increase Shadow Dam 4 (NEW)
-                itemSpell.SpellId = 7706;
-                return;
-            case 7709: // Increase Shadow Dam 7 (OLD) to Increase Shadow Dam 7 (NEW)
-                itemSpell.SpellId = 7708;
-                return;
-            case 7710: // Increase Shadow Dam 6 (OLD) to Increase Shadow Dam 6 (NEW)
-                itemSpell.SpellId = 7707;
-                return;
-            case 9294: // Increase Fire Dam 11 (OLD) to Increase Fire Dam 11 (NEW)
-            case 9295: // Increase Fire Dam 12 (OLD) to Increase Fire Dam 11 (NEW)
-                itemSpell.SpellId = 9399;
-                return;
-            case 9296: // Increase Fire Dam 13 (OLD) to Increase Fire Dam 13 (NEW)
-                itemSpell.SpellId = 9400;
-                return;
-            case 9297: // Increase Fire Dam 14 (OLD) to Increase Fire Dam 14 (NEW)
-            case 9298: // Increase Fire Dam 15 (OLD) to Increase Fire Dam 14 (NEW)
-                itemSpell.SpellId = 9401;
-                return;
-            case 9304: // Increase Frost Dam 11 (OLD) to Increase Frost Dam 11 (NEW)
-            case 9305: // Increase Frost Dam 12 (OLD) to Increase Frost Dam 11 (NEW)
-                itemSpell.SpellId = 9402;
-                return;
-            case 9306: // Increase Frost Dam 13 (OLD) to Increase Frost Dam 13 (NEW)
-                itemSpell.SpellId = 9403;
-                return;
-            case 9307: // Increase Frost Dam 14 (OLD) to Increase Frost Dam 14 (NEW)
-            case 9308: // Increase Frost Dam 15 (OLD) to Increase Frost Dam 14 (NEW)
-                itemSpell.SpellId = 9404;
-                return;
-            case 9314: // Increase Healing 22 (OLD) to Increase Healing 22 (NEW)
-                itemSpell.SpellId = 9408;
-                return;
-            case 9315: // Increase Healing 24 (OLD) to Increase Healing 24 (NEW)
-                itemSpell.SpellId = 9314;
-                return;
-            case 9316: // Increase Healing 26 (OLD) to Increase Healing 26 (NEW)
-            case 9317: // Increase Healing 28 (OLD) to Increase Healing 26 (NEW)
-                itemSpell.SpellId = 9315;
-                return;
-    #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_8_4
-            case 9318: // Increase Healing 30 (OLD) to Increase Healing 30 (NEW)
-                itemSpell.SpellId = 25067;
-                return;
-    #else
-            case 9318: // Increase Healing 30 (OLD) to Increase Healing 29 (NEW)
-                itemSpell.SpellId = 9316;
-                return;
-    #endif
-            case 9324: // Increase Shadow Dam 11 (OLD) to Increase Shadow Dam 11 (NEW)
-            case 9325: // Increase Shadow Dam 12 (OLD) to Increase Shadow Dam 11 (NEW)
-                itemSpell.SpellId = 9412;
-                return;
-            case 9326: // Increase Shadow Dam 13 (OLD) to Increase Shadow Dam 13 (NEW)
-                itemSpell.SpellId = 9413;
-                return;
-            case 9327: // Increase Shadow Dam 14 (OLD) to Increase Shadow Dam 14 (NEW)
-            case 9328: // Increase Shadow Dam 15 (OLD) to Increase Shadow Dam 14 (NEW)
-                itemSpell.SpellId = 9414;
-                return;
-            case 9342: // Increase Spell Dam 7 (OLD) to Increase Spell Dam 7 (NEW)
-                itemSpell.SpellId = 9397;
-                return;
-            case 9343: // Increase Spell Dam 8 (OLD) to Increase Spell Dam 8 (NEW)
-                itemSpell.SpellId = 9398;
-                return;
-            case 9344: // Increase Spell Dam 9 (OLD) to Increase Spell Dam 9 (NEW)
-            case 9345: // Increase Spell Dam 9 (OLD) to Increase Spell Dam 9 (NEW)
-            case 9346: // Increase Spell Dam 10 (OLD) to Increase Spell Dam 9 (NEW)
-                itemSpell.SpellId = 9415;
-                return;
-            case 9357: // Increase Nature Dam 11 (OLD) to Increase Nature Dam 11 (NEW)
-            case 9358: // Increase Nature Dam 12 (OLD) to Increase Nature Dam 11 (NEW)
-                itemSpell.SpellId = 9409;
-                return;
-            case 9359: // Increase Nature Dam 13 (OLD) to Increase Nature Dam 13 (NEW)
-                itemSpell.SpellId = 9410;
-                return;
-            case 9360: // Increase Nature Dam 14 (OLD) to Increase Nature Dam 14 (NEW)
-            case 9361: // Increase Nature Dam 15 (OLD) to Increase Nature Dam 14 (NEW)
-                itemSpell.SpellId = 9411;
-                return;
-            case 9393: // Increase Spell Dam 1 (OLD) to Increase Spell Dam 1 (NEW)
-                itemSpell.SpellId = 9392;
-                return;
-            case 9394: // Increase Spell Dam 2 (OLD) to Increase Spell Dam 2 (NEW)
-                itemSpell.SpellId = 9393;
-                return;
-            case 9395: // Increase Spell Dam 2 (OLD) to Increase Spell Dam 2 (NEW)
-            case 9396: // Increase Spell Dam 3 (OLD) to Increase Spell Dam 2 (NEW)
-                itemSpell.SpellId = 9393;
-                return;
-            case 9397: // Increase Spell Dam 4 (OLD) to Increase Spell Dam 4 (NEW)
-            case 9398: // Increase Spell Dam 4 (OLD) to Increase Spell Dam 4 (NEW)
-                itemSpell.SpellId = 9394;
-                return;
-            case 9399: // Increase Fire Dam 8 (OLD) to Increase Fire Dam 7 (NEW)
-                itemSpell.SpellId = 7687;
-                return;
-            case 9400: // Increase Fire Dam 9 (OLD) to Increase Fire Dam 9 (NEW)
-                itemSpell.SpellId = 7688;
-                return;
-            case 9401: // Increase Fire Dam 10 (OLD) to Increase Fire Dam 10 (NEW)
-                itemSpell.SpellId = 7689;
-                return;
-            case 9402: // Increase Frost Dam 8 (OLD) to Increase Frost Dam 7 (NEW)
-                itemSpell.SpellId = 7701;
-                return;
-            case 9403: // Increase Frost Dam 9 (OLD) to Increase Frost Dam 9 (NEW)
-                itemSpell.SpellId = 7702;
-                return;
-            case 9404: // Increase Frost Dam 10 (OLD) to Increase Frost Dam 10 (NEW)
-                itemSpell.SpellId = 7703;
-                return;
-            case 9406: // Increase Healing 16 (OLD) to Increase Healing 15 (NEW)
-                itemSpell.SpellId = 7681;
-                return;
-            case 9407: // Increase Healing 18 (OLD) to Increase Healing 18 (NEW)
-                itemSpell.SpellId = 9406;
-                return;
-            case 9408: // Increase Healing 20 (OLD) to Increase Healing 20 (NEW)
-                itemSpell.SpellId = 9407;
-                return;
-            case 9409: // Increase Nature Dam 8 (OLD) to Increase Nature Dam 7 (NEW)
-                itemSpell.SpellId = 7694;
-                return;
-            case 9411: // Increase Nature Dam 10 (OLD) to Increase Nature Dam 10 (NEW)
-                itemSpell.SpellId = 7696;
-                return;
-            case 9412: // Increase Shadow Dam 8 (OLD) to Increase Shadow Dam 7 (NEW)
-                itemSpell.SpellId = 7708;
-                return;
-            case 9413: // Increase Shadow Dam 9 (OLD) to Increase Shadow Dam 9 (NEW)
-                itemSpell.SpellId = 7710;
-                return;
-            case 9414: // Increase Shadow Dam 10 (OLD) to Increase Shadow Dam 10 (NEW)
-                itemSpell.SpellId = 7709;
-                return;
-            case 9415: // Increase Spell Dam 5 (OLD) to Increase Spell Dam 5 (NEW)
-                itemSpell.SpellId = 9395;
-                return;
-            case 9416: // Increase Spell Dam 6 (OLD) to Increase Spell Dam 6 (NEW)
-                itemSpell.SpellId = 9396;
-                return;
-            case 9417: // Increase Spell Dam 7 (OLD) to Increase Spell Dam 7 (NEW)
-                itemSpell.SpellId = 9397;
-                return;
-            case 12019: // Increase Spell Dam 18 Random (OLD) to Increase Spell Dam 9 (NEW)
-                itemSpell.SpellId = 9415;
-                return;
-            case 13591: // Increase Arcane Dam 2 (OLD) to Increase Arcane Dam 1 (NEW)
-                itemSpell.SpellId = 13590;
-                return;
-            case 13592: // Increase Arcane Dam 3 (OLD) to Increase Arcane Dam 3 (NEW)
-                itemSpell.SpellId = 13591;
-                return;
-            case 13593: // Increase Arcane Dam 4 (OLD) to Increase Arcane Dam 4 (NEW)
-            case 13594: // Increase Arcane Dam 5 (OLD) to Increase Arcane Dam 4 (NEW)
-                itemSpell.SpellId = 13592;
-                return;
-            case 13595: // Increase Arcane Dam 6 (OLD) to Increase Arcane Dam 6 (NEW)
-                itemSpell.SpellId = 13593;
-                return;
-            case 13596: // Increase Arcane Dam 7 (OLD) to Increase Arcane Dam 7 (NEW)
-            case 13597: // Increase Arcane Dam 8 (OLD) to Increase Arcane Dam 7 (NEW)
-                itemSpell.SpellId = 13594;
-                return;
-            case 13598: // Increase Arcane Dam 9 (OLD) to Increase Arcane Dam 9 (NEW)
-                itemSpell.SpellId = 13595;
-                return;
-            case 13599: // Increase Arcane Dam 10 (OLD) to Increase Arcane Dam 10 (NEW)
-                itemSpell.SpellId = 13596;
-                return;
-            case 13601: // Increase Arcane Dam 11 (OLD) to Increase Arcane Dam 11 (NEW)
-            case 13602: // Increase Arcane Dam 12 (OLD) to Increase Arcane Dam 11 (NEW)
-                itemSpell.SpellId = 13597;
-                return;
-            case 13603: // Increase Arcane Dam 13 (OLD) to Increase Arcane Dam 13 (NEW)
-                itemSpell.SpellId = 13598;
-                return;
-            case 13604: // Increase Arcane Dam 14 (OLD) to Increase Arcane Dam 14 (NEW)
-            case 13605: // Increase Arcane Dam 15 (OLD) to Increase Arcane Dam 14 (NEW)
-                itemSpell.SpellId = 13599;
-                return;
-            case 13830: // Increase Fire Dam 22 (OLD) to Increase Fire Dam 21 (NEW)
-                itemSpell.SpellId = 9298;
-                return;
-            case 13831: // Increase Frost Dam 22 (OLD) to Increase Frost Dam 21 (NEW)
-                itemSpell.SpellId = 9308;
-                return;
-            case 13881: // Increase Spell Dam 22 (OLD) to Increase Spell Dam 22 (NEW)
-                itemSpell.SpellId = 15714;
-                return;
-            case 14047: // Increase Spell Dam 15 (OLD) to Increase Spell Dam 15 (NEW)
-                itemSpell.SpellId = 9344;
-                return;
-            case 14054: // Increase Spell Dam 19 (OLD) to Increase Spell Dam 19 (NEW)
-                itemSpell.SpellId = 14254;
-                return;
-            case 14055: // Increase Spell Dam 29 (OLD) to Increase Spell Dam 29 (NEW)
-                itemSpell.SpellId = 13881;
-                return;
-            case 14127: // Increase Spell Dam 21 (OLD) to Increase Spell Dam 21 (NEW)
-                itemSpell.SpellId = 14248;
-                return;
-            case 14248: // Increase Spell Dam 12 (OLD) to Increase Spell Dam 12 (NEW)
-                itemSpell.SpellId = 9417;
-                return;
-            case 14254: // Increase Spell Dam 11 (OLD) to Increase Spell Dam 11 (NEW)
-                itemSpell.SpellId = 9416;
-                return;
-            case 14793: // Increase Shadow Dam 16 (OLD) to Increase Shadow Dam 16 (NEW)
-                itemSpell.SpellId = 9324;
-                return;
-            case 14794: // Increase Shadow Dam 17 (OLD) to Increase Shadow Dam 17 (NEW)
-                itemSpell.SpellId = 9325;
-                return;
-            case 14798: // Increase Spell Dam 23 (OLD) to Increase Spell Dam 23 (NEW)
-                itemSpell.SpellId = 14047;
-                return;
-            case 14799: // Increase Spell Dam 11 (OLD) to Increase Spell Dam 11 (NEW)
-                itemSpell.SpellId = 9416;
-                return;
-            case 15696: // Increase Healing 48 (OLD) to Increase Healing 48 (NEW)
-                itemSpell.SpellId = 18034;
-                return;
-            case 15714: // Increase Spell Dam 14 (OLD) to Increase Spell Dam 14 (NEW)
-                itemSpell.SpellId = 9343;
-                return;
-            case 15715: // Increase Spell Dam 16 (OLD) to Increase Spell Dam 16 (NEW)
-                itemSpell.SpellId = 9345;
-                return;
-            case 16638: // Increase Nature Dam 30 (OLD) to Increase Nature Dam 30 (NEW)
-                itemSpell.SpellId = 17991;
-                return;
-            case 17280: // Increase Spell Dam 39 (OLD) to Increase Spell Dam 39 (NEW)
-                itemSpell.SpellId = 18055;
-                return;
-            case 17320: // Increase Healing 76 (OLD) to Increase Healing 75 (NEW)
-                itemSpell.SpellId = 18045;
-                return;
-            case 17367: // Increase Spell Dam 25 (OLD) to Increase Spell Dam 25 (NEW)
-                itemSpell.SpellId = 15715;
-                return;
-            case 17371: // Increase Healing 40 (OLD) to Increase Healing 40 (NEW)
-                itemSpell.SpellId = 18031;
-                return;
-            case 17493: // Increase Spell Dam 40 (OLD) to Increase Spell Dam 40 (NEW)
-                itemSpell.SpellId = 18056;
-                return;
-            case 17684: // Increase Fire Dam 36 (OLD) to Increase Fire Dam 36 (NEW)
-                itemSpell.SpellId = 17873;
-                return;
-            case 17747: // Increase Fire Dam 16 (OLD) to Increase Fire Dam 16 (NEW)
-                itemSpell.SpellId = 9294;
-                return;
-            case 17819: // Increase Nature Dam 22 (OLD) to Increase Nature Dam 21 (NEW)
-                itemSpell.SpellId = 9361;
-                return;
-            case 17821: // Increase Arcane Dam 16 (OLD) to Increase Arcane Dam 16 (NEW)
-                itemSpell.SpellId = 13601;
-                return;
-            case 17823: // Increase Arcane Dam 18 (OLD) to Increase Arcane Dam 17 (NEW)
-                itemSpell.SpellId = 13602;
-                return;
-            case 17824: // Increase Arcane Dam 20 (OLD) to Increase Arcane Dam 20 (NEW)
-                itemSpell.SpellId = 13604;
-                return;
-            case 17825: // Increase Arcane Dam 22 (OLD) to Increase Arcane Dam 21 (NEW)
-                itemSpell.SpellId = 13605;
-                return;
-            case 17826: // Increase Arcane Dam 24 (OLD) to Increase Arcane Dam 24 (NEW)
-                itemSpell.SpellId = 17822;
-                return;
-            case 17827: // Increase Arcane Dam 26 (OLD) to Increase Arcane Dam 26 (NEW)
-                itemSpell.SpellId = 17823;
-                return;
-            case 17828: // Increase Arcane Dam 28 (OLD) to Increase Arcane Dam 27 (NEW)
-                itemSpell.SpellId = 17824;
-                return;
-            case 17829: // Increase Arcane Dam 30 (OLD) to Increase Arcane Dam 30 (NEW)
-                itemSpell.SpellId = 17826;
-                return;
-            case 17830: // Increase Arcane Dam 32 (OLD) to Increase Arcane Dam 31 (NEW)
-                itemSpell.SpellId = 17827;
-                return;
-            case 17832: // Increase Arcane Dam 34 (OLD) to Increase Arcane Dam 34 (NEW)
-                itemSpell.SpellId = 17829;
-                return;
-            case 17837: // Increase Arcane Dam 36 (OLD) to Increase Arcane Dam 36 (NEW)
-                itemSpell.SpellId = 17830;
-                return;
-            case 17838: // Increase Arcane Dam 38 (OLD) to Increase Arcane Dam 37 (NEW)
-                itemSpell.SpellId = 17832;
-                return;
-            case 17839: // Increase Arcane Dam 40 (OLD) to Increase Arcane Dam 40 (NEW)
-                itemSpell.SpellId = 17838;
-                return;
-            case 17840: // Increase Arcane Dam 42 (OLD) to Increase Arcane Dam 41 (NEW)
-                itemSpell.SpellId = 17839;
-                return;
-            case 17844: // Increase Arcane Dam 48 (OLD) to Increase Arcane Dam 47 (NEW)
-                itemSpell.SpellId = 17844;
-                return;
-            case 17845: // Increase Arcane Dam 50 (OLD) to Increase Arcane Dam 50 (NEW)
-                itemSpell.SpellId = 17846;
-                return;
-            case 17846: // Increase Arcane Dam 52 (OLD) to Increase Arcane Dam 51 (NEW)
-                itemSpell.SpellId = 17847;
-                return;
-            case 17847: // Increase Arcane Dam 54 (OLD) to Increase Arcane Dam 54 (NEW)
-                itemSpell.SpellId = 17849;
-                return;
-    #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
-            case 17848: // Increase Arcane Dam 56 (OLD) to Increase Arcane Dam 56 (NEW)
-                itemSpell.SpellId = 26704;
-                return;
-    #endif
-            case 17866: // Increase Fire Dam 17 (OLD) to Increase Fire Dam 17 (NEW)
-            case 17867: // Increase Fire Dam 18 (OLD) to Increase Fire Dam 17 (NEW)
-                itemSpell.SpellId = 9295;
-                return;
-            case 17868: // Increase Fire Dam 20 (OLD) to Increase Fire Dam 20 (NEW)
-                itemSpell.SpellId = 9297;
-                return;
-            case 17869: // Increase Fire Dam 24 (OLD) to Increase Fire Dam 24 (NEW)
-                itemSpell.SpellId = 17866;
-                return;
-            case 17870: // Increase Fire Dam 26 (OLD) to Increase Fire Dam 26 (NEW)
-                itemSpell.SpellId = 17867;
-                return;
-            case 17871: // Increase Fire Dam 28 (OLD) to Increase Fire Dam 27 (NEW)
-                itemSpell.SpellId = 17868;
-                return;
-            case 17872: // Increase Fire Dam 30 (OLD) to Increase Fire Dam 30 (NEW)
-                itemSpell.SpellId = 17869;
-                return;
-            case 17873: // Increase Fire Dam 32 (OLD) to Increase Fire Dam 31 (NEW)
-                itemSpell.SpellId = 17870;
-                return;
-            case 17874: // Increase Fire Dam 34 (OLD) to Increase Fire Dam 34 (NEW)
-                itemSpell.SpellId = 17872;
-                return;
-            case 17875: // Increase Fire Dam 38 (OLD) to Increase Fire Dam 37 (NEW)
-                itemSpell.SpellId = 17874;
-                return;
-            case 17876: // Increase Fire Dam 40 (OLD) to Increase Fire Dam 40 (NEW)
-                itemSpell.SpellId = 17875;
-                return;
-            case 17878: // Increase Fire Dam 42 (OLD) to Increase Fire Dam 41 (NEW)
-                itemSpell.SpellId = 17876;
-                return;
-            case 17881: // Increase Fire Dam 48 (OLD) to Increase Fire Dam 47 (NEW)
-                itemSpell.SpellId = 17881;
-                return;
-            case 17882: // Increase Fire Dam 50 (OLD) to Increase Fire Dam 50 (NEW)
-                itemSpell.SpellId = 17884;
-                return;
-            case 17884: // Increase Fire Dam 52 (OLD) to Increase Fire Dam 51 (NEW)
-                itemSpell.SpellId = 17885;
-                return;
-            case 17885: // Increase Fire Dam 54 (OLD) to Increase Fire Dam 54 (NEW)
-            case 17886: // Increase Fire Dam 56 (OLD) to Increase Fire Dam 54 (NEW)
-                itemSpell.SpellId = 17887;
-                return;
-            case 17889: // Increase Frost Dam 16 (OLD) to Increase Frost Dam 16 (NEW)
-                itemSpell.SpellId = 9304;
-                return;
-            case 17890: // Increase Frost Dam 17 (OLD) to Increase Frost Dam 17 (NEW)
-            case 17891: // Increase Frost Dam 18 (OLD) to Increase Frost Dam 17 (NEW)
-                itemSpell.SpellId = 9305;
-                return;
-            case 17892: // Increase Frost Dam 20 (OLD) to Increase Frost Dam 20 (NEW)
-                itemSpell.SpellId = 9307;
-                return;
-            case 17893: // Increase Frost Dam 24 (OLD) to Increase Frost Dam 24 (NEW)
-                itemSpell.SpellId = 17890;
-                return;
-            case 17894: // Increase Frost Dam 26 (OLD) to Increase Frost Dam 26 (NEW)
-                itemSpell.SpellId = 17891;
-                return;
-            case 17895: // Increase Frost Dam 28 (OLD) to Increase Frost Dam 27 (NEW)
-                itemSpell.SpellId = 17892;
-                return;
-            case 17896: // Increase Frost Dam 30 (OLD) to Increase Frost Dam 30 (NEW)
-                itemSpell.SpellId = 17893;
-                return;
-            case 17897: // Increase Frost Dam 32 (OLD) to Increase Frost Dam 31 (NEW)
-                itemSpell.SpellId = 17894;
-                return;
-            case 17898: // Increase Frost Dam 34 (OLD) to Increase Frost Dam 34 (NEW)
-                itemSpell.SpellId = 17896;
-                return;
-            case 17899: // Increase Frost Dam 36 (OLD) to Increase Frost Dam 36 (NEW)
-                itemSpell.SpellId = 17897;
-                return;
-            case 17900: // Increase Frost Dam 38 (OLD) to Increase Frost Dam 37 (NEW)
-                itemSpell.SpellId = 17898;
-                return;
-            case 17901: // Increase Frost Dam 40 (OLD) to Increase Frost Dam 40 (NEW)
-                itemSpell.SpellId = 17900;
-                return;
-            case 17902: // Increase Frost Dam 42 (OLD) to Increase Frost Dam 41 (NEW)
-                itemSpell.SpellId = 17901;
-                return;
-            case 17906: // Increase Frost Dam 48 (OLD) to Increase Frost Dam 47 (NEW)
-                itemSpell.SpellId = 17906;
-                return;
-            case 17907: // Increase Frost Dam 50 (OLD) to Increase Frost Dam 50 (NEW)
-                itemSpell.SpellId = 17908;
-                return;
-            case 17908: // Increase Frost Dam 52 (OLD) to Increase Frost Dam 51 (NEW)
-                itemSpell.SpellId = 17909;
-                return;
-            case 17909: // Increase Frost Dam 54 (OLD) to Increase Frost Dam 54 (NEW)
-                itemSpell.SpellId = 17911;
-                return;
-            case 17987: // Increase Nature Dam 16 (OLD) to Increase Nature Dam 16 (NEW)
-                itemSpell.SpellId = 9357;
-                return;
-            case 17988: // Increase Nature Dam 17 (OLD) to Increase Nature Dam 17 (NEW)
-                itemSpell.SpellId = 9358;
-                return;
-            case 17989: // Increase Nature Dam 18 (OLD) to Increase Nature Dam 17 (NEW)
-                itemSpell.SpellId = 9358;
-                return;
-            case 17990: // Increase Nature Dam 20 (OLD) to Increase Nature Dam 20 (NEW)
-                itemSpell.SpellId = 9360;
-                return;
-            case 17991: // Increase Nature Dam 24 (OLD) to Increase Nature Dam 24 (NEW)
-                itemSpell.SpellId = 17988;
-                return;
-            case 17993: // Increase Nature Dam 28 (OLD) to Increase Nature Dam 27 (NEW)
-                itemSpell.SpellId = 17990;
-                return;
-            case 17994: // Increase Nature Dam 32 (OLD) to Increase Nature Dam 33 (NEW)
-                itemSpell.SpellId = 17993;
-                return;
-            case 17995: // Increase Nature Dam 34 (OLD) to Increase Nature Dam 34 (NEW)
-                itemSpell.SpellId = 16638;
-                return;
-            case 17996: // Increase Nature Dam 36 (OLD) to Increase Nature Dam 36 (NEW)
-                itemSpell.SpellId = 17994;
-                return;
-            case 17997: // Increase Nature Dam 38 (OLD) to Increase Nature Dam 37 (NEW)
-                itemSpell.SpellId = 17995;
-                return;
-            case 17998: // Increase Nature Dam 40 (OLD) to Increase Nature Dam 40 (NEW)
-                itemSpell.SpellId = 17997;
-                return;
-            case 17999: // Increase Nature Dam 42 (OLD) to Increase Nature Dam 41 (NEW)
-                itemSpell.SpellId = 17998;
-                return;
-            case 18002: // Increase Nature Dam 48 (OLD) to Increase Nature Dam 47 (NEW)
-                itemSpell.SpellId = 18002;
-                return;
-            case 18003: // Increase Nature Dam 50 (OLD) to Increase Nature Dam 50 (NEW)
-                itemSpell.SpellId = 18004;
-                return;
-            case 18004: // Increase Nature Dam 52 (OLD) to Increase Nature Dam 51 (NEW)
-                itemSpell.SpellId = 18005;
-                return;
-            case 18005: // Increase Nature Dam 54 (OLD) to Increase Nature Dam 54 (NEW)
-                itemSpell.SpellId = 18007;
-                return;
-            case 18006: // Increase Nature Dam 56 (OLD) to Increase Nature Dam 54 (NEW)
-                itemSpell.SpellId = 18007;
-                return;
-            case 18008: // Increase Shadow Dam 18 (OLD) to Increase Shadow Dam 17 (NEW)
-                itemSpell.SpellId = 9325;
-                return;
-            case 18009: // Increase Shadow Dam 20 (OLD) to Increase Shadow Dam 20 (NEW)
-                itemSpell.SpellId = 9327;
-                return;
-            case 18010: // Increase Shadow Dam 22 (OLD) to Increase Shadow Dam 21 (NEW)
-                itemSpell.SpellId = 9328;
-                return;
-            case 18011: // Increase Shadow Dam 24 (OLD) to Increase Shadow Dam 24 (NEW)
-                itemSpell.SpellId = 14794;
-                return;
-            case 18012: // Increase Shadow Dam 26 (OLD) to Increase Shadow Dam 26 (NEW)
-                itemSpell.SpellId = 18008;
-                return;
-            case 18013: // Increase Shadow Dam 28 (OLD) to Increase Shadow Dam 27 (NEW)
-                itemSpell.SpellId = 18009;
-                return;
-            case 18014: // Increase Shadow Dam 30 (OLD) to Increase Shadow Dam 30 (NEW)
-                itemSpell.SpellId = 18011;
-                return;
-            case 18015: // Increase Shadow Dam 32 (OLD) to Increase Shadow Dam 31 (NEW)
-                itemSpell.SpellId = 18012;
-                return;
-            case 18016: // Increase Shadow Dam 34 (OLD) to Increase Shadow Dam 34 (NEW)
-                itemSpell.SpellId = 18014;
-                return;
-            case 18017: // Increase Shadow Dam 36 (OLD) to Increase Shadow Dam 36 (NEW)
-                itemSpell.SpellId = 18015;
-                return;
-            case 18018: // Increase Shadow Dam 38 (OLD) to Increase Shadow Dam 37 (NEW)
-                itemSpell.SpellId = 18016;
-                return;
-            case 18019: // Increase Shadow Dam 40 (OLD) to Increase Shadow Dam 40 (NEW)
-                itemSpell.SpellId = 18018;
-                return;
-            case 18020: // Increase Shadow Dam 42 (OLD) to Increase Shadow Dam 41 (NEW)
-                itemSpell.SpellId = 18019;
-                return;
-            case 18023: // Increase Shadow Dam 48 (OLD) to Increase Shadow Dam 47 (NEW)
-                itemSpell.SpellId = 18023;
-                return;
-            case 18024: // Increase Shadow Dam 50 (OLD) to Increase Shadow Dam 50 (NEW)
-                itemSpell.SpellId = 18025;
-                return;
-            case 18025: // Increase Shadow Dam 52 (OLD) to Increase Shadow Dam 51 (NEW)
-                itemSpell.SpellId = 18026;
-                return;
-            case 18026: // Increase Shadow Dam 54 (OLD) to Increase Shadow Dam 54 (NEW)
-                itemSpell.SpellId = 18028;
-                return;
-    #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
-            case 18027: // Increase Shadow Dam 56 (OLD) to Increase Shadow Dam 56 (NEW)
-                itemSpell.SpellId = 26728;
-                return;
-            case 18028: // Increase Shadow Dam 58 (OLD) to Increase Shadow Dam 57 (NEW)
-                itemSpell.SpellId = 26729;
-                return;
-    #else
-            case 18027: // Increase Shadow Dam 56 (OLD) to Increase Shadow Dam 54 (NEW)
-                itemSpell.SpellId = 18028;
-                return;
-    #endif
-            case 18029: // Increase Healing 32 (OLD) to Increase Healing 31 (NEW)
-                itemSpell.SpellId = 9317;
-                return;
-            case 18030: // Increase Healing 34 (OLD) to Increase Healing 33 (NEW)
-                itemSpell.SpellId = 9318;
-                return;
-            case 18031: // Increase Healing 36 (OLD) to Increase Healing 35 (NEW)
-                itemSpell.SpellId = 18029;
-                return;
-            case 18032: // Increase Healing 38 (OLD) to Increase Healing 37 (NEW)
-                itemSpell.SpellId = 18030;
-                return;
-            case 18033: // Increase Healing 42 (OLD) to Increase Healing 42 (NEW)
-                itemSpell.SpellId = 18032;
-                return;
-            case 18034: // Increase Healing 44 (OLD) to Increase Healing 44 (NEW)
-                itemSpell.SpellId = 17371;
-                return;
-            case 18035: // Increase Healing 46 (OLD) to Increase Healing 46 (NEW)
-                itemSpell.SpellId = 18033;
-                return;
-            case 18036: // Increase Healing 50 (OLD) to Increase Healing 48 (NEW)
-                itemSpell.SpellId = 18034;
-                return;
-            case 18037: // Increase Healing 52 (OLD) to Increase Healing 51 (NEW)
-                itemSpell.SpellId = 18035;
-                return;
-            case 18038: // Increase Healing 54 (OLD) to Increase Healing 53 (NEW)
-                itemSpell.SpellId = 15696;
-                return;
-            case 18039: // Increase Healing 56 (OLD) to Increase Healing 55 (NEW)
-                itemSpell.SpellId = 18036;
-                return;
-            case 18040: // Increase Healing 58 (OLD) to Increase Healing 57 (NEW)
-                itemSpell.SpellId = 18037;
-                return;
-            case 18041: // Increase Healing 60 (OLD) to Increase Healing 59 (NEW)
-                itemSpell.SpellId = 18038;
-                return;
-            case 18042: // Increase Healing 62 (OLD) to Increase Healing 62 (NEW)
-                itemSpell.SpellId = 18039;
-                return;
-            case 18043: // Increase Healing 64 (OLD) to Increase Healing 64 (NEW)
-                itemSpell.SpellId = 18040;
-                return;
-            case 18044: // Increase Healing 66 (OLD) to Increase Healing 66 (NEW)
-                itemSpell.SpellId = 18041;
-                return;
-            case 18045: // Increase Healing 68 (OLD) to Increase Healing 68 (NEW)
-                itemSpell.SpellId = 18042;
-                return;
-            case 18046: // Increase Healing 70 (OLD) to Increase Healing 70 (NEW)
-                itemSpell.SpellId = 18043;
-                return;
-            case 18047: // Increase Healing 72 (OLD) to Increase Healing 70 (NEW)
-                itemSpell.SpellId = 18043;
-                return;
-            case 18048: // Increase Healing 74 (OLD) to Increase Healing 73 (NEW)
-                itemSpell.SpellId = 18044;
-                return;
-            case 18049: // Increase Spell Dam 18 (OLD) to Increase Spell Dam 18 (NEW)
-                itemSpell.SpellId = 9346;
-                return;
-            case 18050: // Increase Spell Dam 26 (OLD) to Increase Spell Dam 26 (NEW)
-                itemSpell.SpellId = 18049;
-                return;
-            case 18052: // Increase Spell Dam 28 (OLD) to Increase Spell Dam 28 (NEW)
-                itemSpell.SpellId = 14127;
-                return;
-            case 18053: // Increase Spell Dam 30 (OLD) to Increase Spell Dam 30 (NEW)
-                itemSpell.SpellId = 14798;
-                return;
-            case 18054: // Increase Spell Dam 32 (OLD) to Increase Spell Dam 32 (NEW)
-                itemSpell.SpellId = 17367;
-                return;
-            case 18055: // Increase Spell Dam 33 (OLD) to Increase Spell Dam 33 (NEW)
-                itemSpell.SpellId = 18050;
-                return;
-            case 18056: // Increase Spell Dam 35 (OLD) to Increase Spell Dam 35 (NEW)
-                itemSpell.SpellId = 14055;
-                return;
-            case 18057: // Increase Spell Dam 36 (OLD) to Increase Spell Dam 36 (NEW)
-                itemSpell.SpellId = 18053;
-                return;
-            case 18058: // Increase Spell Dam 37 (OLD) to Increase Spell Dam 37 (NEW)
-                itemSpell.SpellId = 18054;
-                return;
-            case 21500: // Increase Holy Dam 2 (OLD) to Increase Holy Dam 1 (NEW)
-                itemSpell.SpellId = 21499;
-                return;
-            case 21501: // Increase Holy Dam 3 (OLD) to Increase Holy Dam 3 (NEW)
-                itemSpell.SpellId = 21500;
-                return;
-            case 21502: // Increase Holy Dam 4 (OLD) to Increase Holy Dam 4 (NEW)
-            case 21503: // Increase Holy Dam 5 (OLD) to Increase Holy Dam 4 (NEW)
-                itemSpell.SpellId = 21501;
-                return;
-            case 21504: // Increase Holy Dam 6 (OLD) to Increase Holy Dam 6 (NEW)
-                itemSpell.SpellId = 21502;
-                return;
-            case 21505: // Increase Holy Dam 7 (OLD) to Increase Holy Dam 7 (NEW)
-            case 21506: // Increase Holy Dam 8 (OLD) to Increase Holy Dam 7 (NEW)
-                itemSpell.SpellId = 21503;
-                return;
-            case 21507: // Increase Holy Dam 9 (OLD) to Increase Holy Dam 9 (NEW)
-                itemSpell.SpellId = 21504;
-                return;
-            case 21508: // Increase Holy Dam 10 (OLD) to Increase Holy Dam 10 (NEW)
-                itemSpell.SpellId = 21505;
-                return;
-            case 21509: // Increase Holy Dam 11 (OLD) to Increase Holy Dam 11 (NEW)
-            case 21510: // Increase Holy Dam 12 (OLD) to Increase Holy Dam 11 (NEW)
-                itemSpell.SpellId = 21506;
-                return;
-            case 21511: // Increase Holy Dam 13 (OLD) to Increase Holy Dam 13 (NEW)
-                itemSpell.SpellId = 21507;
-                return;
-            case 21512: // Increase Holy Dam 14 (OLD) to Increase Holy Dam 14 (NEW)
-            case 21513: // Increase Holy Dam 15 (OLD) to Increase Holy Dam 14 (NEW)
-                itemSpell.SpellId = 21508;
-                return;
-            case 21514: // Increase Holy Dam 16 (OLD) to Increase Holy Dam 16 (NEW)
-                itemSpell.SpellId = 21509;
-                return;
-            case 21515: // Increase Holy Dam 17 (OLD) to Increase Holy Dam 17 (NEW)
-            case 21516: // Increase Holy Dam 18 (OLD) to Increase Holy Dam 17 (NEW)
-                itemSpell.SpellId = 21510;
-                return;
-            case 21517: // Increase Holy Dam 20 (OLD) to Increase Holy Dam 20 (NEW)
-                itemSpell.SpellId = 21512;
-                return;
-            case 21518: // Increase Holy Dam 22 (OLD) to Increase Holy Dam 21 (NEW)
-                itemSpell.SpellId = 21513;
-                return;
-            case 21519: // Increase Holy Dam 24 (OLD) to Increase Holy Dam 24 (NEW)
-                itemSpell.SpellId = 21515;
-                return;
-            case 21520: // Increase Holy Dam 26 (OLD) to Increase Holy Dam 26 (NEW)
-                itemSpell.SpellId = 21516;
-                return;
-            case 21521: // Increase Holy Dam 28 (OLD) to Increase Holy Dam 27 (NEW)
-                itemSpell.SpellId = 21517;
-                return;
-            case 21522: // Increase Holy Dam 30 (OLD) to Increase Holy Dam 30 (NEW)
-                itemSpell.SpellId = 21519;
-                return;
-            case 21523: // Increase Holy Dam 32 (OLD) to Increase Holy Dam 31 (NEW)
-                itemSpell.SpellId = 21520;
-                return;
-            case 21524: // Increase Holy Dam 34 (OLD) to Increase Holy Dam 34 (NEW)
-                itemSpell.SpellId = 21522;
-                return;
-            case 21525: // Increase Holy Dam 36 (OLD) to Increase Holy Dam 36 (NEW)
-                itemSpell.SpellId = 21523;
-                return;
-            case 21526: // Increase Holy Dam 38 (OLD) to Increase Holy Dam 37 (NEW)
-                itemSpell.SpellId = 21524;
-                return;
-            case 21527: // Increase Holy Dam 40 (OLD) to Increase Holy Dam 40 (NEW)
-                itemSpell.SpellId = 21526;
-                return;
-            case 21528: // Increase Holy Dam 42 (OLD) to Increase Holy Dam 41 (NEW)
-                itemSpell.SpellId = 21527;
-                return;
-            case 21531: // Increase Holy Dam 48 (OLD) to Increase Holy Dam 47 (NEW)
-                itemSpell.SpellId = 21531;
-                return;
-            case 21532: // Increase Holy Dam 50 (OLD) to Increase Holy Dam 50 (NEW)
-                itemSpell.SpellId = 21533;
-                return;
-            case 21533: // Increase Holy Dam 52 (OLD) to Increase Holy Dam 51 (NEW)
-                itemSpell.SpellId = 21534;
-                return;
-            case 21534: // Increase Holy Dam 54 (OLD) to Increase Holy Dam 54 (NEW)
-            case 21535: // Increase Holy Dam 56 (OLD) to Increase Holy Dam 54 (NEW)
-                itemSpell.SpellId = 21536;
-                return;
-            case 22747: // Increase Spell Dam 22 (OLD) to Increase Spell Dam 22 (NEW)
-                itemSpell.SpellId = 15714;
-                return;
-            case 22748: // Increase Healing 50 (OLD) to Increase Healing 51 (NEW)
-                itemSpell.SpellId = 18035;
-                return;
+        case 7678: // Increase Healing 8 (OLD) to Increase Healing 7 (NEW)
+            itemSpell.SpellId = 7677;
+            return;
+        case 7679: // Increase Healing 10 (OLD) to Increase Healing 9 (NEW)
+            itemSpell.SpellId = 7678;
+            return;
+        case 7680: // Increase Healing 12 (OLD) to Increase Healing 11 (NEW)
+            itemSpell.SpellId = 7679;
+            return;
+        case 7681: // Increase Healing 14 (OLD) to Increase Healing 13 (NEW)
+            itemSpell.SpellId = 7680;
+            return;
+        case 7684: // Increase Fire Dam 2 (OLD) to Increase Fire Dam 1 (NEW)
+            itemSpell.SpellId = 7683;
+            return;
+        case 7685: // Increase Fire Dam 3 (OLD) to Increase Fire Dam 3 (NEW)
+            itemSpell.SpellId = 7684;
+            return;
+        case 7686: // Increase Fire Dam 4 (OLD) to Increase Fire Dam 4 (NEW)
+        case 7687: // Increase Fire Dam 5 (OLD) to Increase Fire Dam 4 (NEW)
+            itemSpell.SpellId = 7685;
+            return;
+        case 7688: // Increase Fire Dam 6 (OLD) to Increase Fire Dam 6 (NEW)
+            itemSpell.SpellId = 7686;
+            return;
+        case 7689: // Increase Fire Dam 7 (OLD) to Increase Fire Dam 7 (NEW)
+            itemSpell.SpellId = 7687;
+            return;
+        case 7691: // Increase Nature Dam 2 (OLD) to Increase Nature Dam 1 (NEW)
+            itemSpell.SpellId = 7690;
+            return;
+        case 7692: // Increase Nature Dam 3 (OLD) to Increase Nature Dam 3 (NEW)
+            itemSpell.SpellId = 7691;
+            return;
+        case 7693: // Increase Nature Dam 4 (OLD) to Increase Nature Dam 4 (NEW)
+        case 7694: // Increase Nature Dam 5 (OLD) to Increase Nature Dam 4 (NEW)
+            itemSpell.SpellId = 7692;
+            return;
+        case 7695: // Increase Nature Dam 6 (OLD) to Increase Nature Dam 6 (NEW)
+            itemSpell.SpellId = 7693;
+            return;
+        case 7696: // Increase Nature Dam 7 (OLD) to Increase Nature Dam 7 (NEW)
+            itemSpell.SpellId = 7694;
+            return;
+        case 7698: // Increase Frost Dam 2 (OLD) to Increase Frost Dam 1 (NEW)
+            itemSpell.SpellId = 7697;
+            return;
+        case 7699: // Increase Frost Dam 3 (OLD) to Increase Frost Dam 3 (NEW)
+            itemSpell.SpellId = 7698;
+            return;
+        case 7700: // Increase Frost Dam 4 (OLD) to Increase Frost Dam 4 (NEW)
+        case 7701: // Increase Frost Dam 5 (OLD) to Increase Frost Dam 4 (NEW)
+            itemSpell.SpellId = 7699;
+            return;
+        case 7702: // Increase Frost Dam 6 (OLD) to Increase Frost Dam 6 (NEW)
+            itemSpell.SpellId = 7700;
+            return;
+        case 7703: // Increase Frost Dam 7 (OLD) to Increase Frost Dam 7 (NEW)
+            itemSpell.SpellId = 7701;
+            return;
+        case 7705: // Increase Shadow Dam 2 (OLD) to Increase Shadow Dam 1 (NEW)
+            itemSpell.SpellId = 7704;
+            return;
+        case 7706: // Increase Shadow Dam 3 (OLD) to Increase Shadow Dam 3 (NEW)
+            itemSpell.SpellId = 7705;
+            return;
+        case 7707: // Increase Shadow Dam 4 (OLD) to Increase Shadow Dam 4 (NEW)
+            itemSpell.SpellId = 7706;
+            return;
+        case 7708: // Increase Shadow Dam 5 (OLD) to Increase Shadow Dam 4 (NEW)
+            itemSpell.SpellId = 7706;
+            return;
+        case 7709: // Increase Shadow Dam 7 (OLD) to Increase Shadow Dam 7 (NEW)
+            itemSpell.SpellId = 7708;
+            return;
+        case 7710: // Increase Shadow Dam 6 (OLD) to Increase Shadow Dam 6 (NEW)
+            itemSpell.SpellId = 7707;
+            return;
+        case 9294: // Increase Fire Dam 11 (OLD) to Increase Fire Dam 11 (NEW)
+        case 9295: // Increase Fire Dam 12 (OLD) to Increase Fire Dam 11 (NEW)
+            itemSpell.SpellId = 9399;
+            return;
+        case 9296: // Increase Fire Dam 13 (OLD) to Increase Fire Dam 13 (NEW)
+            itemSpell.SpellId = 9400;
+            return;
+        case 9297: // Increase Fire Dam 14 (OLD) to Increase Fire Dam 14 (NEW)
+        case 9298: // Increase Fire Dam 15 (OLD) to Increase Fire Dam 14 (NEW)
+            itemSpell.SpellId = 9401;
+            return;
+        case 9304: // Increase Frost Dam 11 (OLD) to Increase Frost Dam 11 (NEW)
+        case 9305: // Increase Frost Dam 12 (OLD) to Increase Frost Dam 11 (NEW)
+            itemSpell.SpellId = 9402;
+            return;
+        case 9306: // Increase Frost Dam 13 (OLD) to Increase Frost Dam 13 (NEW)
+            itemSpell.SpellId = 9403;
+            return;
+        case 9307: // Increase Frost Dam 14 (OLD) to Increase Frost Dam 14 (NEW)
+        case 9308: // Increase Frost Dam 15 (OLD) to Increase Frost Dam 14 (NEW)
+            itemSpell.SpellId = 9404;
+            return;
+        case 9314: // Increase Healing 22 (OLD) to Increase Healing 22 (NEW)
+            itemSpell.SpellId = 9408;
+            return;
+        case 9315: // Increase Healing 24 (OLD) to Increase Healing 24 (NEW)
+            itemSpell.SpellId = 9314;
+            return;
+        case 9316: // Increase Healing 26 (OLD) to Increase Healing 26 (NEW)
+        case 9317: // Increase Healing 28 (OLD) to Increase Healing 26 (NEW)
+            itemSpell.SpellId = 9315;
+            return;
+#if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_8_4
+        case 9318: // Increase Healing 30 (OLD) to Increase Healing 30 (NEW)
+            itemSpell.SpellId = 25067;
+            return;
+#else
+        case 9318: // Increase Healing 30 (OLD) to Increase Healing 29 (NEW)
+            itemSpell.SpellId = 9316;
+            return;
+#endif
+        case 9324: // Increase Shadow Dam 11 (OLD) to Increase Shadow Dam 11 (NEW)
+        case 9325: // Increase Shadow Dam 12 (OLD) to Increase Shadow Dam 11 (NEW)
+            itemSpell.SpellId = 9412;
+            return;
+        case 9326: // Increase Shadow Dam 13 (OLD) to Increase Shadow Dam 13 (NEW)
+            itemSpell.SpellId = 9413;
+            return;
+        case 9327: // Increase Shadow Dam 14 (OLD) to Increase Shadow Dam 14 (NEW)
+        case 9328: // Increase Shadow Dam 15 (OLD) to Increase Shadow Dam 14 (NEW)
+            itemSpell.SpellId = 9414;
+            return;
+        case 9342: // Increase Spell Dam 7 (OLD) to Increase Spell Dam 7 (NEW)
+            itemSpell.SpellId = 9397;
+            return;
+        case 9343: // Increase Spell Dam 8 (OLD) to Increase Spell Dam 8 (NEW)
+            itemSpell.SpellId = 9398;
+            return;
+        case 9344: // Increase Spell Dam 9 (OLD) to Increase Spell Dam 9 (NEW)
+        case 9345: // Increase Spell Dam 9 (OLD) to Increase Spell Dam 9 (NEW)
+        case 9346: // Increase Spell Dam 10 (OLD) to Increase Spell Dam 9 (NEW)
+            itemSpell.SpellId = 9415;
+            return;
+        case 9357: // Increase Nature Dam 11 (OLD) to Increase Nature Dam 11 (NEW)
+        case 9358: // Increase Nature Dam 12 (OLD) to Increase Nature Dam 11 (NEW)
+            itemSpell.SpellId = 9409;
+            return;
+        case 9359: // Increase Nature Dam 13 (OLD) to Increase Nature Dam 13 (NEW)
+            itemSpell.SpellId = 9410;
+            return;
+        case 9360: // Increase Nature Dam 14 (OLD) to Increase Nature Dam 14 (NEW)
+        case 9361: // Increase Nature Dam 15 (OLD) to Increase Nature Dam 14 (NEW)
+            itemSpell.SpellId = 9411;
+            return;
+        case 9393: // Increase Spell Dam 1 (OLD) to Increase Spell Dam 1 (NEW)
+            itemSpell.SpellId = 9392;
+            return;
+        case 9394: // Increase Spell Dam 2 (OLD) to Increase Spell Dam 2 (NEW)
+            itemSpell.SpellId = 9393;
+            return;
+        case 9395: // Increase Spell Dam 2 (OLD) to Increase Spell Dam 2 (NEW)
+        case 9396: // Increase Spell Dam 3 (OLD) to Increase Spell Dam 2 (NEW)
+            itemSpell.SpellId = 9393;
+            return;
+        case 9397: // Increase Spell Dam 4 (OLD) to Increase Spell Dam 4 (NEW)
+        case 9398: // Increase Spell Dam 4 (OLD) to Increase Spell Dam 4 (NEW)
+            itemSpell.SpellId = 9394;
+            return;
+        case 9399: // Increase Fire Dam 8 (OLD) to Increase Fire Dam 7 (NEW)
+            itemSpell.SpellId = 7687;
+            return;
+        case 9400: // Increase Fire Dam 9 (OLD) to Increase Fire Dam 9 (NEW)
+            itemSpell.SpellId = 7688;
+            return;
+        case 9401: // Increase Fire Dam 10 (OLD) to Increase Fire Dam 10 (NEW)
+            itemSpell.SpellId = 7689;
+            return;
+        case 9402: // Increase Frost Dam 8 (OLD) to Increase Frost Dam 7 (NEW)
+            itemSpell.SpellId = 7701;
+            return;
+        case 9403: // Increase Frost Dam 9 (OLD) to Increase Frost Dam 9 (NEW)
+            itemSpell.SpellId = 7702;
+            return;
+        case 9404: // Increase Frost Dam 10 (OLD) to Increase Frost Dam 10 (NEW)
+            itemSpell.SpellId = 7703;
+            return;
+        case 9406: // Increase Healing 16 (OLD) to Increase Healing 15 (NEW)
+            itemSpell.SpellId = 7681;
+            return;
+        case 9407: // Increase Healing 18 (OLD) to Increase Healing 18 (NEW)
+            itemSpell.SpellId = 9406;
+            return;
+        case 9408: // Increase Healing 20 (OLD) to Increase Healing 20 (NEW)
+            itemSpell.SpellId = 9407;
+            return;
+        case 9409: // Increase Nature Dam 8 (OLD) to Increase Nature Dam 7 (NEW)
+            itemSpell.SpellId = 7694;
+            return;
+        case 9411: // Increase Nature Dam 10 (OLD) to Increase Nature Dam 10 (NEW)
+            itemSpell.SpellId = 7696;
+            return;
+        case 9412: // Increase Shadow Dam 8 (OLD) to Increase Shadow Dam 7 (NEW)
+            itemSpell.SpellId = 7708;
+            return;
+        case 9413: // Increase Shadow Dam 9 (OLD) to Increase Shadow Dam 9 (NEW)
+            itemSpell.SpellId = 7710;
+            return;
+        case 9414: // Increase Shadow Dam 10 (OLD) to Increase Shadow Dam 10 (NEW)
+            itemSpell.SpellId = 7709;
+            return;
+        case 9415: // Increase Spell Dam 5 (OLD) to Increase Spell Dam 5 (NEW)
+            itemSpell.SpellId = 9395;
+            return;
+        case 9416: // Increase Spell Dam 6 (OLD) to Increase Spell Dam 6 (NEW)
+            itemSpell.SpellId = 9396;
+            return;
+        case 9417: // Increase Spell Dam 7 (OLD) to Increase Spell Dam 7 (NEW)
+            itemSpell.SpellId = 9397;
+            return;
+        case 12019: // Increase Spell Dam 18 Random (OLD) to Increase Spell Dam 9 (NEW)
+            itemSpell.SpellId = 9415;
+            return;
+        case 13591: // Increase Arcane Dam 2 (OLD) to Increase Arcane Dam 1 (NEW)
+            itemSpell.SpellId = 13590;
+            return;
+        case 13592: // Increase Arcane Dam 3 (OLD) to Increase Arcane Dam 3 (NEW)
+            itemSpell.SpellId = 13591;
+            return;
+        case 13593: // Increase Arcane Dam 4 (OLD) to Increase Arcane Dam 4 (NEW)
+        case 13594: // Increase Arcane Dam 5 (OLD) to Increase Arcane Dam 4 (NEW)
+            itemSpell.SpellId = 13592;
+            return;
+        case 13595: // Increase Arcane Dam 6 (OLD) to Increase Arcane Dam 6 (NEW)
+            itemSpell.SpellId = 13593;
+            return;
+        case 13596: // Increase Arcane Dam 7 (OLD) to Increase Arcane Dam 7 (NEW)
+        case 13597: // Increase Arcane Dam 8 (OLD) to Increase Arcane Dam 7 (NEW)
+            itemSpell.SpellId = 13594;
+            return;
+        case 13598: // Increase Arcane Dam 9 (OLD) to Increase Arcane Dam 9 (NEW)
+            itemSpell.SpellId = 13595;
+            return;
+        case 13599: // Increase Arcane Dam 10 (OLD) to Increase Arcane Dam 10 (NEW)
+            itemSpell.SpellId = 13596;
+            return;
+        case 13601: // Increase Arcane Dam 11 (OLD) to Increase Arcane Dam 11 (NEW)
+        case 13602: // Increase Arcane Dam 12 (OLD) to Increase Arcane Dam 11 (NEW)
+            itemSpell.SpellId = 13597;
+            return;
+        case 13603: // Increase Arcane Dam 13 (OLD) to Increase Arcane Dam 13 (NEW)
+            itemSpell.SpellId = 13598;
+            return;
+        case 13604: // Increase Arcane Dam 14 (OLD) to Increase Arcane Dam 14 (NEW)
+        case 13605: // Increase Arcane Dam 15 (OLD) to Increase Arcane Dam 14 (NEW)
+            itemSpell.SpellId = 13599;
+            return;
+        case 13830: // Increase Fire Dam 22 (OLD) to Increase Fire Dam 21 (NEW)
+            itemSpell.SpellId = 9298;
+            return;
+        case 13831: // Increase Frost Dam 22 (OLD) to Increase Frost Dam 21 (NEW)
+            itemSpell.SpellId = 9308;
+            return;
+        case 13881: // Increase Spell Dam 22 (OLD) to Increase Spell Dam 22 (NEW)
+            itemSpell.SpellId = 15714;
+            return;
+        case 14047: // Increase Spell Dam 15 (OLD) to Increase Spell Dam 15 (NEW)
+            itemSpell.SpellId = 9344;
+            return;
+        case 14054: // Increase Spell Dam 19 (OLD) to Increase Spell Dam 19 (NEW)
+            itemSpell.SpellId = 14254;
+            return;
+        case 14055: // Increase Spell Dam 29 (OLD) to Increase Spell Dam 29 (NEW)
+            itemSpell.SpellId = 13881;
+            return;
+        case 14127: // Increase Spell Dam 21 (OLD) to Increase Spell Dam 21 (NEW)
+            itemSpell.SpellId = 14248;
+            return;
+        case 14248: // Increase Spell Dam 12 (OLD) to Increase Spell Dam 12 (NEW)
+            itemSpell.SpellId = 9417;
+            return;
+        case 14254: // Increase Spell Dam 11 (OLD) to Increase Spell Dam 11 (NEW)
+            itemSpell.SpellId = 9416;
+            return;
+        case 14793: // Increase Shadow Dam 16 (OLD) to Increase Shadow Dam 16 (NEW)
+            itemSpell.SpellId = 9324;
+            return;
+        case 14794: // Increase Shadow Dam 17 (OLD) to Increase Shadow Dam 17 (NEW)
+            itemSpell.SpellId = 9325;
+            return;
+        case 14798: // Increase Spell Dam 23 (OLD) to Increase Spell Dam 23 (NEW)
+            itemSpell.SpellId = 14047;
+            return;
+        case 14799: // Increase Spell Dam 11 (OLD) to Increase Spell Dam 11 (NEW)
+            itemSpell.SpellId = 9416;
+            return;
+        case 15696: // Increase Healing 48 (OLD) to Increase Healing 48 (NEW)
+            itemSpell.SpellId = 18034;
+            return;
+        case 15714: // Increase Spell Dam 14 (OLD) to Increase Spell Dam 14 (NEW)
+            itemSpell.SpellId = 9343;
+            return;
+        case 15715: // Increase Spell Dam 16 (OLD) to Increase Spell Dam 16 (NEW)
+            itemSpell.SpellId = 9345;
+            return;
+        case 16638: // Increase Nature Dam 30 (OLD) to Increase Nature Dam 30 (NEW)
+            itemSpell.SpellId = 17991;
+            return;
+        case 17280: // Increase Spell Dam 39 (OLD) to Increase Spell Dam 39 (NEW)
+            itemSpell.SpellId = 18055;
+            return;
+        case 17320: // Increase Healing 76 (OLD) to Increase Healing 75 (NEW)
+            itemSpell.SpellId = 18045;
+            return;
+        case 17367: // Increase Spell Dam 25 (OLD) to Increase Spell Dam 25 (NEW)
+            itemSpell.SpellId = 15715;
+            return;
+        case 17371: // Increase Healing 40 (OLD) to Increase Healing 40 (NEW)
+            itemSpell.SpellId = 18031;
+            return;
+        case 17493: // Increase Spell Dam 40 (OLD) to Increase Spell Dam 40 (NEW)
+            itemSpell.SpellId = 18056;
+            return;
+        case 17684: // Increase Fire Dam 36 (OLD) to Increase Fire Dam 36 (NEW)
+            itemSpell.SpellId = 17873;
+            return;
+        case 17747: // Increase Fire Dam 16 (OLD) to Increase Fire Dam 16 (NEW)
+            itemSpell.SpellId = 9294;
+            return;
+        case 17819: // Increase Nature Dam 22 (OLD) to Increase Nature Dam 21 (NEW)
+            itemSpell.SpellId = 9361;
+            return;
+        case 17821: // Increase Arcane Dam 16 (OLD) to Increase Arcane Dam 16 (NEW)
+            itemSpell.SpellId = 13601;
+            return;
+        case 17823: // Increase Arcane Dam 18 (OLD) to Increase Arcane Dam 17 (NEW)
+            itemSpell.SpellId = 13602;
+            return;
+        case 17824: // Increase Arcane Dam 20 (OLD) to Increase Arcane Dam 20 (NEW)
+            itemSpell.SpellId = 13604;
+            return;
+        case 17825: // Increase Arcane Dam 22 (OLD) to Increase Arcane Dam 21 (NEW)
+            itemSpell.SpellId = 13605;
+            return;
+        case 17826: // Increase Arcane Dam 24 (OLD) to Increase Arcane Dam 24 (NEW)
+            itemSpell.SpellId = 17822;
+            return;
+        case 17827: // Increase Arcane Dam 26 (OLD) to Increase Arcane Dam 26 (NEW)
+            itemSpell.SpellId = 17823;
+            return;
+        case 17828: // Increase Arcane Dam 28 (OLD) to Increase Arcane Dam 27 (NEW)
+            itemSpell.SpellId = 17824;
+            return;
+        case 17829: // Increase Arcane Dam 30 (OLD) to Increase Arcane Dam 30 (NEW)
+            itemSpell.SpellId = 17826;
+            return;
+        case 17830: // Increase Arcane Dam 32 (OLD) to Increase Arcane Dam 31 (NEW)
+            itemSpell.SpellId = 17827;
+            return;
+        case 17832: // Increase Arcane Dam 34 (OLD) to Increase Arcane Dam 34 (NEW)
+            itemSpell.SpellId = 17829;
+            return;
+        case 17837: // Increase Arcane Dam 36 (OLD) to Increase Arcane Dam 36 (NEW)
+            itemSpell.SpellId = 17830;
+            return;
+        case 17838: // Increase Arcane Dam 38 (OLD) to Increase Arcane Dam 37 (NEW)
+            itemSpell.SpellId = 17832;
+            return;
+        case 17839: // Increase Arcane Dam 40 (OLD) to Increase Arcane Dam 40 (NEW)
+            itemSpell.SpellId = 17838;
+            return;
+        case 17840: // Increase Arcane Dam 42 (OLD) to Increase Arcane Dam 41 (NEW)
+            itemSpell.SpellId = 17839;
+            return;
+        case 17844: // Increase Arcane Dam 48 (OLD) to Increase Arcane Dam 47 (NEW)
+            itemSpell.SpellId = 17844;
+            return;
+        case 17845: // Increase Arcane Dam 50 (OLD) to Increase Arcane Dam 50 (NEW)
+            itemSpell.SpellId = 17846;
+            return;
+        case 17846: // Increase Arcane Dam 52 (OLD) to Increase Arcane Dam 51 (NEW)
+            itemSpell.SpellId = 17847;
+            return;
+        case 17847: // Increase Arcane Dam 54 (OLD) to Increase Arcane Dam 54 (NEW)
+            itemSpell.SpellId = 17849;
+            return;
+#if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
+        case 17848: // Increase Arcane Dam 56 (OLD) to Increase Arcane Dam 56 (NEW)
+            itemSpell.SpellId = 26704;
+            return;
+#endif
+        case 17866: // Increase Fire Dam 17 (OLD) to Increase Fire Dam 17 (NEW)
+        case 17867: // Increase Fire Dam 18 (OLD) to Increase Fire Dam 17 (NEW)
+            itemSpell.SpellId = 9295;
+            return;
+        case 17868: // Increase Fire Dam 20 (OLD) to Increase Fire Dam 20 (NEW)
+            itemSpell.SpellId = 9297;
+            return;
+        case 17869: // Increase Fire Dam 24 (OLD) to Increase Fire Dam 24 (NEW)
+            itemSpell.SpellId = 17866;
+            return;
+        case 17870: // Increase Fire Dam 26 (OLD) to Increase Fire Dam 26 (NEW)
+            itemSpell.SpellId = 17867;
+            return;
+        case 17871: // Increase Fire Dam 28 (OLD) to Increase Fire Dam 27 (NEW)
+            itemSpell.SpellId = 17868;
+            return;
+        case 17872: // Increase Fire Dam 30 (OLD) to Increase Fire Dam 30 (NEW)
+            itemSpell.SpellId = 17869;
+            return;
+        case 17873: // Increase Fire Dam 32 (OLD) to Increase Fire Dam 31 (NEW)
+            itemSpell.SpellId = 17870;
+            return;
+        case 17874: // Increase Fire Dam 34 (OLD) to Increase Fire Dam 34 (NEW)
+            itemSpell.SpellId = 17872;
+            return;
+        case 17875: // Increase Fire Dam 38 (OLD) to Increase Fire Dam 37 (NEW)
+            itemSpell.SpellId = 17874;
+            return;
+        case 17876: // Increase Fire Dam 40 (OLD) to Increase Fire Dam 40 (NEW)
+            itemSpell.SpellId = 17875;
+            return;
+        case 17878: // Increase Fire Dam 42 (OLD) to Increase Fire Dam 41 (NEW)
+            itemSpell.SpellId = 17876;
+            return;
+        case 17881: // Increase Fire Dam 48 (OLD) to Increase Fire Dam 47 (NEW)
+            itemSpell.SpellId = 17881;
+            return;
+        case 17882: // Increase Fire Dam 50 (OLD) to Increase Fire Dam 50 (NEW)
+            itemSpell.SpellId = 17884;
+            return;
+        case 17884: // Increase Fire Dam 52 (OLD) to Increase Fire Dam 51 (NEW)
+            itemSpell.SpellId = 17885;
+            return;
+        case 17885: // Increase Fire Dam 54 (OLD) to Increase Fire Dam 54 (NEW)
+        case 17886: // Increase Fire Dam 56 (OLD) to Increase Fire Dam 54 (NEW)
+            itemSpell.SpellId = 17887;
+            return;
+        case 17889: // Increase Frost Dam 16 (OLD) to Increase Frost Dam 16 (NEW)
+            itemSpell.SpellId = 9304;
+            return;
+        case 17890: // Increase Frost Dam 17 (OLD) to Increase Frost Dam 17 (NEW)
+        case 17891: // Increase Frost Dam 18 (OLD) to Increase Frost Dam 17 (NEW)
+            itemSpell.SpellId = 9305;
+            return;
+        case 17892: // Increase Frost Dam 20 (OLD) to Increase Frost Dam 20 (NEW)
+            itemSpell.SpellId = 9307;
+            return;
+        case 17893: // Increase Frost Dam 24 (OLD) to Increase Frost Dam 24 (NEW)
+            itemSpell.SpellId = 17890;
+            return;
+        case 17894: // Increase Frost Dam 26 (OLD) to Increase Frost Dam 26 (NEW)
+            itemSpell.SpellId = 17891;
+            return;
+        case 17895: // Increase Frost Dam 28 (OLD) to Increase Frost Dam 27 (NEW)
+            itemSpell.SpellId = 17892;
+            return;
+        case 17896: // Increase Frost Dam 30 (OLD) to Increase Frost Dam 30 (NEW)
+            itemSpell.SpellId = 17893;
+            return;
+        case 17897: // Increase Frost Dam 32 (OLD) to Increase Frost Dam 31 (NEW)
+            itemSpell.SpellId = 17894;
+            return;
+        case 17898: // Increase Frost Dam 34 (OLD) to Increase Frost Dam 34 (NEW)
+            itemSpell.SpellId = 17896;
+            return;
+        case 17899: // Increase Frost Dam 36 (OLD) to Increase Frost Dam 36 (NEW)
+            itemSpell.SpellId = 17897;
+            return;
+        case 17900: // Increase Frost Dam 38 (OLD) to Increase Frost Dam 37 (NEW)
+            itemSpell.SpellId = 17898;
+            return;
+        case 17901: // Increase Frost Dam 40 (OLD) to Increase Frost Dam 40 (NEW)
+            itemSpell.SpellId = 17900;
+            return;
+        case 17902: // Increase Frost Dam 42 (OLD) to Increase Frost Dam 41 (NEW)
+            itemSpell.SpellId = 17901;
+            return;
+        case 17906: // Increase Frost Dam 48 (OLD) to Increase Frost Dam 47 (NEW)
+            itemSpell.SpellId = 17906;
+            return;
+        case 17907: // Increase Frost Dam 50 (OLD) to Increase Frost Dam 50 (NEW)
+            itemSpell.SpellId = 17908;
+            return;
+        case 17908: // Increase Frost Dam 52 (OLD) to Increase Frost Dam 51 (NEW)
+            itemSpell.SpellId = 17909;
+            return;
+        case 17909: // Increase Frost Dam 54 (OLD) to Increase Frost Dam 54 (NEW)
+            itemSpell.SpellId = 17911;
+            return;
+        case 17987: // Increase Nature Dam 16 (OLD) to Increase Nature Dam 16 (NEW)
+            itemSpell.SpellId = 9357;
+            return;
+        case 17988: // Increase Nature Dam 17 (OLD) to Increase Nature Dam 17 (NEW)
+            itemSpell.SpellId = 9358;
+            return;
+        case 17989: // Increase Nature Dam 18 (OLD) to Increase Nature Dam 17 (NEW)
+            itemSpell.SpellId = 9358;
+            return;
+        case 17990: // Increase Nature Dam 20 (OLD) to Increase Nature Dam 20 (NEW)
+            itemSpell.SpellId = 9360;
+            return;
+        case 17991: // Increase Nature Dam 24 (OLD) to Increase Nature Dam 24 (NEW)
+            itemSpell.SpellId = 17988;
+            return;
+        case 17993: // Increase Nature Dam 28 (OLD) to Increase Nature Dam 27 (NEW)
+            itemSpell.SpellId = 17990;
+            return;
+        case 17994: // Increase Nature Dam 32 (OLD) to Increase Nature Dam 33 (NEW)
+            itemSpell.SpellId = 17993;
+            return;
+        case 17995: // Increase Nature Dam 34 (OLD) to Increase Nature Dam 34 (NEW)
+            itemSpell.SpellId = 16638;
+            return;
+        case 17996: // Increase Nature Dam 36 (OLD) to Increase Nature Dam 36 (NEW)
+            itemSpell.SpellId = 17994;
+            return;
+        case 17997: // Increase Nature Dam 38 (OLD) to Increase Nature Dam 37 (NEW)
+            itemSpell.SpellId = 17995;
+            return;
+        case 17998: // Increase Nature Dam 40 (OLD) to Increase Nature Dam 40 (NEW)
+            itemSpell.SpellId = 17997;
+            return;
+        case 17999: // Increase Nature Dam 42 (OLD) to Increase Nature Dam 41 (NEW)
+            itemSpell.SpellId = 17998;
+            return;
+        case 18002: // Increase Nature Dam 48 (OLD) to Increase Nature Dam 47 (NEW)
+            itemSpell.SpellId = 18002;
+            return;
+        case 18003: // Increase Nature Dam 50 (OLD) to Increase Nature Dam 50 (NEW)
+            itemSpell.SpellId = 18004;
+            return;
+        case 18004: // Increase Nature Dam 52 (OLD) to Increase Nature Dam 51 (NEW)
+            itemSpell.SpellId = 18005;
+            return;
+        case 18005: // Increase Nature Dam 54 (OLD) to Increase Nature Dam 54 (NEW)
+            itemSpell.SpellId = 18007;
+            return;
+        case 18006: // Increase Nature Dam 56 (OLD) to Increase Nature Dam 54 (NEW)
+            itemSpell.SpellId = 18007;
+            return;
+        case 18008: // Increase Shadow Dam 18 (OLD) to Increase Shadow Dam 17 (NEW)
+            itemSpell.SpellId = 9325;
+            return;
+        case 18009: // Increase Shadow Dam 20 (OLD) to Increase Shadow Dam 20 (NEW)
+            itemSpell.SpellId = 9327;
+            return;
+        case 18010: // Increase Shadow Dam 22 (OLD) to Increase Shadow Dam 21 (NEW)
+            itemSpell.SpellId = 9328;
+            return;
+        case 18011: // Increase Shadow Dam 24 (OLD) to Increase Shadow Dam 24 (NEW)
+            itemSpell.SpellId = 14794;
+            return;
+        case 18012: // Increase Shadow Dam 26 (OLD) to Increase Shadow Dam 26 (NEW)
+            itemSpell.SpellId = 18008;
+            return;
+        case 18013: // Increase Shadow Dam 28 (OLD) to Increase Shadow Dam 27 (NEW)
+            itemSpell.SpellId = 18009;
+            return;
+        case 18014: // Increase Shadow Dam 30 (OLD) to Increase Shadow Dam 30 (NEW)
+            itemSpell.SpellId = 18011;
+            return;
+        case 18015: // Increase Shadow Dam 32 (OLD) to Increase Shadow Dam 31 (NEW)
+            itemSpell.SpellId = 18012;
+            return;
+        case 18016: // Increase Shadow Dam 34 (OLD) to Increase Shadow Dam 34 (NEW)
+            itemSpell.SpellId = 18014;
+            return;
+        case 18017: // Increase Shadow Dam 36 (OLD) to Increase Shadow Dam 36 (NEW)
+            itemSpell.SpellId = 18015;
+            return;
+        case 18018: // Increase Shadow Dam 38 (OLD) to Increase Shadow Dam 37 (NEW)
+            itemSpell.SpellId = 18016;
+            return;
+        case 18019: // Increase Shadow Dam 40 (OLD) to Increase Shadow Dam 40 (NEW)
+            itemSpell.SpellId = 18018;
+            return;
+        case 18020: // Increase Shadow Dam 42 (OLD) to Increase Shadow Dam 41 (NEW)
+            itemSpell.SpellId = 18019;
+            return;
+        case 18023: // Increase Shadow Dam 48 (OLD) to Increase Shadow Dam 47 (NEW)
+            itemSpell.SpellId = 18023;
+            return;
+        case 18024: // Increase Shadow Dam 50 (OLD) to Increase Shadow Dam 50 (NEW)
+            itemSpell.SpellId = 18025;
+            return;
+        case 18025: // Increase Shadow Dam 52 (OLD) to Increase Shadow Dam 51 (NEW)
+            itemSpell.SpellId = 18026;
+            return;
+        case 18026: // Increase Shadow Dam 54 (OLD) to Increase Shadow Dam 54 (NEW)
+            itemSpell.SpellId = 18028;
+            return;
+#if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
+        case 18027: // Increase Shadow Dam 56 (OLD) to Increase Shadow Dam 56 (NEW)
+            itemSpell.SpellId = 26728;
+            return;
+        case 18028: // Increase Shadow Dam 58 (OLD) to Increase Shadow Dam 57 (NEW)
+            itemSpell.SpellId = 26729;
+            return;
+#else
+        case 18027: // Increase Shadow Dam 56 (OLD) to Increase Shadow Dam 54 (NEW)
+            itemSpell.SpellId = 18028;
+            return;
+#endif
+        case 18029: // Increase Healing 32 (OLD) to Increase Healing 31 (NEW)
+            itemSpell.SpellId = 9317;
+            return;
+        case 18030: // Increase Healing 34 (OLD) to Increase Healing 33 (NEW)
+            itemSpell.SpellId = 9318;
+            return;
+        case 18031: // Increase Healing 36 (OLD) to Increase Healing 35 (NEW)
+            itemSpell.SpellId = 18029;
+            return;
+        case 18032: // Increase Healing 38 (OLD) to Increase Healing 37 (NEW)
+            itemSpell.SpellId = 18030;
+            return;
+        case 18033: // Increase Healing 42 (OLD) to Increase Healing 42 (NEW)
+            itemSpell.SpellId = 18032;
+            return;
+        case 18034: // Increase Healing 44 (OLD) to Increase Healing 44 (NEW)
+            itemSpell.SpellId = 17371;
+            return;
+        case 18035: // Increase Healing 46 (OLD) to Increase Healing 46 (NEW)
+            itemSpell.SpellId = 18033;
+            return;
+        case 18036: // Increase Healing 50 (OLD) to Increase Healing 48 (NEW)
+            itemSpell.SpellId = 18034;
+            return;
+        case 18037: // Increase Healing 52 (OLD) to Increase Healing 51 (NEW)
+            itemSpell.SpellId = 18035;
+            return;
+        case 18038: // Increase Healing 54 (OLD) to Increase Healing 53 (NEW)
+            itemSpell.SpellId = 15696;
+            return;
+        case 18039: // Increase Healing 56 (OLD) to Increase Healing 55 (NEW)
+            itemSpell.SpellId = 18036;
+            return;
+        case 18040: // Increase Healing 58 (OLD) to Increase Healing 57 (NEW)
+            itemSpell.SpellId = 18037;
+            return;
+        case 18041: // Increase Healing 60 (OLD) to Increase Healing 59 (NEW)
+            itemSpell.SpellId = 18038;
+            return;
+        case 18042: // Increase Healing 62 (OLD) to Increase Healing 62 (NEW)
+            itemSpell.SpellId = 18039;
+            return;
+        case 18043: // Increase Healing 64 (OLD) to Increase Healing 64 (NEW)
+            itemSpell.SpellId = 18040;
+            return;
+        case 18044: // Increase Healing 66 (OLD) to Increase Healing 66 (NEW)
+            itemSpell.SpellId = 18041;
+            return;
+        case 18045: // Increase Healing 68 (OLD) to Increase Healing 68 (NEW)
+            itemSpell.SpellId = 18042;
+            return;
+        case 18046: // Increase Healing 70 (OLD) to Increase Healing 70 (NEW)
+            itemSpell.SpellId = 18043;
+            return;
+        case 18047: // Increase Healing 72 (OLD) to Increase Healing 70 (NEW)
+            itemSpell.SpellId = 18043;
+            return;
+        case 18048: // Increase Healing 74 (OLD) to Increase Healing 73 (NEW)
+            itemSpell.SpellId = 18044;
+            return;
+        case 18049: // Increase Spell Dam 18 (OLD) to Increase Spell Dam 18 (NEW)
+            itemSpell.SpellId = 9346;
+            return;
+        case 18050: // Increase Spell Dam 26 (OLD) to Increase Spell Dam 26 (NEW)
+            itemSpell.SpellId = 18049;
+            return;
+        case 18052: // Increase Spell Dam 28 (OLD) to Increase Spell Dam 28 (NEW)
+            itemSpell.SpellId = 14127;
+            return;
+        case 18053: // Increase Spell Dam 30 (OLD) to Increase Spell Dam 30 (NEW)
+            itemSpell.SpellId = 14798;
+            return;
+        case 18054: // Increase Spell Dam 32 (OLD) to Increase Spell Dam 32 (NEW)
+            itemSpell.SpellId = 17367;
+            return;
+        case 18055: // Increase Spell Dam 33 (OLD) to Increase Spell Dam 33 (NEW)
+            itemSpell.SpellId = 18050;
+            return;
+        case 18056: // Increase Spell Dam 35 (OLD) to Increase Spell Dam 35 (NEW)
+            itemSpell.SpellId = 14055;
+            return;
+        case 18057: // Increase Spell Dam 36 (OLD) to Increase Spell Dam 36 (NEW)
+            itemSpell.SpellId = 18053;
+            return;
+        case 18058: // Increase Spell Dam 37 (OLD) to Increase Spell Dam 37 (NEW)
+            itemSpell.SpellId = 18054;
+            return;
+        case 21500: // Increase Holy Dam 2 (OLD) to Increase Holy Dam 1 (NEW)
+            itemSpell.SpellId = 21499;
+            return;
+        case 21501: // Increase Holy Dam 3 (OLD) to Increase Holy Dam 3 (NEW)
+            itemSpell.SpellId = 21500;
+            return;
+        case 21502: // Increase Holy Dam 4 (OLD) to Increase Holy Dam 4 (NEW)
+        case 21503: // Increase Holy Dam 5 (OLD) to Increase Holy Dam 4 (NEW)
+            itemSpell.SpellId = 21501;
+            return;
+        case 21504: // Increase Holy Dam 6 (OLD) to Increase Holy Dam 6 (NEW)
+            itemSpell.SpellId = 21502;
+            return;
+        case 21505: // Increase Holy Dam 7 (OLD) to Increase Holy Dam 7 (NEW)
+        case 21506: // Increase Holy Dam 8 (OLD) to Increase Holy Dam 7 (NEW)
+            itemSpell.SpellId = 21503;
+            return;
+        case 21507: // Increase Holy Dam 9 (OLD) to Increase Holy Dam 9 (NEW)
+            itemSpell.SpellId = 21504;
+            return;
+        case 21508: // Increase Holy Dam 10 (OLD) to Increase Holy Dam 10 (NEW)
+            itemSpell.SpellId = 21505;
+            return;
+        case 21509: // Increase Holy Dam 11 (OLD) to Increase Holy Dam 11 (NEW)
+        case 21510: // Increase Holy Dam 12 (OLD) to Increase Holy Dam 11 (NEW)
+            itemSpell.SpellId = 21506;
+            return;
+        case 21511: // Increase Holy Dam 13 (OLD) to Increase Holy Dam 13 (NEW)
+            itemSpell.SpellId = 21507;
+            return;
+        case 21512: // Increase Holy Dam 14 (OLD) to Increase Holy Dam 14 (NEW)
+        case 21513: // Increase Holy Dam 15 (OLD) to Increase Holy Dam 14 (NEW)
+            itemSpell.SpellId = 21508;
+            return;
+        case 21514: // Increase Holy Dam 16 (OLD) to Increase Holy Dam 16 (NEW)
+            itemSpell.SpellId = 21509;
+            return;
+        case 21515: // Increase Holy Dam 17 (OLD) to Increase Holy Dam 17 (NEW)
+        case 21516: // Increase Holy Dam 18 (OLD) to Increase Holy Dam 17 (NEW)
+            itemSpell.SpellId = 21510;
+            return;
+        case 21517: // Increase Holy Dam 20 (OLD) to Increase Holy Dam 20 (NEW)
+            itemSpell.SpellId = 21512;
+            return;
+        case 21518: // Increase Holy Dam 22 (OLD) to Increase Holy Dam 21 (NEW)
+            itemSpell.SpellId = 21513;
+            return;
+        case 21519: // Increase Holy Dam 24 (OLD) to Increase Holy Dam 24 (NEW)
+            itemSpell.SpellId = 21515;
+            return;
+        case 21520: // Increase Holy Dam 26 (OLD) to Increase Holy Dam 26 (NEW)
+            itemSpell.SpellId = 21516;
+            return;
+        case 21521: // Increase Holy Dam 28 (OLD) to Increase Holy Dam 27 (NEW)
+            itemSpell.SpellId = 21517;
+            return;
+        case 21522: // Increase Holy Dam 30 (OLD) to Increase Holy Dam 30 (NEW)
+            itemSpell.SpellId = 21519;
+            return;
+        case 21523: // Increase Holy Dam 32 (OLD) to Increase Holy Dam 31 (NEW)
+            itemSpell.SpellId = 21520;
+            return;
+        case 21524: // Increase Holy Dam 34 (OLD) to Increase Holy Dam 34 (NEW)
+            itemSpell.SpellId = 21522;
+            return;
+        case 21525: // Increase Holy Dam 36 (OLD) to Increase Holy Dam 36 (NEW)
+            itemSpell.SpellId = 21523;
+            return;
+        case 21526: // Increase Holy Dam 38 (OLD) to Increase Holy Dam 37 (NEW)
+            itemSpell.SpellId = 21524;
+            return;
+        case 21527: // Increase Holy Dam 40 (OLD) to Increase Holy Dam 40 (NEW)
+            itemSpell.SpellId = 21526;
+            return;
+        case 21528: // Increase Holy Dam 42 (OLD) to Increase Holy Dam 41 (NEW)
+            itemSpell.SpellId = 21527;
+            return;
+        case 21531: // Increase Holy Dam 48 (OLD) to Increase Holy Dam 47 (NEW)
+            itemSpell.SpellId = 21531;
+            return;
+        case 21532: // Increase Holy Dam 50 (OLD) to Increase Holy Dam 50 (NEW)
+            itemSpell.SpellId = 21533;
+            return;
+        case 21533: // Increase Holy Dam 52 (OLD) to Increase Holy Dam 51 (NEW)
+            itemSpell.SpellId = 21534;
+            return;
+        case 21534: // Increase Holy Dam 54 (OLD) to Increase Holy Dam 54 (NEW)
+        case 21535: // Increase Holy Dam 56 (OLD) to Increase Holy Dam 54 (NEW)
+            itemSpell.SpellId = 21536;
+            return;
+        case 22747: // Increase Spell Dam 22 (OLD) to Increase Spell Dam 22 (NEW)
+            itemSpell.SpellId = 15714;
+            return;
+        case 22748: // Increase Healing 50 (OLD) to Increase Healing 51 (NEW)
+            itemSpell.SpellId = 18035;
+            return;
         }
     }
 #endif
@@ -3502,98 +3481,98 @@ void ObjectMgr::CorrectItemEffects(uint32 itemId, _ItemSpell& itemSpell)
     {
         switch (itemSpell.SpellId)
         {
-            case 7513: // Increased Defense 2 (OLD) to Increased Defense 2 (NEW)
-                itemSpell.SpellId = 7514;
-                return;
-            case 7514: // Increased Defense 3 (OLD) to Increased Defense 3 (NEW)
-                itemSpell.SpellId = 7515;
-                return;
-            case 7515: // Increased Defense 4 (OLD) to Increased Defense 4 (NEW)
-                itemSpell.SpellId = 7517;
-                return;
-            case 7516: // Increased Defense 5 (OLD) to Increased Defense 5 (NEW)
-                itemSpell.SpellId = 7518;
-                return;
-            case 7517: // Increased Defense 6 (OLD) to Increased Defense 6 (NEW)
-                itemSpell.SpellId = 13384;
-                return;
-            case 7518: // Increased Defense 7 (OLD) to Increased Defense 7 (NEW)
-                itemSpell.SpellId = 13385;
-                return;
-            case 13383: // Increased Defense 8 (OLD) to Increased Defense 8 (NEW)
-                itemSpell.SpellId = 13387;
-                return;
-            case 13384: // Increased Defense 9 (OLD) to Increased Defense 9 (NEW)
-                itemSpell.SpellId = 13388;
-                return;
-            case 13385: // Increased Defense 10 (OLD) to Increased Defense 10 (NEW)
-                itemSpell.SpellId = 13390;
-                return;
-            case 13386: // Increased Defense 11 (OLD) to Increased Defense 11 (NEW)
-                itemSpell.SpellId = 18185;
-                return;
-            case 13387: // Increased Defense 12 (OLD) to Increased Defense 12 (NEW)
-                itemSpell.SpellId = 21408;
-                return;
-            case 13388: // Increased Defense 13 (OLD) to Increased Defense 13 (NEW)
-                itemSpell.SpellId = 14249;
-                return;
-            case 13389: // Increased Defense 25 (OLD) to Increased Defense 25 (NEW)
-                itemSpell.SpellId = 21422;
-                return;
-            case 13390: // Increased Defense 15 (OLD) to Increased Defense 15 (NEW)
-                itemSpell.SpellId = 18196;
-                return;
-            case 14249: // Increased Defense 20 (OLD) to Increased Defense 20 (NEW)
-                itemSpell.SpellId = 21416;
-                return;
-            case 15804: // Increased Defense 100 (OLD) to Increased Defense 80 (NEW)
-                itemSpell.SpellId = 24775;
-                return;
-            case 17513: // Increased Defense 32 (OLD) to Increased Defense 25 (NEW)
-                itemSpell.SpellId = 21423;
-                return;
-            case 18185: // Increased Defense 16 (OLD) to Increased Defense 16 (NEW)
-                itemSpell.SpellId = 21412;
-                return;
-            case 18196: // Increased Defense 22 (OLD) to Increased Defense 22 (NEW)
-                itemSpell.SpellId = 21418;
-                return;
-            case 18369: // Increased Defense 14 (OLD) to Increased Defense 14 (NEW)
-                itemSpell.SpellId = 21410;
-                return;
-            case 21407: // Increased Defense 17 (OLD) to Increased Defense 17 (NEW)
-                itemSpell.SpellId = 13389;
-                return;
-            case 21408: // Increased Defense 18 (OLD) to Increased Defense 18 (NEW)
-                itemSpell.SpellId = 21413;
-                return;
-            case 21409: // Increased Defense 19 (OLD) to Increased Defense 19 (NEW)
-                itemSpell.SpellId = 21414;
-                return;
-            case 21410: // Increased Defense 21 (OLD) to Increased Defense 21 (NEW)
-                itemSpell.SpellId = 17513;
-                return;
-            case 21411: // Increased Defense 23 (OLD) to Increased Defense 23 (NEW)
-                itemSpell.SpellId = 21419;
-                return;
-            case 21412: // Increased Defense 24 (OLD) to Increased Defense 24 (NEW)
-                itemSpell.SpellId = 21421;
-                return;
-            case 21413: // Increased Defense 27 (OLD) to Increased Defense 25 (NEW)
-            case 21414: // Increased Defense 28 (OLD) to Increased Defense 25 (NEW)
-            case 21415: // Increased Defense 29 (OLD) to Increased Defense 25 (NEW)
-            case 21416: // Increased Defense 30 (OLD) to Increased Defense 25 (NEW)
-            case 21417: // Increased Defense 31 (OLD) to Increased Defense 25 (NEW)
-            case 21418: // Increased Defense 33 (OLD) to Increased Defense 25 (NEW)
-            case 21419: // Increased Defense 34 (OLD) to Increased Defense 25 (NEW)
-            case 21420: // Increased Defense 35 (OLD) to Increased Defense 25 (NEW)
-            case 21421: // Increased Defense 36 (OLD) to Increased Defense 25 (NEW)
-            case 21422: // Increased Defense 37 (OLD) to Increased Defense 25 (NEW)
-            case 21423: // Increased Defense 38 (OLD) to Increased Defense 25 (NEW)
-            case 21424: // Increased Defense 26 (OLD) to Increased Defense 25 (NEW)
-                itemSpell.SpellId = 21423;
-                return;
+        case 7513: // Increased Defense 2 (OLD) to Increased Defense 2 (NEW)
+            itemSpell.SpellId = 7514;
+            return;
+        case 7514: // Increased Defense 3 (OLD) to Increased Defense 3 (NEW)
+            itemSpell.SpellId = 7515;
+            return;
+        case 7515: // Increased Defense 4 (OLD) to Increased Defense 4 (NEW)
+            itemSpell.SpellId = 7517;
+            return;
+        case 7516: // Increased Defense 5 (OLD) to Increased Defense 5 (NEW)
+            itemSpell.SpellId = 7518;
+            return;
+        case 7517: // Increased Defense 6 (OLD) to Increased Defense 6 (NEW)
+            itemSpell.SpellId = 13384;
+            return;
+        case 7518: // Increased Defense 7 (OLD) to Increased Defense 7 (NEW)
+            itemSpell.SpellId = 13385;
+            return;
+        case 13383: // Increased Defense 8 (OLD) to Increased Defense 8 (NEW)
+            itemSpell.SpellId = 13387;
+            return;
+        case 13384: // Increased Defense 9 (OLD) to Increased Defense 9 (NEW)
+            itemSpell.SpellId = 13388;
+            return;
+        case 13385: // Increased Defense 10 (OLD) to Increased Defense 10 (NEW)
+            itemSpell.SpellId = 13390;
+            return;
+        case 13386: // Increased Defense 11 (OLD) to Increased Defense 11 (NEW)
+            itemSpell.SpellId = 18185;
+            return;
+        case 13387: // Increased Defense 12 (OLD) to Increased Defense 12 (NEW)
+            itemSpell.SpellId = 21408;
+            return;
+        case 13388: // Increased Defense 13 (OLD) to Increased Defense 13 (NEW)
+            itemSpell.SpellId = 14249;
+            return;
+        case 13389: // Increased Defense 25 (OLD) to Increased Defense 25 (NEW)
+            itemSpell.SpellId = 21422;
+            return;
+        case 13390: // Increased Defense 15 (OLD) to Increased Defense 15 (NEW)
+            itemSpell.SpellId = 18196;
+            return;
+        case 14249: // Increased Defense 20 (OLD) to Increased Defense 20 (NEW)
+            itemSpell.SpellId = 21416;
+            return;
+        case 15804: // Increased Defense 100 (OLD) to Increased Defense 80 (NEW)
+            itemSpell.SpellId = 24775;
+            return;
+        case 17513: // Increased Defense 32 (OLD) to Increased Defense 25 (NEW)
+            itemSpell.SpellId = 21423;
+            return;
+        case 18185: // Increased Defense 16 (OLD) to Increased Defense 16 (NEW)
+            itemSpell.SpellId = 21412;
+            return;
+        case 18196: // Increased Defense 22 (OLD) to Increased Defense 22 (NEW)
+            itemSpell.SpellId = 21418;
+            return;
+        case 18369: // Increased Defense 14 (OLD) to Increased Defense 14 (NEW)
+            itemSpell.SpellId = 21410;
+            return;
+        case 21407: // Increased Defense 17 (OLD) to Increased Defense 17 (NEW)
+            itemSpell.SpellId = 13389;
+            return;
+        case 21408: // Increased Defense 18 (OLD) to Increased Defense 18 (NEW)
+            itemSpell.SpellId = 21413;
+            return;
+        case 21409: // Increased Defense 19 (OLD) to Increased Defense 19 (NEW)
+            itemSpell.SpellId = 21414;
+            return;
+        case 21410: // Increased Defense 21 (OLD) to Increased Defense 21 (NEW)
+            itemSpell.SpellId = 17513;
+            return;
+        case 21411: // Increased Defense 23 (OLD) to Increased Defense 23 (NEW)
+            itemSpell.SpellId = 21419;
+            return;
+        case 21412: // Increased Defense 24 (OLD) to Increased Defense 24 (NEW)
+            itemSpell.SpellId = 21421;
+            return;
+        case 21413: // Increased Defense 27 (OLD) to Increased Defense 25 (NEW)
+        case 21414: // Increased Defense 28 (OLD) to Increased Defense 25 (NEW)
+        case 21415: // Increased Defense 29 (OLD) to Increased Defense 25 (NEW)
+        case 21416: // Increased Defense 30 (OLD) to Increased Defense 25 (NEW)
+        case 21417: // Increased Defense 31 (OLD) to Increased Defense 25 (NEW)
+        case 21418: // Increased Defense 33 (OLD) to Increased Defense 25 (NEW)
+        case 21419: // Increased Defense 34 (OLD) to Increased Defense 25 (NEW)
+        case 21420: // Increased Defense 35 (OLD) to Increased Defense 25 (NEW)
+        case 21421: // Increased Defense 36 (OLD) to Increased Defense 25 (NEW)
+        case 21422: // Increased Defense 37 (OLD) to Increased Defense 25 (NEW)
+        case 21423: // Increased Defense 38 (OLD) to Increased Defense 25 (NEW)
+        case 21424: // Increased Defense 26 (OLD) to Increased Defense 25 (NEW)
+            itemSpell.SpellId = 21423;
+            return;
         }
     }
 #endif
@@ -3603,12 +3582,12 @@ void ObjectMgr::CorrectItemEffects(uint32 itemId, _ItemSpell& itemSpell)
     {
         switch (itemSpell.SpellId)
         {
-            case 20969: // Vitality 2
-                itemSpell.SpellId = 21345;
-                return;
-            case 21168: // Vitality 1
-                itemSpell.SpellId = 21587;
-                return;
+        case 20969: // Vitality 2
+            itemSpell.SpellId = 21345;
+            return;
+        case 21168: // Vitality 1
+            itemSpell.SpellId = 21587;
+            return;
         }
     }
 #endif
@@ -3618,111 +3597,111 @@ void ObjectMgr::CorrectItemEffects(uint32 itemId, _ItemSpell& itemSpell)
     {
         switch (itemSpell.SpellId)
         {
-            case 20885: // Vitality 5
-                itemSpell.SpellId = 20969;
-                return;
-            case 21109: // Vitality 8
-                itemSpell.SpellId = 20885;
-                return;
-            case 21345: // Vitality 1
-                itemSpell.SpellId = 21587;
-                return;
-            case 21347: // Vitality 3
-                itemSpell.SpellId = 21168;
-                return;
-            case 21348: // Vitality 4
-                itemSpell.SpellId = 21347;
-                return;
-            case 21349: // Vitality 6
-                itemSpell.SpellId = 21348;
-                return;
-            case 21350: // Vitality 9
-                itemSpell.SpellId = 21604;
-                return;
-            case 21590: // Vitality 1
-                itemSpell.SpellId = 21587;
-                return;
-            case 21592: // Vitality 2
-                itemSpell.SpellId = 21345;
-                return;
-            case 21593: // Vitality 2
-                itemSpell.SpellId = 21345;
-                return;
-            case 21594: // Vitality 2
-                itemSpell.SpellId = 21345;
-                return;
-            case 21595: // Vitality 3
-                itemSpell.SpellId = 21168;
-                return;
-            case 21596: // Vitality 3
-                itemSpell.SpellId = 21168;
-                return;
-            case 21597: // Vitality 3
-                itemSpell.SpellId = 21168;
-                return;
-            case 21598: // Vitality 4
-                itemSpell.SpellId = 21347;
-                return;
-            case 21599: // Vitality 4
-                itemSpell.SpellId = 21347;
-                return;
-            case 21600: // Vitality 4
-                itemSpell.SpellId = 21347;
-                return;
-            case 21601: // Vitality 5
-                itemSpell.SpellId = 20969;
-                return;
-            case 21602: // Vitality 5
-                itemSpell.SpellId = 20969;
-                return;
-            case 21603: // Vitality 5
-                itemSpell.SpellId = 20969;
-                return;
-            case 21604: // Vitality 6
-                itemSpell.SpellId = 21348;
-                return;
-            case 21605: // Vitality 6
-                itemSpell.SpellId = 21348;
-                return;
-            case 21606: // Vitality 6
-                itemSpell.SpellId = 21348;
-                return;
-            case 21607: // Vitality 7
-                itemSpell.SpellId = 21600;
-                return;
-            case 21608: // Vitality 7
-                itemSpell.SpellId = 21600;
-                return;
-            case 21609: // Vitality 7
-                itemSpell.SpellId = 21600;
-                return;
-            case 21610: // Vitality 7
-                itemSpell.SpellId = 21600;
-                return;
-            case 21611: // Vitality 8
-                itemSpell.SpellId = 20885;
-                return;
-            case 21612: // Vitality 8
-                itemSpell.SpellId = 20885;
-                return;
-            case 21613: // Vitality 8
-                itemSpell.SpellId = 20885;
-                return;
-            case 21614: // Vitality 9
-                itemSpell.SpellId = 21604;
-                return;
-            case 21615: // Vitality 9
-                itemSpell.SpellId = 21604;
-                return;
-            case 21616: // Vitality 9
-                itemSpell.SpellId = 21604;
-                return;
-            case 21617: // Vitality 10
-                itemSpell.SpellId = 21349;
-                return;
-            case 23210: // Vitality 14
-                itemSpell.SpellId = 21350;
-                return;
+        case 20885: // Vitality 5
+            itemSpell.SpellId = 20969;
+            return;
+        case 21109: // Vitality 8
+            itemSpell.SpellId = 20885;
+            return;
+        case 21345: // Vitality 1
+            itemSpell.SpellId = 21587;
+            return;
+        case 21347: // Vitality 3
+            itemSpell.SpellId = 21168;
+            return;
+        case 21348: // Vitality 4
+            itemSpell.SpellId = 21347;
+            return;
+        case 21349: // Vitality 6
+            itemSpell.SpellId = 21348;
+            return;
+        case 21350: // Vitality 9
+            itemSpell.SpellId = 21604;
+            return;
+        case 21590: // Vitality 1
+            itemSpell.SpellId = 21587;
+            return;
+        case 21592: // Vitality 2
+            itemSpell.SpellId = 21345;
+            return;
+        case 21593: // Vitality 2
+            itemSpell.SpellId = 21345;
+            return;
+        case 21594: // Vitality 2
+            itemSpell.SpellId = 21345;
+            return;
+        case 21595: // Vitality 3
+            itemSpell.SpellId = 21168;
+            return;
+        case 21596: // Vitality 3
+            itemSpell.SpellId = 21168;
+            return;
+        case 21597: // Vitality 3
+            itemSpell.SpellId = 21168;
+            return;
+        case 21598: // Vitality 4
+            itemSpell.SpellId = 21347;
+            return;
+        case 21599: // Vitality 4
+            itemSpell.SpellId = 21347;
+            return;
+        case 21600: // Vitality 4
+            itemSpell.SpellId = 21347;
+            return;
+        case 21601: // Vitality 5
+            itemSpell.SpellId = 20969;
+            return;
+        case 21602: // Vitality 5
+            itemSpell.SpellId = 20969;
+            return;
+        case 21603: // Vitality 5
+            itemSpell.SpellId = 20969;
+            return;
+        case 21604: // Vitality 6
+            itemSpell.SpellId = 21348;
+            return;
+        case 21605: // Vitality 6
+            itemSpell.SpellId = 21348;
+            return;
+        case 21606: // Vitality 6
+            itemSpell.SpellId = 21348;
+            return;
+        case 21607: // Vitality 7
+            itemSpell.SpellId = 21600;
+            return;
+        case 21608: // Vitality 7
+            itemSpell.SpellId = 21600;
+            return;
+        case 21609: // Vitality 7
+            itemSpell.SpellId = 21600;
+            return;
+        case 21610: // Vitality 7
+            itemSpell.SpellId = 21600;
+            return;
+        case 21611: // Vitality 8
+            itemSpell.SpellId = 20885;
+            return;
+        case 21612: // Vitality 8
+            itemSpell.SpellId = 20885;
+            return;
+        case 21613: // Vitality 8
+            itemSpell.SpellId = 20885;
+            return;
+        case 21614: // Vitality 9
+            itemSpell.SpellId = 21604;
+            return;
+        case 21615: // Vitality 9
+            itemSpell.SpellId = 21604;
+            return;
+        case 21616: // Vitality 9
+            itemSpell.SpellId = 21604;
+            return;
+        case 21617: // Vitality 10
+            itemSpell.SpellId = 21349;
+            return;
+        case 23210: // Vitality 14
+            itemSpell.SpellId = 21350;
+            return;
         }
     }
 #endif
@@ -3755,7 +3734,8 @@ void ObjectMgr::FillObtainedItemsList(std::set<uint32>& obtainedItems)
                 Field* fields = result->Fetch();
                 uint32 itemId = fields[0].GetUInt32();
                 obtainedItems.insert(itemId);
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
     }
     // Items used by spells need to be marked as discovered too.
@@ -3777,7 +3757,7 @@ void ObjectMgr::FillObtainedItemsList(std::set<uint32>& obtainedItems)
                 if (i)
                     obtainedItems.insert(i);
             }
-            
+
             for (int32 i = 0; i < MAX_SPELL_EFFECTS; i++)
             {
                 if (pSpellProto->Effect[i] == SPELL_EFFECT_CREATE_ITEM)
@@ -3791,9 +3771,14 @@ void ObjectMgr::LoadItemPrototypes()
 {
     m_itemPrototypesMap.clear();
 
-    //                                                                0        1        2           3       4              5                6          7        8            9            10            11                12                 13                14            15                16                17                     18                19                     20                    21                             22                          23           24           25                 26            27             28            29             30            31             32            33             34            35             36            37             38            39             40            41             42            43             44             45              46       47           48           49          50          51           52          53          54           55          56          57           58          59          60           61          62          63           64       65       66          67          68            69           70            71            72           73                74                75                76                 77                 78                         79           80                81                82                83                 84                 85                         86           87                88                89                90                 91                 92                         93           94                95                96                97                 98                 99                         100          101               102               103               104                105                106                        107        108          109              110              111            112        113         114       115                116       117               118           119          120         121           122              123          124               125               126            127                 128
-    std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `class`, `subclass`, `name`, `description`, `display_id`, `quality`, `flags`, `buy_count`, `buy_price`, `sell_price`, `inventory_type`, `allowable_class`, `allowable_race`, `item_level`, `required_level`, `required_skill`, `required_skill_rank`, `required_spell`, `required_honor_rank`, `required_city_rank`, `required_reputation_faction`, `required_reputation_rank`, `max_count`, `stackable`, `container_slots`, `stat_type1`, `stat_value1`, `stat_type2`, `stat_value2`, `stat_type3`, `stat_value3`, `stat_type4`, `stat_value4`, `stat_type5`, `stat_value5`, `stat_type6`, `stat_value6`, `stat_type7`, `stat_value7`, `stat_type8`, `stat_value8`, `stat_type9`, `stat_value9`, `stat_type10`, `stat_value10`, `delay`, `range_mod`, `ammo_type`, `dmg_min1`, `dmg_max1`, `dmg_type1`, `dmg_min2`, `dmg_max2`, `dmg_type2`, `dmg_min3`, `dmg_max3`, `dmg_type3`, `dmg_min4`, `dmg_max4`, `dmg_type4`, `dmg_min5`, `dmg_max5`, `dmg_type5`, `block`, `armor`, `holy_res`, `fire_res`, `nature_res`, `frost_res`, `shadow_res`, `arcane_res`, `spellid_1`, `spelltrigger_1`, `spellcharges_1`, `spellppmrate_1`, `spellcooldown_1`, `spellcategory_1`, `spellcategorycooldown_1`, `spellid_2`, `spelltrigger_2`, `spellcharges_2`, `spellppmrate_2`, `spellcooldown_2`, `spellcategory_2`, `spellcategorycooldown_2`, `spellid_3`, `spelltrigger_3`, `spellcharges_3`, `spellppmrate_3`, `spellcooldown_3`, `spellcategory_3`, `spellcategorycooldown_3`, `spellid_4`, `spelltrigger_4`, `spellcharges_4`, `spellppmrate_4`, `spellcooldown_4`, `spellcategory_4`, `spellcategorycooldown_4`, `spellid_5`, `spelltrigger_5`, `spellcharges_5`, `spellppmrate_5`, `spellcooldown_5`, `spellcategory_5`, `spellcategorycooldown_5`, `bonding`, `page_text`, `page_language`, `page_material`, `start_quest`, `lock_id`, `material`, `sheath`, `random_property`, `set_id`, `max_durability`, `area_bound`, `map_bound`, `duration`, `bag_family`, `disenchant_id`, `food_type`, `min_money_loot`, `max_money_loot`, `wrapped_gift`, `extra_flags`, `other_team_entry` "
-                          " FROM `item_template` t1 WHERE `patch`=(SELECT max(`patch`) FROM `item_template` t2 WHERE t1.`entry`=t2.`entry` && `patch` <= %u)", sWorld.GetWowPatch()));
+    //                                                                0        1        2           3       4              5                6          7        8            9            10            11                12                 13                14            15                16                17                     18                19                     20                    21                             22                          23           24           25                 26            27             28            29             30            31             32            33             34            35             36            37             38            39             40            41             42            43             44             45              46       47           48           49          50          51           52          53          54           55          56          57           58          59          60           61          62          63 64
+    //                                                                65       66          67          68            69           70            71            72           73                74                75                76                 77                 78                         79           80                81                82                83                 84                 85                         86           87                88                89                90                 91                 92                         93           94                95                96                97                 98                 99                         100          101               102               103               104                105                106                        107        108          109              110              111            112        113         114       115                116       117               118           119 120 121
+    //                                                                122              123          124               125               126            127                 128
+    std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `class`, `subclass`, `name`, `description`, `display_id`, `quality`, `flags`, `buy_count`, `buy_price`, `sell_price`, `inventory_type`, `allowable_class`, `allowable_race`, `item_level`, `required_level`, `required_skill`, `required_skill_rank`, `required_spell`, `required_honor_rank`, `required_city_rank`, `required_reputation_faction`, `required_reputation_rank`, `max_count`, `stackable`, `container_slots`, `stat_type1`, `stat_value1`, `stat_type2`, `stat_value2`, `stat_type3`, `stat_value3`, `stat_type4`, `stat_value4`, `stat_type5`, `stat_value5`, `stat_type6`, `stat_value6`, `stat_type7`, `stat_value7`, `stat_type8`, `stat_value8`, `stat_type9`, `stat_value9`, `stat_type10`, `stat_value10`, `delay`, `range_mod`, `ammo_type`, `dmg_min1`, `dmg_max1`, `dmg_type1`, `dmg_min2`, `dmg_max2`, `dmg_type2`, `dmg_min3`, `dmg_max3`, `dmg_type3`, `dmg_min4`, `dmg_max4`, `dmg_type4`, `dmg_min5`, `dmg_max5`, "
+                                                             "`dmg_type5`, `block`, `armor`, `holy_res`, `fire_res`, `nature_res`, `frost_res`, `shadow_res`, `arcane_res`, `spellid_1`, `spelltrigger_1`, `spellcharges_1`, `spellppmrate_1`, `spellcooldown_1`, `spellcategory_1`, `spellcategorycooldown_1`, `spellid_2`, `spelltrigger_2`, `spellcharges_2`, `spellppmrate_2`, `spellcooldown_2`, `spellcategory_2`, `spellcategorycooldown_2`, `spellid_3`, `spelltrigger_3`, `spellcharges_3`, `spellppmrate_3`, `spellcooldown_3`, `spellcategory_3`, `spellcategorycooldown_3`, `spellid_4`, `spelltrigger_4`, `spellcharges_4`, `spellppmrate_4`, `spellcooldown_4`, `spellcategory_4`, `spellcategorycooldown_4`, `spellid_5`, `spelltrigger_5`, `spellcharges_5`, `spellppmrate_5`, `spellcooldown_5`, `spellcategory_5`, `spellcategorycooldown_5`, `bonding`, `page_text`, `page_language`, `page_material`, `start_quest`, `lock_id`, `material`, `sheath`, `random_property`, `set_id`, `max_durability`, "
+                                                             "`area_bound`, `map_bound`, `duration`, `bag_family`, `disenchant_id`, `food_type`, `min_money_loot`, `max_money_loot`, `wrapped_gift`, `extra_flags`, `other_team_entry` "
+                                                             " FROM `item_template` t1 WHERE `patch`=(SELECT max(`patch`) FROM `item_template` t2 WHERE t1.`entry`=t2.`entry` && `patch` <= %u)",
+                                                             sWorld.GetWowPatch()));
     if (!result)
     {
         BarGoLink bar(1);
@@ -3811,19 +3796,19 @@ void ObjectMgr::LoadItemPrototypes()
     {
         bar.step();
         Field* fields = result->Fetch();
-        uint32 entry = fields[ 0].GetUInt32();
+        uint32 entry = fields[0].GetUInt32();
 
         ItemPrototype& item = m_itemPrototypesMap[entry];
         item.ItemId = entry;
-        item.Class = fields[ 1].GetUInt8();
-        item.SubClass = fields[ 2].GetUInt8();
+        item.Class = fields[1].GetUInt8();
+        item.SubClass = fields[2].GetUInt8();
         item.Name1 = strdup(fields[3].GetString());
         item.Description = strdup(fields[4].GetString());
-        item.DisplayInfoID = fields[ 5].GetUInt32();
-        item.Quality = fields[ 6].GetUInt8();
-        item.Flags = fields[ 7].GetUInt32();
-        item.BuyCount = fields[ 8].GetUInt8();
-        item.BuyPrice = fields[ 9].GetUInt32();
+        item.DisplayInfoID = fields[5].GetUInt32();
+        item.Quality = fields[6].GetUInt8();
+        item.Flags = fields[7].GetUInt32();
+        item.BuyCount = fields[8].GetUInt8();
+        item.BuyPrice = fields[9].GetUInt32();
         item.SellPrice = fields[10].GetUInt32();
         item.InventoryType = fields[11].GetUInt8();
         item.AllowableClass = fields[12].GetInt32();
@@ -3842,17 +3827,17 @@ void ObjectMgr::LoadItemPrototypes()
         item.ContainerSlots = fields[25].GetUInt8();
         for (int i = 0; i < MAX_ITEM_PROTO_STATS; i++)
         {
-            item.ItemStat[i].ItemStatType = fields[26 + i*2].GetUInt8();
-            item.ItemStat[i].ItemStatValue = fields[27 + i*2].GetInt16();
+            item.ItemStat[i].ItemStatType = fields[26 + i * 2].GetUInt8();
+            item.ItemStat[i].ItemStatValue = fields[27 + i * 2].GetInt16();
         }
         item.Delay = fields[46].GetUInt16();
         item.RangedModRange = fields[47].GetFloat();
         item.AmmoType = fields[48].GetUInt8();
         for (int i = 0; i < MAX_ITEM_PROTO_DAMAGES; i++)
         {
-            item.Damage[i].DamageMin = fields[49 + i*3].GetFloat();
-            item.Damage[i].DamageMax = fields[50 + i*3].GetFloat();
-            item.Damage[i].DamageType = fields[51 + i*3].GetUInt8();
+            item.Damage[i].DamageMin = fields[49 + i * 3].GetFloat();
+            item.Damage[i].DamageMax = fields[50 + i * 3].GetFloat();
+            item.Damage[i].DamageType = fields[51 + i * 3].GetUInt8();
         }
         item.Block = fields[64].GetUInt32();
         item.Armor = fields[65].GetInt16();
@@ -3864,13 +3849,13 @@ void ObjectMgr::LoadItemPrototypes()
         item.ArcaneRes = fields[71].GetInt16();
         for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; i++)
         {
-            item.Spells[i].SpellId = fields[72 + i*7].GetUInt32();
-            item.Spells[i].SpellTrigger = fields[73 + i*7].GetUInt8();
-            item.Spells[i].SpellCharges = fields[74 + i*7].GetInt16();
-            item.Spells[i].SpellPPMRate = fields[75 + i*7].GetFloat();
-            item.Spells[i].SpellCooldown = fields[76 + i*7].GetInt32();
-            item.Spells[i].SpellCategory = fields[77 + i*7].GetUInt16();
-            item.Spells[i].SpellCategoryCooldown = fields[78 + i*7].GetInt32();
+            item.Spells[i].SpellId = fields[72 + i * 7].GetUInt32();
+            item.Spells[i].SpellTrigger = fields[73 + i * 7].GetUInt8();
+            item.Spells[i].SpellCharges = fields[74 + i * 7].GetInt16();
+            item.Spells[i].SpellPPMRate = fields[75 + i * 7].GetFloat();
+            item.Spells[i].SpellCooldown = fields[76 + i * 7].GetInt32();
+            item.Spells[i].SpellCategory = fields[77 + i * 7].GetUInt16();
+            item.Spells[i].SpellCategoryCooldown = fields[78 + i * 7].GetInt32();
         }
         item.Bonding = fields[107].GetUInt8();
         item.PageText = fields[108].GetUInt32();
@@ -3911,9 +3896,7 @@ void ObjectMgr::LoadItemPrototypes()
         uint32 i = item.first;
         ItemPrototype const* proto = &item.second;
 
-        if ((obtainedItems.find(i) != obtainedItems.end()) ||
-            proto->HasExtraFlag(ITEM_EXTRA_MAIL_STATIONERY) ||
-            !sWorld.getConfig(CONFIG_BOOL_PREVENT_ITEM_DATAMINING))
+        if ((obtainedItems.find(i) != obtainedItems.end()) || proto->HasExtraFlag(ITEM_EXTRA_MAIL_STATIONERY) || !sWorld.getConfig(CONFIG_BOOL_PREVENT_ITEM_DATAMINING))
             proto->Discovered = true;
 
         CorrectItemDisplayIds(i, const_cast<ItemPrototype*>(proto)->DisplayInfoID);
@@ -3927,7 +3910,7 @@ void ObjectMgr::LoadItemPrototypes()
         if (proto->SubClass >= MaxItemSubclassValues[proto->Class])
         {
             sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Item (Entry: %u) has wrong Subclass value (%u) for class %u", i, proto->SubClass, proto->Class);
-            const_cast<ItemPrototype*>(proto)->SubClass = 0;// exist for all item classes
+            const_cast<ItemPrototype*>(proto)->SubClass = 0; // exist for all item classes
         }
 
         if (proto->Quality >= MAX_ITEM_QUALITY)
@@ -4064,7 +4047,7 @@ void ObjectMgr::LoadItemPrototypes()
             {
                 if (proto->Spells[j].SpellId)
                     CorrectItemEffects(proto->ItemId, const_cast<ItemPrototype*>(proto)->Spells[j]);
-                
+
                 if (proto->Spells[j].SpellTrigger >= MAX_ITEM_SPELLTRIGGER)
                 {
                     sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Item (Entry: %u) has wrong item spell trigger value in spelltrigger_%d (%u)", i, j + 1, proto->Spells[j].SpellTrigger);
@@ -4206,7 +4189,7 @@ void ObjectMgr::LoadItemPrototypes()
 
 void ObjectMgr::LoadItemLocales()
 {
-    m_ItemLocaleMap.clear();                                 // need for reload case
+    m_ItemLocaleMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `entry`, `name_loc1`, `description_loc1`, `name_loc2`, `description_loc2`, `name_loc3`, `description_loc3`, `name_loc4`, `description_loc4`, `name_loc5`, `description_loc5`, `name_loc6`, `description_loc6`, `name_loc7`, `description_loc7`, `name_loc8`, `description_loc8` FROM `locales_item`"));
 
@@ -4278,7 +4261,7 @@ void ObjectMgr::LoadItemLocales()
 
 void ObjectMgr::LoadItemRequiredTarget()
 {
-    m_ItemRequiredTarget.clear();                           // needed for reload case
+    m_ItemRequiredTarget.clear(); // needed for reload case
 
     uint32 count = 0;
 
@@ -4301,8 +4284,8 @@ void ObjectMgr::LoadItemRequiredTarget()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 uiItemId      = fields[0].GetUInt32();
-        uint32 uiType        = fields[1].GetUInt32();
+        uint32 uiItemId = fields[0].GetUInt32();
+        uint32 uiType = fields[1].GetUInt32();
         uint32 uiTargetEntry = fields[2].GetUInt32();
 
         ItemPrototype const* pItemProto = GetItemPrototype(uiItemId);
@@ -4328,10 +4311,7 @@ void ObjectMgr::LoadItemRequiredTarget()
 
                     for (uint8 j = 0; j < MAX_EFFECT_INDEX; ++j)
                     {
-                        if (pSpellInfo->EffectImplicitTargetA[j] == TARGET_UNIT_ENEMY ||
-                                pSpellInfo->EffectImplicitTargetB[j] == TARGET_UNIT_ENEMY ||
-                                pSpellInfo->EffectImplicitTargetA[j] == TARGET_UNIT ||
-                                pSpellInfo->EffectImplicitTargetB[j] == TARGET_UNIT)
+                        if (pSpellInfo->EffectImplicitTargetA[j] == TARGET_UNIT_ENEMY || pSpellInfo->EffectImplicitTargetB[j] == TARGET_UNIT_ENEMY || pSpellInfo->EffectImplicitTargetA[j] == TARGET_UNIT || pSpellInfo->EffectImplicitTargetB[j] == TARGET_UNIT)
                         {
                             bIsItemSpellValid = true;
                             break;
@@ -4420,7 +4400,7 @@ void ObjectMgr::LoadPetLevelInfo()
                 else
                 {
                     sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Unused (> MaxPlayerLevel in mangosd.conf) level %u in `pet_levelstats` table, ignoring.", currentLevel);
-                    ++count;                                 // make result loading percent "expected" correct in case disabled detail mode for example.
+                    ++count; // make result loading percent "expected" correct in case disabled detail mode for example.
                 }
                 continue;
             }
@@ -4433,14 +4413,14 @@ void ObjectMgr::LoadPetLevelInfo()
             PetLevelInfo*& pInfoMapEntry = m_PetInfoMap[creatureId];
 
             if (pInfoMapEntry == nullptr)
-                pInfoMapEntry =  new PetLevelInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL)];
+                pInfoMapEntry = new PetLevelInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL)];
 
             // data for level 1 stored in [0] array element, ...
             PetLevelInfo* pLevelInfo = &pInfoMapEntry[currentLevel - 1];
 
             pLevelInfo->health = fields[2].GetUInt16();
-            pLevelInfo->mana   = fields[3].GetUInt16();
-            pLevelInfo->armor  = fields[4].GetUInt16();
+            pLevelInfo->mana = fields[3].GetUInt16();
+            pLevelInfo->armor = fields[4].GetUInt16();
             pLevelInfo->dmgMin = fields[5].GetFloat();
             pLevelInfo->dmgMax = fields[6].GetFloat();
 
@@ -4489,7 +4469,7 @@ PetLevelInfo const* ObjectMgr::GetPetLevelInfo(uint32 creature_id, uint32 level)
     if (itr == m_PetInfoMap.end())
         return nullptr;
 
-    return &itr->second[level - 1];                         // data for level 1 stored in [0] array element, ...
+    return &itr->second[level - 1]; // data for level 1 stored in [0] array element, ...
 }
 
 void ObjectMgr::LoadPlayerInfo()
@@ -4520,14 +4500,14 @@ void ObjectMgr::LoadPlayerInfo()
             bar.step();
             Field* fields = result->Fetch();
 
-            uint32 current_race  = fields[0].GetUInt32();
+            uint32 current_race = fields[0].GetUInt32();
             uint32 current_class = fields[1].GetUInt32();
-            uint32 mapId         = fields[2].GetUInt32();
-            uint32 areaId        = fields[3].GetUInt32();
-            float  positionX     = fields[4].GetFloat();
-            float  positionY     = fields[5].GetFloat();
-            float  positionZ     = fields[6].GetFloat();
-            float  orientation   = fields[7].GetFloat();
+            uint32 mapId = fields[2].GetUInt32();
+            uint32 areaId = fields[3].GetUInt32();
+            float positionX = fields[4].GetFloat();
+            float positionY = fields[5].GetFloat();
+            float positionZ = fields[6].GetFloat();
+            float orientation = fields[7].GetFloat();
 
             ChrRacesEntry const* rEntry = sChrRacesStore.LookupEntry(current_race);
             if (!rEntry || !((1 << (current_race - 1)) & RACEMASK_ALL_PLAYABLE))
@@ -4558,16 +4538,16 @@ void ObjectMgr::LoadPlayerInfo()
 
             PlayerInfo* pInfo = &m_PlayerInfo[current_race][current_class];
 
-            pInfo->mapId       = mapId;
-            pInfo->areaId      = areaId;
-            pInfo->positionX   = positionX;
-            pInfo->positionY   = positionY;
-            pInfo->positionZ   = positionZ;
+            pInfo->mapId = mapId;
+            pInfo->areaId = areaId;
+            pInfo->positionX = positionX;
+            pInfo->positionY = positionY;
+            pInfo->positionZ = positionZ;
             pInfo->orientation = orientation;
 
             pInfo->displayId_m = rEntry->model_m;
             pInfo->displayId_f = rEntry->model_f;
-            
+
             ++count;
         }
         while (result->NextRow());
@@ -4629,7 +4609,7 @@ void ObjectMgr::LoadPlayerInfo()
                     continue;
                 }
 
-                uint32 amount  = fields[3].GetUInt32();
+                uint32 amount = fields[3].GetUInt32();
 
                 if (!amount)
                 {
@@ -4751,7 +4731,7 @@ void ObjectMgr::LoadPlayerInfo()
                     continue;
                 }
 
-                uint8 action_button  = fields[2].GetUInt8();
+                uint8 action_button = fields[2].GetUInt8();
                 uint32 action = fields[3].GetUInt32();
                 uint8 action_type = fields[4].GetUInt8();
 
@@ -4816,7 +4796,7 @@ void ObjectMgr::LoadPlayerInfo()
                 else
                 {
                     sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Unused (> MaxPlayerLevel in mangosd.conf) level %u in `player_classlevelstats` table, ignoring.", current_level);
-                    ++count;                                 // make result loading percent "expected" correct in case disabled detail mode for example.
+                    ++count; // make result loading percent "expected" correct in case disabled detail mode for example.
                 }
                 continue;
             }
@@ -4829,7 +4809,7 @@ void ObjectMgr::LoadPlayerInfo()
             PlayerClassLevelInfo* pClassLevelInfo = &pClassInfo->levelInfo[current_level - 1];
 
             pClassLevelInfo->basehealth = fields[2].GetUInt16();
-            pClassLevelInfo->basemana   = fields[3].GetUInt16();
+            pClassLevelInfo->basemana = fields[3].GetUInt16();
 
             ++count;
         }
@@ -4918,7 +4898,7 @@ void ObjectMgr::LoadPlayerInfo()
                 else
                 {
                     sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Unused (> MaxPlayerLevel in mangosd.conf) level %u in `player_levelstats` table, ignoring.", current_level);
-                    ++count;                                 // make result loading percent "expected" correct in case disabled detail mode for example.
+                    ++count; // make result loading percent "expected" correct in case disabled detail mode for example.
                 }
                 continue;
             }
@@ -4982,7 +4962,7 @@ void ObjectMgr::LoadPlayerInfo()
 
     // Loading xp per level data
     {
-        m_PlayerXPperLevel.resize(sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL)+1);
+        m_PlayerXPperLevel.resize(sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) + 1);
         for (uint32 level = 0; level <= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL); ++level)
             m_PlayerXPperLevel[level] = 0;
 
@@ -5011,7 +4991,7 @@ void ObjectMgr::LoadPlayerInfo()
             Field* fields = result->Fetch();
 
             uint32 current_level = fields[0].GetUInt32();
-            uint32 current_xp    = fields[1].GetUInt32();
+            uint32 current_xp = fields[1].GetUInt32();
 
             if (current_level > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
             {
@@ -5020,11 +5000,11 @@ void ObjectMgr::LoadPlayerInfo()
                 else
                 {
                     sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Unused (> MaxPlayerLevel in mangosd.conf) level %u in `player_xp_for_levels` table, ignoring.", current_level);
-                    ++count;                                 // make result loading percent "expected" correct in case disabled detail mode for example.
+                    ++count; // make result loading percent "expected" correct in case disabled detail mode for example.
                 }
                 continue;
             }
-            //PlayerXPperLevel
+            // PlayerXPperLevel
             m_PlayerXPperLevel[current_level] = current_xp;
             ++count;
         }
@@ -5060,7 +5040,7 @@ void ObjectMgr::GetPlayerClassLevelInfo(uint32 class_, uint32 level, PlayerClass
 
 void ObjectMgr::GetPlayerLevelInfo(uint32 race, uint32 class_, uint32 level, PlayerLevelInfo* info) const
 {
-    if (level < 1 || race   >= MAX_RACES || class_ >= MAX_CLASSES)
+    if (level < 1 || race >= MAX_RACES || class_ >= MAX_CLASSES)
         return;
 
     PlayerInfo const* pInfo = &m_PlayerInfo[race][class_];
@@ -5082,68 +5062,68 @@ void ObjectMgr::BuildPlayerLevelInfo(uint8 race, uint8 _class, uint8 level, Play
     {
         switch (_class)
         {
-            case CLASS_WARRIOR:
-                info->stats[STAT_STRENGTH]  += (lvl > 23 ? 2 : (lvl > 1  ? 1 : 0));
-                info->stats[STAT_STAMINA]   += (lvl > 23 ? 2 : (lvl > 1  ? 1 : 0));
-                info->stats[STAT_AGILITY]   += (lvl > 36 ? 1 : (lvl > 6 && (lvl % 2) ? 1 : 0));
-                info->stats[STAT_INTELLECT] += (lvl > 9 && !(lvl % 2) ? 1 : 0);
-                info->stats[STAT_SPIRIT]    += (lvl > 9 && !(lvl % 2) ? 1 : 0);
-                break;
-            case CLASS_PALADIN:
-                info->stats[STAT_STRENGTH]  += (lvl > 3  ? 1 : 0);
-                info->stats[STAT_STAMINA]   += (lvl > 33 ? 2 : (lvl > 1 ? 1 : 0));
-                info->stats[STAT_AGILITY]   += (lvl > 38 ? 1 : (lvl > 7 && !(lvl % 2) ? 1 : 0));
-                info->stats[STAT_INTELLECT] += (lvl > 6 && (lvl % 2) ? 1 : 0);
-                info->stats[STAT_SPIRIT]    += (lvl > 7 ? 1 : 0);
-                break;
-            case CLASS_HUNTER:
-                info->stats[STAT_STRENGTH]  += (lvl > 4  ? 1 : 0);
-                info->stats[STAT_STAMINA]   += (lvl > 4  ? 1 : 0);
-                info->stats[STAT_AGILITY]   += (lvl > 33 ? 2 : (lvl > 1 ? 1 : 0));
-                info->stats[STAT_INTELLECT] += (lvl > 8 && (lvl % 2) ? 1 : 0);
-                info->stats[STAT_SPIRIT]    += (lvl > 38 ? 1 : (lvl > 9 && !(lvl % 2) ? 1 : 0));
-                break;
-            case CLASS_ROGUE:
-                info->stats[STAT_STRENGTH]  += (lvl > 5  ? 1 : 0);
-                info->stats[STAT_STAMINA]   += (lvl > 4  ? 1 : 0);
-                info->stats[STAT_AGILITY]   += (lvl > 16 ? 2 : (lvl > 1 ? 1 : 0));
-                info->stats[STAT_INTELLECT] += (lvl > 8 && !(lvl % 2) ? 1 : 0);
-                info->stats[STAT_SPIRIT]    += (lvl > 38 ? 1 : (lvl > 9 && !(lvl % 2) ? 1 : 0));
-                break;
-            case CLASS_PRIEST:
-                info->stats[STAT_STRENGTH]  += (lvl > 9 && !(lvl % 2) ? 1 : 0);
-                info->stats[STAT_STAMINA]   += (lvl > 5  ? 1 : 0);
-                info->stats[STAT_AGILITY]   += (lvl > 38 ? 1 : (lvl > 8 && (lvl % 2) ? 1 : 0));
-                info->stats[STAT_INTELLECT] += (lvl > 22 ? 2 : (lvl > 1 ? 1 : 0));
-                info->stats[STAT_SPIRIT]    += (lvl > 3  ? 1 : 0);
-                break;
-            case CLASS_SHAMAN:
-                info->stats[STAT_STRENGTH]  += (lvl > 34 ? 1 : (lvl > 6 && (lvl % 2) ? 1 : 0));
-                info->stats[STAT_STAMINA]   += (lvl > 4 ? 1 : 0);
-                info->stats[STAT_AGILITY]   += (lvl > 7 && !(lvl % 2) ? 1 : 0);
-                info->stats[STAT_INTELLECT] += (lvl > 5 ? 1 : 0);
-                info->stats[STAT_SPIRIT]    += (lvl > 4 ? 1 : 0);
-                break;
-            case CLASS_MAGE:
-                info->stats[STAT_STRENGTH]  += (lvl > 9 && !(lvl % 2) ? 1 : 0);
-                info->stats[STAT_STAMINA]   += (lvl > 5  ? 1 : 0);
-                info->stats[STAT_AGILITY]   += (lvl > 9 && !(lvl % 2) ? 1 : 0);
-                info->stats[STAT_INTELLECT] += (lvl > 24 ? 2 : (lvl > 1 ? 1 : 0));
-                info->stats[STAT_SPIRIT]    += (lvl > 33 ? 2 : (lvl > 2 ? 1 : 0));
-                break;
-            case CLASS_WARLOCK:
-                info->stats[STAT_STRENGTH]  += (lvl > 9 && !(lvl % 2) ? 1 : 0);
-                info->stats[STAT_STAMINA]   += (lvl > 38 ? 2 : (lvl > 3 ? 1 : 0));
-                info->stats[STAT_AGILITY]   += (lvl > 9 && !(lvl % 2) ? 1 : 0);
-                info->stats[STAT_INTELLECT] += (lvl > 33 ? 2 : (lvl > 2 ? 1 : 0));
-                info->stats[STAT_SPIRIT]    += (lvl > 38 ? 2 : (lvl > 3 ? 1 : 0));
-                break;
-            case CLASS_DRUID:
-                info->stats[STAT_STRENGTH]  += (lvl > 38 ? 2 : (lvl > 6 && (lvl % 2) ? 1 : 0));
-                info->stats[STAT_STAMINA]   += (lvl > 32 ? 2 : (lvl > 4 ? 1 : 0));
-                info->stats[STAT_AGILITY]   += (lvl > 38 ? 2 : (lvl > 8 && (lvl % 2) ? 1 : 0));
-                info->stats[STAT_INTELLECT] += (lvl > 38 ? 3 : (lvl > 4 ? 1 : 0));
-                info->stats[STAT_SPIRIT]    += (lvl > 38 ? 3 : (lvl > 5 ? 1 : 0));
+        case CLASS_WARRIOR:
+            info->stats[STAT_STRENGTH] += (lvl > 23 ? 2 : (lvl > 1 ? 1 : 0));
+            info->stats[STAT_STAMINA] += (lvl > 23 ? 2 : (lvl > 1 ? 1 : 0));
+            info->stats[STAT_AGILITY] += (lvl > 36 ? 1 : (lvl > 6 && (lvl % 2) ? 1 : 0));
+            info->stats[STAT_INTELLECT] += (lvl > 9 && !(lvl % 2) ? 1 : 0);
+            info->stats[STAT_SPIRIT] += (lvl > 9 && !(lvl % 2) ? 1 : 0);
+            break;
+        case CLASS_PALADIN:
+            info->stats[STAT_STRENGTH] += (lvl > 3 ? 1 : 0);
+            info->stats[STAT_STAMINA] += (lvl > 33 ? 2 : (lvl > 1 ? 1 : 0));
+            info->stats[STAT_AGILITY] += (lvl > 38 ? 1 : (lvl > 7 && !(lvl % 2) ? 1 : 0));
+            info->stats[STAT_INTELLECT] += (lvl > 6 && (lvl % 2) ? 1 : 0);
+            info->stats[STAT_SPIRIT] += (lvl > 7 ? 1 : 0);
+            break;
+        case CLASS_HUNTER:
+            info->stats[STAT_STRENGTH] += (lvl > 4 ? 1 : 0);
+            info->stats[STAT_STAMINA] += (lvl > 4 ? 1 : 0);
+            info->stats[STAT_AGILITY] += (lvl > 33 ? 2 : (lvl > 1 ? 1 : 0));
+            info->stats[STAT_INTELLECT] += (lvl > 8 && (lvl % 2) ? 1 : 0);
+            info->stats[STAT_SPIRIT] += (lvl > 38 ? 1 : (lvl > 9 && !(lvl % 2) ? 1 : 0));
+            break;
+        case CLASS_ROGUE:
+            info->stats[STAT_STRENGTH] += (lvl > 5 ? 1 : 0);
+            info->stats[STAT_STAMINA] += (lvl > 4 ? 1 : 0);
+            info->stats[STAT_AGILITY] += (lvl > 16 ? 2 : (lvl > 1 ? 1 : 0));
+            info->stats[STAT_INTELLECT] += (lvl > 8 && !(lvl % 2) ? 1 : 0);
+            info->stats[STAT_SPIRIT] += (lvl > 38 ? 1 : (lvl > 9 && !(lvl % 2) ? 1 : 0));
+            break;
+        case CLASS_PRIEST:
+            info->stats[STAT_STRENGTH] += (lvl > 9 && !(lvl % 2) ? 1 : 0);
+            info->stats[STAT_STAMINA] += (lvl > 5 ? 1 : 0);
+            info->stats[STAT_AGILITY] += (lvl > 38 ? 1 : (lvl > 8 && (lvl % 2) ? 1 : 0));
+            info->stats[STAT_INTELLECT] += (lvl > 22 ? 2 : (lvl > 1 ? 1 : 0));
+            info->stats[STAT_SPIRIT] += (lvl > 3 ? 1 : 0);
+            break;
+        case CLASS_SHAMAN:
+            info->stats[STAT_STRENGTH] += (lvl > 34 ? 1 : (lvl > 6 && (lvl % 2) ? 1 : 0));
+            info->stats[STAT_STAMINA] += (lvl > 4 ? 1 : 0);
+            info->stats[STAT_AGILITY] += (lvl > 7 && !(lvl % 2) ? 1 : 0);
+            info->stats[STAT_INTELLECT] += (lvl > 5 ? 1 : 0);
+            info->stats[STAT_SPIRIT] += (lvl > 4 ? 1 : 0);
+            break;
+        case CLASS_MAGE:
+            info->stats[STAT_STRENGTH] += (lvl > 9 && !(lvl % 2) ? 1 : 0);
+            info->stats[STAT_STAMINA] += (lvl > 5 ? 1 : 0);
+            info->stats[STAT_AGILITY] += (lvl > 9 && !(lvl % 2) ? 1 : 0);
+            info->stats[STAT_INTELLECT] += (lvl > 24 ? 2 : (lvl > 1 ? 1 : 0));
+            info->stats[STAT_SPIRIT] += (lvl > 33 ? 2 : (lvl > 2 ? 1 : 0));
+            break;
+        case CLASS_WARLOCK:
+            info->stats[STAT_STRENGTH] += (lvl > 9 && !(lvl % 2) ? 1 : 0);
+            info->stats[STAT_STAMINA] += (lvl > 38 ? 2 : (lvl > 3 ? 1 : 0));
+            info->stats[STAT_AGILITY] += (lvl > 9 && !(lvl % 2) ? 1 : 0);
+            info->stats[STAT_INTELLECT] += (lvl > 33 ? 2 : (lvl > 2 ? 1 : 0));
+            info->stats[STAT_SPIRIT] += (lvl > 38 ? 2 : (lvl > 3 ? 1 : 0));
+            break;
+        case CLASS_DRUID:
+            info->stats[STAT_STRENGTH] += (lvl > 38 ? 2 : (lvl > 6 && (lvl % 2) ? 1 : 0));
+            info->stats[STAT_STAMINA] += (lvl > 32 ? 2 : (lvl > 4 ? 1 : 0));
+            info->stats[STAT_AGILITY] += (lvl > 38 ? 2 : (lvl > 8 && (lvl % 2) ? 1 : 0));
+            info->stats[STAT_INTELLECT] += (lvl > 38 ? 3 : (lvl > 4 ? 1 : 0));
+            info->stats[STAT_SPIRIT] += (lvl > 38 ? 3 : (lvl > 5 ? 1 : 0));
         }
     }
 }
@@ -5198,7 +5178,7 @@ void ObjectMgr::LoadGroups()
     }
     else
     {
-        Group* group = nullptr;                                // used as cached pointer for avoid relookup group for each member
+        Group* group = nullptr; // used as cached pointer for avoid relookup group for each member
 
         BarGoLink bar2(result->GetRowCount());
         do
@@ -5209,16 +5189,15 @@ void ObjectMgr::LoadGroups()
 
             uint32 memberGuidlow = fields[0].GetUInt32();
             ObjectGuid memberGuid = ObjectGuid(HIGHGUID_PLAYER, memberGuidlow);
-            bool   assistent     = fields[1].GetBool();
-            uint8  subgroup      = fields[2].GetUInt8();
-            uint32 groupId       = fields[3].GetUInt32();
+            bool assistent = fields[1].GetBool();
+            uint8 subgroup = fields[2].GetUInt8();
+            uint32 groupId = fields[3].GetUInt32();
             if (!group || group->GetId() != groupId)
             {
                 group = GetGroupById(groupId);
                 if (!group)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Incorrect entry in group_member table : no group with Id %d for member %s!",
-                                    groupId, memberGuid.GetString().c_str());
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Incorrect entry in group_member table : no group with Id %d for member %s!", groupId, memberGuid.GetString().c_str());
                     CharacterDatabase.PExecute("DELETE FROM `group_member` WHERE `member_guid` = '%u'", memberGuidlow);
                     continue;
                 }
@@ -5226,8 +5205,7 @@ void ObjectMgr::LoadGroups()
 
             if (!group->LoadMemberFromDB(memberGuidlow, subgroup, assistent))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Incorrect entry in group_member table : member %s cannot be added to group (Id: %u)!",
-                                memberGuid.GetString().c_str(), groupId);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Incorrect entry in group_member table : member %s cannot be added to group (Id: %u)!", memberGuid.GetString().c_str(), groupId);
                 CharacterDatabase.PExecute("DELETE FROM `group_member` WHERE `member_guid` = '%u'", memberGuidlow);
             }
         }
@@ -5254,14 +5232,13 @@ void ObjectMgr::LoadGroups()
     // -- loading instances --
     count = 0;
     result = CharacterDatabase.Query(
-                 //                        0              1      2           3            4
-                 "SELECT `group_instance`.`leader_guid`, `map`, `instance`, `permanent`, `reset_time`, "
-                 // 5
-                 "(SELECT COUNT(*) FROM `character_instance` WHERE `guid` = `group_instance`.`leader_guid` AND `instance` = `group_instance`.`instance` AND `permanent` = 1 LIMIT 1), "
-                 // 6
-                 " `groups`.`group_id` "
-                 "FROM `group_instance` LEFT JOIN `instance` ON `instance` = `id` LEFT JOIN `groups` ON `groups`.`leader_guid` = `group_instance`.`leader_guid` ORDER BY `group_instance`.`leader_guid`"
-             );
+        //                        0              1      2           3            4
+        "SELECT `group_instance`.`leader_guid`, `map`, `instance`, `permanent`, `reset_time`, "
+        // 5
+        "(SELECT COUNT(*) FROM `character_instance` WHERE `guid` = `group_instance`.`leader_guid` AND `instance` = `group_instance`.`instance` AND `permanent` = 1 LIMIT 1), "
+        // 6
+        " `groups`.`group_id` "
+        "FROM `group_instance` LEFT JOIN `instance` ON `instance` = `id` LEFT JOIN `groups` ON `groups`.`leader_guid` = `group_instance`.`leader_guid` ORDER BY `group_instance`.`leader_guid`");
 
     if (!result)
     {
@@ -5270,7 +5247,7 @@ void ObjectMgr::LoadGroups()
     }
     else
     {
-        Group* group = nullptr;                                // used as cached pointer for avoid relookup group for each member
+        Group* group = nullptr; // used as cached pointer for avoid relookup group for each member
 
         BarGoLink bar2(result->GetRowCount());
         do
@@ -5320,39 +5297,40 @@ void ObjectMgr::LoadQuests()
 
     //                                                                0        1         2             3           4             5       6                  7                8                9
     std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `Method`, `ZoneOrSort`, `MinLevel`, `QuestLevel`, `Type`, `RequiredClasses`, `RequiredRaces`, `RequiredSkill`, `RequiredSkillValue`,"
-    //                      10                     11                   12                       13                     14                       15                     16                  17
-                          "`RepObjectiveFaction`, `RepObjectiveValue`, `RequiredMinRepFaction`, `RequiredMinRepValue`, `RequiredMaxRepFaction`, `RequiredMaxRepValue`, `SuggestedPlayers`, `LimitTime`,"
-    //                      18            19              20             21             22                23                  24           25              26
-                          "`QuestFlags`, `SpecialFlags`, `PrevQuestId`, `NextQuestId`, `ExclusiveGroup`, `NextQuestInChain`, `SrcItemId`, `SrcItemCount`, `SrcSpell`,"
-    //                      27       28         29            30                 31                  32         33                34                35                36
-                          "`Title`, `Details`, `Objectives`, `OfferRewardText`, `RequestItemsText`, `EndText`, `ObjectiveText1`, `ObjectiveText2`, `ObjectiveText3`, `ObjectiveText4`,"
-    //                      37            38            39            40            41               42               43               44
-                          "`ReqItemId1`, `ReqItemId2`, `ReqItemId3`, `ReqItemId4`, `ReqItemCount1`, `ReqItemCount2`, `ReqItemCount3`, `ReqItemCount4`,"
-    //                      45              46              47              48              49                 50                 51                 52
-                          "`ReqSourceId1`, `ReqSourceId2`, `ReqSourceId3`, `ReqSourceId4`, `ReqSourceCount1`, `ReqSourceCount2`, `ReqSourceCount3`, `ReqSourceCount4`,"
-    //                      53                    54                    55                    56                    57                       58                       59                       60
-                          "`ReqCreatureOrGOId1`, `ReqCreatureOrGOId2`, `ReqCreatureOrGOId3`, `ReqCreatureOrGOId4`, `ReqCreatureOrGOCount1`, `ReqCreatureOrGOCount2`, `ReqCreatureOrGOCount3`, `ReqCreatureOrGOCount4`,"
-    //                      61               62               63               64
-                          "`ReqSpellCast1`, `ReqSpellCast2`, `ReqSpellCast3`, `ReqSpellCast4`,"
-    //                      65                  66                  67                  68                  69                  70
-                          "`RewChoiceItemId1`, `RewChoiceItemId2`, `RewChoiceItemId3`, `RewChoiceItemId4`, `RewChoiceItemId5`, `RewChoiceItemId6`,"
-    //                      71                     72                     73                     74                     75                     76
-                          "`RewChoiceItemCount1`, `RewChoiceItemCount2`, `RewChoiceItemCount3`, `RewChoiceItemCount4`, `RewChoiceItemCount5`, `RewChoiceItemCount6`,"
-    //                      77            78            79            80            81               82               83               84
-                          "`RewItemId1`, `RewItemId2`, `RewItemId3`, `RewItemId4`, `RewItemCount1`, `RewItemCount2`, `RewItemCount3`, `RewItemCount4`,"
-    //                      85                86                87                88                89                90              91              92              93              94
-                          "`RewRepFaction1`, `RewRepFaction2`, `RewRepFaction3`, `RewRepFaction4`, `RewRepFaction5`, `RewRepValue1`, `RewRepValue2`, `RewRepValue3`, `RewRepValue4`, `RewRepValue5`,"
-    //                      95               96                  97          98              99                   100                 101           102       103       104
-                          "`RewOrReqMoney`, `RewMoneyMaxLevel`, `RewSpell`, `RewSpellCast`, `RewMailTemplateId`, `RewMailDelaySecs`, `PointMapId`, `PointX`, `PointY`, `PointOpt`,"
-    //                      105              106              107              108              109                   110                   111                   112
-                          "`DetailsEmote1`, `DetailsEmote2`, `DetailsEmote3`, `DetailsEmote4`, `DetailsEmoteDelay1`, `DetailsEmoteDelay2`, `DetailsEmoteDelay3`, `DetailsEmoteDelay4`,"
-    //                      113                114              115                  116                  117                  118
-                          "`IncompleteEmote`, `CompleteEmote`, `OfferRewardEmote1`, `OfferRewardEmote2`, `OfferRewardEmote3`, `OfferRewardEmote4`,"
-    //                      119                       120                       121                       122
-                          "`OfferRewardEmoteDelay1`, `OfferRewardEmoteDelay2`, `OfferRewardEmoteDelay3`, `OfferRewardEmoteDelay4`,"
-    //                      123            124               125         126             127      128                  129                     130
-                          "`StartScript`, `CompleteScript`, `MaxLevel`, `RewMailMoney`, `RewXP`, `RequiredCondition`, `BreadcrumbForQuestId`, `RewRepSpilloverMask`"
-                          " FROM `quest_template` t1 WHERE `patch`=(SELECT max(`patch`) FROM `quest_template` t2 WHERE t1.`entry`=t2.`entry` && `patch` <= %u)", sWorld.GetWowPatch()));
+                                                             //                      10                     11                   12                       13                     14                       15                     16                  17
+                                                             "`RepObjectiveFaction`, `RepObjectiveValue`, `RequiredMinRepFaction`, `RequiredMinRepValue`, `RequiredMaxRepFaction`, `RequiredMaxRepValue`, `SuggestedPlayers`, `LimitTime`,"
+                                                             //                      18            19              20             21             22                23                  24           25              26
+                                                             "`QuestFlags`, `SpecialFlags`, `PrevQuestId`, `NextQuestId`, `ExclusiveGroup`, `NextQuestInChain`, `SrcItemId`, `SrcItemCount`, `SrcSpell`,"
+                                                             //                      27       28         29            30                 31                  32         33                34                35                36
+                                                             "`Title`, `Details`, `Objectives`, `OfferRewardText`, `RequestItemsText`, `EndText`, `ObjectiveText1`, `ObjectiveText2`, `ObjectiveText3`, `ObjectiveText4`,"
+                                                             //                      37            38            39            40            41               42               43               44
+                                                             "`ReqItemId1`, `ReqItemId2`, `ReqItemId3`, `ReqItemId4`, `ReqItemCount1`, `ReqItemCount2`, `ReqItemCount3`, `ReqItemCount4`,"
+                                                             //                      45              46              47              48              49                 50                 51                 52
+                                                             "`ReqSourceId1`, `ReqSourceId2`, `ReqSourceId3`, `ReqSourceId4`, `ReqSourceCount1`, `ReqSourceCount2`, `ReqSourceCount3`, `ReqSourceCount4`,"
+                                                             //                      53                    54                    55                    56                    57                       58                       59                       60
+                                                             "`ReqCreatureOrGOId1`, `ReqCreatureOrGOId2`, `ReqCreatureOrGOId3`, `ReqCreatureOrGOId4`, `ReqCreatureOrGOCount1`, `ReqCreatureOrGOCount2`, `ReqCreatureOrGOCount3`, `ReqCreatureOrGOCount4`,"
+                                                             //                      61               62               63               64
+                                                             "`ReqSpellCast1`, `ReqSpellCast2`, `ReqSpellCast3`, `ReqSpellCast4`,"
+                                                             //                      65                  66                  67                  68                  69                  70
+                                                             "`RewChoiceItemId1`, `RewChoiceItemId2`, `RewChoiceItemId3`, `RewChoiceItemId4`, `RewChoiceItemId5`, `RewChoiceItemId6`,"
+                                                             //                      71                     72                     73                     74                     75                     76
+                                                             "`RewChoiceItemCount1`, `RewChoiceItemCount2`, `RewChoiceItemCount3`, `RewChoiceItemCount4`, `RewChoiceItemCount5`, `RewChoiceItemCount6`,"
+                                                             //                      77            78            79            80            81               82               83               84
+                                                             "`RewItemId1`, `RewItemId2`, `RewItemId3`, `RewItemId4`, `RewItemCount1`, `RewItemCount2`, `RewItemCount3`, `RewItemCount4`,"
+                                                             //                      85                86                87                88                89                90              91              92              93              94
+                                                             "`RewRepFaction1`, `RewRepFaction2`, `RewRepFaction3`, `RewRepFaction4`, `RewRepFaction5`, `RewRepValue1`, `RewRepValue2`, `RewRepValue3`, `RewRepValue4`, `RewRepValue5`,"
+                                                             //                      95               96                  97          98              99                   100                 101           102       103       104
+                                                             "`RewOrReqMoney`, `RewMoneyMaxLevel`, `RewSpell`, `RewSpellCast`, `RewMailTemplateId`, `RewMailDelaySecs`, `PointMapId`, `PointX`, `PointY`, `PointOpt`,"
+                                                             //                      105              106              107              108              109                   110                   111                   112
+                                                             "`DetailsEmote1`, `DetailsEmote2`, `DetailsEmote3`, `DetailsEmote4`, `DetailsEmoteDelay1`, `DetailsEmoteDelay2`, `DetailsEmoteDelay3`, `DetailsEmoteDelay4`,"
+                                                             //                      113                114              115                  116                  117                  118
+                                                             "`IncompleteEmote`, `CompleteEmote`, `OfferRewardEmote1`, `OfferRewardEmote2`, `OfferRewardEmote3`, `OfferRewardEmote4`,"
+                                                             //                      119                       120                       121                       122
+                                                             "`OfferRewardEmoteDelay1`, `OfferRewardEmoteDelay2`, `OfferRewardEmoteDelay3`, `OfferRewardEmoteDelay4`,"
+                                                             //                      123            124               125         126             127      128                  129                     130
+                                                             "`StartScript`, `CompleteScript`, `MaxLevel`, `RewMailMoney`, `RewXP`, `RequiredCondition`, `BreadcrumbForQuestId`, `RewRepSpilloverMask`"
+                                                             " FROM `quest_template` t1 WHERE `patch`=(SELECT max(`patch`) FROM `quest_template` t2 WHERE t1.`entry`=t2.`entry` && `patch` <= %u)",
+                                                             sWorld.GetWowPatch()));
     if (!result)
     {
         BarGoLink bar(1);
@@ -5402,8 +5380,7 @@ void ObjectMgr::LoadQuests()
             {
                 if (uint32 id = qinfo->RewChoiceItemId[j])
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = %u but item from `RewChoiceItemId%d` can't be rewarded with quest flag QUEST_FLAGS_AUTO_REWARDED.",
-                                    qinfo->GetQuestId(), j + 1, id, j + 1);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = %u but item from `RewChoiceItemId%d` can't be rewarded with quest flag QUEST_FLAGS_AUTO_REWARDED.", qinfo->GetQuestId(), j + 1, id, j + 1);
                     // no changes, quest ignore this data
                 }
             }
@@ -5414,8 +5391,7 @@ void ObjectMgr::LoadQuests()
         {
             if (!AreaEntry::GetById(qinfo->ZoneOrSort))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ZoneOrSort` = %u (zone case) but zone with this id does not exist.",
-                                qinfo->GetQuestId(), qinfo->ZoneOrSort);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ZoneOrSort` = %u (zone case) but zone with this id does not exist.", qinfo->GetQuestId(), qinfo->ZoneOrSort);
                 // no changes, quest not dependent from this value but can have problems at client
             }
         }
@@ -5425,19 +5401,17 @@ void ObjectMgr::LoadQuests()
             QuestSortEntry const* qSort = sQuestSortStore.LookupEntry(-int32(qinfo->ZoneOrSort));
             if (!qSort)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ZoneOrSort` = %i (sort case) but quest sort with this id does not exist.",
-                                qinfo->GetQuestId(), qinfo->ZoneOrSort);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ZoneOrSort` = %i (sort case) but quest sort with this id does not exist.", qinfo->GetQuestId(), qinfo->ZoneOrSort);
                 // no changes, quest not dependent from this value but can have problems at client (note some may be 0, we must allow this so no check)
             }
 
-            //check for proper RequiredSkill value (skill case)
+            // check for proper RequiredSkill value (skill case)
             if (uint32 skill_id = SkillByQuestSort(-int32(qinfo->ZoneOrSort)))
             {
                 if (qinfo->RequiredSkill != skill_id)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ZoneOrSort` = %i but `RequiredSkill` does not have a corresponding value (%u).",
-                                    qinfo->GetQuestId(), qinfo->ZoneOrSort, skill_id);
-                    //override, and force proper value here?
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ZoneOrSort` = %i but `RequiredSkill` does not have a corresponding value (%u).", qinfo->GetQuestId(), qinfo->ZoneOrSort, skill_id);
+                    // override, and force proper value here?
                 }
             }
         }
@@ -5467,8 +5441,7 @@ void ObjectMgr::LoadQuests()
         {
             if (!sSkillLineStore.LookupEntry(qinfo->RequiredSkill))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredSkill` = %u but this skill does not exist",
-                                qinfo->GetQuestId(), qinfo->RequiredSkill);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredSkill` = %u but this skill does not exist", qinfo->GetQuestId(), qinfo->RequiredSkill);
             }
         }
 
@@ -5476,8 +5449,7 @@ void ObjectMgr::LoadQuests()
         {
             if (qinfo->RequiredSkillValue > sWorld.GetConfigMaxSkillValue())
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredSkillValue` = %u but max possible skill is %u, quest can't be done.",
-                                qinfo->GetQuestId(), qinfo->RequiredSkillValue, sWorld.GetConfigMaxSkillValue());
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredSkillValue` = %u but max possible skill is %u, quest can't be done.", qinfo->GetQuestId(), qinfo->RequiredSkillValue, sWorld.GetConfigMaxSkillValue());
                 // no changes, quest can't be done for this requirement
             }
         }
@@ -5485,57 +5457,49 @@ void ObjectMgr::LoadQuests()
 
         if (qinfo->RepObjectiveFaction && !GetFactionEntry(qinfo->RepObjectiveFaction))
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RepObjectiveFaction` = %u but faction template %u does not exist, quest can't be done.",
-                            qinfo->GetQuestId(), qinfo->RepObjectiveFaction, qinfo->RepObjectiveFaction);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RepObjectiveFaction` = %u but faction template %u does not exist, quest can't be done.", qinfo->GetQuestId(), qinfo->RepObjectiveFaction, qinfo->RepObjectiveFaction);
             // no changes, quest can't be done for this requirement
         }
 
         if (qinfo->RequiredMinRepFaction && !GetFactionEntry(qinfo->RequiredMinRepFaction))
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMinRepFaction` = %u but faction template %u does not exist, quest can't be done.",
-                            qinfo->GetQuestId(), qinfo->RequiredMinRepFaction, qinfo->RequiredMinRepFaction);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMinRepFaction` = %u but faction template %u does not exist, quest can't be done.", qinfo->GetQuestId(), qinfo->RequiredMinRepFaction, qinfo->RequiredMinRepFaction);
             // no changes, quest can't be done for this requirement
         }
 
         if (qinfo->RequiredMaxRepFaction && !GetFactionEntry(qinfo->RequiredMaxRepFaction))
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMaxRepFaction` = %u but faction template %u does not exist, quest can't be done.",
-                            qinfo->GetQuestId(), qinfo->RequiredMaxRepFaction, qinfo->RequiredMaxRepFaction);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMaxRepFaction` = %u but faction template %u does not exist, quest can't be done.", qinfo->GetQuestId(), qinfo->RequiredMaxRepFaction, qinfo->RequiredMaxRepFaction);
             // no changes, quest can't be done for this requirement
         }
 
         if (qinfo->RequiredMinRepValue && qinfo->RequiredMinRepValue > ReputationMgr::Reputation_Cap)
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMinRepValue` = %d but max reputation is %u, quest can't be done.",
-                            qinfo->GetQuestId(), qinfo->RequiredMinRepValue, ReputationMgr::Reputation_Cap);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMinRepValue` = %d but max reputation is %u, quest can't be done.", qinfo->GetQuestId(), qinfo->RequiredMinRepValue, ReputationMgr::Reputation_Cap);
             // no changes, quest can't be done for this requirement
         }
 
         if (qinfo->RequiredMinRepValue && qinfo->RequiredMaxRepValue && qinfo->RequiredMaxRepValue <= qinfo->RequiredMinRepValue)
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMaxRepValue` = %d and `RequiredMinRepValue` = %d, quest can't be done.",
-                            qinfo->GetQuestId(), qinfo->RequiredMaxRepValue, qinfo->RequiredMinRepValue);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMaxRepValue` = %d and `RequiredMinRepValue` = %d, quest can't be done.", qinfo->GetQuestId(), qinfo->RequiredMaxRepValue, qinfo->RequiredMinRepValue);
             // no changes, quest can't be done for this requirement
         }
 
         if (!qinfo->RepObjectiveFaction && qinfo->RepObjectiveValue > 0)
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RepObjectiveValue` = %d but `RepObjectiveFaction` is 0, value has no effect",
-                            qinfo->GetQuestId(), qinfo->RepObjectiveValue);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RepObjectiveValue` = %d but `RepObjectiveFaction` is 0, value has no effect", qinfo->GetQuestId(), qinfo->RepObjectiveValue);
             // warning
         }
 
         if (!qinfo->RequiredMinRepFaction && qinfo->RequiredMinRepValue > 0)
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMinRepValue` = %d but `RequiredMinRepFaction` is 0, value has no effect",
-                            qinfo->GetQuestId(), qinfo->RequiredMinRepValue);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMinRepValue` = %d but `RequiredMinRepFaction` is 0, value has no effect", qinfo->GetQuestId(), qinfo->RequiredMinRepValue);
             // warning
         }
 
         if (!qinfo->RequiredMaxRepFaction && qinfo->RequiredMaxRepValue > 0)
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMaxRepValue` = %d but `RequiredMaxRepFaction` is 0, value has no effect",
-                            qinfo->GetQuestId(), qinfo->RequiredMaxRepValue);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RequiredMaxRepValue` = %d but `RequiredMaxRepFaction` is 0, value has no effect", qinfo->GetQuestId(), qinfo->RequiredMaxRepValue);
             // warning
         }
 
@@ -5552,23 +5516,20 @@ void ObjectMgr::LoadQuests()
 
                 if (qinfo->SrcItemCount == 0)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcItemId` = %u but `SrcItemCount` = 0, set to 1 but need fix in DB.",
-                        qinfo->GetQuestId(), qinfo->SrcItemId);
-                    qinfo->SrcItemCount = 1;                    // update to 1 for allow quest work for backward compatibility with DB
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcItemId` = %u but `SrcItemCount` = 0, set to 1 but need fix in DB.", qinfo->GetQuestId(), qinfo->SrcItemId);
+                    qinfo->SrcItemCount = 1; // update to 1 for allow quest work for backward compatibility with DB
                 }
             }
             else
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcItemId` = %u but item with entry %u does not exist, quest can't be done.",
-                                qinfo->GetQuestId(), qinfo->SrcItemId, qinfo->SrcItemId);
-                qinfo->SrcItemId = 0;                       // quest can't be done for this requirement
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcItemId` = %u but item with entry %u does not exist, quest can't be done.", qinfo->GetQuestId(), qinfo->SrcItemId, qinfo->SrcItemId);
+                qinfo->SrcItemId = 0; // quest can't be done for this requirement
             }
         }
         else if (qinfo->SrcItemCount > 0)
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcItemId` = 0 but `SrcItemCount` = %u, useless value.",
-                            qinfo->GetQuestId(), qinfo->SrcItemCount);
-            qinfo->SrcItemCount = 0;                        // no quest work changes in fact
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcItemId` = 0 but `SrcItemCount` = %u, useless value.", qinfo->GetQuestId(), qinfo->SrcItemCount);
+            qinfo->SrcItemCount = 0; // no quest work changes in fact
         }
 
         if (qinfo->SrcSpell)
@@ -5576,15 +5537,13 @@ void ObjectMgr::LoadQuests()
             SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(qinfo->SrcSpell);
             if (!spellInfo)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcSpell` = %u but spell %u doesn't exist, quest can't be done.",
-                                qinfo->GetQuestId(), qinfo->SrcSpell, qinfo->SrcSpell);
-                qinfo->SrcSpell = 0;                        // quest can't be done for this requirement
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcSpell` = %u but spell %u doesn't exist, quest can't be done.", qinfo->GetQuestId(), qinfo->SrcSpell, qinfo->SrcSpell);
+                qinfo->SrcSpell = 0; // quest can't be done for this requirement
             }
             else if (!SpellMgr::IsSpellValid(spellInfo))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcSpell` = %u but spell %u is broken, quest can't be done.",
-                                qinfo->GetQuestId(), qinfo->SrcSpell, qinfo->SrcSpell);
-                qinfo->SrcSpell = 0;                        // quest can't be done for this requirement
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `SrcSpell` = %u but spell %u is broken, quest can't be done.", qinfo->GetQuestId(), qinfo->SrcSpell, qinfo->SrcSpell);
+                qinfo->SrcSpell = 0; // quest can't be done for this requirement
             }
         }
 
@@ -5594,8 +5553,7 @@ void ObjectMgr::LoadQuests()
             {
                 if (qinfo->ReqItemCount[j] == 0)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqItemId%d` = %u but `ReqItemCount%d` = 0, quest can't be done.",
-                                    qinfo->GetQuestId(), j + 1, id, j + 1);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqItemId%d` = %u but `ReqItemCount%d` = 0, quest can't be done.", qinfo->GetQuestId(), j + 1, id, j + 1);
                     // no changes, quest can't be done for this requirement
                 }
 
@@ -5605,16 +5563,14 @@ void ObjectMgr::LoadQuests()
                     pItemProto->Discovered = true;
                 else
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqItemId%d` = %u but item with entry %u does not exist, quest can't be done.",
-                                    qinfo->GetQuestId(), j + 1, id, id);
-                    qinfo->ReqItemCount[j] = 0;             // prevent incorrect work of quest
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqItemId%d` = %u but item with entry %u does not exist, quest can't be done.", qinfo->GetQuestId(), j + 1, id, id);
+                    qinfo->ReqItemCount[j] = 0; // prevent incorrect work of quest
                 }
             }
             else if (qinfo->ReqItemCount[j] > 0)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqItemId%d` = 0 but `ReqItemCount%d` = %u, quest can't be done.",
-                                qinfo->GetQuestId(), j + 1, j + 1, qinfo->ReqItemCount[j]);
-                qinfo->ReqItemCount[j] = 0;                 // prevent incorrect work of quest
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqItemId%d` = 0 but `ReqItemCount%d` = %u, quest can't be done.", qinfo->GetQuestId(), j + 1, j + 1, qinfo->ReqItemCount[j]);
+                qinfo->ReqItemCount[j] = 0; // prevent incorrect work of quest
             }
         }
 
@@ -5626,8 +5582,7 @@ void ObjectMgr::LoadQuests()
                     pItemProto->Discovered = true;
                 else
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqSourceId%d` = %u but item with entry %u does not exist, quest can't be done.",
-                                    qinfo->GetQuestId(), j + 1, id, id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqSourceId%d` = %u but item with entry %u does not exist, quest can't be done.", qinfo->GetQuestId(), j + 1, id, id);
                     // no changes, quest can't be done for this requirement
                 }
             }
@@ -5635,8 +5590,7 @@ void ObjectMgr::LoadQuests()
             {
                 if (qinfo->ReqSourceCount[j] > 0)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqSourceId%d` = 0 but `ReqSourceCount%d` = %u.",
-                                    qinfo->GetQuestId(), j + 1, j + 1, qinfo->ReqSourceCount[j]);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqSourceId%d` = 0 but `ReqSourceCount%d` = %u.", qinfo->GetQuestId(), j + 1, j + 1, qinfo->ReqSourceCount[j]);
                     // no changes, quest ignore this data
                 }
             }
@@ -5649,8 +5603,7 @@ void ObjectMgr::LoadQuests()
                 SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(id);
                 if (!spellInfo)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqSpellCast%d` = %u but spell %u does not exist, quest can't be done.",
-                                    qinfo->GetQuestId(), j + 1, id, id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqSpellCast%d` = %u but spell %u does not exist, quest can't be done.", qinfo->GetQuestId(), j + 1, id, id);
                     continue;
                 }
 
@@ -5659,8 +5612,7 @@ void ObjectMgr::LoadQuests()
                     bool found = false;
                     for (uint8 k = 0; k < MAX_EFFECT_INDEX; ++k)
                     {
-                        if ((spellInfo->Effect[k] == SPELL_EFFECT_QUEST_COMPLETE && uint32(spellInfo->EffectMiscValue[k]) == qinfo->QuestId) ||
-                             spellInfo->Effect[k] == SPELL_EFFECT_SEND_EVENT)
+                        if ((spellInfo->Effect[k] == SPELL_EFFECT_QUEST_COMPLETE && uint32(spellInfo->EffectMiscValue[k]) == qinfo->QuestId) || spellInfo->Effect[k] == SPELL_EFFECT_SEND_EVENT)
                         {
                             found = true;
                             break;
@@ -5679,8 +5631,7 @@ void ObjectMgr::LoadQuests()
                     }
                     else
                     {
-                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqSpellCast%d` = %u and ReqCreatureOrGOId%d = 0 but spell %u does not have SPELL_EFFECT_QUEST_COMPLETE or SPELL_EFFECT_SEND_EVENT effect for this quest, quest can't be done.",
-                                        qinfo->GetQuestId(), j + 1, id, j + 1, id);
+                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqSpellCast%d` = %u and ReqCreatureOrGOId%d = 0 but spell %u does not have SPELL_EFFECT_QUEST_COMPLETE or SPELL_EFFECT_SEND_EVENT effect for this quest, quest can't be done.", qinfo->GetQuestId(), j + 1, id, j + 1, id);
                         // no changes, quest can't be done for this requirement
                     }
                 }
@@ -5692,16 +5643,14 @@ void ObjectMgr::LoadQuests()
             int32 id = qinfo->ReqCreatureOrGOId[j];
             if (id < 0 && !GetGameObjectTemplate(-id))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqCreatureOrGOId%d` = %i but gameobject %u does not exist, quest can't be done.",
-                                qinfo->GetQuestId(), j + 1, id, uint32(-id));
-                qinfo->ReqCreatureOrGOId[j] = 0;            // quest can't be done for this requirement
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqCreatureOrGOId%d` = %i but gameobject %u does not exist, quest can't be done.", qinfo->GetQuestId(), j + 1, id, uint32(-id));
+                qinfo->ReqCreatureOrGOId[j] = 0; // quest can't be done for this requirement
             }
 
             if (id > 0 && !GetCreatureTemplate(id))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqCreatureOrGOId%d` = %i but creature with entry %u does not exist, quest can't be done.",
-                                qinfo->GetQuestId(), j + 1, id, uint32(id));
-                qinfo->ReqCreatureOrGOId[j] = 0;            // quest can't be done for this requirement
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqCreatureOrGOId%d` = %i but creature with entry %u does not exist, quest can't be done.", qinfo->GetQuestId(), j + 1, id, uint32(id));
+                qinfo->ReqCreatureOrGOId[j] = 0; // quest can't be done for this requirement
             }
 
             if (id)
@@ -5712,15 +5661,13 @@ void ObjectMgr::LoadQuests()
 
                 if (!qinfo->ReqCreatureOrGOCount[j])
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqCreatureOrGOId%d` = %u but `ReqCreatureOrGOCount%d` = 0, quest can't be done.",
-                                    qinfo->GetQuestId(), j + 1, id, j + 1);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqCreatureOrGOId%d` = %u but `ReqCreatureOrGOCount%d` = 0, quest can't be done.", qinfo->GetQuestId(), j + 1, id, j + 1);
                     // no changes, quest can be incorrectly done, but we already report this
                 }
             }
             else if (qinfo->ReqCreatureOrGOCount[j] > 0)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqCreatureOrGOId%d` = 0 but `ReqCreatureOrGOCount%d` = %u.",
-                                qinfo->GetQuestId(), j + 1, j + 1, qinfo->ReqCreatureOrGOCount[j]);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `ReqCreatureOrGOId%d` = 0 but `ReqCreatureOrGOCount%d` = %u.", qinfo->GetQuestId(), j + 1, j + 1, qinfo->ReqCreatureOrGOCount[j]);
                 // no changes, quest ignore this data
             }
         }
@@ -5742,30 +5689,26 @@ void ObjectMgr::LoadQuests()
                 }
                 else
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = %u but item with entry %u does not exist, quest will not reward this item.",
-                                    qinfo->GetQuestId(), j + 1, id, id);
-                    qinfo->RewChoiceItemId[j] = 0;          // no changes, quest will not reward this
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = %u but item with entry %u does not exist, quest will not reward this item.", qinfo->GetQuestId(), j + 1, id, id);
+                    qinfo->RewChoiceItemId[j] = 0; // no changes, quest will not reward this
                 }
 
                 if (!qinfo->RewChoiceItemCount[j])
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = %u but `RewChoiceItemCount%d` = 0, quest can't be done.",
-                                    qinfo->GetQuestId(), j + 1, id, j + 1);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = %u but `RewChoiceItemCount%d` = 0, quest can't be done.", qinfo->GetQuestId(), j + 1, id, j + 1);
                     // no changes, quest can't be done
                 }
             }
-            else if (choice_found)                          // 1.12.1 client (but not later) crash if have gap in item reward choices
+            else if (choice_found) // 1.12.1 client (but not later) crash if have gap in item reward choices
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = 0 but `RewChoiceItemId%d` = %u, client can crash at like data.",
-                                qinfo->GetQuestId(), j + 1, j + 2, qinfo->RewChoiceItemId[j + 1]);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = 0 but `RewChoiceItemId%d` = %u, client can crash at like data.", qinfo->GetQuestId(), j + 1, j + 2, qinfo->RewChoiceItemId[j + 1]);
                 // fill gap by clone later filled choice
                 qinfo->RewChoiceItemId[j] = qinfo->RewChoiceItemId[j + 1];
                 qinfo->RewChoiceItemCount[j] = qinfo->RewChoiceItemCount[j + 1];
             }
             else if (qinfo->RewChoiceItemCount[j] > 0)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = 0 but `RewChoiceItemCount%d` = %u.",
-                                qinfo->GetQuestId(), j + 1, j + 1, qinfo->RewChoiceItemCount[j]);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewChoiceItemId%d` = 0 but `RewChoiceItemCount%d` = %u.", qinfo->GetQuestId(), j + 1, j + 1, qinfo->RewChoiceItemCount[j]);
                 // no changes, quest ignore this data
             }
         }
@@ -5785,22 +5728,19 @@ void ObjectMgr::LoadQuests()
                 }
                 else
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewItemId%d` = %u but item with entry %u does not exist, quest will not reward this item.",
-                                    qinfo->GetQuestId(), j + 1, id, id);
-                    qinfo->RewItemId[j] = 0;                // no changes, quest will not reward this item
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewItemId%d` = %u but item with entry %u does not exist, quest will not reward this item.", qinfo->GetQuestId(), j + 1, id, id);
+                    qinfo->RewItemId[j] = 0; // no changes, quest will not reward this item
                 }
 
                 if (!qinfo->RewItemCount[j])
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewItemId%d` = %u but `RewItemCount%d` = 0, quest will not reward this item.",
-                                    qinfo->GetQuestId(), j + 1, id, j + 1);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewItemId%d` = %u but `RewItemCount%d` = 0, quest will not reward this item.", qinfo->GetQuestId(), j + 1, id, j + 1);
                     // no changes
                 }
             }
             else if (qinfo->RewItemCount[j] > 0)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewItemId%d` = 0 but `RewItemCount%d` = %u.",
-                                qinfo->GetQuestId(), j + 1, j + 1, qinfo->RewItemCount[j]);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewItemId%d` = 0 but `RewItemCount%d` = %u.", qinfo->GetQuestId(), j + 1, j + 1, qinfo->RewItemCount[j]);
                 // no changes, quest ignore this data
             }
         }
@@ -5811,30 +5751,26 @@ void ObjectMgr::LoadQuests()
             {
                 if (!qinfo->RewRepValue[j])
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewRepFaction%d` = %u but `RewRepValue%d` = 0, quest will not reward this reputation.",
-                                    qinfo->GetQuestId(), j + 1, qinfo->RewRepValue[j], j + 1);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewRepFaction%d` = %u but `RewRepValue%d` = 0, quest will not reward this reputation.", qinfo->GetQuestId(), j + 1, qinfo->RewRepValue[j], j + 1);
                     // no changes
                 }
 
                 if (!GetFactionEntry(qinfo->RewRepFaction[j]))
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewRepFaction%d` = %u but raw faction (faction.dbc) %u does not exist, quest will not reward reputation for this faction.",
-                                    qinfo->GetQuestId(), j + 1, qinfo->RewRepFaction[j] , qinfo->RewRepFaction[j]);
-                    qinfo->RewRepFaction[j] = 0;            // quest will not reward this
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewRepFaction%d` = %u but raw faction (faction.dbc) %u does not exist, quest will not reward reputation for this faction.", qinfo->GetQuestId(), j + 1, qinfo->RewRepFaction[j], qinfo->RewRepFaction[j]);
+                    qinfo->RewRepFaction[j] = 0; // quest will not reward this
                 }
             }
             else
             {
                 if (qinfo->RewRepSpilloverMask & (1 << j))
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewRepFaction%d` = 0 but `RewRepSpilloverMask` is set for this index.",
-                        qinfo->GetQuestId(), j + 1);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewRepFaction%d` = 0 but `RewRepSpilloverMask` is set for this index.", qinfo->GetQuestId(), j + 1);
                     // no changes, quest ignore this data
                 }
                 if (qinfo->RewRepValue[j] != 0)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewRepFaction%d` = 0 but `RewRepValue%d` = %i.",
-                        qinfo->GetQuestId(), j + 1, j + 1, qinfo->RewRepValue[j]);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewRepFaction%d` = 0 but `RewRepValue%d` = %i.", qinfo->GetQuestId(), j + 1, j + 1, qinfo->RewRepValue[j]);
                     // no changes, quest ignore this data
                 }
             }
@@ -5846,21 +5782,18 @@ void ObjectMgr::LoadQuests()
 
             if (!spellInfo)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpell` = %u but spell %u does not exist, spell removed as display reward.",
-                                qinfo->GetQuestId(), qinfo->RewSpell, qinfo->RewSpell);
-                qinfo->RewSpell = 0;                        // no spell reward will display for this quest
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpell` = %u but spell %u does not exist, spell removed as display reward.", qinfo->GetQuestId(), qinfo->RewSpell, qinfo->RewSpell);
+                qinfo->RewSpell = 0; // no spell reward will display for this quest
             }
             else if (!SpellMgr::IsSpellValid(spellInfo))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpell` = %u but spell %u is broken, quest will not have a spell reward.",
-                                qinfo->GetQuestId(), qinfo->RewSpell, qinfo->RewSpell);
-                qinfo->RewSpell = 0;                        // no spell reward will display for this quest
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpell` = %u but spell %u is broken, quest will not have a spell reward.", qinfo->GetQuestId(), qinfo->RewSpell, qinfo->RewSpell);
+                qinfo->RewSpell = 0; // no spell reward will display for this quest
             }
             else if (GetTalentSpellCost(qinfo->RewSpell))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpell` = %u but spell %u is talent, quest will not have a spell reward.",
-                                qinfo->GetQuestId(), qinfo->RewSpell, qinfo->RewSpell);
-                qinfo->RewSpell = 0;                        // no spell reward will display for this quest
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpell` = %u but spell %u is talent, quest will not have a spell reward.", qinfo->GetQuestId(), qinfo->RewSpell, qinfo->RewSpell);
+                qinfo->RewSpell = 0; // no spell reward will display for this quest
             }
         }
 
@@ -5870,21 +5803,18 @@ void ObjectMgr::LoadQuests()
 
             if (!spellInfo)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpellCast` = %u but spell %u does not exist, quest will not have a spell reward.",
-                                qinfo->GetQuestId(), qinfo->RewSpellCast, qinfo->RewSpellCast);
-                qinfo->RewSpellCast = 0;                    // no spell will be casted on player
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpellCast` = %u but spell %u does not exist, quest will not have a spell reward.", qinfo->GetQuestId(), qinfo->RewSpellCast, qinfo->RewSpellCast);
+                qinfo->RewSpellCast = 0; // no spell will be casted on player
             }
             else if (!SpellMgr::IsSpellValid(spellInfo))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpellCast` = %u but spell %u is broken, quest will not have a spell reward.",
-                                qinfo->GetQuestId(), qinfo->RewSpellCast, qinfo->RewSpellCast);
-                qinfo->RewSpellCast = 0;                    // no spell will be casted on player
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpellCast` = %u but spell %u is broken, quest will not have a spell reward.", qinfo->GetQuestId(), qinfo->RewSpellCast, qinfo->RewSpellCast);
+                qinfo->RewSpellCast = 0; // no spell will be casted on player
             }
             else if (GetTalentSpellCost(qinfo->RewSpellCast))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpell` = %u but spell %u is talent, quest will not have a spell reward.",
-                                qinfo->GetQuestId(), qinfo->RewSpellCast, qinfo->RewSpellCast);
-                qinfo->RewSpellCast = 0;                    // no spell will be casted on player
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewSpell` = %u but spell %u is talent, quest will not have a spell reward.", qinfo->GetQuestId(), qinfo->RewSpellCast, qinfo->RewSpellCast);
+                qinfo->RewSpellCast = 0; // no spell will be casted on player
             }
         }
 
@@ -5893,18 +5823,16 @@ void ObjectMgr::LoadQuests()
             uint32 mailTemplateId = abs(qinfo->RewMailTemplateId);
             if (!sMailTemplateStorage.LookupEntry<MailTemplateEntry>(mailTemplateId))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewMailTemplateId` = %u but mail template  %u does not exist, quest will not have a mail reward.",
-                                qinfo->GetQuestId(), mailTemplateId, mailTemplateId);
-                qinfo->RewMailTemplateId = 0;               // no mail will send to player
-                qinfo->RewMailDelaySecs = 0;                // no mail will send to player
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewMailTemplateId` = %u but mail template  %u does not exist, quest will not have a mail reward.", qinfo->GetQuestId(), mailTemplateId, mailTemplateId);
+                qinfo->RewMailTemplateId = 0; // no mail will send to player
+                qinfo->RewMailDelaySecs = 0; // no mail will send to player
             }
             else if (usedMailTemplates.find(mailTemplateId) != usedMailTemplates.end())
             {
                 std::map<uint32, uint32>::const_iterator used_mt_itr = usedMailTemplates.find(mailTemplateId);
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewMailTemplateId` = %u but mail template  %u already used for quest %u, quest will not have a mail reward.",
-                                qinfo->GetQuestId(), mailTemplateId, mailTemplateId, used_mt_itr->second);
-                qinfo->RewMailTemplateId = 0;               // no mail will send to player
-                qinfo->RewMailDelaySecs = 0;                // no mail will send to player
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `RewMailTemplateId` = %u but mail template  %u already used for quest %u, quest will not have a mail reward.", qinfo->GetQuestId(), mailTemplateId, mailTemplateId, used_mt_itr->second);
+                qinfo->RewMailTemplateId = 0; // no mail will send to player
+                qinfo->RewMailDelaySecs = 0; // no mail will send to player
             }
             else
                 usedMailTemplates[mailTemplateId] = qinfo->GetQuestId();
@@ -5915,8 +5843,7 @@ void ObjectMgr::LoadQuests()
             QuestMap::iterator qNextItr = m_QuestTemplatesMap.find(qinfo->NextQuestInChain);
             if (qNextItr == m_QuestTemplatesMap.end())
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `NextQuestInChain` = %u but quest %u does not exist, quest chain will not work.",
-                                qinfo->GetQuestId(), qinfo->NextQuestInChain , qinfo->NextQuestInChain);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Quest %u has `NextQuestInChain` = %u but quest %u does not exist, quest chain will not work.", qinfo->GetQuestId(), qinfo->NextQuestInChain, qinfo->NextQuestInChain);
                 qinfo->NextQuestInChain = 0;
             }
             else
@@ -5975,7 +5902,7 @@ void ObjectMgr::LoadQuests()
     for (auto const& itr : m_QuestTemplatesMap)
     {
         Quest* qinfo = itr.second.get();
-        uint32   qid = qinfo->GetQuestId();
+        uint32 qid = qinfo->GetQuestId();
         uint32 breadcrumbForQuestId = qinfo->BreadcrumbForQuestId;
         std::set<uint32> questSet;
 
@@ -6041,19 +5968,18 @@ uint32 ObjectMgr::GetQuestStartingItemID(uint32 quest_id) const
 
 void ObjectMgr::LoadQuestLocales()
 {
-    m_QuestLocaleMap.clear();                                // need for reload case
+    m_QuestLocaleMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `entry`,"
-                          "`Title_loc1`, `Details_loc1`, `Objectives_loc1`, `OfferRewardText_loc1`, `RequestItemsText_loc1`, `EndText_loc1`, `ObjectiveText1_loc1`, `ObjectiveText2_loc1`, `ObjectiveText3_loc1`, `ObjectiveText4_loc1`,"
-                          "`Title_loc2`, `Details_loc2`, `Objectives_loc2`, `OfferRewardText_loc2`, `RequestItemsText_loc2`, `EndText_loc2`, `ObjectiveText1_loc2`, `ObjectiveText2_loc2`, `ObjectiveText3_loc2`, `ObjectiveText4_loc2`,"
-                          "`Title_loc3`, `Details_loc3`, `Objectives_loc3`, `OfferRewardText_loc3`, `RequestItemsText_loc3`, `EndText_loc3`, `ObjectiveText1_loc3`, `ObjectiveText2_loc3`, `ObjectiveText3_loc3`, `ObjectiveText4_loc3`,"
-                          "`Title_loc4`, `Details_loc4`, `Objectives_loc4`, `OfferRewardText_loc4`, `RequestItemsText_loc4`, `EndText_loc4`, `ObjectiveText1_loc4`, `ObjectiveText2_loc4`, `ObjectiveText3_loc4`, `ObjectiveText4_loc4`,"
-                          "`Title_loc5`, `Details_loc5`, `Objectives_loc5`, `OfferRewardText_loc5`, `RequestItemsText_loc5`, `EndText_loc5`, `ObjectiveText1_loc5`, `ObjectiveText2_loc5`, `ObjectiveText3_loc5`, `ObjectiveText4_loc5`,"
-                          "`Title_loc6`, `Details_loc6`, `Objectives_loc6`, `OfferRewardText_loc6`, `RequestItemsText_loc6`, `EndText_loc6`, `ObjectiveText1_loc6`, `ObjectiveText2_loc6`, `ObjectiveText3_loc6`, `ObjectiveText4_loc6`,"
-                          "`Title_loc7`, `Details_loc7`, `Objectives_loc7`, `OfferRewardText_loc7`, `RequestItemsText_loc7`, `EndText_loc7`, `ObjectiveText1_loc7`, `ObjectiveText2_loc7`, `ObjectiveText3_loc7`, `ObjectiveText4_loc7`,"
-                          "`Title_loc8`, `Details_loc8`, `Objectives_loc8`, `OfferRewardText_loc8`, `RequestItemsText_loc8`, `EndText_loc8`, `ObjectiveText1_loc8`, `ObjectiveText2_loc8`, `ObjectiveText3_loc8`, `ObjectiveText4_loc8`"
-                          " FROM `locales_quest`"
-                                             ));
+                                                            "`Title_loc1`, `Details_loc1`, `Objectives_loc1`, `OfferRewardText_loc1`, `RequestItemsText_loc1`, `EndText_loc1`, `ObjectiveText1_loc1`, `ObjectiveText2_loc1`, `ObjectiveText3_loc1`, `ObjectiveText4_loc1`,"
+                                                            "`Title_loc2`, `Details_loc2`, `Objectives_loc2`, `OfferRewardText_loc2`, `RequestItemsText_loc2`, `EndText_loc2`, `ObjectiveText1_loc2`, `ObjectiveText2_loc2`, `ObjectiveText3_loc2`, `ObjectiveText4_loc2`,"
+                                                            "`Title_loc3`, `Details_loc3`, `Objectives_loc3`, `OfferRewardText_loc3`, `RequestItemsText_loc3`, `EndText_loc3`, `ObjectiveText1_loc3`, `ObjectiveText2_loc3`, `ObjectiveText3_loc3`, `ObjectiveText4_loc3`,"
+                                                            "`Title_loc4`, `Details_loc4`, `Objectives_loc4`, `OfferRewardText_loc4`, `RequestItemsText_loc4`, `EndText_loc4`, `ObjectiveText1_loc4`, `ObjectiveText2_loc4`, `ObjectiveText3_loc4`, `ObjectiveText4_loc4`,"
+                                                            "`Title_loc5`, `Details_loc5`, `Objectives_loc5`, `OfferRewardText_loc5`, `RequestItemsText_loc5`, `EndText_loc5`, `ObjectiveText1_loc5`, `ObjectiveText2_loc5`, `ObjectiveText3_loc5`, `ObjectiveText4_loc5`,"
+                                                            "`Title_loc6`, `Details_loc6`, `Objectives_loc6`, `OfferRewardText_loc6`, `RequestItemsText_loc6`, `EndText_loc6`, `ObjectiveText1_loc6`, `ObjectiveText2_loc6`, `ObjectiveText3_loc6`, `ObjectiveText4_loc6`,"
+                                                            "`Title_loc7`, `Details_loc7`, `Objectives_loc7`, `OfferRewardText_loc7`, `RequestItemsText_loc7`, `EndText_loc7`, `ObjectiveText1_loc7`, `ObjectiveText2_loc7`, `ObjectiveText3_loc7`, `ObjectiveText4_loc7`,"
+                                                            "`Title_loc8`, `Details_loc8`, `Objectives_loc8`, `OfferRewardText_loc8`, `RequestItemsText_loc8`, `EndText_loc8`, `ObjectiveText1_loc8`, `ObjectiveText2_loc8`, `ObjectiveText3_loc8`, `ObjectiveText4_loc8`"
+                                                            " FROM `locales_quest`"));
 
     if (!result)
     {
@@ -6346,10 +6272,9 @@ void ObjectMgr::LoadItemTexts()
         bar.step();
         Field* fields = result->Fetch();
 
-        m_ItemTextsMap[ fields[0].GetUInt32() ] = fields[1].GetCppString();
+        m_ItemTextsMap[fields[0].GetUInt32()] = fields[1].GetCppString();
 
         ++count;
-
     }
     while (result->NextRow());
 
@@ -6389,8 +6314,7 @@ void ObjectMgr::LoadPageTexts()
                 ss << "The text page(s) ";
                 for (const auto checkedPage : checkedPages)
                     ss << checkedPage << " ";
-                ss << "create(s) a circular reference, which can cause the server to freeze. Changing next_page of page "
-                   << pageItr->entry << " to 0";
+                ss << "create(s) a circular reference, which can cause the server to freeze. Changing next_page of page " << pageItr->entry << " to 0";
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "%s", ss.str().c_str());
                 const_cast<PageText*>(pageItr)->next_page = 0;
                 break;
@@ -6401,7 +6325,7 @@ void ObjectMgr::LoadPageTexts()
 
 void ObjectMgr::LoadPageTextLocales()
 {
-    m_PageTextLocaleMap.clear();                             // need for reload case
+    m_PageTextLocaleMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `entry`, `text_loc1`, `text_loc2`, `text_loc3`, `text_loc4`, `text_loc5`, `text_loc6`, `text_loc7`, `text_loc8` FROM `locales_page_text`"));
 
@@ -6448,7 +6372,6 @@ void ObjectMgr::LoadPageTextLocales()
                 data.text[idx] = str;
             }
         }
-
     }
     while (result->NextRow());
 
@@ -6458,7 +6381,7 @@ void ObjectMgr::LoadPageTextLocales()
 
 struct SQLMapLoader : public SQLStorageLoaderBase<SQLMapLoader, SQLStorage>
 {
-    template<class D>
+    template <class D>
     void convert_from_str(uint32 /*field_pos*/, char const* src, D& dst)
     {
         dst = D(sScriptMgr.GetScriptId(src));
@@ -6478,16 +6401,14 @@ void ObjectMgr::LoadMapTemplate()
             MapEntry const* parentEntry = sMapStorage.LookupEntry<MapEntry>(itr->parent);
             if (!parentEntry)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "ObjectMgr::LoadMapTemplate: bad parent map id %u for instance template %u template!",
-                    itr->parent, itr->id);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "ObjectMgr::LoadMapTemplate: bad parent map id %u for instance template %u template!", itr->parent, itr->id);
                 const_cast<MapEntry*>(*itr)->parent = 0;
                 continue;
             }
 
             if (parentEntry->IsContinent())
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "ObjectMgr::LoadMapTemplate: parent point to continent map id %u for instance template %u template, ignored, need be set only for non-continent parents!",
-                                parentEntry->id, itr->id);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "ObjectMgr::LoadMapTemplate: parent point to continent map id %u for instance template %u template, ignored, need be set only for non-continent parents!", parentEntry->id, itr->id);
                 const_cast<MapEntry*>(*itr)->parent = 0;
                 continue;
             }
@@ -6530,7 +6451,7 @@ void ObjectMgr::LoadMapTemplate()
 
 struct SQLWorldLoader : public SQLStorageLoaderBase<SQLWorldLoader, SQLStorage>
 {
-    template<class D>
+    template <class D>
     void convert_from_str(uint32 /*field_pos*/, char const* src, D& dst)
     {
         dst = D(sScriptMgr.GetScriptId(src));
@@ -6539,12 +6460,12 @@ struct SQLWorldLoader : public SQLStorageLoaderBase<SQLWorldLoader, SQLStorage>
 
 void ObjectMgr::LoadNPCText()
 {
-    m_NpcTextMap.clear();                           // need for reload case
+    m_NpcTextMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `ID`, "
-        "`Probability0`, `Probability1`, `Probability2`, `Probability3`, `Probability4`, `Probability5`, `Probability6`, `Probability7`, "
-        "`BroadcastTextID0`, `BroadcastTextID1`, `BroadcastTextID2`, `BroadcastTextID3`, `BroadcastTextID4`, `BroadcastTextID5`, `BroadcastTextID6`, `BroadcastTextID7`"
-        " FROM `npc_text`"));
+                                                            "`Probability0`, `Probability1`, `Probability2`, `Probability3`, `Probability4`, `Probability5`, `Probability6`, `Probability7`, "
+                                                            "`BroadcastTextID0`, `BroadcastTextID1`, `BroadcastTextID2`, `BroadcastTextID3`, `BroadcastTextID4`, `BroadcastTextID5`, `BroadcastTextID6`, `BroadcastTextID7`"
+                                                            " FROM `npc_text`"));
 
     int count = 0;
     if (!result)
@@ -6642,11 +6563,10 @@ public:
 
                 CharacterDatabase.PExecute("DELETE FROM `mail` WHERE `id` = '%u'", messageID);
             }
-            else                // Return to sender
+            else // Return to sender
             {
                 // mail will be returned:
-                CharacterDatabase.PExecute("UPDATE `mail` SET `sender_guid` = '%u', `receiver_guid` = '%u', `expire_time` = '" UI64FMTD "', `deliver_time` = '" UI64FMTD "', `cod` = '0', `checked` = '%u' WHERE `id` = '%u'",
-                                           receiverGuid.GetCounter(), returnToLowGuid, (uint64)(basetime + 30 * DAY), (uint64)basetime, MAIL_CHECK_MASK_RETURNED, messageID);
+                CharacterDatabase.PExecute("UPDATE `mail` SET `sender_guid` = '%u', `receiver_guid` = '%u', `expire_time` = '" UI64FMTD "', `deliver_time` = '" UI64FMTD "', `cod` = '0', `checked` = '%u' WHERE `id` = '%u'", receiverGuid.GetCounter(), returnToLowGuid, (uint64)(basetime + 30 * DAY), (uint64)basetime, MAIL_CHECK_MASK_RETURNED, messageID);
                 if (item_guid)
                 {
                     // update receiver in mail items for its proper delivery, and in instance_item for avoid lost item at sender delete
@@ -6676,7 +6596,7 @@ public:
                 sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Only expired mails (need to be return or delete) or DB table `mail` is empty.");
             }
             delete this;
-            return;                                             // any mails need to be returned or deleted
+            return; // any mails need to be returned or deleted
         }
 
         uint32 skippedCount = 0;
@@ -6729,7 +6649,6 @@ public:
             // deletemail = true;
             // delmails << m.messageID << ", ";
             CharacterDatabase.PExecute("DELETE FROM `mail` WHERE `id` = '%u'", m.messageID);
-            
         }
         while (result->NextRow());
         sObjectMgr.IncrementOldMailCounter(skippedCount);
@@ -6738,12 +6657,12 @@ public:
     }
 };
 
-//not very fast function but it is called only once a day, or on starting-up
+// not very fast function but it is called only once a day, or on starting-up
 void ObjectMgr::ReturnOrDeleteOldMails(bool serverUp)
 {
     time_t basetime = time(nullptr);
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Returning mails current time: hour: %d, minute: %d, second: %d ", localtime(&basetime)->tm_hour, localtime(&basetime)->tm_min, localtime(&basetime)->tm_sec);
-    //delete all old mails without item and without body immediately, if starting server
+    // delete all old mails without item and without body immediately, if starting server
     if (!serverUp)
         CharacterDatabase.PExecute("DELETE FROM `mail` WHERE `expire_time` < '" UI64FMTD "' AND `has_items` = '0' AND `item_text_id` = 0", (uint64)basetime);
     OldMailsReturner* cb = new OldMailsReturner();
@@ -6789,9 +6708,7 @@ bool IsPointInAreaTriggerZone(AreaTriggerEntry const* atEntry, uint32 mapid, flo
         // box edges are parallel to coordiante axis, so we can treat every dimension independently :D
         float dz = z - atEntry->z;
 
-        if ((fabs(dx) > atEntry->box_x / 2 + delta) ||
-                (fabs(dy) > atEntry->box_y / 2 + delta) ||
-                (fabs(dz) > atEntry->box_z / 2 + delta))
+        if ((fabs(dx) > atEntry->box_x / 2 + delta) || (fabs(dy) > atEntry->box_y / 2 + delta) || (fabs(dz) > atEntry->box_z / 2 + delta))
             return false;
     }
 
@@ -6846,7 +6763,7 @@ void ObjectMgr::LoadAreaTriggers()
                 sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "AreaTrigger %u has non-existing condition %u assigned.", areaTrigger.id, areaTrigger.condition_id);
                 areaTrigger.condition_id = 0;
             }
-            
+
             if (!areaTrigger.script_id && !areaTrigger.script_name)
             {
                 sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "AreaTrigger %u has condition %u assigned but no script.", areaTrigger.id, areaTrigger.condition_id);
@@ -6864,8 +6781,8 @@ void ObjectMgr::LoadAreaTriggers()
         }
 
         m_AreaTriggersMap[triggerId] = areaTrigger;
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u area triggers.", (uint32)m_AreaTriggersMap.size());
@@ -6873,7 +6790,7 @@ void ObjectMgr::LoadAreaTriggers()
 
 void ObjectMgr::LoadQuestAreaTriggers()
 {
-    m_QuestAreaTriggerMap.clear();                           // need for reload case
+    m_QuestAreaTriggerMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `id`, `quest` FROM `areatrigger_involvedrelation`"));
 
@@ -6898,7 +6815,7 @@ void ObjectMgr::LoadQuestAreaTriggers()
         Field* fields = result->Fetch();
 
         uint32 trigger_ID = fields[0].GetUInt32();
-        uint32 quest_ID   = fields[1].GetUInt32();
+        uint32 quest_ID = fields[1].GetUInt32();
 
         AreaTriggerEntry const* atEntry = GetAreaTrigger(trigger_ID);
         if (!atEntry)
@@ -6927,7 +6844,6 @@ void ObjectMgr::LoadQuestAreaTriggers()
         }
 
         m_QuestAreaTriggerMap[trigger_ID] = quest_ID;
-
     }
     while (result->NextRow());
 
@@ -6937,7 +6853,7 @@ void ObjectMgr::LoadQuestAreaTriggers()
 
 void ObjectMgr::LoadTavernAreaTriggers()
 {
-    m_TavernAreaTriggerSet.clear();                          // need for reload case
+    m_TavernAreaTriggerSet.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `id` FROM `areatrigger_tavern` WHERE `patch_min` <= %u", sWorld.GetWowPatch()));
 
@@ -6961,7 +6877,7 @@ void ObjectMgr::LoadTavernAreaTriggers()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 triggerId      = fields[0].GetUInt32();
+        uint32 triggerId = fields[0].GetUInt32();
 
         AreaTriggerEntry const* atEntry = GetAreaTrigger(triggerId);
         if (!atEntry)
@@ -6980,7 +6896,7 @@ void ObjectMgr::LoadTavernAreaTriggers()
 
 void ObjectMgr::LoadBattlegroundEntranceTriggers()
 {
-    m_BGEntranceTriggersMap.clear();                                  // need for reload case
+    m_BGEntranceTriggersMap.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -7010,14 +6926,14 @@ void ObjectMgr::LoadBattlegroundEntranceTriggers()
         BattlegroundEntranceTrigger bget;
 
 
-        uint32 team             = fields[1].GetUInt32();
-        uint8 bgTypeId          = fields[2].GetUInt8();
+        uint32 team = fields[1].GetUInt32();
+        uint8 bgTypeId = fields[2].GetUInt8();
 
-        bget.exit_mapId         = fields[3].GetUInt32();
-        bget.exit_X             = fields[4].GetFloat();
-        bget.exit_Y             = fields[5].GetFloat();
-        bget.exit_Z             = fields[6].GetFloat();
-        bget.exit_Orientation   = fields[7].GetFloat();
+        bget.exit_mapId = fields[3].GetUInt32();
+        bget.exit_X = fields[4].GetFloat();
+        bget.exit_Y = fields[5].GetFloat();
+        bget.exit_Z = fields[6].GetFloat();
+        bget.exit_Orientation = fields[7].GetFloat();
 
         AreaTriggerEntry const* bgetEntry = GetAreaTrigger(triggerId);
         if (!bgetEntry)
@@ -7074,7 +6990,7 @@ uint32 ObjectMgr::GetNearestTaxiNode(float x, float y, float z, uint32 mapid, Te
         if (!node || node->map_id != mapid || !node->MountCreatureID[team == ALLIANCE ? 1 : 0])
             continue;
 
-        uint8  field   = (uint8)((i - 1) / 32);
+        uint8 field = (uint8)((i - 1) / 32);
         uint32 submask = 1 << ((i - 1) % 32);
 
         // skip not taxi network nodes
@@ -7165,7 +7081,7 @@ uint32 ObjectMgr::GetTaxiMountDisplayId(uint32 id, Team team, bool allowed_alt_t
 
 void ObjectMgr::LoadGraveyardZones()
 {
-    m_GraveYardMap.clear();                                  // need for reload case
+    m_GraveYardMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `id`, `ghost_zone`, `faction` FROM `game_graveyard_zone` WHERE %u BETWEEN `patch_min` AND `patch_max`", sWorld.GetWowPatch()));
 
@@ -7191,7 +7107,7 @@ void ObjectMgr::LoadGraveyardZones()
 
         uint32 safeLocId = fields[0].GetUInt32();
         uint32 zoneId = fields[1].GetUInt32();
-        uint32 team   = fields[2].GetUInt32();
+        uint32 team = fields[2].GetUInt32();
 
         WorldSafeLocsEntry const* entry = sWorldSafeLocsStore.LookupEntry(safeLocId);
         if (!entry)
@@ -7286,10 +7202,7 @@ WorldSafeLocsEntry const* ObjectMgr::GetClosestGraveYardForArea(uint32 areaOrZon
         if (mapId != entry->map_id)
         {
             // if find graveyard at different map from where entrance placed (or no entrance data), use any first
-            if (!tempEntry ||
-                    tempEntry->ghostEntranceMap < 0 ||
-                    uint32(tempEntry->ghostEntranceMap) != entry->map_id ||
-                    (tempEntry->ghostEntranceX == 0.0f && tempEntry->ghostEntranceY == 0.0f))
+            if (!tempEntry || tempEntry->ghostEntranceMap < 0 || uint32(tempEntry->ghostEntranceMap) != entry->map_id || (tempEntry->ghostEntranceX == 0.0f && tempEntry->ghostEntranceY == 0.0f))
             {
                 // not have any coordinates for check distance anyway
                 entryFar = entry;
@@ -7297,8 +7210,7 @@ WorldSafeLocsEntry const* ObjectMgr::GetClosestGraveYardForArea(uint32 areaOrZon
             }
 
             // at entrance map calculate distance (2D);
-            float dist2 = (entry->x - tempEntry->ghostEntranceX) * (entry->x - tempEntry->ghostEntranceX)
-                          + (entry->y - tempEntry->ghostEntranceY) * (entry->y - tempEntry->ghostEntranceY);
+            float dist2 = (entry->x - tempEntry->ghostEntranceX) * (entry->x - tempEntry->ghostEntranceX) + (entry->y - tempEntry->ghostEntranceY) * (entry->y - tempEntry->ghostEntranceY);
             if (foundEntr)
             {
                 if (dist2 < distEntr)
@@ -7373,7 +7285,8 @@ bool ObjectMgr::AddGraveYardLink(uint32 id, uint32 zoneId, Team team, bool inDB)
     if (inDB)
     {
         WorldDatabase.PExecuteLog("INSERT INTO `game_graveyard_zone` (`id`, `ghost_zone`, `faction`) "
-                                  "VALUES ('%u', '%u','%u')", id, zoneId, uint32(team));
+                                  "VALUES ('%u', '%u','%u')",
+                                  id, zoneId, uint32(team));
     }
 
     return true;
@@ -7403,7 +7316,8 @@ void ObjectMgr::LoadWorldSafeLocsFacing()
 
         m_worldSafeLocsFacingMap[safeLocId] = orientation;
         count++;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u world safe locs facing values", count);
 }
@@ -7418,17 +7332,18 @@ float ObjectMgr::GetWorldSafeLocFacing(uint32 id) const
 
 void ObjectMgr::LoadAreaTriggerTeleports()
 {
-    m_AreaTriggerTeleportMap.clear();                                  // need for reload case
+    m_AreaTriggerTeleportMap.clear(); // need for reload case
 
     uint32 count = 0;
 
     std::unique_ptr<QueryResult> result(WorldDatabase.PQuery(
-    //           0     1                 2                      3
+        //           0     1                 2                      3
         "SELECT `id`, `required_level`, `required_condition`, `message`, "
-    //    4             5                    6                    7                    8 
+        //    4             5                    6                    7                    8
         "`target_map`, `target_position_x`, `target_position_y`, `target_position_z`, `target_orientation` "
-        "FROM `areatrigger_teleport` t1 WHERE `patch`=(SELECT max(`patch`) FROM `areatrigger_teleport` t2 WHERE t1.`id`=t2.`id` && `patch` <= %u)", sWorld.GetWowPatch()));
-    
+        "FROM `areatrigger_teleport` t1 WHERE `patch`=(SELECT max(`patch`) FROM `areatrigger_teleport` t2 WHERE t1.`id`=t2.`id` && `patch` <= %u)",
+        sWorld.GetWowPatch()));
+
     if (!result)
     {
 
@@ -7452,14 +7367,14 @@ void ObjectMgr::LoadAreaTriggerTeleports()
 
         AreaTriggerTeleport at;
 
-        at.requiredLevel      = fields[1].GetUInt8();
-        at.requiredCondition  = fields[2].GetUInt32();
-        at.message            = fields[3].GetCppString();
-        at.destination.mapId  = fields[4].GetUInt32();
-        at.destination.x      = fields[5].GetFloat();
-        at.destination.y      = fields[6].GetFloat();
-        at.destination.z      = fields[7].GetFloat();
-        at.destination.o      = fields[8].GetFloat();
+        at.requiredLevel = fields[1].GetUInt8();
+        at.requiredCondition = fields[2].GetUInt32();
+        at.message = fields[3].GetCppString();
+        at.destination.mapId = fields[4].GetUInt32();
+        at.destination.x = fields[5].GetFloat();
+        at.destination.y = fields[6].GetFloat();
+        at.destination.z = fields[7].GetFloat();
+        at.destination.o = fields[8].GetFloat();
 
         AreaTriggerEntry const* atEntry = GetAreaTrigger(triggerId);
         if (!atEntry)
@@ -7488,7 +7403,6 @@ void ObjectMgr::LoadAreaTriggerTeleports()
         }
 
         m_AreaTriggerTeleportMap[triggerId] = at;
-
     }
     while (result->NextRow());
 
@@ -7500,7 +7414,7 @@ void ObjectMgr::LoadAreaTriggerTeleports()
  * Searches for the areatrigger which teleports players out of the given map (only direct to continent)
  */
 AreaTriggerTeleport const* ObjectMgr::GetGoBackTrigger(uint32 map_id) const
-{  
+{
     MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(map_id);
     if (!mapEntry || !mapEntry->IsDungeon())
         return nullptr;
@@ -7536,7 +7450,7 @@ AreaTriggerTeleport const* ObjectMgr::GetMapEntranceTrigger(uint32 Map) const
 
 void ObjectMgr::LoadAreaTriggerLocales()
 {
-    m_AreaTriggerLocaleMap.clear();                           // need for reload case
+    m_AreaTriggerLocaleMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `entry`, `message_loc1`, `message_loc2`, `message_loc3`, `message_loc4`, `message_loc5`, `message_loc6`, `message_loc7`, `message_loc8` FROM `locales_areatrigger`"));
 
@@ -7586,8 +7500,8 @@ void ObjectMgr::LoadAreaTriggerLocales()
                 }
             }
         }
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %lu areatrigger locale strings", (unsigned long)m_AreaTriggerLocaleMap.size());
@@ -7684,7 +7598,8 @@ void ObjectMgr::SetHighestGuids()
         {
             Field* fields = result->Fetch();
             m_AuctionsIds.insert(fields[0].GetUInt32());
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
     m_NextAuctionId = 1;
 
@@ -7715,20 +7630,20 @@ void ObjectMgr::SetHighestGuids()
 uint32 ObjectMgr::CreateItemText(std::string text)
 {
     uint32 newItemTextId = GenerateItemTextID();
-    //insert new itempage to container
-    m_ItemTextsMap[ newItemTextId ] = text;
-    //save new itempage
+    // insert new itempage to container
+    m_ItemTextsMap[newItemTextId] = text;
+    // save new itempage
     CharacterDatabase.escape_string(text);
-    //any Delete query needed, itemTextId is maximum of all ids
+    // any Delete query needed, itemTextId is maximum of all ids
     std::ostringstream query;
     query << "INSERT INTO `item_text` (`id`, `text`) VALUES ( '" << newItemTextId << "', '" << text << "')";
-    CharacterDatabase.Execute(query.str().c_str());         //needs to be run this way, because mail body may be more than 1024 characters
+    CharacterDatabase.Execute(query.str().c_str()); // needs to be run this way, because mail body may be more than 1024 characters
     return newItemTextId;
 }
 
 void ObjectMgr::LoadGameObjectLocales()
 {
-    m_GameObjectLocaleMap.clear();                           // need for reload case
+    m_GameObjectLocaleMap.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `entry`, `name_loc1`, `name_loc2`, `name_loc3`, `name_loc4`, `name_loc5`, `name_loc6`, `name_loc7`, `name_loc8` FROM `locales_gameobject`"));
 
@@ -7778,7 +7693,6 @@ void ObjectMgr::LoadGameObjectLocales()
                 }
             }
         }
-
     }
     while (result->NextRow());
 
@@ -7791,8 +7705,7 @@ inline void CheckGOLockId(GameObjectInfo const* goInfo, uint32 dataN, uint32 N)
     if (sLockStore.LookupEntry(dataN))
         return;
 
-    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have data%d=%u but lock (Id: %u) not found.",
-                    goInfo->id, goInfo->type, N, dataN, dataN);
+    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have data%d=%u but lock (Id: %u) not found.", goInfo->id, goInfo->type, N, dataN, dataN);
 }
 
 inline void CheckGOLinkedTrapId(GameObjectInfo const* goInfo, uint32 dataN, uint32 N)
@@ -7800,13 +7713,11 @@ inline void CheckGOLinkedTrapId(GameObjectInfo const* goInfo, uint32 dataN, uint
     if (GameObjectInfo const* trapInfo = sObjectMgr.GetGameObjectTemplate(dataN))
     {
         if (trapInfo->type != GAMEOBJECT_TYPE_TRAP)
-            sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but GO (Entry %u) have not GAMEOBJECT_TYPE_TRAP (%u) type.",
-                            goInfo->id, goInfo->type, N, dataN, dataN, GAMEOBJECT_TYPE_TRAP);
+            sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but GO (Entry %u) have not GAMEOBJECT_TYPE_TRAP (%u) type.", goInfo->id, goInfo->type, N, dataN, dataN, GAMEOBJECT_TYPE_TRAP);
     }
     else
         // too many error reports about nonexistent trap templates
-        sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but trap GO (Entry %u) not exist in `gameobject_template`.",
-                            goInfo->id, goInfo->type, N, dataN, dataN);
+        sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but trap GO (Entry %u) not exist in `gameobject_template`.", goInfo->id, goInfo->type, N, dataN, dataN);
 }
 
 inline void CheckGOSpellId(GameObjectInfo const* goInfo, uint32 dataN, uint32 N)
@@ -7814,8 +7725,7 @@ inline void CheckGOSpellId(GameObjectInfo const* goInfo, uint32 dataN, uint32 N)
     if (sSpellMgr.GetSpellEntry(dataN))
         return;
 
-    sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but Spell (Entry %u) not exist.",
-                    goInfo->id, goInfo->type, N, dataN, dataN);
+    sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but Spell (Entry %u) not exist.", goInfo->id, goInfo->type, N, dataN, dataN);
 }
 
 inline void CheckAndFixGOChairHeightId(GameObjectInfo const* goInfo, uint32& dataN, uint32 N)
@@ -7823,8 +7733,7 @@ inline void CheckAndFixGOChairHeightId(GameObjectInfo const* goInfo, uint32& dat
     if (dataN <= (UNIT_STAND_STATE_SIT_HIGH_CHAIR - UNIT_STAND_STATE_SIT_LOW_CHAIR))
         return;
 
-    sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but correct chair height in range 0..%i.",
-                    goInfo->id, goInfo->type, N, dataN, UNIT_STAND_STATE_SIT_HIGH_CHAIR - UNIT_STAND_STATE_SIT_LOW_CHAIR);
+    sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but correct chair height in range 0..%i.", goInfo->id, goInfo->type, N, dataN, UNIT_STAND_STATE_SIT_HIGH_CHAIR - UNIT_STAND_STATE_SIT_LOW_CHAIR);
 
     // prevent client and server unexpected work
     dataN = 0;
@@ -7836,8 +7745,7 @@ inline void CheckGONoDamageImmuneId(GameObjectInfo const* goInfo, uint32 dataN, 
     if (dataN <= 1)
         return;
 
-    sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but expected boolean (0/1) noDamageImmune field value.",
-                    goInfo->id, goInfo->type, N, dataN);
+    sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but expected boolean (0/1) noDamageImmune field value.", goInfo->id, goInfo->type, N, dataN);
 }
 
 inline void CheckGOConsumable(GameObjectInfo const* goInfo, uint32 dataN, uint32 N)
@@ -7846,8 +7754,7 @@ inline void CheckGOConsumable(GameObjectInfo const* goInfo, uint32 dataN, uint32
     if (dataN <= 1)
         return;
 
-    sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but expected boolean (0/1) consumable field value.",
-                    goInfo->id, goInfo->type, N, dataN);
+    sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Gameobject (Entry: %u GoType: %u) have data%d=%u but expected boolean (0/1) consumable field value.", goInfo->id, goInfo->type, N, dataN);
 }
 
 void ObjectMgr::LoadGameObjectTemplates()
@@ -7862,8 +7769,8 @@ void ObjectMgr::LoadGameObjectTemplates()
     {
         Field* fields = result->Fetch();
         LoadGameObjectInfo(fields);
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     for (auto& itr : m_gameObjectInfoMap)
         if (itr.second)
@@ -7885,8 +7792,8 @@ void ObjectMgr::LoadGameObjectTemplate(uint32 entry)
     {
         Field* fields = result->Fetch();
         LoadGameObjectInfo(fields);
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     if (GameObjectInfo const* goInfo = GetGameObjectTemplate(entry))
         CheckGameObjectTemplate(const_cast<GameObjectInfo*>(goInfo));
@@ -7919,58 +7826,56 @@ void ObjectMgr::LoadGameObjectInfo(Field* fields)
 
 void ObjectMgr::CheckGameObjectTemplate(GameObjectInfo* goInfo)
 {
-    if (goInfo->size <= 0.0f)                           // prevent use too small scales
+    if (goInfo->size <= 0.0f) // prevent use too small scales
     {
-        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have too small size=%f",
-            goInfo->id, goInfo->type, goInfo->size);
-        goInfo->size =  DEFAULT_OBJECT_SCALE;
+        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have too small size=%f", goInfo->id, goInfo->type, goInfo->size);
+        goInfo->size = DEFAULT_OBJECT_SCALE;
     }
 
     if (goInfo->type >= GAMEOBJECT_TYPE_MAX)
     {
-        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u) have invalid type=%u in template, forcing it to type GENERIC (5) instead.",
-                        goInfo->id, goInfo->type);
+        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u) have invalid type=%u in template, forcing it to type GENERIC (5) instead.", goInfo->id, goInfo->type);
         goInfo->type = GAMEOBJECT_TYPE_GENERIC;
         memset(goInfo->raw.data, 0, sizeof(GameObjectInfo::raw.data));
     }
 
     switch (goInfo->type)
     {
-        case GAMEOBJECT_TYPE_DOOR:                      //0
+    case GAMEOBJECT_TYPE_DOOR: // 0
         {
             if (goInfo->door.lockId)
                 CheckGOLockId(goInfo, goInfo->door.lockId, 1);
             CheckGONoDamageImmuneId(goInfo, goInfo->door.noDamageImmune, 3);
             break;
         }
-        case GAMEOBJECT_TYPE_BUTTON:                    //1
+    case GAMEOBJECT_TYPE_BUTTON: // 1
         {
             if (goInfo->button.lockId)
                 CheckGOLockId(goInfo, goInfo->button.lockId, 1);
-            if (goInfo->button.linkedTrapId)              // linked trap
+            if (goInfo->button.linkedTrapId) // linked trap
                 CheckGOLinkedTrapId(goInfo, goInfo->button.linkedTrapId, 3);
             CheckGONoDamageImmuneId(goInfo, goInfo->button.noDamageImmune, 4);
             break;
         }
-        case GAMEOBJECT_TYPE_QUESTGIVER:                //2
+    case GAMEOBJECT_TYPE_QUESTGIVER: // 2
         {
             if (goInfo->questgiver.lockId)
                 CheckGOLockId(goInfo, goInfo->questgiver.lockId, 0);
             CheckGONoDamageImmuneId(goInfo, goInfo->questgiver.noDamageImmune, 5);
             break;
         }
-        case GAMEOBJECT_TYPE_CHEST:                     //3
+    case GAMEOBJECT_TYPE_CHEST: // 3
         {
             if (goInfo->chest.lockId)
                 CheckGOLockId(goInfo, goInfo->chest.lockId, 0);
 
             CheckGOConsumable(goInfo, goInfo->chest.consumable, 3);
 
-            if (goInfo->chest.linkedTrapId)              // linked trap
+            if (goInfo->chest.linkedTrapId) // linked trap
                 CheckGOLinkedTrapId(goInfo, goInfo->chest.linkedTrapId, 7);
             break;
         }
-        case GAMEOBJECT_TYPE_TRAP:                      //6
+    case GAMEOBJECT_TYPE_TRAP: // 6
         {
             if (goInfo->trap.lockId)
                 CheckGOLockId(goInfo, goInfo->trap.lockId, 0);
@@ -7980,69 +7885,66 @@ void ObjectMgr::CheckGameObjectTemplate(GameObjectInfo* goInfo)
             */
             break;
         }
-        case GAMEOBJECT_TYPE_CHAIR:                     //7
-            CheckAndFixGOChairHeightId(goInfo, goInfo->chair.height, 1);
-            break;
-        case GAMEOBJECT_TYPE_SPELL_FOCUS:               //8
+    case GAMEOBJECT_TYPE_CHAIR: // 7
+        CheckAndFixGOChairHeightId(goInfo, goInfo->chair.height, 1);
+        break;
+    case GAMEOBJECT_TYPE_SPELL_FOCUS: // 8
         {
             if (goInfo->spellFocus.focusId)
             {
                 if (!sSpellFocusObjectStore.LookupEntry(goInfo->spellFocus.focusId))
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have data0=%u but SpellFocus (Id: %u) not exist.",
-                        goInfo->id, goInfo->type, goInfo->spellFocus.focusId, goInfo->spellFocus.focusId);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have data0=%u but SpellFocus (Id: %u) not exist.", goInfo->id, goInfo->type, goInfo->spellFocus.focusId, goInfo->spellFocus.focusId);
             }
 
-            if (goInfo->spellFocus.linkedTrapId)        // linked trap
+            if (goInfo->spellFocus.linkedTrapId) // linked trap
                 CheckGOLinkedTrapId(goInfo, goInfo->spellFocus.linkedTrapId, 2);
             break;
         }
-        case GAMEOBJECT_TYPE_GOOBER:                    //10
+    case GAMEOBJECT_TYPE_GOOBER: // 10
         {
             if (goInfo->goober.lockId)
                 CheckGOLockId(goInfo, goInfo->goober.lockId, 0);
 
             CheckGOConsumable(goInfo, goInfo->goober.consumable, 3);
 
-            if (goInfo->goober.pageId)                  // pageId
+            if (goInfo->goober.pageId) // pageId
             {
                 if (!sPageTextStore.LookupEntry<PageText>(goInfo->goober.pageId))
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have data7=%u but PageText (Entry %u) not exist.",
-                        goInfo->id, goInfo->type, goInfo->goober.pageId, goInfo->goober.pageId);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have data7=%u but PageText (Entry %u) not exist.", goInfo->id, goInfo->type, goInfo->goober.pageId, goInfo->goober.pageId);
             }
             /* disable check for while, too many nonexistent spells
             if (goInfo->goober.spellId)                 // spell
                 CheckGOSpellId(goInfo,goInfo->goober.spellId,10);
             */
             CheckGONoDamageImmuneId(goInfo, goInfo->goober.noDamageImmune, 11);
-            if (goInfo->goober.linkedTrapId)            // linked trap
+            if (goInfo->goober.linkedTrapId) // linked trap
                 CheckGOLinkedTrapId(goInfo, goInfo->goober.linkedTrapId, 12);
             break;
         }
-        case GAMEOBJECT_TYPE_TRANSPORT:                 //11
-            break;
-        case GAMEOBJECT_TYPE_AREADAMAGE:                //12
+    case GAMEOBJECT_TYPE_TRANSPORT: // 11
+        break;
+    case GAMEOBJECT_TYPE_AREADAMAGE: // 12
         {
             if (goInfo->areadamage.lockId)
                 CheckGOLockId(goInfo, goInfo->areadamage.lockId, 0);
             break;
         }
-        case GAMEOBJECT_TYPE_CAMERA:                    //13
+    case GAMEOBJECT_TYPE_CAMERA: // 13
         {
             if (goInfo->camera.lockId)
                 CheckGOLockId(goInfo, goInfo->camera.lockId, 0);
             break;
         }
-        case GAMEOBJECT_TYPE_MO_TRANSPORT:              //15
+    case GAMEOBJECT_TYPE_MO_TRANSPORT: // 15
         {
             if (goInfo->moTransport.taxiPathId)
             {
                 if (goInfo->moTransport.taxiPathId >= sTaxiPathNodesByPath.size() || sTaxiPathNodesByPath[goInfo->moTransport.taxiPathId].empty())
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have data0=%u but TaxiPath (Id: %u) not exist.",
-                        goInfo->id, goInfo->type, goInfo->moTransport.taxiPathId, goInfo->moTransport.taxiPathId);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Gameobject (Entry: %u GoType: %u) have data0=%u but TaxiPath (Id: %u) not exist.", goInfo->id, goInfo->type, goInfo->moTransport.taxiPathId, goInfo->moTransport.taxiPathId);
             }
             break;
         }
-        case GAMEOBJECT_TYPE_SUMMONING_RITUAL:          //18
+    case GAMEOBJECT_TYPE_SUMMONING_RITUAL: // 18
         {
             /* disable check for while, too many nonexistent spells
             // always must have spell
@@ -8050,14 +7952,14 @@ void ObjectMgr::CheckGameObjectTemplate(GameObjectInfo* goInfo)
             */
             break;
         }
-        case GAMEOBJECT_TYPE_SPELLCASTER:               //22
+    case GAMEOBJECT_TYPE_SPELLCASTER: // 22
         {
             // always must have spell
             CheckGOSpellId(goInfo, goInfo->spellcaster.spellId, 0);
             break;
         }
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_5_1
-        case GAMEOBJECT_TYPE_FLAGSTAND:                 //24
+    case GAMEOBJECT_TYPE_FLAGSTAND: // 24
         {
             if (goInfo->flagstand.lockId)
                 CheckGOLockId(goInfo, goInfo->flagstand.lockId, 0);
@@ -8066,7 +7968,7 @@ void ObjectMgr::CheckGameObjectTemplate(GameObjectInfo* goInfo)
         }
 #endif
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_6_1
-        case GAMEOBJECT_TYPE_FISHINGHOLE:               //25
+    case GAMEOBJECT_TYPE_FISHINGHOLE: // 25
         {
             if (goInfo->fishinghole.lockId)
                 CheckGOLockId(goInfo, goInfo->fishinghole.lockId, 4);
@@ -8074,7 +7976,7 @@ void ObjectMgr::CheckGameObjectTemplate(GameObjectInfo* goInfo)
         }
 #endif
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_7_1
-        case GAMEOBJECT_TYPE_FLAGDROP:                  //26
+    case GAMEOBJECT_TYPE_FLAGDROP: // 26
         {
             if (goInfo->flagdrop.lockId)
                 CheckGOLockId(goInfo, goInfo->flagdrop.lockId, 0);
@@ -8095,10 +7997,10 @@ std::set<uint32> ObjectMgr::GetTransportDisplayIds() const
 
         switch (itr.second->type)
         {
-            case GAMEOBJECT_TYPE_TRANSPORT:
-            case GAMEOBJECT_TYPE_MO_TRANSPORT:
-                transportDisplayIds.insert(itr.second->displayId);
-                break;
+        case GAMEOBJECT_TYPE_TRANSPORT:
+        case GAMEOBJECT_TYPE_MO_TRANSPORT:
+            transportDisplayIds.insert(itr.second->displayId);
+            break;
         }
     }
 
@@ -8145,27 +8047,27 @@ void ObjectMgr::LoadGameobjectsRequirements()
         uint32 reqGuidLow = fields[2].GetUInt32();
         switch (entry.reqType)
         {
-            case GameObjectUseRequirement::GOBJ_REQUIRE_DEAD_CREATURE:
-                if (CreatureData const* data = GetCreatureData(reqGuidLow))
-                    entry.guid = ObjectGuid(HIGHGUID_UNIT, data->creature_id[0], reqGuidLow);
-                else
-                {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `gameobject_requirement` has not found creature guid (%u)", reqGuidLow);
-                    continue;
-                }
-                break;
-            case GameObjectUseRequirement::GOBJ_REQUIRE_ACTIVE_OBJECT:
-                if (GameObjectData const* data = GetGOData(reqGuidLow))
-                    entry.guid = ObjectGuid(HIGHGUID_GAMEOBJECT, data->id, reqGuidLow);
-                else
-                {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `gameobject_requirement` has not found game object guid (%u)", reqGuidLow);
-                    continue;
-                }
-                break;
-            default:
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `gameobject_requirement` has invalid reqType (%u)", entry.reqType);
-                break;
+        case GameObjectUseRequirement::GOBJ_REQUIRE_DEAD_CREATURE:
+            if (CreatureData const* data = GetCreatureData(reqGuidLow))
+                entry.guid = ObjectGuid(HIGHGUID_UNIT, data->creature_id[0], reqGuidLow);
+            else
+            {
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `gameobject_requirement` has not found creature guid (%u)", reqGuidLow);
+                continue;
+            }
+            break;
+        case GameObjectUseRequirement::GOBJ_REQUIRE_ACTIVE_OBJECT:
+            if (GameObjectData const* data = GetGOData(reqGuidLow))
+                entry.guid = ObjectGuid(HIGHGUID_GAMEOBJECT, data->id, reqGuidLow);
+            else
+            {
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `gameobject_requirement` has not found game object guid (%u)", reqGuidLow);
+                continue;
+            }
+            break;
+        default:
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `gameobject_requirement` has invalid reqType (%u)", entry.reqType);
+            break;
         }
 
         _gobjRequirements[guid] = entry;
@@ -8216,7 +8118,7 @@ void ObjectMgr::LoadExplorationBaseXP()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 level  = fields[0].GetUInt32();
+        uint32 level = fields[0].GetUInt32();
         uint32 basexp = fields[1].GetUInt32();
         m_BaseXPMap[level] = basexp;
     }
@@ -8264,8 +8166,8 @@ void ObjectMgr::LoadPetNames()
         Field* fields = result->Fetch();
 
         std::string word = fields[0].GetString();
-        uint32 entry     = fields[1].GetUInt32();
-        bool   half      = fields[2].GetBool();
+        uint32 entry = fields[1].GetUInt32();
+        bool half = fields[2].GetBool();
         if (half)
             m_PetHalfNameMap1[entry].push_back(word);
         else
@@ -8277,10 +8179,7 @@ void ObjectMgr::LoadPetNames()
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u pet name parts", count);
 }
 
-void ObjectMgr::LoadPetNumber()
-{
-    m_NextPetNumber = 1;
-}
+void ObjectMgr::LoadPetNumber() { m_NextPetNumber = 1; }
 
 uint32 ObjectMgr::GeneratePetNumber()
 {
@@ -8290,8 +8189,8 @@ uint32 ObjectMgr::GeneratePetNumber()
 
 static std::string GeneratePlayerName()
 {
-    static char const vowels[] = { 'a', 'e', 'i', 'o', 'u' };
-    static char const consonants[] = { 'b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'y', 'z' };
+    static char const vowels[] = {'a', 'e', 'i', 'o', 'u'};
+    static char const consonants[] = {'b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'y', 'z'};
 
     uint32 const length = urand(sWorld.getConfig(CONFIG_UINT32_MIN_PLAYER_NAME), MAX_PLAYER_NAME);
     std::string name;
@@ -8313,7 +8212,8 @@ std::string ObjectMgr::GenerateFreePlayerName()
     do
     {
         name = GeneratePlayerName();
-    } while (sObjectMgr.GetPlayerGuidByName(name));
+    }
+    while (sObjectMgr.GetPlayerGuidByName(name));
     return name;
 }
 
@@ -8339,10 +8239,10 @@ void ObjectMgr::LoadCorpses()
     uint32 count = 0;
     //                                                                            0       1                       2                      3                      4                      5                       6
     std::unique_ptr<QueryResult> result(CharacterDatabase.Query("SELECT `corpse`.`guid`, `player_guid`, `corpse`.`position_x`, `corpse`.`position_y`, `corpse`.`position_z`, `corpse`.`orientation`, `corpse`.`map`, "
-    //                      7       8                       9           10        11      12       13      14      15            16            17             18                 19          20
-                          "`time`, `corpse_type`, `corpse`.`instance`, `gender`, `race`, `class`, `skin`, `face`, `hair_style`, `hair_color`, `facial_hair`, `equipment_cache`, `guild_id`, `character_flags` FROM `corpse` "
-                          "JOIN `characters` ON `player_guid` = `characters`.`guid` "
-                          "LEFT JOIN `guild_member` ON `player_guid`=`guild_member`.`guid` WHERE `corpse_type` <> 0"));
+                                                                //                      7       8                       9           10        11      12       13      14      15            16            17             18                 19          20
+                                                                "`time`, `corpse_type`, `corpse`.`instance`, `gender`, `race`, `class`, `skin`, `face`, `hair_style`, `hair_color`, `facial_hair`, `equipment_cache`, `guild_id`, `character_flags` FROM `corpse` "
+                                                                "JOIN `characters` ON `player_guid` = `characters`.`guid` "
+                                                                "LEFT JOIN `guild_member` ON `player_guid`=`guild_member`.`guid` WHERE `corpse_type` <> 0"));
 
     if (!result)
     {
@@ -8434,8 +8334,8 @@ void ObjectMgr::LoadFactions()
             */
 
             m_FactionsMap[factionId] = faction;
-
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
 #if SUPPORTED_CLIENT_BUILD == CLIENT_BUILD_1_12_1
         // Load localized texts (currently we only have 1.12 locales).
@@ -8468,8 +8368,8 @@ void ObjectMgr::LoadFactions()
                 faction.description[5] = fields[11].GetCppString();
                 faction.description[6] = fields[12].GetCppString();
                 */
-
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
 #endif
     }
@@ -8523,8 +8423,8 @@ void ObjectMgr::LoadFactions()
             }
 
             m_FactionTemplatesMap[factionId] = faction;
-
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         // This is needed to make sure passive factions who are someone's enemy notify their enemies upon moving.
         for (auto& itr : m_FactionTemplatesMap)
@@ -8539,7 +8439,7 @@ void ObjectMgr::LoadFactions()
 
 void ObjectMgr::LoadReputationRewardRate()
 {
-    m_RepRewardRateMap.clear();                             // for reload case
+    m_RepRewardRateMap.clear(); // for reload case
 
     uint32 count = 0;
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `faction`, `quest_rate`, `creature_rate`, `spell_rate` FROM `reputation_reward_rate`"));
@@ -8561,13 +8461,13 @@ void ObjectMgr::LoadReputationRewardRate()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 factionId        = fields[0].GetUInt32();
+        uint32 factionId = fields[0].GetUInt32();
 
         RepRewardRate repRate;
 
-        repRate.quest_rate      = fields[1].GetFloat();
-        repRate.creature_rate   = fields[2].GetFloat();
-        repRate.spell_rate      = fields[3].GetFloat();
+        repRate.quest_rate = fields[1].GetFloat();
+        repRate.creature_rate = fields[2].GetFloat();
+        repRate.spell_rate = fields[3].GetFloat();
 
         FactionEntry const* factionEntry = GetFactionEntry(factionId);
         if (!factionEntry)
@@ -8610,9 +8510,10 @@ void ObjectMgr::LoadReputationOnKill()
 
     //                                                               0              1                       2
     std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `creature_id`, `RewOnKillRepFaction1`, `RewOnKillRepFaction2`,"
-    //                      3               4               5                     6               7               8                     9
-                          "`IsTeamAward1`, `MaxStanding1`, `RewOnKillRepValue1`, `IsTeamAward2`, `MaxStanding2`, `RewOnKillRepValue2`, `TeamDependent` "
-                          "FROM `creature_onkill_reputation` t1 WHERE `patch`=(SELECT max(`patch`) FROM `creature_onkill_reputation` t2 WHERE t1.`creature_id`=t2.`creature_id` && `patch` <= %u)", sWorld.GetWowPatch()));
+                                                             //                      3               4               5                     6               7               8                     9
+                                                             "`IsTeamAward1`, `MaxStanding1`, `RewOnKillRepValue1`, `IsTeamAward2`, `MaxStanding2`, `RewOnKillRepValue2`, `TeamDependent` "
+                                                             "FROM `creature_onkill_reputation` t1 WHERE `patch`=(SELECT max(`patch`) FROM `creature_onkill_reputation` t2 WHERE t1.`creature_id`=t2.`creature_id` && `patch` <= %u)",
+                                                             sWorld.GetWowPatch()));
 
     if (!result)
     {
@@ -8634,15 +8535,15 @@ void ObjectMgr::LoadReputationOnKill()
         uint32 creature_id = fields[0].GetUInt32();
 
         ReputationOnKillEntry repOnKill;
-        repOnKill.repfaction1          = fields[1].GetUInt32();
-        repOnKill.repfaction2          = fields[2].GetUInt32();
-        repOnKill.is_teamaward1        = fields[3].GetBool();
-        repOnKill.reputation_max_cap1  = fields[4].GetUInt32();
-        repOnKill.repvalue1            = fields[5].GetInt32();
-        repOnKill.is_teamaward2        = fields[6].GetBool();
-        repOnKill.reputation_max_cap2  = fields[7].GetUInt32();
-        repOnKill.repvalue2            = fields[8].GetInt32();
-        repOnKill.team_dependent       = fields[9].GetUInt8();
+        repOnKill.repfaction1 = fields[1].GetUInt32();
+        repOnKill.repfaction2 = fields[2].GetUInt32();
+        repOnKill.is_teamaward1 = fields[3].GetBool();
+        repOnKill.reputation_max_cap1 = fields[4].GetUInt32();
+        repOnKill.repvalue1 = fields[5].GetInt32();
+        repOnKill.is_teamaward2 = fields[6].GetBool();
+        repOnKill.reputation_max_cap2 = fields[7].GetUInt32();
+        repOnKill.repvalue2 = fields[8].GetInt32();
+        repOnKill.team_dependent = fields[9].GetUInt8();
 
         if (!GetCreatureTemplate(creature_id))
         {
@@ -8683,7 +8584,7 @@ void ObjectMgr::LoadReputationOnKill()
 
 void ObjectMgr::LoadReputationSpilloverTemplate()
 {
-    m_RepSpilloverTemplateMap.clear();                      // for reload case
+    m_RepSpilloverTemplateMap.clear(); // for reload case
 
     uint32 count = 0;
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `faction`, `faction1`, `rate_1`, `rank_1`, `faction2`, `rate_2`, `rank_2`, `faction3`, `rate_3`, `rank_3`, `faction4`, `rate_4`, `rank_4` FROM `reputation_spillover_template`"));
@@ -8705,22 +8606,22 @@ void ObjectMgr::LoadReputationSpilloverTemplate()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 factionId                = fields[0].GetUInt32();
+        uint32 factionId = fields[0].GetUInt32();
 
         RepSpilloverTemplate repTemplate;
 
-        repTemplate.faction[0]          = fields[1].GetUInt32();
-        repTemplate.faction_rate[0]     = fields[2].GetFloat();
-        repTemplate.faction_rank[0]     = fields[3].GetUInt32();
-        repTemplate.faction[1]          = fields[4].GetUInt32();
-        repTemplate.faction_rate[1]     = fields[5].GetFloat();
-        repTemplate.faction_rank[1]     = fields[6].GetUInt32();
-        repTemplate.faction[2]          = fields[7].GetUInt32();
-        repTemplate.faction_rate[2]     = fields[8].GetFloat();
-        repTemplate.faction_rank[2]     = fields[9].GetUInt32();
-        repTemplate.faction[3]          = fields[10].GetUInt32();
-        repTemplate.faction_rate[3]     = fields[11].GetFloat();
-        repTemplate.faction_rank[3]     = fields[12].GetUInt32();
+        repTemplate.faction[0] = fields[1].GetUInt32();
+        repTemplate.faction_rate[0] = fields[2].GetFloat();
+        repTemplate.faction_rank[0] = fields[3].GetUInt32();
+        repTemplate.faction[1] = fields[4].GetUInt32();
+        repTemplate.faction_rate[1] = fields[5].GetFloat();
+        repTemplate.faction_rank[1] = fields[6].GetUInt32();
+        repTemplate.faction[2] = fields[7].GetUInt32();
+        repTemplate.faction_rate[2] = fields[8].GetFloat();
+        repTemplate.faction_rank[2] = fields[9].GetUInt32();
+        repTemplate.faction[3] = fields[10].GetUInt32();
+        repTemplate.faction_rate[3] = fields[11].GetFloat();
+        repTemplate.faction_rank[3] = fields[12].GetUInt32();
 
         FactionEntry const* factionEntry = GetFactionEntry(factionId);
 
@@ -8793,7 +8694,7 @@ void ObjectMgr::LoadReputationSpilloverTemplate()
 
 void ObjectMgr::LoadPointsOfInterest()
 {
-    m_PointsOfInterestMap.clear();                              // need for reload case
+    m_PointsOfInterestMap.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -8820,12 +8721,12 @@ void ObjectMgr::LoadPointsOfInterest()
         uint32 point_id = fields[0].GetUInt32();
 
         PointOfInterest POI;
-        POI.x                    = fields[1].GetFloat();
-        POI.y                    = fields[2].GetFloat();
-        POI.icon                 = fields[3].GetUInt32();
-        POI.flags                = fields[4].GetUInt32();
-        POI.data                 = fields[5].GetUInt32();
-        POI.icon_name            = fields[6].GetCppString();
+        POI.x = fields[1].GetFloat();
+        POI.y = fields[2].GetFloat();
+        POI.icon = fields[3].GetUInt32();
+        POI.flags = fields[4].GetUInt32();
+        POI.data = fields[5].GetUInt32();
+        POI.icon_name = fields[6].GetCppString();
 
         if (!MaNGOS::IsValidMapCoord(POI.x, POI.y))
         {
@@ -8853,7 +8754,7 @@ void ObjectMgr::DeleteCreatureData(uint32 guid)
         const_cast<CreatureData*>(data)->spawn_flags |= SPAWN_FLAG_DISABLED;
     }
 
-    //m_CreatureDataMap.erase(guid);
+    // m_CreatureDataMap.erase(guid);
 }
 
 void ObjectMgr::DeleteGOData(uint32 guid)
@@ -8884,7 +8785,7 @@ void ObjectMgr::DeleteCorpseCellData(uint32 mapid, uint32 cellid, uint32 player_
 
 void ObjectMgr::LoadQuestRelationsHelper(QuestRelationsMap& map, char const* table)
 {
-    map.clear();                                            // need for reload case
+    map.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -8907,7 +8808,7 @@ void ObjectMgr::LoadQuestRelationsHelper(QuestRelationsMap& map, char const* tab
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 id    = fields[0].GetUInt32();
+        uint32 id = fields[0].GetUInt32();
         uint32 quest = fields[1].GetUInt32();
 
         if (m_QuestTemplatesMap.find(quest) == m_QuestTemplatesMap.end())
@@ -8968,8 +8869,8 @@ void ObjectMgr::LoadCreatureQuestRelations()
         CreatureInfo const* cInfo = GetCreatureTemplate(itr.first);
         if (!cInfo)
             sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Table `creature_questrelation` have data for nonexistent creature entry (%u) and existing quest %u", itr.first, itr.second);
-        //else if (!(cInfo->npc_flags & UNIT_NPC_FLAG_QUESTGIVER))
-        //    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Table `creature_questrelation` has creature entry (%u) for quest %u, but npc_flags does not include UNIT_NPC_FLAG_QUESTGIVER", itr.first, itr.second);
+        // else if (!(cInfo->npc_flags & UNIT_NPC_FLAG_QUESTGIVER))
+        //     sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Table `creature_questrelation` has creature entry (%u) for quest %u, but npc_flags does not include UNIT_NPC_FLAG_QUESTGIVER", itr.first, itr.second);
     }
 }
 
@@ -8982,8 +8883,8 @@ void ObjectMgr::LoadCreatureInvolvedRelations()
         CreatureInfo const* cInfo = GetCreatureTemplate(itr.first);
         if (!cInfo)
             sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Table `creature_involvedrelation` have data for nonexistent creature entry (%u) and existing quest %u", itr.first, itr.second);
-        //else if (!(cInfo->npc_flags & UNIT_NPC_FLAG_QUESTGIVER))
-        //    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Table `creature_involvedrelation` has creature entry (%u) for quest %u, but npc_flags does not include UNIT_NPC_FLAG_QUESTGIVER", itr.first, itr.second);
+        // else if (!(cInfo->npc_flags & UNIT_NPC_FLAG_QUESTGIVER))
+        //     sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Table `creature_involvedrelation` has creature entry (%u) for quest %u, but npc_flags does not include UNIT_NPC_FLAG_QUESTGIVER", itr.first, itr.second);
     }
 }
 
@@ -9040,8 +8941,8 @@ void ObjectMgr::LoadTaxiNodes()
         taxiNode->MountCreatureID[1] = fields[8].GetUInt32();
 
         m_TaxiNodes[nodeId] = std::move(taxiNode);
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
 #if SUPPORTED_CLIENT_BUILD == CLIENT_BUILD_1_12_1
     // Load localized texts (currently we only have 1.12 locales).
@@ -9062,8 +8963,8 @@ void ObjectMgr::LoadTaxiNodes()
             m_TaxiNodes[nodeId]->name[4] = fields[4].GetCppString();
             m_TaxiNodes[nodeId]->name[5] = fields[5].GetCppString();
             m_TaxiNodes[nodeId]->name[6] = fields[6].GetCppString();
-
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 #endif
 
@@ -9073,7 +8974,7 @@ void ObjectMgr::LoadTaxiNodes()
 
 void ObjectMgr::LoadTaxiPathTransitions()
 {
-    m_TaxiPathTransitions.clear();                                            // need for reload case
+    m_TaxiPathTransitions.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -9142,7 +9043,8 @@ void ObjectMgr::LoadTaxiPathTransitions()
         m_TaxiPathTransitions.insert(TaxiPathTransitionsMap::value_type(inPath, transition));
 
         ++count;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u taxi path transitions", count);
@@ -9164,7 +9066,7 @@ ObjectGuid ObjectMgr::GetFullTransportGuidFromLowGuid(uint32 lowGuid)
 
 void ObjectMgr::LoadReservedPlayersNames()
 {
-    m_ReservedNames.clear();                                // need for reload case
+    m_ReservedNames.clear(); // need for reload case
 
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `name` FROM `reserved_name`"));
 
@@ -9219,44 +9121,44 @@ bool ObjectMgr::IsReservedName(std::string const& name) const
 
 enum LanguageType
 {
-    LT_BASIC_LATIN    = 0x0000,
+    LT_BASIC_LATIN = 0x0000,
     LT_EXTENDEN_LATIN = 0x0001,
-    LT_CYRILLIC       = 0x0002,
-    LT_EAST_ASIA      = 0x0004,
-    LT_ANY            = 0xFFFF
+    LT_CYRILLIC = 0x0002,
+    LT_EAST_ASIA = 0x0004,
+    LT_ANY = 0xFFFF
 };
 
 static LanguageType GetRealmLanguageType(bool create)
 {
     switch (sWorld.getConfig(CONFIG_UINT32_REALM_ZONE))
     {
-        case REALM_ZONE_UNKNOWN:                            // any language
-        case REALM_ZONE_DEVELOPMENT:
-        case REALM_ZONE_TEST_SERVER:
-        case REALM_ZONE_QA_SERVER:
-            return LT_ANY;
-        case REALM_ZONE_UNITED_STATES:                      // extended-Latin
-        case REALM_ZONE_OCEANIC:
-        case REALM_ZONE_LATIN_AMERICA:
-        case REALM_ZONE_ENGLISH:
-        case REALM_ZONE_GERMAN:
-        case REALM_ZONE_FRENCH:
-        case REALM_ZONE_SPANISH:
-            return LT_EXTENDEN_LATIN;
-        case REALM_ZONE_KOREA:                              // East-Asian
-        case REALM_ZONE_TAIWAN:
-        case REALM_ZONE_CHINA:
-            return LT_EAST_ASIA;
-        case REALM_ZONE_RUSSIAN:                            // Cyrillic
-            return LT_CYRILLIC;
-        default:
-            return create ? LT_BASIC_LATIN : LT_ANY;        // basic-Latin at create, any at login
+    case REALM_ZONE_UNKNOWN: // any language
+    case REALM_ZONE_DEVELOPMENT:
+    case REALM_ZONE_TEST_SERVER:
+    case REALM_ZONE_QA_SERVER:
+        return LT_ANY;
+    case REALM_ZONE_UNITED_STATES: // extended-Latin
+    case REALM_ZONE_OCEANIC:
+    case REALM_ZONE_LATIN_AMERICA:
+    case REALM_ZONE_ENGLISH:
+    case REALM_ZONE_GERMAN:
+    case REALM_ZONE_FRENCH:
+    case REALM_ZONE_SPANISH:
+        return LT_EXTENDEN_LATIN;
+    case REALM_ZONE_KOREA: // East-Asian
+    case REALM_ZONE_TAIWAN:
+    case REALM_ZONE_CHINA:
+        return LT_EAST_ASIA;
+    case REALM_ZONE_RUSSIAN: // Cyrillic
+        return LT_CYRILLIC;
+    default:
+        return create ? LT_BASIC_LATIN : LT_ANY; // basic-Latin at create, any at login
     }
 }
 
 bool isValidString(std::wstring const& wstr, uint32 strictMask, bool numericOrSpace, bool create = false)
 {
-    if (strictMask == 0)                                    // any language, ignore realm
+    if (strictMask == 0) // any language, ignore realm
     {
         if (isExtendedLatinString(wstr, numericOrSpace))
             return true;
@@ -9267,7 +9169,7 @@ bool isValidString(std::wstring const& wstr, uint32 strictMask, bool numericOrSp
         return false;
     }
 
-    if (strictMask & 0x2)                                   // realm zone specific
+    if (strictMask & 0x2) // realm zone specific
     {
         LanguageType lt = GetRealmLanguageType(create);
         if (lt & LT_EXTENDEN_LATIN)
@@ -9281,7 +9183,7 @@ bool isValidString(std::wstring const& wstr, uint32 strictMask, bool numericOrSp
                 return true;
     }
 
-    if (strictMask & 0x1)                                   // basic Latin
+    if (strictMask & 0x1) // basic Latin
     {
         if (isBasicLatinString(wstr, numericOrSpace))
             return true;
@@ -9347,12 +9249,12 @@ PetNameInvalidReason ObjectMgr::CheckPetName(std::string const& name)
 
     switch (ValidateName(wname))
     {
-        case CHAR_NAME_PROFANE:
-            return PET_NAME_PROFANE;
-        case CHAR_NAME_RESERVED:
-            return PET_NAME_RESERVED;
-        default:
-            break;
+    case CHAR_NAME_PROFANE:
+        return PET_NAME_PROFANE;
+    case CHAR_NAME_RESERVED:
+        return PET_NAME_RESERVED;
+    default:
+        break;
     }
 
     return PET_NAME_SUCCESS;
@@ -9393,7 +9295,7 @@ int ObjectMgr::GetOrNewIndexForLocale(LocaleConstant loc)
 
 void ObjectMgr::LoadGameObjectForQuests()
 {
-    m_GameObjectForQuestSet.clear();                         // need for reload case
+    m_GameObjectForQuestSet.clear(); // need for reload case
 
     if (GetGameObjectInfoMap().empty())
     {
@@ -9416,10 +9318,9 @@ void ObjectMgr::LoadGameObjectForQuests()
 
         switch (goInfo->type)
         {
-            case GAMEOBJECT_TYPE_QUESTGIVER:
+        case GAMEOBJECT_TYPE_QUESTGIVER:
             {
-                if (m_GOQuestRelations.find(goInfo->id) != m_GOQuestRelations.end() ||
-                        m_GOQuestInvolvedRelations.find(goInfo->id) != m_GOQuestInvolvedRelations.end())
+                if (m_GOQuestRelations.find(goInfo->id) != m_GOQuestRelations.end() || m_GOQuestInvolvedRelations.find(goInfo->id) != m_GOQuestInvolvedRelations.end())
                 {
                     m_GameObjectForQuestSet.insert(goInfo->id);
                     ++count;
@@ -9427,7 +9328,7 @@ void ObjectMgr::LoadGameObjectForQuests()
 
                 break;
             }
-            case GAMEOBJECT_TYPE_CHEST:
+        case GAMEOBJECT_TYPE_CHEST:
             {
                 // scan GO chest with loot including quest items
                 uint32 loot_id = goInfo->GetLootId();
@@ -9440,35 +9341,35 @@ void ObjectMgr::LoadGameObjectForQuests()
                 }
                 break;
             }
-            case GAMEOBJECT_TYPE_GENERIC:
+        case GAMEOBJECT_TYPE_GENERIC:
             {
-                if (goInfo->_generic.questID)               // quest related objects, has visual effects
+                if (goInfo->_generic.questID) // quest related objects, has visual effects
                 {
                     m_GameObjectForQuestSet.insert(goInfo->id);
                     count++;
                 }
                 break;
             }
-            case GAMEOBJECT_TYPE_SPELL_FOCUS:
+        case GAMEOBJECT_TYPE_SPELL_FOCUS:
             {
-                if (goInfo->spellFocus.questID)             // quest related objects, has visual effect
+                if (goInfo->spellFocus.questID) // quest related objects, has visual effect
                 {
                     m_GameObjectForQuestSet.insert(goInfo->id);
                     count++;
                 }
                 break;
             }
-            case GAMEOBJECT_TYPE_GOOBER:
+        case GAMEOBJECT_TYPE_GOOBER:
             {
-                if (goInfo->goober.questId > 0)             //quests objects
+                if (goInfo->goober.questId > 0) // quests objects
                 {
                     m_GameObjectForQuestSet.insert(goInfo->id);
                     count++;
                 }
                 break;
             }
-            default:
-                break;
+        default:
+            break;
         }
     }
 
@@ -9528,8 +9429,8 @@ void ObjectMgr::LoadSkillLineAbility()
         skill->reqtrainpoints = fields[11].GetUInt32();
 
         m_SkillLineAbilities[id] = std::move(skill);
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u skill line abilities.", maxSkillLineAbilityId);
@@ -9562,8 +9463,8 @@ void ObjectMgr::LoadSoundEntries()
         sound.Name = fields[1].GetCppString();
 
         m_SoundEntriesMap[soundId] = sound;
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u sound entries.", (uint32)m_SoundEntriesMap.size());
@@ -9617,7 +9518,7 @@ void ObjectMgr::LoadBroadcastTexts()
             if ((bct.femaleText[LOCALE_enUS].size() > 3) && (bct.femaleText[LOCALE_enUS].at(0) == '%') && (bct.femaleText[LOCALE_enUS].at(1) == 's'))
                 bct.femaleText[LOCALE_enUS] = bct.femaleText[LOCALE_enUS].substr(3, bct.femaleText[LOCALE_enUS].size() - 3);
         }
-#endif  
+#endif
 
         if (bct.soundId)
         {
@@ -9668,7 +9569,8 @@ void ObjectMgr::LoadBroadcastTexts()
         }
 
         m_BroadcastTextLocaleMap[bct.entry] = bct;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %lu broadcast texts.", (uint32)m_BroadcastTextLocaleMap.size());
@@ -9719,7 +9621,7 @@ void ObjectMgr::LoadBroadcastTextLocales()
                     if ((str.size() > 3) && (str.at(0) == '%') && (str.at(1) == 's'))
                         str = str.substr(3, str.size() - 3);
                 }
-#endif  
+#endif
                 int idx = GetOrNewIndexForLocale(LocaleConstant(i));
                 if (idx >= 0)
                 {
@@ -9744,7 +9646,7 @@ void ObjectMgr::LoadBroadcastTextLocales()
                     if ((str.size() > 3) && (str.at(0) == '%') && (str.at(1) == 's'))
                         str = str.substr(3, str.size() - 3);
                 }
-#endif  
+#endif
                 int idx = GetOrNewIndexForLocale(LocaleConstant(i));
                 if (idx >= 0)
                 {
@@ -9758,7 +9660,8 @@ void ObjectMgr::LoadBroadcastTextLocales()
         }
 
         ++count;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u broadcast text locales.", count);
@@ -9791,7 +9694,7 @@ char const* ObjectMgr::GetBroadcastText(uint32 id, int locale_index, uint8 gende
 bool ObjectMgr::LoadMangosStrings(DatabaseType& db, char const* table, int32 min_value, int32 max_value, bool extra_content)
 {
     int32 start_value = min_value;
-    int32 end_value   = max_value;
+    int32 end_value = max_value;
     // some string can have negative indexes range
     if (start_value < 0)
     {
@@ -9832,7 +9735,7 @@ bool ObjectMgr::LoadMangosStrings(DatabaseType& db, char const* table, int32 min
         bar.step();
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
-        if (min_value == MIN_MANGOS_STRING_ID)              // error only in case internal strings
+        if (min_value == MIN_MANGOS_STRING_ID) // error only in case internal strings
             sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, ">> Loaded 0 mangos strings. DB table `%s` is empty. Cannot continue.", table);
         else
             sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded 0 string templates. DB table `%s` is empty.", table);
@@ -9895,10 +9798,10 @@ bool ObjectMgr::LoadMangosStrings(DatabaseType& db, char const* table, int32 min
         // Load additional string content if necessary
         if (extra_content)
         {
-            data.SoundId     = fields[10].GetUInt32();
-            data.Type        = fields[11].GetUInt32();
-            data.LanguageId  = Language(fields[12].GetUInt32());
-            data.Emote       = fields[13].GetUInt32();
+            data.SoundId = fields[10].GetUInt32();
+            data.Type = fields[11].GetUInt32();
+            data.LanguageId = Language(fields[12].GetUInt32());
+            data.Emote = fields[13].GetUInt32();
 
             if (data.SoundId && !GetSoundEntry(data.SoundId))
             {
@@ -9985,7 +9888,7 @@ bool ObjectMgr::LoadQuestGreetings()
 
         switch (type)
         {
-            case QUESTGIVER_CREATURE:
+        case QUESTGIVER_CREATURE:
             {
                 if (!GetCreatureTemplate(entry))
                 {
@@ -9995,7 +9898,7 @@ bool ObjectMgr::LoadQuestGreetings()
                 }
                 break;
             }
-            case QUESTGIVER_GAMEOBJECT:
+        case QUESTGIVER_GAMEOBJECT:
             {
                 if (!sObjectMgr.GetGameObjectTemplate(entry))
                 {
@@ -10004,7 +9907,7 @@ bool ObjectMgr::LoadQuestGreetings()
                 }
                 break;
             }
-            default:
+        default:
             {
                 sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Table `quest_greeting` have entry with invalid type (Type: %u), ignore", type);
                 continue;
@@ -10044,7 +9947,8 @@ bool ObjectMgr::LoadQuestGreetings()
             sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Entry %i in table `quest_greeting` has Emote %u but emote does not exist.", entry, data.Emote);
             data.Emote = EMOTE_ONESHOT_NONE;
         }
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u quest greetings.", count);
@@ -10108,8 +10012,8 @@ bool ObjectMgr::LoadTrainerGreetings()
                 }
             }
         }
-
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u trainer greetings.", count);
@@ -10119,7 +10023,7 @@ bool ObjectMgr::LoadTrainerGreetings()
 
 void ObjectMgr::LoadFishingBaseSkillLevel()
 {
-    m_FishingBaseSkillMap.clear();                            // for reload case
+    m_FishingBaseSkillMap.clear(); // for reload case
 
     uint32 count = 0;
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `entry`, `skill` FROM `skill_fishing_base_level`"));
@@ -10141,8 +10045,8 @@ void ObjectMgr::LoadFishingBaseSkillLevel()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 entry  = fields[0].GetUInt32();
-        int32 skill   = fields[1].GetInt32();
+        uint32 entry = fields[0].GetUInt32();
+        int32 skill = fields[1].GetInt32();
 
         const auto* fArea = AreaEntry::GetById(entry);
         if (!fArea)
@@ -10167,10 +10071,10 @@ SkillRangeType GetSkillRangeType(SkillLineEntry const* skill, SkillRaceClassInfo
 
     switch (skill->categoryId)
     {
-        case SKILL_CATEGORY_ARMOR:
-            return SKILL_RANGE_MONO;
-        case SKILL_CATEGORY_LANGUAGES:
-            return SKILL_RANGE_LANGUAGE;
+    case SKILL_CATEGORY_ARMOR:
+        return SKILL_RANGE_MONO;
+    case SKILL_CATEGORY_LANGUAGES:
+        return SKILL_RANGE_LANGUAGE;
     }
 
     return SKILL_RANGE_LEVEL;
@@ -10178,7 +10082,7 @@ SkillRangeType GetSkillRangeType(SkillLineEntry const* skill, SkillRaceClassInfo
 
 void ObjectMgr::LoadGameTele()
 {
-    m_GameTeleMap.clear();                                  // for reload case
+    m_GameTeleMap.clear(); // for reload case
 
     uint32 count = 0;
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `id`, `position_x`, `position_y`, `position_z`, `orientation`, `map`, `name` FROM `game_tele`"));
@@ -10200,15 +10104,15 @@ void ObjectMgr::LoadGameTele()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 id         = fields[0].GetUInt32();
+        uint32 id = fields[0].GetUInt32();
         GameTele gt;
 
-        gt.x     = fields[1].GetFloat();
-        gt.y     = fields[2].GetFloat();
-        gt.z     = fields[3].GetFloat();
-        gt.o     = fields[4].GetFloat();
+        gt.x = fields[1].GetFloat();
+        gt.y = fields[2].GetFloat();
+        gt.z = fields[3].GetFloat();
+        gt.o = fields[4].GetFloat();
         gt.mapId = fields[5].GetUInt32();
-        gt.name  = fields[6].GetCppString();
+        gt.name = fields[6].GetCppString();
 
         if (!MapManager::IsValidMapCoord(gt.mapId, gt.x, gt.y, gt.z, gt.o))
         {
@@ -10283,8 +10187,7 @@ bool ObjectMgr::AddGameTele(GameTele& tele)
 
     m_GameTeleMap[new_id] = tele;
 
-    return WorldDatabase.PExecuteLog("INSERT INTO `game_tele` (`id`, `position_x`, `position_y`, `position_z`, `orientation`, `map`, `name`) VALUES (%u,%f,%f,%f,%f,%u,'%s')",
-                                     new_id, tele.x, tele.y, tele.z, tele.o, tele.mapId, tele.name.c_str());
+    return WorldDatabase.PExecuteLog("INSERT INTO `game_tele` (`id`, `position_x`, `position_y`, `position_z`, `orientation`, `map`, `name`) VALUES (%u,%f,%f,%f,%f,%u,'%s')", new_id, tele.x, tele.y, tele.z, tele.o, tele.mapId, tele.name.c_str());
 }
 
 bool ObjectMgr::DeleteGameTele(std::string const& name)
@@ -10329,7 +10232,8 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
             Field* fields = result->Fetch();
             uint32 entry = fields[0].GetUInt32();
             skip_trainers.insert(entry);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     result = WorldDatabase.PQuery("SELECT `entry`, `spell`, `spellcost`, `reqskill`, `reqskillvalue`, `reqlevel` FROM %s WHERE %u BETWEEN `build_min` AND `build_max`", tableName, SUPPORTED_CLIENT_BUILD);
@@ -10353,8 +10257,8 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 entry  = fields[0].GetUInt32();
-        uint32 spell  = fields[1].GetUInt32();
+        uint32 entry = fields[0].GetUInt32();
+        uint32 spell = fields[1].GetUInt32();
 
         SpellEntry const* spellinfo = sSpellMgr.GetSpellEntry(spell);
         if (!spellinfo)
@@ -10430,11 +10334,11 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
         TrainerSpellData& data = trainerList[entry];
 
         TrainerSpell& trainerSpell = data.spellList[spell];
-        trainerSpell.spell         = spell;
-        trainerSpell.spellCost     = fields[2].GetUInt32();
-        trainerSpell.reqSkill      = fields[3].GetUInt32();
+        trainerSpell.spell = spell;
+        trainerSpell.spellCost = fields[2].GetUInt32();
+        trainerSpell.reqSkill = fields[3].GetUInt32();
         trainerSpell.reqSkillValue = fields[4].GetUInt32();
-        trainerSpell.reqLevel      = fields[5].GetUInt32();
+        trainerSpell.reqLevel = fields[5].GetUInt32();
 
         if (trainerSpell.reqLevel)
         {
@@ -10448,7 +10352,6 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
             data.trainerType = 2;
 
         ++count;
-
     }
     while (result->NextRow());
 
@@ -10483,7 +10386,8 @@ void ObjectMgr::LoadTrainerTemplates()
                 trainer_ids.erase(trainer_id);
             else if (patch <= sWorld.GetWowPatch())
                 sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Creature (Entry: %u) has trainer_id = %u for nonexistent trainer template", creature_id, trainer_id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     for (const auto trainer_id : trainer_ids)
@@ -10512,18 +10416,18 @@ void ObjectMgr::LoadVendors(char const* tableName, bool isTemplates)
 
     uint32 count = 0;
     BarGoLink bar(result->GetRowCount());
-    
+
     do
     {
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 entry        = fields[0].GetUInt32();
-        uint32 item_id      = fields[1].GetUInt32();
-        uint32 maxcount     = fields[2].GetUInt32();
-        uint32 incrtime     = fields[3].GetUInt32();
-        uint32 itemflags    = fields[4].GetUInt32();
-        uint32 conditionId  = fields[5].GetUInt32();
+        uint32 entry = fields[0].GetUInt32();
+        uint32 item_id = fields[1].GetUInt32();
+        uint32 maxcount = fields[2].GetUInt32();
+        uint32 incrtime = fields[3].GetUInt32();
+        uint32 itemflags = fields[4].GetUInt32();
+        uint32 conditionId = fields[5].GetUInt32();
 
         if (!IsVendorItemValid(isTemplates, tableName, entry, item_id, maxcount, incrtime, conditionId, nullptr))
             continue;
@@ -10532,7 +10436,6 @@ void ObjectMgr::LoadVendors(char const* tableName, bool isTemplates)
 
         vList.AddItem(item_id, maxcount, incrtime, itemflags, conditionId);
         ++count;
-
     }
     while (result->NextRow());
 
@@ -10568,7 +10471,8 @@ void ObjectMgr::LoadVendorTemplates()
                 vendor_ids.erase(vendor_id);
             else if ((patch <= sWorld.GetWowPatch()) && !IsExistingVendorTemplateId(vendor_id))
                 sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Creature (Entry: %u) has vendor_id = %u for nonexistent vendor template", creature_id, vendor_id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     for (const auto vendor_id : vendor_ids)
@@ -10599,7 +10503,7 @@ void ObjectMgr::LoadNpcGossips()
         bar.step();
         Field* fields = result->Fetch();
 
-        guid   = fields[0].GetUInt32();
+        guid = fields[0].GetUInt32();
         textid = fields[1].GetUInt32();
 
         if (!GetCreatureData(guid))
@@ -10614,9 +10518,8 @@ void ObjectMgr::LoadNpcGossips()
             continue;
         }
 
-        m_CacheNpcTextIdMap[guid] = textid ;
+        m_CacheNpcTextIdMap[guid] = textid;
         ++count;
-
     }
     while (result->NextRow());
 
@@ -10668,10 +10571,10 @@ void ObjectMgr::LoadGossipMenu(std::set<uint32>& gossipScriptSet)
 
         GossipMenus gMenu;
 
-        gMenu.entry             = fields[0].GetUInt32();
-        gMenu.text_id           = fields[1].GetUInt32();
-        gMenu.script_id         = fields[2].GetUInt32();
-        gMenu.condition_id      = fields[3].GetUInt32();
+        gMenu.entry = fields[0].GetUInt32();
+        gMenu.text_id = fields[1].GetUInt32();
+        gMenu.script_id = fields[2].GetUInt32();
+        gMenu.condition_id = fields[3].GetUInt32();
 
         if (!GetNpcText(gMenu.text_id))
         {
@@ -10727,11 +10630,10 @@ void ObjectMgr::LoadGossipMenuItems(std::set<uint32>& gossipScriptSet)
 {
     m_GossipMenuItemsMap.clear();
 
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query(
-                              "SELECT `menu_id`, `id`, `option_icon`, `option_text`, `option_broadcast_text`, `option_id`, `npc_option_npcflag`, "
-                              "`action_menu_id`, `action_poi_id`, `action_script_id`, `box_coded`, `box_money`, `box_text`, `box_broadcast_text`, "
-                              "`condition_id` "
-                              "FROM `gossip_menu_option` ORDER BY `menu_id`, `id`"));
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `menu_id`, `id`, `option_icon`, `option_text`, `option_broadcast_text`, `option_id`, `npc_option_npcflag`, "
+                                                            "`action_menu_id`, `action_poi_id`, `action_script_id`, `box_coded`, `box_money`, `box_text`, `box_broadcast_text`, "
+                                                            "`condition_id` "
+                                                            "FROM `gossip_menu_option` ORDER BY `menu_id`, `id`"));
 
     if (!result)
     {
@@ -10744,8 +10646,8 @@ void ObjectMgr::LoadGossipMenuItems(std::set<uint32>& gossipScriptSet)
     }
 
     // prepare data for unused menu ids
-    std::set<uint32> menu_ids;                              // for later integrity check
-    if (!sLog.HasLogFilter(LOG_FILTER_DB_STRICTED_CHECK))   // check unused menu ids only in strict mode
+    std::set<uint32> menu_ids; // for later integrity check
+    if (!sLog.HasLogFilter(LOG_FILTER_DB_STRICTED_CHECK)) // check unused menu ids only in strict mode
     {
         for (const auto& itr : m_GossipMenusMap)
             if (itr.first)
@@ -10761,7 +10663,7 @@ void ObjectMgr::LoadGossipMenuItems(std::set<uint32>& gossipScriptSet)
     uint32 count = 0;
 
     // prepare menuid -> CreatureInfo map for fast access
-    typedef  std::multimap<uint32, CreatureInfo const*> Menu2CInfoMap;
+    typedef std::multimap<uint32, CreatureInfo const*> Menu2CInfoMap;
     Menu2CInfoMap menu2CInfoMap;
     for (auto const& itr : m_creatureInfoMap)
         if (CreatureInfo const* cInfo = itr.second.get())
@@ -10775,23 +10677,23 @@ void ObjectMgr::LoadGossipMenuItems(std::set<uint32>& gossipScriptSet)
 
         GossipMenuItems gMenuItem;
 
-        gMenuItem.menu_id               = fields[0].GetUInt32();
-        gMenuItem.id                    = fields[1].GetUInt32();
-        gMenuItem.option_icon           = fields[2].GetUInt8();
-        gMenuItem.option_text           = fields[3].GetCppString();
+        gMenuItem.menu_id = fields[0].GetUInt32();
+        gMenuItem.id = fields[1].GetUInt32();
+        gMenuItem.option_icon = fields[2].GetUInt8();
+        gMenuItem.option_text = fields[3].GetCppString();
         gMenuItem.option_broadcast_text = fields[4].GetUInt32();
-        gMenuItem.option_id             = fields[5].GetUInt32();
-        gMenuItem.npc_option_npcflag    = fields[6].GetUInt32();
-        gMenuItem.action_menu_id        = fields[7].GetInt32();
-        gMenuItem.action_poi_id         = fields[8].GetUInt32();
-        gMenuItem.action_script_id      = fields[9].GetUInt32();
-        gMenuItem.box_coded             = fields[10].GetUInt8() != 0;
-        //gMenuItem.box_money             = fields[11].GetUInt32();
-        gMenuItem.box_text              = fields[12].GetCppString();
-        gMenuItem.box_broadcast_text    = fields[13].GetUInt32();
-        gMenuItem.condition_id          = fields[14].GetUInt32();
+        gMenuItem.option_id = fields[5].GetUInt32();
+        gMenuItem.npc_option_npcflag = fields[6].GetUInt32();
+        gMenuItem.action_menu_id = fields[7].GetInt32();
+        gMenuItem.action_poi_id = fields[8].GetUInt32();
+        gMenuItem.action_script_id = fields[9].GetUInt32();
+        gMenuItem.box_coded = fields[10].GetUInt8() != 0;
+        // gMenuItem.box_money             = fields[11].GetUInt32();
+        gMenuItem.box_text = fields[12].GetCppString();
+        gMenuItem.box_broadcast_text = fields[13].GetUInt32();
+        gMenuItem.condition_id = fields[14].GetUInt32();
 
-        if (gMenuItem.menu_id)                              // == 0 id is special and not have menu_id data
+        if (gMenuItem.menu_id) // == 0 id is special and not have menu_id data
         {
             if (m_GossipMenusMap.find(gMenuItem.menu_id) == m_GossipMenusMap.end())
             {
@@ -10870,8 +10772,8 @@ void ObjectMgr::LoadGossipMenuItems(std::set<uint32>& gossipScriptSet)
                     menu_ids.erase(gMenuItem.menu_id);
             }
 
-            //if (found_menu_uses && !found_flags_uses)
-            //    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Table gossip_menu_option for menu %u, id %u has `npc_option_npcflag` = %u but creatures using this menu does not have corresponding `npc_flags`. Option will not accessible in game.", gMenuItem.menu_id, gMenuItem.id, gMenuItem.npc_option_npcflag);
+            // if (found_menu_uses && !found_flags_uses)
+            //     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Table gossip_menu_option for menu %u, id %u has `npc_option_npcflag` = %u but creatures using this menu does not have corresponding `npc_flags`. Option will not accessible in game.", gMenuItem.menu_id, gMenuItem.id, gMenuItem.npc_option_npcflag);
         }
 
         if (gMenuItem.action_poi_id && !GetPointOfInterest(gMenuItem.action_poi_id))
@@ -10904,7 +10806,6 @@ void ObjectMgr::LoadGossipMenuItems(std::set<uint32>& gossipScriptSet)
         m_GossipMenuItemsMap.insert(GossipMenuItemsMap::value_type(gMenuItem.menu_id, gMenuItem));
 
         ++count;
-
     }
     while (result->NextRow());
 
@@ -10928,7 +10829,7 @@ void ObjectMgr::AddVendorItem(uint32 entry, uint32 item, uint32 maxcount, uint32
 
 bool ObjectMgr::RemoveVendorItem(uint32 entry, uint32 item)
 {
-    CacheVendorItemMap::iterator  iter = m_CacheVendorItemMap.find(entry);
+    CacheVendorItemMap::iterator iter = m_CacheVendorItemMap.find(entry);
     if (iter == m_CacheVendorItemMap.end())
         return false;
 
@@ -10965,8 +10866,7 @@ bool ObjectMgr::IsVendorItemValid(bool isTemplate, char const* tableName, uint32
         if (pl)
             pl->PSendSysMessage(LANG_ITEM_NOT_FOUND, item_id);
         else if (!IsExistingItemId(item_id))
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` for %s %u contain nonexistent item (%u), ignoring",
-                            tableName, idStr, vendor_entry, item_id);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` for %s %u contain nonexistent item (%u), ignoring", tableName, idStr, vendor_entry, item_id);
         return false;
     }
 
@@ -10975,8 +10875,7 @@ bool ObjectMgr::IsVendorItemValid(bool isTemplate, char const* tableName, uint32
         if (pl)
             pl->PSendSysMessage("MaxCount!=0 (%u) but IncrTime==0", maxcount);
         else
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has `maxcount` (%u) for item %u of %s %u but `incrtime`=0, ignoring",
-                            tableName, maxcount, item_id, idStr, vendor_entry);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has `maxcount` (%u) for item %u of %s %u but `incrtime`=0, ignoring", tableName, maxcount, item_id, idStr, vendor_entry);
         return false;
     }
     else if (maxcount == 0 && incrtime > 0)
@@ -10984,8 +10883,7 @@ bool ObjectMgr::IsVendorItemValid(bool isTemplate, char const* tableName, uint32
         if (pl)
             pl->PSendSysMessage("MaxCount==0 but IncrTime<>=0");
         else
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has `maxcount`=0 for item %u of %s %u but `incrtime`<>0, ignoring",
-                            tableName, item_id, idStr, vendor_entry);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has `maxcount`=0 for item %u of %s %u but `incrtime`<>0, ignoring", tableName, item_id, idStr, vendor_entry);
         return false;
     }
 
@@ -10999,17 +10897,15 @@ bool ObjectMgr::IsVendorItemValid(bool isTemplate, char const* tableName, uint32
     VendorItemData const* tItems = isTemplate ? nullptr : GetNpcVendorTemplateItemList(vendor_entry);
 
     if (!vItems && !tItems)
-        return true;                                        // later checks for non-empty lists
+        return true; // later checks for non-empty lists
 
     if (vItems && vItems->FindItem(item_id))
     {
         if (pl)
             pl->PSendSysMessage(LANG_ITEM_ALREADY_IN_LIST, item_id);
         else
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has duplicate items %u for %s %u, ignoring",
-                            tableName, item_id, idStr, vendor_entry);
-        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `npc_vendor` has duplicate items %u for vendor (Entry: %u), ignoring",
-                        item_id, vendor_entry);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has duplicate items %u for %s %u, ignoring", tableName, item_id, idStr, vendor_entry);
+        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `npc_vendor` has duplicate items %u for vendor (Entry: %u), ignoring", item_id, vendor_entry);
         return false;
     }
 
@@ -11022,11 +10918,9 @@ bool ObjectMgr::IsVendorItemValid(bool isTemplate, char const* tableName, uint32
             else
             {
                 if (!cInfo->vendor_id)
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has duplicate items %u for %s %u, ignoring",
-                                    tableName, item_id, idStr, vendor_entry);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has duplicate items %u for %s %u, ignoring", tableName, item_id, idStr, vendor_entry);
                 else
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has duplicate items %u for %s %u (or possible in vendor template %u), ignoring",
-                                    tableName, item_id, idStr, vendor_entry, cInfo->vendor_id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has duplicate items %u for %s %u (or possible in vendor template %u), ignoring", tableName, item_id, idStr, vendor_entry, cInfo->vendor_id);
             }
             return false;
         }
@@ -11040,23 +10934,16 @@ bool ObjectMgr::IsVendorItemValid(bool isTemplate, char const* tableName, uint32
         if (pl)
             pl->SendSysMessage(LANG_COMMAND_ADDVENDORITEMITEMS);
         else
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has too many items (%u >= %i) for %s %u, ignoring",
-                            tableName, countItems, UINT8_MAX, idStr, vendor_entry);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has too many items (%u >= %i) for %s %u, ignoring", tableName, countItems, UINT8_MAX, idStr, vendor_entry);
         return false;
     }
 
     return true;
 }
 
-void ObjectMgr::AddGroup(Group* group)
-{
-    m_GroupMap[group->GetId()] = group ;
-}
+void ObjectMgr::AddGroup(Group* group) { m_GroupMap[group->GetId()] = group; }
 
-void ObjectMgr::RemoveGroup(Group* group)
-{
-    m_GroupMap.erase(group->GetId());
-}
+void ObjectMgr::RemoveGroup(Group* group) { m_GroupMap.erase(group->GetId()); }
 
 bool FindCreatureData::operator()(CreatureDataPair const& dataPair)
 {
@@ -11170,21 +11057,21 @@ uint32 ObjectMgr::AddGOData(uint32 entry, uint32 mapId, float x, float y, float 
 
     uint32 guid = map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT);
     GameObjectData& data = NewGOData(guid);
-    data.id             = entry;
+    data.id = entry;
     data.position.mapId = mapId;
-    data.position.x     = x;
-    data.position.y     = y;
-    data.position.z     = z;
-    data.position.o     = o;
-    data.rotation0      = rotation0;
-    data.rotation1      = rotation1;
-    data.rotation2      = rotation2;
-    data.rotation3      = rotation3;
+    data.position.x = x;
+    data.position.y = y;
+    data.position.z = z;
+    data.position.o = o;
+    data.rotation0 = rotation0;
+    data.rotation1 = rotation1;
+    data.rotation2 = rotation2;
+    data.rotation3 = rotation3;
     data.spawntimesecsmin = spawntimedelay;
     data.spawntimesecsmax = spawntimedelay;
-    data.animprogress   = 100;
-    data.go_state       = GO_STATE_READY;
-    data.spawn_flags     = 0;
+    data.animprogress = 100;
+    data.go_state = GO_STATE_READY;
+    data.spawn_flags = 0;
 
     AddGameobjectToGrid(guid, &data);
 
@@ -11287,11 +11174,11 @@ uint32 ObjectMgr::AddCreData(uint32 entry, uint32 /*team*/, uint32 mapId, float 
 
 void ObjectMgr::RemoveGraveYardLink(uint32 id, uint32 zoneId, Team team, bool inDB)
 {
-    GraveYardMap::iterator graveLow  = m_GraveYardMap.lower_bound(zoneId);
-    GraveYardMap::iterator graveUp   = m_GraveYardMap.upper_bound(zoneId);
+    GraveYardMap::iterator graveLow = m_GraveYardMap.lower_bound(zoneId);
+    GraveYardMap::iterator graveUp = m_GraveYardMap.upper_bound(zoneId);
     if (graveLow == graveUp)
     {
-        //sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `game_graveyard_zone` incomplete: Zone %u Team %u does not have a linked graveyard.",zoneId,team);
+        // sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `game_graveyard_zone` incomplete: Zone %u Team %u does not have a linked graveyard.",zoneId,team);
         return;
     }
 
@@ -11301,7 +11188,7 @@ void ObjectMgr::RemoveGraveYardLink(uint32 id, uint32 zoneId, Team team, bool in
 
     for (itr = graveLow; itr != graveUp; ++itr)
     {
-        GraveYardData & data = itr->second;
+        GraveYardData& data = itr->second;
 
         // skip not matching safezone id
         if (data.safeLocId != id)
@@ -11519,8 +11406,8 @@ void ObjectMgr::LoadFactionChangeMounts()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint8 RaceId     = fields[0].GetUInt8();
-        uint8 MountNum   = fields[1].GetUInt8();
+        uint8 RaceId = fields[0].GetUInt8();
+        uint8 MountNum = fields[1].GetUInt8();
         uint32 ItemEntry = fields[2].GetUInt32();
 
         if (!GetItemPrototype(ItemEntry))
@@ -11531,9 +11418,9 @@ void ObjectMgr::LoadFactionChangeMounts()
         else
         {
             FactionChangeMountData data;
-            data.RaceId     = Races(RaceId);
-            data.MountNum   = MountNum;
-            data.ItemEntry  = ItemEntry;
+            data.RaceId = Races(RaceId);
+            data.MountNum = MountNum;
+            data.ItemEntry = ItemEntry;
             factionchange_mounts.push_back(data);
             ++count;
         }
@@ -11570,7 +11457,7 @@ void ObjectMgr::RestoreDeletedItems()
         uint32 playerGuidLow = fields[1].GetUInt32();
         uint32 itemId = fields[2].GetUInt32();
         uint32 stackCount = fields[3].GetUInt32();
-        
+
         if (ItemPrototype const* itemProto = GetItemPrototype(itemId))
         {
             ObjectGuid const playerGuid = ObjectGuid(HIGHGUID_PLAYER, playerGuidLow);
@@ -11585,17 +11472,16 @@ void ObjectMgr::RestoreDeletedItems()
 
                 // text
                 std::string textFormat = GetMangosString(LANG_RESTORED_ITEM, DB_LOCALE_enUS);
-                
-                MailDraft(subject, textFormat)
-                    .AddItem(restoredItem)
-                    .SendMailTo(MailReceiver(playerGuid), MailSender(MAIL_NORMAL, playerGuid.GetCounter(), MAIL_STATIONERY_GM), MAIL_CHECK_MASK_COPIED, 0, 30 * DAY);
+
+                MailDraft(subject, textFormat).AddItem(restoredItem).SendMailTo(MailReceiver(playerGuid), MailSender(MAIL_NORMAL, playerGuid.GetCounter(), MAIL_STATIONERY_GM), MAIL_CHECK_MASK_COPIED, 0, 30 * DAY);
 
                 CharacterDatabase.PExecute("DELETE FROM `character_deleted_items` WHERE `id` = %u", id);
 
                 count++;
             }
         }
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Restored %u previously deleted items to players.", count);
@@ -11655,24 +11541,24 @@ Races ObjectMgr::GetOppositeRace(Races origRace) const
 {
     switch (origRace)
     {
-        case RACE_HUMAN:
-            return RACE_ORC;
-        case RACE_ORC:
-            return RACE_HUMAN;
-        case RACE_DWARF:
-            return RACE_TROLL;
-        case RACE_NIGHTELF:
-            return RACE_UNDEAD;
-        case RACE_UNDEAD:
-            return RACE_NIGHTELF;
-        case RACE_TAUREN:
-            return RACE_TAUREN;
-        case RACE_GNOME:
-            return RACE_TAUREN;
-        case RACE_TROLL:
-            return RACE_DWARF;
-        default:
-            return RACE_GOBLIN;
+    case RACE_HUMAN:
+        return RACE_ORC;
+    case RACE_ORC:
+        return RACE_HUMAN;
+    case RACE_DWARF:
+        return RACE_TROLL;
+    case RACE_NIGHTELF:
+        return RACE_UNDEAD;
+    case RACE_UNDEAD:
+        return RACE_NIGHTELF;
+    case RACE_TAUREN:
+        return RACE_TAUREN;
+    case RACE_GNOME:
+        return RACE_TAUREN;
+    case RACE_TROLL:
+        return RACE_DWARF;
+    default:
+        return RACE_GOBLIN;
     }
 }
 
@@ -11723,10 +11609,7 @@ uint32 ObjectMgr::GenerateAuctionID()
     return m_NextAuctionId++;
 }
 
-void ObjectMgr::FreeAuctionID(uint32 id)
-{
-    m_AuctionsIds.erase(id);
-}
+void ObjectMgr::FreeAuctionID(uint32 id) { m_AuctionsIds.erase(id); }
 
 void ObjectMgr::GeneratePetNumberRange(uint32& first, uint32& last)
 {
@@ -11868,19 +11751,19 @@ void ObjectMgr::LoadPlayerPremadeTemplates()
 
             switch (requiredClass)
             {
-                case CLASS_WARRIOR:
-                case CLASS_PALADIN:
-                case CLASS_HUNTER:
-                case CLASS_ROGUE:
-                case CLASS_PRIEST:
-                case CLASS_SHAMAN:
-                case CLASS_MAGE:
-                case CLASS_WARLOCK:
-                case CLASS_DRUID:
-                    break;
-                default:
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Wrong class %hhu for entry %u in table `player_premade_template`", requiredClass, entry);
-                    continue;
+            case CLASS_WARRIOR:
+            case CLASS_PALADIN:
+            case CLASS_HUNTER:
+            case CLASS_ROGUE:
+            case CLASS_PRIEST:
+            case CLASS_SHAMAN:
+            case CLASS_MAGE:
+            case CLASS_WARLOCK:
+            case CLASS_DRUID:
+                break;
+            default:
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Wrong class %hhu for entry %u in table `player_premade_template`", requiredClass, entry);
+                continue;
             }
 
             if (!(level >= 1 && level <= PLAYER_MAX_LEVEL))
@@ -11895,8 +11778,8 @@ void ObjectMgr::LoadPlayerPremadeTemplates()
             data.level = level;
             data.role = CombatBotRoles(role);
             data.name = name;
-
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded " SIZEFMTD " premade player gear templates", m_playerPremadeGearMap.size());
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
@@ -11943,18 +11826,19 @@ void ObjectMgr::LoadPlayerPremadeTemplates()
 
             switch (team)
             {
-                case TEAM_NONE:
-                case HORDE:
-                case ALLIANCE:
-                    break;
-                default:
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Wrong team %u for entry %u in table `player_premade_item`", team, entry);
-                    continue;
+            case TEAM_NONE:
+            case HORDE:
+            case ALLIANCE:
+                break;
+            default:
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Wrong team %u for entry %u in table `player_premade_item`", team, entry);
+                continue;
             }
 
             count++;
             itr->second.items.emplace_back(item, enchant, team);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u premade player items", count);
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
@@ -11991,19 +11875,19 @@ void ObjectMgr::LoadPlayerPremadeTemplates()
 
             switch (requiredClass)
             {
-                case CLASS_WARRIOR:
-                case CLASS_PALADIN:
-                case CLASS_HUNTER:
-                case CLASS_ROGUE:
-                case CLASS_PRIEST:
-                case CLASS_SHAMAN:
-                case CLASS_MAGE:
-                case CLASS_WARLOCK:
-                case CLASS_DRUID:
-                    break;
-                default:
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Wrong class %hhu for entry %u in table `player_premade_template`", requiredClass, entry);
-                    continue;
+            case CLASS_WARRIOR:
+            case CLASS_PALADIN:
+            case CLASS_HUNTER:
+            case CLASS_ROGUE:
+            case CLASS_PRIEST:
+            case CLASS_SHAMAN:
+            case CLASS_MAGE:
+            case CLASS_WARLOCK:
+            case CLASS_DRUID:
+                break;
+            default:
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Wrong class %hhu for entry %u in table `player_premade_template`", requiredClass, entry);
+                continue;
             }
 
             if (!(level >= 1 && level <= PLAYER_MAX_LEVEL))
@@ -12018,8 +11902,8 @@ void ObjectMgr::LoadPlayerPremadeTemplates()
             data.level = level;
             data.role = CombatBotRoles(role);
             data.name = name;
-
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded " SIZEFMTD " premade player spec templates", m_playerPremadeSpecMap.size());
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
@@ -12049,7 +11933,7 @@ void ObjectMgr::LoadPlayerPremadeTemplates()
 
             uint32 entry = fields[0].GetUInt32();
             uint32 spell = fields[1].GetUInt32();
-            
+
             auto itr = m_playerPremadeSpecMap.find(entry);
             if (itr == m_playerPremadeSpecMap.end())
             {
@@ -12059,10 +11943,11 @@ void ObjectMgr::LoadPlayerPremadeTemplates()
 
             if (!sSpellMgr.GetSpellEntry(spell))
                 continue;
-            
+
             count++;
             itr->second.spells.push_back(spell);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u premade player spells", count);
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");

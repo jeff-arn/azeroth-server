@@ -33,17 +33,15 @@ enum eData64
 
 enum eGameObject
 {
-    GO_GONG                                     = 148917,
-    GO_IDOL_CUP_FIRE                            = 151952
+    GO_GONG = 148917,
+    GO_IDOL_CUP_FIRE = 151952
 };
 
 enum eCreature
 {
-    CREATURE_TOMB_FIEND                         = 7349,
-    CREATURE_TOMB_REAVER                        = 7351,
-    CREATURE_TUTEN_KASH                         = 7355
+    CREATURE_TOMB_FIEND = 7349,
+    CREATURE_TOMB_REAVER = 7351,
+    CREATURE_TUTEN_KASH = 7355
 };
 
 #endif
-
-

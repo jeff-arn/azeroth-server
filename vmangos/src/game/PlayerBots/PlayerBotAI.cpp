@@ -1,35 +1,34 @@
 /*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
-#include "PlayerBotMgr.h"
 #include "PlayerBotAI.h"
 #include "BotChatManager.h"
+#include "BotDirector.h"
 #include "BotServiceMgr.h"
 #include "GuildBotMgr.h"
-#include "BotDirector.h"
-#include "Opcodes.h"
-#include "TradeData.h"
-#include "Player.h"
 #include "Log.h"
-#include "SocialMgr.h"
-#include "MotionMaster.h"
-#include "ObjectMgr.h"
 #include "MapManager.h"
+#include "MotionMaster.h"
 #include "MoveSpline.h"
+#include "ObjectMgr.h"
 #include "Opcodes.h"
+#include "Player.h"
+#include "PlayerBotMgr.h"
+#include "SocialMgr.h"
+#include "TradeData.h"
 #include "WorldPacket.h"
 
 bool PlayerBotAI::OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess)
@@ -123,8 +122,7 @@ bool PlayerBotAI::SpawnNewPlayer(WorldSession* sess, uint8 class_, uint32 race_,
     // Set instance
     if (instanceId && mapId > 1) // Not a continent
     {
-        DungeonPersistentState* state = (DungeonPersistentState*)sMapPersistentStateMgr
-                .AddPersistentState(sMapStorage.LookupEntry<MapEntry>(mapId), instanceId, time(nullptr) + 3600, false, true);
+        DungeonPersistentState* state = (DungeonPersistentState*)sMapPersistentStateMgr.AddPersistentState(sMapStorage.LookupEntry<MapEntry>(mapId), instanceId, time(nullptr) + 3600, false, true);
         newChar->BindToInstance(state, true, true);
     }
     // Generate position
@@ -156,10 +154,7 @@ bool PlayerBotAI::SpawnNewPlayer(WorldSession* sess, uint8 class_, uint32 race_,
     newChar->UpdateAllStats();
     return true;
 }
-bool MageOrgrimmarAttackerAI::OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess)
-{
-    return SpawnNewPlayer(sess, CLASS_MAGE, RACE_GNOME, 1, 0, 1017.0f, -4450, 12, 0.65f);
-}
+bool MageOrgrimmarAttackerAI::OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess) { return SpawnNewPlayer(sess, CLASS_MAGE, RACE_GNOME, 1, 0, 1017.0f, -4450, 12, 0.65f); }
 
 void MageOrgrimmarAttackerAI::UpdateAI(uint32 const diff)
 {
@@ -268,18 +263,18 @@ void MageOrgrimmarAttackerAI::UpdateAI(uint32 const diff)
         {
             switch (urand(0, 2))
             {
-                case 0:
-                    x = 1357;
-                    y = -4376;
-                    break;
-                case 1:
-                    x = 1354;
-                    y = -4412;
-                    break;
-                case 2:
-                    x = 1346;
-                    y = -4339;
-                    break;
+            case 0:
+                x = 1357;
+                y = -4376;
+                break;
+            case 1:
+                x = 1354;
+                y = -4412;
+                break;
+            case 2:
+                x = 1346;
+                y = -4339;
+                break;
             }
         }
         else if (me->GetPositionX() + 10 < 1421.0f)
@@ -294,24 +289,24 @@ void MageOrgrimmarAttackerAI::UpdateAI(uint32 const diff)
         {
             switch (urand(0, 2))
             {
-                case 0:
-                    x = 1516;
-                    y = -4410;
-                    z = 17.0f;
-                    r = 4;
-                    break;
-                case 1:
-                    x = 1538;
-                    y = -4347;
-                    z = 18;
-                    r = 3;
-                    break;
-                case 2:
-                    x = 1617;
-                    y = -4426;
-                    z = 12;
-                    r = 4;
-                    break;
+            case 0:
+                x = 1516;
+                y = -4410;
+                z = 17.0f;
+                r = 4;
+                break;
+            case 1:
+                x = 1538;
+                y = -4347;
+                z = 18;
+                r = 3;
+                break;
+            case 2:
+                x = 1617;
+                y = -4426;
+                z = 12;
+                r = 4;
+                break;
             }
         }
         if (!z)
@@ -352,7 +347,8 @@ void PopulateAreaBotAI::BeforeAddToMap(Player* player)
         float y = _y;
         float z = _z;
         Map* map = sMapMgr.CreateMap(_map, player);
-        while (!map->GetWalkRandomPosition(nullptr, x, y, z, _radius));
+        while (!map->GetWalkRandomPosition(nullptr, x, y, z, _radius))
+            ;
         player->Relocate(x, y, z);
         player->SetLocationMapId(_map);
     }
@@ -379,108 +375,107 @@ struct CrowdBotSpawn
 // Each entry is one bot's exact position (with small random offset from radius)
 
 // City crowd bot spawn points
-static const CrowdBotSpawn CITY_SPAWNS[] =
-{
+static const CrowdBotSpawn CITY_SPAWNS[] = {
     // IF Bank front — main Alliance gathering area (GUIDs 100-124, 25 bots)
     // Within 10 yards of center (-4919.8, -958.6, 501.5)
-    { -4919.8f, -958.6f, 501.5f, 2.0f, 0 },
-    { -4915.0f, -954.0f, 501.5f, 2.0f, 0 },
-    { -4924.5f, -963.0f, 501.5f, 2.0f, 0 },
-    { -4913.5f, -960.0f, 501.5f, 2.0f, 0 },
-    { -4926.0f, -957.0f, 501.5f, 2.0f, 0 },
-    { -4916.0f, -951.0f, 501.5f, 2.0f, 0 },
-    { -4923.5f, -966.0f, 501.5f, 2.0f, 0 },
-    { -4912.0f, -957.0f, 501.5f, 2.0f, 0 },
-    { -4927.5f, -960.0f, 501.5f, 2.0f, 0 },
-    { -4919.8f, -968.0f, 501.5f, 2.0f, 0 },
-    { -4919.8f, -949.0f, 501.5f, 2.0f, 0 },
-    { -4925.0f, -953.0f, 501.5f, 2.0f, 0 },
-    { -4914.5f, -964.0f, 501.5f, 2.0f, 0 },
-    { -4927.0f, -963.0f, 501.5f, 2.0f, 0 },
-    { -4912.5f, -954.0f, 501.5f, 2.0f, 0 },
-    { -4923.0f, -951.5f, 501.5f, 2.0f, 0 },
-    { -4916.5f, -965.5f, 501.5f, 2.0f, 0 },
-    { -4926.5f, -956.0f, 501.5f, 2.0f, 0 },
-    { -4913.0f, -961.5f, 501.5f, 2.0f, 0 },
-    { -4922.0f, -950.0f, 501.5f, 2.0f, 0 },
-    { -4917.5f, -967.0f, 501.5f, 2.0f, 0 },
-    { -4928.0f, -955.0f, 501.5f, 2.0f, 0 },
-    { -4911.5f, -962.0f, 501.5f, 2.0f, 0 },
-    { -4924.0f, -958.6f, 501.5f, 2.0f, 0 },
-    { -4915.5f, -958.6f, 501.5f, 2.0f, 0 },
+    {-4919.8f, -958.6f, 501.5f, 2.0f, 0},
+    {-4915.0f, -954.0f, 501.5f, 2.0f, 0},
+    {-4924.5f, -963.0f, 501.5f, 2.0f, 0},
+    {-4913.5f, -960.0f, 501.5f, 2.0f, 0},
+    {-4926.0f, -957.0f, 501.5f, 2.0f, 0},
+    {-4916.0f, -951.0f, 501.5f, 2.0f, 0},
+    {-4923.5f, -966.0f, 501.5f, 2.0f, 0},
+    {-4912.0f, -957.0f, 501.5f, 2.0f, 0},
+    {-4927.5f, -960.0f, 501.5f, 2.0f, 0},
+    {-4919.8f, -968.0f, 501.5f, 2.0f, 0},
+    {-4919.8f, -949.0f, 501.5f, 2.0f, 0},
+    {-4925.0f, -953.0f, 501.5f, 2.0f, 0},
+    {-4914.5f, -964.0f, 501.5f, 2.0f, 0},
+    {-4927.0f, -963.0f, 501.5f, 2.0f, 0},
+    {-4912.5f, -954.0f, 501.5f, 2.0f, 0},
+    {-4923.0f, -951.5f, 501.5f, 2.0f, 0},
+    {-4916.5f, -965.5f, 501.5f, 2.0f, 0},
+    {-4926.5f, -956.0f, 501.5f, 2.0f, 0},
+    {-4913.0f, -961.5f, 501.5f, 2.0f, 0},
+    {-4922.0f, -950.0f, 501.5f, 2.0f, 0},
+    {-4917.5f, -967.0f, 501.5f, 2.0f, 0},
+    {-4928.0f, -955.0f, 501.5f, 2.0f, 0},
+    {-4911.5f, -962.0f, 501.5f, 2.0f, 0},
+    {-4924.0f, -958.6f, 501.5f, 2.0f, 0},
+    {-4915.5f, -958.6f, 501.5f, 2.0f, 0},
     // SW AH area (GUIDs 125-134)
-    { -8811.0f, 667.0f, 97.0f, 3.0f, 0 },
-    { -8815.0f, 671.0f, 97.0f, 2.0f, 0 },
-    { -8808.0f, 663.0f, 97.0f, 2.0f, 0 },
-    { -8818.0f, 675.0f, 97.0f, 3.0f, 0 },
-    { -8805.0f, 660.0f, 97.0f, 2.0f, 0 },
-    { -8813.0f, 669.0f, 97.0f, 2.0f, 0 },
-    { -8820.0f, 664.0f, 97.0f, 2.0f, 0 },
-    { -8807.0f, 673.0f, 97.0f, 3.0f, 0 },
-    { -8816.0f, 660.0f, 97.0f, 2.0f, 0 },
-    { -8810.0f, 676.0f, 97.0f, 2.0f, 0 },
+    {-8811.0f, 667.0f, 97.0f, 3.0f, 0},
+    {-8815.0f, 671.0f, 97.0f, 2.0f, 0},
+    {-8808.0f, 663.0f, 97.0f, 2.0f, 0},
+    {-8818.0f, 675.0f, 97.0f, 3.0f, 0},
+    {-8805.0f, 660.0f, 97.0f, 2.0f, 0},
+    {-8813.0f, 669.0f, 97.0f, 2.0f, 0},
+    {-8820.0f, 664.0f, 97.0f, 2.0f, 0},
+    {-8807.0f, 673.0f, 97.0f, 3.0f, 0},
+    {-8816.0f, 660.0f, 97.0f, 2.0f, 0},
+    {-8810.0f, 676.0f, 97.0f, 2.0f, 0},
     // SW Bank area (GUIDs 135-139)
-    { -8880.0f, 644.0f, 96.0f, 3.0f, 0 },
-    { -8876.0f, 648.0f, 96.0f, 2.0f, 0 },
-    { -8884.0f, 640.0f, 96.0f, 2.0f, 0 },
-    { -8872.0f, 646.0f, 96.0f, 3.0f, 0 },
-    { -8878.0f, 650.0f, 96.0f, 2.0f, 0 },
+    {-8880.0f, 644.0f, 96.0f, 3.0f, 0},
+    {-8876.0f, 648.0f, 96.0f, 2.0f, 0},
+    {-8884.0f, 640.0f, 96.0f, 2.0f, 0},
+    {-8872.0f, 646.0f, 96.0f, 3.0f, 0},
+    {-8878.0f, 650.0f, 96.0f, 2.0f, 0},
     // Goldshire Inn (GUIDs 140-144)
-    { -9456.0f, 45.0f, 57.0f, 3.0f, 0 },
-    { -9460.0f, 42.0f, 57.0f, 2.0f, 0 },
-    { -9452.0f, 48.0f, 57.0f, 2.0f, 0 },
-    { -9458.0f, 38.0f, 57.0f, 3.0f, 0 },
-    { -9464.0f, 46.0f, 57.0f, 2.0f, 0 },
+    {-9456.0f, 45.0f, 57.0f, 3.0f, 0},
+    {-9460.0f, 42.0f, 57.0f, 2.0f, 0},
+    {-9452.0f, 48.0f, 57.0f, 2.0f, 0},
+    {-9458.0f, 38.0f, 57.0f, 3.0f, 0},
+    {-9464.0f, 46.0f, 57.0f, 2.0f, 0},
     // IF Bank front — additional 25 bots (GUIDs 145-169)
-    { -4920.5f, -952.0f, 501.5f, 2.0f, 0 },
-    { -4919.0f, -965.0f, 501.5f, 2.0f, 0 },
-    { -4925.5f, -961.5f, 501.5f, 2.0f, 0 },
-    { -4914.0f, -955.5f, 501.5f, 2.0f, 0 },
-    { -4921.5f, -967.5f, 501.5f, 2.0f, 0 },
-    { -4918.0f, -949.5f, 501.5f, 2.0f, 0 },
-    { -4926.0f, -964.5f, 501.5f, 2.0f, 0 },
-    { -4913.5f, -952.5f, 501.5f, 2.0f, 0 },
-    { -4928.5f, -958.0f, 501.5f, 2.0f, 0 },
-    { -4911.0f, -959.0f, 501.5f, 2.0f, 0 },
-    { -4922.5f, -953.5f, 501.5f, 2.0f, 0 },
-    { -4917.0f, -963.5f, 501.5f, 2.0f, 0 },
-    { -4924.5f, -955.0f, 501.5f, 2.0f, 0 },
-    { -4915.0f, -962.0f, 501.5f, 2.0f, 0 },
-    { -4921.0f, -949.0f, 501.5f, 2.0f, 0 },
-    { -4918.5f, -968.0f, 501.5f, 2.0f, 0 },
-    { -4927.0f, -954.5f, 501.5f, 2.0f, 0 },
-    { -4912.5f, -962.5f, 501.5f, 2.0f, 0 },
-    { -4923.0f, -966.0f, 501.5f, 2.0f, 0 },
-    { -4916.5f, -951.0f, 501.5f, 2.0f, 0 },
-    { -4925.0f, -959.5f, 501.5f, 2.0f, 0 },
-    { -4914.5f, -957.5f, 501.5f, 2.0f, 0 },
-    { -4920.0f, -950.5f, 501.5f, 2.0f, 0 },
-    { -4919.5f, -966.5f, 501.5f, 2.0f, 0 },
-    { -4929.0f, -957.0f, 501.5f, 2.0f, 0 },
+    {-4920.5f, -952.0f, 501.5f, 2.0f, 0},
+    {-4919.0f, -965.0f, 501.5f, 2.0f, 0},
+    {-4925.5f, -961.5f, 501.5f, 2.0f, 0},
+    {-4914.0f, -955.5f, 501.5f, 2.0f, 0},
+    {-4921.5f, -967.5f, 501.5f, 2.0f, 0},
+    {-4918.0f, -949.5f, 501.5f, 2.0f, 0},
+    {-4926.0f, -964.5f, 501.5f, 2.0f, 0},
+    {-4913.5f, -952.5f, 501.5f, 2.0f, 0},
+    {-4928.5f, -958.0f, 501.5f, 2.0f, 0},
+    {-4911.0f, -959.0f, 501.5f, 2.0f, 0},
+    {-4922.5f, -953.5f, 501.5f, 2.0f, 0},
+    {-4917.0f, -963.5f, 501.5f, 2.0f, 0},
+    {-4924.5f, -955.0f, 501.5f, 2.0f, 0},
+    {-4915.0f, -962.0f, 501.5f, 2.0f, 0},
+    {-4921.0f, -949.0f, 501.5f, 2.0f, 0},
+    {-4918.5f, -968.0f, 501.5f, 2.0f, 0},
+    {-4927.0f, -954.5f, 501.5f, 2.0f, 0},
+    {-4912.5f, -962.5f, 501.5f, 2.0f, 0},
+    {-4923.0f, -966.0f, 501.5f, 2.0f, 0},
+    {-4916.5f, -951.0f, 501.5f, 2.0f, 0},
+    {-4925.0f, -959.5f, 501.5f, 2.0f, 0},
+    {-4914.5f, -957.5f, 501.5f, 2.0f, 0},
+    {-4920.0f, -950.5f, 501.5f, 2.0f, 0},
+    {-4919.5f, -966.5f, 501.5f, 2.0f, 0},
+    {-4929.0f, -957.0f, 501.5f, 2.0f, 0},
     // IF Bank interior (GUIDs 170-174, 5 bots)
     // Within 2 yards of (-4891.7, -990.8, 503.9)
-    { -4891.7f, -990.8f, 503.9f, 1.0f, 0 },
-    { -4890.5f, -989.8f, 503.9f, 1.0f, 0 },
-    { -4892.8f, -991.8f, 503.9f, 1.0f, 0 },
-    { -4890.0f, -991.5f, 503.9f, 1.0f, 0 },
-    { -4893.2f, -989.5f, 503.9f, 1.0f, 0 },
+    {-4891.7f, -990.8f, 503.9f, 1.0f, 0},
+    {-4890.5f, -989.8f, 503.9f, 1.0f, 0},
+    {-4892.8f, -991.8f, 503.9f, 1.0f, 0},
+    {-4890.0f, -991.5f, 503.9f, 1.0f, 0},
+    {-4893.2f, -989.5f, 503.9f, 1.0f, 0},
     // IF AH area (GUIDs 175-189, 15 bots)
     // Within 3 yards of AH vendor 1 (-4959.9, -906.4, 503.8)
-    { -4959.9f, -906.4f, 503.8f, 1.0f, 0 },
-    { -4958.0f, -904.5f, 503.8f, 1.0f, 0 },
-    { -4961.8f, -908.3f, 503.8f, 1.0f, 0 },
-    { -4957.5f, -907.5f, 503.8f, 1.0f, 0 },
-    { -4962.2f, -905.0f, 503.8f, 1.0f, 0 },
-    { -4958.5f, -909.0f, 503.8f, 1.0f, 0 },
-    { -4961.0f, -904.0f, 503.8f, 1.0f, 0 },
-    { -4957.0f, -906.0f, 503.8f, 1.0f, 0 },
-    { -4962.5f, -907.0f, 503.8f, 1.0f, 0 },
-    { -4959.0f, -909.2f, 503.8f, 1.0f, 0 },
-    { -4960.5f, -903.8f, 503.8f, 1.0f, 0 },
-    { -4957.8f, -908.5f, 503.8f, 1.0f, 0 },
-    { -4962.0f, -906.0f, 503.8f, 1.0f, 0 },
-    { -4958.2f, -904.0f, 503.8f, 1.0f, 0 },
-    { -4961.5f, -909.0f, 503.8f, 1.0f, 0 },
+    {-4959.9f, -906.4f, 503.8f, 1.0f, 0},
+    {-4958.0f, -904.5f, 503.8f, 1.0f, 0},
+    {-4961.8f, -908.3f, 503.8f, 1.0f, 0},
+    {-4957.5f, -907.5f, 503.8f, 1.0f, 0},
+    {-4962.2f, -905.0f, 503.8f, 1.0f, 0},
+    {-4958.5f, -909.0f, 503.8f, 1.0f, 0},
+    {-4961.0f, -904.0f, 503.8f, 1.0f, 0},
+    {-4957.0f, -906.0f, 503.8f, 1.0f, 0},
+    {-4962.5f, -907.0f, 503.8f, 1.0f, 0},
+    {-4959.0f, -909.2f, 503.8f, 1.0f, 0},
+    {-4960.5f, -903.8f, 503.8f, 1.0f, 0},
+    {-4957.8f, -908.5f, 503.8f, 1.0f, 0},
+    {-4962.0f, -906.0f, 503.8f, 1.0f, 0},
+    {-4958.2f, -904.0f, 503.8f, 1.0f, 0},
+    {-4961.5f, -909.0f, 503.8f, 1.0f, 0},
 };
 static const size_t NUM_CITY_SPAWNS = sizeof(CITY_SPAWNS) / sizeof(CITY_SPAWNS[0]);
 static const uint32 CITY_GUID_MIN = 100; // GUIDs 100-189
@@ -494,54 +489,53 @@ struct CrowdBotInnLocation
     const char* name;
 };
 
-static const CrowdBotInnLocation INN_LOCATIONS[] =
-{
+static const CrowdBotInnLocation INN_LOCATIONS[] = {
     // Eastern Kingdoms (map 0)
-    { -5582.0f,  -525.0f, 398.0f, 4.0f, 0, "Kharanos" },
-    { -5405.0f, -2930.0f, 340.0f, 4.0f, 0, "Thelsamar" },
-    { -10628.0f, 1036.0f,  34.0f, 4.0f, 0, "Sentinel Hill" },
-    { -9278.0f, -2216.0f,  66.0f, 4.0f, 0, "Lakeshire" },
-    { -10559.0f,-1189.0f,  28.0f, 4.0f, 0, "Darkshire" },
-    { -3745.0f,  -751.0f,  10.0f, 4.0f, 0, "Menethil Harbor" },
-    {  -808.0f,  -564.0f,  18.0f, 4.0f, 0, "Southshore" },
-    { -1247.0f, -2516.0f,  22.0f, 4.0f, 0, "Refuge Pointe" },
-    {   320.0f, -2066.0f, 122.0f, 4.0f, 0, "Aerie Peak" },
-    {  2271.0f, -5312.0f,  82.0f, 4.0f, 0, "Light's Hope Chapel" },
-    { -7510.0f, -1038.0f, 228.0f, 4.0f, 0, "Morgan's Vigil" },
-    { -10920.0f,-3439.0f,  22.0f, 4.0f, 0, "Nethergarde Keep" },
-    { -14414.0f,  419.0f,  22.0f, 4.0f, 0, "Booty Bay" },
-    { -6554.0f, -1101.0f, 310.0f, 4.0f, 0, "Thorium Point" },
+    {-5582.0f, -525.0f, 398.0f, 4.0f, 0, "Kharanos"},
+    {-5405.0f, -2930.0f, 340.0f, 4.0f, 0, "Thelsamar"},
+    {-10628.0f, 1036.0f, 34.0f, 4.0f, 0, "Sentinel Hill"},
+    {-9278.0f, -2216.0f, 66.0f, 4.0f, 0, "Lakeshire"},
+    {-10559.0f, -1189.0f, 28.0f, 4.0f, 0, "Darkshire"},
+    {-3745.0f, -751.0f, 10.0f, 4.0f, 0, "Menethil Harbor"},
+    {-808.0f, -564.0f, 18.0f, 4.0f, 0, "Southshore"},
+    {-1247.0f, -2516.0f, 22.0f, 4.0f, 0, "Refuge Pointe"},
+    {320.0f, -2066.0f, 122.0f, 4.0f, 0, "Aerie Peak"},
+    {2271.0f, -5312.0f, 82.0f, 4.0f, 0, "Light's Hope Chapel"},
+    {-7510.0f, -1038.0f, 228.0f, 4.0f, 0, "Morgan's Vigil"},
+    {-10920.0f, -3439.0f, 22.0f, 4.0f, 0, "Nethergarde Keep"},
+    {-14414.0f, 419.0f, 22.0f, 4.0f, 0, "Booty Bay"},
+    {-6554.0f, -1101.0f, 310.0f, 4.0f, 0, "Thorium Point"},
     // Kalimdor (map 1)
-    {  9837.0f,   966.0f,1306.0f, 4.0f, 1, "Dolanaar" },
-    {  6456.0f,   683.0f,   9.0f, 4.0f, 1, "Auberdine" },
-    {  2715.0f,  -379.0f, 107.0f, 4.0f, 1, "Astranaar" },
-    {  -472.0f,  1546.0f,  88.0f, 4.0f, 1, "Nijel's Point" },
-    { -4371.0f,  3338.0f,  12.0f, 4.0f, 1, "Feathermoon" },
-    { -3680.0f, -4389.0f,  10.0f, 4.0f, 1, "Theramore" },
-    { -7167.0f, -3785.0f,   8.0f, 4.0f, 1, "Gadgetzan" },
-    {  6724.0f, -4606.0f, 720.0f, 4.0f, 1, "Everlook" },
-    { -6815.0f,   836.0f,  42.0f, 4.0f, 1, "Cenarion Hold" },
-    {  -996.0f, -3827.0f,   6.0f, 4.0f, 1, "Ratchet" },
+    {9837.0f, 966.0f, 1306.0f, 4.0f, 1, "Dolanaar"},
+    {6456.0f, 683.0f, 9.0f, 4.0f, 1, "Auberdine"},
+    {2715.0f, -379.0f, 107.0f, 4.0f, 1, "Astranaar"},
+    {-472.0f, 1546.0f, 88.0f, 4.0f, 1, "Nijel's Point"},
+    {-4371.0f, 3338.0f, 12.0f, 4.0f, 1, "Feathermoon"},
+    {-3680.0f, -4389.0f, 10.0f, 4.0f, 1, "Theramore"},
+    {-7167.0f, -3785.0f, 8.0f, 4.0f, 1, "Gadgetzan"},
+    {6724.0f, -4606.0f, 720.0f, 4.0f, 1, "Everlook"},
+    {-6815.0f, 836.0f, 42.0f, 4.0f, 1, "Cenarion Hold"},
+    {-996.0f, -3827.0f, 6.0f, 4.0f, 1, "Ratchet"},
 };
 static const size_t NUM_INN_LOCATIONS = sizeof(INN_LOCATIONS) / sizeof(INN_LOCATIONS[0]);
-static const uint32 INN_GUID_MIN = 300;  // GUIDs 300-371 (3 per inn)
+static const uint32 INN_GUID_MIN = 300; // GUIDs 300-371 (3 per inn)
 static const uint32 BOTS_PER_INN = 3;
 
 // Idle emotes that look natural for AFK city players
-static const uint32 CROWD_BOT_EMOTES[] =
-{
-    1,   // EMOTE_ONESHOT_TALK
-    25,  // EMOTE_ONESHOT_POINT
+static const uint32 CROWD_BOT_EMOTES[] = {
+    1, // EMOTE_ONESHOT_TALK
+    25, // EMOTE_ONESHOT_POINT
     396, // EMOTE_ONESHOT_TALK_NOSHEATHE
-    92,  // EMOTE_ONESHOT_EAT_NOSHEATHE
-    3,   // EMOTE_ONESHOT_WAVE
+    92, // EMOTE_ONESHOT_EAT_NOSHEATHE
+    3, // EMOTE_ONESHOT_WAVE
 };
 static const size_t NUM_CROWD_BOT_EMOTES = sizeof(CROWD_BOT_EMOTES) / sizeof(CROWD_BOT_EMOTES[0]);
 
 void CrowdBotAI::BeforeAddToMap(Player* player)
 {
     uint32 guid = botEntry ? botEntry->playerGUID : 0;
-    if (!guid) return;
+    if (!guid)
+        return;
 
     float cx, cy, cz, radius;
     uint32 mapId;
@@ -591,7 +585,8 @@ void CrowdBotAI::BeforeAddToMap(Player* player)
 
 void CrowdBotAI::OnPlayerLogin()
 {
-    if (!me) return;
+    if (!me)
+        return;
 
     // Guild bots keep their DB level (synced to player level ±3 by SyncBotLevels).
     // Regular crowd bots randomize: 70% level 60, 30% level 40-59.
@@ -617,9 +612,7 @@ void CrowdBotAI::OnPlayerLogin()
         uint32 bestLevel = 0;
         for (auto const& itr : sObjectMgr.GetPlayerPremadeGearTemplates())
         {
-            if (itr.second.requiredClass == me->GetClass() &&
-                itr.second.level <= me->GetLevel() &&
-                itr.second.level > bestLevel)
+            if (itr.second.requiredClass == me->GetClass() && itr.second.level <= me->GetLevel() && itr.second.level > bestLevel)
             {
                 // For level 60 crowd bots, prefer preraid-bis over phase6-bis
                 if (me->GetLevel() == 60 && itr.second.level == 60)
@@ -642,18 +635,26 @@ void CrowdBotAI::OnPlayerLogin()
     if (me->GetLevel() == 60 && urand(1, 100) <= 25)
     {
         // Epic mount spell IDs by Alliance race
-        static const uint32 HUMAN_MOUNTS[]   = { 23227, 23229, 23228 };  // Swift Palomino/Brown/White Steed
-        static const uint32 DWARF_MOUNTS[]   = { 23238, 23239, 23240 };  // Swift Brown/Gray/White Ram
-        static const uint32 NELF_MOUNTS[]    = { 23221, 23219, 23338 };  // Swift Frost/Mist/Stormsaber
-        static const uint32 GNOME_MOUNTS[]   = { 23225, 23223, 23222 };  // Swift Green/White/Yellow Mechanostrider
+        static const uint32 HUMAN_MOUNTS[] = {23227, 23229, 23228}; // Swift Palomino/Brown/White Steed
+        static const uint32 DWARF_MOUNTS[] = {23238, 23239, 23240}; // Swift Brown/Gray/White Ram
+        static const uint32 NELF_MOUNTS[] = {23221, 23219, 23338}; // Swift Frost/Mist/Stormsaber
+        static const uint32 GNOME_MOUNTS[] = {23225, 23223, 23222}; // Swift Green/White/Yellow Mechanostrider
 
         uint32 mountSpell = 0;
         switch (me->GetRace())
         {
-            case 1: mountSpell = HUMAN_MOUNTS[urand(0, 2)];  break;  // Human
-            case 3: mountSpell = DWARF_MOUNTS[urand(0, 2)];  break;  // Dwarf
-            case 4: mountSpell = NELF_MOUNTS[urand(0, 2)];   break;  // Night Elf
-            case 7: mountSpell = GNOME_MOUNTS[urand(0, 2)];  break;  // Gnome
+        case 1:
+            mountSpell = HUMAN_MOUNTS[urand(0, 2)];
+            break; // Human
+        case 3:
+            mountSpell = DWARF_MOUNTS[urand(0, 2)];
+            break; // Dwarf
+        case 4:
+            mountSpell = NELF_MOUNTS[urand(0, 2)];
+            break; // Night Elf
+        case 7:
+            mountSpell = GNOME_MOUNTS[urand(0, 2)];
+            break; // Gnome
         }
         if (mountSpell)
             me->CastSpell(me, mountSpell, true);
@@ -663,8 +664,7 @@ void CrowdBotAI::OnPlayerLogin()
     m_emoteTimer = urand(5000, 30000);
     m_chatTimer = urand(60000, 300000);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[CrowdBot] %s (lvl %u) spawned at (%.1f, %.1f, %.1f)",
-        me->GetName(), me->GetLevel(), m_homeX, m_homeY, m_homeZ);
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[CrowdBot] %s (lvl %u) spawned at (%.1f, %.1f, %.1f)", me->GetName(), me->GetLevel(), m_homeX, m_homeY, m_homeZ);
 }
 
 void CrowdBotAI::UpdateAI(uint32 const diff)
@@ -690,8 +690,7 @@ void CrowdBotAI::UpdateAI(uint32 const diff)
                 acceptData << uint32(1);
                 me->GetSession()->HandleAcceptTradeOpcode(acceptData);
 
-                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-                    "[CrowdBot] %s called HandleAcceptTradeOpcode directly", me->GetName());
+                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[CrowdBot] %s called HandleAcceptTradeOpcode directly", me->GetName());
             }
         }
         else
@@ -725,8 +724,7 @@ void CrowdBotAI::UpdateAI(uint32 const diff)
     }
 
     // 5% chance per tick to micro-wander (2-3 yards from home)
-    if (urand(0, 99) < 5 &&
-        me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
+    if (urand(0, 99) < 5 && me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
     {
         float x = m_homeX + frand(-3.0f, 3.0f);
         float y = m_homeY + frand(-3.0f, 3.0f);
@@ -743,7 +741,7 @@ void CrowdBotAI::OnPacketReceived(WorldPacket const* packet)
 
     switch (packet->GetOpcode())
     {
-        case SMSG_TRADE_STATUS:
+    case SMSG_TRADE_STATUS:
         {
             WorldPacket pktCopy(*packet);
             uint32 status;
@@ -756,13 +754,10 @@ void CrowdBotAI::OnPacketReceived(WorldPacket const* packet)
                 {
                     Player* trader = me->GetTradeData()->GetTrader();
                     bool accepted = trader && sBotServiceMgr.ShouldAcceptTrade(me, trader);
-                    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-                        "[CrowdBot] %s trade request from %s — ShouldAcceptTrade=%s",
-                        me->GetName(), trader ? trader->GetName() : "null", accepted ? "YES" : "NO");
+                    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[CrowdBot] %s trade request from %s — ShouldAcceptTrade=%s", me->GetName(), trader ? trader->GetName() : "null", accepted ? "YES" : "NO");
                     if (accepted)
                     {
-                        std::unique_ptr<WorldPacket> beginData =
-                            std::make_unique<WorldPacket>(CMSG_BEGIN_TRADE, 0);
+                        std::unique_ptr<WorldPacket> beginData = std::make_unique<WorldPacket>(CMSG_BEGIN_TRADE, 0);
                         me->GetSession()->QueuePacket(std::move(beginData));
                     }
                     else
@@ -799,14 +794,17 @@ void CrowdBotAI::OnPacketReceived(WorldPacket const* packet)
 
 void DynamicBotAI::LoadAssignment()
 {
-    if (m_loaded) return;
+    if (m_loaded)
+        return;
     m_loaded = true;
 
     uint32 guid = botEntry ? botEntry->playerGUID : 0;
-    if (!guid) return;
+    if (!guid)
+        return;
 
     BotAssignment const* assignment = sBotDirector.GetAssignment(guid);
-    if (!assignment) return;
+    if (!assignment)
+        return;
 
     _map = assignment->targetMap;
     _x = assignment->targetX;
@@ -840,9 +838,7 @@ void DynamicBotAI::LoadAssignment()
             uint32 bestLevel = 0;
             for (auto const& itr : sObjectMgr.GetPlayerPremadeGearTemplates())
             {
-                if (itr.second.requiredClass == me->GetClass() &&
-                    itr.second.level <= me->GetLevel() &&
-                    itr.second.level > bestLevel)
+                if (itr.second.requiredClass == me->GetClass() && itr.second.level <= me->GetLevel() && itr.second.level > bestLevel)
                 {
                     bestLevel = itr.second.level;
                     bestEntry = itr.second.entry;
@@ -850,15 +846,13 @@ void DynamicBotAI::LoadAssignment()
             }
             if (bestEntry)
             {
-                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] %s (lvl %u, class %u) equipping premade template %u (template lvl %u)",
-                    me->GetName(), me->GetLevel(), me->GetClass(), bestEntry, bestLevel);
+                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] %s (lvl %u, class %u) equipping premade template %u (template lvl %u)", me->GetName(), me->GetLevel(), me->GetClass(), bestEntry, bestLevel);
                 sObjectMgr.ApplyPremadeGearTemplateToPlayer(bestEntry, me);
             }
             else
             {
-                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] %s (lvl %u, class %u) no premade template found, using starter items",
-                    me->GetName(), me->GetLevel(), me->GetClass());
-                me->AddStartingItems();  // Fallback for very low level bots
+                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] %s (lvl %u, class %u) no premade template found, using starter items", me->GetName(), me->GetLevel(), me->GetClass());
+                me->AddStartingItems(); // Fallback for very low level bots
             }
         }
     }
@@ -872,10 +866,12 @@ void DynamicBotAI::OnBotEntryLoad(PlayerBotEntry* entry)
 void DynamicBotAI::BeforeAddToMap(Player* player)
 {
     uint32 guid = botEntry ? botEntry->playerGUID : 0;
-    if (!guid) return;
+    if (!guid)
+        return;
 
     BotAssignment const* assignment = sBotDirector.GetAssignment(guid);
-    if (!assignment) return;
+    if (!assignment)
+        return;
 
     uint32 targetMap = assignment->targetMap;
     float tx = assignment->targetX;
@@ -903,8 +899,7 @@ void DynamicBotAI::BeforeAddToMap(Player* player)
 
 void DynamicBotAI::OnPlayerLogin()
 {
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] OnPlayerLogin called for guid %u",
-        botEntry ? botEntry->playerGUID : 0);
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] OnPlayerLogin called for guid %u", botEntry ? botEntry->playerGUID : 0);
     LoadAssignment();
 
     // Set level from assignment
@@ -962,13 +957,18 @@ void DynamicBotAI::DoCasterCombat(Unit* target)
     uint32 spellId = 0;
     uint8 cls = me->GetClass();
 
-    if (cls == CLASS_MAGE) spellId = 133;
-    else if (cls == CLASS_WARLOCK) spellId = 686;
-    else if (cls == CLASS_PRIEST) spellId = 585;
-    else if (cls == CLASS_SHAMAN) spellId = 403;
+    if (cls == CLASS_MAGE)
+        spellId = 133;
+    else if (cls == CLASS_WARLOCK)
+        spellId = 686;
+    else if (cls == CLASS_PRIEST)
+        spellId = 585;
+    else if (cls == CLASS_SHAMAN)
+        spellId = 403;
     else if (cls == CLASS_HUNTER)
     {
-        if (!me->IsInCombat()) me->Attack(target, false);
+        if (!me->IsInCombat())
+            me->Attack(target, false);
         if (me->GetDistance(target) < 8.0f)
         {
             float x = me->GetPositionX();
@@ -988,9 +988,11 @@ void DynamicBotAI::DoCasterCombat(Unit* target)
 
     if (spellId && !me->IsNonMeleeSpellCasted(false))
     {
-        if (!me->IsInCombat()) me->Attack(target, false);
+        if (!me->IsInCombat())
+            me->Attack(target, false);
         me->SetFacingToObject(target);
-        if (!me->movespline->Finalized()) me->StopMoving();
+        if (!me->movespline->Finalized())
+            me->StopMoving();
         me->CastSpell(target, spellId, false);
     }
 }
@@ -1003,8 +1005,7 @@ void DynamicBotAI::UpdateAI(uint32 const diff)
     if (!m_initLogged && me)
     {
         m_initLogged = true;
-        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] UpdateAI first call for %s (lvl %u, class %u, loaded=%u, geared=%u)",
-            me->GetName(), me->GetLevel(), me->GetClass(), m_loaded ? 1 : 0, m_gearEquipped ? 1 : 0);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[DynamicBot] UpdateAI first call for %s (lvl %u, class %u, loaded=%u, geared=%u)", me->GetName(), me->GetLevel(), me->GetClass(), m_loaded ? 1 : 0, m_gearEquipped ? 1 : 0);
     }
 
     m_updateTimer += diff;
@@ -1035,16 +1036,18 @@ void DynamicBotAI::UpdateAI(uint32 const diff)
         m_gearEquipped = false;
         LoadAssignment();
         m_reloadTimer = 0;
-    m_initLogged = false;
+        m_initLogged = false;
     }
 
     // Out of combat regen
     if (!me->IsInCombat())
     {
         if (me->GetHealth() < me->GetMaxHealth())
-            if (me->GetHealth() < me->GetMaxHealth()) me->SetHealth(me->GetHealth() + me->GetMaxHealth() / 20);
+            if (me->GetHealth() < me->GetMaxHealth())
+                me->SetHealth(me->GetHealth() + me->GetMaxHealth() / 20);
         if (me->GetPower(POWER_MANA) < me->GetMaxPower(POWER_MANA))
-            if (me->GetPower(POWER_MANA) < me->GetMaxPower(POWER_MANA)) me->SetPower(POWER_MANA, me->GetPower(POWER_MANA) + me->GetMaxPower(POWER_MANA) / 20);
+            if (me->GetPower(POWER_MANA) < me->GetMaxPower(POWER_MANA))
+                me->SetPower(POWER_MANA, me->GetPower(POWER_MANA) + me->GetMaxPower(POWER_MANA) / 20);
     }
 
     // If aggressive, look for enemies
@@ -1054,8 +1057,10 @@ void DynamicBotAI::UpdateAI(uint32 const diff)
         {
             uint8 cls = me->GetClass();
             bool isMelee = (cls == CLASS_WARRIOR || cls == CLASS_ROGUE);
-            if (isMelee) DoMeleeCombat(me->GetVictim());
-            else DoCasterCombat(me->GetVictim());
+            if (isMelee)
+                DoMeleeCombat(me->GetVictim());
+            else
+                DoCasterCombat(me->GetVictim());
             return;
         }
 
@@ -1064,15 +1069,16 @@ void DynamicBotAI::UpdateAI(uint32 const diff)
         {
             uint8 cls = me->GetClass();
             bool isMelee = (cls == CLASS_WARRIOR || cls == CLASS_ROGUE);
-            if (isMelee) DoMeleeCombat(target);
-            else DoCasterCombat(target);
+            if (isMelee)
+                DoMeleeCombat(target);
+            else
+                DoCasterCombat(target);
             return;
         }
     }
 
     // No target - wander (only if we have a valid assignment with real coordinates)
-    if (_x != 0.0f && _y != 0.0f && _radius > 0.0f &&
-        me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
+    if (_x != 0.0f && _y != 0.0f && _radius > 0.0f && me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
     {
         float x = _x + frand(-_radius, _radius);
         float y = _y + frand(-_radius, _radius);
@@ -1141,13 +1147,13 @@ void AggressiveHordeBotAI::DoCasterCombat(Unit* target)
     uint8 cls = me->GetClass();
 
     if (cls == CLASS_MAGE)
-        spellId = 133;  // Fireball
+        spellId = 133; // Fireball
     else if (cls == CLASS_WARLOCK)
-        spellId = 686;  // Shadow Bolt
+        spellId = 686; // Shadow Bolt
     else if (cls == CLASS_PRIEST)
-        spellId = 585;  // Smite
+        spellId = 585; // Smite
     else if (cls == CLASS_SHAMAN)
-        spellId = 403;  // Lightning Bolt
+        spellId = 403; // Lightning Bolt
     else if (cls == CLASS_HUNTER)
     {
         // Hunters use auto shot at range
@@ -1211,9 +1217,11 @@ void AggressiveHordeBotAI::UpdateAI(uint32 const diff)
     if (!me->IsInCombat())
     {
         if (me->GetHealth() < me->GetMaxHealth())
-            if (me->GetHealth() < me->GetMaxHealth()) me->SetHealth(me->GetHealth() + me->GetMaxHealth() / 20);
+            if (me->GetHealth() < me->GetMaxHealth())
+                me->SetHealth(me->GetHealth() + me->GetMaxHealth() / 20);
         if (me->GetPower(POWER_MANA) < me->GetMaxPower(POWER_MANA))
-            if (me->GetPower(POWER_MANA) < me->GetMaxPower(POWER_MANA)) me->SetPower(POWER_MANA, me->GetPower(POWER_MANA) + me->GetMaxPower(POWER_MANA) / 20);
+            if (me->GetPower(POWER_MANA) < me->GetMaxPower(POWER_MANA))
+                me->SetPower(POWER_MANA, me->GetPower(POWER_MANA) + me->GetMaxPower(POWER_MANA) / 20);
     }
 
     // Already in combat — keep fighting current target

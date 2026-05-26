@@ -20,15 +20,12 @@
  */
 
 #include "Camera.h"
-#include "GridNotifiersImpl.h"
 #include "CellImpl.h"
+#include "GridNotifiersImpl.h"
 #include "Log.h"
 #include "Player.h"
 
-Camera::Camera(Player* pl) : m_owner(*pl), m_source(pl)
-{
-    m_source->GetViewPoint().Attach(this);
-}
+Camera::Camera(Player* pl) : m_owner(*pl), m_source(pl) { m_source->GetViewPoint().Attach(this); }
 
 Camera::~Camera()
 {
@@ -39,10 +36,7 @@ Camera::~Camera()
     m_source->GetViewPoint().Detach(this);
 }
 
-void Camera::ReceivePacket(WorldPacket* data)
-{
-    m_owner.SendDirectMessage(data);
-}
+void Camera::ReceivePacket(WorldPacket* data) { m_owner.SendDirectMessage(data); }
 
 void Camera::UpdateForCurrentViewPoint()
 {
@@ -102,10 +96,7 @@ void Camera::Event_ViewPointVisibilityChanged()
         ResetView();
 }
 
-void Camera::ResetView(bool update_far_sight_field /*= true*/)
-{
-    SetView(&m_owner, update_far_sight_field);
-}
+void Camera::ResetView(bool update_far_sight_field /*= true*/) { SetView(&m_owner, update_far_sight_field); }
 
 void Camera::Event_AddedToWorld()
 {
@@ -133,21 +124,18 @@ void Camera::Event_Moved()
     m_source->GetViewPoint().m_grid->AddWorldObject(this);
 }
 
-void Camera::UpdateVisibilityOf(WorldObject* target)
-{
-    m_owner.UpdateVisibilityOf(m_source, target);
-}
+void Camera::UpdateVisibilityOf(WorldObject* target) { m_owner.UpdateVisibilityOf(m_source, target); }
 
-template<class T>
+template <class T>
 void Camera::UpdateVisibilityOf(T* target, UpdateData& data)
 {
     m_owner.template UpdateVisibilityOf<T>(m_source, target, data);
 }
 
-template void Camera::UpdateVisibilityOf(Player*       , UpdateData&);
-template void Camera::UpdateVisibilityOf(Creature*     , UpdateData&);
-template void Camera::UpdateVisibilityOf(Corpse*       , UpdateData&);
-template void Camera::UpdateVisibilityOf(GameObject*   , UpdateData&);
+template void Camera::UpdateVisibilityOf(Player*, UpdateData&);
+template void Camera::UpdateVisibilityOf(Creature*, UpdateData&);
+template void Camera::UpdateVisibilityOf(Corpse*, UpdateData&);
+template void Camera::UpdateVisibilityOf(GameObject*, UpdateData&);
 template void Camera::UpdateVisibilityOf(DynamicObject*, UpdateData&);
 
 void Camera::UpdateVisibilityForOwner()

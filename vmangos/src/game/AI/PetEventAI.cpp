@@ -1,26 +1,25 @@
 /*
-* Copyright (C) 2017-2018 Light's Hope <https://lightshope.org>
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * Copyright (C) 2017-2018 Light's Hope <https://lightshope.org>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 #include "PetEventAI.h"
 #include "Pet.h"
 
-PetEventAI::PetEventAI(Creature* pCreature) : CreatureEventAI(pCreature)
-{}
+PetEventAI::PetEventAI(Creature* pCreature) : CreatureEventAI(pCreature) {}
 
 int PetEventAI::Permissible(Creature const* creature)
 {
@@ -35,7 +34,7 @@ void PetEventAI::MoveInLineOfSight(Unit* pWho)
     if (m_creature->GetVictim())
         return;
 
-    //Check for OOC LOS Event
+    // Check for OOC LOS Event
     if (!m_bEmptyList)
         UpdateEventsOn_MoveInLineOfSight(pWho);
 
@@ -45,8 +44,8 @@ void PetEventAI::MoveInLineOfSight(Unit* pWho)
     if (m_creature->GetDistanceZ(pWho) > CREATURE_Z_ATTACK_RANGE)
         return;
 
-    // World of Warcraft Client Patch 1.8.0 (2005-10-11)
-    // - Guardians and pets in aggressive mode no longer attack civilians.
+        // World of Warcraft Client Patch 1.8.0 (2005-10-11)
+        // - Guardians and pets in aggressive mode no longer attack civilians.
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_7_1
     if (m_creature->IsPet() && pWho->IsCreature() && static_cast<Creature*>(pWho)->IsCivilian())
         return;
@@ -55,8 +54,7 @@ void PetEventAI::MoveInLineOfSight(Unit* pWho)
     if (m_creature->CanInitiateAttack() && pWho->IsTargetableBy(m_creature))
     {
         float const attackRadius = m_creature->GetAttackDistance(pWho);
-        if (m_creature->IsWithinDistInMap(pWho, attackRadius, true, SizeFactor::None) && m_creature->IsHostileTo(pWho) &&
-            pWho->IsInAccessablePlaceFor(m_creature) && m_creature->IsWithinLOSInMap(pWho))
+        if (m_creature->IsWithinDistInMap(pWho, attackRadius, true, SizeFactor::None) && m_creature->IsHostileTo(pWho) && pWho->IsInAccessablePlaceFor(m_creature) && m_creature->IsWithinLOSInMap(pWho))
             AttackStart(pWho);
     }
 }
@@ -101,7 +99,7 @@ void PetEventAI::AttackStart(Unit* pWho)
                 pOwner->SetInCombatWith(pWho);
                 pWho->SetInCombatWith(pOwner);
             }
-            
+
             if (!pOwner->IsPvP())
                 pOwner->TogglePlayerPvPFlagOnAttackVictim(pWho);
         }
@@ -111,8 +109,8 @@ void PetEventAI::AttackStart(Unit* pWho)
             if (m_creature->GetCharmInfo())
                 m_creature->GetCharmInfo()->SetIsReturning(false);
             m_creature->GetMotionMaster()->MoveChase(pWho);
-        }   
-    } 
+        }
+    }
 }
 
 Unit* PetEventAI::FindTargetForAttack() const
@@ -161,7 +159,7 @@ Unit* PetEventAI::FindTargetForAttack() const
 
 void PetEventAI::UpdateAI(uint32 const uiDiff)
 {
-    //Must return if creature isn't alive. Normally select hostile target and get victim prevent this
+    // Must return if creature isn't alive. Normally select hostile target and get victim prevent this
     if (!m_creature->IsAlive())
         return;
 
@@ -190,11 +188,10 @@ void PetEventAI::UpdateAI(uint32 const uiDiff)
 
         if (hasAliveOwner && m_creature->GetCharmInfo()->HasCommandState(COMMAND_FOLLOW) && !m_creature->HasUnitState(UNIT_STATE_FOLLOW))
         {
-            m_creature->GetMotionMaster()->MoveFollow(m_creature->GetCharmerOrOwner(), PET_FOLLOW_DIST,
-                                                      m_creature->IsPet() ? static_cast<Pet*>(m_creature)->GetFollowAngle() : PET_FOLLOW_ANGLE);
+            m_creature->GetMotionMaster()->MoveFollow(m_creature->GetCharmerOrOwner(), PET_FOLLOW_DIST, m_creature->IsPet() ? static_cast<Pet*>(m_creature)->GetFollowAngle() : PET_FOLLOW_ANGLE);
             if (m_creature->GetCharmInfo())
                 m_creature->GetCharmInfo()->SetIsReturning(true);
-        }     
+        }
     }
 }
 

@@ -32,27 +32,24 @@ npc_corporal_keeshan */
 
 enum CorporalLeehsanData
 {
-    FACTION_ESCORTEE        = 10, // only during escort
-    FACTION_STORMWIND       = 12, // default ooc faction
+    FACTION_ESCORTEE = 10, // only during escort
+    FACTION_STORMWIND = 12, // default ooc faction
 
     QUEST_MISSING_IN_ACTION = 219,
 
-    SPELL_MOCKING_BLOW      = 21008,
-    SPELL_SHIELD_BASH       = 11972,
+    SPELL_MOCKING_BLOW = 21008,
+    SPELL_SHIELD_BASH = 11972,
 
-    SAY_CORPORAL_KEESHAN_1  = 25,
-    SAY_CORPORAL_KEESHAN_2  = 26,
-    SAY_CORPORAL_KEESHAN_3  = 27,
-    SAY_CORPORAL_KEESHAN_4  = 29,
-    SAY_CORPORAL_KEESHAN_5  = 30
+    SAY_CORPORAL_KEESHAN_1 = 25,
+    SAY_CORPORAL_KEESHAN_2 = 26,
+    SAY_CORPORAL_KEESHAN_3 = 27,
+    SAY_CORPORAL_KEESHAN_4 = 29,
+    SAY_CORPORAL_KEESHAN_5 = 30
 };
 
 struct npc_corporal_keeshan_escortAI : npc_escortAI
 {
-    explicit npc_corporal_keeshan_escortAI(Creature* pCreature) : npc_escortAI(pCreature)
-    {
-        npc_corporal_keeshan_escortAI::Reset();
-    }
+    explicit npc_corporal_keeshan_escortAI(Creature* pCreature) : npc_escortAI(pCreature) { npc_corporal_keeshan_escortAI::Reset(); }
 
     uint32 m_uiMockingBlowTimer;
     uint32 m_uiShieldBashTimer;
@@ -60,22 +57,22 @@ struct npc_corporal_keeshan_escortAI : npc_escortAI
     void Reset() override
     {
         m_uiMockingBlowTimer = 5000;
-        m_uiShieldBashTimer  = 8000;
+        m_uiShieldBashTimer = 8000;
     }
 
     void WaypointStart(uint32 uiWP) override
     {
         switch (uiWP)
         {
-            case 27: // break outside
-                if (Player* pPlayer = GetPlayerForEscort())
-                    DoScriptText(SAY_CORPORAL_KEESHAN_3, m_creature, pPlayer);
-                m_creature->SetStandState(UNIT_STAND_STATE_STAND);
-                break;
-            case 54: // say goodbye
-                if (Player* pPlayer = GetPlayerForEscort())
-                    DoScriptText(SAY_CORPORAL_KEESHAN_5, m_creature, pPlayer);
-                break;
+        case 27: // break outside
+            if (Player* pPlayer = GetPlayerForEscort())
+                DoScriptText(SAY_CORPORAL_KEESHAN_3, m_creature, pPlayer);
+            m_creature->SetStandState(UNIT_STAND_STATE_STAND);
+            break;
+        case 54: // say goodbye
+            if (Player* pPlayer = GetPlayerForEscort())
+                DoScriptText(SAY_CORPORAL_KEESHAN_5, m_creature, pPlayer);
+            break;
         }
     }
 
@@ -83,22 +80,22 @@ struct npc_corporal_keeshan_escortAI : npc_escortAI
     {
         switch (uiWP)
         {
-            case 26:                                        //break outside
-                m_creature->SetStandState(UNIT_STAND_STATE_SIT);
-                if (Player* pPlayer = GetPlayerForEscort())
-                    DoScriptText(SAY_CORPORAL_KEESHAN_2, m_creature, pPlayer);
-                break;
-            case 53:                                        //quest_complete
-                DoScriptText(SAY_CORPORAL_KEESHAN_4, m_creature);
-                if (Player* pPlayer = GetPlayerForEscort())
-                    pPlayer->GroupEventHappens(QUEST_MISSING_IN_ACTION, m_creature);
-                break;
+        case 26: // break outside
+            m_creature->SetStandState(UNIT_STAND_STATE_SIT);
+            if (Player* pPlayer = GetPlayerForEscort())
+                DoScriptText(SAY_CORPORAL_KEESHAN_2, m_creature, pPlayer);
+            break;
+        case 53: // quest_complete
+            DoScriptText(SAY_CORPORAL_KEESHAN_4, m_creature);
+            if (Player* pPlayer = GetPlayerForEscort())
+                pPlayer->GroupEventHappens(QUEST_MISSING_IN_ACTION, m_creature);
+            break;
         }
     }
 
     void UpdateEscortAI(uint32 const uiDiff) override
     {
-        //Combat check
+        // Combat check
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
@@ -122,10 +119,7 @@ struct npc_corporal_keeshan_escortAI : npc_escortAI
     }
 };
 
-CreatureAI* GetAI_npc_corporal_keeshan(Creature* pCreature)
-{
-    return new npc_corporal_keeshan_escortAI(pCreature);
-}
+CreatureAI* GetAI_npc_corporal_keeshan(Creature* pCreature) { return new npc_corporal_keeshan_escortAI(pCreature); }
 
 bool QuestAccept_npc_corporal_keeshan(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
 {

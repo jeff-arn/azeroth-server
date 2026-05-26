@@ -10,50 +10,34 @@ SDCategory: Npc
 EndScriptData */
 
 #include "ScriptedEscortAI.h"
-#include "ScriptMgr.h"
 #include "Chat.h"
-#include "MovementGenerator.h"
-#include "Player.h"
 #include "Group.h"
 #include "Map.h"
+#include "MovementGenerator.h"
+#include "Player.h"
+#include "ScriptMgr.h"
 
 float const DEFAULT_MAX_PLAYER_DISTANCE = 100.0f;
-float const DEFAULT_MAX_ASSIST_DISTANCE =  40.0f;
+float const DEFAULT_MAX_ASSIST_DISTANCE = 40.0f;
 
 enum
 {
-    POINT_LAST_POINT    = 0xFFFFFF,
-    POINT_HOME          = 0xFFFFFE
+    POINT_LAST_POINT = 0xFFFFFF,
+    POINT_HOME = 0xFFFFFE
 };
 
-npc_escortAI::npc_escortAI(Creature* pCreature) : ScriptedAI(pCreature),
-    m_uiPlayerGUID(0),
-    m_uiPlayerCheckTimer(1000),
-    m_uiEscortState(STATE_ESCORT_NONE),
-    m_uiDelayBeforeTheFirstWaypoint(2500),
-    m_pQuestForEscort(nullptr),
-    m_currentWaypointIdx(0),
-    m_bIsRunning(false),
-    m_bCanInstantRespawn(false),
-    m_bCanReturnToStart(false),
-    m_bIsPathfindingEnabledBetweenWaypoints(true),
-    m_MaxPlayerDistance(DEFAULT_MAX_PLAYER_DISTANCE),
-    m_MaxAssistDistance(DEFAULT_MAX_ASSIST_DISTANCE),
-    m_combatStartX(m_creature->GetPositionX()),
-    m_combatStartY(m_creature->GetPositionY()),
-    m_combatStartZ(m_creature->GetPositionZ()),
-    m_combatStartO(m_creature->GetOrientation())
+npc_escortAI::npc_escortAI(Creature* pCreature) : ScriptedAI(pCreature), m_uiPlayerGUID(0), m_uiPlayerCheckTimer(1000), m_uiEscortState(STATE_ESCORT_NONE), m_uiDelayBeforeTheFirstWaypoint(2500), m_pQuestForEscort(nullptr), m_currentWaypointIdx(0), m_bIsRunning(false), m_bCanInstantRespawn(false), m_bCanReturnToStart(false), m_bIsPathfindingEnabledBetweenWaypoints(true), m_MaxPlayerDistance(DEFAULT_MAX_PLAYER_DISTANCE), m_MaxAssistDistance(DEFAULT_MAX_ASSIST_DISTANCE), m_combatStartX(m_creature->GetPositionX()), m_combatStartY(m_creature->GetPositionY()), m_combatStartZ(m_creature->GetPositionZ()), m_combatStartO(m_creature->GetOrientation())
 {
     m_uiWPWaitTimer = m_uiDelayBeforeTheFirstWaypoint;
     pCreature->SetEscortable(true);
 }
 
-void npc_escortAI::setCurrentWP (uint32 idx)
+void npc_escortAI::setCurrentWP(uint32 idx)
 {
     if (idx >= WaypointList.size())
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[npc_escortAI] Attempt to set current waypoint to %u, but NPC entry=%u only has %u waypoints !", idx, m_creature->GetEntry(), WaypointList.size());
     else
-    m_currentWaypointIdx = idx;
+        m_currentWaypointIdx = idx;
 }
 
 void npc_escortAI::EnterCombat(Unit* pEnemy)
@@ -66,20 +50,15 @@ void npc_escortAI::EnterCombat(Unit* pEnemy)
         float x, y, z;
         m_creature->GetPosition(x, y, z);
         SetCombatStartPosition(x, y, z);
-        m_combatStartO = m_creature->GetOrientation();      
+        m_combatStartO = m_creature->GetOrientation();
     }
 
     Aggro(pEnemy);
 }
 
-void npc_escortAI::Aggro(Unit* /*pEnemy*/)
-{
-}
+void npc_escortAI::Aggro(Unit* /*pEnemy*/) {}
 
-Player* npc_escortAI::GetPlayerForEscort() const
-{
-    return m_creature->GetMap()->GetPlayer(m_uiPlayerGUID);
-}
+Player* npc_escortAI::GetPlayerForEscort() const { return m_creature->GetMap()->GetPlayer(m_uiPlayerGUID); }
 
 bool npc_escortAI::AssistPlayerInCombat(Unit* pWho)
 {
@@ -89,25 +68,25 @@ bool npc_escortAI::AssistPlayerInCombat(Unit* pWho)
     if (!pWho->GetVictim())
         return false;
 
-    //experimental (unknown) flag not present
+    // experimental (unknown) flag not present
     if (!m_creature->CanAssistPlayers())
         return false;
 
     if (m_creature->HasUnitState(UNIT_STATE_STUNNED | UNIT_STATE_FEIGN_DEATH))
         return false;
 
-    //not a player
+    // not a player
     if (!pWho->GetVictim()->GetCharmerOrOwnerPlayerOrPlayerItself())
         return false;
 
-    //never attack friendly
+    // never attack friendly
     if (!pWho->IsTargetableBy(m_creature) || m_creature->IsFriendlyTo(pWho))
         return false;
 
-    //too far away and no free sight?
+    // too far away and no free sight?
     if (m_creature->IsWithinDistInMap(pWho, m_MaxAssistDistance) && m_creature->IsWithinLOSInMap(pWho))
     {
-        //already fighting someone?
+        // already fighting someone?
         if (!m_creature->GetVictim())
         {
             AttackStart(pWho);
@@ -149,7 +128,7 @@ void npc_escortAI::JustRespawned()
     if (!IsCombatMovementEnabled())
         SetCombatMovement(true);
 
-    //add a small delay before going to first waypoint.
+    // add a small delay before going to first waypoint.
     m_uiWPWaitTimer = m_uiDelayBeforeTheFirstWaypoint;
 
     if (m_creature->GetFactionTemplateId() != m_creature->GetCreatureInfo()->faction)
@@ -183,13 +162,12 @@ bool npc_escortAI::IsPlayerOrGroupInRange() const
     {
         if (Group* pGroup = pPlayer->GetGroup())
         {
-            for(GroupReference* pRef = pGroup->GetFirstMember(); pRef != nullptr; pRef = pRef->next())
+            for (GroupReference* pRef = pGroup->GetFirstMember(); pRef != nullptr; pRef = pRef->next())
             {
                 Player* pMember = pRef->getSource();
 
                 if (pMember && m_creature->IsWithinDistInMap(pMember, m_MaxPlayerDistance))
                     return true;
-
             }
         }
         else
@@ -203,12 +181,12 @@ bool npc_escortAI::IsPlayerOrGroupInRange() const
 
 void npc_escortAI::UpdateAI(uint32 const uiDiff)
 {
-    //Waypoint Updating
+    // Waypoint Updating
     if (HasEscortState(STATE_ESCORT_ESCORTING) && !m_creature->IsInCombat() && m_uiWPWaitTimer && !HasEscortState(STATE_ESCORT_RETURNING))
     {
         if (m_uiWPWaitTimer <= uiDiff)
         {
-            //End of the line
+            // End of the line
             auto CurrentWP = WaypointList.begin();
             if (m_currentWaypointIdx <= WaypointList.size())
                 CurrentWP += m_currentWaypointIdx;
@@ -263,7 +241,7 @@ void npc_escortAI::UpdateAI(uint32 const uiDiff)
             m_uiWPWaitTimer -= uiDiff;
     }
 
-    //Check if player or any member of his group is within range
+    // Check if player or any member of his group is within range
     if (HasEscortState(STATE_ESCORT_ESCORTING) && m_uiPlayerGUID && m_MaxPlayerDistance && !m_creature->IsInCombat() && !HasEscortState(STATE_ESCORT_RETURNING))
     {
         if (m_uiPlayerCheckTimer < uiDiff)
@@ -274,7 +252,7 @@ void npc_escortAI::UpdateAI(uint32 const uiDiff)
 
                 JustDied(nullptr);
                 ResetEscort();
-                
+
                 return;
             }
 
@@ -323,7 +301,7 @@ void npc_escortAI::MovementInform(uint32 uiMoveType, uint32 uiPointId)
     if (uiMoveType != POINT_MOTION_TYPE || !HasEscortState(STATE_ESCORT_ESCORTING))
         return;
 
-    //Combat start position reached, continue waypoint movement
+    // Combat start position reached, continue waypoint movement
     if (uiPointId == POINT_LAST_POINT)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "EscortAI has returned to original position before combat");
@@ -341,7 +319,8 @@ void npc_escortAI::MovementInform(uint32 uiMoveType, uint32 uiPointId)
     else if (uiPointId == POINT_HOME)
     {
         // wp reach should not count if we crossed it while returning
-        if (HasEscortState(STATE_ESCORT_RETURNING)) return;
+        if (HasEscortState(STATE_ESCORT_RETURNING))
+            return;
 
         sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "EscortAI has returned to original home location and will continue from beginning of waypoint list.");
 
@@ -351,9 +330,11 @@ void npc_escortAI::MovementInform(uint32 uiMoveType, uint32 uiPointId)
     else
     {
         // wp reach should not count if we crossed it while returning
-        if (HasEscortState(STATE_ESCORT_RETURNING)) return;
+        if (HasEscortState(STATE_ESCORT_RETURNING))
+            return;
 
-        if (m_currentWaypointIdx >= WaypointList.size()) return;
+        if (m_currentWaypointIdx >= WaypointList.size())
+            return;
 
         auto const& wp = WaypointList[m_currentWaypointIdx];
         // MovePoint interrupted for any reason
@@ -363,17 +344,16 @@ void npc_escortAI::MovementInform(uint32 uiMoveType, uint32 uiPointId)
             return;
         }
 
-        //Make sure that we are still on the right waypoint
+        // Make sure that we are still on the right waypoint
         if (wp.id != uiPointId)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[ScriptedEscortAI] Waypoint out of order for <#%u - %s>: <%u> instead of <%u>.", 
-                m_creature->GetEntry(), m_creature->GetName(), uiPointId, wp.id);
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[ScriptedEscortAI] Waypoint out of order for <#%u - %s>: <%u> instead of <%u>.", m_creature->GetEntry(), m_creature->GetName(), uiPointId, wp.id);
             return;
         }
 
         sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "EscortAI waypoint %u reached.", wp.id);
 
-        //Call WP function
+        // Call WP function
         WaypointReached(wp.id);
 
         m_uiWPWaitTimer = wp.WaitTimeMs + 1;
@@ -447,7 +427,7 @@ void npc_escortAI::Start(bool bRun, uint64 uiPlayerGUID, Quest const* pQuest, bo
         return;
     }
 
-    //set variables
+    // set variables
     m_bIsRunning = bRun;
 
     m_uiPlayerGUID = uiPlayerGUID;
@@ -466,13 +446,13 @@ void npc_escortAI::Start(bool bRun, uint64 uiPlayerGUID, Quest const* pQuest, bo
         sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "EscortAI start with WAYPOINT_MOTION_TYPE, changed to MoveIdle.");
     }
 
-    //disable npcflags
+    // disable npcflags
     m_creature->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "EscortAI started with %u waypoints. Run = %d, PlayerGUID = %u", WaypointList.size(), m_bIsRunning, m_uiPlayerGUID);
 
     m_currentWaypointIdx = 0;
 
-    //Set initial speed
+    // Set initial speed
     m_creature->SetWalk(!m_bIsRunning);
 
     AddEscortState(STATE_ESCORT_ESCORTING);
@@ -526,15 +506,14 @@ void npc_escortAI::ReturnToCombatStartPosition()
 
             if (m_creature->GetDistance2d(fPosX, fPosY) > 1000.0f)
             {
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[ScriptedEscortAI.GetCombatStartPosition] Creature with entry <%u> is in <%f> distance from {%f,%f,%f}.", 
-                    m_creature->GetEntry(), m_creature->GetDistance2d(fPosX, fPosY), fPosX, fPosY, fPosZ);
+                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[ScriptedEscortAI.GetCombatStartPosition] Creature with entry <%u> is in <%f> distance from {%f,%f,%f}.", m_creature->GetEntry(), m_creature->GetDistance2d(fPosX, fPosY), fPosX, fPosY, fPosZ);
                 m_creature->GetPosition(fPosX, fPosY, fPosY);
                 SetCombatStartPosition(fPosX, fPosY, fPosZ);
                 MovementInform(POINT_MOTION_TYPE, POINT_LAST_POINT);
                 return;
             }
 
-            m_creature->GetMotionMaster()->MovePoint(POINT_LAST_POINT, fPosX, fPosY, fPosZ, MOVE_RUN_MODE|MOVE_PATHFINDING, 0, m_combatStartO);
+            m_creature->GetMotionMaster()->MovePoint(POINT_LAST_POINT, fPosX, fPosY, fPosZ, MOVE_RUN_MODE | MOVE_PATHFINDING, 0, m_combatStartO);
         }
     }
     else

@@ -1,10 +1,10 @@
 #include "BotCombatEventBuffer.h"
-#include "Unit.h"
 #include "Creature.h"
-#include "Player.h"
 #include "Database/DatabaseEnv.h"
-#include "Timer.h"
 #include "Log.h"
+#include "Player.h"
+#include "Timer.h"
+#include "Unit.h"
 
 // ============================================================
 // CombatEventBuffer
@@ -28,8 +28,7 @@ BotPatternMgr& BotPatternMgr::Instance()
 
 // --- Recording ---
 
-void BotPatternMgr::RecordDamage(Unit* source, Unit* victim, uint32 damage,
-                                  uint32 spellId, uint32 mapId, uint32 creatureEntry)
+void BotPatternMgr::RecordDamage(Unit* source, Unit* victim, uint32 damage, uint32 spellId, uint32 mapId, uint32 creatureEntry)
 {
     if (!m_active)
         return;
@@ -50,8 +49,7 @@ void BotPatternMgr::RecordDamage(Unit* source, Unit* victim, uint32 damage,
         DetectPatterns(creatureEntry, victim->GetGUIDLow(), damage);
 }
 
-void BotPatternMgr::RecordCastStart(Unit* caster, Unit* target, SpellEntry const* spell,
-                                     uint32 mapId, uint32 creatureEntry)
+void BotPatternMgr::RecordCastStart(Unit* caster, Unit* target, SpellEntry const* spell, uint32 mapId, uint32 creatureEntry)
 {
     if (!m_active || !spell)
         return;
@@ -103,39 +101,39 @@ void BotPatternMgr::DetectPatterns(uint32 creatureEntry, uint64 victimGuid, uint
     uint8 hitCount = 0;
 
     // First pass: find the most recent CAST_START from this creature entry
-    m_buffer.ScanBackwards([&](CombatEvent const& evt) -> bool
-    {
-        // Don't look more than 5 seconds back
-        if (now - evt.timestamp > 5000)
-            return false;
-
-        if (evt.creatureEntry == creatureEntry && evt.eventType == COMBAT_EVENT_CAST_START)
+    m_buffer.ScanBackwards(
+        [&](CombatEvent const& evt) -> bool
         {
-            foundSpellId = evt.spellId;
-            castTimestamp = evt.timestamp;
-            return false; // found it
-        }
-        return true;
-    });
+            // Don't look more than 5 seconds back
+            if (now - evt.timestamp > 5000)
+                return false;
+
+            if (evt.creatureEntry == creatureEntry && evt.eventType == COMBAT_EVENT_CAST_START)
+            {
+                foundSpellId = evt.spellId;
+                castTimestamp = evt.timestamp;
+                return false; // found it
+            }
+            return true;
+        });
 
     if (foundSpellId == 0)
         return;
 
     // Second pass: count how many targets were hit by damage events from this spell
     // within 200ms of each other (AoE detection)
-    m_buffer.ScanBackwards([&](CombatEvent const& evt) -> bool
-    {
-        if (now - evt.timestamp > 5000)
-            return false;
-
-        if (evt.creatureEntry == creatureEntry &&
-            evt.eventType == COMBAT_EVENT_DAMAGE &&
-            evt.spellId == foundSpellId)
+    m_buffer.ScanBackwards(
+        [&](CombatEvent const& evt) -> bool
         {
-            hitCount++;
-        }
-        return true;
-    });
+            if (now - evt.timestamp > 5000)
+                return false;
+
+            if (evt.creatureEntry == creatureEntry && evt.eventType == COMBAT_EVENT_DAMAGE && evt.spellId == foundSpellId)
+            {
+                hitCount++;
+            }
+            return true;
+        });
 
     // Classify the response
     PatternResponse response;
@@ -169,8 +167,7 @@ void BotPatternMgr::AddOrUpdatePattern(LearnedPattern const& p)
     auto& vec = m_patterns[p.creatureEntry];
     for (auto& existing : vec)
     {
-        if (existing.triggerSpellId == p.triggerSpellId &&
-            existing.responseType == p.responseType)
+        if (existing.triggerSpellId == p.triggerSpellId && existing.responseType == p.responseType)
         {
             // Update existing pattern
             if (!existing.isPermanent)
@@ -216,24 +213,24 @@ void BotPatternMgr::DecayPatterns()
 {
     uint32 now = time(nullptr);
 
-    for (auto it = m_patterns.begin(); it != m_patterns.end(); )
+    for (auto it = m_patterns.begin(); it != m_patterns.end();)
     {
         auto& vec = it->second;
         vec.erase(std::remove_if(vec.begin(), vec.end(),
-            [now](LearnedPattern& p) -> bool
-            {
-                if (p.isPermanent)
-                    return false;
+                                 [now](LearnedPattern& p) -> bool
+                                 {
+                                     if (p.isPermanent)
+                                         return false;
 
-                // Decay if not seen in 30 minutes
-                if (now - p.lastSeen > 1800)
-                {
-                    if (p.confidence > 0)
-                        p.confidence--;
-                }
-                return p.confidence == 0;
-            }),
-            vec.end());
+                                     // Decay if not seen in 30 minutes
+                                     if (now - p.lastSeen > 1800)
+                                     {
+                                         if (p.confidence > 0)
+                                             p.confidence--;
+                                     }
+                                     return p.confidence == 0;
+                                 }),
+                  vec.end());
 
         if (vec.empty())
             it = m_patterns.erase(it);
@@ -247,21 +244,20 @@ void BotPatternMgr::DecayPatterns()
 void BotPatternMgr::LoadFromDB()
 {
     // Auto-create table if it doesn't exist (no manual migration step required)
-    CharacterDatabase.DirectExecute(
-        "CREATE TABLE IF NOT EXISTS `bot_learned_patterns` ("
-        "`creature_entry` INT UNSIGNED NOT NULL,"
-        "`trigger_spell_id` INT UNSIGNED NOT NULL,"
-        "`response_type` TINYINT UNSIGNED NOT NULL DEFAULT 0,"
-        "`response_param` FLOAT NOT NULL DEFAULT 0,"
-        "`confidence` TINYINT UNSIGNED NOT NULL DEFAULT 1,"
-        "`is_permanent` TINYINT UNSIGNED NOT NULL DEFAULT 0,"
-        "`last_seen` INT UNSIGNED NOT NULL DEFAULT 0,"
-        "PRIMARY KEY (`creature_entry`, `trigger_spell_id`, `response_type`),"
-        "KEY `idx_creature` (`creature_entry`)"
-        ") ENGINE=InnoDB DEFAULT CHARSET=utf8");
+    CharacterDatabase.DirectExecute("CREATE TABLE IF NOT EXISTS `bot_learned_patterns` ("
+                                    "`creature_entry` INT UNSIGNED NOT NULL,"
+                                    "`trigger_spell_id` INT UNSIGNED NOT NULL,"
+                                    "`response_type` TINYINT UNSIGNED NOT NULL DEFAULT 0,"
+                                    "`response_param` FLOAT NOT NULL DEFAULT 0,"
+                                    "`confidence` TINYINT UNSIGNED NOT NULL DEFAULT 1,"
+                                    "`is_permanent` TINYINT UNSIGNED NOT NULL DEFAULT 0,"
+                                    "`last_seen` INT UNSIGNED NOT NULL DEFAULT 0,"
+                                    "PRIMARY KEY (`creature_entry`, `trigger_spell_id`, `response_type`),"
+                                    "KEY `idx_creature` (`creature_entry`)"
+                                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8");
 
     auto result = CharacterDatabase.Query("SELECT creature_entry, trigger_spell_id, response_type, "
-        "response_param, confidence, is_permanent, last_seen FROM bot_learned_patterns");
+                                          "response_param, confidence, is_permanent, last_seen FROM bot_learned_patterns");
 
     if (!result)
     {
@@ -284,7 +280,8 @@ void BotPatternMgr::LoadFromDB()
         p.lastSeen = fields[6].GetUInt32();
         m_patterns[p.creatureEntry].push_back(p);
         count++;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotPatternMgr] Loaded %u learned patterns from DB.", count);
 
@@ -301,12 +298,10 @@ void BotPatternMgr::SaveToDB()
     {
         for (auto const& p : pair.second)
         {
-            CharacterDatabase.PExecute(
-                "INSERT INTO bot_learned_patterns "
-                "(creature_entry, trigger_spell_id, response_type, response_param, "
-                "confidence, is_permanent, last_seen) VALUES (%u, %u, %u, %f, %u, %u, %u)",
-                p.creatureEntry, p.triggerSpellId, p.responseType, p.responseParam,
-                uint32(p.confidence), p.isPermanent ? 1u : 0u, p.lastSeen);
+            CharacterDatabase.PExecute("INSERT INTO bot_learned_patterns "
+                                       "(creature_entry, trigger_spell_id, response_type, response_param, "
+                                       "confidence, is_permanent, last_seen) VALUES (%u, %u, %u, %f, %u, %u, %u)",
+                                       p.creatureEntry, p.triggerSpellId, p.responseType, p.responseParam, uint32(p.confidence), p.isPermanent ? 1u : 0u, p.lastSeen);
         }
     }
 
@@ -320,8 +315,7 @@ void BotPatternMgr::RegisterPermanentPattern(LearnedPattern const& p)
     auto& vec = m_patterns[p.creatureEntry];
     for (auto& existing : vec)
     {
-        if (existing.triggerSpellId == p.triggerSpellId &&
-            existing.responseType == p.responseType)
+        if (existing.triggerSpellId == p.triggerSpellId && existing.responseType == p.responseType)
         {
             // Already exists — ensure it's marked permanent
             existing.isPermanent = true;
@@ -366,7 +360,7 @@ void BotPatternMgr::InitEncounterOverrides()
 
     // === Ragefire Chasm ===
     // Jergosh the Invoker — interrupt Shadow Bolt Volley
-    MakeInterrupt(11518, 11966);  // Shadow Bolt Volley
+    MakeInterrupt(11518, 11966); // Shadow Bolt Volley
 
     // Taragaman the Hungerer — avoid Fire Nova
     MakeAvoidAoe(11520, 11969, 10.0f);
@@ -375,7 +369,7 @@ void BotPatternMgr::InitEncounterOverrides()
     // Mr. Smite — save cooldowns for phase 3 at 33% HP
     {
         LearnedPattern p;
-        p.creatureEntry = 646;  // Mr. Smite
+        p.creatureEntry = 646; // Mr. Smite
         p.triggerSpellId = 0;
         p.responseType = RESPONSE_SAVE_CD;
         p.responseParam = 33.0f;
@@ -387,8 +381,8 @@ void BotPatternMgr::InitEncounterOverrides()
 
     // === Wailing Caverns ===
     // Lord Serpentis — interrupt Lightning Bolt and Healing Touch
-    MakeInterrupt(3673, 9532);   // Lightning Bolt
-    MakeInterrupt(3673, 11986);  // Healing Touch
+    MakeInterrupt(3673, 9532); // Lightning Bolt
+    MakeInterrupt(3673, 11986); // Healing Touch
 
     // === Shadowfang Keep ===
     // Baron Silverlaine — interrupt Veil of Shadow
@@ -404,12 +398,11 @@ void BotPatternMgr::InitEncounterOverrides()
 
     // === Scarlet Monastery ===
     // High Inquisitor Whitemane — interrupt heals
-    MakeInterrupt(3977, 12039);  // Heal
-    MakeInterrupt(3977, 22187);  // Greater Heal (Whitemane version)
+    MakeInterrupt(3977, 12039); // Heal
+    MakeInterrupt(3977, 22187); // Greater Heal (Whitemane version)
 
     // Herod — avoid Whirlwind
     MakeAvoidAoe(3975, 8989, 10.0f);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotPatternMgr] Initialized %zu encounter overrides.",
-             m_patterns.size());
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotPatternMgr] Initialized %zu encounter overrides.", m_patterns.size());
 }

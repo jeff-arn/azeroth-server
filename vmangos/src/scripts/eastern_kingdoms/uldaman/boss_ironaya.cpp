@@ -26,7 +26,7 @@ EndScriptData */
 
 enum Texts
 {
-    SAY_AGGRO           = 3261
+    SAY_AGGRO = 3261
 };
 
 struct boss_ironayaAI : public ScriptedAI
@@ -51,7 +51,7 @@ struct boss_ironayaAI : public ScriptedAI
         hasCastedWstomp = false;
     }
 
-    void Aggro(Unit *who) override
+    void Aggro(Unit* who) override
     {
         DoScriptText(SAY_AGGRO, m_creature);
         m_creature->SetInCombatWithZone();
@@ -68,13 +68,13 @@ struct boss_ironayaAI : public ScriptedAI
             hasMoved = true;
         }
 
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             return;
         }
 
-        //If we are <50% hp do knockaway ONCE
+        // If we are <50% hp do knockaway ONCE
         if (!hasCastedKnockaway && m_creature->GetHealthPercent() < 50.0f)
         {
             m_creature->CastSpell(m_creature->GetVictim(), SPELL_KNOCKAWAY, false);
@@ -89,17 +89,18 @@ struct boss_ironayaAI : public ScriptedAI
             if (pTarget)
                 AttackStart(pTarget);
 
-            //Shouldn't cast this again
+            // Shouldn't cast this again
             hasCastedKnockaway = true;
         }
 
-        //Arcing_Timer
+        // Arcing_Timer
         if (Arcing_Timer < diff)
         {
             DoCastSpellIfCan(m_creature, SPELL_ARCINGSMASH);
             Arcing_Timer = 13000;
         }
-        else Arcing_Timer -= diff;
+        else
+            Arcing_Timer -= diff;
 
         if (!hasCastedWstomp && m_creature->GetHealthPercent() < 25.0f)
         {
@@ -111,10 +112,7 @@ struct boss_ironayaAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_ironaya(Creature* pCreature)
-{
-    return new boss_ironayaAI(pCreature);
-}
+CreatureAI* GetAI_boss_ironaya(Creature* pCreature) { return new boss_ironayaAI(pCreature); }
 
 void AddSC_boss_ironaya()
 {

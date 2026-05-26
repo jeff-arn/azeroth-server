@@ -19,7 +19,7 @@ Full rewrite by Gemt
 
 Current semi-unknowns:
 The aoe manaburn; not seen it used in videos, despite all original vanilla guides mentioning it.
-Probably because its pretty much a wipe if ranged/healers are hit by it. 
+Probably because its pretty much a wipe if ranged/healers are hit by it.
 While Decrepit fever is very aggressive on its cooldown after a dance phase, the mana burn does not seem to be,
 so we should give "plenty" of time for casters to get to the platform, and tank to move the boss away.
 
@@ -28,39 +28,39 @@ the default, static, callForHelp radius.
 
 */
 
-#include "scriptPCH.h"
 #include "naxxramas.h"
+#include "scriptPCH.h"
 
 enum HeiganData
 {
-    PHASE_GROUND            = 1,
-    PHASE_PLATFORM          = 2,
+    PHASE_GROUND = 1,
+    PHASE_PLATFORM = 2,
 
-    SAY_AGGRO1              = 13041,
-    SAY_AGGRO2              = 13042,
-    SAY_AGGRO3              = 13043,
-    SAY_SLAY                = 13045,
-    
-    SAY_TAUNT1              = 13046,
-    SAY_TAUNT2              = 13047,
-    SAY_TAUNT3              = 13048,
-    SAY_TAUNT4              = 13050,
-    SAY_CHANNELING          = 13049,
-    SAY_DEATH               = -1533118, // need find correct bct id!
+    SAY_AGGRO1 = 13041,
+    SAY_AGGRO2 = 13042,
+    SAY_AGGRO3 = 13043,
+    SAY_SLAY = 13045,
 
-    EMOTE_TELEPORT          = -1533136, // need find correct bct id!
-    EMOTE_RETURN            = -1533137, // need find correct bct id!
+    SAY_TAUNT1 = 13046,
+    SAY_TAUNT2 = 13047,
+    SAY_TAUNT3 = 13048,
+    SAY_TAUNT4 = 13050,
+    SAY_CHANNELING = 13049,
+    SAY_DEATH = -1533118, // need find correct bct id!
 
-    SPELL_ERUPTION          = 29371,
-    SPELL_PLAGUE_WAVE       = 30243,
+    EMOTE_TELEPORT = -1533136, // need find correct bct id!
+    EMOTE_RETURN = -1533137, // need find correct bct id!
 
-    //Spells by boss
-    SPELL_DECREPIT_FEVER    = 29998,
-    SPELL_PLAGUE_CLOUD      = 29350,
-    SPELL_TELEPORT_SELF     = 30211,
-    SPELL_MANABURN          = 29310,
+    SPELL_ERUPTION = 29371,
+    SPELL_PLAGUE_WAVE = 30243,
 
-    NPC_PLAGUE_WAVE         = 17293
+    // Spells by boss
+    SPELL_DECREPIT_FEVER = 29998,
+    SPELL_PLAGUE_CLOUD = 29350,
+    SPELL_TELEPORT_SELF = 30211,
+    SPELL_MANABURN = 29310,
+
+    NPC_PLAGUE_WAVE = 17293
 };
 
 enum Events
@@ -81,7 +81,7 @@ enum Phases
     PHASE_DANCE
 };
 
-//static uint32 const firstEruptionDBGUID = 533048;
+// static uint32 const firstEruptionDBGUID = 533048;
 static uint8 const numSections = 4;
 /*static uint8 const numEruptions[numSections] = { // count of sequential GO DBGUIDs in the respective section of the room
     15,
@@ -91,27 +91,20 @@ static uint8 const numSections = 4;
 };*/
 
 // in tunnel
-static constexpr float safespotFissures[3][3] = 
-{   
+static constexpr float safespotFissures[3][3] = {
     {2747.0f, -3754.0f, 274.0f},
     {2805.8f, -3695.88f, 273.61f},
     {2812.95f, -3703.52f, 273.61f},
 };
 
-static constexpr float sect1SafeSpot[3][3] = 
-{
-    { 2799.5f, -3691.0f, 273.62f },
-    { 2810.67f, -3706.06f, 275.0f },
-    { 2803.51f, -3697.42f, 274.1f }
-};
+static constexpr float sect1SafeSpot[3][3] = {{2799.5f, -3691.0f, 273.62f}, {2810.67f, -3706.06f, 275.0f}, {2803.51f, -3697.42f, 274.1f}};
 
-static constexpr float sect2SafeSpot[3] = { 2790.51f, -3690.45f, 273.622f };
-static constexpr float sect3SafeSpot[3] = { 2778.40f, -3702.645f, 273.621f };
-static constexpr float sect4SafeSpot[3][3] = 
-{
-    { 2777.2f, -3712.41f, 273.63f },
-    { 2783.06f, -3717.7f, 273.63f },
-    { 2791.62f, -3726.04f, 273.63f },
+static constexpr float sect2SafeSpot[3] = {2790.51f, -3690.45f, 273.622f};
+static constexpr float sect3SafeSpot[3] = {2778.40f, -3702.645f, 273.621f};
+static constexpr float sect4SafeSpot[3][3] = {
+    {2777.2f, -3712.41f, 273.63f},
+    {2783.06f, -3717.7f, 273.63f},
+    {2791.62f, -3726.04f, 273.63f},
 };
 
 struct boss_heiganAI : public ScriptedAI
@@ -145,13 +138,13 @@ struct boss_heiganAI : public ScriptedAI
 
         eruptionPhase = 0;
         currentPhase = PHASE_FIGHT;
-        m_events.ScheduleEvent(EVENT_FEVER,      Seconds(30), 0, PHASE_FIGHT);
-        m_events.ScheduleEvent(EVENT_DANCE,      Seconds(90), 0, PHASE_FIGHT);
-        m_events.ScheduleEvent(EVENT_ERUPT,      Seconds(15), 0, PHASE_FIGHT);
-        m_events.ScheduleEvent(EVENT_MANABURN,   Seconds(15), 0, PHASE_FIGHT);
-        m_events.ScheduleEvent(EVENT_TAUNT,      randtime(Seconds(20), Seconds(70)));
+        m_events.ScheduleEvent(EVENT_FEVER, Seconds(30), 0, PHASE_FIGHT);
+        m_events.ScheduleEvent(EVENT_DANCE, Seconds(90), 0, PHASE_FIGHT);
+        m_events.ScheduleEvent(EVENT_ERUPT, Seconds(15), 0, PHASE_FIGHT);
+        m_events.ScheduleEvent(EVENT_MANABURN, Seconds(15), 0, PHASE_FIGHT);
+        m_events.ScheduleEvent(EVENT_TAUNT, randtime(Seconds(20), Seconds(70)));
         m_events.ScheduleEvent(EVENT_DOOR_CLOSE, Seconds(15));
-        m_events.ScheduleEvent(EVENT_PORT_PLAYER,Seconds(40));
+        m_events.ScheduleEvent(EVENT_PORT_PLAYER, Seconds(40));
 
         DoScriptText(urand(SAY_AGGRO1, SAY_AGGRO3), m_creature);
 
@@ -193,7 +186,7 @@ struct boss_heiganAI : public ScriptedAI
 
     void KilledUnit(Unit* pVictim) override
     {
-        if(!killCooldown)
+        if (!killCooldown)
             DoScriptText(SAY_SLAY, m_creature);
     }
 
@@ -253,20 +246,20 @@ struct boss_heiganAI : public ScriptedAI
 
             switch (uiArea)
             {
-                case 0:
-                    for (const auto& i : sect1SafeSpot)
-                        SendEruptCustomLocation(i[0], i[1], i[2]);
-                    break;
-                case 1:
-                    SendEruptCustomLocation(sect2SafeSpot[0], sect2SafeSpot[1], sect2SafeSpot[2]);
-                    break;
-                case 2:
-                    SendEruptCustomLocation(sect3SafeSpot[0], sect3SafeSpot[1], sect3SafeSpot[2]);
-                    break;
-                case 3:
-                    for (const auto& i : sect4SafeSpot)
-                        SendEruptCustomLocation(i[0], i[1], i[2]);
-                    break;
+            case 0:
+                for (const auto& i : sect1SafeSpot)
+                    SendEruptCustomLocation(i[0], i[1], i[2]);
+                break;
+            case 1:
+                SendEruptCustomLocation(sect2SafeSpot[0], sect2SafeSpot[1], sect2SafeSpot[2]);
+                break;
+            case 2:
+                SendEruptCustomLocation(sect3SafeSpot[0], sect3SafeSpot[1], sect3SafeSpot[2]);
+                break;
+            case 3:
+                for (const auto& i : sect4SafeSpot)
+                    SendEruptCustomLocation(i[0], i[1], i[2]);
+                break;
             }
         }
 
@@ -282,8 +275,7 @@ struct boss_heiganAI : public ScriptedAI
 
     void SummmonPlagueWave(float x, float y, float z, float o)
     {
-        if (Creature* pCloud = m_creature->SummonCreature(NPC_PLAGUE_WAVE, x, y, z, o,
-            TEMPSUMMON_TIMED_DESPAWN, 45000))
+        if (Creature* pCloud = m_creature->SummonCreature(NPC_PLAGUE_WAVE, x, y, z, o, TEMPSUMMON_TIMED_DESPAWN, 45000))
         {
             pCloud->CastSpell(pCloud, SPELL_PLAGUE_WAVE, true);
         }
@@ -328,11 +320,11 @@ struct boss_heiganAI : public ScriptedAI
 
         uint32 tauntStash = m_events.GetTimeUntilEvent(EVENT_TAUNT);
         m_events.Reset();
-        m_events.ScheduleEvent(EVENT_TAUNT,     tauntStash);
-        m_events.ScheduleEvent(EVENT_FEVER,     Seconds(5)); // videos confirm this, unless raid moves perfectly, more or less everyone is hit.
-        m_events.ScheduleEvent(EVENT_DANCE,     Seconds(90));
-        m_events.ScheduleEvent(EVENT_ERUPT,     Seconds(10));
-        m_events.ScheduleEvent(EVENT_MANABURN,  Seconds(10));
+        m_events.ScheduleEvent(EVENT_TAUNT, tauntStash);
+        m_events.ScheduleEvent(EVENT_FEVER, Seconds(5)); // videos confirm this, unless raid moves perfectly, more or less everyone is hit.
+        m_events.ScheduleEvent(EVENT_DANCE, Seconds(90));
+        m_events.ScheduleEvent(EVENT_ERUPT, Seconds(10));
+        m_events.ScheduleEvent(EVENT_MANABURN, Seconds(10));
         m_events.ScheduleEvent(EVENT_PORT_PLAYER, Seconds(18));
         m_events.ScheduleEvent(EVENT_PORT_PLAYER, Seconds(48));
         m_creature->InterruptNonMeleeSpells(false);
@@ -355,8 +347,7 @@ struct boss_heiganAI : public ScriptedAI
             if (Player* pUnit = (*it)->getTarget()->ToPlayer())
             {
                 // Candidates are only alive players who have not yet been ported during this phase rotation
-                if (pUnit->IsAlive()
-                    && std::find(portedPlayersThisPhase.begin(), portedPlayersThisPhase.end(), pUnit->GetObjectGuid()) == portedPlayersThisPhase.end())
+                if (pUnit->IsAlive() && std::find(portedPlayersThisPhase.begin(), portedPlayersThisPhase.end(), pUnit->GetObjectGuid()) == portedPlayersThisPhase.end())
                 {
                     candidates.push_back(pUnit);
                 }
@@ -373,9 +364,7 @@ struct boss_heiganAI : public ScriptedAI
             candidates.erase(candidates.begin() + idx);
             portedPlayersThisPhase.push_back(target->GetObjectGuid());
             // getting the spell visual to show both where you were TPed from and where you are TPed too
-            if (Creature* pCreature = m_creature->SummonCreature(NPC_PLAGUE_WAVE, 
-                target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), target->GetOrientation(),
-                TEMPSUMMON_TIMED_DESPAWN, 2000))
+            if (Creature* pCreature = m_creature->SummonCreature(NPC_PLAGUE_WAVE, target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), target->GetOrientation(), TEMPSUMMON_TIMED_DESPAWN, 2000))
             {
                 pCreature->SendSpellGo(pCreature, 30211);
             }
@@ -440,33 +429,33 @@ struct boss_heiganAI : public ScriptedAI
         {
             switch (eventId)
             {
-                case EVENT_FEVER:
-                    DoCastAOE(SPELL_DECREPIT_FEVER);
-                    m_events.Repeat(randtime(Seconds(20), Seconds(25)));
-                    break;
-                case EVENT_DANCE:
-                    EventStartDance();
-                    break;
-                case EVENT_DANCE_END:
-                    EventDanceEnd();
-                    break;
-                case EVENT_ERUPT:
-                    UpdateEruption();
-                    m_events.Repeat(currentPhase == PHASE_DANCE ? Seconds(3) : Seconds(10));
-                    break;
-                case EVENT_TAUNT:
-                    EventTaunt();
-                    break;
-                case EVENT_DOOR_CLOSE:
-                    if(m_pInstance)
-                        m_pInstance->UpdateAutomaticBossEntranceDoor(GO_PLAG_HEIG_ENTRY_DOOR, IN_PROGRESS);
-                    break;
-                case EVENT_MANABURN:
-                    CheckManausersAndRepeat();
-                    break;
-                case EVENT_PORT_PLAYER:
-                    EventPortPlayer();
-                    break;
+            case EVENT_FEVER:
+                DoCastAOE(SPELL_DECREPIT_FEVER);
+                m_events.Repeat(randtime(Seconds(20), Seconds(25)));
+                break;
+            case EVENT_DANCE:
+                EventStartDance();
+                break;
+            case EVENT_DANCE_END:
+                EventDanceEnd();
+                break;
+            case EVENT_ERUPT:
+                UpdateEruption();
+                m_events.Repeat(currentPhase == PHASE_DANCE ? Seconds(3) : Seconds(10));
+                break;
+            case EVENT_TAUNT:
+                EventTaunt();
+                break;
+            case EVENT_DOOR_CLOSE:
+                if (m_pInstance)
+                    m_pInstance->UpdateAutomaticBossEntranceDoor(GO_PLAG_HEIG_ENTRY_DOOR, IN_PROGRESS);
+                break;
+            case EVENT_MANABURN:
+                CheckManausersAndRepeat();
+                break;
+            case EVENT_PORT_PLAYER:
+                EventPortPlayer();
+                break;
             }
         }
 
@@ -480,10 +469,7 @@ struct boss_heiganAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_heigan(Creature* pCreature)
-{
-    return new boss_heiganAI(pCreature);
-}
+CreatureAI* GetAI_boss_heigan(Creature* pCreature) { return new boss_heiganAI(pCreature); }
 
 // 29310 - Mana Burn (Heigan, naxxramas)
 struct HeiganManaBurnScript : SpellScript
@@ -495,10 +481,7 @@ struct HeiganManaBurnScript : SpellScript
     }
 };
 
-SpellScript* GetScript_HeiganManaBurn(SpellEntry const*)
-{
-    return new HeiganManaBurnScript();
-}
+SpellScript* GetScript_HeiganManaBurn(SpellEntry const*) { return new HeiganManaBurnScript(); }
 
 void AddSC_boss_heigan()
 {

@@ -30,13 +30,13 @@ npc_malfurion_stormrage
 event_antalarion_statue_activation
 EndContentData */
 
-#include "scriptPCH.h"
 #include "sunken_temple.h"
+#include "scriptPCH.h"
 
 enum
 {
     QUEST_THE_CHARGE_OF_DRAGONFLIGHTS = 8555,
-    QUEST_ERANIKUS_TYRANT_OF_DREAMS   = 8733
+    QUEST_ERANIKUS_TYRANT_OF_DREAMS = 8733
 };
 
 /*######
@@ -45,11 +45,11 @@ enum
 
 enum
 {
-    EMOTE_MALFURION1              = 11191,
-    SAY_MALFURION1                = 11193,
-    SAY_MALFURION2                = 11194,
-    SAY_MALFURION3                = 11195,
-    SAY_MALFURION4                = 11196,
+    EMOTE_MALFURION1 = 11191,
+    SAY_MALFURION1 = 11193,
+    SAY_MALFURION2 = 11194,
+    SAY_MALFURION3 = 11195,
+    SAY_MALFURION4 = 11196,
 
     MAX_MALFURION_TEMPLE_SPEECHES = 7
 };
@@ -58,7 +58,7 @@ struct npc_malfurionAI : public ScriptedAI
 {
     npc_malfurionAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_uiSpeech   = 0;
+        m_uiSpeech = 0;
         m_uiSayTimer = 3000;
         m_creature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER | UNIT_NPC_FLAG_GOSSIP);
 
@@ -90,42 +90,42 @@ struct npc_malfurionAI : public ScriptedAI
                 {
                     switch (m_uiSpeech)
                     {
-                        case 0:
-                            m_creature->SetVisibility(VISIBILITY_ON);
-                            m_creature->HandleEmoteCommand(EMOTE_ONESHOT_ROAR);
-                            // Resurrection visual
-                            m_creature->CastSpell(m_creature, 20761, true);
-                            m_uiSayTimer = 1500;
-                            break;
+                    case 0:
+                        m_creature->SetVisibility(VISIBILITY_ON);
+                        m_creature->HandleEmoteCommand(EMOTE_ONESHOT_ROAR);
+                        // Resurrection visual
+                        m_creature->CastSpell(m_creature, 20761, true);
+                        m_uiSayTimer = 1500;
+                        break;
 
-                        case 1:
-                            m_creature->HandleEmoteCommand(EMOTE_ONESHOT_BOW);
-                            m_uiSayTimer = 2000;
-                            break;
+                    case 1:
+                        m_creature->HandleEmoteCommand(EMOTE_ONESHOT_BOW);
+                        m_uiSayTimer = 2000;
+                        break;
 
-                        case 2:
-                            DoScriptText(SAY_MALFURION1, m_creature);
-                            m_uiSayTimer = 10000;
-                            break;
+                    case 2:
+                        DoScriptText(SAY_MALFURION1, m_creature);
+                        m_uiSayTimer = 10000;
+                        break;
 
-                        case 3:
-                            DoScriptText(SAY_MALFURION2, m_creature);
-                            m_uiSayTimer = 10000;
-                            break;
+                    case 3:
+                        DoScriptText(SAY_MALFURION2, m_creature);
+                        m_uiSayTimer = 10000;
+                        break;
 
-                        case 4:
-                            DoScriptText(SAY_MALFURION3, m_creature);
-                            m_uiSayTimer = 8000;
-                            break;
+                    case 4:
+                        DoScriptText(SAY_MALFURION3, m_creature);
+                        m_uiSayTimer = 8000;
+                        break;
 
-                        case 5:
-                            DoScriptText(SAY_MALFURION4, m_creature);
-                            m_uiSayTimer = 5000;
-                            break;
-                        
-                        case 6:
-                            m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER | UNIT_NPC_FLAG_GOSSIP);
-                            break;
+                    case 5:
+                        DoScriptText(SAY_MALFURION4, m_creature);
+                        m_uiSayTimer = 5000;
+                        break;
+
+                    case 6:
+                        m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER | UNIT_NPC_FLAG_GOSSIP);
+                        break;
                     }
 
                     ++m_uiSpeech;
@@ -137,10 +137,7 @@ struct npc_malfurionAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_malfurion(Creature* pCreature)
-{
-    return new npc_malfurionAI(pCreature);
-}
+CreatureAI* GetAI_npc_malfurion(Creature* pCreature) { return new npc_malfurionAI(pCreature); }
 
 // Summon Malfurion trigger (AQ scepter quest)
 bool AreaTrigger_at_shade_of_eranikus(Player* pPlayer, AreaTriggerEntry const* pAt)
@@ -152,9 +149,7 @@ bool AreaTrigger_at_shade_of_eranikus(Player* pPlayer, AreaTriggerEntry const* p
         return false;
 
     // Don't spawn if player did not complete Charge of Dragonflights, or already on/done with Malfurion quest
-    if (!pPlayer->GetQuestRewardStatus(QUEST_THE_CHARGE_OF_DRAGONFLIGHTS)
-        || pPlayer->GetQuestStatus(QUEST_ERANIKUS_TYRANT_OF_DREAMS) != QUEST_STATUS_NONE
-        || pPlayer->GetQuestRewardStatus(QUEST_ERANIKUS_TYRANT_OF_DREAMS))
+    if (!pPlayer->GetQuestRewardStatus(QUEST_THE_CHARGE_OF_DRAGONFLIGHTS) || pPlayer->GetQuestStatus(QUEST_ERANIKUS_TYRANT_OF_DREAMS) != QUEST_STATUS_NONE || pPlayer->GetQuestRewardStatus(QUEST_ERANIKUS_TYRANT_OF_DREAMS))
         return false;
 
     // Check if Malfurion already spawned
@@ -164,7 +159,7 @@ bool AreaTrigger_at_shade_of_eranikus(Player* pPlayer, AreaTriggerEntry const* p
     // Summon for real now
     if (Creature* cMalfurion = pPlayer->SummonCreature(NPC_MALFURION, pAt->x, pAt->y - 15, pAt->z, 1.52f, TEMPSUMMON_CORPSE_DESPAWN, 0))
         return true;
-    
+
     return false;
 }
 

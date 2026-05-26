@@ -20,11 +20,11 @@
  */
 
 #include "ReputationMgr.h"
-#include "Player.h"
-#include "Opcodes.h"
-#include "WorldPacket.h"
-#include "ObjectMgr.h"
 #include <numeric>
+#include "ObjectMgr.h"
+#include "Opcodes.h"
+#include "Player.h"
+#include "WorldPacket.h"
 
 int32 const ReputationMgr::PointsInRank[MAX_REPUTATION_RANK] = {36000, 3000, 3000, 3000, 6000, 12000, 21000, 1000};
 
@@ -40,10 +40,7 @@ ReputationRank ReputationMgr::ReputationToRank(int32 standing)
     return MIN_REPUTATION_RANK;
 }
 
-int32 ReputationMgr::GetRepPointsToRank(ReputationRank rank)
-{
-    return std::accumulate(PointsInRank, PointsInRank + rank, 0) - 42000;
-}
+int32 ReputationMgr::GetRepPointsToRank(ReputationRank rank) { return std::accumulate(PointsInRank, PointsInRank + rank, 0) - 42000; }
 
 int32 ReputationMgr::GetReputation(uint32 faction_id) const
 {
@@ -123,8 +120,8 @@ void ReputationMgr::SendForceReactions()
     data << uint32(m_forcedReactions.size());
     for (const auto& itr : m_forcedReactions)
     {
-        data << uint32(itr.first);                         // faction_id (Faction.dbc)
-        data << uint32(itr.second);                        // reputation rank
+        data << uint32(itr.first); // faction_id (Faction.dbc)
+        data << uint32(itr.second); // reputation rank
     }
     m_player->SendDirectMessage(&data);
 }
@@ -133,12 +130,12 @@ void ReputationMgr::SendState(FactionState const* faction)
 {
     uint32 count = 1;
 
-    WorldPacket data(SMSG_SET_FACTION_STANDING, (16));      // last check 2.4.0
+    WorldPacket data(SMSG_SET_FACTION_STANDING, (16)); // last check 2.4.0
     size_t p_count = data.wpos();
-    data << (uint32) count;                                 // placeholder
+    data << (uint32)count; // placeholder
 
-    data << (uint32) faction->ReputationListID;
-    data << (uint32) faction->Standing;
+    data << (uint32)faction->ReputationListID;
+    data << (uint32)faction->Standing;
 
     for (auto& itr : m_factions)
     {
@@ -249,7 +246,7 @@ bool ReputationMgr::SetReputation(FactionEntry const* factionEntry, int32 standi
             }
         }
     }
-    
+
     // spillover done, update faction itself
     bool res = false;
     FactionStateList::iterator faction = m_factions.find(factionEntry->reputationListID);
@@ -294,7 +291,7 @@ bool ReputationMgr::SetOneFactionReputation(FactionEntry const* factionEntry, in
     return false;
 }
 
-void ReputationMgr::SetVisible(FactionTemplateEntry const*factionTemplateEntry)
+void ReputationMgr::SetVisible(FactionTemplateEntry const* factionTemplateEntry)
 {
     if (!factionTemplateEntry->faction)
         return;
@@ -399,7 +396,7 @@ void ReputationMgr::LoadFromDB(std::unique_ptr<QueryResult> result)
     // Set initial reputations (so everything is nifty before DB data load)
     Initialize();
 
-    //std::unique_ptr<QueryResult> result = CharacterDatabase.PQuery("SELECT faction,standing,flags FROM character_reputation WHERE guid = '%u'",GetGUIDLow());
+    // std::unique_ptr<QueryResult> result = CharacterDatabase.PQuery("SELECT faction,standing,flags FROM character_reputation WHERE guid = '%u'",GetGUIDLow());
 
     if (result)
     {
@@ -418,18 +415,18 @@ void ReputationMgr::LoadFromDB(std::unique_ptr<QueryResult> result)
                 uint32 dbFactionFlags = fields[2].GetUInt32();
 
                 if (dbFactionFlags & FACTION_FLAG_VISIBLE)
-                    SetVisible(faction);                    // have internal checks for forced invisibility
+                    SetVisible(faction); // have internal checks for forced invisibility
 
                 if (dbFactionFlags & FACTION_FLAG_INACTIVE)
-                    SetInactive(faction, true);             // have internal checks for visibility requirement
+                    SetInactive(faction, true); // have internal checks for visibility requirement
 
-                if (dbFactionFlags & FACTION_FLAG_AT_WAR)   // DB at war
-                    SetAtWar(faction, true);                // have internal checks for FACTION_FLAG_PEACE_FORCED
-                else                                        // DB not at war
+                if (dbFactionFlags & FACTION_FLAG_AT_WAR) // DB at war
+                    SetAtWar(faction, true); // have internal checks for FACTION_FLAG_PEACE_FORCED
+                else // DB not at war
                 {
                     // allow remove if visible (and then not FACTION_FLAG_INVISIBLE_FORCED or FACTION_FLAG_HIDDEN)
                     if (faction->Flags & FACTION_FLAG_VISIBLE)
-                        SetAtWar(faction, false);           // have internal checks for FACTION_FLAG_PEACE_FORCED
+                        SetAtWar(faction, false); // have internal checks for FACTION_FLAG_PEACE_FORCED
                 }
 
                 // set atWar for hostile
@@ -450,8 +447,8 @@ void ReputationMgr::LoadFromDB(std::unique_ptr<QueryResult> result)
 
 void ReputationMgr::SaveToDB()
 {
-    static SqlStatementID delRep ;
-    static SqlStatementID insRep ;
+    static SqlStatementID delRep;
+    static SqlStatementID insRep;
 
     SqlStatement stmtDel = CharacterDatabase.CreateStatement(delRep, "DELETE FROM character_reputation WHERE guid = ? AND faction=?");
     SqlStatement stmtIns = CharacterDatabase.CreateStatement(insRep, "INSERT INTO character_reputation (guid,faction,standing,flags) VALUES (?, ?, ?, ?)");

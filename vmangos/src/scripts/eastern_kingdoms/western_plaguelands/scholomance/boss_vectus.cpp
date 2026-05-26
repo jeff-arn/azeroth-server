@@ -21,40 +21,40 @@ SDComment: event gambit de l'aube : Chakor
 SDCategory: Scholomance
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "CreatureGroups.h"
 #include "scholomance.h"
+#include "scriptPCH.h"
 
 enum
 {
-    //EMOTE_GENERIC_FRENZY_KILL   = 7797,
+    // EMOTE_GENERIC_FRENZY_KILL   = 7797,
 
-    NPC_STUDENT                                     = 10475,
-    NPC_MARDUK_BLACKPOOL                            = 10433,
+    NPC_STUDENT = 10475,
+    NPC_MARDUK_BLACKPOOL = 10433,
 
-    VECTUS_SPEECH_GAMBIT_EVENT_START                = 6883,
+    VECTUS_SPEECH_GAMBIT_EVENT_START = 6883,
 
-    FACTION_MONSTER                                 = 16,
+    FACTION_MONSTER = 16,
 
-    GO_DAWN_S_GAMBIT                                = 177304,
+    GO_DAWN_S_GAMBIT = 177304,
 
-    SPELL_VIEWING_ROOM_STUDENT_TRANSFORM_EFFECT     = 18115,    //spell qui transforme les étudiants élites en squelettes
-    SPELL_FLAMESTRIKE                               = 18399,
-    SPELL_BLAST_WAVE                                = 16046
-  //SPELL_FRENZY                                    = 28371     //spell is used by Gluth, confirm this is for this boss too
-  //SPELL_FIRE_SHIELD                               = 0         //should supposedly have some aura, but proper spell not found
+    SPELL_VIEWING_ROOM_STUDENT_TRANSFORM_EFFECT = 18115, // spell qui transforme les étudiants élites en squelettes
+    SPELL_FLAMESTRIKE = 18399,
+    SPELL_BLAST_WAVE = 16046
+    // SPELL_FRENZY                                    = 28371     //spell is used by Gluth, confirm this is for this boss too
+    // SPELL_FIRE_SHIELD                               = 0         //should supposedly have some aura, but proper spell not found
 };
 
 struct boss_vectusAI : public ScriptedAI
 {
     boss_vectusAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_bStartedDialogue      = false;
-        eventGambitDone         = false;
-        eventGambitStart        = false;
-        findGambit              = false;
-        m_uiGambitEvent_Timer   = 0;
-        pGambit     = nullptr;
+        m_bStartedDialogue = false;
+        eventGambitDone = false;
+        eventGambitStart = false;
+        findGambit = false;
+        m_uiGambitEvent_Timer = 0;
+        pGambit = nullptr;
         Reset();
     }
 
@@ -62,26 +62,26 @@ struct boss_vectusAI : public ScriptedAI
     uint32 m_uiBlastWave_Timer;
     uint32 m_uiFrenzy_Timer;
     uint32 m_uiGambitEvent_Timer;
-    bool   _fullAggroDone;
-    bool   eventGambitDone;
-    bool   eventGambitStart;
-    bool   findGambit;
+    bool _fullAggroDone;
+    bool eventGambitDone;
+    bool eventGambitStart;
+    bool findGambit;
     GameObject* pGambit;
 
     bool m_bStartedDialogue;
 
     void Reset() override
     {
-        m_uiFlameStrike_Timer   = 2000;
-        m_uiBlastWave_Timer     = 14000;
-        m_uiFrenzy_Timer        = 0;
-        _fullAggroDone          = false;
+        m_uiFlameStrike_Timer = 2000;
+        m_uiBlastWave_Timer = 14000;
+        m_uiFrenzy_Timer = 0;
+        _fullAggroDone = false;
 
         m_creature->EnableMoveInLosEvent();
     }
 
     void MoveInLineOfSight(Unit* pWho) override
-    {        
+    {
         if (!m_bStartedDialogue)
         {
             if (pWho->IsPlayer() && m_creature->IsWithinDistInMap(pWho, 32.0f) && m_creature->IsWithinLOSInMap(pWho))
@@ -173,7 +173,7 @@ struct boss_vectusAI : public ScriptedAI
             _fullAggroDone = true;
         }
 
-        //m_uiFlameStrike_Timer
+        // m_uiFlameStrike_Timer
         if (m_uiFlameStrike_Timer < uiDiff)
         {
             DoCastSpellIfCan(m_creature, SPELL_FLAMESTRIKE);
@@ -182,7 +182,7 @@ struct boss_vectusAI : public ScriptedAI
         else
             m_uiFlameStrike_Timer -= uiDiff;
 
-        //BlastWave_Timer
+        // BlastWave_Timer
         if (m_uiBlastWave_Timer < uiDiff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BLAST_WAVE);
@@ -191,7 +191,7 @@ struct boss_vectusAI : public ScriptedAI
         else
             m_uiBlastWave_Timer -= uiDiff;
 
-        //Frenzy_Timer
+        // Frenzy_Timer
         /*if (m_creature->GetHealthPercent() < 25.0f)
         {
             if (m_uiFrenzy_Timer < uiDiff)
@@ -208,10 +208,7 @@ struct boss_vectusAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_vectus(Creature* pCreature)
-{
-    return new boss_vectusAI(pCreature);
-}
+CreatureAI* GetAI_boss_vectus(Creature* pCreature) { return new boss_vectusAI(pCreature); }
 
 /*######
 ## npc_scholomance_student
@@ -221,7 +218,7 @@ struct npc_scholomance_studentAI : public ScriptedAI
 {
     npc_scholomance_studentAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (ScriptedInstance*) pCreature->GetInstanceData();
+        m_pInstance = (ScriptedInstance*)pCreature->GetInstanceData();
         isTransformed = false;
         Reset();
     }
@@ -263,16 +260,16 @@ struct npc_scholomance_studentAI : public ScriptedAI
     {
         if (isTransformed)
         {
-            if(!m_creature->FindNearestCreature(NPC_STUDENT, 100.0f, true) && m_pInstance)
+            if (!m_creature->FindNearestCreature(NPC_STUDENT, 100.0f, true) && m_pInstance)
             {
-                //delink les deux boss
-                Creature * Vectus = (Creature*) m_creature->GetMap()->GetUnit(m_pInstance->GetData64(DATA_VECTUS));
-                Creature * Marduke = (Creature*) m_creature->GetMap()->GetUnit(m_pInstance->GetData64(DATA_MARDUKE));
-                if ( Vectus && Marduke )
+                // delink les deux boss
+                Creature* Vectus = (Creature*)m_creature->GetMap()->GetUnit(m_pInstance->GetData64(DATA_VECTUS));
+                Creature* Marduke = (Creature*)m_creature->GetMap()->GetUnit(m_pInstance->GetData64(DATA_MARDUKE));
+                if (Vectus && Marduke)
                 {
                     if (CreatureGroup* myGroup = Vectus->GetCreatureGroup())
                     {
-                        if(myGroup == Marduke->GetCreatureGroup())
+                        if (myGroup == Marduke->GetCreatureGroup())
                         {
                             myGroup->RemoveMember(Vectus->GetGUID());
                             myGroup->RemoveMember(Marduke->GetGUID());
@@ -283,7 +280,7 @@ struct npc_scholomance_studentAI : public ScriptedAI
                 }
             }
 
-            //this was already there
+            // this was already there
             m_creature->ForcedDespawn();
         }
     }
@@ -315,10 +312,7 @@ struct npc_scholomance_studentAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_scholomance_student(Creature* pCreature)
-{
-    return new npc_scholomance_studentAI(pCreature);
-}
+CreatureAI* GetAI_npc_scholomance_student(Creature* pCreature) { return new npc_scholomance_studentAI(pCreature); }
 
 void AddSC_boss_vectus()
 {

@@ -34,16 +34,16 @@ EndContentData */
 
 enum DaphneStilwellData
 {
-    SAY_DS_START        = 2360,
-    SAY_DS_DOWN_1       = 5269,
-    SAY_DS_DOWN_2       = 2369,
-    SAY_DS_DOWN_3       = 2358,
-    SAY_DS_PROLOGUE     = 3090,
+    SAY_DS_START = 2360,
+    SAY_DS_DOWN_1 = 5269,
+    SAY_DS_DOWN_2 = 2369,
+    SAY_DS_DOWN_3 = 2358,
+    SAY_DS_PROLOGUE = 3090,
 
-    SPELL_SHOOT         = 6660,
-    QUEST_TOME_VALOR    = 1651,
-    NPC_DEFIAS_RAIDER   = 6180,
-    EQUIP_ID_RIFLE      = 2511
+    SPELL_SHOOT = 6660,
+    QUEST_TOME_VALOR = 1651,
+    NPC_DEFIAS_RAIDER = 6180,
+    EQUIP_ID_RIFLE = 2511
 };
 
 struct npc_daphne_stilwellAI : public npc_escortAI
@@ -63,15 +63,15 @@ struct npc_daphne_stilwellAI : public npc_escortAI
         {
             switch (m_uiWPHolder)
             {
-                case 7:
-                    DoScriptText(SAY_DS_DOWN_1, m_creature);
-                    break;
-                case 8:
-                    DoScriptText(SAY_DS_DOWN_2, m_creature);
-                    break;
-                case 9:
-                    DoScriptText(SAY_DS_DOWN_3, m_creature);
-                    break;
+            case 7:
+                DoScriptText(SAY_DS_DOWN_1, m_creature);
+                break;
+            case 8:
+                DoScriptText(SAY_DS_DOWN_2, m_creature);
+                break;
+            case 9:
+                DoScriptText(SAY_DS_DOWN_3, m_creature);
+                break;
             }
         }
         else
@@ -86,46 +86,46 @@ struct npc_daphne_stilwellAI : public npc_escortAI
 
         switch (uiPoint)
         {
-            case 4:
-                m_creature->SetVirtualItem(BASE_ATTACK, 6946);
-                m_creature->SetSheath(SHEATH_STATE_RANGED);
-                m_creature->HandleEmoteCommand(EMOTE_STATE_USESTANDING_NOSHEATHE);
-                break;
-            case 7:
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11450.836f, 1569.755f, 54.267f, 4.230f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11449.697f, 1569.124f, 54.421f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.237f, 1568.307f, 54.620f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                break;
-            case 8:
-                m_creature->SetSheath(SHEATH_STATE_RANGED);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11450.836f, 1569.755f, 54.267f, 4.230f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11449.697f, 1569.124f, 54.421f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.237f, 1568.307f, 54.620f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.037f, 1570.213f, 54.961f, 4.283f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                break;
-            case 9:
-                m_creature->SetSheath(SHEATH_STATE_RANGED);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11450.836f, 1569.755f, 54.267f, 4.230f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11449.697f, 1569.124f, 54.421f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.237f, 1568.307f, 54.620f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.037f, 1570.213f, 54.961f, 4.283f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11449.018f, 1570.738f, 54.828f, 4.220f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
-                break;
-            case 10:
-                SetRun(false);
-                break;
-            case 11:
-                DoScriptText(SAY_DS_PROLOGUE, m_creature);
-                break;
-            case 13:
-                SetEquipmentSlots(true);
-                m_creature->SetSheath(SHEATH_STATE_UNARMED);
-                m_creature->HandleEmoteCommand(EMOTE_STATE_USESTANDING_NOSHEATHE);
-                break;
-            case 17:
-                if (Player* pPlayer = GetPlayerForEscort())
-                    pPlayer->GroupEventHappens(QUEST_TOME_VALOR, m_creature);
-                break;
+        case 4:
+            m_creature->SetVirtualItem(BASE_ATTACK, 6946);
+            m_creature->SetSheath(SHEATH_STATE_RANGED);
+            m_creature->HandleEmoteCommand(EMOTE_STATE_USESTANDING_NOSHEATHE);
+            break;
+        case 7:
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11450.836f, 1569.755f, 54.267f, 4.230f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11449.697f, 1569.124f, 54.421f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.237f, 1568.307f, 54.620f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            break;
+        case 8:
+            m_creature->SetSheath(SHEATH_STATE_RANGED);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11450.836f, 1569.755f, 54.267f, 4.230f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11449.697f, 1569.124f, 54.421f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.237f, 1568.307f, 54.620f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.037f, 1570.213f, 54.961f, 4.283f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            break;
+        case 9:
+            m_creature->SetSheath(SHEATH_STATE_RANGED);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11450.836f, 1569.755f, 54.267f, 4.230f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11449.697f, 1569.124f, 54.421f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.237f, 1568.307f, 54.620f, 4.206f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11448.037f, 1570.213f, 54.961f, 4.283f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            m_creature->SummonCreature(NPC_DEFIAS_RAIDER, -11449.018f, 1570.738f, 54.828f, 4.220f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000);
+            break;
+        case 10:
+            SetRun(false);
+            break;
+        case 11:
+            DoScriptText(SAY_DS_PROLOGUE, m_creature);
+            break;
+        case 13:
+            SetEquipmentSlots(true);
+            m_creature->SetSheath(SHEATH_STATE_UNARMED);
+            m_creature->HandleEmoteCommand(EMOTE_STATE_USESTANDING_NOSHEATHE);
+            break;
+        case 17:
+            if (Player* pPlayer = GetPlayerForEscort())
+                pPlayer->GroupEventHappens(QUEST_TOME_VALOR, m_creature);
+            break;
         }
     }
 
@@ -144,10 +144,7 @@ struct npc_daphne_stilwellAI : public npc_escortAI
         }
     }
 
-    void JustSummoned(Creature* pSummoned) override
-    {
-        pSummoned->AI()->AttackStart(m_creature);
-    }
+    void JustSummoned(Creature* pSummoned) override { pSummoned->AI()->AttackStart(m_creature); }
 
     void UpdateEscortAI(uint32 const uiDiff) override
     {
@@ -160,7 +157,6 @@ struct npc_daphne_stilwellAI : public npc_escortAI
 
             if (!m_creature->CanReachWithMeleeAutoAttack(m_creature->GetVictim()))
                 DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHOOT);
-
         }
         else
             m_uiShootTimer -= uiDiff;
@@ -182,10 +178,7 @@ bool QuestAccept_npc_daphne_stilwell(Player* pPlayer, Creature* pCreature, Quest
     return true;
 }
 
-CreatureAI* GetAI_npc_daphne_stilwell(Creature* pCreature)
-{
-    return new npc_daphne_stilwellAI(pCreature);
-}
+CreatureAI* GetAI_npc_daphne_stilwell(Creature* pCreature) { return new npc_daphne_stilwellAI(pCreature); }
 
 void AddSC_westfall()
 {

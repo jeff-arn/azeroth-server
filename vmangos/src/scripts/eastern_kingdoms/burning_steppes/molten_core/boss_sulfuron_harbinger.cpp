@@ -25,14 +25,14 @@ EndScriptData */
     Sulfuron should walk to a random point ~10 yds behind him before casting Flamespear
 */
 
-#include "scriptPCH.h"
 #include "molten_core.h"
+#include "scriptPCH.h"
 
-#define SPELL_DARKSTRIKE            19777
-#define SPELL_DEMORALIZINGSHOUT     19778
-#define SPELL_INSPIRE               19779
-#define SPELL_KNOCKDOWN             19780
-#define SPELL_FLAMESPEAR            19781
+#define SPELL_DARKSTRIKE 19777
+#define SPELL_DEMORALIZINGSHOUT 19778
+#define SPELL_INSPIRE 19779
+#define SPELL_KNOCKDOWN 19780
+#define SPELL_FLAMESPEAR 19781
 
 struct boss_sulfuronAI : public ScriptedAI
 {
@@ -51,11 +51,11 @@ struct boss_sulfuronAI : public ScriptedAI
 
     void Reset() override
     {
-        Darkstrike_Timer        = 10000;                     //These times are probably wrong
+        Darkstrike_Timer = 10000; // These times are probably wrong
         DemoralizingShout_Timer = 15000;
-        Inspire_Timer           = 13000;
-        Knockdown_Timer         = 6000;
-        Flamespear_Timer        = 2000;
+        Inspire_Timer = 13000;
+        Knockdown_Timer = 6000;
+        Flamespear_Timer = 2000;
 
         if (m_pInstance && m_creature->IsAlive())
             m_pInstance->SetData(TYPE_SULFURON, NOT_STARTED);
@@ -79,15 +79,16 @@ struct boss_sulfuronAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //DemoralizingShout_Timer
+        // DemoralizingShout_Timer
         if (DemoralizingShout_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_DEMORALIZINGSHOUT) == CAST_OK)
                 DemoralizingShout_Timer = urand(15000, 20000);
         }
-        else DemoralizingShout_Timer -= diff;
+        else
+            DemoralizingShout_Timer -= diff;
 
-        //Inspire_Timer
+        // Inspire_Timer
         if (Inspire_Timer < diff)
         {
             Creature* target = nullptr;
@@ -108,17 +109,19 @@ struct boss_sulfuronAI : public ScriptedAI
             if (DoCastSpellIfCan(m_creature, SPELL_INSPIRE) == CAST_OK)
                 Inspire_Timer = urand(20000, 26000);
         }
-        else Inspire_Timer -= diff;
+        else
+            Inspire_Timer -= diff;
 
-        //Knockdown_Timer
+        // Knockdown_Timer
         if (Knockdown_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_KNOCKDOWN) == CAST_OK)
                 Knockdown_Timer = urand(12000, 15000);
         }
-        else Knockdown_Timer -= diff;
+        else
+            Knockdown_Timer -= diff;
 
-        //Flamespear_Timer
+        // Flamespear_Timer
         if (Flamespear_Timer < diff)
         {
             if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
@@ -127,24 +130,23 @@ struct boss_sulfuronAI : public ScriptedAI
                     Flamespear_Timer = urand(12000, 16000);
             }
         }
-        else Flamespear_Timer -= diff;
+        else
+            Flamespear_Timer -= diff;
 
-        //DarkStrike_Timer
+        // DarkStrike_Timer
         if (Darkstrike_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_DARKSTRIKE) == CAST_OK)
                 Darkstrike_Timer = urand(15000, 18000);
         }
-        else Darkstrike_Timer -= diff;
+        else
+            Darkstrike_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_boss_sulfuron(Creature* pCreature)
-{
-    return new boss_sulfuronAI(pCreature);
-}
+CreatureAI* GetAI_boss_sulfuron(Creature* pCreature) { return new boss_sulfuronAI(pCreature); }
 
 void AddSC_boss_sulfuron()
 {

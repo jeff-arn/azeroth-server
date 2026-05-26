@@ -18,7 +18,8 @@
 
 namespace Movement
 {
-    template<typename length_type> void Spline<length_type>::evaluate_percent(float t, Vector3& c) const
+    template <typename length_type>
+    void Spline<length_type>::evaluate_percent(float t, Vector3& c) const
     {
         index_type Index;
         float u;
@@ -26,7 +27,8 @@ namespace Movement
         evaluate_percent(Index, u, c);
     }
 
-    template<typename length_type> void Spline<length_type>::evaluate_derivative(float t, Vector3& hermite) const
+    template <typename length_type>
+    void Spline<length_type>::evaluate_derivative(float t, Vector3& hermite) const
     {
         index_type Index;
         float u;
@@ -34,9 +36,10 @@ namespace Movement
         evaluate_derivative(Index, u, hermite);
     }
 
-    template<typename length_type> SplineBase::index_type Spline<length_type>::computeIndexInBounds(length_type length_) const
+    template <typename length_type>
+    SplineBase::index_type Spline<length_type>::computeIndexInBounds(length_type length_) const
     {
-// Temporary disabled: causes infinite loop with t = 1.f
+        // Temporary disabled: causes infinite loop with t = 1.f
         /*
             index_type hi = index_hi;
             index_type lo = index_lo;
@@ -61,7 +64,8 @@ namespace Movement
         return i;
     }
 
-    template<typename length_type> void Spline<length_type>::computeIndex(float t, index_type& index, float& u) const
+    template <typename length_type>
+    void Spline<length_type>::computeIndex(float t, index_type& index, float& u) const
     {
         MANGOS_ASSERT(t >= 0.f && t <= 1.f);
         length_type length_ = t * length();
@@ -70,13 +74,15 @@ namespace Movement
         u = (length_ - length(index)) / (float)length(index, index + 1);
     }
 
-    template<typename length_type> SplineBase::index_type Spline<length_type>::computeIndexInBounds(float t) const
+    template <typename length_type>
+    SplineBase::index_type Spline<length_type>::computeIndexInBounds(float t) const
     {
         MANGOS_ASSERT(t >= 0.f && t <= 1.f);
         return computeIndexInBounds(t * length());
     }
 
-    template<typename length_type> void Spline<length_type>::initLengths()
+    template <typename length_type>
+    void Spline<length_type>::initLengths()
     {
         index_type i = index_lo;
         length_type length = 0;
@@ -88,10 +94,11 @@ namespace Movement
         }
     }
 
-    template<typename length_type> void Spline<length_type>::clear()
+    template <typename length_type>
+    void Spline<length_type>::clear()
     {
         SplineBase::clear();
         lengths.clear();
     }
 
-}
+} // namespace Movement

@@ -25,39 +25,36 @@ EndScriptData */
 
 enum
 {
-    TYPE_FREE_NPC           = 1,
-    TYPE_RETHILGORE         = 2,
-    TYPE_FENRUS             = 3,
-    TYPE_NANDOS             = 4,
-    TYPE_INTRO              = 5,
-    TYPE_VOIDWALKER         = 6,
-    MAX_ENCOUNTER           = 6,
+    TYPE_FREE_NPC = 1,
+    TYPE_RETHILGORE = 2,
+    TYPE_FENRUS = 3,
+    TYPE_NANDOS = 4,
+    TYPE_INTRO = 5,
+    TYPE_VOIDWALKER = 6,
+    MAX_ENCOUNTER = 6,
 
-    NPC_BARON_SILVERLAINE   = 3887,
-    NPC_CMD_SPRINGVALE      = 4278,
-    NPC_ASH                 = 3850,
-    NPC_ADA                 = 3849,
-    NPC_ARUGAL              = 10000,                        //"Arugal" says intro text
-    NPC_ARCHMAGE_ARUGAL     = 4275,                         //"Archmage Arugal" does Fenrus event
-    NPC_FENRUS              = 4274,                         //used to summon Arugal in Fenrus event
-    NPC_VINCENT             = 4444,                         //Vincent should be "dead" is Arugal is done the intro already
-    NPC_NANDOS              = 3927,
-    NPC_WOLF_GUARD          = 3854,                         //Baron Silverlaine and Commander Springvale patrol
+    NPC_BARON_SILVERLAINE = 3887,
+    NPC_CMD_SPRINGVALE = 4278,
+    NPC_ASH = 3850,
+    NPC_ADA = 3849,
+    NPC_ARUGAL = 10000, //"Arugal" says intro text
+    NPC_ARCHMAGE_ARUGAL = 4275, //"Archmage Arugal" does Fenrus event
+    NPC_FENRUS = 4274, // used to summon Arugal in Fenrus event
+    NPC_VINCENT = 4444, // Vincent should be "dead" is Arugal is done the intro already
+    NPC_NANDOS = 3927,
+    NPC_WOLF_GUARD = 3854, // Baron Silverlaine and Commander Springvale patrol
 
-    GO_COURTYARD_DOOR       = 18895,                        //door to open when talking to NPC's
-    GO_SORCERER_DOOR        = 18972,                        //door to open when Fenrus the Devourer dies
-    GO_ARUGAL_DOOR          = 18971,                        //door to open when Wolf Master Nandos dies
-    GO_ARUGAL_FOCUS         = 18973,                        //this generates the lightning visual in the Fenrus event
+    GO_COURTYARD_DOOR = 18895, // door to open when talking to NPC's
+    GO_SORCERER_DOOR = 18972, // door to open when Fenrus the Devourer dies
+    GO_ARUGAL_DOOR = 18971, // door to open when Wolf Master Nandos dies
+    GO_ARUGAL_FOCUS = 18973, // this generates the lightning visual in the Fenrus event
 
-    SOUND_FENRUS_AGGRO      = 6017,                         //Fenrus howls on aggro A_FenrusAggro in sound entries
+    SOUND_FENRUS_AGGRO = 6017, // Fenrus howls on aggro A_FenrusAggro in sound entries
 };
 
 struct instance_shadowfang_keep : public ScriptedInstance
 {
-    instance_shadowfang_keep(Map* pMap) : ScriptedInstance(pMap)
-    {
-        Initialize();
-    };
+    instance_shadowfang_keep(Map* pMap) : ScriptedInstance(pMap) { Initialize(); };
 
     uint32 m_auiEncounter[MAX_ENCOUNTER];
     std::string strInstData;
@@ -91,60 +88,60 @@ struct instance_shadowfang_keep : public ScriptedInstance
         m_uiAdaGUID = 0;
 
         m_uiDoorCourtyardGUID = 0;
-        m_uiDoorSorcererGUID  = 0;
-        m_uiDoorArugalGUID    = 0;
+        m_uiDoorSorcererGUID = 0;
+        m_uiDoorArugalGUID = 0;
 
-        m_uiFenrusGUID        = 0;
-        m_uiVincentGUID       = 0;
+        m_uiFenrusGUID = 0;
+        m_uiVincentGUID = 0;
         m_uiCmdSpringvaleGUID = 0;
 
-        showSilverlainePatrol  = false;
-        showSpringvalePatrol   = false;
+        showSilverlainePatrol = false;
+        showSpringvalePatrol = false;
         m_uiSpawnPatrolOnBaronDeath = 6000;
-        m_uiSpawnPatrolOnCmdDeath   = 6000;
+        m_uiSpawnPatrolOnCmdDeath = 6000;
 
         m_uiBaronSilverlaineGUID = 0;
-        //Nostalrius
-        m_uiVoidWalkerCount   = 0;
+        // Nostalrius
+        m_uiVoidWalkerCount = 0;
     }
 
     void OnCreatureCreate(Creature* pCreature) override
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_ASH:
-                m_uiAshGUID = pCreature->GetGUID();
-                break;
-            case NPC_ADA:
-                m_uiAdaGUID = pCreature->GetGUID();
-                break;
-            case NPC_FENRUS:
-                m_uiFenrusGUID = pCreature->GetGUID();
-                break;
-            case NPC_ARUGAL:
-                //if Arugal has done the intro, make him invisible!
-                if (m_auiEncounter[4] == DONE)
-                    pCreature->SetVisibility(VISIBILITY_OFF);
-                break;
-            case NPC_VINCENT:
-                m_uiVincentGUID = pCreature->GetGUID();
-                //if Arugal has done the intro, make Vincent dead!
-                if (m_auiEncounter[4] == DONE)
-                    pCreature->SetStandState(UNIT_STAND_STATE_DEAD);
-                break;
-            case NPC_BARON_SILVERLAINE:
-                m_uiBaronSilverlaineGUID = pCreature->GetGUID();
-                break;
-            case NPC_NANDOS:
-                m_uiNandosGUID = pCreature->GetGUID();
-                break;
-            case NPC_CMD_SPRINGVALE:
-                m_uiCmdSpringvaleGUID = pCreature->GetGUID();
-                break;
-            case NPC_WOLF_GUARD:
+        case NPC_ASH:
+            m_uiAshGUID = pCreature->GetGUID();
+            break;
+        case NPC_ADA:
+            m_uiAdaGUID = pCreature->GetGUID();
+            break;
+        case NPC_FENRUS:
+            m_uiFenrusGUID = pCreature->GetGUID();
+            break;
+        case NPC_ARUGAL:
+            // if Arugal has done the intro, make him invisible!
+            if (m_auiEncounter[4] == DONE)
                 pCreature->SetVisibility(VISIBILITY_OFF);
-                pCreature->SetFactionTemplateId(35);
-                break;
+            break;
+        case NPC_VINCENT:
+            m_uiVincentGUID = pCreature->GetGUID();
+            // if Arugal has done the intro, make Vincent dead!
+            if (m_auiEncounter[4] == DONE)
+                pCreature->SetStandState(UNIT_STAND_STATE_DEAD);
+            break;
+        case NPC_BARON_SILVERLAINE:
+            m_uiBaronSilverlaineGUID = pCreature->GetGUID();
+            break;
+        case NPC_NANDOS:
+            m_uiNandosGUID = pCreature->GetGUID();
+            break;
+        case NPC_CMD_SPRINGVALE:
+            m_uiCmdSpringvaleGUID = pCreature->GetGUID();
+            break;
+        case NPC_WOLF_GUARD:
+            pCreature->SetVisibility(VISIBILITY_OFF);
+            pCreature->SetFactionTemplateId(35);
+            break;
         }
     }
 
@@ -152,12 +149,12 @@ struct instance_shadowfang_keep : public ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_BARON_SILVERLAINE:
-                showSilverlainePatrol = true;
-                break;
-            case NPC_CMD_SPRINGVALE:
-                showSpringvalePatrol = true;
-                break;
+        case NPC_BARON_SILVERLAINE:
+            showSilverlainePatrol = true;
+            break;
+        case NPC_CMD_SPRINGVALE:
+            showSpringvalePatrol = true;
+            break;
         }
     }
 
@@ -165,10 +162,10 @@ struct instance_shadowfang_keep : public ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_FENRUS:
-                // play Fenrus howl
-                pCreature->PlayDirectSound(SOUND_FENRUS_AGGRO);
-                break;
+        case NPC_FENRUS:
+            // play Fenrus howl
+            pCreature->PlayDirectSound(SOUND_FENRUS_AGGRO);
+            break;
         }
     }
 
@@ -177,23 +174,23 @@ struct instance_shadowfang_keep : public ScriptedInstance
     {
         switch (pGo->GetEntry())
         {
-            case GO_COURTYARD_DOOR:
-                m_uiDoorCourtyardGUID = pGo->GetGUID();
-                if (m_auiEncounter[0] == DONE)
-                    pGo->SetGoState(GO_STATE_ACTIVE);
-                break;
-            //for this we ignore voidwalkers, because if the server restarts
-            //they won't be there, but Fenrus is dead so the door can't be opened!
-            case GO_SORCERER_DOOR:
-                m_uiDoorSorcererGUID = pGo->GetGUID();
-                if (m_auiEncounter[2] == DONE)
-                    pGo->SetGoState(GO_STATE_ACTIVE);
-                break;
-            case GO_ARUGAL_DOOR:
-                m_uiDoorArugalGUID = pGo->GetGUID();
-                if (m_auiEncounter[3] == DONE)
-                    pGo->SetGoState(GO_STATE_ACTIVE);
-                break;
+        case GO_COURTYARD_DOOR:
+            m_uiDoorCourtyardGUID = pGo->GetGUID();
+            if (m_auiEncounter[0] == DONE)
+                pGo->SetGoState(GO_STATE_ACTIVE);
+            break;
+        // for this we ignore voidwalkers, because if the server restarts
+        // they won't be there, but Fenrus is dead so the door can't be opened!
+        case GO_SORCERER_DOOR:
+            m_uiDoorSorcererGUID = pGo->GetGUID();
+            if (m_auiEncounter[2] == DONE)
+                pGo->SetGoState(GO_STATE_ACTIVE);
+            break;
+        case GO_ARUGAL_DOOR:
+            m_uiDoorArugalGUID = pGo->GetGUID();
+            if (m_auiEncounter[3] == DONE)
+                pGo->SetGoState(GO_STATE_ACTIVE);
+            break;
         }
     }
 
@@ -245,40 +242,39 @@ struct instance_shadowfang_keep : public ScriptedInstance
                     m_uiSpawnPatrolOnCmdDeath -= uiDiff;
             }
         }
-
     }
 
     void SetData(uint32 uiType, uint32 uiData) override
     {
         switch (uiType)
         {
-            case TYPE_FREE_NPC:
-                if (uiData == DONE)
-                    DoUseDoorOrButton(m_uiDoorCourtyardGUID);
-                m_auiEncounter[0] = uiData;
-                break;
-            case TYPE_RETHILGORE:
-                m_auiEncounter[1] = uiData;
-                break;
-            case TYPE_FENRUS:
-                m_auiEncounter[2] = uiData;
-                break;
-            case TYPE_NANDOS:
-                if (uiData == DONE)
-                    DoUseDoorOrButton(m_uiDoorArugalGUID);
-                m_auiEncounter[3] = uiData;
-                break;
-            case TYPE_INTRO:
-                m_auiEncounter[4] = uiData;
-                break;
-            case TYPE_VOIDWALKER:
-                if (uiData == DONE)
-                {
-                    m_auiEncounter[5]++;
-                    if (m_auiEncounter[5] > 3)
-                        DoUseDoorOrButton(m_uiDoorSorcererGUID);
-                }
-                break;
+        case TYPE_FREE_NPC:
+            if (uiData == DONE)
+                DoUseDoorOrButton(m_uiDoorCourtyardGUID);
+            m_auiEncounter[0] = uiData;
+            break;
+        case TYPE_RETHILGORE:
+            m_auiEncounter[1] = uiData;
+            break;
+        case TYPE_FENRUS:
+            m_auiEncounter[2] = uiData;
+            break;
+        case TYPE_NANDOS:
+            if (uiData == DONE)
+                DoUseDoorOrButton(m_uiDoorArugalGUID);
+            m_auiEncounter[3] = uiData;
+            break;
+        case TYPE_INTRO:
+            m_auiEncounter[4] = uiData;
+            break;
+        case TYPE_VOIDWALKER:
+            if (uiData == DONE)
+            {
+                m_auiEncounter[5]++;
+                if (m_auiEncounter[5] > 3)
+                    DoUseDoorOrButton(m_uiDoorSorcererGUID);
+            }
+            break;
         }
 
         if (uiData == DONE)
@@ -286,8 +282,7 @@ struct instance_shadowfang_keep : public ScriptedInstance
             OUT_SAVE_INST_DATA;
 
             std::ostringstream saveStream;
-            saveStream << m_auiEncounter[0] << " " << m_auiEncounter[1] << " " << m_auiEncounter[2] << " " << m_auiEncounter[3]
-                       << " " << m_auiEncounter[4] << " " << m_auiEncounter[5];
+            saveStream << m_auiEncounter[0] << " " << m_auiEncounter[1] << " " << m_auiEncounter[2] << " " << m_auiEncounter[3] << " " << m_auiEncounter[4] << " " << m_auiEncounter[5];
 
             strInstData = saveStream.str();
 
@@ -300,26 +295,23 @@ struct instance_shadowfang_keep : public ScriptedInstance
     {
         switch (uiType)
         {
-            case TYPE_FREE_NPC:
-                return m_auiEncounter[0];
-            case TYPE_RETHILGORE:
-                return m_auiEncounter[1];
-            case TYPE_FENRUS:
-                return m_auiEncounter[2];
-            case TYPE_NANDOS:
-                return m_auiEncounter[3];
-            case TYPE_INTRO:
-                return m_auiEncounter[4];
-            default:
-                break;
+        case TYPE_FREE_NPC:
+            return m_auiEncounter[0];
+        case TYPE_RETHILGORE:
+            return m_auiEncounter[1];
+        case TYPE_FENRUS:
+            return m_auiEncounter[2];
+        case TYPE_NANDOS:
+            return m_auiEncounter[3];
+        case TYPE_INTRO:
+            return m_auiEncounter[4];
+        default:
+            break;
         }
         return 0;
     }
 
-    char const* Save() override
-    {
-        return strInstData.c_str();
-    }
+    char const* Save() override { return strInstData.c_str(); }
 
     void Load(char const* chrIn) override
     {
@@ -332,10 +324,9 @@ struct instance_shadowfang_keep : public ScriptedInstance
         OUT_LOAD_INST_DATA(chrIn);
 
         std::istringstream loadStream(chrIn);
-        loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2] >> m_auiEncounter[3]
-                   >> m_auiEncounter[4] >> m_auiEncounter[5];
+        loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2] >> m_auiEncounter[3] >> m_auiEncounter[4] >> m_auiEncounter[5];
 
-        for (uint32 & i : m_auiEncounter)
+        for (uint32& i : m_auiEncounter)
         {
             if (i == IN_PROGRESS)
                 i = NOT_STARTED;
@@ -345,10 +336,7 @@ struct instance_shadowfang_keep : public ScriptedInstance
     }
 };
 
-InstanceData* GetInstanceData_instance_shadowfang_keep(Map* pMap)
-{
-    return new instance_shadowfang_keep(pMap);
-}
+InstanceData* GetInstanceData_instance_shadowfang_keep(Map* pMap) { return new instance_shadowfang_keep(pMap); }
 
 // 7057 - Haunting Spirits
 struct HauntingSpiritsScript : public AuraScript
@@ -368,10 +356,7 @@ struct HauntingSpiritsScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_HauntingSpirits(SpellEntry const*)
-{
-    return new HauntingSpiritsScript();
-}
+AuraScript* GetScript_HauntingSpirits(SpellEntry const*) { return new HauntingSpiritsScript(); }
 
 void AddSC_instance_shadowfang_keep()
 {

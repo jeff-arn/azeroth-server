@@ -23,18 +23,18 @@
     \ingroup realmd
 */
 
-#include "Common.h"
 #include "RealmList.h"
 #include "AuthCodes.h"
-#include "Util.h"                                           // for Tokens typedef
-#include "Log.h"
-#include "Errors.h"
-#include "Policies/SingletonImp.h"
+#include "Common.h"
 #include "Database/DatabaseEnv.h"
+#include "Errors.h"
 #include "IO/Networking/DNS.h"
 #include "IO/Networking/Utils.h"
+#include "Log.h"
+#include "Policies/SingletonImp.h"
+#include "Util.h" // for Tokens typedef
 
-INSTANTIATE_SINGLETON_1( RealmList );
+INSTANTIATE_SINGLETON_1(RealmList);
 
 // list sorted from high to low build and first build used as low bound for accepted by default range (any > it will accepted by realmd at least)
 std::vector<RealmBuildInfo> ExpectedRealmdClientBuilds;
@@ -67,12 +67,11 @@ RealmBuildInfo const* FindBuildInfo(uint16 build)
     return nullptr;
 }
 
-static uint8 const RealmCategoryIdsByRealmZoneByMajorVersion[4][MAX_REALM_ZONES] =
-{
-    { 0, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1 }, // 0 - Alpha
-    { 0, 1, 1, 5, 1, 1, 1, 1, 1, 2,  3,  5,  1,  1,  1,  1,  1,  1,  1,  2,  1,  1,  1,  3,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1 }, // 1 - Classic
-    { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,  0,  0,  0,  0,  0,  0,  0 }, // 2 - TBC
-    { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37 }  // 3 - WotLK
+static uint8 const RealmCategoryIdsByRealmZoneByMajorVersion[4][MAX_REALM_ZONES] = {
+    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, // 0 - Alpha
+    {0, 1, 1, 5, 1, 1, 1, 1, 1, 2, 3, 5, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, // 1 - Classic
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 0, 0, 0, 0, 0, 0, 0}, // 2 - TBC
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37} // 3 - WotLK
 };
 
 uint8 GetRealmCategoryIdByBuildAndZone(uint16 build, RealmZone realmZone)
@@ -88,9 +87,7 @@ uint8 GetRealmCategoryIdByBuildAndZone(uint16 build, RealmZone realmZone)
     return realmZone;
 }
 
-RealmList::RealmList( ) : m_UpdateInterval(0), m_NextUpdateTime(time(nullptr))
-{
-}
+RealmList::RealmList() : m_UpdateInterval(0), m_NextUpdateTime(time(nullptr)) {}
 
 RealmList& sRealmList
 {
@@ -114,12 +111,12 @@ void RealmList::UpdateRealm(uint32 realmId, std::string const& name, IO::Network
     // Create new if not exist or update existed
     Realm& realm = m_realms[name];
 
-    realm.id         = realmId;
-    realm.icon       = icon;
+    realm.id = realmId;
+    realm.icon = icon;
     realm.realmFlags = realmFlags;
-    realm.timeZone   = timeZone;
+    realm.timeZone = timeZone;
     realm.allowedSecurityLevel = allowedSecurityLevel;
-    realm.populationLevel      = population;
+    realm.populationLevel = population;
 
     Tokens tokens = StrSplit(builds, " ");
     Tokens::iterator iter;
@@ -151,7 +148,7 @@ void RealmList::UpdateRealm(uint32 realmId, std::string const& name, IO::Network
 void RealmList::UpdateIfNeed()
 {
     // maybe disabled or updated recently
-    if(!m_UpdateInterval || m_NextUpdateTime > time(nullptr))
+    if (!m_UpdateInterval || m_NextUpdateTime > time(nullptr))
         return;
 
     m_NextUpdateTime = time(nullptr) + m_UpdateInterval;
@@ -175,11 +172,11 @@ void RealmList::UpdateRealms(bool init)
         "WHERE (`realmflags` & 1) = 0 ORDER BY `name`");
 
     // Circle through results and add them to the realm map
-    if(result)
+    if (result)
     {
         do
         {
-            Field *fields = result->Fetch();
+            Field* fields = result->Fetch();
 
             uint32 realmId = fields[0].GetUInt32();
             std::string name = fields[1].GetCppString();
@@ -195,10 +192,10 @@ void RealmList::UpdateRealms(bool init)
             float population = fields[10].GetFloat();
             std::string realmBuilds = fields[11].GetCppString();
 
-            if (realmflags & ~(REALM_FLAG_OFFLINE|REALM_FLAG_NEW_PLAYERS|REALM_FLAG_RECOMMENDED|REALM_FLAG_SPECIFYBUILD))
+            if (realmflags & ~(REALM_FLAG_OFFLINE | REALM_FLAG_NEW_PLAYERS | REALM_FLAG_RECOMMENDED | REALM_FLAG_SPECIFYBUILD))
             {
                 sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Realm allowed have only OFFLINE Mask 0x2), or NEWPLAYERS (mask 0x20), or RECOMENDED (mask 0x40), or SPECIFICBUILD (mask 0x04) flags in DB");
-                realmflags &= (REALM_FLAG_OFFLINE|REALM_FLAG_NEW_PLAYERS|REALM_FLAG_RECOMMENDED|REALM_FLAG_SPECIFYBUILD);
+                realmflags &= (REALM_FLAG_OFFLINE | REALM_FLAG_NEW_PLAYERS | REALM_FLAG_RECOMMENDED | REALM_FLAG_SPECIFYBUILD);
             }
 
             auto externalIpAddress = IO::Networking::DNS::ResolveDomainSingle(externalAddressString, IO::Networking::IpAddress::Type::IPv4);
@@ -238,14 +235,12 @@ void RealmList::UpdateRealms(bool init)
                 }
             }
 
-            UpdateRealm(
-                realmId, name, *externalIpAddress, *localIpAddress, localSubnetMaskCidr, port, icon, RealmFlags(realmflags), timezone,
-                (allowedSecurityLevel <= SEC_ADMINISTRATOR ? AccountTypes(allowedSecurityLevel) : SEC_ADMINISTRATOR),
-                population, realmBuilds);
+            UpdateRealm(realmId, name, *externalIpAddress, *localIpAddress, localSubnetMaskCidr, port, icon, RealmFlags(realmflags), timezone, (allowedSecurityLevel <= SEC_ADMINISTRATOR ? AccountTypes(allowedSecurityLevel) : SEC_ADMINISTRATOR), population, realmBuilds);
 
-            if(init)
+            if (init)
                 sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Added realm \"%s\"", fields[1].GetString());
-        } while( result->NextRow() );
+        }
+        while (result->NextRow());
     }
 }
 
@@ -262,7 +257,7 @@ void RealmList::LoadAllowedClients()
     {
         do
         {
-            Field *fields = result->Fetch();
+            Field* fields = result->Fetch();
 
             RealmBuildInfo buildInfo;
             buildInfo.majorVersion = fields[0].GetUInt8();
@@ -282,8 +277,8 @@ void RealmList::LoadAllowedClients()
             }
 
             ExpectedRealmdClientBuilds.push_back(buildInfo);
-
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 }
 
@@ -294,7 +289,5 @@ IO::Networking::IpEndpoint Realm::GetAddressForClient(IO::Networking::IpAddress 
 
     // Check if user connected with an IpAddress that is in the same subnet as the localAddress of the realm
     bool clientHasAccessToLocalSubnet = IO::Networking::IsInSameSubnet(clientAddr, localAddress.ip, localSubnetMaskCidr);
-    return clientHasAccessToLocalSubnet
-           ? localAddress
-           : externalAddress;
+    return clientHasAccessToLocalSubnet ? localAddress : externalAddress;
 }

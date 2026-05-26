@@ -42,36 +42,35 @@ enum ePetSelectTargetReason : uint8
 
 class PetAI : public CreatureAI
 {
-    public:
+public:
+    explicit PetAI(Creature* c);
 
-        explicit PetAI(Creature* c);
+    void MoveInLineOfSight(Unit*) final;
+    void EnterEvadeMode() {}
 
-        void MoveInLineOfSight(Unit*) final;
-        void EnterEvadeMode() {}
+    void KilledUnit(Unit* /*victim*/);
+    void AttackStart(Unit* target);
+    void MovementInform(uint32 moveType, uint32 data);
+    void OwnerAttackedBy(Unit* attacker);
+    void OwnerAttacked(Unit* target);
+    void AttackedBy(Unit* attacker);
 
-        void KilledUnit(Unit* /*victim*/);
-        void AttackStart(Unit* target);
-        void MovementInform(uint32 moveType, uint32 data);
-        void OwnerAttackedBy(Unit* attacker);
-        void OwnerAttacked(Unit* target);
-        void AttackedBy(Unit* attacker);
+    void UpdateAI(uint32 const);
+    static int Permissible(Creature const*);
 
-        void UpdateAI(uint32 const);
-        static int Permissible(Creature const*);
+private:
+    bool _needToStop() const;
+    void _stopAttack();
 
-    private:
-        bool _needToStop() const;
-        void _stopAttack();
+    void UpdateAllies();
 
-        void UpdateAllies();
+    uint32 m_updateAlliesTimer;
+    std::set<uint64> m_AllySet;
 
-        uint32 m_updateAlliesTimer;
-        std::set<uint64> m_AllySet;
-
-        std::pair<Unit*, ePetSelectTargetReason> SelectNextTarget() const;
-        void HandleReturnMovement();
-        void DoAttack(Unit* target, bool chase);
-        bool CanAttack(Unit* target);
-        void ClearCharmInfoFlags();
+    std::pair<Unit*, ePetSelectTargetReason> SelectNextTarget() const;
+    void HandleReturnMovement();
+    void DoAttack(Unit* target, bool chase);
+    bool CanAttack(Unit* target);
+    void ClearCharmInfoFlags();
 };
 #endif

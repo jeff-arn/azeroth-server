@@ -18,8 +18,8 @@
 #define _SNIFF_FILE_H
 
 #include "Common.h"
-#include "WorldPacket.h"
 #include "Timer.h"
+#include "WorldPacket.h"
 
 struct LoggedPacket
 {
@@ -41,19 +41,17 @@ public:
     ~SniffFile();
 
     void WriteHeader();
-    void WritePacket(LoggedPacket const& packet)
-    {
-        WritePacket(packet.data, packet.isClientPacket, packet.timestamp);
-    }
+    void WritePacket(LoggedPacket const& packet) { WritePacket(packet.data, packet.isClientPacket, packet.timestamp); }
     void WritePacket(WorldPacket const& packet, bool isClientPacket, time_t timestamp);
 
-    template < template < class ... > class Container, class ... Args >
+    template <template <class...> class Container, class... Args>
     void WriteToFile(Container<LoggedPacket, Args...> const& container)
     {
         WriteHeader();
         for (auto const itr : container)
             WritePacket(itr);
     }
+
 private:
     FILE* m_file;
 };

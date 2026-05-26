@@ -1,24 +1,20 @@
 #include "PlayerBroadcaster.h"
 
 #include "MovementBroadcaster.h"
+#include "Player.h"
 #include "WorldPacket.h"
 #include "WorldSocket.h"
-#include "Player.h"
 
 uint32 PlayerBroadcaster::num_bcaster_created = 0;
 uint32 PlayerBroadcaster::num_bcaster_deleted = 0;
 
-PlayerBroadcaster::PlayerBroadcaster(std::shared_ptr<WorldSocket> socket, ObjectGuid const& self, std::size_t max_queue)
-    : MAX_QUEUE_SIZE(max_queue), m_socket(std::move(socket)), m_self(self), instanceId(0), lastUpdatePackets(0)
+PlayerBroadcaster::PlayerBroadcaster(std::shared_ptr<WorldSocket> socket, ObjectGuid const& self, std::size_t max_queue) : MAX_QUEUE_SIZE(max_queue), m_socket(std::move(socket)), m_self(self), instanceId(0), lastUpdatePackets(0)
 {
     m_queue.reserve(max_queue);
     ++num_bcaster_created;
 }
 
-void PlayerBroadcaster::ChangeSocket(std::shared_ptr<WorldSocket> const& new_socket)
-{
-    m_socket = new_socket;
-}
+void PlayerBroadcaster::ChangeSocket(std::shared_ptr<WorldSocket> const& new_socket) { m_socket = new_socket; }
 
 void PlayerBroadcaster::AddListener(Player const* player)
 {
@@ -104,10 +100,7 @@ void PlayerBroadcaster::QueuePacket(WorldPacket packet, bool self, ObjectGuid ex
     guard.unlock();
 }
 
-ObjectGuid PlayerBroadcaster::GetGUID() const
-{
-    return m_self;
-}
+ObjectGuid PlayerBroadcaster::GetGUID() const { return m_self; }
 
 void PlayerBroadcaster::FreeAtLogout()
 {

@@ -30,8 +30,8 @@ go_bells
 go_darkmoon_faire_music
 EndContentData */
 
-#include "scriptPCH.h"
 #include "Utilities/EventMap.h"
+#include "scriptPCH.h"
 
 /*######
 ## go_cat_figurine
@@ -39,7 +39,7 @@ EndContentData */
 
 enum
 {
-    SPELL_SUMMON_GHOST_SABER    = 5968,
+    SPELL_SUMMON_GHOST_SABER = 5968,
 };
 
 bool GOHello_go_cat_figurine(Player* pPlayer, GameObject* pGo)
@@ -66,7 +66,7 @@ bool GOHello_go_field_repair_bot_74A(Player* pPlayer, GameObject* pGo)
 
 enum
 {
-    NPC_GOGGEROC    = 11920
+    NPC_GOGGEROC = 11920
 };
 
 bool GOHello_go_resonite_cask(Player* pPlayer, GameObject* pGO)
@@ -86,9 +86,7 @@ bool GOHello_go_silithyste(Player* pPlayer, GameObject* pGo)
 
     pPlayer->CastSpell(pPlayer, 29519, true);
 
-    sLog.Out(LOG_BG, LOG_LVL_DETAIL, "%s [%u:%u:'%s'] reprend une Silithyst d'un monticule",
-             pPlayer->GetName(),
-             pPlayer->GetGUIDLow(), pPlayer->GetSession()->GetAccountId(), pPlayer->GetSession()->GetRemoteAddress().c_str());
+    sLog.Out(LOG_BG, LOG_LVL_DETAIL, "%s [%u:%u:'%s'] reprend une Silithyst d'un monticule", pPlayer->GetName(), pPlayer->GetGUIDLow(), pPlayer->GetSession()->GetAccountId(), pPlayer->GetSession()->GetRemoteAddress().c_str());
 
 
     // On despawn seulement ceux qui sont la temporairement (Blizzlike ?)
@@ -108,31 +106,31 @@ bool GOHello_go_silithyste(Player* pPlayer, GameObject* pGo)
 
 enum BellHourlySoundFX
 {
-    BELLTOLLHORDE      = 6595, // Undercity
-    BELLTOLLTRIBAL     = 6675, // Orgrimma/Thunderbluff
-    BELLTOLLALLIANCE   = 6594, // Stormwind
-    BELLTOLLNIGHTELF   = 6674, // Darnassus
+    BELLTOLLHORDE = 6595, // Undercity
+    BELLTOLLTRIBAL = 6675, // Orgrimma/Thunderbluff
+    BELLTOLLALLIANCE = 6594, // Stormwind
+    BELLTOLLNIGHTELF = 6674, // Darnassus
     BELLTOLLDWARFGNOME = 7234, // Ironforge
-    LIGHTHOUSEFOGHORN  = 7197  // Lighthouses
+    LIGHTHOUSEFOGHORN = 7197 // Lighthouses
 };
 
 enum BellHourlySoundZones
 {
-    TIRISFAL_ZONE            = 85,
-    UNDERCITY_ZONE           = 1497,
+    TIRISFAL_ZONE = 85,
+    UNDERCITY_ZONE = 1497,
     HILLSBRAD_FOOTHILLS_ZONE = 267,
-    DUSKWOOD_ZONE            = 10,
-    DUN_MOROGH_ZONE          = 1,
-    IRONFORGE_ZONE           = 1537,
-    TELDRASSIL_ZONE          = 141,
-    DARNASSUS_ZONE           = 1657,
-    ASHENVALE_ZONE           = 331
+    DUSKWOOD_ZONE = 10,
+    DUN_MOROGH_ZONE = 1,
+    IRONFORGE_ZONE = 1537,
+    TELDRASSIL_ZONE = 141,
+    DARNASSUS_ZONE = 1657,
+    ASHENVALE_ZONE = 331
 };
 
 enum LightHouseAreas
 {
-    AREA_THERAMORE           = 513,
-    AREA_ALCAZ_ISLAND        = 2079,
+    AREA_THERAMORE = 513,
+    AREA_ALCAZ_ISLAND = 2079,
     AREA_WESTFALL_LIGHTHOUSE = 115
 };
 
@@ -158,23 +156,23 @@ struct go_bells : public GameObjectAI
         uint32 zoneId = me->GetZoneId();
         switch (me->GetEntry())
         {
-            case GO_HORDE_BELL:
+        case GO_HORDE_BELL:
             {
                 switch (zoneId)
                 {
-                    case TIRISFAL_ZONE:
-                    case UNDERCITY_ZONE:
-                    case HILLSBRAD_FOOTHILLS_ZONE:
-                    case DUSKWOOD_ZONE:
-                         _soundId = BELLTOLLHORDE;  // undead bell sound 
-                         break;
-                    default:
-                        _soundId = BELLTOLLTRIBAL; // drum sound
-                        break;
+                case TIRISFAL_ZONE:
+                case UNDERCITY_ZONE:
+                case HILLSBRAD_FOOTHILLS_ZONE:
+                case DUSKWOOD_ZONE:
+                    _soundId = BELLTOLLHORDE; // undead bell sound
+                    break;
+                default:
+                    _soundId = BELLTOLLTRIBAL; // drum sound
+                    break;
                 }
-            break;
+                break;
             }
-            case GO_ALLIANCE_BELL:
+        case GO_ALLIANCE_BELL:
             {
                 if (isLightHouseObject())
                 {
@@ -184,20 +182,20 @@ struct go_bells : public GameObjectAI
 
                 switch (zoneId)
                 {
-                    case IRONFORGE_ZONE:
-                    case DUN_MOROGH_ZONE:
-                        _soundId = BELLTOLLDWARFGNOME; // horn sound
-                        break;
-                    case TELDRASSIL_ZONE:
-                    case DARNASSUS_ZONE:
-                    case ASHENVALE_ZONE:
-                        _soundId = BELLTOLLNIGHTELF;   // nightelf bell sound 
-                        break;
-                    default:
-                        _soundId = BELLTOLLALLIANCE;   // human bell sound
-                        break;
+                case IRONFORGE_ZONE:
+                case DUN_MOROGH_ZONE:
+                    _soundId = BELLTOLLDWARFGNOME; // horn sound
+                    break;
+                case TELDRASSIL_ZONE:
+                case DARNASSUS_ZONE:
+                case ASHENVALE_ZONE:
+                    _soundId = BELLTOLLNIGHTELF; // nightelf bell sound
+                    break;
+                default:
+                    _soundId = BELLTOLLALLIANCE; // human bell sound
+                    break;
                 }
-            break;
+                break;
             }
         default:
             sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "go_bells() called with invalid object, ID: %u", me->GetEntry());
@@ -208,14 +206,14 @@ struct go_bells : public GameObjectAI
     {
         switch (me->GetAreaId())
         {
-            case AREA_THERAMORE:
+        case AREA_THERAMORE:
             {
                 // Area is not precise enough here, since there also is an alliance bell spawn
                 // in the same area. Check if location is close to lighthouse:
                 return me->GetDistance(-3667.0f, -4754.0f, 1.8f) < 1;
             }
-            case AREA_ALCAZ_ISLAND:
-            case AREA_WESTFALL_LIGHTHOUSE:
+        case AREA_ALCAZ_ISLAND:
+        case AREA_WESTFALL_LIGHTHOUSE:
             {
                 return true;
             }
@@ -238,12 +236,12 @@ struct go_bells : public GameObjectAI
         {
             switch (eventId)
             {
-                case EVENT_TIME:
+            case EVENT_TIME:
                 {
                     // Get how many times it should ring
                     time_t rawtime;
                     time(&rawtime);
-                    struct tm * timeinfo = localtime(&rawtime);
+                    struct tm* timeinfo = localtime(&rawtime);
                     uint8 _rings = (timeinfo->tm_hour) % 12;
                     _rings = (_rings == 0) ? 12 : _rings; // 00:00 and 12:00
 
@@ -262,24 +260,22 @@ struct go_bells : public GameObjectAI
 
                     break;
                 }
-                case EVENT_RING_BELL:
-                    me->PlayDirectSound(_soundId);
-                    break;
-                default:
-                    break;
+            case EVENT_RING_BELL:
+                me->PlayDirectSound(_soundId);
+                break;
+            default:
+                break;
             }
         }
     }
+
 private:
     EventMap m_events;
     uint32 _soundId;
     bool once;
 };
 
-GameObjectAI* GetAI_go_bells(GameObject* gameobject)
-{
-    return new go_bells(gameobject);
-}
+GameObjectAI* GetAI_go_bells(GameObject* gameobject) { return new go_bells(gameobject); }
 
 /*####
 ## go_darkmoon_faire_music
@@ -299,10 +295,7 @@ enum DarkmoonFaireMusicEvents
 
 struct go_darkmoon_faire_music : public GameObjectAI
 {
-    go_darkmoon_faire_music(GameObject* gobj) : GameObjectAI(gobj)
-    {
-        m_events.ScheduleEvent(EVENT_DFM_START_MUSIC, Seconds(1));
-    }
+    go_darkmoon_faire_music(GameObject* gobj) : GameObjectAI(gobj) { m_events.ScheduleEvent(EVENT_DFM_START_MUSIC, Seconds(1)); }
 
     void UpdateAI(uint32 const diff) override
     {
@@ -311,25 +304,23 @@ struct go_darkmoon_faire_music : public GameObjectAI
         {
             switch (eventId)
             {
-                case EVENT_DFM_START_MUSIC:
-                    if (sGameEventMgr.IsActiveEvent(GAME_EVENT_DARKMOON_FAIRE_ELWYNN) || sGameEventMgr.IsActiveEvent(GAME_EVENT_DARKMOON_FAIRE_THUNDER))
-                        me->PlayDirectMusic(MUSIC_DARKMOON_FAIRE_MUSIC);
+            case EVENT_DFM_START_MUSIC:
+                if (sGameEventMgr.IsActiveEvent(GAME_EVENT_DARKMOON_FAIRE_ELWYNN) || sGameEventMgr.IsActiveEvent(GAME_EVENT_DARKMOON_FAIRE_THUNDER))
+                    me->PlayDirectMusic(MUSIC_DARKMOON_FAIRE_MUSIC);
 
-                    m_events.ScheduleEvent(EVENT_DFM_START_MUSIC, Seconds(5));  // Every 5 second's SMSG_PLAY_MUSIC packet (PlayDirectMusic) is pushed to the client (sniffed value)
-                    break;
-                default:
-                    break;
+                m_events.ScheduleEvent(EVENT_DFM_START_MUSIC, Seconds(5)); // Every 5 second's SMSG_PLAY_MUSIC packet (PlayDirectMusic) is pushed to the client (sniffed value)
+                break;
+            default:
+                break;
             }
         }
     }
+
 private:
     EventMap m_events;
 };
 
-GameObjectAI* GetAI_go_darkmoon_faire_music(GameObject* gameobject)
-{
-    return new go_darkmoon_faire_music(gameobject);
-}
+GameObjectAI* GetAI_go_darkmoon_faire_music(GameObject* gameobject) { return new go_darkmoon_faire_music(gameobject); }
 
 /*####
 ## go_firework_rocket
@@ -344,10 +335,7 @@ struct go_firework_rocket : public GameObjectAI
 {
     // In videos and sniffs, rockets are triggered immediately .
     // Without this code it takes forever (like 5 seconds) in vmangos for some reason.
-    go_firework_rocket(GameObject* gobj) : GameObjectAI(gobj)
-    {
-        m_events.ScheduleEvent(EVENT_ROCKET_DESPAWN, Seconds(0));
-    }
+    go_firework_rocket(GameObject* gobj) : GameObjectAI(gobj) { m_events.ScheduleEvent(EVENT_ROCKET_DESPAWN, Seconds(0)); }
 
     void UpdateAI(uint32 const diff) override
     {
@@ -359,24 +347,22 @@ struct go_firework_rocket : public GameObjectAI
         {
             switch (eventId)
             {
-                case EVENT_ROCKET_DESPAWN:
+            case EVENT_ROCKET_DESPAWN:
                 {
                     me->Despawn();
                     break;
                 }
-                default:
-                    break;
+            default:
+                break;
             }
         }
     }
+
 private:
     EventMap m_events;
 };
 
-GameObjectAI* GetAI_go_firework_rocket(GameObject* gameobject)
-{
-    return new go_firework_rocket(gameobject);
-}
+GameObjectAI* GetAI_go_firework_rocket(GameObject* gameobject) { return new go_firework_rocket(gameobject); }
 
 /*####
 ## go_lunar_festival_firecracker
@@ -392,7 +378,7 @@ struct go_lunar_festival_firecracker : public GameObjectAI
     go_lunar_festival_firecracker(GameObject* gobj) : GameObjectAI(gobj)
     {
         if (me->GetEntry() == 180763 || me->GetEntry() == 180764)
-            m_events.ScheduleEvent(EVENT_FIRECRACKER_DESPAWN, Seconds(urand(30,60)));
+            m_events.ScheduleEvent(EVENT_FIRECRACKER_DESPAWN, Seconds(urand(30, 60)));
     }
 
     bool OnUse(Unit* /*user*/) override
@@ -411,7 +397,7 @@ struct go_lunar_festival_firecracker : public GameObjectAI
         {
             switch (eventId)
             {
-                case EVENT_FIRECRACKER_DESPAWN:    
+            case EVENT_FIRECRACKER_DESPAWN:
                 {
                     me->Despawn();
                     uint32 respawnTime = me->GetRespawnDelay();
@@ -422,19 +408,17 @@ struct go_lunar_festival_firecracker : public GameObjectAI
                     me->UpdateObjectVisibility();
                     break;
                 }
-                default:
-                    break;
+            default:
+                break;
             }
         }
     }
+
 private:
     EventMap m_events;
 };
 
-GameObjectAI* GetAI_go_lunar_festival_firecracker(GameObject* gameobject)
-{
-    return new go_lunar_festival_firecracker(gameobject);
-}
+GameObjectAI* GetAI_go_lunar_festival_firecracker(GameObject* gameobject) { return new go_lunar_festival_firecracker(gameobject); }
 
 /*####
 ## go_containment_coffer
@@ -442,10 +426,7 @@ GameObjectAI* GetAI_go_lunar_festival_firecracker(GameObject* gameobject)
 
 struct go_containment_coffer : public GameObjectAI
 {
-    go_containment_coffer(GameObject* gobj) : GameObjectAI(gobj)
-    {
-        m_despawnTimer = 20000;
-    }
+    go_containment_coffer(GameObject* gobj) : GameObjectAI(gobj) { m_despawnTimer = 20000; }
 
     uint32 m_despawnTimer;
 
@@ -464,10 +445,7 @@ struct go_containment_coffer : public GameObjectAI
     }
 };
 
-GameObjectAI* GetAI_go_containment_coffer(GameObject* gameobject)
-{
-    return new go_containment_coffer(gameobject);
-}
+GameObjectAI* GetAI_go_containment_coffer(GameObject* gameobject) { return new go_containment_coffer(gameobject); }
 
 void AddSC_go_scripts()
 {

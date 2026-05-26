@@ -23,15 +23,15 @@
     \ingroup mangosd
 */
 
-#include "Common.h"
-#include "World.h"
 #include "WorldRunnable.h"
-#include "Timer.h"
-#include "ObjectAccessor.h"
-#include "MapManager.h"
 #include "BattleGroundMgr.h"
+#include "Common.h"
+#include "MapManager.h"
 #include "Master.h"
+#include "ObjectAccessor.h"
 #include "TimePeriod.h"
+#include "Timer.h"
+#include "World.h"
 
 #include "Database/DatabaseEnv.h"
 
@@ -47,7 +47,7 @@ extern volatile int m_ServiceStatus;
 void WorldRunnable::operator()()
 {
     // Init new SQL thread for the world database
-    WorldDatabase.ThreadStart();                                // let thread do safe mySQL requests (one connection call enough)
+    WorldDatabase.ThreadStart(); // let thread do safe mySQL requests (one connection call enough)
     sWorld.InitResultQueue();
 
     Master::ArmAnticrash();
@@ -108,10 +108,12 @@ void WorldRunnable::operator()()
         if (updateTime < WORLD_SLEEP_CONST)
             std::this_thread::sleep_for(std::chrono::milliseconds(WORLD_SLEEP_CONST - updateTime));
 
-        #ifdef WIN32
-            if (m_ServiceStatus == 0) World::StopNow(SHUTDOWN_EXIT_CODE);
-            while (m_ServiceStatus == 2) Sleep(1000);
-        #endif
+#ifdef WIN32
+        if (m_ServiceStatus == 0)
+            World::StopNow(SHUTDOWN_EXIT_CODE);
+        while (m_ServiceStatus == 2)
+            Sleep(1000);
+#endif
     }
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Shutting down world...");
@@ -121,8 +123,8 @@ void WorldRunnable::operator()()
     sBattleGroundMgr.DeleteAllBattleGrounds();
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Unloading all maps...");
-    sMapMgr.UnloadAll();                                    // unload all grids (including locked in memory)
+    sMapMgr.UnloadAll(); // unload all grids (including locked in memory)
 
     // End the database thread
-    WorldDatabase.ThreadEnd();                              // free mySQL thread resources
+    WorldDatabase.ThreadEnd(); // free mySQL thread resources
 }

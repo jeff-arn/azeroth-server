@@ -14,28 +14,28 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "naxxramas.h"
+#include "scriptPCH.h"
 
 enum FaerlinaData
 {
-    SAY_PULL                    = 12856, // slay them in the masters name
-    SAY_ENRAGE1                 = 12857, // you cannot hide from me!
-    SAY_ENRAGE2                 = 12858, // kneel before me, worm!
-    SAY_ENRAGE3                 = 12859, // Run while you can!
-    SAY_SLAY1                   = 12854, // You have failed!
-    SAY_SLAY2                   = 12855, // Pathethic Wretch
-    SAY_DEATH                   = 12853, // the master... will avenge me!
+    SAY_PULL = 12856, // slay them in the masters name
+    SAY_ENRAGE1 = 12857, // you cannot hide from me!
+    SAY_ENRAGE2 = 12858, // kneel before me, worm!
+    SAY_ENRAGE3 = 12859, // Run while you can!
+    SAY_SLAY1 = 12854, // You have failed!
+    SAY_SLAY2 = 12855, // Pathethic Wretch
+    SAY_DEATH = 12853, // the master... will avenge me!
 
-    SPELL_POSIONBOLT_VOLLEY     = 28796,
-    SPELL_ENRAGE                = 28798, 
+    SPELL_POSIONBOLT_VOLLEY = 28796,
+    SPELL_ENRAGE = 28798,
 
-    SPELL_RAINOFFIRE            = 28794,    //Not sure if targeted AoEs work if casted directly upon a pPlayer
+    SPELL_RAINOFFIRE = 28794, // Not sure if targeted AoEs work if casted directly upon a pPlayer
 
-    SPELL_WIDOWS_EMBRACE        = 28732,    // Used by worshippers. ToDo: Spell does NOT add the attackspeed reduction, or is it just castspeed?
+    SPELL_WIDOWS_EMBRACE = 28732, // Used by worshippers. ToDo: Spell does NOT add the attackspeed reduction, or is it just castspeed?
 
-    MOB_FOLLOWER                = 16505,    // TODO: should aoe silence (small range, 8-10yd)
-    MOB_WORSHIPPER              = 16506
+    MOB_FOLLOWER = 16505, // TODO: should aoe silence (small range, 8-10yd)
+    MOB_WORSHIPPER = 16506
 };
 
 /*
@@ -78,19 +78,19 @@ struct boss_faerlinaAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiPoisonBoltVolleyTimer   = INITIAL_POISONBOLT_VOLLEY_CD;
-        m_uiRainOfFireTimer         = RAINOFFIRE_INITIAL_CD;
-        m_uiEnrageTimer             = 60000;
+        m_uiPoisonBoltVolleyTimer = INITIAL_POISONBOLT_VOLLEY_CD;
+        m_uiRainOfFireTimer = RAINOFFIRE_INITIAL_CD;
+        m_uiEnrageTimer = 60000;
     }
 
-    void SpellHit(SpellCaster* pCaster, SpellEntry const* pSpell) override 
+    void SpellHit(SpellCaster* pCaster, SpellEntry const* pSpell) override
     {
         /*
         note from wowhead:
         --
-        Note: You must sacrifice the worshiper AFTER she enrages if you want to stop her for the full 60 seconds. 
+        Note: You must sacrifice the worshiper AFTER she enrages if you want to stop her for the full 60 seconds.
         If you sacrifice the Worshiper before the enrage, it will merely delay the enrage for 30 seconds.
-        -- 
+        --
         Above note makes it seem that if she is not already enraged when widows embrace hits, we should do enrageTimer+=30000;
         while if she is enraged we set the timer to 60000 again.
         */
@@ -117,8 +117,10 @@ struct boss_faerlinaAI : public ScriptedAI
 
     void MoveInLineOfSight(Unit* pWho) override
     {
-        //todo aggro range
-        if (m_creature->IsWithinDistInMap(pWho, 60.0f)) { }
+        // todo aggro range
+        if (m_creature->IsWithinDistInMap(pWho, 60.0f))
+        {
+        }
 
         ScriptedAI::MoveInLineOfSight(pWho);
     }
@@ -157,7 +159,7 @@ struct boss_faerlinaAI : public ScriptedAI
             {
                 m_uiPoisonBoltVolleyTimer = 2500; // retrying in 2.5sec
             }
-            else 
+            else
             {
                 if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_POSIONBOLT_VOLLEY) == SpellCastResult::SPELL_CAST_OK)
                 {
@@ -182,7 +184,7 @@ struct boss_faerlinaAI : public ScriptedAI
         else
             m_uiRainOfFireTimer -= uiDiff;
 
-        //Enrage_Timer
+        // Enrage_Timer
         if (m_uiEnrageTimer < uiDiff)
         {
             // widows embrace can be used as a preventive method rather than dispelling method for the enrage as well,
@@ -204,24 +206,15 @@ struct boss_faerlinaAI : public ScriptedAI
 };
 
 
-CreatureAI* GetAI_boss_faerlina(Creature* pCreature)
-{
-    return new boss_faerlinaAI(pCreature);
-}
+CreatureAI* GetAI_boss_faerlina(Creature* pCreature) { return new boss_faerlinaAI(pCreature); }
 
 // 28796 - Poison Bolt Volley (Naxx, Faerlina)
 struct FaerlinaPoisonBoltVolleyScript : SpellScript
 {
-    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final
-    {
-        unMaxTargets = 10;
-    }
+    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final { unMaxTargets = 10; }
 };
 
-SpellScript* GetScript_FaerlinaPoisonBoltVolley(SpellEntry const*)
-{
-    return new FaerlinaPoisonBoltVolleyScript();
-}
+SpellScript* GetScript_FaerlinaPoisonBoltVolley(SpellEntry const*) { return new FaerlinaPoisonBoltVolleyScript(); }
 
 void AddSC_boss_faerlina()
 {

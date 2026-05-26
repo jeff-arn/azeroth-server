@@ -28,10 +28,7 @@ struct HeavyArmorKitScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_HeavyArmorKit(SpellEntry const*)
-{
-    return new HeavyArmorKitScript();
-}
+SpellScript* GetScript_HeavyArmorKit(SpellEntry const*) { return new HeavyArmorKitScript(); }
 
 // 8063 - Deviate Fish
 struct DeviateFishScript : public SpellScript
@@ -44,13 +41,12 @@ struct DeviateFishScript : public SpellScript
             if (!pPlayer)
                 return false;
 
-            uint32 randomSpellId = PickRandomValue(
-                8064u, // Sleepy
-                8065u, // Invigorate
-                8066u, // Shrink
-                8067u, // Party Time!
-                8068u, // Healthy Spirit
-                8070u  // Rejuvenation
+            uint32 randomSpellId = PickRandomValue(8064u, // Sleepy
+                                                   8065u, // Invigorate
+                                                   8066u, // Shrink
+                                                   8067u, // Party Time!
+                                                   8068u, // Healthy Spirit
+                                                   8070u // Rejuvenation
             );
 
             pPlayer->CastSpell(pPlayer, randomSpellId, true, nullptr);
@@ -59,10 +55,7 @@ struct DeviateFishScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_DeviateFish(SpellEntry const*)
-{
-    return new DeviateFishScript();
-}
+SpellScript* GetScript_DeviateFish(SpellEntry const*) { return new DeviateFishScript(); }
 
 // 8213 - Cooked Deviate Fish
 struct CookedDeviateFishScript : public SpellScript
@@ -82,7 +75,7 @@ struct CookedDeviateFishScript : public SpellScript
                 8223u, // Oops - goo
                 8215u, // Rapid Cast
                 8224u, // Cowardice
-                8226u  // Fake Death
+                8226u // Fake Death
             };
 
             // Had additional effects before BWL patch.
@@ -97,10 +90,7 @@ struct CookedDeviateFishScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_CookedDeviateFish(SpellEntry const*)
-{
-    return new CookedDeviateFishScript();
-}
+SpellScript* GetScript_CookedDeviateFish(SpellEntry const*) { return new CookedDeviateFishScript(); }
 
 // 16589 - Noggenfogger Elixir
 struct NoggenfoggerElixirScript : public SpellScript
@@ -117,14 +107,14 @@ struct NoggenfoggerElixirScript : public SpellScript
             uint32 randomSpellId = 16591; // skeleton (60%)
             switch (urand(1, 10))
             {
-                case 1:
-                case 2:
+            case 1:
+            case 2:
                 {
                     randomSpellId = 16595; // mini (20%)
                     break;
                 }
-                case 3:
-                case 4:
+            case 3:
+            case 4:
                 {
                     randomSpellId = 16593; // slow fall (20%)
                     break;
@@ -137,10 +127,7 @@ struct NoggenfoggerElixirScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_NoggenfoggerElixir(SpellEntry const*)
-{
-    return new NoggenfoggerElixirScript();
-}
+SpellScript* GetScript_NoggenfoggerElixir(SpellEntry const*) { return new NoggenfoggerElixirScript(); }
 
 // 15712 - Linken's Boomerang
 struct LinkensBoomerangScript : public SpellScript
@@ -162,10 +149,7 @@ struct LinkensBoomerangScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_LinkensBoomerang(SpellEntry const*)
-{
-    return new LinkensBoomerangScript();
-}
+SpellScript* GetScript_LinkensBoomerang(SpellEntry const*) { return new LinkensBoomerangScript(); }
 
 // 6410 - Food (Scorpid Surprise)
 struct ScorpidSurpriseScript : public SpellScript
@@ -183,10 +167,7 @@ struct ScorpidSurpriseScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_ScorpidSurprise(SpellEntry const*)
-{
-    return new ScorpidSurpriseScript();
-}
+SpellScript* GetScript_ScorpidSurprise(SpellEntry const*) { return new ScorpidSurpriseScript(); }
 
 // 29284 - Brittle Armor (Zandalarian Hero Badge)
 struct BrittleArmorDummyScript : public SpellScript
@@ -201,10 +182,7 @@ struct BrittleArmorDummyScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_BrittleArmorDummy(SpellEntry const*)
-{
-    return new BrittleArmorDummyScript();
-}
+SpellScript* GetScript_BrittleArmorDummy(SpellEntry const*) { return new BrittleArmorDummyScript(); }
 
 // 29286 - Mercurial Shield (Petrified Scarab)
 struct MercurialShieldDummyScript : public SpellScript
@@ -219,10 +197,7 @@ struct MercurialShieldDummyScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_MercurialShieldDummy(SpellEntry const*)
-{
-    return new MercurialShieldDummyScript();
-}
+SpellScript* GetScript_MercurialShieldDummy(SpellEntry const*) { return new MercurialShieldDummyScript(); }
 
 // 23442 - Everlook Transporter (Dimensional Ripper - Everlook)
 struct EverlookTransporterScript : public SpellScript
@@ -232,11 +207,11 @@ struct EverlookTransporterScript : public SpellScript
         if (effIdx == EFFECT_INDEX_0 && spell->m_casterUnit)
         {
             int32 r = irand(0, 119);
-            if (r >= 70)                                    // 7/12 success
+            if (r >= 70) // 7/12 success
             {
-                if (r < 100)                                // 4/12 evil twin
+                if (r < 100) // 4/12 evil twin
                     spell->m_casterUnit->CastSpell(spell->m_casterUnit, 23445, true);
-                else                                        // 1/12 fire
+                else // 1/12 fire
                     spell->m_casterUnit->CastSpell(spell->m_casterUnit, 23449, true);
             }
         }
@@ -244,10 +219,7 @@ struct EverlookTransporterScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_EverlookTransporter(SpellEntry const*)
-{
-    return new EverlookTransporterScript();
-}
+SpellScript* GetScript_EverlookTransporter(SpellEntry const*) { return new EverlookTransporterScript(); }
 
 enum
 {
@@ -266,19 +238,13 @@ struct GDRChannelScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_GDRChannel(SpellEntry const*)
-{
-    return new GDRChannelScript();
-}
+SpellScript* GetScript_GDRChannel(SpellEntry const*) { return new GDRChannelScript(); }
 
 struct GDRPeriodicDamageScript : public AuraScript
 {
     int32 dmg = 0;
 
-    int32 OnAuraValueCalculate(Aura* /*aura*/, Unit* /*caster*/, Unit* /*target*/, SpellEntry const* /*spellProto*/, SpellEffectIndex /*effIdx*/, Item* /*castItem*/, int32 /*value*/) final
-    {
-        return urand(100, 500);
-    }
+    int32 OnAuraValueCalculate(Aura* /*aura*/, Unit* /*caster*/, Unit* /*target*/, SpellEntry const* /*spellProto*/, SpellEffectIndex /*effIdx*/, Item* /*castItem*/, int32 /*value*/) final { return urand(100, 500); }
 
     void OnPeriodicCalculateAmount(Aura* aura, float& amount) final
     {
@@ -300,10 +266,7 @@ struct GDRPeriodicDamageScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_GDRPeriodicDamage(SpellEntry const*)
-{
-    return new GDRPeriodicDamageScript();
-}
+AuraScript* GetScript_GDRPeriodicDamage(SpellEntry const*) { return new GDRPeriodicDamageScript(); }
 
 // 4071 - Target Dummy
 // 4072 - Advanced Target Dummy
@@ -317,10 +280,7 @@ struct TargetDummyScript : SpellScript
     }
 };
 
-SpellScript* GetScript_TargetDummy(SpellEntry const*)
-{
-    return new TargetDummyScript();
-}
+SpellScript* GetScript_TargetDummy(SpellEntry const*) { return new TargetDummyScript(); }
 
 // 12766 - Poison Cloud (Chained Essence of Eranikus)
 struct ChainedEssenceOfEranikusScript : SpellScript
@@ -335,10 +295,7 @@ struct ChainedEssenceOfEranikusScript : SpellScript
     }
 };
 
-SpellScript* GetScript_ChainedEssenceOfEranikus(SpellEntry const*)
-{
-    return new ChainedEssenceOfEranikusScript();
-}
+SpellScript* GetScript_ChainedEssenceOfEranikus(SpellEntry const*) { return new ChainedEssenceOfEranikusScript(); }
 
 // 17166 - Release Umi's Yeti
 struct ReleaseUmisYetiScript : SpellScript
@@ -351,48 +308,45 @@ struct ReleaseUmisYetiScript : SpellScript
 
         switch (summon->GetAreaId())
         {
-            case 541: // Un'Goro Crater
-                if (Creature* pCreature = summon->FindNearestCreature(10977, 30.0f, true)) // NPC_QUIXXIL
-                {
-                    summon->GetMotionMaster()->MoveFollow(pCreature, 0.6f, M_PI_F);
-                    pCreature->MonsterSay(6314);
-                    pCreature->SetWalk(false);
-                    pCreature->GetMotionMaster()->MoveWaypoint(0, 0, 0, 0, 0, false);
-                }
-                break;
-            case 976: // Tanaris
-                if (Creature* pCreature = summon->FindNearestCreature(7583, 30.0f, true)) // NPC_SPRINKLE
-                {
-                    summon->GetMotionMaster()->MoveFollow(pCreature, 0.6f, M_PI_F);
-                    pCreature->MonsterTextEmote(6301);
-                    pCreature->SetWalk(false);
-                    pCreature->GetMotionMaster()->MoveWaypoint(0, 0, 0, 0, 0, false);
-                }
-                break;
-            case 2255: // Winterspring
-                if (Creature* pCreature = summon->FindNearestCreature(10978, 30.0f, true)) // NPC_LEGACKI
-                {
-                    summon->GetMotionMaster()->MoveFollow(pCreature, 0.6f, M_PI_F);
-                    pCreature->MonsterTextEmote(6306);
-                    pCreature->SetWalk(false);
-                    pCreature->GetMotionMaster()->MoveWaypoint(0, 0, 0, 0, 0, false);
-                }
-                break;
+        case 541: // Un'Goro Crater
+            if (Creature* pCreature = summon->FindNearestCreature(10977, 30.0f, true)) // NPC_QUIXXIL
+            {
+                summon->GetMotionMaster()->MoveFollow(pCreature, 0.6f, M_PI_F);
+                pCreature->MonsterSay(6314);
+                pCreature->SetWalk(false);
+                pCreature->GetMotionMaster()->MoveWaypoint(0, 0, 0, 0, 0, false);
+            }
+            break;
+        case 976: // Tanaris
+            if (Creature* pCreature = summon->FindNearestCreature(7583, 30.0f, true)) // NPC_SPRINKLE
+            {
+                summon->GetMotionMaster()->MoveFollow(pCreature, 0.6f, M_PI_F);
+                pCreature->MonsterTextEmote(6301);
+                pCreature->SetWalk(false);
+                pCreature->GetMotionMaster()->MoveWaypoint(0, 0, 0, 0, 0, false);
+            }
+            break;
+        case 2255: // Winterspring
+            if (Creature* pCreature = summon->FindNearestCreature(10978, 30.0f, true)) // NPC_LEGACKI
+            {
+                summon->GetMotionMaster()->MoveFollow(pCreature, 0.6f, M_PI_F);
+                pCreature->MonsterTextEmote(6306);
+                pCreature->SetWalk(false);
+                pCreature->GetMotionMaster()->MoveWaypoint(0, 0, 0, 0, 0, false);
+            }
+            break;
         }
     }
 };
 
-SpellScript* GetScript_ReleaseUmisYeti(SpellEntry const*)
-{
-    return new ReleaseUmisYetiScript();
-}
+SpellScript* GetScript_ReleaseUmisYeti(SpellEntry const*) { return new ReleaseUmisYetiScript(); }
 
 // 26391 - Tentacle Call (Vanquished Tentacle of C'Thun)
 struct VanquishedTentacleofCthunScript : SpellScript
 {
     void OnSummon(Spell* spell, Creature* summon) const final
     {
-        CharmInfo *charmInfo = summon->GetCharmInfo();
+        CharmInfo* charmInfo = summon->GetCharmInfo();
         charmInfo->SetIsAtStay(true);
         charmInfo->SetCommandState(COMMAND_STAY);
         charmInfo->SetIsCommandFollow(false);
@@ -400,10 +354,7 @@ struct VanquishedTentacleofCthunScript : SpellScript
     }
 };
 
-SpellScript* GetScript_VanquishedTentacleofCthun(SpellEntry const*)
-{
-    return new VanquishedTentacleofCthunScript();
-}
+SpellScript* GetScript_VanquishedTentacleofCthun(SpellEntry const*) { return new VanquishedTentacleofCthunScript(); }
 
 // 8342 - Defibrillate (Goblin Jumper Cables)
 struct GoblinJumperCablesScript : public SpellScript
@@ -424,10 +375,7 @@ struct GoblinJumperCablesScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_GoblinJumperCables(SpellEntry const*)
-{
-    return new GoblinJumperCablesScript();
-}
+SpellScript* GetScript_GoblinJumperCables(SpellEntry const*) { return new GoblinJumperCablesScript(); }
 
 // 22999 - Defibrillate (Goblin Jumper Cables XL)
 struct GoblinJumperCablesXLScript : public SpellScript
@@ -448,10 +396,7 @@ struct GoblinJumperCablesXLScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_GoblinJumperCablesXL(SpellEntry const*)
-{
-    return new GoblinJumperCablesXLScript();
-}
+SpellScript* GetScript_GoblinJumperCablesXL(SpellEntry const*) { return new GoblinJumperCablesXLScript(); }
 
 // 25860 - Reindeer Transformation (Fresh Holly, Preserved Holly)
 struct ReindeerTransformationScript : SpellScript
@@ -464,10 +409,7 @@ struct ReindeerTransformationScript : SpellScript
     }
 };
 
-SpellScript* GetScript_ReindeerTransformation(SpellEntry const*)
-{
-    return new ReindeerTransformationScript();
-}
+SpellScript* GetScript_ReindeerTransformation(SpellEntry const*) { return new ReindeerTransformationScript(); }
 
 // 25720 - Place Loot (Bag of Gold), Quest 8606 Decoy!
 struct BagOfGoldScript : SpellScript
@@ -481,10 +423,7 @@ struct BagOfGoldScript : SpellScript
     }
 };
 
-SpellScript* GetScript_BagOfGold(SpellEntry const*)
-{
-    return new BagOfGoldScript();
-}
+SpellScript* GetScript_BagOfGold(SpellEntry const*) { return new BagOfGoldScript(); }
 
 // 4067 - Big Bronze Bomb
 // 13237 - Goblin Mortar
@@ -497,10 +436,7 @@ struct InstantCastScript : SpellScript
     }
 };
 
-SpellScript* GetScript_InstantCast(SpellEntry const*)
-{
-    return new InstantCastScript();
-}
+SpellScript* GetScript_InstantCast(SpellEntry const*) { return new InstantCastScript(); }
 
 // 5166 - Harvest Silithid Egg (Digging Claw), Quest 868 Egg Hunt
 struct DiggingClawScript : public SpellScript
@@ -521,10 +457,7 @@ struct DiggingClawScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_DiggingClaw(SpellEntry const*)
-{
-    return new DiggingClawScript();
-}
+SpellScript* GetScript_DiggingClaw(SpellEntry const*) { return new DiggingClawScript(); }
 
 // 11759 - Basilisk Sample (Untested Basilisk Sample)
 // 11760 - Hyena Sample (Untested Hyena Sample)
@@ -540,17 +473,14 @@ struct TanarisFieldSamplingScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_TanarisFieldSampling(SpellEntry const*)
-{
-    return new TanarisFieldSamplingScript();
-}
+SpellScript* GetScript_TanarisFieldSampling(SpellEntry const*) { return new TanarisFieldSamplingScript(); }
 
 // 26374 - Elune's Candle
 struct ElunesCandleScript : public SpellScript
 {
     void OnCast(Spell* spell) const final
     {
-        static uint32 const OmenSpells[] = { 26622, 26623, 26624, 26625, 26649 };
+        static uint32 const OmenSpells[] = {26622, 26623, 26624, 26625, 26649};
 
         uint32 spellId = 26636;
 
@@ -569,10 +499,7 @@ struct ElunesCandleScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_ElunesCandle(SpellEntry const*)
-{
-    return new ElunesCandleScript();
-}
+SpellScript* GetScript_ElunesCandle(SpellEntry const*) { return new ElunesCandleScript(); }
 
 enum
 {
@@ -589,10 +516,7 @@ struct FirstAidScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_FirstAid(SpellEntry const*)
-{
-    return new FirstAidScript();
-}
+SpellScript* GetScript_FirstAid(SpellEntry const*) { return new FirstAidScript(); }
 
 enum
 {
@@ -609,10 +533,7 @@ struct WolfsheadHelmScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_WolfsheadHelm(SpellEntry const*)
-{
-    return new WolfsheadHelmScript();
-}
+SpellScript* GetScript_WolfsheadHelm(SpellEntry const*) { return new WolfsheadHelmScript(); }
 
 enum
 {
@@ -631,10 +552,7 @@ struct KodoKombobulatorScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_KodoKombobulator(SpellEntry const*)
-{
-    return new KodoKombobulatorScript();
-}
+SpellScript* GetScript_KodoKombobulator(SpellEntry const*) { return new KodoKombobulatorScript(); }
 
 enum
 {
@@ -653,10 +571,7 @@ struct MelodiusRaptureScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_MelodiusRapture(SpellEntry const*)
-{
-    return new MelodiusRaptureScript();
-}
+SpellScript* GetScript_MelodiusRapture(SpellEntry const*) { return new MelodiusRaptureScript(); }
 
 // 16072 - Purify and Place Food (Filled Cleansing Bowl)
 struct PurifyAndPlaceFoodScript : public SpellScript
@@ -671,10 +586,7 @@ struct PurifyAndPlaceFoodScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_PurifyAndPlaceFood(SpellEntry const*)
-{
-    return new PurifyAndPlaceFoodScript();
-}
+SpellScript* GetScript_PurifyAndPlaceFood(SpellEntry const*) { return new PurifyAndPlaceFoodScript(); }
 
 // 26656 - Summon Black Qiraji Battle Tank (Black Qiraji Resonating Crystal)
 struct SummonBlackQirajiBattleTankScript : public SpellScript
@@ -709,10 +621,7 @@ struct SummonBlackQirajiBattleTankScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_SummonBlackQirajiBattleTank(SpellEntry const*)
-{
-    return new SummonBlackQirajiBattleTankScript();
-}
+SpellScript* GetScript_SummonBlackQirajiBattleTank(SpellEntry const*) { return new SummonBlackQirajiBattleTankScript(); }
 
 // 4060 - Discombobulate (Discombobulator Ray)
 struct DiscombobulateAuraScript : public AuraScript
@@ -732,10 +641,7 @@ struct DiscombobulateAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_Discombobulate(SpellEntry const*)
-{
-    return new DiscombobulateAuraScript();
-}
+AuraScript* GetScript_Discombobulate(SpellEntry const*) { return new DiscombobulateAuraScript(); }
 
 // 28282 - Ashbringer
 struct AshbringerAuraScript : public AuraScript
@@ -768,10 +674,7 @@ struct AshbringerAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_Ashbringer(SpellEntry const*)
-{
-    return new AshbringerAuraScript();
-}
+AuraScript* GetScript_Ashbringer(SpellEntry const*) { return new AshbringerAuraScript(); }
 
 void AddSC_item_spell_scripts()
 {

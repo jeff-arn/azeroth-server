@@ -40,10 +40,7 @@ struct RogueEviscerateScript : SpellScript
     }
 };
 
-SpellScript* GetScript_RogueEviscerate(SpellEntry const*)
-{
-    return new RogueEviscerateScript();
-}
+SpellScript* GetScript_RogueEviscerate(SpellEntry const*) { return new RogueEviscerateScript(); }
 
 // 1856, 1857, 27617 - Vanish
 struct RogueVanishScript : SpellScript
@@ -66,16 +63,12 @@ struct RogueVanishScript : SpellScript
                 pPlayer->CastHighestStealthRank();
 
             return false;
-
         }
         return true;
     }
 };
 
-SpellScript* GetScript_RogueVanish(SpellEntry const*)
-{
-    return new RogueVanishScript();
-}
+SpellScript* GetScript_RogueVanish(SpellEntry const*) { return new RogueVanishScript(); }
 
 void AddSC_rogue_spell_scripts()
 {

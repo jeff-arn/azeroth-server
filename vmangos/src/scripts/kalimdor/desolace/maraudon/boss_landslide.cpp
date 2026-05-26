@@ -23,16 +23,13 @@ EndScriptData */
 
 #include "scriptPCH.h"
 
-#define SPELL_KNOCKAWAY         18670
-#define SPELL_TRAMPLE           5568
-#define SPELL_LANDSLIDE         21808
+#define SPELL_KNOCKAWAY 18670
+#define SPELL_TRAMPLE 5568
+#define SPELL_LANDSLIDE 21808
 
 struct boss_landslideAI : public ScriptedAI
 {
-    boss_landslideAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_landslideAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 KnockAway_Timer;
     uint32 Trample_Timer;
@@ -50,23 +47,25 @@ struct boss_landslideAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //KnockAway_Timer
+        // KnockAway_Timer
         if (KnockAway_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_KNOCKAWAY);
             KnockAway_Timer = 15000;
         }
-        else KnockAway_Timer -= diff;
+        else
+            KnockAway_Timer -= diff;
 
-        //Trample_Timer
+        // Trample_Timer
         if (Trample_Timer < diff)
         {
             DoCastSpellIfCan(m_creature, SPELL_TRAMPLE);
             Trample_Timer = 8000;
         }
-        else Trample_Timer -= diff;
+        else
+            Trample_Timer -= diff;
 
-        //Landslide
+        // Landslide
         if (m_creature->GetHealthPercent() < 50.0f)
         {
             if (Landslide_Timer < diff)
@@ -75,16 +74,14 @@ struct boss_landslideAI : public ScriptedAI
                 DoCastSpellIfCan(m_creature, SPELL_LANDSLIDE);
                 Landslide_Timer = 60000;
             }
-            else Landslide_Timer -= diff;
+            else
+                Landslide_Timer -= diff;
         }
 
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_landslide(Creature* pCreature)
-{
-    return new boss_landslideAI(pCreature);
-}
+CreatureAI* GetAI_boss_landslide(Creature* pCreature) { return new boss_landslideAI(pCreature); }
 
 void AddSC_boss_landslide()
 {

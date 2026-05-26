@@ -21,13 +21,13 @@ SDComment: Missing pre-event to open doors
 SDCategory: Blackrock Depths
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "blackrock_depths.h"
+#include "scriptPCH.h"
 
 enum
 {
-    SPELL_FIERYBURST        = 13900,
-    SPELL_WARSTOMP          = 24375
+    SPELL_FIERYBURST = 13900,
+    SPELL_WARSTOMP = 24375
 };
 
 struct boss_magmusAI : public ScriptedAI
@@ -60,7 +60,6 @@ struct boss_magmusAI : public ScriptedAI
         Engaged = true;
         if (m_pInstance)
             m_pInstance->SetData(TYPE_IRON_HALL, IN_PROGRESS);
-
     }
 
     void JustDied(Unit* pVictim) override
@@ -71,11 +70,11 @@ struct boss_magmusAI : public ScriptedAI
 
     void UpdateAI(uint32 const uiDiff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //FieryBurst_Timer
+        // FieryBurst_Timer
         if (m_uiFieryBurst_Timer < uiDiff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FIERYBURST);
@@ -84,7 +83,7 @@ struct boss_magmusAI : public ScriptedAI
         else
             m_uiFieryBurst_Timer -= uiDiff;
 
-        //WarStomp_Timer
+        // WarStomp_Timer
         if (m_creature->GetHealthPercent() < 51.0f)
         {
             if (m_uiWarStomp_Timer < uiDiff)
@@ -100,10 +99,7 @@ struct boss_magmusAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_magmus(Creature* pCreature)
-{
-    return new boss_magmusAI(pCreature);
-}
+CreatureAI* GetAI_boss_magmus(Creature* pCreature) { return new boss_magmusAI(pCreature); }
 
 void AddSC_boss_magmus()
 {

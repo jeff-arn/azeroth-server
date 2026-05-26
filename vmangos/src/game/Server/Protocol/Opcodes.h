@@ -57,22 +57,22 @@ inline bool IsAnyMoveAckOpcode(uint16 opcode)
 {
     switch (opcode)
     {
-        case MSG_MOVE_TELEPORT_ACK:
-        case MSG_MOVE_WORLDPORT_ACK:
-        case MSG_MOVE_SET_RAW_POSITION_ACK:
-        case CMSG_FORCE_RUN_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_SWIM_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_MOVE_ROOT_ACK:
-        case CMSG_FORCE_MOVE_UNROOT_ACK:
-        case CMSG_MOVE_KNOCK_BACK_ACK:
-        case CMSG_MOVE_HOVER_ACK:
-        case CMSG_MOVE_FEATHER_FALL_ACK:
-        case CMSG_MOVE_WATER_WALK_ACK:
-        case CMSG_FORCE_WALK_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_TURN_RATE_CHANGE_ACK:
-            return true;
+    case MSG_MOVE_TELEPORT_ACK:
+    case MSG_MOVE_WORLDPORT_ACK:
+    case MSG_MOVE_SET_RAW_POSITION_ACK:
+    case CMSG_FORCE_RUN_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_SWIM_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_MOVE_ROOT_ACK:
+    case CMSG_FORCE_MOVE_UNROOT_ACK:
+    case CMSG_MOVE_KNOCK_BACK_ACK:
+    case CMSG_MOVE_HOVER_ACK:
+    case CMSG_MOVE_FEATHER_FALL_ACK:
+    case CMSG_MOVE_WATER_WALK_ACK:
+    case CMSG_FORCE_WALK_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_TURN_RATE_CHANGE_ACK:
+        return true;
     }
 
     return false;
@@ -82,12 +82,12 @@ inline bool IsFlagAckOpcode(uint16 opcode)
 {
     switch (opcode)
     {
-        case CMSG_FORCE_MOVE_ROOT_ACK:
-        case CMSG_FORCE_MOVE_UNROOT_ACK:
-        case CMSG_MOVE_WATER_WALK_ACK:
-        case CMSG_MOVE_HOVER_ACK:
-        case CMSG_MOVE_FEATHER_FALL_ACK:
-            return true;
+    case CMSG_FORCE_MOVE_ROOT_ACK:
+    case CMSG_FORCE_MOVE_UNROOT_ACK:
+    case CMSG_MOVE_WATER_WALK_ACK:
+    case CMSG_MOVE_HOVER_ACK:
+    case CMSG_MOVE_FEATHER_FALL_ACK:
+        return true;
     }
 
     return false;
@@ -97,13 +97,13 @@ inline bool IsSpeedAckOpcode(uint16 opcode)
 {
     switch (opcode)
     {
-        case CMSG_FORCE_RUN_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_SWIM_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_WALK_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_TURN_RATE_CHANGE_ACK:
-            return true;
+    case CMSG_FORCE_RUN_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_SWIM_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_WALK_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_TURN_RATE_CHANGE_ACK:
+        return true;
     }
 
     return false;
@@ -113,12 +113,12 @@ inline bool IsStopOpcode(uint16 opcode)
 {
     switch (opcode)
     {
-        case MSG_MOVE_STOP:
-        case MSG_MOVE_STOP_STRAFE:
-        case MSG_MOVE_STOP_TURN:
-        case MSG_MOVE_STOP_PITCH:
-        case MSG_MOVE_STOP_SWIM:
-            return true;
+    case MSG_MOVE_STOP:
+    case MSG_MOVE_STOP_STRAFE:
+    case MSG_MOVE_STOP_TURN:
+    case MSG_MOVE_STOP_PITCH:
+    case MSG_MOVE_STOP_SWIM:
+        return true;
     }
 
     return false;
@@ -128,9 +128,9 @@ inline bool IsFallEndOpcode(uint16 opcode)
 {
     switch (opcode)
     {
-        case MSG_MOVE_FALL_LAND:
-        case MSG_MOVE_START_SWIM:
-            return true;
+    case MSG_MOVE_FALL_LAND:
+    case MSG_MOVE_START_SWIM:
+        return true;
     }
 
     return false;
@@ -139,12 +139,12 @@ inline bool IsFallEndOpcode(uint16 opcode)
 // Player state
 enum SessionStatus
 {
-    STATUS_AUTHED = 0,                                      // Player authenticated (_player==nullptr, m_playerRecentlyLogout = false or will be reset before handler call)
-    STATUS_LOGGEDIN,                                        // Player in game (_player!=nullptr, inWorld())
-    STATUS_TRANSFER,                                        // Player transferring to another map (_player!=nullptr, !inWorld())
-    STATUS_LOGGEDIN_OR_RECENTLY_LOGGEDOUT,                  // _player!= nullptr or _player==nullptr && m_playerRecentlyLogout)
-    STATUS_NEVER,                                           // Opcode not accepted from client (deprecated or server side only)
-    STATUS_UNHANDLED                                        // We don' handle this opcode yet
+    STATUS_AUTHED = 0, // Player authenticated (_player==nullptr, m_playerRecentlyLogout = false or will be reset before handler call)
+    STATUS_LOGGEDIN, // Player in game (_player!=nullptr, inWorld())
+    STATUS_TRANSFER, // Player transferring to another map (_player!=nullptr, !inWorld())
+    STATUS_LOGGEDIN_OR_RECENTLY_LOGGEDOUT, // _player!= nullptr or _player==nullptr && m_playerRecentlyLogout)
+    STATUS_NEVER, // Opcode not accepted from client (deprecated or server side only)
+    STATUS_UNHANDLED // We don' handle this opcode yet
 };
 
 class WorldPacket;
@@ -157,47 +157,47 @@ struct OpcodeHandler
     void (WorldSession::*handler)(WorldPacket& recvPacket);
 };
 
-typedef std::map< uint16, OpcodeHandler> OpcodeMap;
+typedef std::map<uint16, OpcodeHandler> OpcodeMap;
 
 class Opcodes
 {
-    public:
-        Opcodes();
-        ~Opcodes();
-    public:
-        void BuildOpcodeList();
-        void StoreOpcode(uint16 Opcode,char const* name, SessionStatus status, PacketProcessing process, void (WorldSession::*handler)(WorldPacket& recvPacket))
-        {
-            OpcodeHandler& ref = mOpcodeMap[Opcode];
-            ref.name = name;
-            ref.status = status;
-            ref.packetProcessing = process;
-            ref.handler = handler;
-        }
+public:
+    Opcodes();
+    ~Opcodes();
 
-        // Lookup opcode
-        inline OpcodeHandler const* LookupOpcode(uint16 id) const
-        {
-            OpcodeMap::const_iterator itr = mOpcodeMap.find(id);
-            if (itr != mOpcodeMap.end())
-                return &itr->second;
-            return nullptr;
-        }
+public:
+    void BuildOpcodeList();
+    void StoreOpcode(uint16 Opcode, char const* name, SessionStatus status, PacketProcessing process, void (WorldSession::*handler)(WorldPacket& recvPacket))
+    {
+        OpcodeHandler& ref = mOpcodeMap[Opcode];
+        ref.name = name;
+        ref.status = status;
+        ref.packetProcessing = process;
+        ref.handler = handler;
+    }
 
-        // compatible with other mangos branches access
+    // Lookup opcode
+    inline OpcodeHandler const* LookupOpcode(uint16 id) const
+    {
+        OpcodeMap::const_iterator itr = mOpcodeMap.find(id);
+        if (itr != mOpcodeMap.end())
+            return &itr->second;
+        return nullptr;
+    }
 
-        inline OpcodeHandler const& operator[] (uint16 id) const
-        {
-            OpcodeMap::const_iterator itr = mOpcodeMap.find(id);
-            if (itr != mOpcodeMap.end())
-                return itr->second;
-            return emptyHandler;
-        }
+    // compatible with other mangos branches access
 
-        static OpcodeHandler const emptyHandler;
+    inline OpcodeHandler const& operator[](uint16 id) const
+    {
+        OpcodeMap::const_iterator itr = mOpcodeMap.find(id);
+        if (itr != mOpcodeMap.end())
+            return itr->second;
+        return emptyHandler;
+    }
 
-        OpcodeMap mOpcodeMap;
+    static OpcodeHandler const emptyHandler;
 
+    OpcodeMap mOpcodeMap;
 };
 
 #define opcodeTable MaNGOS::Singleton<Opcodes>::Instance()

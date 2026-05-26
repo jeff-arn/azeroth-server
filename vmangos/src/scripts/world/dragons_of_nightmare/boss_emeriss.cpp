@@ -2,34 +2,31 @@
  *
  */
 
-#include "scriptPCH.h"
 #include "boss_dragon_of_nightmare.h"
+#include "scriptPCH.h"
 
 enum
 {
-    SAY_EMERISS_AGGRO               = 10885,
-    SAY_CAST_CORRUPTION             = 10884,
+    SAY_EMERISS_AGGRO = 10885,
+    SAY_CAST_CORRUPTION = 10884,
 
-    SPELL_EMERISS_AURA              = 24906,
-    SPELL_VOLATILE_INFECTION        = 24928,
+    SPELL_EMERISS_AURA = 24906,
+    SPELL_VOLATILE_INFECTION = 24928,
 
-    SPELL_CORRUPTION_OF_THE_EARTH   = 24910
+    SPELL_CORRUPTION_OF_THE_EARTH = 24910
 };
 
 /*
  *
  */
 
-boss_emerissAI::boss_emerissAI(Creature* pCreature) : boss_dragon_of_nightmareAI(pCreature)
-{
-    boss_emerissAI::Reset();
-}
+boss_emerissAI::boss_emerissAI(Creature* pCreature) : boss_dragon_of_nightmareAI(pCreature) { boss_emerissAI::Reset(); }
 
 void boss_emerissAI::Reset()
 {
     boss_dragon_of_nightmareAI::Reset();
 
-    m_uiEmerissAuraTimer       = 0;
+    m_uiEmerissAuraTimer = 0;
     m_uiVolatileInfectionTimer = urand(11000, 13000);
 }
 

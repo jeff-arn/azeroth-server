@@ -1,12 +1,12 @@
-#include "scriptPCH.h"
 #include "blackrock_spire.h"
+#include "scriptPCH.h"
 
 enum
 {
     // Blackhand Veteran
-    SPELL_CHARGE_BOUCLIER       = 15749,
-    SPELL_COUP_BOUCLIER         = 11972,
-    SPELL_FRAPPE                = 14516,
+    SPELL_CHARGE_BOUCLIER = 15749,
+    SPELL_COUP_BOUCLIER = 11972,
+    SPELL_FRAPPE = 14516,
 };
 
 // npc_blackhand_veteran
@@ -14,7 +14,7 @@ struct npc_blackhand_veteranAI : public ScriptedAI
 {
     npc_blackhand_veteranAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (instance_blackrock_spire*) pCreature->GetInstanceData();
+        m_pInstance = (instance_blackrock_spire*)pCreature->GetInstanceData();
         Reset();
     }
 
@@ -75,7 +75,7 @@ struct npc_blackhand_veteranAI : public ScriptedAI
             {
                 if (pTarget2->IsNonMeleeSpellCasted(false, false, true))
                 {
-                    if (!urand(0, 3)) //because otherwise they all decast at the same, which is stupid.
+                    if (!urand(0, 3)) // because otherwise they all decast at the same, which is stupid.
                     {
                         if (DoCastSpellIfCan(pTarget2, SPELL_COUP_BOUCLIER) == CAST_OK)
                             m_uiCoupBouclierTimer = 10000;
@@ -95,10 +95,7 @@ struct npc_blackhand_veteranAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_blackhand_veteran(Creature* pCreature)
-{
-    return new npc_blackhand_veteranAI(pCreature);
-}
+CreatureAI* GetAI_npc_blackhand_veteran(Creature* pCreature) { return new npc_blackhand_veteranAI(pCreature); }
 
 void AddSC_ubrs_trash()
 {

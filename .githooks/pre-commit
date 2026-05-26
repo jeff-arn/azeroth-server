@@ -46,6 +46,7 @@ fi
 STAGED_CPP=$(git diff --cached --name-only --diff-filter=d \
     | grep -E '\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$' \
     | grep -v '^vmangos/dep/' \
+    | grep -vE '^vmangos/src/shared/(json\.hpp|nonstd/)' \
     || true)
 
 if [ -n "$STAGED_CPP" ]; then

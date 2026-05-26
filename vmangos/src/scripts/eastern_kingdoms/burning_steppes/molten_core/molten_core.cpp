@@ -25,8 +25,8 @@ EndScriptData */
 mob_ancient_core_hound
 EndContentData */
 
-#include "scriptPCH.h"
 #include "molten_core.h"
+#include "scriptPCH.h"
 
 /*######
 ## mob_firewalker
@@ -34,9 +34,9 @@ EndContentData */
 
 enum
 {
-    SPELL_FIREBLOSSOM         =   19637,
-    SPELL_FIREBLOSSOM_CASTING =   19636,
-    SPELL_INCITE_FLAMES       =   19635,
+    SPELL_FIREBLOSSOM = 19637,
+    SPELL_FIREBLOSSOM_CASTING = 19636,
+    SPELL_INCITE_FLAMES = 19635,
 };
 
 struct FirewalkerAI : public ScriptedAI
@@ -56,17 +56,14 @@ struct FirewalkerAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiFireBlossomCasting_Timer   =  6000;
-        m_uiFireBlossom_Timer          =     0;
-        m_uiFireBlossomPreparing_Timer =     0;
-        m_uiInciteFlames_Timer         = 20000;
-        m_uiNbBlossom                  =     0;
+        m_uiFireBlossomCasting_Timer = 6000;
+        m_uiFireBlossom_Timer = 0;
+        m_uiFireBlossomPreparing_Timer = 0;
+        m_uiInciteFlames_Timer = 20000;
+        m_uiNbBlossom = 0;
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -76,7 +73,7 @@ struct FirewalkerAI : public ScriptedAI
         if (m_uiFireBlossomCasting_Timer < uiDiff)
         {
             if (DoCastSpellIfCan(m_creature, SPELL_FIREBLOSSOM_CASTING) == CAST_OK)
-                m_uiFireBlossomCasting_Timer   = 12000;
+                m_uiFireBlossomCasting_Timer = 12000;
 
             m_uiNbBlossom = 6;
             m_uiFireBlossomPreparing_Timer = 1000;
@@ -110,29 +107,26 @@ struct FirewalkerAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_Firewalker(Creature* pCreature)
-{
-    return new FirewalkerAI(pCreature);
-}
+CreatureAI* GetAI_Firewalker(Creature* pCreature) { return new FirewalkerAI(pCreature); }
 
 
 /*######
 ## mob_ancient_core_hound
 ######*/
 
-enum 
+enum
 {
-    SPELL_CONE_OF_FIRE          = 19630,
-    SPELL_VICIOUS_BITE          = 19319,
-    SPELL_BITE                  = 19771,
+    SPELL_CONE_OF_FIRE = 19630,
+    SPELL_VICIOUS_BITE = 19319,
+    SPELL_BITE = 19771,
 
-    //Random Debuff (each hound has only one of these)
-    SPELL_GROUND_STOMP          = 19364,
-    SPELL_ANCIENT_DREAD         = 19365,
-    SPELL_CAUTERIZING_FLAMES    = 19366,
-    SPELL_WITHERING_HEAT        = 19367,
-    SPELL_ANCIENT_DESPAIR       = 19369,
-    SPELL_ANCIENT_HYSTERIA      = 19372
+    // Random Debuff (each hound has only one of these)
+    SPELL_GROUND_STOMP = 19364,
+    SPELL_ANCIENT_DREAD = 19365,
+    SPELL_CAUTERIZING_FLAMES = 19366,
+    SPELL_WITHERING_HEAT = 19367,
+    SPELL_ANCIENT_DESPAIR = 19369,
+    SPELL_ANCIENT_HYSTERIA = 19372
 };
 
 struct mob_ancient_core_houndAI : public ScriptedAI
@@ -154,29 +148,29 @@ struct mob_ancient_core_houndAI : public ScriptedAI
     {
         switch (urand(0, 5))
         {
-            case 0 :
-                RandDebuff = SPELL_GROUND_STOMP;
-                break;
-            case 1 :
-                RandDebuff = SPELL_ANCIENT_DREAD;
-                break;
-            case 2 :
-                RandDebuff = SPELL_CAUTERIZING_FLAMES;
-                break;
-            case 3 :
-                RandDebuff = SPELL_WITHERING_HEAT;
-                break;
-            case 4 :
-                RandDebuff = SPELL_ANCIENT_DESPAIR;
-                break;
-            case 5 :
-                RandDebuff = SPELL_ANCIENT_HYSTERIA;
-                break;
+        case 0:
+            RandDebuff = SPELL_GROUND_STOMP;
+            break;
+        case 1:
+            RandDebuff = SPELL_ANCIENT_DREAD;
+            break;
+        case 2:
+            RandDebuff = SPELL_CAUTERIZING_FLAMES;
+            break;
+        case 3:
+            RandDebuff = SPELL_WITHERING_HEAT;
+            break;
+        case 4:
+            RandDebuff = SPELL_ANCIENT_DESPAIR;
+            break;
+        case 5:
+            RandDebuff = SPELL_ANCIENT_HYSTERIA;
+            break;
         }
-        m_uiConeOfFireTimer   = urand(4000, 7000);
+        m_uiConeOfFireTimer = urand(4000, 7000);
         m_uiRandomDebuffTimer = urand(12000, 15000);
-        m_uiBiteTimer         = 4000;
-        
+        m_uiBiteTimer = 4000;
+
         m_creature->SetNoCallAssistance(true);
     }
 
@@ -191,7 +185,7 @@ struct mob_ancient_core_houndAI : public ScriptedAI
 
     /*
     void MoveInLineOfSight(Unit *pWho) override
-    {        
+    {
         if (!m_creature->IsInCombat())
         {
             if (pWho->IsPlayer() && m_creature->IsWithinDistInMap(pWho, 20.0f) && pWho->IsTargetableBy(m_creature))
@@ -217,14 +211,16 @@ struct mob_ancient_core_houndAI : public ScriptedAI
             m_creature->CastSpell(m_creature, SPELL_CONE_OF_FIRE, false);
             m_uiConeOfFireTimer = urand(6000, 8000);
         }
-        else m_uiConeOfFireTimer -= uiDiff;
+        else
+            m_uiConeOfFireTimer -= uiDiff;
 
         if (m_uiRandomDebuffTimer < uiDiff)
         {
             if (DoCastSpellIfCan(m_creature, RandDebuff) == CAST_OK)
                 m_uiRandomDebuffTimer = urand(14000, 24000);
         }
-        else m_uiRandomDebuffTimer -= uiDiff;
+        else
+            m_uiRandomDebuffTimer -= uiDiff;
 
         if (m_uiBiteTimer < uiDiff)
         {
@@ -234,11 +230,12 @@ struct mob_ancient_core_houndAI : public ScriptedAI
                 m_uiBiteTimer = 6000;
             }
         }
-        else m_uiBiteTimer -= uiDiff;
+        else
+            m_uiBiteTimer -= uiDiff;
 
         if (m_creature->IsAttackReady())
         {
-            //If we are within range melee the target
+            // If we are within range melee the target
             if (m_creature->CanReachWithMeleeAutoAttack(m_creature->GetVictim()))
             {
                 m_creature->CastSpell(m_creature->GetVictim(), SPELL_VICIOUS_BITE, true);
@@ -248,10 +245,7 @@ struct mob_ancient_core_houndAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_mob_ancient_core_hound(Creature* pCreature)
-{
-    return new mob_ancient_core_houndAI(pCreature);
-}
+CreatureAI* GetAI_mob_ancient_core_hound(Creature* pCreature) { return new mob_ancient_core_houndAI(pCreature); }
 
 
 /*######
@@ -260,13 +254,13 @@ CreatureAI* GetAI_mob_ancient_core_hound(Creature* pCreature)
 
 enum
 {
-    SPELL_FULL_HEAL         = 17683,
-    SPELL_SERRATED_BITE     = 19771,
-    SPELL_FIRE_NOVA_VISUAL  = 19823,
-    SPELL_PACIFY_SELF       = 19951,
+    SPELL_FULL_HEAL = 17683,
+    SPELL_SERRATED_BITE = 19771,
+    SPELL_FIRE_NOVA_VISUAL = 19823,
+    SPELL_PACIFY_SELF = 19951,
 
-    BCT_FAKE_DEATH          = 7866,
-    BCT_REVIVE              = 7867,
+    BCT_FAKE_DEATH = 7866,
+    BCT_REVIVE = 7867,
 };
 
 struct mob_core_houndAI : public ScriptedAI
@@ -317,7 +311,7 @@ struct mob_core_houndAI : public ScriptedAI
         m_uiResurrectTimer = 10000;
         m_bDead = true;
     }
-    
+
     void Kill_Self()
     {
         m_creature->SetInvincibilityHpThreshold(0);
@@ -333,12 +327,9 @@ struct mob_core_houndAI : public ScriptedAI
         ResurrectSelf();
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
 
-    void DamageTaken(Unit* pDoneBy, uint32 &uiDamage) override
+    void DamageTaken(Unit* pDoneBy, uint32& uiDamage) override
     {
         if (m_creature->GetHealth() < uiDamage)
         {
@@ -346,7 +337,7 @@ struct mob_core_houndAI : public ScriptedAI
             if (!m_bDead)
                 FeignDeath();
             return;
-       }
+        }
     }
 
     void UpdateAI(uint32 const uiDiff) override
@@ -372,7 +363,7 @@ struct mob_core_houndAI : public ScriptedAI
                             m_bResurrectionOkay = true;
                     }
                 }
-            
+
                 if (m_bResurrectionOkay)
                 {
                     ResurrectSelf();
@@ -384,14 +375,14 @@ struct mob_core_houndAI : public ScriptedAI
             }
             else
                 m_uiResurrectTimer -= uiDiff;
-                
+
             return;
         }
 
-        //Serrated Bite
+        // Serrated Bite
         if (m_uiSerratedBiteTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->GetVictim(),SPELL_SERRATED_BITE) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SERRATED_BITE) == CAST_OK)
                 m_uiSerratedBiteTimer = urand(4000, 7000);
         }
         else
@@ -402,10 +393,7 @@ struct mob_core_houndAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_mob_core_hound(Creature* pCreature)
-{
-    return new mob_core_houndAI(pCreature);
-}
+CreatureAI* GetAI_mob_core_hound(Creature* pCreature) { return new mob_core_houndAI(pCreature); }
 
 /*######
 ## mob_firelord
@@ -413,10 +401,10 @@ CreatureAI* GetAI_mob_core_hound(Creature* pCreature)
 
 enum
 {
-    SPELL_INCINERATE_AURA   = 19396,
-    SPELL_INCINERATE        = 19397,
-    SPELL_LAVASPAWN         = 19569,
-    SPELL_SOULBURN          = 19393
+    SPELL_INCINERATE_AURA = 19396,
+    SPELL_INCINERATE = 19397,
+    SPELL_LAVASPAWN = 19569,
+    SPELL_SOULBURN = 19393
 };
 
 struct mob_firelordAI : public ScriptedAI
@@ -434,19 +422,13 @@ struct mob_firelordAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiSummonLavaSpawnTimer  = urand(7500, 12500);
-        m_uiSoulBurnTimer         = urand(4000, 6000);
+        m_uiSummonLavaSpawnTimer = urand(7500, 12500);
+        m_uiSoulBurnTimer = urand(4000, 6000);
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        DoCastSpellIfCan(m_creature, SPELL_INCINERATE_AURA, CF_TRIGGERED | CF_AURA_NOT_PRESENT);
-    }
-    
-    void JustSummoned(Creature* pSummoned) override
-    {
-        pSummoned->AI()->AttackStart(m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0));
-    }
+    void Aggro(Unit* pWho) override { DoCastSpellIfCan(m_creature, SPELL_INCINERATE_AURA, CF_TRIGGERED | CF_AURA_NOT_PRESENT); }
+
+    void JustSummoned(Creature* pSummoned) override { pSummoned->AI()->AttackStart(m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0)); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -454,13 +436,14 @@ struct mob_firelordAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //Summon Lava Spawn
+        // Summon Lava Spawn
         if (m_uiSummonLavaSpawnTimer < uiDiff)
         {
             if (DoCastSpellIfCan(m_creature, SPELL_LAVASPAWN) == CAST_OK)
                 m_uiSummonLavaSpawnTimer = urand(15000, 20000);
         }
-        else m_uiSummonLavaSpawnTimer -= uiDiff;
+        else
+            m_uiSummonLavaSpawnTimer -= uiDiff;
 
         // Soul Burn
         if (m_uiSoulBurnTimer < uiDiff)
@@ -471,16 +454,14 @@ struct mob_firelordAI : public ScriptedAI
                     m_uiSoulBurnTimer = urand(3000, 4000);
             }
         }
-        else m_uiSoulBurnTimer -= uiDiff;
+        else
+            m_uiSoulBurnTimer -= uiDiff;
 
         DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_mob_firelord(Creature* pCreature)
-{
-    return new mob_firelordAI(pCreature);
-}
+CreatureAI* GetAI_mob_firelord(Creature* pCreature) { return new mob_firelordAI(pCreature); }
 
 /*######
 ## mob_lava_surger
@@ -488,7 +469,7 @@ CreatureAI* GetAI_mob_firelord(Creature* pCreature)
 
 enum
 {
-    SPELL_SURGE            = 19196
+    SPELL_SURGE = 19196
 };
 
 struct mob_lava_surgerAI : public ScriptedAI
@@ -502,10 +483,7 @@ struct mob_lava_surgerAI : public ScriptedAI
     uint32 m_uiSurgeTimer;
     ScriptedInstance* m_pInstance;
 
-    void Reset() override
-    {
-        m_uiSurgeTimer = urand(1000, 2000);
-    }
+    void Reset() override { m_uiSurgeTimer = urand(1000, 2000); }
 
     void JustDied(Unit* pKiller) override
     {
@@ -521,7 +499,7 @@ struct mob_lava_surgerAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        if (m_creature->HasAuraType(SPELL_AURA_MOD_STUN))     // don't update CDs while Banished
+        if (m_creature->HasAuraType(SPELL_AURA_MOD_STUN)) // don't update CDs while Banished
             return;
 
         // Surge Timer
@@ -543,10 +521,7 @@ struct mob_lava_surgerAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_mob_lava_surger(Creature* pCreature)
-{
-    return new mob_lava_surgerAI(pCreature);
-}
+CreatureAI* GetAI_mob_lava_surger(Creature* pCreature) { return new mob_lava_surgerAI(pCreature); }
 
 void AddSC_molten_core()
 {

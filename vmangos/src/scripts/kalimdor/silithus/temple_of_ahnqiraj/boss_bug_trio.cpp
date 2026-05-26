@@ -21,12 +21,12 @@ enum
     SPELL_THRASH = 3391,
     SPELL_CLEAVE = 19983,
     SPELL_TOXIC_VOLLEY = 25812,
-    SPELL_SUMMON_CLOUD = 25786,            // should be 26590 -> summons 15933 -> casts 25786 ("Toxic Vapors") in EventAI
-    // the trigger that spawns was meleeing players and keeping them in combat, some better way to make it non-aggro?
-    // yauj
+    SPELL_SUMMON_CLOUD = 25786, // should be 26590 -> summons 15933 -> casts 25786 ("Toxic Vapors") in EventAI
+                                // the trigger that spawns was meleeing players and keeping them in combat, some better way to make it non-aggro?
+                                // yauj
     SPELL_RAVAGE = 24213,
     SPELL_HEAL = 25807,
-    SPELL_FEAR = 19408,            // should be spell 25807, but will need to fix that spell fearing 1 person max first
+    SPELL_FEAR = 19408, // should be spell 25807, but will need to fix that spell fearing 1 person max first
 
     // vem
     SPELL_CHARGE = 26561,
@@ -48,7 +48,7 @@ struct boss_bug_trioAI : public ScriptedAI
     ScriptedInstance* m_pInstance;
     uint32 m_uiDevourTimer;
     uint32 m_uiEvadeCheckTimer;
-    bool   m_bIsEating;
+    bool m_bIsEating;
 
     void Reset() override
     {
@@ -206,9 +206,9 @@ struct boss_bug_trioAI : public ScriptedAI
     }
 };
 
-//##########
-// LORD KRI
-//##########
+// ##########
+//  LORD KRI
+// ##########
 
 struct boss_kriAI : public boss_bug_trioAI
 {
@@ -265,9 +265,9 @@ struct boss_kriAI : public boss_bug_trioAI
     }
 };
 
-//###############
-// PRINCESS YAUJ
-//###############
+// ###############
+//  PRINCESS YAUJ
+// ###############
 
 struct boss_yaujAI : public boss_bug_trioAI
 {
@@ -295,7 +295,7 @@ struct boss_yaujAI : public boss_bug_trioAI
     {
         // Spawn 10 Yauj Brood on death
         float fX, fY, fZ;
-        float const aCenterLoc[3] = { -8590.0f, 2138.0f, 0.0f };                    // define a central point in the room to use for LOS check
+        float const aCenterLoc[3] = {-8590.0f, 2138.0f, 0.0f}; // define a central point in the room to use for LOS check
 
         for (int i = 0; i < 10; ++i)
         {
@@ -362,9 +362,9 @@ struct boss_yaujAI : public boss_bug_trioAI
     }
 };
 
-//#####
-// VEM 
-//#####
+// #####
+//  VEM
+// #####
 
 struct boss_vemAI : public boss_bug_trioAI
 {
@@ -440,20 +440,11 @@ struct boss_vemAI : public boss_bug_trioAI
     }
 };
 
-CreatureAI* GetAI_boss_kri(Creature* pCreature)
-{
-    return new boss_kriAI(pCreature);
-}
+CreatureAI* GetAI_boss_kri(Creature* pCreature) { return new boss_kriAI(pCreature); }
 
-CreatureAI* GetAI_boss_yauj(Creature* pCreature)
-{
-    return new boss_yaujAI(pCreature);
-}
+CreatureAI* GetAI_boss_yauj(Creature* pCreature) { return new boss_yaujAI(pCreature); }
 
-CreatureAI* GetAI_boss_vem(Creature* pCreature)
-{
-    return new boss_vemAI(pCreature);
-}
+CreatureAI* GetAI_boss_vem(Creature* pCreature) { return new boss_vemAI(pCreature); }
 
 
 void AddSC_bug_trio()

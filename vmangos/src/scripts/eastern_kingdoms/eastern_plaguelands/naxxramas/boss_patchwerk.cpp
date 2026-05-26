@@ -21,27 +21,27 @@ SDComment: TODO: confirm how hateful strike work
 SDCategory: Naxxramas
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "naxxramas.h"
+#include "scriptPCH.h"
 
 enum PatchwerkData
 {
-    SAY_AGGRO1            = 13068,
-    SAY_AGGRO2            = 13069,
-    SAY_SLAY              = 13071,
-    SAY_DEATH             = 13070,
+    SAY_AGGRO1 = 13068,
+    SAY_AGGRO2 = 13069,
+    SAY_SLAY = 13071,
+    SAY_DEATH = 13070,
 
-    EMOTE_BERSERK         = 4428,
-    EMOTE_ENRAGE          = 2384,
+    EMOTE_BERSERK = 4428,
+    EMOTE_ENRAGE = 2384,
 
-    SPELL_SUMMON_PLAYER   = 20477,
-    SPELL_HATEFUL_STRIKE  = 28308,
-    SPELL_ENRAGE          = 28131, // 5% enrage soft enrage
-    SPELL_BERSERK         = 27680, // 7min hard enrage
-    SPELL_SLIMEBOLT       = 32309  // Added in patch 1.12
+    SPELL_SUMMON_PLAYER = 20477,
+    SPELL_HATEFUL_STRIKE = 28308,
+    SPELL_ENRAGE = 28131, // 5% enrage soft enrage
+    SPELL_BERSERK = 27680, // 7min hard enrage
+    SPELL_SLIMEBOLT = 32309 // Added in patch 1.12
 };
 
-constexpr float MELEE_DISTANCE = 5.0; 
+constexpr float MELEE_DISTANCE = 5.0;
 
 enum ePatchwerkEvents
 {
@@ -50,13 +50,13 @@ enum ePatchwerkEvents
     EVENT_SLIMEBOLT
 };
 
-static constexpr uint32 BERSERK_TIMER           = 7 * 60 * 1000; // 7 minutes enrage
-static constexpr uint32 HATEFUL_CD              = 1200;
+static constexpr uint32 BERSERK_TIMER = 7 * 60 * 1000; // 7 minutes enrage
+static constexpr uint32 HATEFUL_CD = 1200;
 
 // 30 sec after berserk he starts throwing slime at ppl
 // this was added in 1.12.1 to cope with guilds kiting him
-static constexpr uint32 SLIMEBOLT_INITIAL       = BERSERK_TIMER + 30000;
-static constexpr uint32 SLIMEBOLT_REPEAT_CD     = 5000; 
+static constexpr uint32 SLIMEBOLT_INITIAL = BERSERK_TIMER + 30000;
+static constexpr uint32 SLIMEBOLT_REPEAT_CD = 5000;
 
 struct boss_patchwerkAI : public ScriptedAI
 {
@@ -70,8 +70,8 @@ struct boss_patchwerkAI : public ScriptedAI
 
     EventMap m_events;
 
-    bool   m_bEnraged;
-    bool   m_bBerserk;
+    bool m_bEnraged;
+    bool m_bBerserk;
     uint32 m_failedStrikes;
     ObjectGuid m_previousTarget;
 
@@ -112,7 +112,7 @@ struct boss_patchwerkAI : public ScriptedAI
 
         if (m_pInstance)
             m_pInstance->SetData(TYPE_PATCHWERK, IN_PROGRESS);
-            
+
         m_events.ScheduleEvent(EVENT_BERSERK, BERSERK_TIMER);
         m_events.ScheduleEvent(EVENT_HATEFULSTRIKE, HATEFUL_CD);
 #if SUPPORTED_CLIENT_BUILD >= CLIENT_BUILD_1_12_1
@@ -124,7 +124,7 @@ struct boss_patchwerkAI : public ScriptedAI
     {
         // The ability is used on highest HP target in melee
         // current tank cannot be hit by hateful as long as there are other players in melee
-        
+
         // todo: can it hit anything other than players?
 
         SpellEntry const* pHatefulStrike = sSpellMgr.GetSpellEntry(SPELL_HATEFUL_STRIKE);
@@ -135,7 +135,7 @@ struct boss_patchwerkAI : public ScriptedAI
         }
 
         Unit* mainTank = m_creature->GetVictim();
-        
+
         // Shouldnt really be possible, but hey, weirder things have happened
         if (!mainTank)
             return;
@@ -152,7 +152,7 @@ struct boss_patchwerkAI : public ScriptedAI
             // Only top 4 players on threat in melee range are targetted.
             if (threatListPosition > 3)
                 break;
-            
+
             Player* pTempTarget = iter->getTarget()->ToPlayer();
             if (!pTempTarget)
                 continue;
@@ -166,7 +166,7 @@ struct boss_patchwerkAI : public ScriptedAI
             if (pTempTarget->IsImmuneToSpell(pHatefulStrike, false))
                 continue;
 
-            // Skipping maintank, only using him if there is no other viable target 
+            // Skipping maintank, only using him if there is no other viable target
             // todo: not sure if this is correct. Should we target the MT over the offtanks, if the offtanks have less hp?
             if (iter->getUnitGuid() != mainTankGuid)
             {
@@ -219,8 +219,7 @@ struct boss_patchwerkAI : public ScriptedAI
         if (target)
         {
             // Nostalrius : Correction bug sheep/fear
-            if (!m_creature->HasUnitState(UNIT_STATE_STUNNED | UNIT_STATE_PENDING_STUNNED | UNIT_STATE_FEIGN_DEATH | UNIT_STATE_CONFUSED | UNIT_STATE_FLEEING)
-                && (!m_creature->HasAuraType(SPELL_AURA_MOD_FEAR) || m_creature->HasAuraType(SPELL_AURA_PREVENTS_FLEEING)) && !m_creature->HasAuraType(SPELL_AURA_MOD_CONFUSE))
+            if (!m_creature->HasUnitState(UNIT_STATE_STUNNED | UNIT_STATE_PENDING_STUNNED | UNIT_STATE_FEIGN_DEATH | UNIT_STATE_CONFUSED | UNIT_STATE_FLEEING) && (!m_creature->HasAuraType(SPELL_AURA_MOD_FEAR) || m_creature->HasAuraType(SPELL_AURA_PREVENTS_FLEEING)) && !m_creature->HasAuraType(SPELL_AURA_MOD_CONFUSE))
             {
                 if (!m_creature->IsAttackReady(BASE_ATTACK) && m_creature->CanReachWithMeleeAutoAttack(target)) // he does not have offhand attack
                     return true;
@@ -279,25 +278,25 @@ struct boss_patchwerkAI : public ScriptedAI
         {
             switch (l_EventId)
             {
-                case EVENT_BERSERK:
-                    if (DoCastSpellIfCan(m_creature, SPELL_BERSERK) == CAST_OK)
-                    {
-                        DoScriptText(EMOTE_BERSERK, m_creature);
-                        m_bBerserk = true;
-                    }
-                    else
-                        m_events.Repeat(100);
-                    break;
-                case EVENT_HATEFULSTRIKE:
-                    DoHatefulStrike();
-                    m_events.Repeat(HATEFUL_CD);
-                    break;
-                case EVENT_SLIMEBOLT:
-                    if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SLIMEBOLT) == CAST_OK)
-                        m_events.Repeat(SLIMEBOLT_REPEAT_CD);
-                    else
-                        m_events.Repeat(100);
-                    break;
+            case EVENT_BERSERK:
+                if (DoCastSpellIfCan(m_creature, SPELL_BERSERK) == CAST_OK)
+                {
+                    DoScriptText(EMOTE_BERSERK, m_creature);
+                    m_bBerserk = true;
+                }
+                else
+                    m_events.Repeat(100);
+                break;
+            case EVENT_HATEFULSTRIKE:
+                DoHatefulStrike();
+                m_events.Repeat(HATEFUL_CD);
+                break;
+            case EVENT_SLIMEBOLT:
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SLIMEBOLT) == CAST_OK)
+                    m_events.Repeat(SLIMEBOLT_REPEAT_CD);
+                else
+                    m_events.Repeat(100);
+                break;
             }
         }
 
@@ -305,10 +304,7 @@ struct boss_patchwerkAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_patchwerk(Creature* pCreature)
-{
-    return new boss_patchwerkAI(pCreature);
-}
+CreatureAI* GetAI_boss_patchwerk(Creature* pCreature) { return new boss_patchwerkAI(pCreature); }
 
 void AddSC_boss_patchwerk()
 {

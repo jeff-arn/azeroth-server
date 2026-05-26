@@ -14,15 +14,15 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "Chat.h"
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
-#include "Player.h"
 #include "Group.h"
-#include "Chat.h"
-#include "ObjectAccessor.h"
 #include "Language.h"
-#include "ObjectMgr.h"
 #include "MapManager.h"
+#include "ObjectAccessor.h"
+#include "ObjectMgr.h"
+#include "Player.h"
 #include "Util.h"
 
 bool ChatHandler::HandleTeleCommand(char* args)
@@ -101,8 +101,8 @@ bool ChatHandler::HandleTeleDelCommand(char* args)
     return true;
 }
 
-//Teleport group to given game_tele.entry
-bool ChatHandler::HandleTeleGroupCommand(char * args)
+// Teleport group to given game_tele.entry
+bool ChatHandler::HandleTeleGroupCommand(char* args)
 {
     if (!*args)
         return false;
@@ -177,7 +177,7 @@ bool ChatHandler::HandleTeleGroupCommand(char * args)
     return true;
 }
 
-//Summon group of player
+// Summon group of player
 bool ChatHandler::HandleGroupgoCommand(char* args)
 {
     Player* target;
@@ -201,13 +201,11 @@ bool ChatHandler::HandleGroupgoCommand(char* args)
 
     Player* pPlayer = m_session->GetPlayer();
     Map* gmMap = pPlayer->GetMap();
-    bool to_instance =  gmMap->Instanceable();
+    bool to_instance = gmMap->Instanceable();
 
     // we are in instance, and can summon only player in our group with us as lead
-    if (to_instance && (
-                !pPlayer->GetGroup() || (grp->GetLeaderGuid() != pPlayer->GetObjectGuid()) ||
-                (pPlayer->GetGroup()->GetLeaderGuid() != pPlayer->GetObjectGuid())))
-        // the last check is a bit excessive, but let it be, just in case
+    if (to_instance && (!pPlayer->GetGroup() || (grp->GetLeaderGuid() != pPlayer->GetObjectGuid()) || (pPlayer->GetGroup()->GetLeaderGuid() != pPlayer->GetObjectGuid())))
+    // the last check is a bit excessive, but let it be, just in case
     {
         SendSysMessage(LANG_CANNOT_SUMMON_TO_INST);
         SetSentErrorMessage(true);
@@ -270,12 +268,7 @@ bool ChatHandler::HandleGroupgoCommand(char* args)
     return true;
 }
 
-static char const* const areatriggerKeys[] =
-{
-    "Hareatrigger",
-    "Hareatrigger_target",
-    nullptr
-};
+static char const* const areatriggerKeys[] = {"Hareatrigger", "Hareatrigger_target", nullptr};
 
 bool ChatHandler::HandleGoTriggerCommand(char* args)
 {
@@ -284,7 +277,7 @@ bool ChatHandler::HandleGoTriggerCommand(char* args)
     if (!*args)
         return false;
 
-    char *atIdStr = ExtractKeyFromLink(&args, areatriggerKeys);
+    char* atIdStr = ExtractKeyFromLink(&args, areatriggerKeys);
     if (!atIdStr)
         return false;
 
@@ -304,7 +297,7 @@ bool ChatHandler::HandleGoTriggerCommand(char* args)
     }
 
     bool to_target = ExtractLiteralArg(&args, "target");
-    if (!to_target && *args)                                // can be fail also at syntax error
+    if (!to_target && *args) // can be fail also at syntax error
         return false;
 
     if (to_target)
@@ -344,29 +337,24 @@ bool ChatHandler::HandleGoGraveyardCommand(char* args)
 
 enum CreatureLinkType
 {
-    CREATURE_LINK_RAW = -1,                   // non-link case
+    CREATURE_LINK_RAW = -1, // non-link case
     CREATURE_LINK_GUID = 0,
     CREATURE_LINK_ENTRY = 1,
 };
 
-static char const* const creatureKeys[] =
-{
-    "Hcreature",
-    "Hcreature_entry",
-    nullptr
-};
+static char const* const creatureKeys[] = {"Hcreature", "Hcreature_entry", nullptr};
 
 /** \brief Teleport the GM to the specified creature
-*
-* .go creature <GUID>     --> TP using creature.guid
-* .go creature azuregos   --> TP player to the mob with this name
-*                             Warning: If there is more than one mob with this name
-*                                      you will be teleported to the first one that is found.
-* .go creature id 6109    --> TP player to the mob, that has this creature_template.entry
-*                             Warning: If there is more than one mob with this "id"
-*                                      you will be teleported to the first one that is found.
-*/
-//teleport to creature
+ *
+ * .go creature <GUID>     --> TP using creature.guid
+ * .go creature azuregos   --> TP player to the mob with this name
+ *                             Warning: If there is more than one mob with this name
+ *                                      you will be teleported to the first one that is found.
+ * .go creature id 6109    --> TP player to the mob, that has this creature_template.entry
+ *                             Warning: If there is more than one mob with this "id"
+ *                                      you will be teleported to the first one that is found.
+ */
+// teleport to creature
 bool ChatHandler::HandleGoCreatureCommand(char* args)
 {
     if (!*args)
@@ -397,90 +385,24 @@ bool ChatHandler::HandleGoCreatureCommand(char* args)
     switch (crType)
     {
     case CREATURE_LINK_ENTRY:
-    {
-        uint32 tEntry;
-        if (!ExtractUInt32(&pParam1, tEntry))
-            return false;
-
-        if (!tEntry)
-            return false;
-
-        if (!sObjectMgr.GetCreatureTemplate(tEntry))
         {
-            SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
-            SetSentErrorMessage(true);
-            return false;
-        }
-
-        FindCreatureData worker(tEntry, m_session ? pPlayer : nullptr);
-
-        sObjectMgr.DoCreatureData(worker);
-
-        CreatureDataPair const* dataPair = worker.GetResult();
-        if (!dataPair)
-        {
-            SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
-            SetSentErrorMessage(true);
-            return false;
-        }
-
-        data = &dataPair->second;
-        lowguid = dataPair->first;
-        break;
-    }
-    case CREATURE_LINK_GUID:
-    {
-        if (!ExtractUInt32(&pParam1, lowguid))
-            return false;
-
-        data = sObjectMgr.GetCreatureData(lowguid);
-        if (!data)
-        {
-            SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
-            SetSentErrorMessage(true);
-            return false;
-        }
-        break;
-    }
-    case CREATURE_LINK_RAW:
-    {
-        if (ExtractUInt32(&pParam1, lowguid))
-        {
-            data = sObjectMgr.GetCreatureData(lowguid);
-            if (!data)
-            {
-                SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
-                SetSentErrorMessage(true);
+            uint32 tEntry;
+            if (!ExtractUInt32(&pParam1, tEntry))
                 return false;
-            }
-        }
-        // Number is invalid - maybe the user specified the mob's name
-        else
-        {
-            std::string name = pParam1;
-            WorldDatabase.escape_string(name);
-            std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT guid FROM creature, creature_template WHERE creature.id = creature_template.entry AND creature_template.name " _LIKE_ " " _CONCAT3_("'%%'", "'%s'", "'%%'"), name.c_str());
-            if (!result)
+
+            if (!tEntry)
+                return false;
+
+            if (!sObjectMgr.GetCreatureTemplate(tEntry))
             {
                 SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
                 SetSentErrorMessage(true);
                 return false;
             }
 
-            FindCreatureData worker(0, m_session ? pPlayer : nullptr);
+            FindCreatureData worker(tEntry, m_session ? pPlayer : nullptr);
 
-            do
-            {
-                Field* fields = result->Fetch();
-                uint32 guid = fields[0].GetUInt32();
-
-                CreatureDataPair const* cr_data = sObjectMgr.GetCreatureDataPair(guid);
-                if (!cr_data)
-                    continue;
-
-                worker(*cr_data);
-
-            } while (result->NextRow());
+            sObjectMgr.DoCreatureData(worker);
 
             CreatureDataPair const* dataPair = worker.GetResult();
             if (!dataPair)
@@ -492,9 +414,75 @@ bool ChatHandler::HandleGoCreatureCommand(char* args)
 
             data = &dataPair->second;
             lowguid = dataPair->first;
+            break;
         }
-        break;
-    }
+    case CREATURE_LINK_GUID:
+        {
+            if (!ExtractUInt32(&pParam1, lowguid))
+                return false;
+
+            data = sObjectMgr.GetCreatureData(lowguid);
+            if (!data)
+            {
+                SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
+                SetSentErrorMessage(true);
+                return false;
+            }
+            break;
+        }
+    case CREATURE_LINK_RAW:
+        {
+            if (ExtractUInt32(&pParam1, lowguid))
+            {
+                data = sObjectMgr.GetCreatureData(lowguid);
+                if (!data)
+                {
+                    SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
+                    SetSentErrorMessage(true);
+                    return false;
+                }
+            }
+            // Number is invalid - maybe the user specified the mob's name
+            else
+            {
+                std::string name = pParam1;
+                WorldDatabase.escape_string(name);
+                std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT guid FROM creature, creature_template WHERE creature.id = creature_template.entry AND creature_template.name " _LIKE_ " " _CONCAT3_("'%%'", "'%s'", "'%%'"), name.c_str());
+                if (!result)
+                {
+                    SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
+                    SetSentErrorMessage(true);
+                    return false;
+                }
+
+                FindCreatureData worker(0, m_session ? pPlayer : nullptr);
+
+                do
+                {
+                    Field* fields = result->Fetch();
+                    uint32 guid = fields[0].GetUInt32();
+
+                    CreatureDataPair const* cr_data = sObjectMgr.GetCreatureDataPair(guid);
+                    if (!cr_data)
+                        continue;
+
+                    worker(*cr_data);
+                }
+                while (result->NextRow());
+
+                CreatureDataPair const* dataPair = worker.GetResult();
+                if (!dataPair)
+                {
+                    SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
+                    SetSentErrorMessage(true);
+                    return false;
+                }
+
+                data = &dataPair->second;
+                lowguid = dataPair->first;
+            }
+            break;
+        }
     }
 
     float x, y, z;
@@ -508,19 +496,14 @@ bool ChatHandler::HandleGoCreatureCommand(char* args)
 
 enum GameobjectLinkType
 {
-    GAMEOBJECT_LINK_RAW = -1,                   // non-link case
+    GAMEOBJECT_LINK_RAW = -1, // non-link case
     GAMEOBJECT_LINK_GUID = 0,
     GAMEOBJECT_LINK_ENTRY = 1,
 };
 
-static char const* const gameobjectKeys[] =
-{
-    "Hgameobject",
-    "Hgameobject_entry",
-    nullptr
-};
+static char const* const gameobjectKeys[] = {"Hgameobject", "Hgameobject_entry", nullptr};
 
-//teleport to gameobject
+// teleport to gameobject
 bool ChatHandler::HandleGoObjectCommand(char* args)
 {
     Player* pPlayer = m_session->GetPlayer();
@@ -547,95 +530,27 @@ bool ChatHandler::HandleGoObjectCommand(char* args)
     switch (goType)
     {
     case CREATURE_LINK_ENTRY:
-    {
-        uint32 tEntry;
-        if (!ExtractUInt32(&pParam1, tEntry))
-            return false;
-
-        if (!tEntry)
-            return false;
-
-        if (!sObjectMgr.GetGameObjectTemplate(tEntry))
         {
-            SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
-            SetSentErrorMessage(true);
-            return false;
-        }
-
-        FindGOData worker(tEntry, m_session ? pPlayer : nullptr);
-
-        sObjectMgr.DoGOData(worker);
-
-        GameObjectDataPair const* dataPair = worker.GetResult();
-
-        if (!dataPair)
-        {
-            SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
-            SetSentErrorMessage(true);
-            return false;
-        }
-
-        data = &dataPair->second;
-        break;
-    }
-    case GAMEOBJECT_LINK_GUID:
-    {
-        uint32 lowguid;
-        if (!ExtractUInt32(&pParam1, lowguid))
-            return false;
-
-        // by DB guid
-        data = sObjectMgr.GetGOData(lowguid);
-        if (!data)
-        {
-            SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
-            SetSentErrorMessage(true);
-            return false;
-        }
-        break;
-    }
-    case GAMEOBJECT_LINK_RAW:
-    {
-        uint32 lowguid;
-        if (ExtractUInt32(&pParam1, lowguid))
-        {
-            // by DB guid
-            data = sObjectMgr.GetGOData(lowguid);
-            if (!data)
-            {
-                SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
-                SetSentErrorMessage(true);
+            uint32 tEntry;
+            if (!ExtractUInt32(&pParam1, tEntry))
                 return false;
-            }
-        }
-        else
-        {
-            std::string name = pParam1;
-            WorldDatabase.escape_string(name);
-            std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT guid FROM gameobject, gameobject_template WHERE gameobject.id = gameobject_template.entry AND gameobject_template.name " _LIKE_ " " _CONCAT3_("'%%'", "'%s'", "'%%'"), name.c_str());
-            if (!result)
+
+            if (!tEntry)
+                return false;
+
+            if (!sObjectMgr.GetGameObjectTemplate(tEntry))
             {
                 SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
                 SetSentErrorMessage(true);
                 return false;
             }
 
-            FindGOData worker(0, m_session ? pPlayer : nullptr);
+            FindGOData worker(tEntry, m_session ? pPlayer : nullptr);
 
-            do
-            {
-                Field* fields = result->Fetch();
-                uint32 guid = fields[0].GetUInt32();
-
-                GameObjectDataPair const* go_data = sObjectMgr.GetGODataPair(guid);
-                if (!go_data)
-                    continue;
-
-                worker(*go_data);
-
-            } while (result->NextRow());
+            sObjectMgr.DoGOData(worker);
 
             GameObjectDataPair const* dataPair = worker.GetResult();
+
             if (!dataPair)
             {
                 SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
@@ -644,9 +559,77 @@ bool ChatHandler::HandleGoObjectCommand(char* args)
             }
 
             data = &dataPair->second;
+            break;
         }
-        break;
-    }
+    case GAMEOBJECT_LINK_GUID:
+        {
+            uint32 lowguid;
+            if (!ExtractUInt32(&pParam1, lowguid))
+                return false;
+
+            // by DB guid
+            data = sObjectMgr.GetGOData(lowguid);
+            if (!data)
+            {
+                SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
+                SetSentErrorMessage(true);
+                return false;
+            }
+            break;
+        }
+    case GAMEOBJECT_LINK_RAW:
+        {
+            uint32 lowguid;
+            if (ExtractUInt32(&pParam1, lowguid))
+            {
+                // by DB guid
+                data = sObjectMgr.GetGOData(lowguid);
+                if (!data)
+                {
+                    SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
+                    SetSentErrorMessage(true);
+                    return false;
+                }
+            }
+            else
+            {
+                std::string name = pParam1;
+                WorldDatabase.escape_string(name);
+                std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT guid FROM gameobject, gameobject_template WHERE gameobject.id = gameobject_template.entry AND gameobject_template.name " _LIKE_ " " _CONCAT3_("'%%'", "'%s'", "'%%'"), name.c_str());
+                if (!result)
+                {
+                    SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
+                    SetSentErrorMessage(true);
+                    return false;
+                }
+
+                FindGOData worker(0, m_session ? pPlayer : nullptr);
+
+                do
+                {
+                    Field* fields = result->Fetch();
+                    uint32 guid = fields[0].GetUInt32();
+
+                    GameObjectDataPair const* go_data = sObjectMgr.GetGODataPair(guid);
+                    if (!go_data)
+                        continue;
+
+                    worker(*go_data);
+                }
+                while (result->NextRow());
+
+                GameObjectDataPair const* dataPair = worker.GetResult();
+                if (!dataPair)
+                {
+                    SendSysMessage(LANG_COMMAND_GOOBJNOTFOUND);
+                    SetSentErrorMessage(true);
+                    return false;
+                }
+
+                data = &dataPair->second;
+            }
+            break;
+        }
     }
 
     return HandleGoHelper(pPlayer, data->position.mapId, data->position.x, data->position.y, &data->position.z);
@@ -703,8 +686,7 @@ bool ChatHandler::HandleTeleNameCommand(char* args)
         std::string nameLink = playerLink(target_name);
 
         PSendSysMessage(LANG_TELEPORTING_TO, nameLink.c_str(), GetMangosString(LANG_OFFLINE), tele->name.c_str());
-        Player::SavePositionInDB(target_guid, tele->mapId, tele->x, tele->y, tele->z, tele->o,
-                                 sTerrainMgr.GetZoneId(tele->mapId, tele->x, tele->y, tele->z));
+        Player::SavePositionInDB(target_guid, tele->mapId, tele->x, tele->y, tele->z, tele->o, sTerrainMgr.GetZoneId(tele->mapId, tele->x, tele->y, tele->z));
     }
 
     return true;
@@ -830,7 +812,7 @@ bool ChatHandler::HandleGoCommand(char* args)
     return HandleGoHelper(pPlayer, mapid, x, y, &z);
 }
 
-//teleport at coordinates
+// teleport at coordinates
 bool ChatHandler::HandleGoXYCommand(char* args)
 {
     Player* pPlayer = m_session->GetPlayer();
@@ -850,7 +832,7 @@ bool ChatHandler::HandleGoXYCommand(char* args)
     return HandleGoHelper(pPlayer, mapid, x, y);
 }
 
-//teleport at coordinates, including Z
+// teleport at coordinates, including Z
 bool ChatHandler::HandleGoXYZCommand(char* args)
 {
     Player* pPlayer = m_session->GetPlayer();
@@ -874,7 +856,7 @@ bool ChatHandler::HandleGoXYZCommand(char* args)
     return HandleGoHelper(pPlayer, mapid, x, y, &z);
 }
 
-//teleport at coordinates, including Z and orientation
+// teleport at coordinates, including Z and orientation
 bool ChatHandler::HandleGoXYZOCommand(char* args)
 {
     Player* pPlayer = m_session->GetPlayer();
@@ -902,7 +884,7 @@ bool ChatHandler::HandleGoXYZOCommand(char* args)
     return HandleGoHelper(pPlayer, mapid, x, y, &z, &ort);
 }
 
-//teleport at coordinates
+// teleport at coordinates
 bool ChatHandler::HandleGoZoneXYCommand(char* args)
 {
     Player* pPlayer = m_session->GetPlayer();
@@ -924,7 +906,7 @@ bool ChatHandler::HandleGoZoneXYCommand(char* args)
     else
         areaid = pPlayer->GetZoneId();
 
-    const auto *areaEntry = AreaEntry::GetById(areaid);
+    const auto* areaEntry = AreaEntry::GetById(areaid);
 
     if (x < 0 || x > 100 || y < 0 || y > 100 || !areaEntry)
     {
@@ -934,7 +916,7 @@ bool ChatHandler::HandleGoZoneXYCommand(char* args)
     }
 
     // update to parent zone if exist (client map show only zones without parents)
-    const auto *zoneEntry = !areaEntry->IsZone() ? AreaEntry::GetById(areaEntry->ZoneId) : areaEntry;
+    const auto* zoneEntry = !areaEntry->IsZone() ? AreaEntry::GetById(areaEntry->ZoneId) : areaEntry;
 
     MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(zoneEntry->MapId);
 
@@ -942,16 +924,14 @@ bool ChatHandler::HandleGoZoneXYCommand(char* args)
     sObjectMgr.GetAreaLocaleString(areaEntry->Id, GetSessionDbLocaleIndex(), &areaName);
     if (mapEntry->Instanceable())
     {
-        PSendSysMessage(LANG_INVALID_ZONE_MAP, areaEntry->Id, areaName.c_str(),
-                        mapEntry->id, mapEntry->name);
+        PSendSysMessage(LANG_INVALID_ZONE_MAP, areaEntry->Id, areaName.c_str(), mapEntry->id, mapEntry->name);
         SetSentErrorMessage(true);
         return false;
     }
 
     if (!Zone2MapCoordinates(x, y, zoneEntry->Id))
     {
-        PSendSysMessage(LANG_INVALID_ZONE_MAP, areaEntry->Id, areaName.c_str(),
-                        mapEntry->id, mapEntry->name);
+        PSendSysMessage(LANG_INVALID_ZONE_MAP, areaEntry->Id, areaName.c_str(), mapEntry->id, mapEntry->name);
         SetSentErrorMessage(true);
         return false;
     }
@@ -959,7 +939,7 @@ bool ChatHandler::HandleGoZoneXYCommand(char* args)
     return HandleGoHelper(pPlayer, mapEntry->id, x, y);
 }
 
-//teleport to grid
+// teleport to grid
 bool ChatHandler::HandleGoGridCommand(char* args)
 {
     Player* pPlayer = m_session->GetPlayer();
@@ -1080,7 +1060,7 @@ bool ChatHandler::HandleUnstuckCommand(char* /*args*/)
     else
     {
         pPlayer->AddAura(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS); // Add Resurrection Sickness
-        if (SpellEntry const* pSpellEntry= sSpellMgr.GetSpellEntry(20939))
+        if (SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(20939))
             pPlayer->AddCooldown(*pSpellEntry, nullptr, false, HOUR * IN_MILLISECONDS); // Trigger 1 Hour Cooldown
         // Get nearest graveyard.
         WorldSafeLocsEntry const* pClosestGrave = sObjectMgr.GetClosestGraveYard(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), pPlayer->GetMapId(), pPlayer->GetTeam());
@@ -1120,7 +1100,7 @@ bool ChatHandler::HandleRecallCommand(char* args)
 }
 
 
-//Summon Player
+// Summon Player
 bool ChatHandler::HandleNamegoCommand(char* args)
 {
     Player* pTarget;
@@ -1190,18 +1170,13 @@ bool ChatHandler::HandleNamegoCommand(char* args)
         PSendSysMessage(LANG_SUMMONING, nameLink.c_str(), GetMangosString(LANG_OFFLINE));
 
         // in point where GM stay
-        Player::SavePositionInDB(target_guid, pPlayer->GetMapId(),
-                                              pPlayer->GetPositionX(),
-                                              pPlayer->GetPositionY(),
-                                              pPlayer->GetPositionZ(),
-                                              pPlayer->GetOrientation(),
-                                              pPlayer->GetZoneId());
+        Player::SavePositionInDB(target_guid, pPlayer->GetMapId(), pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), pPlayer->GetOrientation(), pPlayer->GetZoneId());
     }
 
     return true;
 }
 
-//Teleport to Player
+// Teleport to Player
 bool ChatHandler::HandleGonameCommand(char* args)
 {
     Player* pTarget;
@@ -1224,7 +1199,7 @@ bool ChatHandler::HandleGonameCommand(char* args)
         Map* cMap = pTarget->GetMap();
         uint32 instanceId = 0;
         uint32 teleFlags = TELE_TO_GM_MODE;
-        InstancePlayerBind *bind = pPlayer->GetBoundInstance(pTarget->GetMapId());
+        InstancePlayerBind* bind = pPlayer->GetBoundInstance(pTarget->GetMapId());
 
         if (pPlayer->GetSmartInstanceBindingMode() && bind)
         {
@@ -1270,13 +1245,13 @@ bool ChatHandler::HandleGonameCommand(char* args)
 
             // if the player or the player's group is bound to another instance
             // the player will not be bound to another one
-            InstancePlayerBind *pBind = pPlayer->GetBoundInstance(pTarget->GetMapId());
+            InstancePlayerBind* pBind = pPlayer->GetBoundInstance(pTarget->GetMapId());
 
             if (!pBind)
             {
                 Group* group = pPlayer->GetGroup();
                 // if no bind exists, create a solo bind
-                InstanceGroupBind *gBind = group ? group->GetBoundInstance(pTarget->GetMapId()) : nullptr;
+                InstanceGroupBind* gBind = group ? group->GetBoundInstance(pTarget->GetMapId()) : nullptr;
                 // if no bind exists, create a solo bind
                 if (!gBind)
                 {
@@ -1288,7 +1263,8 @@ bool ChatHandler::HandleGonameCommand(char* args)
                     else
                         pPlayer->BindToInstance(save, !save->CanReset());
 
-                    if (instanceId && instanceId != save->GetInstanceId()) {
+                    if (instanceId && instanceId != save->GetInstanceId())
+                    {
                         teleFlags |= TELE_TO_FORCE_MAP_CHANGE;
                     }
                 }

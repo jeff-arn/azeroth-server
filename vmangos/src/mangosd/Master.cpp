@@ -25,31 +25,31 @@
 
 #include <memory>
 
-#include "Common.h"
-#include "Master.h"
-#include "WorldSocket.h"
-#include "WorldRunnable.h"
-#include "World.h"
-#include "Log.h"
-#include "Timer.h"
-#include "Policies/SingletonImp.h"
-#include "SystemConfig.h"
-#include "Config/Config.h"
-#include "Database/DatabaseEnv.h"
 #include "CliRunnable.h"
-#include "remote/RemoteAccess/RASocket.h"
-#include "remote/soap/MaNGOSsoap.h"
-#include "Util.h"
-#include "MassMailMgr.h"
+#include "Common.h"
+#include "Config/Config.h"
 #include "DBCStores.h"
-#include "WorldSocketMgr.h"
+#include "Database/DatabaseEnv.h"
 #include "IO/Context/IoContext.h"
 #include "IO/Multithreading/CreateThread.h"
 #include "IO/Networking/AsyncSocketAcceptor.h"
 #include "IO/Timer/AsyncSystemTimer.h"
+#include "Log.h"
+#include "MassMailMgr.h"
+#include "Master.h"
+#include "Policies/SingletonImp.h"
+#include "SystemConfig.h"
+#include "Timer.h"
+#include "Util.h"
+#include "World.h"
+#include "WorldRunnable.h"
+#include "WorldSocket.h"
+#include "WorldSocketMgr.h"
+#include "remote/RemoteAccess/RASocket.h"
+#include "remote/soap/MaNGOSsoap.h"
 
-#include "revision.h"
 #include "migrations_list.h"
+#include "revision.h"
 
 #ifndef WIN32
 #include "PosixDaemon.h"
@@ -78,7 +78,7 @@ void freezeDetector(uint32 _delaytime)
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         uint32 curtime = WorldTimer::getMSTime();
-        //sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "anti-freeze: time=%u, counters=[%u; %u]",curtime,Master::m_masterLoopCounter,World::m_worldLoopCounter);
+        // sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "anti-freeze: time=%u, counters=[%u; %u]",curtime,Master::m_masterLoopCounter,World::m_worldLoopCounter);
 
         // normal work
         if (loops != World::m_worldLoopCounter)
@@ -91,12 +91,12 @@ void freezeDetector(uint32 _delaytime)
         else if (WorldTimer::getMSTimeDiff(lastchange, curtime) > _delaytime)
         {
             sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "World Thread hangs, kicking out server!");
-            std::terminate();              // bang crash
+            std::terminate(); // bang crash
         }
 #endif
     }
     // Fix crash au shutdown du serv. sLog n'existe plus ici.
-    //sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Anti-freeze thread exiting without problems.");
+    // sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Anti-freeze thread exiting without problems.");
 }
 
 std::unique_ptr<IO::Networking::AsyncSocketAcceptor> SetupRemoteAccessServer(IO::IoContext* ioCtx)
@@ -110,23 +110,20 @@ std::unique_ptr<IO::Networking::AsyncSocketAcceptor> SetupRemoteAccessServer(IO:
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "MaNGOS RA can not bind to port %d on %s", raBindPort, raBindIp.c_str());
         return nullptr;
     }
-    raServer->AutoAcceptSocketsUntilClose([ioCtx](IO::Networking::SocketDescriptor socketDescriptor)
-    {
-        // Create a socket and attach it to our global ioCtx
-        std::make_shared<RASocket>(std::move(IO::Networking::AsyncSocket(ioCtx, std::move(socketDescriptor))))->Start();
-    });
+    raServer->AutoAcceptSocketsUntilClose(
+        [ioCtx](IO::Networking::SocketDescriptor socketDescriptor)
+        {
+            // Create a socket and attach it to our global ioCtx
+            std::make_shared<RASocket>(std::move(IO::Networking::AsyncSocket(ioCtx, std::move(socketDescriptor))))->Start();
+        });
     sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "Starting Remote access listener on %s:%d", raBindIp.c_str(), raBindPort);
 
     return raServer;
 }
 
-Master::Master()
-{
-}
+Master::Master() {}
 
-Master::~Master()
-{
-}
+Master::~Master() {}
 
 // Main function
 int Master::Run()
@@ -179,10 +176,7 @@ int Master::Run()
     }
     for (int32 i = 0; i < ioNetworkThreadCount; ++i)
     {
-        ioCtxRunners.emplace_back(IO::Multithreading::CreateThread("IO[" + std::to_string(i) + "]", [ioCtx]()
-        {
-            ioCtx->RunUntilShutdown();
-        }));
+        ioCtxRunners.emplace_back(IO::Multithreading::CreateThread("IO[" + std::to_string(i) + "]", [ioCtx]() { ioCtx->RunUntilShutdown(); }));
     }
 
     // Initialize the World
@@ -216,7 +210,7 @@ int Master::Run()
     std::unique_ptr<std::thread> cliThread = nullptr;
 
 #ifdef WIN32
-    if (sConfig.GetBoolDefault("Console.Enable", true) && (m_ServiceStatus == -1)/* need disable console in service mode*/)
+    if (sConfig.GetBoolDefault("Console.Enable", true) && (m_ServiceStatus == -1) /* need disable console in service mode*/)
 #else
     if (sConfig.GetBoolDefault("Console.Enable", true))
 #endif
@@ -229,7 +223,7 @@ int Master::Run()
     if (sConfig.GetBoolDefault("Ra.Enable", false))
         remoteAccessServer = SetupRemoteAccessServer(ioCtx);
 
-    // Handle affinity for multiple processors and process priority on Windows
+        // Handle affinity for multiple processors and process priority on Windows
 #ifdef WIN32
     {
         HANDLE hProcess = ::GetCurrentProcess();
@@ -242,11 +236,11 @@ int Master::Run()
 
             if (::GetProcessAffinityMask(hProcess, &appAff, &sysAff))
             {
-                ULONG_PTR curAff = Aff & appAff;            // remove non accessible processors
+                ULONG_PTR curAff = Aff & appAff; // remove non accessible processors
 
                 if (!curAff)
                 {
-                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Processors marked in UseProcessors bitmask (hex) %x not accessible for mangosd. Accessible processors bitmask (hex): %x",Aff,appAff);
+                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Processors marked in UseProcessors bitmask (hex) %x not accessible for mangosd. Accessible processors bitmask (hex): %x", Aff, appAff);
                 }
                 else
                 {
@@ -261,10 +255,10 @@ int Master::Run()
 
         bool Prio = sConfig.GetBoolDefault("ProcessPriority", false);
 
-     // if(Prio && (m_ServiceStatus == -1)/* need set to default process priority class in service mode*/)
-        if(Prio)
+        // if(Prio && (m_ServiceStatus == -1)/* need set to default process priority class in service mode*/)
+        if (Prio)
         {
-            if (::SetPriorityClass(hProcess,HIGH_PRIORITY_CLASS))
+            if (::SetPriorityClass(hProcess, HIGH_PRIORITY_CLASS))
                 sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "mangosd process priority class set to HIGH");
             else
                 sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Can't set mangosd process priority class.");
@@ -299,13 +293,8 @@ int Master::Run()
     bool doExplicitTcpNoDelay = sConfig.GetBoolDefault("Network.TcpNoDelay", true);
     std::vector<std::string> trustedProxyIps = SplitStringByDelimiter(sConfig.GetStringDefault("Network.TrustedProxyServers", ""), ',');
 
-    WorldSocketMgrOptions socketOptions
-    {
-        bindIp,
-        bindPort,
-        socketOutByteBufferSize,
-        doExplicitTcpNoDelay,
-        trustedProxyIps,
+    WorldSocketMgrOptions socketOptions{
+        bindIp, bindPort, socketOutByteBufferSize, doExplicitTcpNoDelay, trustedProxyIps,
     };
 
     if (!sWorldSocketMgr.StartWorldNetworking(ioCtx, socketOptions))
@@ -477,10 +466,7 @@ bool Master::_StartDB()
         return false;
     }
 
-    if (!StartDB("World", WorldDatabase, MIGRATIONS_WORLD) ||
-        !StartDB("Character", CharacterDatabase, MIGRATIONS_CHARACTERS) ||
-        !StartDB("Login", LoginDatabase, MIGRATIONS_LOGON) ||
-        !StartDB("Logs", LogsDatabase, MIGRATIONS_LOGS))
+    if (!StartDB("World", WorldDatabase, MIGRATIONS_WORLD) || !StartDB("Character", CharacterDatabase, MIGRATIONS_CHARACTERS) || !StartDB("Login", LoginDatabase, MIGRATIONS_LOGON) || !StartDB("Logs", LogsDatabase, MIGRATIONS_LOGS))
     {
         WorldDatabase.HaltDelayThread();
         CharacterDatabase.HaltDelayThread();
@@ -509,8 +495,8 @@ void Master::clearOnlineAccounts()
     CharacterDatabase.Execute("UPDATE `character_battleground_data` SET `instance_id` = 0");
 }
 
-#include "ObjectAccessor.h"
 #include "Language.h"
+#include "ObjectAccessor.h"
 void CreateCrashDump()
 {
 #ifndef WIN32
@@ -533,51 +519,51 @@ void Master::_OnSignal(int s)
 {
     switch (s)
     {
-        case SIGINT:
-            World::StopNow(RESTART_EXIT_CODE);
-            break;
-        case SIGTERM:
+    case SIGINT:
+        World::StopNow(RESTART_EXIT_CODE);
+        break;
+    case SIGTERM:
 #ifdef _WIN32
-            case SIGBREAK:
+    case SIGBREAK:
 #endif
-            World::StopNow(SHUTDOWN_EXIT_CODE);
-            break;
-        case SIGSEGV:
-            ::signal(SIGSEGV, nullptr);
-            if (!m_handleSigvSignals)
-                return;
-            m_handleSigvSignals = false; // Disarm anti-crash
-
-            std::exception_ptr exc = std::current_exception();
-            sWorld.SetAnticrashRearmTimer(sWorld.getConfig(CONFIG_UINT32_ANTICRASH_REARM_TIMER));
-            uint32 anticrashOptions = sWorld.getConfig(CONFIG_UINT32_ANTICRASH_OPTIONS);
-
-            // Log crash stack
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Received SIGSEGV");
-            MaNGOS::Errors::PrintStacktrace();
-
-            if (anticrashOptions & ANTICRASH_GENERATE_COREDUMP)
-                CreateCrashDump();
-
-            if (anticrashOptions & ANTICRASH_OPTION_ANNOUNCE_PLAYERS)
-            {
-                if (anticrashOptions & ANTICRASH_OPTION_SAVEALL)
-                    sWorld.SendWorldText(LANG_SYSTEMMESSAGE, "Server has crashed. Now saving online players ...");
-                else
-                    sWorld.SendWorldText(LANG_SYSTEMMESSAGE, "Crash server occurred :(");
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            }
-
-            if (anticrashOptions & ANTICRASH_OPTION_SAVEALL)
-            {
-                CharacterDatabase.ThreadStart();
-                sObjectAccessor.SaveAllPlayers();
-                std::this_thread::sleep_for(std::chrono::seconds(25));
-            }
-
-            std::rethrow_exception(exc); // Crash for real now.
+        World::StopNow(SHUTDOWN_EXIT_CODE);
+        break;
+    case SIGSEGV:
+        ::signal(SIGSEGV, nullptr);
+        if (!m_handleSigvSignals)
             return;
+        m_handleSigvSignals = false; // Disarm anti-crash
+
+        std::exception_ptr exc = std::current_exception();
+        sWorld.SetAnticrashRearmTimer(sWorld.getConfig(CONFIG_UINT32_ANTICRASH_REARM_TIMER));
+        uint32 anticrashOptions = sWorld.getConfig(CONFIG_UINT32_ANTICRASH_OPTIONS);
+
+        // Log crash stack
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Received SIGSEGV");
+        MaNGOS::Errors::PrintStacktrace();
+
+        if (anticrashOptions & ANTICRASH_GENERATE_COREDUMP)
+            CreateCrashDump();
+
+        if (anticrashOptions & ANTICRASH_OPTION_ANNOUNCE_PLAYERS)
+        {
+            if (anticrashOptions & ANTICRASH_OPTION_SAVEALL)
+                sWorld.SendWorldText(LANG_SYSTEMMESSAGE, "Server has crashed. Now saving online players ...");
+            else
+                sWorld.SendWorldText(LANG_SYSTEMMESSAGE, "Crash server occurred :(");
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+
+        if (anticrashOptions & ANTICRASH_OPTION_SAVEALL)
+        {
+            CharacterDatabase.ThreadStart();
+            sObjectAccessor.SaveAllPlayers();
+            std::this_thread::sleep_for(std::chrono::seconds(25));
+        }
+
+        std::rethrow_exception(exc); // Crash for real now.
+        return;
     }
 
     ::signal(s, _OnSignal);

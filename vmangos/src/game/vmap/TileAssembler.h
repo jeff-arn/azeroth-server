@@ -19,8 +19,8 @@
 #ifndef _TILEASSEMBLER_H_
 #define _TILEASSEMBLER_H_
 
-#include <G3D/Vector3.h>
 #include <G3D/Matrix3.h>
+#include <G3D/Vector3.h>
 #include <map>
 #include <set>
 
@@ -37,18 +37,16 @@ namespace VMAP
 
     class ModelPosition
     {
-        private:
-            G3D::Matrix3 iRotation;
-        public:
-            G3D::Vector3 iPos;
-            G3D::Vector3 iDir;
-            float iScale;
-            void init()
-            {
-                iRotation = G3D::Matrix3::fromEulerAnglesZYX(G3D::pi() * iDir.y / 180.f, G3D::pi() * iDir.x / 180.f, G3D::pi() * iDir.z / 180.f);
-            }
-            G3D::Vector3 transform(G3D::Vector3 const& pIn) const;
-            void moveToBasePos(G3D::Vector3 const& pBasePos) { iPos -= pBasePos; }
+    private:
+        G3D::Matrix3 iRotation;
+
+    public:
+        G3D::Vector3 iPos;
+        G3D::Vector3 iDir;
+        float iScale;
+        void init() { iRotation = G3D::Matrix3::fromEulerAnglesZYX(G3D::pi() * iDir.y / 180.f, G3D::pi() * iDir.x / 180.f, G3D::pi() * iDir.z / 180.f); }
+        G3D::Vector3 transform(G3D::Vector3 const& pIn) const;
+        void moveToBasePos(G3D::Vector3 const& pBasePos) { iPos -= pBasePos; }
     };
 
     typedef std::map<uint32, ModelSpawn> UniqueEntryMap;
@@ -90,22 +88,22 @@ namespace VMAP
 
     class TileAssembler
     {
-        private:
-            std::string iDestDir;
-            std::string iSrcDir;
-            MapData mapData;
-            std::set<std::string> spawnedModelFiles;
+    private:
+        std::string iDestDir;
+        std::string iSrcDir;
+        MapData mapData;
+        std::set<std::string> spawnedModelFiles;
 
-        public:
-            TileAssembler(std::string const& pSrcDirName, std::string const& pDestDirName);
-            virtual ~TileAssembler();
+    public:
+        TileAssembler(std::string const& pSrcDirName, std::string const& pDestDirName);
+        virtual ~TileAssembler();
 
-            bool convertWorld2();
-            bool readMapSpawns();
-            bool calculateTransformedBound(ModelSpawn& spawn);
+        bool convertWorld2();
+        bool readMapSpawns();
+        bool calculateTransformedBound(ModelSpawn& spawn);
 
-            void exportGameobjectModels();
-            bool convertRawFile(std::string const& pModelFilename);
+        void exportGameobjectModels();
+        bool convertRawFile(std::string const& pModelFilename);
     };
-}                                                           // VMAP
-#endif                                                      /*_TILEASSEMBLER_H_*/
+} // namespace VMAP
+#endif /*_TILEASSEMBLER_H_*/

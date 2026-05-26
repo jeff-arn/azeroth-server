@@ -19,31 +19,31 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "CharacterDatabaseCache.h"
+#include "Chat.h"
 #include "Common.h"
-#include "Language.h"
+#include "Creature.h"
 #include "Database/DatabaseEnv.h"
-#include "WorldPacket.h"
-#include "WorldSession.h"
-#include "Opcodes.h"
+#include "GossipDef.h"
+#include "Language.h"
 #include "Log.h"
 #include "ObjectMgr.h"
-#include "SpellMgr.h"
-#include "Player.h"
-#include "GossipDef.h"
-#include "ScriptMgr.h"
-#include "Creature.h"
+#include "Opcodes.h"
 #include "Pet.h"
+#include "Player.h"
+#include "ScriptMgr.h"
 #include "Spell.h"
-#include "Chat.h"
-#include "CharacterDatabaseCache.h"
+#include "SpellMgr.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 enum StableResultCode
 {
-    STABLE_ERR_MONEY        = 0x01,                         // "you don't have enough money"
-    STABLE_ERR_STABLE       = 0x06,                         // currently used in most fail cases
-    STABLE_SUCCESS_STABLE   = 0x08,                         // stable success
-    STABLE_SUCCESS_UNSTABLE = 0x09,                         // unstable/swap success
-    STABLE_SUCCESS_BUY_SLOT = 0x0A,                         // buy slot success
+    STABLE_ERR_MONEY = 0x01, // "you don't have enough money"
+    STABLE_ERR_STABLE = 0x06, // currently used in most fail cases
+    STABLE_SUCCESS_STABLE = 0x08, // stable success
+    STABLE_SUCCESS_UNSTABLE = 0x09, // unstable/swap success
+    STABLE_SUCCESS_BUY_SLOT = 0x0A, // buy slot success
 };
 
 void WorldSession::HandleTabardVendorActivateOpcode(WorldPacket& recv_data)
@@ -123,7 +123,7 @@ static void SendTrainerSpellHelper(WorldPacket& data, TrainerSpell const* tSpell
 
     data << uint32(primary_prof_first_rank && can_learn_primary_prof ? 1 : 0);
     // primary prof. learn confirmation dialog
-    data << uint32(primary_prof_first_rank ? 1 : 0);    // must be equal prev. field to have learn button in enabled state
+    data << uint32(primary_prof_first_rank ? 1 : 0); // must be equal prev. field to have learn button in enabled state
     data << uint8(spellLevel);
     data << uint32(tSpell->reqSkill);
     data << uint32(tSpell->reqSkillValue);
@@ -254,7 +254,7 @@ void WorldSession::SendTrainingSuccess(ObjectGuid guid, uint32 spellId)
 {
     WorldPacket data(SMSG_TRAINER_BUY_SUCCEEDED, 12);
     data << ObjectGuid(guid);
-    data << uint32(spellId);                                // should be same as in packet from client
+    data << uint32(spellId); // should be same as in packet from client
     SendPacket(&data);
 }
 
@@ -293,7 +293,7 @@ void WorldSession::HandleTrainerBuySpellOpcode(WorldPacket& recv_data)
         SendTrainingFailure(guid, spellId, TRAIN_FAIL_UNAVAILABLE);
         return;
     }
-        
+
     // Try to find the spell in npc_trainer.
     TrainerSpell const* trainer_spell = cSpells ? cSpells->Find(spellId) : nullptr;
 
@@ -307,7 +307,7 @@ void WorldSession::HandleTrainerBuySpellOpcode(WorldPacket& recv_data)
         SendTrainingFailure(guid, spellId, TRAIN_FAIL_UNAVAILABLE);
         return;
     }
-    
+
     // Can't be learned, cheat? Or double learn with lags...
     if (_player->GetTrainerSpellState(trainer_spell) != TRAINER_SPELL_GREEN)
     {
@@ -457,8 +457,7 @@ void WorldSession::SendSpiritResurrect()
     WorldSafeLocsEntry const* corpseGrave = nullptr;
     Corpse* corpse = _player->GetCorpse();
     if (corpse)
-        corpseGrave = sObjectMgr.GetClosestGraveYard(
-                          corpse->GetPositionX(), corpse->GetPositionY(), corpse->GetPositionZ(), corpse->GetMapId(), _player->GetTeam());
+        corpseGrave = sObjectMgr.GetClosestGraveYard(corpse->GetPositionX(), corpse->GetPositionY(), corpse->GetPositionZ(), corpse->GetMapId(), _player->GetTeam());
 
     // now can spawn bones
     _player->SpawnCorpseBones();
@@ -466,13 +465,12 @@ void WorldSession::SendSpiritResurrect()
     // teleport to nearest from corpse graveyard, if different from nearest to player ghost
     if (corpseGrave)
     {
-        WorldSafeLocsEntry const* ghostGrave = sObjectMgr.GetClosestGraveYard(
-                _player->GetPositionX(), _player->GetPositionY(), _player->GetPositionZ(), _player->GetMapId(), _player->GetTeam());
+        WorldSafeLocsEntry const* ghostGrave = sObjectMgr.GetClosestGraveYard(_player->GetPositionX(), _player->GetPositionY(), _player->GetPositionZ(), _player->GetMapId(), _player->GetTeam());
 
         float orientation = _player->GetOrientation();
 
         // World of Warcraft Client Patch 1.8.0 (2005-10-11)
-        // - All graveyards that needed adjustment were changed so that a 
+        // - All graveyards that needed adjustment were changed so that a
         //   character's spirit comes into the world facing toward the Spirit Healer.
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_7_1
         if (float facing = sObjectMgr.GetWorldSafeLocFacing(corpseGrave->ID))
@@ -523,7 +521,7 @@ void WorldSession::SendBindPoint(Creature* npc)
         return;
 
     // send spell for bind 3286 bind magic
-    npc->CastSpell(_player, 3286, true);                    // Bind
+    npc->CastSpell(_player, 3286, true); // Bind
 
     _player->PlayerTalkClass->CloseGossip();
 }
@@ -547,17 +545,17 @@ void WorldSession::HandleListStabledPetsOpcode(WorldPacket& recv_data)
 
 void WorldSession::SendStablePet(ObjectGuid guid)
 {
-    WorldPacket data(MSG_LIST_STABLED_PETS, 200);           // guess size
+    WorldPacket data(MSG_LIST_STABLED_PETS, 200); // guess size
     data << guid;
 
     Pet* pet = _player->GetPet();
 
     size_t wpos = data.wpos();
-    data << uint8(0);                                       // place holder for slot show number
+    data << uint8(0); // place holder for slot show number
 
     data << uint8(GetPlayer()->m_stableSlots);
 
-    uint8 num = 0;                                          // counter for place holder
+    uint8 num = 0; // counter for place holder
 
     // not let move dead pet in slot
     if (pet && pet->IsAlive() && pet->GetPetType() == HUNTER_PET)
@@ -565,9 +563,9 @@ void WorldSession::SendStablePet(ObjectGuid guid)
         data << uint32(pet->GetCharmInfo()->GetPetNumber());
         data << uint32(pet->GetEntry());
         data << uint32(pet->GetLevel());
-        data << pet->GetName();                             // petname
-        data << uint32(pet->GetLoyaltyLevel());             // loyalty
-        data << uint8(0x01);                                // client slot 1 == current pet (0)
+        data << pet->GetName(); // petname
+        data << uint32(pet->GetLoyaltyLevel()); // loyalty
+        data << uint8(0x01); // client slot 1 == current pet (0)
         ++num;
     }
     // Pet may be despawned if owner went far away from pet for example.
@@ -576,9 +574,9 @@ void WorldSession::SendStablePet(ObjectGuid guid)
         data << uint32(currentPetData->id);
         data << uint32(currentPetData->entry);
         data << uint32(currentPetData->level);
-        data << currentPetData->name;                           // petname
-        data << uint32(currentPetData->loyalty);                // loyalty
-        data << uint8(0x01);                                    // client slot 1 == current pet (0)
+        data << currentPetData->name; // petname
+        data << uint32(currentPetData->loyalty); // loyalty
+        data << uint8(0x01); // client slot 1 == current pet (0)
         ++num;
     }
     CharPetMap const& pets = sCharacterDatabaseCache.GetCharPetsMap();
@@ -587,16 +585,16 @@ void WorldSession::SendStablePet(ObjectGuid guid)
         for (const auto it : myPets->second)
             if (it->slot >= PET_SAVE_FIRST_STABLE_SLOT && it->slot <= PET_SAVE_LAST_STABLE_SLOT)
             {
-                data << uint32(it->id);                 // pet number
-                data << uint32(it->entry);              // creature entry
-                data << uint32(it->level);              // level
-                data << it->name;                       // name
-                data << uint32(it->loyalty);            // loyalty
-                data << uint8(it->slot + 1);            // slot
+                data << uint32(it->id); // pet number
+                data << uint32(it->entry); // creature entry
+                data << uint32(it->level); // level
+                data << it->name; // name
+                data << uint32(it->loyalty); // loyalty
+                data << uint8(it->slot + 1); // slot
                 ++num;
             }
 
-    data.put<uint8>(wpos, num);                             // set real data to placeholder
+    data.put<uint8>(wpos, num); // set real data to placeholder
     SendPacket(&data);
 }
 
@@ -672,7 +670,8 @@ void WorldSession::HandleStablePet(WorldPacket& recv_data)
             if (it->slot >= PET_SAVE_FIRST_STABLE_SLOT && it->slot <= PET_SAVE_LAST_STABLE_SLOT)
                 usedSlots[it->slot - PET_SAVE_FIRST_STABLE_SLOT] = true;
 
-    for (free_slot = PET_SAVE_FIRST_STABLE_SLOT; free_slot <= PET_SAVE_LAST_STABLE_SLOT && usedSlots[free_slot - PET_SAVE_FIRST_STABLE_SLOT]; ++free_slot);
+    for (free_slot = PET_SAVE_FIRST_STABLE_SLOT; free_slot <= PET_SAVE_LAST_STABLE_SLOT && usedSlots[free_slot - PET_SAVE_FIRST_STABLE_SLOT]; ++free_slot)
+        ;
 
     if (free_slot <= GetPlayer()->m_stableSlots)
     {
@@ -765,9 +764,7 @@ void WorldSession::HandleBuyStableSlot(WorldPacket& recv_data)
         SendStableResult(STABLE_ERR_STABLE);
 }
 
-void WorldSession::HandleStableRevivePet(WorldPacket& /* recv_data */)
-{
-}
+void WorldSession::HandleStableRevivePet(WorldPacket& /* recv_data */) {}
 
 void WorldSession::HandleStableSwapPet(WorldPacket& recv_data)
 {
@@ -801,7 +798,7 @@ void WorldSession::HandleStableSwapPet(WorldPacket& recv_data)
         return;
     }
 
-    uint32 slot        = swappedPet->slot;
+    uint32 slot = swappedPet->slot;
     uint32 creature_id = swappedPet->entry;
 
     if (!creature_id)

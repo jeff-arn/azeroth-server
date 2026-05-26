@@ -25,20 +25,17 @@ EndScriptData */
 
 enum
 {
-    SPELL_CURSEOFBLOOD              = 8282,
-    SPELL_DISPELMAGIC               = 15090,
-    SPELL_FEAR                      = 12096,
-    SPELL_HEAL                      = 12039,
-    SPELL_POWERWORDSHIELD           = 11647,
-    SPELL_SLEEP                     = 8399
+    SPELL_CURSEOFBLOOD = 8282,
+    SPELL_DISPELMAGIC = 15090,
+    SPELL_FEAR = 12096,
+    SPELL_HEAL = 12039,
+    SPELL_POWERWORDSHIELD = 11647,
+    SPELL_SLEEP = 8399
 };
 
 struct boss_high_inquisitor_fairbanksAI : public ScriptedAI
 {
-    boss_high_inquisitor_fairbanksAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_high_inquisitor_fairbanksAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 CurseOfBlood_Timer;
     uint32 DispelMagic_Timer;
@@ -78,15 +75,16 @@ struct boss_high_inquisitor_fairbanksAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //If we are <25% hp cast Heal
+        // If we are <25% hp cast Heal
         if (m_creature->GetHealthPercent() <= 25.0f && !m_creature->IsNonMeleeSpellCasted(false) && Heal_Timer < diff)
         {
             DoCastSpellIfCan(m_creature, SPELL_HEAL);
             Heal_Timer = 30000;
         }
-        else Heal_Timer -= diff;
+        else
+            Heal_Timer -= diff;
 
-        //Fear_Timer
+        // Fear_Timer
         if (Fear_Timer < diff)
         {
             if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 1))
@@ -94,9 +92,10 @@ struct boss_high_inquisitor_fairbanksAI : public ScriptedAI
 
             Fear_Timer = 40000;
         }
-        else Fear_Timer -= diff;
+        else
+            Fear_Timer -= diff;
 
-        //Sleep_Timer
+        // Sleep_Timer
         if (Sleep_Timer < diff)
         {
             if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0))
@@ -104,16 +103,17 @@ struct boss_high_inquisitor_fairbanksAI : public ScriptedAI
 
             Sleep_Timer = 30000;
         }
-        else Sleep_Timer -= diff;
+        else
+            Sleep_Timer -= diff;
 
-        //PowerWordShield_Timer
+        // PowerWordShield_Timer
         if (!PowerWordShield && m_creature->GetHealthPercent() <= 25.0f)
         {
             DoCastSpellIfCan(m_creature, SPELL_POWERWORDSHIELD);
             PowerWordShield = true;
         }
 
-        //Dispel_Timer
+        // Dispel_Timer
         if (Dispel_Timer < diff)
         {
             if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
@@ -121,25 +121,24 @@ struct boss_high_inquisitor_fairbanksAI : public ScriptedAI
 
             DispelMagic_Timer = 30000;
         }
-        else DispelMagic_Timer -= diff;
+        else
+            DispelMagic_Timer -= diff;
 
-        //CurseOfBlood_Timer
+        // CurseOfBlood_Timer
         if (CurseOfBlood_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CURSEOFBLOOD);
             CurseOfBlood_Timer = 25000;
         }
-        else CurseOfBlood_Timer -= diff;
+        else
+            CurseOfBlood_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
 
 
-CreatureAI* GetAI_boss_high_inquisitor_fairbanks(Creature* pCreature)
-{
-    return new boss_high_inquisitor_fairbanksAI(pCreature);
-}
+CreatureAI* GetAI_boss_high_inquisitor_fairbanks(Creature* pCreature) { return new boss_high_inquisitor_fairbanksAI(pCreature); }
 
 void AddSC_boss_high_inquisitor_fairbanks()
 {

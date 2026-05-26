@@ -16,15 +16,15 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <iomanip>
-#include <string>
-#include <sstream>
 #include "VMapManager2.h"
+#include <iomanip>
+#include <sstream>
+#include <string>
 #include "MapTree.h"
-#include "ModelInstance.h"
-#include "WorldModel.h"
-#include "VMapDefinitions.h"
 #include "Maps/GridMapDefines.h"
+#include "ModelInstance.h"
+#include "VMapDefinitions.h"
+#include "WorldModel.h"
 
 using G3D::Vector3;
 
@@ -33,9 +33,7 @@ namespace VMAP
 
     //=========================================================
 
-    VMapManager2::VMapManager2()
-    {
-    }
+    VMapManager2::VMapManager2() {}
 
     //=========================================================
 
@@ -121,7 +119,7 @@ namespace VMAP
 
     //=========================================================
 
-    void VMapManager2::unloadMap(unsigned int  pMapId, int x, int y)
+    void VMapManager2::unloadMap(unsigned int pMapId, int x, int y)
     {
         InstanceTreeMap::iterator instanceTree = iInstanceMapTrees.find(pMapId);
         if (instanceTree != iInstanceMapTrees.end())
@@ -139,7 +137,8 @@ namespace VMAP
 
     bool VMapManager2::isInLineOfSight(unsigned int pMapId, float x1, float y1, float z1, float x2, float y2, float z2, bool ignoreM2Model)
     {
-        if (!isLineOfSightCalcEnabled()) return true;
+        if (!isLineOfSightCalcEnabled())
+            return true;
         bool result = true;
         InstanceTreeMap::iterator instanceTree = iInstanceMapTrees.find(pMapId);
         if (instanceTree != iInstanceMapTrees.end())
@@ -153,7 +152,8 @@ namespace VMAP
     }
     ModelInstance* VMapManager2::FindCollisionModel(unsigned int mapId, float x0, float y0, float z0, float x1, float y1, float z1)
     {
-        if (!isLineOfSightCalcEnabled()) return nullptr;
+        if (!isLineOfSightCalcEnabled())
+            return nullptr;
         ModelInstance* result = nullptr;
         InstanceTreeMap::iterator instanceTree = iInstanceMapTrees.find(mapId);
         if (instanceTree != iInstanceMapTrees.end())
@@ -201,7 +201,7 @@ namespace VMAP
 
     float VMapManager2::getHeight(unsigned int pMapId, float x, float y, float z, float maxSearchDist)
     {
-        float height = VMAP_INVALID_HEIGHT_VALUE;           // no height
+        float height = VMAP_INVALID_HEIGHT_VALUE; // no height
         if (isHeightCalcEnabled())
         {
             InstanceTreeMap::iterator instanceTree = iInstanceMapTrees.find(pMapId);
@@ -211,7 +211,7 @@ namespace VMAP
                 height = instanceTree->second->getHeight(pos, maxSearchDist);
                 if (!(height < G3D::inf()))
                 {
-                    height = VMAP_INVALID_HEIGHT_VALUE;     // no height
+                    height = VMAP_INVALID_HEIGHT_VALUE; // no height
                 }
             }
         }
@@ -250,15 +250,24 @@ namespace VMAP
     {
         switch (type)
         {
-            case 0: return MAP_LIQUID_TYPE_NO_WATER;
-            case 1: return MAP_LIQUID_TYPE_WATER;
-            case 2: return MAP_LIQUID_TYPE_OCEAN;
-            case 3: return MAP_LIQUID_TYPE_MAGMA;
-            case 4: return MAP_LIQUID_TYPE_SLIME;
-            case 21: return MAP_LIQUID_TYPE_SLIME;
-            case 41: return MAP_LIQUID_TYPE_WATER;
-            case 61: return MAP_LIQUID_TYPE_WATER;
-            default: return 0;
+        case 0:
+            return MAP_LIQUID_TYPE_NO_WATER;
+        case 1:
+            return MAP_LIQUID_TYPE_WATER;
+        case 2:
+            return MAP_LIQUID_TYPE_OCEAN;
+        case 3:
+            return MAP_LIQUID_TYPE_MAGMA;
+        case 4:
+            return MAP_LIQUID_TYPE_SLIME;
+        case 21:
+            return MAP_LIQUID_TYPE_SLIME;
+        case 41:
+            return MAP_LIQUID_TYPE_WATER;
+        case 61:
+            return MAP_LIQUID_TYPE_WATER;
+        default:
+            return 0;
         }
     }
 
@@ -286,13 +295,13 @@ namespace VMAP
 
     std::shared_ptr<WorldModel> VMapManager2::acquireModelInstance(std::string const& basepath, std::string const& filename)
     {
-        std::shared_lock<std::shared_timed_mutex> slock (m_modelsLock);
+        std::shared_lock<std::shared_timed_mutex> slock(m_modelsLock);
         ModelFileMap::iterator model = iLoadedModelFiles.find(filename);
         std::shared_ptr<WorldModel> ret;
         if (model == iLoadedModelFiles.end())
         {
             slock.unlock();
-            std::unique_lock<std::shared_timed_mutex> ulock (m_modelsLock);
+            std::unique_lock<std::shared_timed_mutex> ulock(m_modelsLock);
             model = iLoadedModelFiles.find(filename);
             if (model != iLoadedModelFiles.end())
             {
@@ -307,15 +316,15 @@ namespace VMAP
                 delete worldmodel;
                 return nullptr;
             }
-            //DEBUG_FILTER_LOG(LOG_FILTER_MAP_LOADING, "VMapManager2: loading file '%s%s'.", basepath.c_str(), filename.c_str());
-            ret = std::shared_ptr<WorldModel>(
-                        worldmodel,
-                        [this, filename](WorldModel* m){
-                            std::unique_lock<std::shared_timed_mutex> lock(m_modelsLock);
-                            if (!getUseManagedPtrs())
-                                iLoadedModelFiles.erase(filename);
-                            delete m;
-                        });
+            // DEBUG_FILTER_LOG(LOG_FILTER_MAP_LOADING, "VMapManager2: loading file '%s%s'.", basepath.c_str(), filename.c_str());
+            ret = std::shared_ptr<WorldModel>(worldmodel,
+                                              [this, filename](WorldModel* m)
+                                              {
+                                                  std::unique_lock<std::shared_timed_mutex> lock(m_modelsLock);
+                                                  if (!getUseManagedPtrs())
+                                                      iLoadedModelFiles.erase(filename);
+                                                  delete m;
+                                              });
             model = iLoadedModelFiles.emplace(filename, ManagedModel{ret, getUseManagedPtrs()}).first;
             return ret;
         }
@@ -325,13 +334,9 @@ namespace VMAP
 
     //=========================================================
 
-    bool VMapManager2::existsMap(char const* pBasePath, unsigned int pMapId, int x, int y)
-    {
-        return StaticMapTree::CanLoadMap(std::string(pBasePath), pMapId, x, y);
-    }
+    bool VMapManager2::existsMap(char const* pBasePath, unsigned int pMapId, int x, int y) { return StaticMapTree::CanLoadMap(std::string(pBasePath), pMapId, x, y); }
 
-    ManagedModel::ManagedModel(const std::shared_ptr<WorldModel> &ptr, bool managed) :
-        std::weak_ptr<WorldModel>(ptr)
+    ManagedModel::ManagedModel(const std::shared_ptr<WorldModel>& ptr, bool managed) : std::weak_ptr<WorldModel>(ptr)
     {
         if (managed)
             m_persistent = lock();

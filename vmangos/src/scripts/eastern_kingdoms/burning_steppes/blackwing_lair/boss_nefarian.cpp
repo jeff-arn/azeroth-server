@@ -14,57 +14,57 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "blackwing_lair.h"
+#include "scriptPCH.h"
 
 enum Nefarian : uint32
 {
-    SAY_AGGRO                   = 9973,
-    SAY_SHADOWFLAME             = 9974,
-    SAY_RAISE_SKELETONS         = 9883,
-    SAY_SLAY                    = 9972,
-    SAY_DEATH                   = 9971,
+    SAY_AGGRO = 9973,
+    SAY_SHADOWFLAME = 9974,
+    SAY_RAISE_SKELETONS = 9883,
+    SAY_SLAY = 9972,
+    SAY_DEATH = 9971,
 
-    SAY_MAGE                    = 9850,
-    SAY_WARRIOR                 = 9855,
-    SAY_DRUID                   = 9851,
-    SAY_PRIEST                  = 9848,
-    SAY_PALADIN                 = 9853,
-    SAY_SHAMAN                  = 9854,
-    SAY_WARLOCK                 = 9852,
-    SAY_HUNTER                  = 9849,
-    SAY_ROGUE                   = 9856,
+    SAY_MAGE = 9850,
+    SAY_WARRIOR = 9855,
+    SAY_DRUID = 9851,
+    SAY_PRIEST = 9848,
+    SAY_PALADIN = 9853,
+    SAY_SHAMAN = 9854,
+    SAY_WARLOCK = 9852,
+    SAY_HUNTER = 9849,
+    SAY_ROGUE = 9856,
 
-    SPELL_SHADOWFLAME_PASSIV    = 22992,
-    SPELL_SHADOWFLAME           = 22539,
-    SPELL_BELLOWING_ROAR        = 22686,
-    SPELL_VEIL_OF_SHADOW        = 22687, // old spell id 7068 -> wrong
-    SPELL_CLEAVE                = 20691,
-    SPELL_TAIL_LASH             = 23364,
-    SPELL_BONE_CONTRUST         = 23363,
-    SPELL_RAISE_DRAKONID        = 23362,
+    SPELL_SHADOWFLAME_PASSIV = 22992,
+    SPELL_SHADOWFLAME = 22539,
+    SPELL_BELLOWING_ROAR = 22686,
+    SPELL_VEIL_OF_SHADOW = 22687, // old spell id 7068 -> wrong
+    SPELL_CLEAVE = 20691,
+    SPELL_TAIL_LASH = 23364,
+    SPELL_BONE_CONTRUST = 23363,
+    SPELL_RAISE_DRAKONID = 23362,
 
-    SPELL_MAGE                  = 23410, // wild magic
-    SPELL_WARRIOR               = 23397, // beserk
-    SPELL_DRUID                 = 23398, // cat form
-    SPELL_PRIEST                = 23401, // corrupted healing
-    SPELL_PALADIN               = 23418, // syphon blessing
-    SPELL_SHAMAN                = 23425, // totems
-    SPELL_CORRUPTED_TOTEM       = 23424,
-    SPELL_WARLOCK               = 23427, // infernals -> should trigger 23426
-    SPELL_HUNTER                = 23436, // bow broke
-    SPELL_ROGUE                 = 23414, // Paralise
+    SPELL_MAGE = 23410, // wild magic
+    SPELL_WARRIOR = 23397, // beserk
+    SPELL_DRUID = 23398, // cat form
+    SPELL_PRIEST = 23401, // corrupted healing
+    SPELL_PALADIN = 23418, // syphon blessing
+    SPELL_SHAMAN = 23425, // totems
+    SPELL_CORRUPTED_TOTEM = 23424,
+    SPELL_WARLOCK = 23427, // infernals -> should trigger 23426
+    SPELL_HUNTER = 23436, // bow broke
+    SPELL_ROGUE = 23414, // Paralise
 
-    SPELL_POLYMORPH             = 23603,
-    SPELL_HOVER                 = 17131,
+    SPELL_POLYMORPH = 23603,
+    SPELL_HOVER = 17131,
 
-    SPELL_WINDFURY_TOTEM_PASSIVE         = 10612,
-    SPELL_WINDFURY_TOTEM                 = 10610,
-    NPC_CORRUPTED_INFERNAL               = 14668,
-    NPC_CORRUPTED_STONESKIN_TOTEM_VI     = 14663,
+    SPELL_WINDFURY_TOTEM_PASSIVE = 10612,
+    SPELL_WINDFURY_TOTEM = 10610,
+    NPC_CORRUPTED_INFERNAL = 14668,
+    NPC_CORRUPTED_STONESKIN_TOTEM_VI = 14663,
     NPC_CORRUPTED_HEALING_STREAM_TOTEM_V = 14664,
-    NPC_CORRUPTED_WINDFURY_TOTEM_III     = 14666,
-    NPC_CORRUPTED_FIRE_NOVA_TOTEM_V      = 14662,
+    NPC_CORRUPTED_WINDFURY_TOTEM_III = 14666,
+    NPC_CORRUPTED_FIRE_NOVA_TOTEM_V = 14662,
 };
 
 struct ClassCallInfo
@@ -101,29 +101,29 @@ struct boss_nefarianAI : ScriptedAI
 
     void Reset() override
     {
-        m_uiShadowFlameTimer    = urand(18000, 25000);
-        m_uiBellowingRoarTimer  = urand(25000, 30000);
-        m_uiVeilOfShadowTimer   = 15000;
-        m_uiCleaveTimer         = urand(7000, 10000);
-        m_uiTailLashTimer       = 10000;
-        m_uiClassCallTimer      = urand(25000, 35000);
-        m_bPhase3               = false;
-        m_bTransitionDone       = m_creature->GetMapId() != MAP_BLACKWING_LAIR;
-        m_bWarriorStance        = false;
-        m_uiTransitionStage     = 0;
-        m_uiTransitionTimer     = 100;
+        m_uiShadowFlameTimer = urand(18000, 25000);
+        m_uiBellowingRoarTimer = urand(25000, 30000);
+        m_uiVeilOfShadowTimer = 15000;
+        m_uiCleaveTimer = urand(7000, 10000);
+        m_uiTailLashTimer = 10000;
+        m_uiClassCallTimer = urand(25000, 35000);
+        m_bPhase3 = false;
+        m_bTransitionDone = m_creature->GetMapId() != MAP_BLACKWING_LAIR;
+        m_bWarriorStance = false;
+        m_uiTransitionStage = 0;
+        m_uiTransitionTimer = 100;
 
         m_vPossibleCalls.clear();
 
-        m_vPossibleCalls.emplace_back(CLASS_WARRIOR,  SAY_WARRIOR);
-        m_vPossibleCalls.emplace_back(CLASS_PALADIN,  SAY_PALADIN);
-        m_vPossibleCalls.emplace_back(CLASS_HUNTER,   SAY_HUNTER);
-        m_vPossibleCalls.emplace_back(CLASS_ROGUE,    SAY_ROGUE);
-        m_vPossibleCalls.emplace_back(CLASS_PRIEST,   SAY_PRIEST);
-        m_vPossibleCalls.emplace_back(CLASS_SHAMAN,   SAY_SHAMAN);
-        m_vPossibleCalls.emplace_back(CLASS_MAGE,     SAY_MAGE);
-        m_vPossibleCalls.emplace_back(CLASS_WARLOCK,  SAY_WARLOCK);
-        m_vPossibleCalls.emplace_back(CLASS_DRUID,    SAY_DRUID);
+        m_vPossibleCalls.emplace_back(CLASS_WARRIOR, SAY_WARRIOR);
+        m_vPossibleCalls.emplace_back(CLASS_PALADIN, SAY_PALADIN);
+        m_vPossibleCalls.emplace_back(CLASS_HUNTER, SAY_HUNTER);
+        m_vPossibleCalls.emplace_back(CLASS_ROGUE, SAY_ROGUE);
+        m_vPossibleCalls.emplace_back(CLASS_PRIEST, SAY_PRIEST);
+        m_vPossibleCalls.emplace_back(CLASS_SHAMAN, SAY_SHAMAN);
+        m_vPossibleCalls.emplace_back(CLASS_MAGE, SAY_MAGE);
+        m_vPossibleCalls.emplace_back(CLASS_WARLOCK, SAY_WARLOCK);
+        m_vPossibleCalls.emplace_back(CLASS_DRUID, SAY_DRUID);
     }
 
     void KilledUnit(Unit* pVictim) override
@@ -153,10 +153,7 @@ struct boss_nefarianAI : ScriptedAI
         m_creature->DeleteLater();
     }
 
-    void JustSummoned(Creature* pSummoned) override
-    {
-        pSummoned->SetInCombatWithZone();
-    }
+    void JustSummoned(Creature* pSummoned) override { pSummoned->SetInCombatWithZone(); }
 
     void MovementInform(uint32 uiType, uint32 uiPointId) override
     {
@@ -165,16 +162,16 @@ struct boss_nefarianAI : ScriptedAI
 
         switch (uiPointId)
         {
-            case 1:
-                m_creature->GetMotionMaster()->MovePoint(2, -7495.964f, -1252.402f, 476.795f, MOVE_FORCE_DESTINATION, 17.0f);
-                m_uiTransitionTimer = 0;
-                break;
-            case 2:
-                m_creature->GetMotionMaster()->MoveIdle();
-                m_uiTransitionTimer = 100;
-                break;
-            default:
-                break;
+        case 1:
+            m_creature->GetMotionMaster()->MovePoint(2, -7495.964f, -1252.402f, 476.795f, MOVE_FORCE_DESTINATION, 17.0f);
+            m_uiTransitionTimer = 0;
+            break;
+        case 2:
+            m_creature->GetMotionMaster()->MoveIdle();
+            m_uiTransitionTimer = 100;
+            break;
+        default:
+            break;
         }
     }
 
@@ -191,56 +188,54 @@ struct boss_nefarianAI : ScriptedAI
         for (const auto& itr : players)
         {
             Player* pPlayer = itr.getSource();
-            if (pPlayer &&
-                pPlayer->IsAlive() &&
-                !pPlayer->IsGameMaster())
+            if (pPlayer && pPlayer->IsAlive() && !pPlayer->IsGameMaster())
             {
                 if (pPlayer->GetClass() == ClassCalled)
                 {
                     bClassFound = true;
                     switch (ClassCalled)
                     {
-                        case CLASS_WARRIOR:
+                    case CLASS_WARRIOR:
                         {
                             pPlayer->AddAura(SPELL_WARRIOR);
                             break;
                         }
-                        case CLASS_PALADIN:
+                    case CLASS_PALADIN:
                         {
                             pPlayer->CastSpell(pPlayer, SPELL_PALADIN, true);
                             break;
                         }
-                        case CLASS_HUNTER:
+                    case CLASS_HUNTER:
                         {
                             pPlayer->CastSpell(pPlayer, SPELL_HUNTER, true);
                             break;
                         }
-                        case CLASS_ROGUE:
+                    case CLASS_ROGUE:
                         {
                             pPlayer->CastSpell(pPlayer, SPELL_ROGUE, true);
                             break;
                         }
-                        case CLASS_PRIEST:
+                    case CLASS_PRIEST:
                         {
                             pPlayer->AddAura(SPELL_PRIEST);
                             break;
                         }
-                        case CLASS_SHAMAN:
+                    case CLASS_SHAMAN:
                         {
                             pPlayer->AddAura(SPELL_SHAMAN);
                             break;
                         }
-                        case CLASS_MAGE:
+                    case CLASS_MAGE:
                         {
                             pPlayer->CastSpell(pPlayer, SPELL_MAGE, true);
                             break;
                         }
-                        case CLASS_WARLOCK:
+                    case CLASS_WARLOCK:
                         {
                             pPlayer->CastSpell(pPlayer, SPELL_WARLOCK, true);
                             break;
                         }
-                        case CLASS_DRUID:
+                    case CLASS_DRUID:
                         {
                             pPlayer->AddAura(SPELL_DRUID);
                             break;
@@ -262,34 +257,34 @@ struct boss_nefarianAI : ScriptedAI
             {
                 switch (m_uiTransitionStage)
                 {
-                    case 0:
-                        SetCombatMovement(false);
-                        m_creature->SetInCombatWithZone();
-                        m_creature->SetFly(true);
+                case 0:
+                    SetCombatMovement(false);
+                    m_creature->SetInCombatWithZone();
+                    m_creature->SetFly(true);
 
-                        DoScriptText(SAY_AGGRO, m_creature);
+                    DoScriptText(SAY_AGGRO, m_creature);
 
-                        m_creature->GetMotionMaster()->MovePoint(1, -7449.145f, -1320.647f, 476.795f);
-                        m_creature->MonsterMoveWithSpeed(-7449.145f, -1320.647f, 476.795f, -10.0f, 17, uint32(MOVE_FORCE_DESTINATION));
-                        m_uiTransitionTimer = 0;
-                        break;
-                    case 1:
-                        m_creature->SetFly(false);
-                        DoScriptText(SAY_SHADOWFLAME, m_creature);
-                        m_creature->HandleEmote(EMOTE_ONESHOT_LAND);
-                        m_uiTransitionTimer = 1000;
-                        break;
-                    case 2:
-                        m_creature->SetWalk(true);
-                        m_creature->RemoveAurasDueToSpell(SPELL_HOVER);
-                        if (Unit* pTarget = m_creature->GetVictim())
-                        {
-                            m_creature->GetMotionMaster()->MoveChase(pTarget);
-                            SetCombatMovement(true);
-                            m_creature->CastSpell(pTarget, SPELL_SHADOWFLAME_PASSIV, true);
-                        }
-                        m_bTransitionDone = true;
-                        break;
+                    m_creature->GetMotionMaster()->MovePoint(1, -7449.145f, -1320.647f, 476.795f);
+                    m_creature->MonsterMoveWithSpeed(-7449.145f, -1320.647f, 476.795f, -10.0f, 17, uint32(MOVE_FORCE_DESTINATION));
+                    m_uiTransitionTimer = 0;
+                    break;
+                case 1:
+                    m_creature->SetFly(false);
+                    DoScriptText(SAY_SHADOWFLAME, m_creature);
+                    m_creature->HandleEmote(EMOTE_ONESHOT_LAND);
+                    m_uiTransitionTimer = 1000;
+                    break;
+                case 2:
+                    m_creature->SetWalk(true);
+                    m_creature->RemoveAurasDueToSpell(SPELL_HOVER);
+                    if (Unit* pTarget = m_creature->GetVictim())
+                    {
+                        m_creature->GetMotionMaster()->MoveChase(pTarget);
+                        SetCombatMovement(true);
+                        m_creature->CastSpell(pTarget, SPELL_SHADOWFLAME_PASSIV, true);
+                    }
+                    m_bTransitionDone = true;
+                    break;
                 }
                 ++m_uiTransitionStage;
             }
@@ -348,10 +343,10 @@ struct boss_nefarianAI : ScriptedAI
         // ClassCall_Timer
         if (m_uiClassCallTimer < uiDiff)
         {
-            //Cast a random class call
-            //On official it is based on what classes are currently on the hostil list
-            //but we can't do that yet so just randomly call one
-            // We do it now
+            // Cast a random class call
+            // On official it is based on what classes are currently on the hostil list
+            // but we can't do that yet so just randomly call one
+            //  We do it now
             if (!m_vPossibleCalls.empty())
             {
                 uint8 uiRandClass = urand(0, m_vPossibleCalls.size() - 1);
@@ -382,16 +377,13 @@ struct boss_nefarianAI : ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_nefarian(Creature* pCreature)
-{
-    return new boss_nefarianAI(pCreature);
-}
+CreatureAI* GetAI_boss_nefarian(Creature* pCreature) { return new boss_nefarianAI(pCreature); }
 
 enum
 {
-    SPELL_ROOT_SELF      = 17507,
-    SPELL_AVOIDANCE      = 23198,
-    SPELL_STONESKIN      = 10405,
+    SPELL_ROOT_SELF = 17507,
+    SPELL_AVOIDANCE = 23198,
+    SPELL_STONESKIN = 10405,
     SPELL_HEALING_STREAM = 10461,
 };
 
@@ -425,24 +417,21 @@ struct npc_corrupted_totemAI : ScriptedAI
         m_uiCheckTimer = 1000;
     }
 
-    void Aggro(Unit* /*pWho*/) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* /*pWho*/) override { m_creature->SetInCombatWithZone(); }
 
     void JustDied(Unit* /*pKiller*/) override
     {
         switch (m_uiCreatureEntry)
         {
-            case NPC_CORRUPTED_STONESKIN_TOTEM_VI:
-                SetAura(false, SPELL_STONESKIN);
-                break;
-            case NPC_CORRUPTED_HEALING_STREAM_TOTEM_V:
-                SetAura(false, SPELL_HEALING_STREAM);
-                break;
-            case NPC_CORRUPTED_WINDFURY_TOTEM_III:
-                SetAura(false, SPELL_WINDFURY_TOTEM_PASSIVE);
-                break;
+        case NPC_CORRUPTED_STONESKIN_TOTEM_VI:
+            SetAura(false, SPELL_STONESKIN);
+            break;
+        case NPC_CORRUPTED_HEALING_STREAM_TOTEM_V:
+            SetAura(false, SPELL_HEALING_STREAM);
+            break;
+        case NPC_CORRUPTED_WINDFURY_TOTEM_III:
+            SetAura(false, SPELL_WINDFURY_TOTEM_PASSIVE);
+            break;
         }
     }
 
@@ -483,12 +472,12 @@ struct npc_corrupted_totemAI : ScriptedAI
                             int damage = 0;
                             switch (uiSpellId)
                             {
-                                case SPELL_STONESKIN:
+                            case SPELL_STONESKIN:
                                 {
                                     damage = -310;
                                     break; // Stoneskin : base -31
                                 }
-                                case SPELL_HEALING_STREAM:
+                            case SPELL_HEALING_STREAM:
                                 {
                                     damage = 14000;
                                     break; // Healing Stream : base 14
@@ -524,24 +513,24 @@ struct npc_corrupted_totemAI : ScriptedAI
         uint32 addAuraEntry = 0;
         switch (m_uiCreatureEntry)
         {
-            case NPC_CORRUPTED_FIRE_NOVA_TOTEM_V:
-                if (!m_bAuraAdded)
-                {
-                    m_creature->AddAura(11311);  // Fire Nova
-                    m_bAuraAdded = true;
-                    m_creature->DeleteLater();
-                    return;
-                }
-                break;
-            case NPC_CORRUPTED_STONESKIN_TOTEM_VI:
-                addAuraEntry = SPELL_STONESKIN; // Stoneskin -30 dmg really ???
-                break;
-            case NPC_CORRUPTED_HEALING_STREAM_TOTEM_V:
-                addAuraEntry = SPELL_HEALING_STREAM; // Healing Stream +14 hp really ???
-                break;
-            case NPC_CORRUPTED_WINDFURY_TOTEM_III:
-                addAuraEntry = SPELL_WINDFURY_TOTEM_PASSIVE;
-                break;
+        case NPC_CORRUPTED_FIRE_NOVA_TOTEM_V:
+            if (!m_bAuraAdded)
+            {
+                m_creature->AddAura(11311); // Fire Nova
+                m_bAuraAdded = true;
+                m_creature->DeleteLater();
+                return;
+            }
+            break;
+        case NPC_CORRUPTED_STONESKIN_TOTEM_VI:
+            addAuraEntry = SPELL_STONESKIN; // Stoneskin -30 dmg really ???
+            break;
+        case NPC_CORRUPTED_HEALING_STREAM_TOTEM_V:
+            addAuraEntry = SPELL_HEALING_STREAM; // Healing Stream +14 hp really ???
+            break;
+        case NPC_CORRUPTED_WINDFURY_TOTEM_III:
+            addAuraEntry = SPELL_WINDFURY_TOTEM_PASSIVE;
+            break;
         }
         if (!addAuraEntry)
             return;
@@ -556,10 +545,7 @@ struct npc_corrupted_totemAI : ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_corrupted_totem(Creature* pCreature)
-{
-    return new npc_corrupted_totemAI(pCreature);
-}
+CreatureAI* GetAI_npc_corrupted_totem(Creature* pCreature) { return new npc_corrupted_totemAI(pCreature); }
 
 // 23424 - Nefarian Class Call Shaman Corrupted Totems
 struct NefarianCorruptedTotemsScript : SpellScript
@@ -575,10 +561,7 @@ struct NefarianCorruptedTotemsScript : SpellScript
     }
 };
 
-SpellScript* GetScript_NefarianCorruptedTotems(SpellEntry const*)
-{
-    return new NefarianCorruptedTotemsScript();
-}
+SpellScript* GetScript_NefarianCorruptedTotems(SpellEntry const*) { return new NefarianCorruptedTotemsScript(); }
 
 // 22992 - Shadow Flame
 // When Nefarian lands at the start of Phase 2 of his encounter he will use an AoE Shadowflame.
@@ -596,10 +579,7 @@ struct NefarianShadowFlamePassiveScript : SpellScript
     }
 };
 
-SpellScript* GetScript_NefarianShadowFlamePassive(SpellEntry const*)
-{
-    return new NefarianShadowFlamePassiveScript();
-}
+SpellScript* GetScript_NefarianShadowFlamePassive(SpellEntry const*) { return new NefarianShadowFlamePassiveScript(); }
 
 // 23427 - Nefarian Class Call Warlock
 // Each Warlock will summon 2 hostile Corrupted Infernals.
@@ -624,10 +604,7 @@ struct NefarianClassCallWarlockScript : SpellScript
     }
 };
 
-SpellScript* GetScript_NefarianClassCallWarlock(SpellEntry const*)
-{
-    return new NefarianClassCallWarlockScript();
-}
+SpellScript* GetScript_NefarianClassCallWarlock(SpellEntry const*) { return new NefarianClassCallWarlockScript(); }
 
 // 23414 - Nefarian Class Call Rogue
 // Paralyze and teleport player to random position near Nefarian
@@ -663,10 +640,7 @@ struct NefarianClassCallRogueScript : SpellScript
     }
 };
 
-SpellScript* GetScript_NefarianClassCallRogue(SpellEntry const*)
-{
-    return new NefarianClassCallRogueScript();
-}
+SpellScript* GetScript_NefarianClassCallRogue(SpellEntry const*) { return new NefarianClassCallRogueScript(); }
 
 // 23410 - Nefarian Class Call Mage - Wild Magic
 // Randomly cast Wild Polymorph on raid members, polymorphing them
@@ -687,8 +661,7 @@ struct NefarianClassCallMageAuraScript : public AuraScript
             return;
 
         Player* pMage = mage->ToPlayer();
-        if (!pMage->IsAlive() ||
-            pMage->HasAura(SPELL_POLYMORPH))
+        if (!pMage->IsAlive() || pMage->HasAura(SPELL_POLYMORPH))
             return;
 
         Map* pMap = pMage->GetMap();
@@ -705,12 +678,9 @@ struct NefarianClassCallMageAuraScript : public AuraScript
         for (const auto& itr : players)
         {
             Player* pPlayer = itr.getSource();
-            if (!pPlayer ||
-                !pPlayer->IsAlive() ||
-                !pPlayer->IsInWorld() ||
+            if (!pPlayer || !pPlayer->IsAlive() || !pPlayer->IsInWorld() ||
                 // pPlayer == pMage || // Skip self
-                pPlayer->HasAura(SPELL_POLYMORPH) ||
-                !pMage->IsWithinDist(pPlayer, 60.0f))
+                pPlayer->HasAura(SPELL_POLYMORPH) || !pMage->IsWithinDist(pPlayer, 60.0f))
                 continue;
 
             possibleTargets.push_back(pPlayer);
@@ -728,10 +698,7 @@ struct NefarianClassCallMageAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_NefarianClassCallMage(SpellEntry const*)
-{
-    return new NefarianClassCallMageAuraScript();
-}
+AuraScript* GetScript_NefarianClassCallMage(SpellEntry const*) { return new NefarianClassCallMageAuraScript(); }
 
 // 23603 - Nefarian Class Call Mage - Polymorph (Transform Display-ID)
 struct NefarianPolymorphAuraScript : public AuraScript
@@ -751,15 +718,15 @@ struct NefarianPolymorphAuraScript : public AuraScript
         int rand = urand(0, 2);
         switch (rand)
         {
-            case 0:
-                display_id = 1060;
-                break;
-            case 1:
-                display_id = 4473;
-                break;
-            case 2:
-                display_id = 7898;
-                break;
+        case 0:
+            display_id = 1060;
+            break;
+        case 1:
+            display_id = 4473;
+            break;
+        case 2:
+            display_id = 7898;
+            break;
         }
 
         if (display_id)
@@ -770,10 +737,7 @@ struct NefarianPolymorphAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_NefarianPolymorph(SpellEntry const*)
-{
-    return new NefarianPolymorphAuraScript();
-}
+AuraScript* GetScript_NefarianPolymorph(SpellEntry const*) { return new NefarianPolymorphAuraScript(); }
 
 void AddSC_boss_nefarian()
 {

@@ -1,13 +1,13 @@
 #include "scriptPCH.h"
 #include "stratholme.h"
 
-#define SPELL_DRAININGBLOW      16793
-#define SPELL_CROWDPUMMEL       10887
-#define SPELL_MIGHTYBLOW        14099
-#define SPELL_FURIOUS_ANGER     16791
+#define SPELL_DRAININGBLOW 16793
+#define SPELL_CROWDPUMMEL 10887
+#define SPELL_MIGHTYBLOW 14099
+#define SPELL_FURIOUS_ANGER 16791
 
-#define MODEL_NORMAL            10433
-#define MODEL_HUMAN             3637
+#define MODEL_NORMAL 10433
+#define MODEL_HUMAN 3637
 
 struct boss_magistrate_barthilasAI : public ScriptedAI
 {
@@ -39,7 +39,7 @@ struct boss_magistrate_barthilasAI : public ScriptedAI
             m_creature->SetDisplayId(MODEL_HUMAN);
     }
 
-    void MoveInLineOfSight(Unit *who) override
+    void MoveInLineOfSight(Unit* who) override
     {
         if (who->GetTypeId() == TYPEID_PLAYER && m_creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING) && m_creature->IsWithinDistInMap(who, 10.0f))
         {
@@ -48,10 +48,7 @@ struct boss_magistrate_barthilasAI : public ScriptedAI
         ScriptedAI::MoveInLineOfSight(who);
     }
 
-    void JustDied(Unit* Killer) override
-    {
-        m_creature->SetDisplayId(MODEL_HUMAN);
-    }
+    void JustDied(Unit* Killer) override { m_creature->SetDisplayId(MODEL_HUMAN); }
 
     void UpdateAI(uint32 const diff) override
     {
@@ -67,39 +64,40 @@ struct boss_magistrate_barthilasAI : public ScriptedAI
             ++AngerCount;
             m_creature->CastSpell(m_creature, SPELL_FURIOUS_ANGER, false);
         }
-        else FuriousAnger_Timer -= diff;
+        else
+            FuriousAnger_Timer -= diff;
 
-        //DrainingBlow
+        // DrainingBlow
         if (DrainingBlow_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_DRAININGBLOW);
             DrainingBlow_Timer = 15000;
         }
-        else DrainingBlow_Timer -= diff;
+        else
+            DrainingBlow_Timer -= diff;
 
-        //CrowdPummel
+        // CrowdPummel
         if (CrowdPummel_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CROWDPUMMEL);
             CrowdPummel_Timer = 15000;
         }
-        else CrowdPummel_Timer -= diff;
+        else
+            CrowdPummel_Timer -= diff;
 
-        //MightyBlow
+        // MightyBlow
         if (MightyBlow_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MIGHTYBLOW);
             MightyBlow_Timer = 20000;
         }
-        else MightyBlow_Timer -= diff;
+        else
+            MightyBlow_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_magistrate_barthilas(Creature* pCreature)
-{
-    return new boss_magistrate_barthilasAI(pCreature);
-}
+CreatureAI* GetAI_boss_magistrate_barthilas(Creature* pCreature) { return new boss_magistrate_barthilasAI(pCreature); }
 
 void AddSC_boss_magistrate_barthilas()
 {

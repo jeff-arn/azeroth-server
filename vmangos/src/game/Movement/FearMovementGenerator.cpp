@@ -2,18 +2,18 @@
  *
  */
 
+#include "FearMovementGenerator.h"
 #include "Creature.h"
 #include "CreatureAI.h"
-#include "FearMovementGenerator.h"
-#include "ObjectAccessor.h"
-#include "MoveSplineInit.h"
-#include "MoveSpline.h"
-#include "PathFinder.h"
-#include "MoveMap.h"
 #include "Map.h"
+#include "MoveMap.h"
+#include "MoveSpline.h"
+#include "MoveSplineInit.h"
+#include "ObjectAccessor.h"
+#include "PathFinder.h"
 
-template<class T>
-void FearMovementGenerator<T>::_setTargetLocation(T &owner)
+template <class T>
+void FearMovementGenerator<T>::_setTargetLocation(T& owner)
 {
     if (!&owner)
         return;
@@ -55,8 +55,8 @@ void FearMovementGenerator<T>::_setTargetLocation(T &owner)
     _forceUpdate = false;
 }
 
-template<class T>
-bool FearMovementGenerator<T>::_getPoint(T &owner, float &x, float &y, float &z)
+template <class T>
+bool FearMovementGenerator<T>::_getPoint(T& owner, float& x, float& y, float& z)
 {
     if (!&owner)
         return false;
@@ -110,8 +110,8 @@ bool FearMovementGenerator<T>::_getPoint(T &owner, float &x, float &y, float &z)
     return owner.GetMap()->GetWalkRandomPosition(owner.GetTransport(), x, y, z, REACHABLE_RADIUS);
 }
 
-template<class T>
-void FearMovementGenerator<T>::Initialize(T &owner)
+template <class T>
+void FearMovementGenerator<T>::Initialize(T& owner)
 {
     owner.AddUnitState(UNIT_STATE_FLEEING | UNIT_STATE_FLEEING_MOVE);
 
@@ -138,37 +138,37 @@ void FearMovementGenerator<T>::Initialize(T &owner)
     _setTargetLocation(owner);
 }
 
-template<>
-void FearMovementGenerator<Player>::Finalize(Player &owner)
+template <>
+void FearMovementGenerator<Player>::Finalize(Player& owner)
 {
     owner.ClearUnitState(UNIT_STATE_FLEEING | UNIT_STATE_FLEEING_MOVE);
     owner.StopMoving();
     owner.UpdateControl();
 }
 
-template<>
-void FearMovementGenerator<Creature>::Finalize(Creature &owner)
+template <>
+void FearMovementGenerator<Creature>::Finalize(Creature& owner)
 {
     owner.SetWalk(!owner.HasUnitState(UNIT_STATE_RUNNING), false);
     owner.ClearUnitState(UNIT_STATE_FLEEING | UNIT_STATE_FLEEING_MOVE);
     owner.UpdateControl();
 }
 
-template<class T>
-void FearMovementGenerator<T>::Interrupt(T &owner)
+template <class T>
+void FearMovementGenerator<T>::Interrupt(T& owner)
 {
     // flee state still applied while movegen disabled
     owner.ClearUnitState(UNIT_STATE_FLEEING_MOVE);
 }
 
-template<class T>
-void FearMovementGenerator<T>::Reset(T &owner)
+template <class T>
+void FearMovementGenerator<T>::Reset(T& owner)
 {
     Initialize(owner);
 }
 
-template<class T>
-bool FearMovementGenerator<T>::Update(T &owner, uint32 const&  time_diff)
+template <class T>
+bool FearMovementGenerator<T>::Update(T& owner, uint32 const& time_diff)
 {
     if (!&owner || !owner.IsAlive())
         return false;
@@ -200,18 +200,18 @@ bool FearMovementGenerator<T>::Update(T &owner, uint32 const&  time_diff)
     return true;
 }
 
-template void FearMovementGenerator<Player>::Initialize(Player &);
-template void FearMovementGenerator<Creature>::Initialize(Creature &);
-template bool FearMovementGenerator<Player>::_getPoint(Player &, float &, float &, float &);
-template bool FearMovementGenerator<Creature>::_getPoint(Creature &, float &, float &, float &);
-template void FearMovementGenerator<Player>::_setTargetLocation(Player &);
-template void FearMovementGenerator<Creature>::_setTargetLocation(Creature &);
-template void FearMovementGenerator<Player>::Interrupt(Player &);
-template void FearMovementGenerator<Creature>::Interrupt(Creature &);
-template void FearMovementGenerator<Player>::Reset(Player &);
-template void FearMovementGenerator<Creature>::Reset(Creature &);
-template bool FearMovementGenerator<Player>::Update(Player &, uint32 const&);
-template bool FearMovementGenerator<Creature>::Update(Creature &, uint32 const&);
+template void FearMovementGenerator<Player>::Initialize(Player&);
+template void FearMovementGenerator<Creature>::Initialize(Creature&);
+template bool FearMovementGenerator<Player>::_getPoint(Player&, float&, float&, float&);
+template bool FearMovementGenerator<Creature>::_getPoint(Creature&, float&, float&, float&);
+template void FearMovementGenerator<Player>::_setTargetLocation(Player&);
+template void FearMovementGenerator<Creature>::_setTargetLocation(Creature&);
+template void FearMovementGenerator<Player>::Interrupt(Player&);
+template void FearMovementGenerator<Creature>::Interrupt(Creature&);
+template void FearMovementGenerator<Player>::Reset(Player&);
+template void FearMovementGenerator<Creature>::Reset(Creature&);
+template bool FearMovementGenerator<Player>::Update(Player&, uint32 const&);
+template bool FearMovementGenerator<Creature>::Update(Creature&, uint32 const&);
 
 void TimedFearMovementGenerator::Initialize(Unit& owner)
 {
@@ -221,7 +221,7 @@ void TimedFearMovementGenerator::Initialize(Unit& owner)
     FearMovementGenerator<Creature>::Initialize(*((Creature*)&owner));
 }
 
-void TimedFearMovementGenerator::Finalize(Unit &owner)
+void TimedFearMovementGenerator::Finalize(Unit& owner)
 {
     owner.ClearUnitState(UNIT_STATE_FLEEING | UNIT_STATE_FLEEING_MOVE);
     owner.UpdateControl();
@@ -236,12 +236,9 @@ void TimedFearMovementGenerator::Finalize(Unit &owner)
     }
 }
 
-TimedFearMovementGenerator::TimedFearMovementGenerator(ObjectGuid fright, uint32 time) : FearMovementGenerator<Creature>(fright), i_totalFleeTime(time)
-{
-    i_initialFleeTime.Reset(DEFAULT_INIT_FLEE_TIME + urand(0, time * INIT_FLEE_TIME_RAND_MULT));
-}
+TimedFearMovementGenerator::TimedFearMovementGenerator(ObjectGuid fright, uint32 time) : FearMovementGenerator<Creature>(fright), i_totalFleeTime(time) { i_initialFleeTime.Reset(DEFAULT_INIT_FLEE_TIME + urand(0, time * INIT_FLEE_TIME_RAND_MULT)); }
 
-bool TimedFearMovementGenerator::Update(Unit & owner, uint32 const&  time_diff)
+bool TimedFearMovementGenerator::Update(Unit& owner, uint32 const& time_diff)
 {
     if (!owner.IsAlive())
         return false;
@@ -251,11 +248,11 @@ bool TimedFearMovementGenerator::Update(Unit & owner, uint32 const&  time_diff)
         owner.ClearUnitState(UNIT_STATE_FLEEING_MOVE);
         return true;
     }
-    
+
     i_totalFleeTime.Update(time_diff);
 
     if (i_totalFleeTime.Passed())
         return false;
 
-    return MovementGeneratorMedium< Creature, FearMovementGenerator<Creature> >::Update(owner, time_diff);
+    return MovementGeneratorMedium<Creature, FearMovementGenerator<Creature>>::Update(owner, time_diff);
 }

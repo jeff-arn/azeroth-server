@@ -19,8 +19,8 @@
 #include "CyclicMovementGenerator.h"
 #include "Creature.h"
 #include "CreatureAI.h"
-#include "MoveSplineInit.h"
 #include "MoveSpline.h"
+#include "MoveSplineInit.h"
 
 void CyclicMovementGenerator<Creature>::LoadPath(uint32 guid, uint32 entry, WaypointPathOrigin wpOrigin)
 {
@@ -42,10 +42,7 @@ void CyclicMovementGenerator<Creature>::LoadPath(uint32 guid, uint32 entry, Wayp
     }
 }
 
-void CyclicMovementGenerator<Creature>::Initialize(Creature& creature)
-{
-    creature.AddUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
-}
+void CyclicMovementGenerator<Creature>::Initialize(Creature& creature) { creature.AddUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE); }
 
 void CyclicMovementGenerator<Creature>::InitializeWaypointPath(Creature& creature, WaypointPathOrigin wpSource, uint32 overwriteGuid, uint32 overwriteEntry)
 {
@@ -60,12 +57,9 @@ void CyclicMovementGenerator<Creature>::InitializeWaypointPath(Creature& creatur
         _setTargetLocation(creature);
 }
 
-void CyclicMovementGenerator<Creature>::Reset(Creature& creature)
-{
-    creature.AddUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
-}
+void CyclicMovementGenerator<Creature>::Reset(Creature& creature) { creature.AddUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE); }
 
-void CyclicMovementGenerator<Creature>::_setTargetLocation(Creature & owner)
+void CyclicMovementGenerator<Creature>::_setTargetLocation(Creature& owner)
 {
     if (owner.HasUnitState(UNIT_STATE_CAN_NOT_MOVE))
         return;
@@ -100,7 +94,7 @@ void CyclicMovementGenerator<Creature>::_setTargetLocation(Creature & owner)
     }
 }
 
-bool CyclicMovementGenerator<Creature>::Update(Creature &owner, uint32 const& /*time_diff*/)
+bool CyclicMovementGenerator<Creature>::Update(Creature& owner, uint32 const& /*time_diff*/)
 {
     if (!i_path || i_path->size() < 2)
         return false;
@@ -117,7 +111,7 @@ void CyclicMovementGenerator<Creature>::Finalize(Creature& creature)
     creature.SetWalk(!creature.HasUnitState(UNIT_STATE_RUNNING), false);
 }
 
-void CyclicMovementGenerator<Creature>::Interrupt(Creature &creature)
+void CyclicMovementGenerator<Creature>::Interrupt(Creature& creature)
 {
     creature.ClearUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
     creature.SetWalk(!creature.HasUnitState(UNIT_STATE_RUNNING), false);

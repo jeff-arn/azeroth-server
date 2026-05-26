@@ -21,52 +21,52 @@ SDComment: Only base implemented. Todo: control adds at summon. Handle case of r
 SDCategory: Naxxramas
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "naxxramas.h"
+#include "scriptPCH.h"
 
 enum GothikData
 {
-    SAY_SPEECH_1                = 13029,
-    SAY_SPEECH_2                = 13031,
-    SAY_SPEECH_3                = 13032,
-    SAY_SPEECH_4                = 13033,
+    SAY_SPEECH_1 = 13029,
+    SAY_SPEECH_2 = 13031,
+    SAY_SPEECH_3 = 13032,
+    SAY_SPEECH_4 = 13033,
 
-    SAY_KILL                    = 13027,
-    SAY_DEATH                   = 13026,
-    SAY_TELEPORT                = 13028,
+    SAY_KILL = 13027,
+    SAY_DEATH = 13026,
+    SAY_TELEPORT = 13028,
 
-    EMOTE_TO_FRAY               = -1533138, // bct need!
-    EMOTE_GATE                  = -1533139, // bct need!
+    EMOTE_TO_FRAY = -1533138, // bct need!
+    EMOTE_GATE = -1533139, // bct need!
 
-    PHASE_SPEECH                = 0,
-    PHASE_BALCONY               = 1,
-    PHASE_GROUND                = 2,
+    PHASE_SPEECH = 0,
+    PHASE_BALCONY = 1,
+    PHASE_GROUND = 2,
 
-    MAX_WAVES                   = 18,
+    MAX_WAVES = 18,
 
-    SPELL_TELEPORT_LEFT         = 28025,                    // guesswork
-    SPELL_TELEPORT_RIGHT        = 28026,                    // could be defined as dead or live side, left or right facing north
+    SPELL_TELEPORT_LEFT = 28025, // guesswork
+    SPELL_TELEPORT_RIGHT = 28026, // could be defined as dead or live side, left or right facing north
 
-    SPELL_HARVESTSOUL           = 28679,
-    SPELL_SHADOWBOLT            = 29317,
+    SPELL_HARVESTSOUL = 28679,
+    SPELL_SHADOWBOLT = 29317,
 
-    SPELL_IMMUNE_ALL            = 29230,
-    TELEPORT_PACIFY_TIMER       = 1200
+    SPELL_IMMUNE_ALL = 29230,
+    TELEPORT_PACIFY_TIMER = 1200
 };
 
 enum eSpellDummy
 {
-    SPELL_A_TO_ANCHOR_1     = 27892,
-    SPELL_B_TO_ANCHOR_1     = 27928,
-    SPELL_C_TO_ANCHOR_1     = 27935,
+    SPELL_A_TO_ANCHOR_1 = 27892,
+    SPELL_B_TO_ANCHOR_1 = 27928,
+    SPELL_C_TO_ANCHOR_1 = 27935,
 
-    SPELL_A_TO_ANCHOR_2     = 27893,
-    SPELL_B_TO_ANCHOR_2     = 27929,
-    SPELL_C_TO_ANCHOR_2     = 27936,
+    SPELL_A_TO_ANCHOR_2 = 27893,
+    SPELL_B_TO_ANCHOR_2 = 27929,
+    SPELL_C_TO_ANCHOR_2 = 27936,
 
-    SPELL_A_TO_SKULL        = 27915,
-    SPELL_B_TO_SKULL        = 27931,
-    SPELL_C_TO_SKULL        = 27937
+    SPELL_A_TO_SKULL = 27915,
+    SPELL_B_TO_SKULL = 27931,
+    SPELL_C_TO_SKULL = 27937
 };
 
 struct boss_gothikAI : public ScriptedAI
@@ -119,9 +119,7 @@ struct boss_gothikAI : public ScriptedAI
         m_bJustTeleported = false;
 
         std::list<Creature*> creaturesToDespawn;
-        GetCreatureListWithEntryInGrid(creaturesToDespawn, m_creature, 
-        { NPC_UNREL_TRAINEE, NPC_UNREL_DEATH_KNIGHT, NPC_UNREL_RIDER, NPC_SPECT_TRAINEE, NPC_SPECT_DEATH_KNIGTH, NPC_SPECT_RIDER, NPC_SPECT_HORSE }, 
-            1000.0f);
+        GetCreatureListWithEntryInGrid(creaturesToDespawn, m_creature, {NPC_UNREL_TRAINEE, NPC_UNREL_DEATH_KNIGHT, NPC_UNREL_RIDER, NPC_SPECT_TRAINEE, NPC_SPECT_DEATH_KNIGTH, NPC_SPECT_RIDER, NPC_SPECT_HORSE}, 1000.0f);
         for (Creature* pC : creaturesToDespawn)
         {
             pC->DeleteLater();
@@ -144,7 +142,7 @@ struct boss_gothikAI : public ScriptedAI
 
         m_creature->GetMotionMaster()->MoveIdle();
         DoStopAttack();
-        if(!m_creature->HasAura(SPELL_IMMUNE_ALL))
+        if (!m_creature->HasAura(SPELL_IMMUNE_ALL))
             m_creature->CastSpell(m_creature, SPELL_IMMUNE_ALL, true);
     }
 
@@ -186,7 +184,7 @@ struct boss_gothikAI : public ScriptedAI
         if (!m_creature->IsInCombat() && !m_creature->IsDead())
             return;
 
-        if (Creature *pCreature = m_creature->SummonCreature(entry, x, y, z, o, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 420000))
+        if (Creature* pCreature = m_creature->SummonCreature(entry, x, y, z, o, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 420000))
         {
             pCreature->SetCorpseDelay(10);
             if (gatesOpened)
@@ -195,7 +193,7 @@ struct boss_gothikAI : public ScriptedAI
                 return;
             }
 
-            MapRefManager const&  lPlayers = m_pInstance->GetMap()->GetPlayers();
+            MapRefManager const& lPlayers = m_pInstance->GetMap()->GetPlayers();
             for (auto& playerRef : lPlayers)
             {
                 Player* p = playerRef.getSource();
@@ -203,25 +201,25 @@ struct boss_gothikAI : public ScriptedAI
                     bool isRightSide = m_pInstance->IsInRightSideGothArea(p);
                     switch (entry)
                     {
-                        case NPC_UNREL_RIDER:
-                        case NPC_UNREL_DEATH_KNIGHT:
-                        case NPC_UNREL_TRAINEE:
-                            if (isRightSide)
-                            {
-                                pCreature->SetInCombatWith(p);
-                                pCreature->AddThreat(p, 100);
-                            }
-                            break;
-                        case NPC_SPECT_DEATH_KNIGTH:
-                        case NPC_SPECT_HORSE:
-                        case NPC_SPECT_RIDER:
-                        case NPC_SPECT_TRAINEE:
-                            if (!isRightSide)
-                            {
-                                pCreature->SetInCombatWith(p);
-                                pCreature->AddThreat(p, 100);
-                            }
-                            break;
+                    case NPC_UNREL_RIDER:
+                    case NPC_UNREL_DEATH_KNIGHT:
+                    case NPC_UNREL_TRAINEE:
+                        if (isRightSide)
+                        {
+                            pCreature->SetInCombatWith(p);
+                            pCreature->AddThreat(p, 100);
+                        }
+                        break;
+                    case NPC_SPECT_DEATH_KNIGTH:
+                    case NPC_SPECT_HORSE:
+                    case NPC_SPECT_RIDER:
+                    case NPC_SPECT_TRAINEE:
+                        if (!isRightSide)
+                        {
+                            pCreature->SetInCombatWith(p);
+                            pCreature->AddThreat(p, 100);
+                        }
+                        break;
                     }
                 }
             }
@@ -246,23 +244,24 @@ struct boss_gothikAI : public ScriptedAI
 
         switch (uiSummonEntry)
         {
-            case NPC_UNREL_DEATH_KNIGHT:
-                SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
-                itr = lSummonList.end();--itr;
-                SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
-                break;
-            case NPC_UNREL_TRAINEE:
-                SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
-                ++itr;
-                SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
-                ++itr;
-                ++itr;
-                SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
-                break;
-            case NPC_UNREL_RIDER:
-                ++itr;
-                SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
-                break;
+        case NPC_UNREL_DEATH_KNIGHT:
+            SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
+            itr = lSummonList.end();
+            --itr;
+            SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
+            break;
+        case NPC_UNREL_TRAINEE:
+            SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
+            ++itr;
+            SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
+            ++itr;
+            ++itr;
+            SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
+            break;
+        case NPC_UNREL_RIDER:
+            ++itr;
+            SummonAdd(uiSummonEntry, (*itr)->GetPositionX(), (*itr)->GetPositionY(), (*itr)->GetPositionZ(), (*itr)->GetOrientation());
+            break;
         }
     }
 
@@ -273,11 +272,11 @@ struct boss_gothikAI : public ScriptedAI
 
         switch (pSummoned->GetEntry())
         {
-            case NPC_SPECT_DEATH_KNIGTH:
-            case NPC_SPECT_HORSE:
-            case NPC_SPECT_RIDER:
-            case NPC_SPECT_TRAINEE:
-                return;
+        case NPC_SPECT_DEATH_KNIGTH:
+        case NPC_SPECT_HORSE:
+        case NPC_SPECT_RIDER:
+        case NPC_SPECT_TRAINEE:
+            return;
         }
 
         Creature* pAnchor = m_pInstance->GetClosestAnchorForGoth(pSummoned, true);
@@ -285,14 +284,7 @@ struct boss_gothikAI : public ScriptedAI
         if (!pAnchor)
             return;
 
-        Creature* pTempTrigger = m_creature->SummonCreature(
-            NPC_SUB_BOSS_TRIGGER,
-            pSummoned->GetPositionX(),
-            pSummoned->GetPositionY(),
-            pSummoned->GetPositionZ(),
-            pSummoned->GetOrientation(),
-            TEMPSUMMON_TIMED_DESPAWN,
-            15000);
+        Creature* pTempTrigger = m_creature->SummonCreature(NPC_SUB_BOSS_TRIGGER, pSummoned->GetPositionX(), pSummoned->GetPositionY(), pSummoned->GetPositionZ(), pSummoned->GetOrientation(), TEMPSUMMON_TIMED_DESPAWN, 15000);
 
         if (!pTempTrigger)
             return;
@@ -303,32 +295,31 @@ struct boss_gothikAI : public ScriptedAI
         // Elysium: we use a temp creature to handle this issue
         switch (pSummoned->GetEntry())
         {
-            case NPC_UNREL_TRAINEE:
-                pTempTrigger->CastSpell(pAnchor, SPELL_A_TO_ANCHOR_1, true, nullptr, nullptr, pSummoned->GetGUID());
-                break;
-            case NPC_UNREL_DEATH_KNIGHT:
-                pTempTrigger->CastSpell(pAnchor, SPELL_B_TO_ANCHOR_1, true, nullptr, nullptr, pSummoned->GetGUID());
-                break;
-            case NPC_UNREL_RIDER:
-                pTempTrigger->CastSpell(pAnchor, SPELL_C_TO_ANCHOR_1, true, nullptr, nullptr, pSummoned->GetGUID());
-                break;
+        case NPC_UNREL_TRAINEE:
+            pTempTrigger->CastSpell(pAnchor, SPELL_A_TO_ANCHOR_1, true, nullptr, nullptr, pSummoned->GetGUID());
+            break;
+        case NPC_UNREL_DEATH_KNIGHT:
+            pTempTrigger->CastSpell(pAnchor, SPELL_B_TO_ANCHOR_1, true, nullptr, nullptr, pSummoned->GetGUID());
+            break;
+        case NPC_UNREL_RIDER:
+            pTempTrigger->CastSpell(pAnchor, SPELL_C_TO_ANCHOR_1, true, nullptr, nullptr, pSummoned->GetGUID());
+            break;
         }
     }
 
     void OpenTheGate()
     {
-        if (gatesOpened) return;
+        if (gatesOpened)
+            return;
 
         DoScriptText(EMOTE_GATE, m_creature);
 
         gatesOpened = true;
         if (GameObject* pGO = m_pInstance->GetSingleGameObjectFromStorage(GO_MILI_GOTH_COMBAT_GATE))
             pGO->SetGoState(GO_STATE_ACTIVE);
-        
+
         std::list<Creature*> allAdds;
-        GetCreatureListWithEntryInGrid(allAdds, m_creature,
-        { NPC_UNREL_TRAINEE, NPC_UNREL_DEATH_KNIGHT, NPC_UNREL_RIDER, NPC_SPECT_TRAINEE, NPC_SPECT_DEATH_KNIGTH, NPC_SPECT_RIDER, NPC_SPECT_HORSE },
-            300.0f);
+        GetCreatureListWithEntryInGrid(allAdds, m_creature, {NPC_UNREL_TRAINEE, NPC_UNREL_DEATH_KNIGHT, NPC_UNREL_RIDER, NPC_SPECT_TRAINEE, NPC_SPECT_DEATH_KNIGTH, NPC_SPECT_RIDER, NPC_SPECT_HORSE}, 300.0f);
         for (Creature* pC : allAdds)
         {
             pC->SetInCombatWithZone();
@@ -375,7 +366,7 @@ struct boss_gothikAI : public ScriptedAI
 
     void UpdateAI(uint32 const uiDiff) override
     {
-        if(!m_creature->HasAura(SPELL_IMMUNE_ALL))
+        if (!m_creature->HasAura(SPELL_IMMUNE_ALL))
         {
             if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
                 return;
@@ -392,7 +383,7 @@ struct boss_gothikAI : public ScriptedAI
 
         switch (m_uiPhase)
         {
-            case PHASE_SPEECH:
+        case PHASE_SPEECH:
             {
                 if (m_uiSpeechTimer < uiDiff)
                 {
@@ -407,18 +398,18 @@ struct boss_gothikAI : public ScriptedAI
 
                     switch (m_uiSpeechCount)
                     {
-                        case 1:
-                            DoScriptText(SAY_SPEECH_2, m_creature);
-                            break;
-                        case 2:
-                            DoScriptText(SAY_SPEECH_3, m_creature);
-                            break;
-                        case 3:
-                            DoScriptText(SAY_SPEECH_4, m_creature);
-                            break;
-                        case 4:
-                            m_uiPhase = PHASE_BALCONY;
-                            break;
+                    case 1:
+                        DoScriptText(SAY_SPEECH_2, m_creature);
+                        break;
+                    case 2:
+                        DoScriptText(SAY_SPEECH_3, m_creature);
+                        break;
+                    case 3:
+                        DoScriptText(SAY_SPEECH_4, m_creature);
+                        break;
+                    case 4:
+                        m_uiPhase = PHASE_BALCONY;
+                        break;
                     }
                 }
                 else
@@ -426,7 +417,7 @@ struct boss_gothikAI : public ScriptedAI
 
                 break;
             }
-            case PHASE_BALCONY:
+        case PHASE_BALCONY:
             {
                 if (m_uiSummonTimer < uiDiff)
                 {
@@ -450,26 +441,8 @@ struct boss_gothikAI : public ScriptedAI
                     }
 
                     // npc, npc, npc, timer
-                    static uint32 const auiSummonData[MAX_WAVES][4] =
-                    {
-                        {NPC_UNREL_TRAINEE, 0, 0, 20000},
-                        {NPC_UNREL_TRAINEE, 0, 0, 20000},
-                        {NPC_UNREL_TRAINEE, 0, 0, 10000},
-                        {NPC_UNREL_DEATH_KNIGHT, 0, 0, 10000},
-                        {NPC_UNREL_TRAINEE, 0, 0, 15000},
-                        {NPC_UNREL_DEATH_KNIGHT, 0, 0, 5000},
-                        {NPC_UNREL_TRAINEE, 0, 0, 20000},
-                        {NPC_UNREL_DEATH_KNIGHT, NPC_UNREL_TRAINEE, 0, 10000},
-                        {NPC_UNREL_RIDER, 0, 0, 10000},
-                        {NPC_UNREL_TRAINEE, 0, 0, 5000},
-                        {NPC_UNREL_DEATH_KNIGHT, 0, 0, 15000},
-                        {NPC_UNREL_TRAINEE, NPC_UNREL_RIDER, 0, 10000},
-                        {NPC_UNREL_DEATH_KNIGHT, 0, 0, 10000},
-                        {NPC_UNREL_TRAINEE, 0, 0, 10000},
-                        {NPC_UNREL_RIDER, 0, 0, 5000},
-                        {NPC_UNREL_DEATH_KNIGHT, 0, 0, 5000},
-                        {NPC_UNREL_TRAINEE, 0, 0, 20000},
-                        {NPC_UNREL_RIDER, NPC_UNREL_DEATH_KNIGHT, NPC_UNREL_TRAINEE, 50000},
+                    static uint32 const auiSummonData[MAX_WAVES][4] = {
+                        {NPC_UNREL_TRAINEE, 0, 0, 20000}, {NPC_UNREL_TRAINEE, 0, 0, 20000}, {NPC_UNREL_TRAINEE, 0, 0, 10000}, {NPC_UNREL_DEATH_KNIGHT, 0, 0, 10000}, {NPC_UNREL_TRAINEE, 0, 0, 15000}, {NPC_UNREL_DEATH_KNIGHT, 0, 0, 5000}, {NPC_UNREL_TRAINEE, 0, 0, 20000}, {NPC_UNREL_DEATH_KNIGHT, NPC_UNREL_TRAINEE, 0, 10000}, {NPC_UNREL_RIDER, 0, 0, 10000}, {NPC_UNREL_TRAINEE, 0, 0, 5000}, {NPC_UNREL_DEATH_KNIGHT, 0, 0, 15000}, {NPC_UNREL_TRAINEE, NPC_UNREL_RIDER, 0, 10000}, {NPC_UNREL_DEATH_KNIGHT, 0, 0, 10000}, {NPC_UNREL_TRAINEE, 0, 0, 10000}, {NPC_UNREL_RIDER, 0, 0, 5000}, {NPC_UNREL_DEATH_KNIGHT, 0, 0, 5000}, {NPC_UNREL_TRAINEE, 0, 0, 20000}, {NPC_UNREL_RIDER, NPC_UNREL_DEATH_KNIGHT, NPC_UNREL_TRAINEE, 50000},
                     };
 
                     SummonAdds(true, auiSummonData[m_uiSummonCount][0]);
@@ -488,7 +461,7 @@ struct boss_gothikAI : public ScriptedAI
 
                 break;
             }
-            case PHASE_GROUND:
+        case PHASE_GROUND:
             {
                 // If we just teleported
                 if (m_bJustTeleported)
@@ -520,7 +493,7 @@ struct boss_gothikAI : public ScriptedAI
                 // We check if a side has wiped every 1 sec. If it's the case, we open the gates
                 if (!gatesOpened && m_checkAllPlayersOneSideTimer < uiDiff)
                 {
-                    if(HasLessPlayersPerSide(1))
+                    if (HasLessPlayersPerSide(1))
                         OpenTheGate();
                     m_checkAllPlayersOneSideTimer = 1000;
                 }
@@ -530,7 +503,7 @@ struct boss_gothikAI : public ScriptedAI
                 if (m_uiTeleportTimer < uiDiff && !gatesOpened) // stop teleporting after gates open
                 {
                     uint32 uiTeleportSpell = m_bRightSide ? SPELL_TELEPORT_LEFT : SPELL_TELEPORT_RIGHT;
-                        
+
                     if (DoCastSpellIfCan(m_creature, uiTeleportSpell) == CAST_OK)
                     {
                         m_uiTeleportTimer = urand(15000, 20000);
@@ -548,7 +521,7 @@ struct boss_gothikAI : public ScriptedAI
                         return;
                     }
                 }
-                else 
+                else
                 {
                     m_uiTeleportTimer -= std::min(m_uiTeleportTimer, uiDiff);
                 }
@@ -608,10 +581,7 @@ struct boss_gothikAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_gothik(Creature* pCreature)
-{
-    return new boss_gothikAI(pCreature);
-}
+CreatureAI* GetAI_boss_gothik(Creature* pCreature) { return new boss_gothikAI(pCreature); }
 
 bool EffectDummyCreature_spell_anchor(WorldObject* /*pCaster*/, uint32 uiSpellId, SpellEffectIndex uiEffIndex, Creature* pCreatureTarget)
 {
@@ -625,9 +595,9 @@ bool EffectDummyCreature_spell_anchor(WorldObject* /*pCaster*/, uint32 uiSpellId
 
     switch (uiSpellId)
     {
-        case SPELL_A_TO_ANCHOR_1:                           // trigger mobs at high right side
-        case SPELL_B_TO_ANCHOR_1:
-        case SPELL_C_TO_ANCHOR_1:
+    case SPELL_A_TO_ANCHOR_1: // trigger mobs at high right side
+    case SPELL_B_TO_ANCHOR_1:
+    case SPELL_C_TO_ANCHOR_1:
         {
             if (Creature* pAnchor2 = pInstance->GetClosestAnchorForGoth(pCreatureTarget, false))
             {
@@ -643,9 +613,9 @@ bool EffectDummyCreature_spell_anchor(WorldObject* /*pCaster*/, uint32 uiSpellId
 
             return true;
         }
-        case SPELL_A_TO_ANCHOR_2:                           // trigger mobs at high left side
-        case SPELL_B_TO_ANCHOR_2:
-        case SPELL_C_TO_ANCHOR_2:
+    case SPELL_A_TO_ANCHOR_2: // trigger mobs at high left side
+    case SPELL_B_TO_ANCHOR_2:
+    case SPELL_C_TO_ANCHOR_2:
         {
             std::list<Creature*> lTargets;
             pInstance->GetGothSummonPointCreatures(lTargets, false);
@@ -670,9 +640,9 @@ bool EffectDummyCreature_spell_anchor(WorldObject* /*pCaster*/, uint32 uiSpellId
             }
             return true;
         }
-        case SPELL_A_TO_SKULL:                              // final destination trigger mob
-        case SPELL_B_TO_SKULL:
-        case SPELL_C_TO_SKULL:
+    case SPELL_A_TO_SKULL: // final destination trigger mob
+    case SPELL_B_TO_SKULL:
+    case SPELL_C_TO_SKULL:
         {
             if (Creature* pGoth = pInstance->GetSingleCreatureFromStorage(NPC_GOTHIK))
             {
@@ -697,25 +667,22 @@ bool EffectDummyCreature_spell_anchor(WorldObject* /*pCaster*/, uint32 uiSpellId
 
 struct gothikTriggerAI : public ScriptedAI
 {
-    gothikTriggerAI(Creature* pCreature) : ScriptedAI(pCreature) { }
+    gothikTriggerAI(Creature* pCreature) : ScriptedAI(pCreature) {}
 
-    void Reset() override 
+    void Reset() override
     {
         m_creature->SetWanderDistance(0.01f);
         m_creature->SetDefaultMovementType(RANDOM_MOTION_TYPE);
         m_creature->GetMotionMaster()->Initialize();
     }
 
-    void MoveInLineOfSight(Unit*) override { }
-    void Aggro(Unit*) override { }
-    void AttackStart(Unit*) override { }
-    void UpdateAI(uint32 const diff) override { }
+    void MoveInLineOfSight(Unit*) override {}
+    void Aggro(Unit*) override {}
+    void AttackStart(Unit*) override {}
+    void UpdateAI(uint32 const diff) override {}
 };
 
-CreatureAI* GetAI_GothikTrigger(Creature* pCreature)
-{
-    return new gothikTriggerAI(pCreature);
-}
+CreatureAI* GetAI_GothikTrigger(Creature* pCreature) { return new gothikTriggerAI(pCreature); }
 
 void AddSC_boss_gothik()
 {

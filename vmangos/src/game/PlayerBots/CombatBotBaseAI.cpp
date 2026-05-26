@@ -1,19 +1,19 @@
-#include "World.h"
 #include "CombatBotBaseAI.h"
-#include "ObjectMgr.h"
-#include "Player.h"
+#include <random>
+#include "CharacterDatabaseCache.h"
+#include "Chat.h"
+#include "DBCStores.h"
 #include "Group.h"
-#include "PlayerBotMgr.h"
+#include "GuildBotMgr.h"
+#include "ObjectMgr.h"
 #include "Opcodes.h"
-#include "WorldPacket.h"
+#include "Player.h"
+#include "PlayerBotMgr.h"
 #include "Spell.h"
 #include "SpellAuras.h"
-#include "Chat.h"
-#include "CharacterDatabaseCache.h"
-#include "GuildBotMgr.h"
-#include "DBCStores.h"
 #include "SpellMgr.h"
-#include <random>
+#include "World.h"
+#include "WorldPacket.h"
 
 enum CombatBotSpells
 {
@@ -37,23 +37,23 @@ enum CombatBotSpells
     SPELL_REVIVE_PET = 982,
     SPELL_CALL_PET = 883,
 
-    PET_WOLF    = 565,
-    PET_CAT     = 681,
-    PET_BEAR    = 822,
-    PET_CRAB    = 831,
+    PET_WOLF = 565,
+    PET_CAT = 681,
+    PET_BEAR = 822,
+    PET_CRAB = 831,
     PET_GORILLA = 1108,
-    PET_BIRD    = 1109,
-    PET_BOAR    = 1190,
-    PET_BAT     = 1554,
-    PET_CROC    = 1693,
-    PET_SPIDER  = 1781,
-    PET_OWL     = 1997,
+    PET_BIRD = 1109,
+    PET_BOAR = 1190,
+    PET_BAT = 1554,
+    PET_CROC = 1693,
+    PET_SPIDER = 1781,
+    PET_OWL = 1997,
     PET_STRIDER = 2322,
     PET_SCORPID = 3127,
     PET_SERPENT = 3247,
-    PET_RAPTOR  = 3254,
-    PET_TURTLE  = 3461,
-    PET_HYENA   = 4127,
+    PET_RAPTOR = 3254,
+    PET_TURTLE = 3461,
+    PET_HYENA = 4127,
 };
 
 // ============================================================================
@@ -66,244 +66,244 @@ enum CombatBotSpells
 struct BotTalentPoint
 {
     uint32 talentId;
-    uint8  ranks;
+    uint8 ranks;
 };
 
 struct BotTalentBuild
 {
-    uint8           classId;
-    CombatBotRoles  role;
-    char const*     name;
+    uint8 classId;
+    CombatBotRoles role;
+    char const* name;
     BotTalentPoint const* points;
-    uint32          numPoints;
+    uint32 numPoints;
 };
 
 // --- Warrior ---
 static BotTalentPoint const s_Warrior_fury[] = {
-    {  157, 5 }, {  159, 5 }, {  160, 1 }, {  154, 5 },  // Cruelty, Unbridled Wrath, Piercing Howl, Imp Battle Shout
-    {  155, 5 }, {  156, 5 }, {  167, 1 },               // Enrage, Flurry, Bloodthirst
-    {  124, 3 }, {  130, 5 }, {  641, 5 }, {  121, 3 },  // Imp Heroic Strike, Deflection, Tactical Mastery, Deep Wounds
-    {  662, 2 }, {  136, 5 }, { 1541, 1 },               // Impale, 2H Weapon Spec, Imp Berserker Rage
+    {157, 5}, {159, 5}, {160, 1},  {154, 5}, // Cruelty, Unbridled Wrath, Piercing Howl, Imp Battle Shout
+    {155, 5}, {156, 5}, {167, 1}, // Enrage, Flurry, Bloodthirst
+    {124, 3}, {130, 5}, {641, 5},  {121, 3}, // Imp Heroic Strike, Deflection, Tactical Mastery, Deep Wounds
+    {662, 2}, {136, 5}, {1541, 1}, // Impale, 2H Weapon Spec, Imp Berserker Rage
 };
 static BotTalentPoint const s_Warrior_prot[] = {
-    { 1601, 5 }, {  138, 5 }, {  147, 3 }, {  140, 5 },  // Shield Spec, Anticipation, Imp Revenge, Toughness
-    {  153, 1 }, {  145, 3 }, {  144, 5 }, {  152, 1 },  // Last Stand, Imp Shield Block, Defiance, Concussion Blow
-    {  146, 3 }, {  702, 5 }, {  148, 1 },               // Imp Sunder, 1H Weapon Spec, Shield Slam
-    {  157, 5 }, {  159, 5 }, {  124, 3 }, {  154, 1 },  // Cruelty, Unbridled Wrath, Imp Heroic Strike, Imp Battle Shout
+    {1601, 5}, {138, 5}, {147, 3}, {140, 5}, // Shield Spec, Anticipation, Imp Revenge, Toughness
+    {153, 1},  {145, 3}, {144, 5}, {152, 1}, // Last Stand, Imp Shield Block, Defiance, Concussion Blow
+    {146, 3},  {702, 5}, {148, 1}, // Imp Sunder, 1H Weapon Spec, Shield Slam
+    {157, 5},  {159, 5}, {124, 3}, {154, 1}, // Cruelty, Unbridled Wrath, Imp Heroic Strike, Imp Battle Shout
 };
 static BotTalentPoint const s_Warrior_arms[] = {
-    {  124, 3 }, {  130, 5 }, {  641, 5 }, {  137, 1 },  // Imp Heroic Strike, Deflection, Tactical Mastery, Anger Mgmt
-    {  121, 3 }, {  662, 2 }, {  136, 5 }, {  132, 5 },  // Deep Wounds, Impale, 2H Weapon Spec, Axe Spec
-    {  133, 1 }, {  123, 5 }, {  135, 1 },               // Sweeping Strikes, Sword Spec, Mortal Strike
-    {  157, 5 }, {  159, 5 }, {  160, 1 }, {  154, 4 },  // Cruelty, Unbridled Wrath, Piercing Howl, Imp Battle Shout
+    {124, 3}, {130, 5}, {641, 5}, {137, 1}, // Imp Heroic Strike, Deflection, Tactical Mastery, Anger Mgmt
+    {121, 3}, {662, 2}, {136, 5}, {132, 5}, // Deep Wounds, Impale, 2H Weapon Spec, Axe Spec
+    {133, 1}, {123, 5}, {135, 1}, // Sweeping Strikes, Sword Spec, Mortal Strike
+    {157, 5}, {159, 5}, {160, 1}, {154, 4}, // Cruelty, Unbridled Wrath, Piercing Howl, Imp Battle Shout
 };
 
 // --- Paladin ---
 static BotTalentPoint const s_Paladin_holy[] = {
-    { 1449, 5 }, { 1432, 5 }, { 1444, 3 }, { 1435, 1 },  // Divine Int, Spiritual Focus, Healing Light, Consecration
-    { 1443, 2 }, { 1461, 5 }, { 1433, 1 }, { 1465, 3 },  // Imp Lay on Hands, Illumination, Divine Favor, Lasting Judgement
-    { 1627, 5 }, { 1502, 1 },                             // Holy Power, Holy Shock
-    { 1422, 5 }, { 1425, 2 }, { 1630, 3 }, { 1442, 1 },  // Imp Devotion Aura, Guardian's Favor, Precision, BoK
-    { 1446, 2 }, { 1463, 5 }, { 1450, 2 },               // Imp BoW, Imp SoR, Divine Strength
+    {1449, 5}, {1432, 5}, {1444, 3}, {1435, 1}, // Divine Int, Spiritual Focus, Healing Light, Consecration
+    {1443, 2}, {1461, 5}, {1433, 1}, {1465, 3}, // Imp Lay on Hands, Illumination, Divine Favor, Lasting Judgement
+    {1627, 5}, {1502, 1}, // Holy Power, Holy Shock
+    {1422, 5}, {1425, 2}, {1630, 3}, {1442, 1}, // Imp Devotion Aura, Guardian's Favor, Precision, BoK
+    {1446, 2}, {1463, 5}, {1450, 2}, // Imp BoW, Imp SoR, Divine Strength
 };
 static BotTalentPoint const s_Paladin_prot[] = {
-    { 1421, 5 }, { 1630, 3 }, { 1425, 2 }, { 1423, 5 },  // Redoubt, Precision, Guardian's Favor, Toughness
-    { 1521, 3 }, { 1431, 1 }, { 1424, 3 }, { 1426, 5 },  // Imp HoJ, Blessing of Sanctuary, Shield Spec, Reckoning
-    { 1429, 5 }, { 1430, 1 }, { 1501, 3 },               // 1H Weapon Spec, Holy Shield, Imp Righteous Fury
-    { 1450, 5 }, { 1449, 5 }, { 1432, 5 },               // Divine Strength, Divine Int, Spiritual Focus
+    {1421, 5}, {1630, 3}, {1425, 2}, {1423, 5}, // Redoubt, Precision, Guardian's Favor, Toughness
+    {1521, 3}, {1431, 1}, {1424, 3}, {1426, 5}, // Imp HoJ, Blessing of Sanctuary, Shield Spec, Reckoning
+    {1429, 5}, {1430, 1}, {1501, 3}, // 1H Weapon Spec, Holy Shield, Imp Righteous Fury
+    {1450, 5}, {1449, 5}, {1432, 5}, // Divine Strength, Divine Int, Spiritual Focus
 };
 static BotTalentPoint const s_Paladin_ret[] = {
-    { 1401, 5 }, { 1407, 5 }, { 1403, 5 }, { 1633, 3 },  // Imp BoM, Benediction, Deflection, Vindication
-    { 1411, 5 }, { 1481, 1 }, { 1634, 2 }, { 1410, 3 },  // Conviction, Seal of Command, Pursuit of Justice, 2H Spec
-    { 1409, 1 }, { 1402, 5 }, { 1441, 1 },               // Sanctity Aura, Vengeance, Repentance
-    { 1450, 5 }, { 1449, 5 }, { 1432, 5 },               // Divine Strength, Divine Int, Spiritual Focus
+    {1401, 5}, {1407, 5}, {1403, 5}, {1633, 3}, // Imp BoM, Benediction, Deflection, Vindication
+    {1411, 5}, {1481, 1}, {1634, 2}, {1410, 3}, // Conviction, Seal of Command, Pursuit of Justice, 2H Spec
+    {1409, 1}, {1402, 5}, {1441, 1}, // Sanctity Aura, Vengeance, Repentance
+    {1450, 5}, {1449, 5}, {1432, 5}, // Divine Strength, Divine Int, Spiritual Focus
 };
 
 // --- Hunter ---
 static BotTalentPoint const s_Hunter_mm[] = {
-    { 1344, 5 }, { 1342, 5 }, { 1345, 1 }, { 1343, 5 },  // Lethal Shots, Efficiency, Aimed Shot, Imp Hunter's Mark
-    { 1349, 5 }, { 1353, 1 }, { 1347, 3 }, { 1362, 5 },  // Mortal Shots, Scatter Shot, Barrage, Ranged Weapon Spec
-    { 1361, 1 },                                           // Trueshot Aura
-    { 1623, 3 }, { 1301, 3 }, { 1306, 2 }, { 1310, 3 },  // Monster Slaying, Humanoid Slaying, Clever Traps, Surefooted
-    { 1321, 3 }, { 1303, 5 }, { 1341, 1 },               // Killer Instinct, Lightning Reflexes, Imp Concussive Shot
+    {1344, 5}, {1342, 5}, {1345, 1}, {1343, 5}, // Lethal Shots, Efficiency, Aimed Shot, Imp Hunter's Mark
+    {1349, 5}, {1353, 1}, {1347, 3}, {1362, 5}, // Mortal Shots, Scatter Shot, Barrage, Ranged Weapon Spec
+    {1361, 1}, // Trueshot Aura
+    {1623, 3}, {1301, 3}, {1306, 2}, {1310, 3}, // Monster Slaying, Humanoid Slaying, Clever Traps, Surefooted
+    {1321, 3}, {1303, 5}, {1341, 1}, // Killer Instinct, Lightning Reflexes, Imp Concussive Shot
 };
 static BotTalentPoint const s_Hunter_bm[] = {
-    { 1389, 5 }, { 1395, 3 }, { 1625, 2 }, { 1396, 5 },  // Endurance Training, Thick Hide, Imp Revive Pet, Unleashed Fury
-    { 1385, 2 }, { 1393, 5 }, { 1390, 2 }, { 1387, 1 },  // Imp Mend Pet, Ferocity, Bestial Discipline, Intimidation
-    { 1397, 5 }, { 1386, 1 },                             // Frenzy, Bestial Wrath
-    { 1344, 5 }, { 1342, 5 }, { 1345, 1 }, { 1343, 5 },  // Lethal Shots, Efficiency, Aimed Shot, Imp Hunter's Mark
-    { 1349, 4 },                                           // Mortal Shots
+    {1389, 5}, {1395, 3}, {1625, 2}, {1396, 5}, // Endurance Training, Thick Hide, Imp Revive Pet, Unleashed Fury
+    {1385, 2}, {1393, 5}, {1390, 2}, {1387, 1}, // Imp Mend Pet, Ferocity, Bestial Discipline, Intimidation
+    {1397, 5}, {1386, 1}, // Frenzy, Bestial Wrath
+    {1344, 5}, {1342, 5}, {1345, 1}, {1343, 5}, // Lethal Shots, Efficiency, Aimed Shot, Imp Hunter's Mark
+    {1349, 4}, // Mortal Shots
 };
 static BotTalentPoint const s_Hunter_surv[] = {
-    { 1623, 3 }, { 1301, 3 }, { 1311, 5 }, { 1621, 2 },  // Monster Slaying, Humanoid Slaying, Deflection, Savage Strikes
-    { 1306, 2 }, { 1310, 3 }, { 1322, 2 }, { 1321, 3 },  // Clever Traps, Surefooted, Trap Mastery, Killer Instinct
-    { 1312, 1 }, { 1303, 5 }, { 1325, 1 },               // Counterattack, Lightning Reflexes, Wyvern Sting
-    { 1344, 5 }, { 1342, 5 }, { 1345, 1 }, { 1343, 5 },  // Lethal Shots, Efficiency, Aimed Shot, Imp Hunter's Mark
-    { 1349, 5 },                                           // Mortal Shots
+    {1623, 3}, {1301, 3}, {1311, 5}, {1621, 2}, // Monster Slaying, Humanoid Slaying, Deflection, Savage Strikes
+    {1306, 2}, {1310, 3}, {1322, 2}, {1321, 3}, // Clever Traps, Surefooted, Trap Mastery, Killer Instinct
+    {1312, 1}, {1303, 5}, {1325, 1}, // Counterattack, Lightning Reflexes, Wyvern Sting
+    {1344, 5}, {1342, 5}, {1345, 1}, {1343, 5}, // Lethal Shots, Efficiency, Aimed Shot, Imp Hunter's Mark
+    {1349, 5}, // Mortal Shots
 };
 
 // --- Rogue ---
 static BotTalentPoint const s_Rogue_combat[] = {
-    {  201, 2 }, {  186, 3 }, {  203, 3 }, {  181, 5 },  // Imp SS, Lightning Reflexes, Imp Gouge, Precision
-    {  277, 3 }, {  221, 5 }, {  223, 1 }, {  242, 5 },  // Imp SnD, Dual Wield Spec, Blade Flurry, Sword Spec
-    { 1703, 2 }, { 1122, 3 }, {  205, 1 },               // Weapon Expertise, Aggression, Adrenaline Rush
-    {  270, 5 }, {  273, 3 }, {  274, 2 }, {  281, 1 },  // Malice, Ruthlessness, Murder, Relentless Strikes
-    {  269, 5 }, {  276, 2 },                             // Lethality, Imp Eviscerate
+    {201, 2},  {186, 3},  {203, 3}, {181, 5}, // Imp SS, Lightning Reflexes, Imp Gouge, Precision
+    {277, 3},  {221, 5},  {223, 1}, {242, 5}, // Imp SnD, Dual Wield Spec, Blade Flurry, Sword Spec
+    {1703, 2}, {1122, 3}, {205, 1}, // Weapon Expertise, Aggression, Adrenaline Rush
+    {270, 5},  {273, 3},  {274, 2}, {281, 1}, // Malice, Ruthlessness, Murder, Relentless Strikes
+    {269, 5},  {276, 2}, // Lethality, Imp Eviscerate
 };
 static BotTalentPoint const s_Rogue_assassination[] = {
-    {  276, 3 }, {  270, 5 }, {  273, 3 }, {  274, 2 },  // Imp Eviscerate, Malice, Ruthlessness, Murder
-    {  281, 1 }, {  277, 3 }, {  269, 5 }, {  682, 5 },  // Relentless Strikes, Imp SnD, Lethality, Vile Poisons
-    {  268, 5 }, {  280, 1 }, {  283, 5 },               // Imp Poisons, Cold Blood, Seal Fate
-    {  186, 3 }, {  181, 5 }, {  201, 2 }, {  221, 3 },  // Lightning Reflexes, Precision, Imp SS, Dual Wield Spec
+    {276, 3}, {270, 5}, {273, 3}, {274, 2}, // Imp Eviscerate, Malice, Ruthlessness, Murder
+    {281, 1}, {277, 3}, {269, 5}, {682, 5}, // Relentless Strikes, Imp SnD, Lethality, Vile Poisons
+    {268, 5}, {280, 1}, {283, 5}, // Imp Poisons, Cold Blood, Seal Fate
+    {186, 3}, {181, 5}, {201, 2}, {221, 3}, // Lightning Reflexes, Precision, Imp SS, Dual Wield Spec
 };
 
 // --- Priest ---
 static BotTalentPoint const s_Priest_holy[] = {
-    {  342, 5 }, {  344, 2 }, {  343, 3 }, {  348, 1 },  // Unbreakable Will, Imp PW:F, Imp PW:S, Inner Focus
-    {  347, 3 }, {  341, 3 }, {  351, 1 }, { 1201, 2 },  // Meditation, Mental Agility, Divine Spirit, Mental Strength
-    {  322, 1 },                                           // Power Infusion
-    {  410, 2 }, {  401, 5 }, { 1181, 5 }, {  361, 3 },  // Healing Focus, Holy Spec, Divine Fury, Inspiration
-    { 1635, 2 }, {  408, 3 }, {  402, 5 }, {  404, 5 },  // Holy Reach, Imp Healing, Spiritual Guidance, Spiritual Healing
+    {342, 5},  {344, 2}, {343, 3},  {348, 1}, // Unbreakable Will, Imp PW:F, Imp PW:S, Inner Focus
+    {347, 3},  {341, 3}, {351, 1},  {1201, 2}, // Meditation, Mental Agility, Divine Spirit, Mental Strength
+    {322, 1}, // Power Infusion
+    {410, 2},  {401, 5}, {1181, 5}, {361, 3}, // Healing Focus, Holy Spec, Divine Fury, Inspiration
+    {1635, 2}, {408, 3}, {402, 5},  {404, 5}, // Holy Reach, Imp Healing, Spiritual Guidance, Spiritual Healing
 };
 static BotTalentPoint const s_Priest_shadow[] = {
-    {  465, 5 }, {  466, 3 }, {  482, 2 }, {  463, 5 },  // Spirit Tap, Shadow Affinity, Imp SW:P, Shadow Focus
-    {  501, 1 }, {  481, 5 }, {  881, 3 }, {  461, 5 },  // Mind Flay, Imp Mind Blast, Shadow Reach, Shadow Weaving
-    {  541, 1 }, {  462, 5 }, {  521, 1 }, {  484, 1 },  // Silence, Darkness, Shadowform, Vampiric Embrace
-    {  345, 5 }, {  344, 2 }, {  343, 3 }, {  348, 1 },  // Wand Spec, Imp PW:F, Imp PW:S, Inner Focus
-    {  347, 3 },                                           // Meditation
+    {465, 5}, {466, 3}, {482, 2}, {463, 5}, // Spirit Tap, Shadow Affinity, Imp SW:P, Shadow Focus
+    {501, 1}, {481, 5}, {881, 3}, {461, 5}, // Mind Flay, Imp Mind Blast, Shadow Reach, Shadow Weaving
+    {541, 1}, {462, 5}, {521, 1}, {484, 1}, // Silence, Darkness, Shadowform, Vampiric Embrace
+    {345, 5}, {344, 2}, {343, 3}, {348, 1}, // Wand Spec, Imp PW:F, Imp PW:S, Inner Focus
+    {347, 3}, // Meditation
 };
 
 // --- Shaman ---
 static BotTalentPoint const s_Shaman_resto[] = {
-    {  586, 5 }, {  593, 5 }, {  595, 5 }, {  581, 3 },  // Imp HW, Tidal Focus, Totemic Focus, Ancestral Healing
-    {  587, 3 }, {  588, 5 }, {  594, 5 }, {  591, 1 },  // Healing Focus, Restorative Totems, Tidal Mastery, NS
-    { 1648, 3 }, {  592, 5 }, {  590, 1 },               // Healing Way, Purification, Mana Tide
-    {  563, 5 }, {  561, 3 }, {  575, 2 },               // Concussion, Call of Flame, Reverberation
+    {586, 5},  {593, 5}, {595, 5}, {581, 3}, // Imp HW, Tidal Focus, Totemic Focus, Ancestral Healing
+    {587, 3},  {588, 5}, {594, 5}, {591, 1}, // Healing Focus, Restorative Totems, Tidal Mastery, NS
+    {1648, 3}, {592, 5}, {590, 1}, // Healing Way, Purification, Mana Tide
+    {563, 5},  {561, 3}, {575, 2}, // Concussion, Call of Flame, Reverberation
 };
 static BotTalentPoint const s_Shaman_enhance[] = {
-    {  614, 5 }, {  612, 5 }, {  613, 5 }, {  605, 2 },  // Ancestral Knowledge, Shield Spec, Thundering Strikes, Imp GW
-    {  602, 5 }, {  611, 3 }, {  616, 1 }, { 1643, 5 },  // Flurry, Elemental Weapons, Parry, Weapon Mastery
-    {  901, 1 },                                           // Stormstrike
-    {  563, 5 }, {  561, 3 }, {  574, 1 }, {  562, 5 },  // Concussion, Call of Flame, Elemental Focus, Call of Thunder
-    {  575, 5 },                                           // Reverberation
+    {614, 5}, {612, 5}, {613, 5}, {605, 2}, // Ancestral Knowledge, Shield Spec, Thundering Strikes, Imp GW
+    {602, 5}, {611, 3}, {616, 1}, {1643, 5}, // Flurry, Elemental Weapons, Parry, Weapon Mastery
+    {901, 1}, // Stormstrike
+    {563, 5}, {561, 3}, {574, 1}, {562, 5}, // Concussion, Call of Flame, Elemental Focus, Call of Thunder
+    {575, 5}, // Reverberation
 };
 static BotTalentPoint const s_Shaman_elemental[] = {
-    {  564, 5 }, {  563, 5 }, {  561, 3 }, {  562, 5 },  // Convection, Concussion, Call of Flame, Call of Thunder
-    {  574, 1 }, {  575, 5 }, { 1642, 3 }, {  565, 1 },  // Elemental Focus, Reverberation, Eye of the Storm, Ele Fury
-    {  721, 5 }, {  573, 1 },                             // Lightning Mastery, Elemental Mastery
-    {  586, 5 }, {  593, 5 }, {  595, 4 }, {  587, 3 },  // Imp HW, Tidal Focus, Totemic Focus, Healing Focus
+    {564, 5}, {563, 5}, {561, 3},  {562, 5}, // Convection, Concussion, Call of Flame, Call of Thunder
+    {574, 1}, {575, 5}, {1642, 3}, {565, 1}, // Elemental Focus, Reverberation, Eye of the Storm, Ele Fury
+    {721, 5}, {573, 1}, // Lightning Mastery, Elemental Mastery
+    {586, 5}, {593, 5}, {595, 4},  {587, 3}, // Imp HW, Tidal Focus, Totemic Focus, Healing Focus
 };
 
 // --- Mage ---
 static BotTalentPoint const s_Mage_frost[] = {
-    {   37, 5 }, { 1649, 3 }, {   73, 5 }, {   61, 3 },  // Imp Frostbolt, Ele Precision, Ice Shards, Piercing Ice
-    {   69, 1 }, {   63, 3 }, {  741, 2 }, {   66, 3 },  // Cold Snap, Imp Blizzard, Arctic Reach, Frost Channeling
-    {   67, 5 }, {   72, 1 }, {   64, 3 }, {   68, 5 },  // Shatter, Ice Block, Imp CoC, Winter's Chill
-    {   71, 1 },                                           // Ice Barrier
-    {   74, 2 }, {   76, 3 }, {   75, 5 }, { 1142, 1 },  // Arcane Subtlety, Arcane Focus, Arcane Conc, Arcane Med
+    {37, 5}, {1649, 3}, {73, 5},  {61, 3}, // Imp Frostbolt, Ele Precision, Ice Shards, Piercing Ice
+    {69, 1}, {63, 3},   {741, 2}, {66, 3}, // Cold Snap, Imp Blizzard, Arctic Reach, Frost Channeling
+    {67, 5}, {72, 1},   {64, 3},  {68, 5}, // Shatter, Ice Block, Imp CoC, Winter's Chill
+    {71, 1}, // Ice Barrier
+    {74, 2}, {76, 3},   {75, 5},  {1142, 1}, // Arcane Subtlety, Arcane Focus, Arcane Conc, Arcane Med
 };
 static BotTalentPoint const s_Mage_fire[] = {
-    {   26, 5 }, {   34, 5 }, {   28, 2 }, {   30, 5 },  // Imp Fireball, Ignite, Flame Throwing, Impact
-    {   31, 3 }, {   29, 1 }, {   23, 2 }, { 1639, 3 },  // Imp Flamestrike, Pyroblast, Burning Soul, Master of Elements
-    {   33, 3 }, {   32, 1 }, {   35, 5 }, {   36, 1 },  // Critical Mass, Blast Wave, Fire Power, Combustion
-    {   74, 2 }, {   76, 3 }, {   75, 5 }, { 1142, 3 },  // Arcane Subtlety, Arcane Focus, Arcane Conc, Arcane Med
-    {   77, 2 },                                           // Arcane Mind
+    {26, 5}, {34, 5}, {28, 2}, {30, 5}, // Imp Fireball, Ignite, Flame Throwing, Impact
+    {31, 3}, {29, 1}, {23, 2}, {1639, 3}, // Imp Flamestrike, Pyroblast, Burning Soul, Master of Elements
+    {33, 3}, {32, 1}, {35, 5}, {36, 1}, // Critical Mass, Blast Wave, Fire Power, Combustion
+    {74, 2}, {76, 3}, {75, 5}, {1142, 3}, // Arcane Subtlety, Arcane Focus, Arcane Conc, Arcane Med
+    {77, 2}, // Arcane Mind
 };
 static BotTalentPoint const s_Mage_arcfrost[] = {
-    {   74, 2 }, {   76, 5 }, {   75, 5 }, {   80, 5 },  // Arcane Subtlety, Arcane Focus, Arcane Conc, Imp AM
-    { 1142, 3 }, {   86, 1 }, {   77, 5 }, {  421, 3 },  // Arcane Med, Presence of Mind, Arcane Mind, Arcane Instability
-    {   87, 1 },                                           // Arcane Power
-    {   37, 5 }, { 1649, 3 }, {   73, 5 }, {   61, 3 },  // Imp Frostbolt, Ele Precision, Ice Shards, Piercing Ice
-    {   66, 3 }, {   69, 1 }, {   37, 1 },               // Frost Channeling, Cold Snap, (extra Imp Frostbolt rank)
+    {74, 2},   {76, 5},   {75, 5}, {80, 5}, // Arcane Subtlety, Arcane Focus, Arcane Conc, Imp AM
+    {1142, 3}, {86, 1},   {77, 5}, {421, 3}, // Arcane Med, Presence of Mind, Arcane Mind, Arcane Instability
+    {87, 1}, // Arcane Power
+    {37, 5},   {1649, 3}, {73, 5}, {61, 3}, // Imp Frostbolt, Ele Precision, Ice Shards, Piercing Ice
+    {66, 3},   {69, 1},   {37, 1}, // Frost Channeling, Cold Snap, (extra Imp Frostbolt rank)
 };
 
 // --- Warlock ---
 static BotTalentPoint const s_Warlock_smruin[] = {
-    { 1003, 5 }, { 1005, 5 }, { 1007, 2 }, { 1284, 3 },  // Imp Corruption, Suppression, Imp Life Tap, Imp CoA
-    { 1061, 1 }, { 1001, 5 }, { 1002, 2 }, { 1021, 2 },  // Amplify Curse, Fel Conc, Nightfall, Grim Reach
-    { 1041, 1 }, { 1042, 5 },                             // Siphon Life, Shadow Mastery
-    {  944, 5 }, {  941, 5 }, {  943, 5 }, {  981, 4 },  // Imp Shadow Bolt, Cataclysm, Bane, Devastation
-    {  967, 1 },                                           // Ruin
+    {1003, 5}, {1005, 5}, {1007, 2}, {1284, 3}, // Imp Corruption, Suppression, Imp Life Tap, Imp CoA
+    {1061, 1}, {1001, 5}, {1002, 2}, {1021, 2}, // Amplify Curse, Fel Conc, Nightfall, Grim Reach
+    {1041, 1}, {1042, 5}, // Siphon Life, Shadow Mastery
+    {944, 5},  {941, 5},  {943, 5},  {981, 4}, // Imp Shadow Bolt, Cataclysm, Bane, Devastation
+    {967, 1}, // Ruin
 };
 static BotTalentPoint const s_Warlock_dsruin[] = {
-    { 1221, 2 }, { 1222, 3 }, { 1223, 5 }, { 1242, 5 },  // Imp Healthstone, Imp Imp, Demonic Embrace, Fel Intellect
-    { 1226, 1 }, { 1241, 3 }, { 1281, 1 }, { 1262, 1 },  // Fel Domination, Fel Stamina, Demonic Sacrifice, Unholy Power
-    {  944, 5 }, {  941, 5 }, {  943, 5 }, {  981, 5 },  // Imp Shadow Bolt, Cataclysm, Bane, Devastation
-    {  963, 1 }, {  985, 2 }, {  967, 1 },               // Shadowburn, Intensity, Ruin
-    { 1003, 5 }, { 1005, 1 },                             // Imp Corruption, Suppression
+    {1221, 2}, {1222, 3}, {1223, 5}, {1242, 5}, // Imp Healthstone, Imp Imp, Demonic Embrace, Fel Intellect
+    {1226, 1}, {1241, 3}, {1281, 1}, {1262, 1}, // Fel Domination, Fel Stamina, Demonic Sacrifice, Unholy Power
+    {944, 5},  {941, 5},  {943, 5},  {981, 5}, // Imp Shadow Bolt, Cataclysm, Bane, Devastation
+    {963, 1},  {985, 2},  {967, 1}, // Shadowburn, Intensity, Ruin
+    {1003, 5}, {1005, 1}, // Imp Corruption, Suppression
 };
 static BotTalentPoint const s_Warlock_affliction[] = {
-    { 1003, 5 }, { 1005, 5 }, { 1284, 3 }, { 1007, 2 },  // Imp Corruption, Suppression, Imp CoA, Imp Life Tap
-    { 1061, 1 }, { 1001, 5 }, { 1002, 2 }, { 1021, 2 },  // Amplify Curse, Fel Conc, Nightfall, Grim Reach
-    { 1041, 1 }, { 1042, 5 }, { 1022, 1 }, { 1004, 2 },  // Siphon Life, Shadow Mastery, Dark Pact, Imp Drain Life
-    {  944, 5 }, {  941, 5 }, {  943, 5 }, {  981, 2 },  // Imp Shadow Bolt, Cataclysm, Bane, Devastation
+    {1003, 5}, {1005, 5}, {1284, 3}, {1007, 2}, // Imp Corruption, Suppression, Imp CoA, Imp Life Tap
+    {1061, 1}, {1001, 5}, {1002, 2}, {1021, 2}, // Amplify Curse, Fel Conc, Nightfall, Grim Reach
+    {1041, 1}, {1042, 5}, {1022, 1}, {1004, 2}, // Siphon Life, Shadow Mastery, Dark Pact, Imp Drain Life
+    {944, 5},  {941, 5},  {943, 5},  {981, 2}, // Imp Shadow Bolt, Cataclysm, Bane, Devastation
 };
 
 // --- Druid ---
 static BotTalentPoint const s_Druid_resto[] = {
-    {  821, 5 }, {  822, 5 }, {  824, 5 }, {  829, 3 },  // Imp MotW, Furor, Imp HT, Reflection
-    {  827, 1 }, {  841, 5 }, {  843, 5 }, {  831, 1 },  // Insect Swarm, Subtlety, Tranquil Spirit, NS
-    {  830, 3 }, {  828, 5 }, {  825, 5 }, {  844, 1 },  // Imp Rejuv, Gift of Nature, Imp Regrowth, Swiftmend
-    {  789, 1 }, {  921, 4 }, {  781, 2 },               // Nature's Grace, Imp Nature's Grasp, Natural Shapeshifter
+    {821, 5}, {822, 5}, {824, 5}, {829, 3}, // Imp MotW, Furor, Imp HT, Reflection
+    {827, 1}, {841, 5}, {843, 5}, {831, 1}, // Insect Swarm, Subtlety, Tranquil Spirit, NS
+    {830, 3}, {828, 5}, {825, 5}, {844, 1}, // Imp Rejuv, Gift of Nature, Imp Regrowth, Swiftmend
+    {789, 1}, {921, 4}, {781, 2}, // Nature's Grace, Imp Nature's Grasp, Natural Shapeshifter
 };
 static BotTalentPoint const s_Druid_feraltank[] = {
-    {  796, 5 }, {  795, 5 }, {  794, 5 }, {  799, 5 },  // Ferocity, Feral Aggression, Thick Hide, Feral Instinct
-    {  798, 3 }, {  803, 3 }, {  800, 2 }, {  801, 2 },  // Sharpened Claws, Predatory Strikes, Blood Frenzy, Primal Fury
-    {  808, 5 }, {  809, 1 }, { 1162, 1 }, {  804, 1 },  // Heart of the Wild, LotP, Faerie Fire (Feral), Feral Charge
-    {  822, 5 }, {  821, 5 }, {  829, 3 },               // Furor, Imp MotW, Reflection
+    {796, 5}, {795, 5}, {794, 5},  {799, 5}, // Ferocity, Feral Aggression, Thick Hide, Feral Instinct
+    {798, 3}, {803, 3}, {800, 2},  {801, 2}, // Sharpened Claws, Predatory Strikes, Blood Frenzy, Primal Fury
+    {808, 5}, {809, 1}, {1162, 1}, {804, 1}, // Heart of the Wild, LotP, Faerie Fire (Feral), Feral Charge
+    {822, 5}, {821, 5}, {829, 3}, // Furor, Imp MotW, Reflection
 };
 static BotTalentPoint const s_Druid_feralcat[] = {
-    {  796, 5 }, {  795, 5 }, {  799, 5 }, {  798, 3 },  // Ferocity, Feral Aggression, Feral Instinct, Sharpened Claws
-    {  803, 3 }, {  800, 2 }, {  801, 2 }, {  805, 2 },  // Predatory Strikes, Blood Frenzy, Primal Fury, Savage Fury
-    {  808, 5 }, {  809, 1 }, { 1162, 1 }, {  804, 1 },  // Heart of the Wild, LotP, Faerie Fire (Feral), Feral Charge
-    {  822, 5 }, {  821, 5 }, {  781, 3 }, {  788, 1 },  // Furor, Imp MotW, Natural Shapeshifter, Omen of Clarity
-    {  829, 2 },                                           // Reflection
+    {796, 5}, {795, 5}, {799, 5},  {798, 3}, // Ferocity, Feral Aggression, Feral Instinct, Sharpened Claws
+    {803, 3}, {800, 2}, {801, 2},  {805, 2}, // Predatory Strikes, Blood Frenzy, Primal Fury, Savage Fury
+    {808, 5}, {809, 1}, {1162, 1}, {804, 1}, // Heart of the Wild, LotP, Faerie Fire (Feral), Feral Charge
+    {822, 5}, {821, 5}, {781, 3},  {788, 1}, // Furor, Imp MotW, Natural Shapeshifter, Omen of Clarity
+    {829, 2}, // Reflection
 };
 static BotTalentPoint const s_Druid_balance[] = {
-    {  762, 5 }, {  761, 1 }, {  921, 4 }, {  763, 5 },  // Imp Wrath, Nature's Grasp, Imp Nature's Grasp, Imp Moonfire
-    {  791, 5 }, {  781, 3 }, {  788, 1 }, {  764, 2 },  // Natural Weapons, Natural Shapeshifter, Omen of Clarity, Nature's Reach
-    {  792, 5 }, {  784, 5 }, {  789, 1 }, {  783, 3 },  // Vengeance, Imp Starfire, Nature's Grace, Moonglow
-    {  790, 5 }, {  793, 1 },                             // Moonfury, Moonkin Form
-    {  821, 5 },                                           // Imp MotW
+    {762, 5}, {761, 1}, {921, 4}, {763, 5}, // Imp Wrath, Nature's Grasp, Imp Nature's Grasp, Imp Moonfire
+    {791, 5}, {781, 3}, {788, 1}, {764, 2}, // Natural Weapons, Natural Shapeshifter, Omen of Clarity, Nature's Reach
+    {792, 5}, {784, 5}, {789, 1}, {783, 3}, // Vengeance, Imp Starfire, Nature's Grace, Moonglow
+    {790, 5}, {793, 1}, // Moonfury, Moonkin Form
+    {821, 5}, // Imp MotW
 };
 
 // Master build table — all 26 specs
 static BotTalentBuild const s_talentBuilds[] = {
     // Warrior
-    { CLASS_WARRIOR, ROLE_MELEE_DPS, "fury",     s_Warrior_fury,     std::extent<decltype(s_Warrior_fury)>::value },
-    { CLASS_WARRIOR, ROLE_TANK,      "prot",     s_Warrior_prot,     std::extent<decltype(s_Warrior_prot)>::value },
-    { CLASS_WARRIOR, ROLE_MELEE_DPS, "arms",     s_Warrior_arms,     std::extent<decltype(s_Warrior_arms)>::value },
+    {CLASS_WARRIOR, ROLE_MELEE_DPS, "fury", s_Warrior_fury, std::extent<decltype(s_Warrior_fury)>::value},
+    {CLASS_WARRIOR, ROLE_TANK, "prot", s_Warrior_prot, std::extent<decltype(s_Warrior_prot)>::value},
+    {CLASS_WARRIOR, ROLE_MELEE_DPS, "arms", s_Warrior_arms, std::extent<decltype(s_Warrior_arms)>::value},
     // Paladin
-    { CLASS_PALADIN, ROLE_HEALER,    "holy",     s_Paladin_holy,     std::extent<decltype(s_Paladin_holy)>::value },
-    { CLASS_PALADIN, ROLE_TANK,      "prot",     s_Paladin_prot,     std::extent<decltype(s_Paladin_prot)>::value },
-    { CLASS_PALADIN, ROLE_MELEE_DPS, "ret",      s_Paladin_ret,      std::extent<decltype(s_Paladin_ret)>::value },
+    {CLASS_PALADIN, ROLE_HEALER, "holy", s_Paladin_holy, std::extent<decltype(s_Paladin_holy)>::value},
+    {CLASS_PALADIN, ROLE_TANK, "prot", s_Paladin_prot, std::extent<decltype(s_Paladin_prot)>::value},
+    {CLASS_PALADIN, ROLE_MELEE_DPS, "ret", s_Paladin_ret, std::extent<decltype(s_Paladin_ret)>::value},
     // Hunter
-    { CLASS_HUNTER, ROLE_RANGE_DPS,  "mm",       s_Hunter_mm,        std::extent<decltype(s_Hunter_mm)>::value },
-    { CLASS_HUNTER, ROLE_RANGE_DPS,  "bm",       s_Hunter_bm,        std::extent<decltype(s_Hunter_bm)>::value },
-    { CLASS_HUNTER, ROLE_RANGE_DPS,  "surv",     s_Hunter_surv,      std::extent<decltype(s_Hunter_surv)>::value },
+    {CLASS_HUNTER, ROLE_RANGE_DPS, "mm", s_Hunter_mm, std::extent<decltype(s_Hunter_mm)>::value},
+    {CLASS_HUNTER, ROLE_RANGE_DPS, "bm", s_Hunter_bm, std::extent<decltype(s_Hunter_bm)>::value},
+    {CLASS_HUNTER, ROLE_RANGE_DPS, "surv", s_Hunter_surv, std::extent<decltype(s_Hunter_surv)>::value},
     // Rogue
-    { CLASS_ROGUE, ROLE_MELEE_DPS,   "combat",   s_Rogue_combat,     std::extent<decltype(s_Rogue_combat)>::value },
-    { CLASS_ROGUE, ROLE_MELEE_DPS,   "assassination", s_Rogue_assassination, std::extent<decltype(s_Rogue_assassination)>::value },
+    {CLASS_ROGUE, ROLE_MELEE_DPS, "combat", s_Rogue_combat, std::extent<decltype(s_Rogue_combat)>::value},
+    {CLASS_ROGUE, ROLE_MELEE_DPS, "assassination", s_Rogue_assassination, std::extent<decltype(s_Rogue_assassination)>::value},
     // Priest
-    { CLASS_PRIEST, ROLE_HEALER,     "holy",     s_Priest_holy,      std::extent<decltype(s_Priest_holy)>::value },
-    { CLASS_PRIEST, ROLE_RANGE_DPS,  "shadow",   s_Priest_shadow,    std::extent<decltype(s_Priest_shadow)>::value },
+    {CLASS_PRIEST, ROLE_HEALER, "holy", s_Priest_holy, std::extent<decltype(s_Priest_holy)>::value},
+    {CLASS_PRIEST, ROLE_RANGE_DPS, "shadow", s_Priest_shadow, std::extent<decltype(s_Priest_shadow)>::value},
     // Shaman
-    { CLASS_SHAMAN, ROLE_HEALER,     "resto",    s_Shaman_resto,     std::extent<decltype(s_Shaman_resto)>::value },
-    { CLASS_SHAMAN, ROLE_MELEE_DPS,  "enhance",  s_Shaman_enhance,   std::extent<decltype(s_Shaman_enhance)>::value },
-    { CLASS_SHAMAN, ROLE_RANGE_DPS,  "elemental",s_Shaman_elemental, std::extent<decltype(s_Shaman_elemental)>::value },
+    {CLASS_SHAMAN, ROLE_HEALER, "resto", s_Shaman_resto, std::extent<decltype(s_Shaman_resto)>::value},
+    {CLASS_SHAMAN, ROLE_MELEE_DPS, "enhance", s_Shaman_enhance, std::extent<decltype(s_Shaman_enhance)>::value},
+    {CLASS_SHAMAN, ROLE_RANGE_DPS, "elemental", s_Shaman_elemental, std::extent<decltype(s_Shaman_elemental)>::value},
     // Mage
-    { CLASS_MAGE, ROLE_RANGE_DPS,    "frost",    s_Mage_frost,       std::extent<decltype(s_Mage_frost)>::value },
-    { CLASS_MAGE, ROLE_RANGE_DPS,    "fire",     s_Mage_fire,        std::extent<decltype(s_Mage_fire)>::value },
-    { CLASS_MAGE, ROLE_RANGE_DPS,    "arcfrost", s_Mage_arcfrost,    std::extent<decltype(s_Mage_arcfrost)>::value },
+    {CLASS_MAGE, ROLE_RANGE_DPS, "frost", s_Mage_frost, std::extent<decltype(s_Mage_frost)>::value},
+    {CLASS_MAGE, ROLE_RANGE_DPS, "fire", s_Mage_fire, std::extent<decltype(s_Mage_fire)>::value},
+    {CLASS_MAGE, ROLE_RANGE_DPS, "arcfrost", s_Mage_arcfrost, std::extent<decltype(s_Mage_arcfrost)>::value},
     // Warlock
-    { CLASS_WARLOCK, ROLE_RANGE_DPS, "smruin",   s_Warlock_smruin,   std::extent<decltype(s_Warlock_smruin)>::value },
-    { CLASS_WARLOCK, ROLE_RANGE_DPS, "dsruin",   s_Warlock_dsruin,   std::extent<decltype(s_Warlock_dsruin)>::value },
-    { CLASS_WARLOCK, ROLE_RANGE_DPS, "affliction",s_Warlock_affliction, std::extent<decltype(s_Warlock_affliction)>::value },
+    {CLASS_WARLOCK, ROLE_RANGE_DPS, "smruin", s_Warlock_smruin, std::extent<decltype(s_Warlock_smruin)>::value},
+    {CLASS_WARLOCK, ROLE_RANGE_DPS, "dsruin", s_Warlock_dsruin, std::extent<decltype(s_Warlock_dsruin)>::value},
+    {CLASS_WARLOCK, ROLE_RANGE_DPS, "affliction", s_Warlock_affliction, std::extent<decltype(s_Warlock_affliction)>::value},
     // Druid
-    { CLASS_DRUID, ROLE_HEALER,      "resto",    s_Druid_resto,      std::extent<decltype(s_Druid_resto)>::value },
-    { CLASS_DRUID, ROLE_TANK,        "feraltank",s_Druid_feraltank,  std::extent<decltype(s_Druid_feraltank)>::value },
-    { CLASS_DRUID, ROLE_MELEE_DPS,   "feralcat", s_Druid_feralcat,   std::extent<decltype(s_Druid_feralcat)>::value },
-    { CLASS_DRUID, ROLE_RANGE_DPS,   "balance",  s_Druid_balance,    std::extent<decltype(s_Druid_balance)>::value },
+    {CLASS_DRUID, ROLE_HEALER, "resto", s_Druid_resto, std::extent<decltype(s_Druid_resto)>::value},
+    {CLASS_DRUID, ROLE_TANK, "feraltank", s_Druid_feraltank, std::extent<decltype(s_Druid_feraltank)>::value},
+    {CLASS_DRUID, ROLE_MELEE_DPS, "feralcat", s_Druid_feralcat, std::extent<decltype(s_Druid_feralcat)>::value},
+    {CLASS_DRUID, ROLE_RANGE_DPS, "balance", s_Druid_balance, std::extent<decltype(s_Druid_balance)>::value},
 };
 static uint32 const s_numTalentBuilds = std::extent<decltype(s_talentBuilds)>::value;
 
@@ -311,7 +311,7 @@ void CombatBotBaseAI::AutoAssignRole()
 {
     switch (me->GetClass())
     {
-        case CLASS_WARRIOR:
+    case CLASS_WARRIOR:
         {
             if (me->HasSpell(SPELL_SHIELD_SLAM))
                 m_role = ROLE_TANK;
@@ -319,19 +319,19 @@ void CombatBotBaseAI::AutoAssignRole()
                 m_role = ROLE_MELEE_DPS;
             return;
         }
-        case CLASS_ROGUE:
+    case CLASS_ROGUE:
         {
             m_role = ROLE_MELEE_DPS;
             return;
         }
-        case CLASS_HUNTER:
-        case CLASS_MAGE:
-        case CLASS_WARLOCK:
+    case CLASS_HUNTER:
+    case CLASS_MAGE:
+    case CLASS_WARLOCK:
         {
             m_role = ROLE_RANGE_DPS;
             return;
         }
-        case CLASS_PALADIN:
+    case CLASS_PALADIN:
         {
             if (me->HasSpell(SPELL_HOLY_SHIELD))
                 m_role = ROLE_TANK;
@@ -341,7 +341,7 @@ void CombatBotBaseAI::AutoAssignRole()
                 m_role = ROLE_HEALER;
             return;
         }
-        case CLASS_PRIEST:
+    case CLASS_PRIEST:
         {
             if (me->HasSpell(SPELL_SHADOWFORM))
                 m_role = ROLE_RANGE_DPS;
@@ -349,7 +349,7 @@ void CombatBotBaseAI::AutoAssignRole()
                 m_role = ROLE_HEALER;
             return;
         }
-        case CLASS_SHAMAN:
+    case CLASS_SHAMAN:
         {
             if (me->HasSpell(SPELL_ELEMENTAL_MASTERY))
                 m_role = ROLE_RANGE_DPS;
@@ -359,7 +359,7 @@ void CombatBotBaseAI::AutoAssignRole()
                 m_role = ROLE_HEALER;
             return;
         }
-        case CLASS_DRUID:
+    case CLASS_DRUID:
         {
             if (me->HasSpell(SPELL_MOONKIN_FORM))
                 m_role = ROLE_RANGE_DPS;
@@ -489,7 +489,7 @@ void CombatBotBaseAI::PopulateSpellData()
 
         switch (me->GetClass())
         {
-            case CLASS_PALADIN:
+        case CLASS_PALADIN:
             {
                 if (pSpellEntry->SpellName[0].find("Seal of Righteousness") != std::string::npos)
                 {
@@ -658,7 +658,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 break;
             }
-            case CLASS_SHAMAN:
+        case CLASS_SHAMAN:
             {
                 if (pSpellEntry->SpellName[0].find("Lightning Bolt") != std::string::npos)
                 {
@@ -835,8 +835,7 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.shaman.pNaturesSwiftness))
                         m_spells.shaman.pNaturesSwiftness = pSpellEntry;
                 }
-                else if (pSpellEntry->SpellName[0].find("Healing Wave") != std::string::npos &&
-                         pSpellEntry->SpellName[0].find("Lesser") == std::string::npos)
+                else if (pSpellEntry->SpellName[0].find("Healing Wave") != std::string::npos && pSpellEntry->SpellName[0].find("Lesser") == std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.shaman.pHealingWave))
                         m_spells.shaman.pHealingWave = pSpellEntry;
@@ -853,7 +852,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 break;
             }
-            case CLASS_HUNTER:
+        case CLASS_HUNTER:
             {
                 if (pSpellEntry->SpellName[0].find("Aspect of the Cheetah") != std::string::npos)
                 {
@@ -942,7 +941,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 break;
             }
-            case CLASS_MAGE:
+        case CLASS_MAGE:
             {
                 if (pSpellEntry->SpellName[0].find("Ice Armor") != std::string::npos)
                 {
@@ -1086,7 +1085,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 break;
             }
-            case CLASS_PRIEST:
+        case CLASS_PRIEST:
             {
                 if (pSpellEntry->SpellName[0].find("Power Word: Fortitude") != std::string::npos)
                 {
@@ -1235,7 +1234,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 break;
             }
-            case CLASS_WARLOCK:
+        case CLASS_WARLOCK:
             {
                 if (pSpellEntry->SpellName[0].find("Demon Armor") != std::string::npos)
                 {
@@ -1354,7 +1353,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 break;
             }
-            case CLASS_WARRIOR:
+        case CLASS_WARRIOR:
             {
                 if (pSpellEntry->SpellName[0].find("Battle Stance") != std::string::npos)
                 {
@@ -1538,7 +1537,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 break;
             }
-            case CLASS_ROGUE:
+        case CLASS_ROGUE:
             {
                 if (pSpellEntry->SpellName[0].find("Slice and Dice") != std::string::npos)
                 {
@@ -1692,7 +1691,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 break;
             }
-            case CLASS_DRUID:
+        case CLASS_DRUID:
             {
                 if (pSpellEntry->SpellName[0].find("Bear Form") != std::string::npos)
                 {
@@ -1927,26 +1926,26 @@ void CombatBotBaseAI::PopulateSpellData()
         {
             switch (pSpellEntry->Effect[i])
             {
-                case SPELL_EFFECT_HEAL:
-                    m_spellListDirectHeal.insert(pSpellEntry);
-                    break;
-                case SPELL_EFFECT_ATTACK_ME:
-                    m_spellListTaunt.push_back(pSpellEntry);
-                    break;
-                case SPELL_EFFECT_RESURRECT:
-                case SPELL_EFFECT_RESURRECT_NEW:
-                    m_resurrectionSpell = pSpellEntry;
-                    break;
-                case SPELL_EFFECT_APPLY_AURA:
+            case SPELL_EFFECT_HEAL:
+                m_spellListDirectHeal.insert(pSpellEntry);
+                break;
+            case SPELL_EFFECT_ATTACK_ME:
+                m_spellListTaunt.push_back(pSpellEntry);
+                break;
+            case SPELL_EFFECT_RESURRECT:
+            case SPELL_EFFECT_RESURRECT_NEW:
+                m_resurrectionSpell = pSpellEntry;
+                break;
+            case SPELL_EFFECT_APPLY_AURA:
                 {
                     switch (pSpellEntry->EffectApplyAuraName[i])
                     {
-                        case SPELL_AURA_PERIODIC_HEAL:
-                            m_spellListPeriodicHeal.insert(pSpellEntry);
-                            break;
-                        case SPELL_AURA_MOD_TAUNT:
-                            m_spellListTaunt.push_back(pSpellEntry);
-                            break;
+                    case SPELL_AURA_PERIODIC_HEAL:
+                        m_spellListPeriodicHeal.insert(pSpellEntry);
+                        break;
+                    case SPELL_AURA_MOD_TAUNT:
+                        m_spellListTaunt.push_back(pSpellEntry);
+                        break;
                     }
                     break;
                 }
@@ -1956,7 +1955,7 @@ void CombatBotBaseAI::PopulateSpellData()
 
     switch (me->GetClass())
     {
-        case CLASS_PALADIN:
+    case CLASS_PALADIN:
         {
             if (pSealOfFury && m_role == ROLE_TANK)
                 m_spells.paladin.pSeal = pSealOfFury;
@@ -2010,7 +2009,7 @@ void CombatBotBaseAI::PopulateSpellData()
 
             break;
         }
-        case CLASS_SHAMAN:
+    case CLASS_SHAMAN:
         {
             std::vector<SpellEntry const*> airTotems;
             if (pGraceOfAirTotem)
@@ -2097,7 +2096,7 @@ void CombatBotBaseAI::PopulateSpellData()
 
             break;
         }
-        case CLASS_MAGE:
+    case CLASS_MAGE:
         {
             if (!m_spells.mage.pIceArmor && pFrostArmor)
                 m_spells.mage.pIceArmor = pFrostArmor;
@@ -2116,7 +2115,7 @@ void CombatBotBaseAI::PopulateSpellData()
 
             break;
         }
-        case CLASS_ROGUE:
+    case CLASS_ROGUE:
         {
             // Rogues can only craft an item that applies the poison, they don't know the actual poison enchant.
             auto GetHighestRankOfPoisonByName = [](std::string name, uint32 level)
@@ -2126,9 +2125,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 {
                     if (SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(i))
                     {
-                        if (pSpellEntry->Effect[0] == SPELL_EFFECT_ENCHANT_ITEM_TEMPORARY &&
-                            pSpellEntry->SpellName[0] == name && pSpellEntry->spellLevel <= level &&
-                           (!pHighestRank || pHighestRank->spellLevel < pSpellEntry->spellLevel))
+                        if (pSpellEntry->Effect[0] == SPELL_EFFECT_ENCHANT_ITEM_TEMPORARY && pSpellEntry->SpellName[0] == name && pSpellEntry->spellLevel <= level && (!pHighestRank || pHighestRank->spellLevel < pSpellEntry->spellLevel))
                         {
                             pHighestRank = pSpellEntry;
                         }
@@ -2136,7 +2133,7 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 return pHighestRank;
             };
-            
+
             SpellEntry const* pPoisonSpell = nullptr;
             std::vector<SpellEntry const*> vPoisons;
             if (hasDeadlyPoison && (pPoisonSpell = GetHighestRankOfPoisonByName("Deadly Poison", me->GetLevel())))
@@ -2240,15 +2237,15 @@ SpellEntry const* CombatBotBaseAI::SelectMostEfficientHealingSpell(Unit const* p
             {
                 switch (pSpellEntry->Effect[i])
                 {
-                    case SPELL_EFFECT_HEAL:
-                        basePoints += pSpellEntry->EffectBasePoints[i];
-                        break;
-                    case SPELL_EFFECT_APPLY_AURA:
-                    case SPELL_EFFECT_PERSISTENT_AREA_AURA:
-                    case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
-                        if (pSpellEntry->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL)
-                            basePoints += ((pSpellEntry->GetDuration() / pSpellEntry->EffectAmplitude[i]) * pSpellEntry->EffectBasePoints[i]);
-                        break;
+                case SPELL_EFFECT_HEAL:
+                    basePoints += pSpellEntry->EffectBasePoints[i];
+                    break;
+                case SPELL_EFFECT_APPLY_AURA:
+                case SPELL_EFFECT_PERSISTENT_AREA_AURA:
+                case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
+                    if (pSpellEntry->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL)
+                        basePoints += ((pSpellEntry->GetDuration() / pSpellEntry->EffectAmplitude[i]) * pSpellEntry->EffectBasePoints[i]);
+                    break;
                 }
             }
 
@@ -2280,8 +2277,7 @@ int32 CombatBotBaseAI::GetIncomingdamage(Unit const* pTarget) const
 bool CombatBotBaseAI::HealInjuredTarget(Unit* pTarget)
 {
     // Put a HoT on the target if only missing a little health.
-    if (pTarget->GetHealthPercent() >= 80.0f &&
-       !pTarget->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
+    if (pTarget->GetHealthPercent() >= 80.0f && !pTarget->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
     {
         if (HealInjuredTargetPeriodic(pTarget))
             return true;
@@ -2316,13 +2312,7 @@ bool CombatBotBaseAI::HealInjuredTargetDirect(Unit* pTarget)
     return false;
 }
 
-bool CombatBotBaseAI::IsValidHealTarget(Unit const* pTarget, float healthPercent) const
-{
-    return (pTarget->GetHealthPercent() < healthPercent) &&
-            me->IsValidHelpfulTarget(pTarget) &&
-            me->IsWithinLOSInMap(pTarget) &&
-            me->IsWithinDist(pTarget, 30.0f);
-}
+bool CombatBotBaseAI::IsValidHealTarget(Unit const* pTarget, float healthPercent) const { return (pTarget->GetHealthPercent() < healthPercent) && me->IsValidHelpfulTarget(pTarget) && me->IsWithinLOSInMap(pTarget) && me->IsWithinDist(pTarget, 30.0f); }
 
 Unit* CombatBotBaseAI::SelectHealTarget(float selfHealPercent, float groupHealPercent) const
 {
@@ -2350,11 +2340,9 @@ Unit* CombatBotBaseAI::SelectHealTarget(float selfHealPercent, float groupHealPe
                     continue;
 
                 // Check if we should heal party member.
-                if ((IsValidHealTarget(pMember, groupHealPercent) &&
-                    healthPercent > pMember->GetHealthPercent()) ||
+                if ((IsValidHealTarget(pMember, groupHealPercent) && healthPercent > pMember->GetHealthPercent()) ||
                     // Or a pet if there are no injured players.
-                    (!pTarget && (pMember = pMember->GetPet()) &&
-                      IsValidHealTarget(pMember, groupHealPercent)))
+                    (!pTarget && (pMember = pMember->GetPet()) && IsValidHealTarget(pMember, groupHealPercent)))
                 {
                     healthPercent = pMember->GetHealthPercent();
                     pTarget = pMember;
@@ -2371,8 +2359,7 @@ Unit* CombatBotBaseAI::SelectHealTarget(float selfHealPercent, float groupHealPe
 
 Unit* CombatBotBaseAI::SelectPeriodicHealTarget(float selfHealPercent, float groupHealPercent) const
 {
-    if (me->GetHealthPercent() < selfHealPercent &&
-       !me->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
+    if (me->GetHealthPercent() < selfHealPercent && !me->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
         return me;
 
     if (IsInDuel())
@@ -2389,8 +2376,7 @@ Unit* CombatBotBaseAI::SelectPeriodicHealTarget(float selfHealPercent, float gro
                     continue;
 
                 // Check if we should heal party member.
-                if (IsValidHealTarget(pMember, groupHealPercent) &&
-                   !pMember->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
+                if (IsValidHealTarget(pMember, groupHealPercent) && !pMember->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
                     return pMember;
             }
         }
@@ -2425,8 +2411,7 @@ bool CombatBotBaseAI::FindAndPreHealTarget()
                         continue;
 
                     // Check if we should heal party member.
-                    if (incomingDamage > maxIncomingDamage &&
-                        IsValidHealTarget(pMember))
+                    if (incomingDamage > maxIncomingDamage && IsValidHealTarget(pMember))
                     {
                         maxIncomingDamage = incomingDamage;
                         pTarget = pMember;
@@ -2456,14 +2441,7 @@ bool CombatBotBaseAI::FindAndPreHealTarget()
     return pTarget;
 }
 
-bool CombatBotBaseAI::IsValidHostileTarget(Unit const* pTarget) const
-{
-    return me->IsValidAttackTarget(pTarget) &&
-           pTarget->IsVisibleForOrDetect(me, me, false) &&
-           !pTarget->HasBreakableByDamageCrowdControlAura() &&
-           !pTarget->IsTotalImmune() &&
-           pTarget->GetTransport() == me->GetTransport();
-}
+bool CombatBotBaseAI::IsValidHostileTarget(Unit const* pTarget) const { return me->IsValidAttackTarget(pTarget) && pTarget->IsVisibleForOrDetect(me, me, false) && !pTarget->HasBreakableByDamageCrowdControlAura() && !pTarget->IsTotalImmune() && pTarget->GetTransport() == me->GetTransport(); }
 
 bool CombatBotBaseAI::IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
@@ -2483,8 +2461,7 @@ bool CombatBotBaseAI::IsValidDispelTarget(Unit const* pTarget, SpellEntry const*
 
     if (pTarget &&
         // Check immune for offensive dispel
-        (!pTarget->IsImmuneToSchoolMask(pSpellEntry->GetSpellSchoolMask()) ||
-            friendly_dispel))
+        (!pTarget->IsImmuneToSchoolMask(pSpellEntry->GetSpellSchoolMask()) || friendly_dispel))
     {
         if (!friendly_dispel && !me->IsValidAttackTarget(pTarget))
             return false;
@@ -2495,16 +2472,14 @@ bool CombatBotBaseAI::IsValidDispelTarget(Unit const* pTarget, SpellEntry const*
             SpellAuraHolder* holder = aura.second;
             if ((1 << holder->GetSpellProto()->Dispel) & dispelMask)
             {
-                if (holder->GetSpellProto()->Dispel == DISPEL_MAGIC ||
-                    holder->GetSpellProto()->Dispel == DISPEL_DISEASE ||
-                    holder->GetSpellProto()->Dispel == DISPEL_POISON)
+                if (holder->GetSpellProto()->Dispel == DISPEL_MAGIC || holder->GetSpellProto()->Dispel == DISPEL_DISEASE || holder->GetSpellProto()->Dispel == DISPEL_POISON)
                 {
                     bool positive = holder->IsPositive();
                     // do not remove positive auras if friendly target
                     // do not remove negative auras if non-friendly target
                     // when removing charm auras ignore hostile reaction from the charm
                     if (!friendly_dispel && !positive && holder->GetSpellProto()->IsCharmSpell())
-                        if (CharmInfo *charm = pTarget->GetCharmInfo())
+                        if (CharmInfo* charm = pTarget->GetCharmInfo())
                             if (FactionTemplateEntry const* ft = charm->GetOriginalFactionTemplate())
                                 if (FactionTemplateEntry const* ft2 = me->GetFactionTemplateEntry())
                                     if (charm->GetOriginalFactionTemplate()->IsFriendlyTo(*ft2))
@@ -2564,7 +2539,7 @@ bool CombatBotBaseAI::IsValidBuffTarget(Unit const* pTarget, SpellEntry const* p
             if (it == i.first)
                 return false;
     }
-        
+
     return true;
 }
 
@@ -2577,11 +2552,7 @@ Player* CombatBotBaseAI::SelectBuffTarget(SpellEntry const* pSpellEntry) const
         {
             if (Player* pMember = itr->getSource())
             {
-                if (me->IsValidHelpfulTarget(pMember) &&
-                   !pMember->IsGameMaster() &&
-                    IsValidBuffTarget(pMember, pSpellEntry) &&
-                    me->IsWithinLOSInMap(pMember) &&
-                    me->IsWithinDist(pMember, 30.0f))
+                if (me->IsValidHelpfulTarget(pMember) && !pMember->IsGameMaster() && IsValidBuffTarget(pMember, pSpellEntry) && me->IsWithinLOSInMap(pMember) && me->IsWithinDist(pMember, 30.0f))
                     return pMember;
             }
         }
@@ -2599,11 +2570,7 @@ Player* CombatBotBaseAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
         {
             if (Player* pMember = itr->getSource())
             {
-                if (me->IsValidHelpfulTarget(pMember) &&
-                   !pMember->IsGameMaster() &&
-                    IsValidDispelTarget(pMember, pSpellEntry) &&
-                    me->IsWithinLOSInMap(pMember) &&
-                    me->IsWithinDist(pMember, 30.0f))
+                if (me->IsValidHelpfulTarget(pMember) && !pMember->IsGameMaster() && IsValidDispelTarget(pMember, pSpellEntry) && me->IsWithinLOSInMap(pMember) && me->IsWithinDist(pMember, 30.0f))
                     return pMember;
             }
         }
@@ -2614,71 +2581,76 @@ Player* CombatBotBaseAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
 
 // Warlock pet ability spell IDs with the owner level they become available.
 // Keyed by creature entry so only relevant spells are taught per pet type.
-struct WarlockPetSpell { uint32 petEntry; uint32 spellId; uint8 reqLevel; };
+struct WarlockPetSpell
+{
+    uint32 petEntry;
+    uint32 spellId;
+    uint8 reqLevel;
+};
 static const WarlockPetSpell s_warlockPetSpells[] = {
     // Imp (416)
-    { 416,  6307,  4 }, // Blood Pact (Rank 1)
-    { 416,  7799,  8 }, // Firebolt (Rank 2)
-    { 416,  4511, 12 }, // Phase Shift
-    { 416,  2947, 14 }, // Fire Shield (Rank 1)
-    { 416,  7804, 14 }, // Blood Pact (Rank 2)
-    { 416,  7800, 18 }, // Firebolt (Rank 3)
-    { 416,  8316, 24 }, // Fire Shield (Rank 2)
-    { 416,  7805, 26 }, // Blood Pact (Rank 3)
-    { 416,  7801, 28 }, // Firebolt (Rank 4)
-    { 416,  8317, 34 }, // Fire Shield (Rank 3)
-    { 416, 11766, 38 }, // Blood Pact (Rank 4)
-    { 416,  7802, 38 }, // Firebolt (Rank 5)
-    { 416, 11770, 44 }, // Fire Shield (Rank 4)
-    { 416, 11762, 48 }, // Firebolt (Rank 6)
-    { 416, 11767, 50 }, // Blood Pact (Rank 5)
-    { 416, 11771, 54 }, // Fire Shield (Rank 5)
-    { 416, 11763, 58 }, // Firebolt (Rank 7)
+    {416, 6307, 4}, // Blood Pact (Rank 1)
+    {416, 7799, 8}, // Firebolt (Rank 2)
+    {416, 4511, 12}, // Phase Shift
+    {416, 2947, 14}, // Fire Shield (Rank 1)
+    {416, 7804, 14}, // Blood Pact (Rank 2)
+    {416, 7800, 18}, // Firebolt (Rank 3)
+    {416, 8316, 24}, // Fire Shield (Rank 2)
+    {416, 7805, 26}, // Blood Pact (Rank 3)
+    {416, 7801, 28}, // Firebolt (Rank 4)
+    {416, 8317, 34}, // Fire Shield (Rank 3)
+    {416, 11766, 38}, // Blood Pact (Rank 4)
+    {416, 7802, 38}, // Firebolt (Rank 5)
+    {416, 11770, 44}, // Fire Shield (Rank 4)
+    {416, 11762, 48}, // Firebolt (Rank 6)
+    {416, 11767, 50}, // Blood Pact (Rank 5)
+    {416, 11771, 54}, // Fire Shield (Rank 5)
+    {416, 11763, 58}, // Firebolt (Rank 7)
     // Voidwalker (1860)
-    { 1860,  7812, 16 }, // Sacrifice (Rank 1)
-    { 1860, 17767, 18 }, // Consume Shadows (Rank 1)
-    { 1860,  7809, 20 }, // Torment (Rank 2)
-    { 1860, 17735, 24 }, // Suffering (Rank 1)
-    { 1860, 19438, 24 }, // Sacrifice (Rank 2)
-    { 1860, 17850, 26 }, // Consume Shadows (Rank 2)
-    { 1860,  7810, 30 }, // Torment (Rank 3)
-    { 1860, 19440, 32 }, // Sacrifice (Rank 3)
-    { 1860, 17851, 34 }, // Consume Shadows (Rank 3)
-    { 1860, 17750, 36 }, // Suffering (Rank 2)
-    { 1860,  7811, 40 }, // Torment (Rank 4)
-    { 1860, 19441, 40 }, // Sacrifice (Rank 4)
-    { 1860, 17852, 42 }, // Consume Shadows (Rank 4)
-    { 1860, 19442, 48 }, // Sacrifice (Rank 5)
-    { 1860, 17751, 48 }, // Suffering (Rank 3)
-    { 1860, 11774, 50 }, // Torment (Rank 5)
-    { 1860, 17853, 50 }, // Consume Shadows (Rank 5)
-    { 1860, 19443, 56 }, // Sacrifice (Rank 6)
-    { 1860, 17854, 58 }, // Consume Shadows (Rank 6)
-    { 1860, 11775, 60 }, // Torment (Rank 6)
-    { 1860, 17752, 60 }, // Suffering (Rank 4)
+    {1860, 7812, 16}, // Sacrifice (Rank 1)
+    {1860, 17767, 18}, // Consume Shadows (Rank 1)
+    {1860, 7809, 20}, // Torment (Rank 2)
+    {1860, 17735, 24}, // Suffering (Rank 1)
+    {1860, 19438, 24}, // Sacrifice (Rank 2)
+    {1860, 17850, 26}, // Consume Shadows (Rank 2)
+    {1860, 7810, 30}, // Torment (Rank 3)
+    {1860, 19440, 32}, // Sacrifice (Rank 3)
+    {1860, 17851, 34}, // Consume Shadows (Rank 3)
+    {1860, 17750, 36}, // Suffering (Rank 2)
+    {1860, 7811, 40}, // Torment (Rank 4)
+    {1860, 19441, 40}, // Sacrifice (Rank 4)
+    {1860, 17852, 42}, // Consume Shadows (Rank 4)
+    {1860, 19442, 48}, // Sacrifice (Rank 5)
+    {1860, 17751, 48}, // Suffering (Rank 3)
+    {1860, 11774, 50}, // Torment (Rank 5)
+    {1860, 17853, 50}, // Consume Shadows (Rank 5)
+    {1860, 19443, 56}, // Sacrifice (Rank 6)
+    {1860, 17854, 58}, // Consume Shadows (Rank 6)
+    {1860, 11775, 60}, // Torment (Rank 6)
+    {1860, 17752, 60}, // Suffering (Rank 4)
     // Succubus (1863)
-    { 1863,  6360, 22 }, // Soothing Kiss (Rank 1)
-    { 1863,  6358, 26 }, // Seduction
-    { 1863,  7815, 28 }, // Lash of Pain (Rank 2)
-    { 1863,  7870, 32 }, // Lesser Invisibility
-    { 1863,  6362, 34 }, // Soothing Kiss (Rank 2)
-    { 1863,  7816, 36 }, // Lash of Pain (Rank 3)
-    { 1863, 11778, 44 }, // Lash of Pain (Rank 4)
-    { 1863, 11784, 46 }, // Soothing Kiss (Rank 3)
-    { 1863, 11779, 52 }, // Lash of Pain (Rank 5)
-    { 1863, 11785, 58 }, // Soothing Kiss (Rank 4)
-    { 1863, 11780, 60 }, // Lash of Pain (Rank 6)
+    {1863, 6360, 22}, // Soothing Kiss (Rank 1)
+    {1863, 6358, 26}, // Seduction
+    {1863, 7815, 28}, // Lash of Pain (Rank 2)
+    {1863, 7870, 32}, // Lesser Invisibility
+    {1863, 6362, 34}, // Soothing Kiss (Rank 2)
+    {1863, 7816, 36}, // Lash of Pain (Rank 3)
+    {1863, 11778, 44}, // Lash of Pain (Rank 4)
+    {1863, 11784, 46}, // Soothing Kiss (Rank 3)
+    {1863, 11779, 52}, // Lash of Pain (Rank 5)
+    {1863, 11785, 58}, // Soothing Kiss (Rank 4)
+    {1863, 11780, 60}, // Lash of Pain (Rank 6)
     // Felhunter (417)
-    { 417, 19478, 32 }, // Tainted Blood (Rank 1)
-    { 417, 19244, 36 }, // Spell Lock (Rank 1)
-    { 417, 19731, 38 }, // Devour Magic (Rank 2)
-    { 417, 19655, 40 }, // Tainted Blood (Rank 2)
-    { 417, 19480, 42 }, // Paranoia
-    { 417, 19734, 46 }, // Devour Magic (Rank 3)
-    { 417, 19656, 48 }, // Tainted Blood (Rank 3)
-    { 417, 19647, 52 }, // Spell Lock (Rank 2)
-    { 417, 19736, 54 }, // Devour Magic (Rank 4)
-    { 417, 19660, 56 }, // Tainted Blood (Rank 4)
+    {417, 19478, 32}, // Tainted Blood (Rank 1)
+    {417, 19244, 36}, // Spell Lock (Rank 1)
+    {417, 19731, 38}, // Devour Magic (Rank 2)
+    {417, 19655, 40}, // Tainted Blood (Rank 2)
+    {417, 19480, 42}, // Paranoia
+    {417, 19734, 46}, // Devour Magic (Rank 3)
+    {417, 19656, 48}, // Tainted Blood (Rank 3)
+    {417, 19647, 52}, // Spell Lock (Rank 2)
+    {417, 19736, 54}, // Devour Magic (Rank 4)
+    {417, 19660, 56}, // Tainted Blood (Rank 4)
 };
 
 void CombatBotBaseAI::TeachWarlockPetSpells()
@@ -2732,12 +2704,8 @@ void CombatBotBaseAI::SummonPetIfNeeded()
             return;
         }
 
-        uint32 petId = PickRandomValue( PET_WOLF, PET_CAT, PET_BEAR, PET_CRAB, PET_GORILLA, PET_BIRD,
-                                        PET_BOAR, PET_BAT, PET_CROC, PET_SPIDER, PET_OWL, PET_STRIDER,
-                                        PET_SCORPID, PET_SERPENT, PET_RAPTOR, PET_TURTLE, PET_HYENA );
-        if (Creature* pCreature = me->SummonCreature(petId,
-            me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), 0.0f,
-            TEMPSUMMON_TIMED_COMBAT_OR_DEAD_DESPAWN, 3000, false, 3000))
+        uint32 petId = PickRandomValue(PET_WOLF, PET_CAT, PET_BEAR, PET_CRAB, PET_GORILLA, PET_BIRD, PET_BOAR, PET_BAT, PET_CROC, PET_SPIDER, PET_OWL, PET_STRIDER, PET_SCORPID, PET_SERPENT, PET_RAPTOR, PET_TURTLE, PET_HYENA);
+        if (Creature* pCreature = me->SummonCreature(petId, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), 0.0f, TEMPSUMMON_TIMED_COMBAT_OR_DEAD_DESPAWN, 3000, false, 3000))
         {
             pCreature->SetLevel(me->GetLevel());
             me->CastSpell(pCreature, SPELL_TAME_BEAST, true);
@@ -2766,15 +2734,15 @@ void CombatBotBaseAI::LearnArmorProficiencies()
 {
     switch (me->GetClass())
     {
-        case CLASS_WARRIOR:
-        case CLASS_PALADIN:
+    case CLASS_WARRIOR:
+    case CLASS_PALADIN:
         {
             if (me->GetLevel() >= 40 && !me->HasSpell(SPELL_PLATE_PROFICIENCY))
                 me->LearnSpell(SPELL_PLATE_PROFICIENCY, false, false);
             break;
         }
-        case CLASS_HUNTER:
-        case CLASS_SHAMAN:
+    case CLASS_HUNTER:
+    case CLASS_SHAMAN:
         {
             if (me->GetLevel() >= 40 && !me->HasSpell(SPELL_MAIL_PROFICIENCY))
                 me->LearnSpell(SPELL_MAIL_PROFICIENCY, false, false);
@@ -2923,8 +2891,9 @@ void CombatBotBaseAI::LearnRandomTalents()
             continue;
 
         uint32 ranks;
-        for (ranks = 0; ranks < MAX_TALENT_RANK && talentInfo->RankID[ranks]; ++ranks);
-        possibleTalents[talentInfo->Row].push_back({ talentId, ranks });
+        for (ranks = 0; ranks < MAX_TALENT_RANK && talentInfo->RankID[ranks]; ++ranks)
+            ;
+        possibleTalents[talentInfo->Row].push_back({talentId, ranks});
     }
 
     if (possibleTalents.empty())
@@ -2934,7 +2903,7 @@ void CombatBotBaseAI::LearnRandomTalents()
     for (auto& itrRow : possibleTalents)
     {
         std::shuffle(itrRow.second.begin(), itrRow.second.end(), std::default_random_engine(seed));
-        for (auto const& itrTalent: itrRow.second)
+        for (auto const& itrTalent : itrRow.second)
         {
             for (uint32 rank = 0; rank < itrTalent.second; ++rank)
             {
@@ -2955,8 +2924,7 @@ void CombatBotBaseAI::EquipPremadeGearTemplate()
     std::vector<PlayerPremadeGearTemplate const*> vGear;
     for (const auto& itr : sObjectMgr.GetPlayerPremadeGearTemplates())
     {
-        if (itr.second.requiredClass == me->GetClass() &&
-            itr.second.level <= me->GetLevel())
+        if (itr.second.requiredClass == me->GetClass() && itr.second.level <= me->GetLevel())
         {
             if (!vGear.empty())
             {
@@ -2997,27 +2965,27 @@ inline uint32 GetPrimaryItemStatForClassAndRole(uint8 playerClass, uint8 role)
 {
     switch (playerClass)
     {
-        case CLASS_WARRIOR:
+    case CLASS_WARRIOR:
         {
             return ITEM_MOD_STRENGTH;
         }
-        case CLASS_PALADIN:
+    case CLASS_PALADIN:
         {
             return ((role == ROLE_HEALER) ? ITEM_MOD_INTELLECT : ITEM_MOD_STRENGTH);
         }
-        case CLASS_HUNTER:
-        case CLASS_ROGUE:
+    case CLASS_HUNTER:
+    case CLASS_ROGUE:
         {
             return ITEM_MOD_AGILITY;
         }
-        case CLASS_SHAMAN:
-        case CLASS_DRUID:
+    case CLASS_SHAMAN:
+    case CLASS_DRUID:
         {
             return ((role == ROLE_MELEE_DPS || role == ROLE_TANK) ? ITEM_MOD_AGILITY : ITEM_MOD_INTELLECT);
         }
-        case CLASS_PRIEST:
-        case CLASS_MAGE:
-        case CLASS_WARLOCK:
+    case CLASS_PRIEST:
+    case CLASS_MAGE:
+    case CLASS_WARLOCK:
         {
             return ITEM_MOD_INTELLECT;
         }
@@ -3088,11 +3056,7 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
         if (uint32 skill = pProto->GetProficiencySkill())
         {
             // Don't equip cloth items on warriors, etc unless bot is a healer
-            if (pProto->Class == ITEM_CLASS_ARMOR &&
-                pProto->InventoryType != INVTYPE_CLOAK &&
-                pProto->InventoryType != INVTYPE_SHIELD &&
-                skill != me->GetHighestKnownArmorProficiency() &&
-                m_role != ROLE_HEALER)
+            if (pProto->Class == ITEM_CLASS_ARMOR && pProto->InventoryType != INVTYPE_CLOAK && pProto->InventoryType != INVTYPE_SHIELD && skill != me->GetHighestKnownArmorProficiency() && m_role != ROLE_HEALER)
                 continue;
 
             // Fist weapons use unarmed skill calculations, but we must query fist weapon skill presence to use this item
@@ -3107,20 +3071,17 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
 
         for (uint8 slot : slots)
         {
-            if (slot >= EQUIPMENT_SLOT_START && slot < EQUIPMENT_SLOT_END &&
-                !me->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            if (slot >= EQUIPMENT_SLOT_START && slot < EQUIPMENT_SLOT_END && !me->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
             {
                 // Offhand checks
                 if (slot == EQUIPMENT_SLOT_OFFHAND)
                 {
                     // Only allow shield in offhand for tanks
-                    if (pProto->InventoryType != INVTYPE_SHIELD &&
-                        m_role == ROLE_TANK && IsShieldClass(me->GetClass()))
+                    if (pProto->InventoryType != INVTYPE_SHIELD && m_role == ROLE_TANK && IsShieldClass(me->GetClass()))
                         continue;
 
                     // Only equip holdables on mana users
-                    if (pProto->InventoryType == INVTYPE_HOLDABLE &&
-                        m_role != ROLE_HEALER && m_role != ROLE_RANGE_DPS)
+                    if (pProto->InventoryType == INVTYPE_HOLDABLE && m_role != ROLE_HEALER && m_role != ROLE_RANGE_DPS)
                         continue;
                 }
 
@@ -3139,7 +3100,7 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
     for (auto& itr : itemsPerSlot)
     {
         bool hasPrimaryStatItem = false;
-        
+
         for (auto const& pItem : itr.second)
         {
             for (auto const& stat : pItem->ItemStat)
@@ -3158,21 +3119,21 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
         if (hasPrimaryStatItem)
         {
             itr.second.erase(std::remove_if(itr.second.begin(), itr.second.end(),
-            [primaryStat](ItemPrototype const* & pItem)
-            {
-                bool itemHasPrimaryStat = false;
-                for (auto const& stat : pItem->ItemStat)
-                {
-                    if (stat.ItemStatType == primaryStat && stat.ItemStatValue > 0)
-                    {
-                        itemHasPrimaryStat = true;
-                        break;
-                    }
-                }
+                                            [primaryStat](ItemPrototype const*& pItem)
+                                            {
+                                                bool itemHasPrimaryStat = false;
+                                                for (auto const& stat : pItem->ItemStat)
+                                                {
+                                                    if (stat.ItemStatType == primaryStat && stat.ItemStatValue > 0)
+                                                    {
+                                                        itemHasPrimaryStat = true;
+                                                        break;
+                                                    }
+                                                }
 
-                return !itemHasPrimaryStat;
-            }),
-                itr.second.end());
+                                                return !itemHasPrimaryStat;
+                                            }),
+                             itr.second.end());
         }
 
         bool hasPvpItem = false;
@@ -3188,12 +3149,7 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
 
         if (hasPvpItem)
         {
-            itr.second.erase(std::remove_if(itr.second.begin(), itr.second.end(),
-                [](ItemPrototype const* & pItem)
-            {
-                return pItem->RequiredHonorRank == 0;
-            }),
-                itr.second.end());
+            itr.second.erase(std::remove_if(itr.second.begin(), itr.second.end(), [](ItemPrototype const*& pItem) { return pItem->RequiredHonorRank == 0; }), itr.second.end());
         }
     }
 
@@ -3223,15 +3179,15 @@ void CombatBotBaseAI::AutoEquipGear(uint32 option)
 {
     switch (option)
     {
-        case PLAYER_BOT_AUTO_EQUIP_STARTING_GEAR:
-            me->AddStartingItems();
-            break;
-        case PLAYER_BOT_AUTO_EQUIP_RANDOM_GEAR:
-            EquipRandomGearInEmptySlots();
-            break;
-        case PLAYER_BOT_AUTO_EQUIP_PREMADE_GEAR:
-            EquipPremadeGearTemplate();
-            break;
+    case PLAYER_BOT_AUTO_EQUIP_STARTING_GEAR:
+        me->AddStartingItems();
+        break;
+    case PLAYER_BOT_AUTO_EQUIP_RANDOM_GEAR:
+        EquipRandomGearInEmptySlots();
+        break;
+    case PLAYER_BOT_AUTO_EQUIP_PREMADE_GEAR:
+        EquipPremadeGearTemplate();
+        break;
     }
 
     UpdateVisualHonorRankBasedOnItems();
@@ -3248,12 +3204,10 @@ bool CombatBotBaseAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* p
     if (me->HasGCD(pSpellEntry))
         return false;
 
-    if (pSpellEntry->TargetAuraState &&
-       !pTarget->HasAuraState(AuraState(pSpellEntry->TargetAuraState)))
+    if (pSpellEntry->TargetAuraState && !pTarget->HasAuraState(AuraState(pSpellEntry->TargetAuraState)))
         return false;
 
-    if (pSpellEntry->CasterAuraState &&
-        !me->HasAuraState(AuraState(pSpellEntry->CasterAuraState)))
+    if (pSpellEntry->CasterAuraState && !me->HasAuraState(AuraState(pSpellEntry->CasterAuraState)))
         return false;
 
     uint32 const powerCost = Spell::CalculatePowerCost(pSpellEntry, me);
@@ -3306,17 +3260,12 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
     me->SetTargetGuid(pTarget->GetObjectGuid());
     auto result = me->CastSpell(pTarget, pSpellEntry, false);
 
-    //printf("cast %s result %u\n", pSpellEntry->SpellName[0].c_str(), result);
+    // printf("cast %s result %u\n", pSpellEntry->SpellName[0].c_str(), result);
 
-    if ((result == SPELL_FAILED_MOVING ||
-        result == SPELL_CAST_OK) &&
-        (pSpellEntry->GetCastTime(me) > 0) &&
-        (me->IsMoving() || !me->IsStopped()))
+    if ((result == SPELL_FAILED_MOVING || result == SPELL_CAST_OK) && (pSpellEntry->GetCastTime(me) > 0) && (me->IsMoving() || !me->IsStopped()))
         me->StopMoving();
 
-    if ((result == SPELL_FAILED_NEED_AMMO_POUCH ||
-        result == SPELL_FAILED_ITEM_NOT_READY) &&
-        pSpellEntry->Reagent[0])
+    if ((result == SPELL_FAILED_NEED_AMMO_POUCH || result == SPELL_FAILED_ITEM_NOT_READY) && pSpellEntry->Reagent[0])
     {
         if (Item* pItem = me->GetItemByPos(INVENTORY_SLOT_BAG_0, INVENTORY_SLOT_ITEM_START))
             me->DestroyItem(INVENTORY_SLOT_BAG_0, INVENTORY_SLOT_ITEM_START, true);
@@ -3349,15 +3298,15 @@ void CombatBotBaseAI::AddHunterAmmo()
                 uint32 ammoType;
                 switch (pWeaponProto->SubClass)
                 {
-                    case ITEM_SUBCLASS_WEAPON_GUN:
-                        ammoType = ITEM_SUBCLASS_BULLET;
-                        break;
-                    case ITEM_SUBCLASS_WEAPON_BOW:
-                    case ITEM_SUBCLASS_WEAPON_CROSSBOW:
-                        ammoType = ITEM_SUBCLASS_ARROW;
-                        break;
-                    default:
-                        return;
+                case ITEM_SUBCLASS_WEAPON_GUN:
+                    ammoType = ITEM_SUBCLASS_BULLET;
+                    break;
+                case ITEM_SUBCLASS_WEAPON_BOW:
+                case ITEM_SUBCLASS_WEAPON_CROSSBOW:
+                    ammoType = ITEM_SUBCLASS_ARROW;
+                    break;
+                default:
+                    return;
                 }
 
                 ItemPrototype const* pAmmoProto = nullptr;
@@ -3365,11 +3314,7 @@ void CombatBotBaseAI::AddHunterAmmo()
                 {
                     ItemPrototype const* pProto = &itr.second;
 
-                    if (pProto->Class == ITEM_CLASS_PROJECTILE &&
-                        pProto->SubClass == ammoType &&
-                        pProto->RequiredLevel <= me->GetLevel() &&
-                        (!pAmmoProto || pAmmoProto->ItemLevel < pProto->ItemLevel) &&
-                        me->CanUseAmmo(pProto->ItemId) == EQUIP_ERR_OK)
+                    if (pProto->Class == ITEM_CLASS_PROJECTILE && pProto->SubClass == ammoType && pProto->RequiredLevel <= me->GetLevel() && (!pAmmoProto || pAmmoProto->ItemLevel < pProto->ItemLevel) && me->CanUseAmmo(pProto->ItemId) == EQUIP_ERR_OK)
                     {
                         pAmmoProto = pProto;
                     }
@@ -3383,8 +3328,8 @@ void CombatBotBaseAI::AddHunterAmmo()
                     AddItemToInventory(pAmmoProto->ItemId, pAmmoProto->GetMaxStackSize());
                     me->SetAmmo(pAmmoProto->ItemId);
                 }
-            }  
-        }  
+            }
+        }
     }
 }
 
@@ -3397,15 +3342,15 @@ void CombatBotBaseAI::EquipOrUseNewItem()
         {
             switch (pItem->GetProto()->Class)
             {
-                case ITEM_CLASS_CONSUMABLE:
+            case ITEM_CLASS_CONSUMABLE:
                 {
                     SpellCastTargets targets;
                     targets.setUnitTarget(me);
                     me->CastItemUseSpell(pItem, targets);
                     break;
                 }
-                case ITEM_CLASS_WEAPON:
-                case ITEM_CLASS_ARMOR:
+            case ITEM_CLASS_WEAPON:
+            case ITEM_CLASS_ARMOR:
                 {
                     uint32 slot = me->FindEquipSlot(pItem->GetProto(), NULL_SLOT, true);
                     if (slot != NULL_SLOT)
@@ -3455,33 +3400,25 @@ void CombatBotBaseAI::UpdateVisualHonorRankBasedOnItems()
 
 bool CombatBotBaseAI::SummonShamanTotems()
 {
-    if (m_spells.shaman.pAirTotem &&
-        !me->GetTotem(TOTEM_SLOT_AIR) &&
-        CanTryToCastSpell(me, m_spells.shaman.pAirTotem))
+    if (m_spells.shaman.pAirTotem && !me->GetTotem(TOTEM_SLOT_AIR) && CanTryToCastSpell(me, m_spells.shaman.pAirTotem))
     {
         if (DoCastSpell(me, m_spells.shaman.pAirTotem) == SPELL_CAST_OK)
             return true;
     }
 
-    if (m_spells.shaman.pEarthTotem &&
-        !me->GetTotem(TOTEM_SLOT_EARTH) &&
-        CanTryToCastSpell(me, m_spells.shaman.pEarthTotem))
+    if (m_spells.shaman.pEarthTotem && !me->GetTotem(TOTEM_SLOT_EARTH) && CanTryToCastSpell(me, m_spells.shaman.pEarthTotem))
     {
         if (DoCastSpell(me, m_spells.shaman.pEarthTotem) == SPELL_CAST_OK)
             return true;
     }
 
-    if (m_spells.shaman.pFireTotem &&
-        !me->GetTotem(TOTEM_SLOT_FIRE) &&
-        CanTryToCastSpell(me, m_spells.shaman.pFireTotem))
+    if (m_spells.shaman.pFireTotem && !me->GetTotem(TOTEM_SLOT_FIRE) && CanTryToCastSpell(me, m_spells.shaman.pFireTotem))
     {
         if (DoCastSpell(me, m_spells.shaman.pFireTotem) == SPELL_CAST_OK)
             return true;
     }
 
-    if (m_spells.shaman.pWaterTotem &&
-        !me->GetTotem(TOTEM_SLOT_WATER) &&
-        CanTryToCastSpell(me, m_spells.shaman.pWaterTotem))
+    if (m_spells.shaman.pWaterTotem && !me->GetTotem(TOTEM_SLOT_WATER) && CanTryToCastSpell(me, m_spells.shaman.pWaterTotem))
     {
         if (DoCastSpell(me, m_spells.shaman.pWaterTotem) == SPELL_CAST_OK)
             return true;
@@ -3548,50 +3485,51 @@ void CombatBotBaseAI::BreakCrowdControlEffects()
 
     switch (me->GetClass())
     {
-        case CLASS_PALADIN:
+    case CLASS_PALADIN:
         {
-            if (m_spells.paladin.pDivineShield &&
-                CanTryToCastSpell(me, m_spells.paladin.pDivineShield))
+            if (m_spells.paladin.pDivineShield && CanTryToCastSpell(me, m_spells.paladin.pDivineShield))
             {
                 if (DoCastSpell(me, m_spells.paladin.pDivineShield) == SPELL_CAST_OK)
                 {
                     if (m_role != ROLE_HEALER)
                     {
-                        me->m_Events.AddLambdaEventAtOffset([player = me, spellId = m_spells.paladin.pDivineShield->Id]()
-                        {
-                            if (player->GetHealthPercent() > 75.0f && player->GetAttackers().size() < 3)
-                                player->RemoveAurasDueToSpellByCancel(spellId);
-                        }, 1 * IN_MILLISECONDS);
+                        me->m_Events.AddLambdaEventAtOffset(
+                            [player = me, spellId = m_spells.paladin.pDivineShield->Id]()
+                            {
+                                if (player->GetHealthPercent() > 75.0f && player->GetAttackers().size() < 3)
+                                    player->RemoveAurasDueToSpellByCancel(spellId);
+                            },
+                            1 * IN_MILLISECONDS);
                     }
                     return;
                 }
             }
             break;
         }
-        case CLASS_MAGE:
+    case CLASS_MAGE:
         {
-            if (me->HasUnitState(UNIT_STATE_STUNNED) && m_spells.mage.pBlink &&
-                CanTryToCastSpell(me, m_spells.mage.pBlink))
+            if (me->HasUnitState(UNIT_STATE_STUNNED) && m_spells.mage.pBlink && CanTryToCastSpell(me, m_spells.mage.pBlink))
             {
                 if (DoCastSpell(me, m_spells.mage.pBlink) == SPELL_CAST_OK)
                     return;
             }
-            if (m_spells.mage.pIceBlock &&
-                CanTryToCastSpell(me, m_spells.mage.pIceBlock))
+            if (m_spells.mage.pIceBlock && CanTryToCastSpell(me, m_spells.mage.pIceBlock))
             {
                 if (DoCastSpell(me, m_spells.mage.pIceBlock) == SPELL_CAST_OK)
                 {
-                    me->m_Events.AddLambdaEventAtOffset([player = me, spellId = m_spells.mage.pIceBlock->Id]()
-                    {
-                        if (player->GetHealthPercent() > 75.0f && player->GetAttackers().size() < 3)
-                            player->RemoveAurasDueToSpellByCancel(spellId);
-                    }, 1 * IN_MILLISECONDS);
+                    me->m_Events.AddLambdaEventAtOffset(
+                        [player = me, spellId = m_spells.mage.pIceBlock->Id]()
+                        {
+                            if (player->GetHealthPercent() > 75.0f && player->GetAttackers().size() < 3)
+                                player->RemoveAurasDueToSpellByCancel(spellId);
+                        },
+                        1 * IN_MILLISECONDS);
                     return;
                 }
             }
             break;
         }
-        case CLASS_DRUID:
+    case CLASS_DRUID:
         {
             bool polymorphed = false;
             auto const& auraList = me->GetAurasByType(SPELL_AURA_MOD_CONFUSE);
@@ -3630,10 +3568,7 @@ void CombatBotBaseAI::BreakCrowdControlEffects()
                 {
                     if (m_role == ROLE_HEALER)
                     {
-                        me->m_Events.AddLambdaEventAtOffset([player = me, spellId = pShapeshift->Id]()
-                        {
-                            player->RemoveAurasDueToSpellByCancel(spellId);
-                        }, 1 * IN_MILLISECONDS);
+                        me->m_Events.AddLambdaEventAtOffset([player = me, spellId = pShapeshift->Id]() { player->RemoveAurasDueToSpellByCancel(spellId); }, 1 * IN_MILLISECONDS);
                     }
                     return;
                 }
@@ -3655,10 +3590,7 @@ bool CombatBotBaseAI::IsWearingShield(Player* pPlayer) const
     return false;
 }
 
-bool CombatBotBaseAI::IsInDuel() const
-{
-    return me->m_duel && me->m_duel->startTime != 0;
-}
+bool CombatBotBaseAI::IsInDuel() const { return me->m_duel && me->m_duel->startTime != 0; }
 
 CombatBotRoles CombatBotBaseAI::GetRole() const
 {
@@ -3693,27 +3625,27 @@ void CombatBotBaseAI::SendBattlefieldPortPacket()
 void CombatBotBaseAI::SendBattlemasterJoinPacket(uint8 battlegroundId)
 {
     WorldPacket data(CMSG_BATTLEFIELD_JOIN);
-    data << me->GetObjectGuid();                       // battlemaster guid, or player guid if joining queue from BG portal
+    data << me->GetObjectGuid(); // battlemaster guid, or player guid if joining queue from BG portal
 
     switch (battlegroundId)
     {
-        case BATTLEGROUND_QUEUE_AV:
-            data << uint32(MAP_ALTERAC_VALLEY);
-            break;
-        case BATTLEGROUND_QUEUE_WS:
-            data << uint32(MAP_WARSONG_GULCH);
-            break;
-        case BATTLEGROUND_QUEUE_AB:
-            data << uint32(MAP_ARATHI_BASIN);
-            break;
-        default:
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "BattleBot: Invalid BG queue type!");
-            botEntry->requestRemoval = true;
-            return;
+    case BATTLEGROUND_QUEUE_AV:
+        data << uint32(MAP_ALTERAC_VALLEY);
+        break;
+    case BATTLEGROUND_QUEUE_WS:
+        data << uint32(MAP_WARSONG_GULCH);
+        break;
+    case BATTLEGROUND_QUEUE_AB:
+        data << uint32(MAP_ARATHI_BASIN);
+        break;
+    default:
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "BattleBot: Invalid BG queue type!");
+        botEntry->requestRemoval = true;
+        return;
     }
 
-    data << uint32(0);                                 // instance id, 0 if First Available selected
-    data << uint8(0);                                  // join as group
+    data << uint32(0); // instance id, 0 if First Available selected
+    data << uint8(0); // join as group
     me->GetSession()->HandleBattlemasterJoinOpcode(data);
 }
 
@@ -3743,10 +3675,10 @@ void CombatBotBaseAI::ActivateNearbyAreaTrigger()
 void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
 {
     // Must always check "me" player pointer here!
-    //printf("Bot received %s\n", LookupOpcodeName(packet->GetOpcode()));
+    // printf("Bot received %s\n", LookupOpcodeName(packet->GetOpcode()));
     switch (packet->GetOpcode())
     {
-        case SMSG_NEW_WORLD:
+    case SMSG_NEW_WORLD:
         {
             if (!me)
                 return;
@@ -3755,7 +3687,7 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             me->GetSession()->QueuePacket(std::move(data));
             break;
         }
-        case MSG_MOVE_TELEPORT_ACK:
+    case MSG_MOVE_TELEPORT_ACK:
         {
             if (!me)
                 return;
@@ -3769,7 +3701,7 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             me->GetSession()->QueuePacket(std::move(data));
             break;
         }
-        case SMSG_LOGIN_SETTIMESPEED:
+    case SMSG_LOGIN_SETTIMESPEED:
         {
             if (!me)
                 return;
@@ -3777,7 +3709,7 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             UpdateVisualHonorRankBasedOnItems();
             break;
         }
-        case SMSG_TRADE_STATUS:
+    case SMSG_TRADE_STATUS:
         {
             if (!me)
                 return;
@@ -3801,7 +3733,7 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             }
             break;
         }
-        case SMSG_RESURRECT_REQUEST:
+    case SMSG_RESURRECT_REQUEST:
         {
             if (!me)
                 return;
@@ -3812,7 +3744,7 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             me->GetSession()->QueuePacket(std::move(data));
             break;
         }
-        case SMSG_BATTLEFIELD_STATUS:
+    case SMSG_BATTLEFIELD_STATUS:
         {
             if (!me)
                 return;
@@ -3832,7 +3764,7 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             }
             return;
         }
-        case SMSG_LOOT_START_ROLL:
+    case SMSG_LOOT_START_ROLL:
         {
             if (!me)
                 return;
@@ -3856,9 +3788,7 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
                     {
                         if (Player* member = itr->getSource())
                         {
-                            if (member->GetGUIDLow() != me->GetGUIDLow() &&
-                                !sGuildBotMgr.IsGuildBot(member->GetGUIDLow()) &&
-                                member->GetSession() && !member->GetSession()->GetBot())
+                            if (member->GetGUIDLow() != me->GetGUIDLow() && !sGuildBotMgr.IsGuildBot(member->GetGUIDLow()) && member->GetSession() && !member->GetSession()->GetBot())
                             {
                                 humanInGroup = true;
                                 break;

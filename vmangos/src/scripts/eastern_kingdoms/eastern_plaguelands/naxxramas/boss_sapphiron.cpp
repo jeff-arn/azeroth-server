@@ -16,47 +16,47 @@
 
 // todo: Make sure he's immune to frost damage.
 
-#include "scriptPCH.h"
-#include "naxxramas.h"
 #include "MovementGenerator.h"
+#include "naxxramas.h"
+#include "scriptPCH.h"
 
 enum SapphironData
 {
-    EMOTE_BREATH       = 7213,
-    EMOTE_ENRAGE       = 2384,
+    EMOTE_BREATH = 7213,
+    EMOTE_ENRAGE = 2384,
 
-    SPELL_ICEBOLT       = 28522,
-    SPELL_STUN_IMMUNE   = 28782,
+    SPELL_ICEBOLT = 28522,
+    SPELL_STUN_IMMUNE = 28782,
 
     // SPELL_SUMM_ICEBLOCK = 28535, // we manually summon an iceblock in SpellHitTarget
 
-    //SPELL_FROST_BREATH = 29318,
-    SPELL_FROST_BREATH        = 28524, // triggers the damage and explosion visual, 7sec cast
-    SPELL_FROST_BREATH_DUMMY  = 30101, // shows the falling ball thing
+    // SPELL_FROST_BREATH = 29318,
+    SPELL_FROST_BREATH = 28524, // triggers the damage and explosion visual, 7sec cast
+    SPELL_FROST_BREATH_DUMMY = 30101, // shows the falling ball thing
 
-    SPELL_FROST_AURA   = 28529,
-    SPELL_LIFE_DRAIN   = 28542,
-    SPELL_BESERK       = 26662,
-    SPELL_CLEAVE        = 19983,
-    SPELL_TAIL_SWEEP    = 15847,
+    SPELL_FROST_AURA = 28529,
+    SPELL_LIFE_DRAIN = 28542,
+    SPELL_BESERK = 26662,
+    SPELL_CLEAVE = 19983,
+    SPELL_TAIL_SWEEP = 15847,
 
     // each blizzard has 30sec duration supposedly
-    SPELL_SUMMON_BLIZ1      = 28561, // summons creature 16474
-    SPELL_SUMMON_BLIZ2      = 28560, // unimplemented script effect
+    SPELL_SUMMON_BLIZ1 = 28561, // summons creature 16474
+    SPELL_SUMMON_BLIZ2 = 28560, // unimplemented script effect
     SPELL_BLIZZARD_PERIODIC = 28534, // triggers 28547 every 3 second
-    SPELL_BLIZZARD          = 28547, // deals dmg every 2 seconds. Stationary, lasts for 15sec
+    SPELL_BLIZZARD = 28547, // deals dmg every 2 seconds. Stationary, lasts for 15sec
 
-    SPELL_PERIODIC_BUFFET   = 29327, // periodically does 29328
-    SPELL_WING_BUFFET       = 29328, // is it the spell he does on takeoff, or another one?
+    SPELL_PERIODIC_BUFFET = 29327, // periodically does 29328
+    SPELL_WING_BUFFET = 29328, // is it the spell he does on takeoff, or another one?
 
     SPELL_SAPPHIRON_DIES = 29357, // adds camera-shake.
-    
+
     GO_ICEBLOCK = 181247,
 
     MOVE_POINT_LIFTOFF = 1,
     MOVE_POINT_FLYPOINT = 2,
 
-    NPC_WING_BUFFET = 17025, 
+    NPC_WING_BUFFET = 17025,
     NPC_BLIZZARD = 16474
 };
 
@@ -78,14 +78,14 @@ enum Events
 
 enum Phase
 {
-    PHASE_GROUND     = 1,
-    PHASE_LIFT_OFF   = 2,
-    PHASE_AIR_BOLTS  = 3,
+    PHASE_GROUND = 1,
+    PHASE_LIFT_OFF = 2,
+    PHASE_AIR_BOLTS = 3,
     PHASE_AIR_BREATH = 4,
-    PHASE_LANDING    = 5
+    PHASE_LANDING = 5
 };
 
-static float const aLiftOffPosition[3] = { 3521.300f, -5237.560f, 138.261f };
+static float const aLiftOffPosition[3] = {3521.300f, -5237.560f, 138.261f};
 
 struct boss_sapphironAI : public ScriptedAI
 {
@@ -151,13 +151,13 @@ struct boss_sapphironAI : public ScriptedAI
     {
         std::list<GameObject*> iceblocks;
         GetGameObjectListWithEntryInGrid(iceblocks, m_creature, GO_ICEBLOCK, 300.0f);
-        for(GameObject* ib : iceblocks)
+        for (GameObject* ib : iceblocks)
         {
             ib->DeleteLater();
         }
     }
 
-    void DamageTaken(Unit* pDoneBy, uint32&) override 
+    void DamageTaken(Unit* pDoneBy, uint32&) override
     {
         if (m_creature->GetMeleeZLimit() < 1.0f)
         {
@@ -274,8 +274,8 @@ struct boss_sapphironAI : public ScriptedAI
             if (m_creature->GetTemporaryFactionFlags() & TEMPFACTION_RESTORE_COMBAT_STOP)
                 m_creature->ClearTemporaryFaction();
 
-            //m_creature->SetFly(true);
-            //m_creature->SetLevitate(true);
+            // m_creature->SetFly(true);
+            // m_creature->SetLevitate(true);
             m_creature->SetMeleeZLimit(0.0f);
         }
         else
@@ -292,21 +292,15 @@ struct boss_sapphironAI : public ScriptedAI
                 m_creature->SetReactState(ReactStates::REACT_AGGRESSIVE);
             }
 
-            //m_creature->SetFly(false);
-            //m_creature->SetLevitate(false);
+            // m_creature->SetFly(false);
+            // m_creature->SetLevitate(false);
             m_creature->SetMeleeZLimit(UNIT_DEFAULT_MELEE_Z_LIMIT);
         }
     }
 
     void UpdateReachable(uint32 update_diff)
     {
-        bool unreachableTarget = 
-            !m_creature->GetMotionMaster()->empty() &&
-             m_creature->GetVictim() &&
-             m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE &&
-            !m_creature->HasDistanceCasterMovement() &&
-           (!m_creature->IsWithinDistInMap(m_creature->GetVictim(), m_creature->GetMaxChaseDistance(m_creature->GetVictim())) || !m_creature->IsWithinLOSInMap(m_creature->GetVictim())) &&
-            !m_creature->GetMotionMaster()->GetCurrent()->IsReachable();
+        bool unreachableTarget = !m_creature->GetMotionMaster()->empty() && m_creature->GetVictim() && m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE && !m_creature->HasDistanceCasterMovement() && (!m_creature->IsWithinDistInMap(m_creature->GetVictim(), m_creature->GetMaxChaseDistance(m_creature->GetVictim())) || !m_creature->IsWithinLOSInMap(m_creature->GetVictim())) && !m_creature->GetMotionMaster()->GetCurrent()->IsReachable();
 
         if (unreachableTarget)
         {
@@ -342,7 +336,7 @@ struct boss_sapphironAI : public ScriptedAI
                     m_forceTargetUpdateTimer -= uiDiff;
             }
         }
-        else 
+        else
         {
             if (m_creature->GetThreatManager().isThreatListEmpty())
             {
@@ -350,7 +344,7 @@ struct boss_sapphironAI : public ScriptedAI
             }
         }
 
-        if(!m_creature->HasAura(SPELL_FROST_AURA))
+        if (!m_creature->HasAura(SPELL_FROST_AURA))
             m_creature->CastSpell(m_creature, SPELL_FROST_AURA, true);
 
         events.Update(uiDiff);
@@ -359,21 +353,21 @@ struct boss_sapphironAI : public ScriptedAI
         {
             switch (eventId)
             {
-                case EVENT_MOVE_TO_FLY: // MovementInform() will trigger liftoff after this
-                    // He does not lift below 10%
-                    if (m_creature->GetHealthPercent() > 10.0f)
-                    {
-                        events.Reset();
-                        m_creature->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
-                        m_creature->InterruptNonMeleeSpells(false);
-                        m_creature->GetMotionMaster()->Clear(false);
-                        m_creature->GetMotionMaster()->MoveIdle();
-                        m_creature->GetMotionMaster()->MovePoint(MOVE_POINT_LIFTOFF, aLiftOffPosition[0], aLiftOffPosition[1], aLiftOffPosition[2]);
-                        phase = PHASE_LIFT_OFF;
-                        m_creature->SetTargetGuid(0);
-                    }
-                    break;
-                case EVENT_LIFTOFF: // liftoff is triggered from MovementInform()
+            case EVENT_MOVE_TO_FLY: // MovementInform() will trigger liftoff after this
+                // He does not lift below 10%
+                if (m_creature->GetHealthPercent() > 10.0f)
+                {
+                    events.Reset();
+                    m_creature->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
+                    m_creature->InterruptNonMeleeSpells(false);
+                    m_creature->GetMotionMaster()->Clear(false);
+                    m_creature->GetMotionMaster()->MoveIdle();
+                    m_creature->GetMotionMaster()->MovePoint(MOVE_POINT_LIFTOFF, aLiftOffPosition[0], aLiftOffPosition[1], aLiftOffPosition[2]);
+                    phase = PHASE_LIFT_OFF;
+                    m_creature->SetTargetGuid(0);
+                }
+                break;
+            case EVENT_LIFTOFF: // liftoff is triggered from MovementInform()
                 {
                     phase = PHASE_AIR_BOLTS;
                     Icebolt_Count = 0;
@@ -388,10 +382,10 @@ struct boss_sapphironAI : public ScriptedAI
                     setHover(true);
                     break;
                 }
-                case EVENT_LAND:
+            case EVENT_LAND:
                 {
                     iceboltTargets.clear();
-                    // in case something is delayed, and we're not finished 
+                    // in case something is delayed, and we're not finished
                     // casting the frost breath
                     if (m_creature->IsNonMeleeSpellCasted())
                     {
@@ -399,12 +393,12 @@ struct boss_sapphironAI : public ScriptedAI
                         return;
                     }
                     setHover(false);
-                    //m_creature->GetMotionMaster()->MovePoint(MOVE_POINT_FLYPOINT, m_creature->GetPositionX(), m_creature->GetPositionY(), 137.7f, MOVE_PATHFINDING | MOVE_FLY_MODE);
+                    // m_creature->GetMotionMaster()->MovePoint(MOVE_POINT_FLYPOINT, m_creature->GetPositionX(), m_creature->GetPositionY(), 137.7f, MOVE_PATHFINDING | MOVE_FLY_MODE);
                     phase = PHASE_LANDING;
                     events.ScheduleEvent(EVENT_LANDED, Seconds(4));
                     break;
                 }
-                case EVENT_LANDED:
+            case EVENT_LANDED:
                 {
                     DeleteAndDispellIceBlocks();
                     events.Reset();
@@ -420,12 +414,12 @@ struct boss_sapphironAI : public ScriptedAI
                     phase = PHASE_GROUND;
                     break;
                 }
-                case EVENT_ICEBOLT:
+            case EVENT_ICEBOLT:
                 {
                     DoIceBolt();
                     break;
                 }
-                case EVENT_FROST_BREATH_DUMMY:
+            case EVENT_FROST_BREATH_DUMMY:
                 {
                     // Looks like the wing buffet dissapears as he starts casting frost breath
                     UnSummonWingBuffet();
@@ -435,7 +429,7 @@ struct boss_sapphironAI : public ScriptedAI
                         events.Repeat(100);
                     break;
                 }
-                case EVENT_FROST_BREATH_CAST:
+            case EVENT_FROST_BREATH_CAST:
                 {
                     if (DoCastSpellIfCan(m_creature, SPELL_FROST_BREATH) != CAST_OK)
                         events.Repeat(100);
@@ -443,7 +437,7 @@ struct boss_sapphironAI : public ScriptedAI
                         events.ScheduleEvent(EVENT_LAND, 7000);
                     break;
                 }
-                case EVENT_BLIZZARD:
+            case EVENT_BLIZZARD:
                 {
                     if (Unit* pUnit = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, nullptr, SELECT_FLAG_PLAYER_NOT_GM))
                     {
@@ -457,7 +451,7 @@ struct boss_sapphironAI : public ScriptedAI
                     }
                     break;
                 }
-                case EVENT_LIFEDRAIN:
+            case EVENT_LIFEDRAIN:
                 {
                     if (DoCastSpellIfCan(m_creature, SPELL_LIFE_DRAIN) == CAST_OK)
                         events.Repeat(Seconds(24));
@@ -465,7 +459,7 @@ struct boss_sapphironAI : public ScriptedAI
                         events.Repeat(100);
                     break;
                 }
-                case EVENT_TAIL_SWEEP:
+            case EVENT_TAIL_SWEEP:
                 {
                     if (DoCastSpellIfCan(m_creature, SPELL_TAIL_SWEEP) == CAST_OK)
                         events.Repeat(Seconds(urand(7, 10)));
@@ -473,7 +467,7 @@ struct boss_sapphironAI : public ScriptedAI
                         events.Repeat(100);
                     break;
                 }
-                case EVENT_CLEAVE:
+            case EVENT_CLEAVE:
                 {
                     if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CLEAVE) == CAST_OK)
                         events.Repeat(Seconds(urand(5, 10)));
@@ -515,11 +509,11 @@ struct npc_sapphiron_blizzardAI : public ScriptedAI
     instance_naxxramas* m_pInstance;
     std::vector<ObjectGuid> previousTargets;
 
-    void Reset() override { }
-    void JustRespawned() override { }
-    void AttackStart(Unit*) override { }
-    void MoveInLineOfSight(Unit*) override { }
-    void Aggro(Unit*) override { }
+    void Reset() override {}
+    void JustRespawned() override {}
+    void AttackStart(Unit*) override {}
+    void MoveInLineOfSight(Unit*) override {}
+    void Aggro(Unit*) override {}
 
     void MovementInform(uint32 uiType, uint32 pointId) override
     {
@@ -541,7 +535,7 @@ struct npc_sapphiron_blizzardAI : public ScriptedAI
     {
         // if no sapphiron, move random
         Creature* pSapp = nullptr;
-        if(m_pInstance)
+        if (m_pInstance)
             pSapp = m_pInstance->GetSingleCreatureFromStorage(NPC_SAPPHIRON);
 
         if (!pSapp)
@@ -593,43 +587,28 @@ struct npc_sapphiron_blizzardAI : public ScriptedAI
         if (events.ExecuteEvent())
         {
             PickNewTarget();
-            events.Repeat(Seconds(urand(8,10)));
+            events.Repeat(Seconds(urand(8, 10)));
         }
     }
 };
 
-CreatureAI* GetAI_boss_sapphiron(Creature* pCreature)
-{
-    return new boss_sapphironAI(pCreature);
-}
+CreatureAI* GetAI_boss_sapphiron(Creature* pCreature) { return new boss_sapphironAI(pCreature); }
 
-CreatureAI* GetAI_npc_sapphironBlizzard(Creature* pCreature)
-{
-    return new npc_sapphiron_blizzardAI(pCreature);
-}
+CreatureAI* GetAI_npc_sapphironBlizzard(Creature* pCreature) { return new npc_sapphiron_blizzardAI(pCreature); }
 
 // 28542 - Life Drain (Naxx, Sapphiron)
 struct SapphironLifeDrainScript : SpellScript
 {
-    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final
-    {
-        unMaxTargets = urand(7, 10);
-    }
+    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final { unMaxTargets = urand(7, 10); }
 };
 
-SpellScript* GetScript_SapphironLifeDrain(SpellEntry const*)
-{
-    return new SapphironLifeDrainScript();
-}
+SpellScript* GetScript_SapphironLifeDrain(SpellEntry const*) { return new SapphironLifeDrainScript(); }
 
 struct sapphiron_birthAI : public GameObjectAI
 {
     instance_naxxramas* m_pInstance;
 
-    explicit sapphiron_birthAI(GameObject* pGo) : GameObjectAI(pGo)
-    {
-        m_pInstance = (instance_naxxramas*)me->GetInstanceData();
-    }
+    explicit sapphiron_birthAI(GameObject* pGo) : GameObjectAI(pGo) { m_pInstance = (instance_naxxramas*)me->GetInstanceData(); }
 
     bool OnUse(Unit* user) override
     {
@@ -657,10 +636,7 @@ struct sapphiron_birthAI : public GameObjectAI
     }
 };
 
-GameObjectAI* GetAI_sapphiron_birth(GameObject* pGo)
-{
-    return new sapphiron_birthAI(pGo);
-}
+GameObjectAI* GetAI_sapphiron_birth(GameObject* pGo) { return new sapphiron_birthAI(pGo); }
 
 void AddSC_boss_sapphiron()
 {

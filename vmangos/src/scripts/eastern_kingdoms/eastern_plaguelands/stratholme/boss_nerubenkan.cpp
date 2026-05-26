@@ -24,9 +24,9 @@ EndScriptData */
 #include "scriptPCH.h"
 #include "stratholme.h"
 
-#define SPELL_ENCASINGWEBS          4962
-#define SPELL_PIERCEARMOR           6016
-#define SPELL_RAISEUNDEADSCARAB     17235
+#define SPELL_ENCASINGWEBS 4962
+#define SPELL_PIERCEARMOR 6016
+#define SPELL_RAISEUNDEADSCARAB 17235
 
 struct boss_nerubenkanAI : public ScriptedAI
 {
@@ -64,15 +64,15 @@ struct boss_nerubenkanAI : public ScriptedAI
             int amount = 0;
             switch (urand(0, 2))
             {
-                case 0:
-                    amount = 4;
-                    break;
-                case 1:
-                    amount = 6;
-                    break;
-                case 2:
-                    amount = 8;
-                    break;
+            case 0:
+                amount = 4;
+                break;
+            case 1:
+                amount = 6;
+                break;
+            case 2:
+                amount = 8;
+                break;
             }
             for (int i = 0; i < amount; i++)
             {
@@ -118,7 +118,7 @@ struct boss_nerubenkanAI : public ScriptedAI
             }
         }
 
-        //EncasingWebs
+        // EncasingWebs
         if (EncasingWebs_Timer < diff)
         {
             if (Unit* pTarget = m_creature->GetVictim())
@@ -132,9 +132,10 @@ struct boss_nerubenkanAI : public ScriptedAI
                 }
             }
         }
-        else EncasingWebs_Timer -= diff;
+        else
+            EncasingWebs_Timer -= diff;
 
-        //PierceArmor
+        // PierceArmor
         if (PierceArmor_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_PIERCEARMOR) == CAST_OK)
@@ -143,7 +144,7 @@ struct boss_nerubenkanAI : public ScriptedAI
         else
             PierceArmor_Timer -= diff;
 
-        //RaiseUndeadScarab
+        // RaiseUndeadScarab
         if (RaiseUndeadScarab_Timer < diff)
         {
             if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
@@ -158,10 +159,7 @@ struct boss_nerubenkanAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_nerubenkan(Creature* pCreature)
-{
-    return new boss_nerubenkanAI(pCreature);
-}
+CreatureAI* GetAI_boss_nerubenkan(Creature* pCreature) { return new boss_nerubenkanAI(pCreature); }
 
 void AddSC_boss_nerubenkan()
 {

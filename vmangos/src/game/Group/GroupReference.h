@@ -29,16 +29,17 @@ class Player;
 
 class GroupReference : public Reference<Group, Player>
 {
-    protected:
-        uint8 iSubGroup;
-        void targetObjectBuildLink() override;
-        void targetObjectDestroyLink() override;
-        void sourceObjectDestroyLink() override;
-    public:
-        GroupReference() : Reference<Group, Player>(), iSubGroup(0) {}
-        ~GroupReference() override { unlink(); }
-        GroupReference* next() { return (GroupReference*)Reference<Group, Player>::next(); }
-        uint8 getSubGroup() const { return iSubGroup; }
-        void setSubGroup(uint8 pSubGroup) { iSubGroup = pSubGroup; }
+protected:
+    uint8 iSubGroup;
+    void targetObjectBuildLink() override;
+    void targetObjectDestroyLink() override;
+    void sourceObjectDestroyLink() override;
+
+public:
+    GroupReference() : Reference<Group, Player>(), iSubGroup(0) {}
+    ~GroupReference() override { unlink(); }
+    GroupReference* next() { return (GroupReference*)Reference<Group, Player>::next(); }
+    uint8 getSubGroup() const { return iSubGroup; }
+    void setSubGroup(uint8 pSubGroup) { iSubGroup = pSubGroup; }
 };
 #endif

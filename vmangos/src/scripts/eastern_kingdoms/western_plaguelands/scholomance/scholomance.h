@@ -7,43 +7,43 @@
 
 enum
 {
-    GO_GATE_KIRTONOS        = 175570,
-    GO_BRAZIER_KIRTONOS     = 175564,
-    GO_GATE_GANDLING        = 177374,
-    GO_GATE_MALICIA         = 177375,
-    GO_GATE_THEOLEN         = 177377,
-    GO_GATE_POLKELT         = 177376,
-    GO_GATE_RAVENIAN        = 177372,
-    GO_GATE_BAROV           = 177373,
-    GO_GATE_ILLUCIA         = 177371,
-    GO_VIEWING_ROOM_DOOR    = 175167,
+    GO_GATE_KIRTONOS = 175570,
+    GO_BRAZIER_KIRTONOS = 175564,
+    GO_GATE_GANDLING = 177374,
+    GO_GATE_MALICIA = 177375,
+    GO_GATE_THEOLEN = 177377,
+    GO_GATE_POLKELT = 177376,
+    GO_GATE_RAVENIAN = 177372,
+    GO_GATE_BAROV = 177373,
+    GO_GATE_ILLUCIA = 177371,
+    GO_VIEWING_ROOM_DOOR = 175167,
 
-    SOUND_SCREECH           = 557,
+    SOUND_SCREECH = 557,
 
-    NPC_KIRTONOS            = 10506,
-    NPC_GANDLING            = 1853,
-    NPC_VECTUS              = 10432,
-    NPC_MARDUKE             = 10433,
+    NPC_KIRTONOS = 10506,
+    NPC_GANDLING = 1853,
+    NPC_VECTUS = 10432,
+    NPC_MARDUKE = 10433,
 
-    NPC_J_EEVEE             = 14500
+    NPC_J_EEVEE = 14500
 };
 
 enum
 {
-    TYPE_GANDLING           = 0,
-    TYPE_THEOLEN            = 1,
-    TYPE_MALICIA            = 2,
-    TYPE_ILLUCIABAROV       = 3,
-    TYPE_ALEXEIBAROV        = 4,
-    TYPE_POLKELT            = 5,
-    TYPE_RAVENIAN           = 6,
-    TYPE_KIRTONOS           = 7,
-    TYPE_VIEWING_ROOM_DOOR  = 14,
-    TYPE_DARKREAVER         = 15,
+    TYPE_GANDLING = 0,
+    TYPE_THEOLEN = 1,
+    TYPE_MALICIA = 2,
+    TYPE_ILLUCIABAROV = 3,
+    TYPE_ALEXEIBAROV = 4,
+    TYPE_POLKELT = 5,
+    TYPE_RAVENIAN = 6,
+    TYPE_KIRTONOS = 7,
+    TYPE_VIEWING_ROOM_DOOR = 14,
+    TYPE_DARKREAVER = 15,
     INSTANCE_SCHOLOMANCE_MAX_ENCOUNTER = 16,
 
 
-    DATA_VECTUS            = 16,
-    DATA_MARDUKE           = 17,
+    DATA_VECTUS = 16,
+    DATA_MARDUKE = 17,
 };
 #endif

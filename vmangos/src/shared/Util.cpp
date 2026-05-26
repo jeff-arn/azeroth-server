@@ -20,15 +20,15 @@
  */
 
 #include "Util.h"
-#include "Timer.h"
-#include "Log.h"
 #include "Errors.h"
+#include "Log.h"
+#include "Timer.h"
 
-#include "IO/Utils.h"
 #include "IO/Networking/IpAddress.h"
+#include "IO/Utils.h"
 
-#include "utf8cpp/utf8.h"
 #include "mersennetwister/MersenneTwister.h"
+#include "utf8cpp/utf8.h"
 
 #include <cstdarg>
 
@@ -80,13 +80,13 @@ uint32 WorldTimer::tickPrevTime() { return m_iPrevTime; }
 
 uint32 WorldTimer::tick()
 {
-    //save previous world tick time
+    // save previous world tick time
     m_iPrevTime = m_iTime;
 
-    //get the new one and don't forget to persist current system time in m_SystemTickTime
+    // get the new one and don't forget to persist current system time in m_SystemTickTime
     m_iTime = WorldTimer::getMSTime();
 
-    //return tick diff
+    // return tick diff
     return getMSTimeDiff(m_iPrevTime, m_iTime);
 }
 
@@ -98,45 +98,21 @@ uint32 WorldTimer::getMSTime()
 }
 
 //////////////////////////////////////////////////////////////////////////
-int32 irand (int32 min, int32 max)
-{
-    return int32 (mtRand.randInt(max - min)) + min;
-}
+int32 irand(int32 min, int32 max) { return int32(mtRand.randInt(max - min)) + min; }
 
-uint32 urand (uint32 min, uint32 max)
-{
-    return mtRand.randInt(max - min) + min;
-}
+uint32 urand(uint32 min, uint32 max) { return mtRand.randInt(max - min) + min; }
 
-float frand (float min, float max)
-{
-    return mtRand.randExc (max - min) + min;
-}
+float frand(float min, float max) { return mtRand.randExc(max - min) + min; }
 
-int32 rand32 ()
-{
-    return mtRand.randInt ();
-}
+int32 rand32() { return mtRand.randInt(); }
 
-double rand_norm(void)
-{
-    return mtRand.randExc ();
-}
+double rand_norm(void) { return mtRand.randExc(); }
 
-float rand_norm_f(void)
-{
-    return (float)mtRand.randExc ();
-}
+float rand_norm_f(void) { return (float)mtRand.randExc(); }
 
-double rand_chance (void)
-{
-    return mtRand.randExc (100.0);
-}
+double rand_chance(void) { return mtRand.randExc(100.0); }
 
-float rand_chance_f(void)
-{
-    return (float)mtRand.randExc (100.0);
-}
+float rand_chance_f(void) { return (float)mtRand.randExc(100.0); }
 
 Milliseconds randtime(Milliseconds const& min, Milliseconds const& max)
 {
@@ -154,7 +130,8 @@ Tokens StrSplit(std::string const& src, std::string const& sep)
     {
         if (sep.find(*i) != std::string::npos)
         {
-            if (s.length()) r.push_back(s);
+            if (s.length())
+                r.push_back(s);
             s = "";
         }
         else
@@ -162,13 +139,14 @@ Tokens StrSplit(std::string const& src, std::string const& sep)
             s += *i;
         }
     }
-    if (s.length()) r.push_back(s);
+    if (s.length())
+        r.push_back(s);
     return r;
 }
 
 uint32 GetUInt32ValueFromArray(Tokens const& data, uint16 index)
 {
-    if(index >= data.size())
+    if (index >= data.size())
         return 0;
 
     return (uint32)atoi(data[index].c_str());
@@ -177,24 +155,24 @@ uint32 GetUInt32ValueFromArray(Tokens const& data, uint16 index)
 float GetFloatValueFromArray(Tokens const& data, uint16 index)
 {
     float result;
-    uint32 temp = GetUInt32ValueFromArray(data,index);
+    uint32 temp = GetUInt32ValueFromArray(data, index);
     memcpy(&result, &temp, sizeof(result));
 
     return result;
 }
 
-void stripLineInvisibleChars(std::string &str)
+void stripLineInvisibleChars(std::string& str)
 {
     static std::string invChars = " \t\7\n";
 
     size_t wpos = 0;
 
     bool space = false;
-    for(size_t pos = 0; pos < str.size(); ++pos)
+    for (size_t pos = 0; pos < str.size(); ++pos)
     {
-        if(invChars.find(str[pos])!=std::string::npos)
+        if (invChars.find(str[pos]) != std::string::npos)
         {
-            if(!space)
+            if (!space)
             {
                 str[wpos++] = ' ';
                 space = true;
@@ -202,7 +180,7 @@ void stripLineInvisibleChars(std::string &str)
         }
         else
         {
-            if(wpos!=pos)
+            if (wpos != pos)
                 str[wpos++] = str[pos];
             else
                 ++wpos;
@@ -210,8 +188,8 @@ void stripLineInvisibleChars(std::string &str)
         }
     }
 
-    if(wpos < str.size())
-        str.erase(wpos,str.size());
+    if (wpos < str.size())
+        str.erase(wpos, str.size());
 }
 
 void stripLineInvisibleChars(char* str)
@@ -248,13 +226,13 @@ void stripLineInvisibleChars(char* str)
 
 std::string secsToTimeString(time_t timeInSecs, bool shortText, bool hoursOnly)
 {
-    time_t secs    = timeInSecs % MINUTE;
+    time_t secs = timeInSecs % MINUTE;
     time_t minutes = timeInSecs % HOUR / MINUTE;
-    time_t hours   = timeInSecs % DAY  / HOUR;
-    time_t days    = timeInSecs / DAY;
+    time_t hours = timeInSecs % DAY / HOUR;
+    time_t days = timeInSecs / DAY;
 
     std::ostringstream ss;
-    if(days)
+    if (days)
     {
         ss << days;
         if (shortText)
@@ -264,7 +242,7 @@ std::string secsToTimeString(time_t timeInSecs, bool shortText, bool hoursOnly)
         else
             ss << " Days ";
     }
-    if(hours || hoursOnly)
+    if (hours || hoursOnly)
     {
         ss << hours;
         if (shortText)
@@ -274,9 +252,9 @@ std::string secsToTimeString(time_t timeInSecs, bool shortText, bool hoursOnly)
         else
             ss << " Hours ";
     }
-    if(!hoursOnly)
+    if (!hoursOnly)
     {
-        if(minutes)
+        if (minutes)
         {
             ss << minutes;
             if (shortText)
@@ -303,30 +281,39 @@ std::string secsToTimeString(time_t timeInSecs, bool shortText, bool hoursOnly)
 
 uint32 TimeStringToSecs(std::string const& timestring)
 {
-    uint32 secs       = 0;
-    uint32 buffer     = 0;
+    uint32 secs = 0;
+    uint32 buffer = 0;
     uint32 multiplier = 0;
 
-    for(std::string::const_iterator itr = timestring.begin(); itr != timestring.end(); itr++)
+    for (std::string::const_iterator itr = timestring.begin(); itr != timestring.end(); itr++)
     {
-        if(isdigit(*itr))
+        if (isdigit(*itr))
         {
-            buffer*=10;
-            buffer+= (*itr)-'0';
+            buffer *= 10;
+            buffer += (*itr) - '0';
         }
         else
         {
-            switch(*itr)
+            switch (*itr)
             {
-                case 'd': multiplier = DAY;     break;
-                case 'h': multiplier = HOUR;    break;
-                case 'm': multiplier = MINUTE;  break;
-                case 's': multiplier = 1;       break;
-                default : return 0;                         //bad format
+            case 'd':
+                multiplier = DAY;
+                break;
+            case 'h':
+                multiplier = HOUR;
+                break;
+            case 'm':
+                multiplier = MINUTE;
+                break;
+            case 's':
+                multiplier = 1;
+                break;
+            default:
+                return 0; // bad format
             }
-            buffer*=multiplier;
-            secs+=buffer;
-            buffer=0;
+            buffer *= multiplier;
+            secs += buffer;
+            buffer = 0;
         }
     }
 
@@ -343,7 +330,7 @@ std::string TimeToTimestampStr(time_t t)
     //       MM     minutes (2 digits 00-59)
     //       SS     seconds (2 digits 00-59)
     char buf[20];
-    snprintf(buf,20,"%04d-%02d-%02d_%02d-%02d-%02d",aTm->tm_year+1900,aTm->tm_mon+1,aTm->tm_mday,aTm->tm_hour,aTm->tm_min,aTm->tm_sec);
+    snprintf(buf, 20, "%04d-%02d-%02d_%02d-%02d-%02d", aTm->tm_year + 1900, aTm->tm_mon + 1, aTm->tm_mday, aTm->tm_hour, aTm->tm_min, aTm->tm_sec);
     return std::string(buf);
 }
 
@@ -360,7 +347,7 @@ bool IsIPAddress(char const* ipAddressString)
 // create PID file
 uint32 CreatePIDFile(std::string const& filename)
 {
-    FILE* pid_file = fopen (filename.c_str(), "w");
+    FILE* pid_file = fopen(filename.c_str(), "w");
     if (pid_file == nullptr)
         return 0;
 
@@ -376,9 +363,9 @@ size_t utf8length(std::string& utf8str)
 {
     try
     {
-        return utf8::distance(utf8str.c_str(),utf8str.c_str()+utf8str.size());
+        return utf8::distance(utf8str.c_str(), utf8str.c_str() + utf8str.size());
     }
-    catch(std::exception)
+    catch (std::exception)
     {
         utf8str = "";
         return 0;
@@ -427,7 +414,7 @@ bool WStrToUtf8(std::wstring& wstr, std::string& utf8str)
     try
     {
         std::string utf8str2;
-        utf8str2.resize(wstr.size() * 4);                     // allocate for most long case
+        utf8str2.resize(wstr.size() * 4); // allocate for most long case
 
         auto end = utf8::utf16to8(wstr.cbegin(), wstr.cend(), utf8str2.begin());
         if (end != utf8str2.end())
@@ -525,9 +512,9 @@ void vutf8printf(FILE* out, char const* str, va_list* ap)
 void hexEncodeByteArray(uint8* bytes, uint32 arrayLen, std::string& result)
 {
     std::ostringstream ss;
-    for (uint32 i = 0; i<arrayLen; ++i)
+    for (uint32 i = 0; i < arrayLen; ++i)
     {
-        for (uint8 j = 0; j<2; ++j)
+        for (uint8 j = 0; j < 2; ++j)
         {
             unsigned char nibble = 0x0F & (bytes[i] >> ((1 - j) * 4));
             char encodedNibble;
@@ -541,19 +528,22 @@ void hexEncodeByteArray(uint8* bytes, uint32 arrayLen, std::string& result)
     result = ss.str();
 }
 
-std::string ByteArrayToHexStr(uint8 const* bytes, uint32 arrayLen, bool reverse /* = false */) {
+std::string ByteArrayToHexStr(uint8 const* bytes, uint32 arrayLen, bool reverse /* = false */)
+{
     int32 init = 0;
     int32 end = arrayLen;
     int8 op = 1;
 
-    if (reverse) {
+    if (reverse)
+    {
         init = arrayLen - 1;
         end = -1;
         op = -1;
     }
 
     std::ostringstream ss;
-    for (int32 i = init; i != end; i += op) {
+    for (int32 i = init; i != end; i += op)
+    {
         char buffer[4];
         sprintf(buffer, "%02X", bytes[i]);
         ss << buffer;
@@ -562,7 +552,8 @@ std::string ByteArrayToHexStr(uint8 const* bytes, uint32 arrayLen, bool reverse 
     return ss.str();
 }
 
-void HexStrToByteArray(std::string const& str, uint8* out, bool reverse /*= false*/) {
+void HexStrToByteArray(std::string const& str, uint8* out, bool reverse /*= false*/)
+{
     // string must have even number of characters
     if (str.length() & 1)
         return;
@@ -571,28 +562,24 @@ void HexStrToByteArray(std::string const& str, uint8* out, bool reverse /*= fals
     int32 end = str.length();
     int8 op = 1;
 
-    if (reverse) {
+    if (reverse)
+    {
         init = str.length() - 2;
         end = -2;
         op = -1;
     }
 
     uint32 j = 0;
-    for (int32 i = init; i != end; i += 2 * op) {
-        char buffer[3] = { str[i], str[i + 1], '\0' };
+    for (int32 i = init; i != end; i += 2 * op)
+    {
+        char buffer[3] = {str[i], str[i + 1], '\0'};
         out[j++] = strtoul(buffer, nullptr, 16);
     }
 }
 
-int32 dither(float v)
-{
-    return std::copysign(std::floor(std::abs(v) + frand(0,1)), v);
-}
+int32 dither(float v) { return std::copysign(std::floor(std::abs(v) + frand(0, 1)), v); }
 
-uint32 ditheru(float v)
-{
-    return std::copysign(std::floor(std::abs(v) + frand(0,1)), v);
-}
+uint32 ditheru(float v) { return std::copysign(std::floor(std::abs(v) + frand(0, 1)), v); }
 
 void SetByteValue(uint32& variable, uint8 offset, uint8 value)
 {
@@ -648,7 +635,8 @@ std::vector<std::string> SplitStringByDelimiter(std::string const& str, char del
     std::vector<std::string> vec;
     std::size_t old_pos = 0;
     std::size_t pos = 0;
-    while((pos = str.find_first_of(delimiter, old_pos)) != std::string::npos) {
+    while ((pos = str.find_first_of(delimiter, old_pos)) != std::string::npos)
+    {
         vec.emplace_back(str.substr(old_pos, pos - old_pos));
         old_pos = pos + 1;
     }

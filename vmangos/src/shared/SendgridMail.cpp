@@ -17,10 +17,10 @@
  */
 
 #include "SendgridMail.h"
-#include "Config/Config.h"
-#include "json.hpp"
 #include <curl/curl.h>
 #include <utility>
+#include "Config/Config.h"
+#include "json.hpp"
 
 using json = nlohmann::json;
 
@@ -30,15 +30,9 @@ void SendgridMail::substitution(const std::string& key, const std::string& value
     //_substitutions.insert_or_assign(key, value);
 }
 
-void SendgridMail::recipient(std::string recipient)
-{
-    _recipients.emplace_back(std::move(recipient));
-}
+void SendgridMail::recipient(std::string recipient) { _recipients.emplace_back(std::move(recipient)); }
 
-void SendgridMail::from(std::string from)
-{
-    _from = std::move(from);
-}
+void SendgridMail::from(std::string from) { _from = std::move(from); }
 
 SendgridMail::Result SendgridMail::send()
 {
@@ -59,7 +53,7 @@ SendgridMail::Result SendgridMail::send()
         return Result::INTERNAL_ERROR;
     }
 
-    //curl_easy_setopt(curl, CURLOPT_URL, uri.data());
+    // curl_easy_setopt(curl, CURLOPT_URL, uri.data());
     curl_easy_setopt(curl, CURLOPT_URL, uri);
 
     // add header data
@@ -68,28 +62,25 @@ SendgridMail::Result SendgridMail::send()
     list = curl_slist_append(list, auth.c_str());
     list = curl_slist_append(list, "Content-Type: application/json");
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
-    
+
     if (sConfig.GetBoolDefault("MailCertChecks", true))
     {
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
     }
 
-    json data
-    {
-        { "template_id", _template_name },
-        { "from", {{ "email", _from }}},
-        { "personalizations",
-            {
-            {{ "to", {{
-                { "email", _recipients.front() } // only dealing with a single recipient for now
-            }}},
-            { "substitutions",
-                _substitutions
-             } },
-           },
-        }
-    };
+    json data{{"template_id", _template_name},
+              {"from", {{"email", _from}}},
+              {
+                  "personalizations",
+                  {
+                      {{"to",
+                        {{
+                            {"email", _recipients.front()} // only dealing with a single recipient for now
+                        }}},
+                       {"substitutions", _substitutions}},
+                  },
+              }};
 
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.dump().c_str());
 
@@ -97,10 +88,7 @@ SendgridMail::Result SendgridMail::send()
 
     curl_slist_free_all(list);
     curl_easy_cleanup(curl);
-    return _extended_error == CURLE_OK? Result::OK : Result::EXTENDED_ERROR;
+    return _extended_error == CURLE_OK ? Result::OK : Result::EXTENDED_ERROR;
 }
 
-SendgridMail::ExResult SendgridMail::extended_error() const
-{
-    return _extended_error;
-}
+SendgridMail::ExResult SendgridMail::extended_error() const { return _extended_error; }

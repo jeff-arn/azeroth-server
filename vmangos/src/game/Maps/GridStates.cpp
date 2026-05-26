@@ -20,17 +20,13 @@
  */
 
 #include "GridStates.h"
-#include "GridNotifiers.h"
 #include "GameSystem/Grid.h"
+#include "GridNotifiers.h"
 #include "Log.h"
 
-void
-InvalidState::Update(Map&, NGridType&, GridInfo&, uint32 const& /*x*/, uint32 const& /*y*/, uint32 const&) const
-{
-}
+void InvalidState::Update(Map&, NGridType&, GridInfo&, uint32 const& /*x*/, uint32 const& /*y*/, uint32 const&) const {}
 
-void
-ActiveState::Update(Map& m, NGridType& grid, GridInfo& info, uint32 const& x, uint32 const& y, uint32 const& t_diff) const
+void ActiveState::Update(Map& m, NGridType& grid, GridInfo& info, uint32 const& x, uint32 const& y, uint32 const& t_diff) const
 {
     // Only check grid activity every (grid_expiry/10) ms, because it's really useless to do it every cycle
     info.UpdateTimeTracker(t_diff);
@@ -47,16 +43,14 @@ ActiveState::Update(Map& m, NGridType& grid, GridInfo& info, uint32 const& x, ui
     }
 }
 
-void
-IdleState::Update(Map& m, NGridType& grid, GridInfo&, uint32 const& x, uint32 const& y, uint32 const&) const
+void IdleState::Update(Map& m, NGridType& grid, GridInfo&, uint32 const& x, uint32 const& y, uint32 const&) const
 {
     m.ResetGridExpiry(grid);
     grid.SetGridState(GRID_STATE_REMOVAL);
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Grid[%u,%u] on map %u moved to IDLE state", x, y, m.GetId());
 }
 
-void
-RemovalState::Update(Map& m, NGridType& grid, GridInfo& info, uint32 const& x, uint32 const& y, uint32 const& t_diff) const
+void RemovalState::Update(Map& m, NGridType& grid, GridInfo& info, uint32 const& x, uint32 const& y, uint32 const& t_diff) const
 {
     if (!info.getUnloadLock())
     {

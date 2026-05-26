@@ -29,12 +29,12 @@ class WorldPacket;
 
 class AddonHandler
 {
-    public:
-        /* Construction */
-        AddonHandler();
-        ~AddonHandler();
-                                                            //built addon packet
-        bool BuildAddonPacket(WorldPacket* Source, WorldPacket* Target);
+public:
+    /* Construction */
+    AddonHandler();
+    ~AddonHandler();
+    // built addon packet
+    bool BuildAddonPacket(WorldPacket* Source, WorldPacket* Target);
 };
 #define sAddOnHandler MaNGOS::Singleton<AddonHandler>::Instance()
 #endif

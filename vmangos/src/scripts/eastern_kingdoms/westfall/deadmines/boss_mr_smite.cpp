@@ -21,48 +21,45 @@ SDComment:
 SDCategory: Deadmines
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "deadmines.h"
+#include "scriptPCH.h"
 
 enum
 {
-    SAY_PHASE_2                     = 1344,
-    SAY_PHASE_3                     = 1345,
+    SAY_PHASE_2 = 1344,
+    SAY_PHASE_3 = 1345,
 
-    EQUIP_ID_SWORD                  = 2179,
-    EQUIP_ID_AXE                    = 2183,
-    EQUIP_ID_HAMMER                 = 10756,
+    EQUIP_ID_SWORD = 2179,
+    EQUIP_ID_AXE = 2183,
+    EQUIP_ID_HAMMER = 10756,
 
-    SPELL_NIBLE_REFLEXES            = 6433,                 // removed after phase 1
-    SPELL_SMITE_SLAM                = 6435,                 // only casted in phase 3
-    SPELL_SMITE_STOMP               = 6432,
-    SPELL_SMITE_HAMMER              = 6436,                 // unclear, not casted in
-    SPELL_THRASH                    = 3391,//12787,                // only casted in phase 2; unclear, 3391 directly casted instead of proc aura
+    SPELL_NIBLE_REFLEXES = 6433, // removed after phase 1
+    SPELL_SMITE_SLAM = 6435, // only casted in phase 3
+    SPELL_SMITE_STOMP = 6432,
+    SPELL_SMITE_HAMMER = 6436, // unclear, not casted in
+    SPELL_THRASH = 3391, // 12787,                // only casted in phase 2; unclear, 3391 directly casted instead of proc aura
 
-    GO_SMITE_CHEST                  = 144111, //ALITA coffre.
+    GO_SMITE_CHEST = 144111, // ALITA coffre.
 
-    PHASE_1                         = 1,
-    PHASE_2                         = 2,
-    PHASE_3                         = 3,
-    PHASE_EQUIP_NULL                = 4,
-    PHASE_EQUIP_START               = 5,
-    PHASE_EQUIP_PROCESS             = 6,
-    PHASE_EQUIP_END                 = 7,
+    PHASE_1 = 1,
+    PHASE_2 = 2,
+    PHASE_3 = 3,
+    PHASE_EQUIP_NULL = 4,
+    PHASE_EQUIP_START = 5,
+    PHASE_EQUIP_PROCESS = 6,
+    PHASE_EQUIP_END = 7,
 };
 
 struct boss_mr_smiteAI : public ScriptedAI
 {
-    boss_mr_smiteAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_mr_smiteAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiPhase;
     uint32 m_uiEquipTimer;
     uint32 m_uiSlamTimer;
     uint32 m_uiThrashTimer;
-    bool equiping; //Alita : Basicaly when he is not chasing the player.
-    bool inSpline; //bool true while running to chest.
+    bool equiping; // Alita : Basicaly when he is not chasing the player.
+    bool inSpline; // bool true while running to chest.
 
     void Reset() override
     {
@@ -129,7 +126,7 @@ struct boss_mr_smiteAI : public ScriptedAI
 
     void SplineFinished()
     {
-        //m_creature->MonsterSay("splineFinished.");
+        // m_creature->MonsterSay("splineFinished.");
         if (!equiping)
             return;
         m_creature->LoadEquipment(0, true);
@@ -206,7 +203,7 @@ struct boss_mr_smiteAI : public ScriptedAI
 
     void UpdateAI(uint32 const uiDiff) override
     {
-        Unit * target = m_creature->GetVictim();
+        Unit* target = m_creature->GetVictim();
         if (!m_creature->SelectHostileTarget() || !target)
         {
             if (m_uiEquipTimer)
@@ -223,15 +220,15 @@ struct boss_mr_smiteAI : public ScriptedAI
 
             switch (m_uiPhase)
             {
-                case PHASE_EQUIP_START:
-                    PhaseEquipStart();
-                    break;
-                case PHASE_EQUIP_PROCESS:
-                    PhaseEquipProcess();
-                    break;
-                case PHASE_EQUIP_END:
-                    PhaseEquipEnd();
-                    break;
+            case PHASE_EQUIP_START:
+                PhaseEquipStart();
+                break;
+            case PHASE_EQUIP_PROCESS:
+                PhaseEquipProcess();
+                break;
+            case PHASE_EQUIP_END:
+                PhaseEquipEnd();
+                break;
             }
 
             return;
@@ -239,7 +236,7 @@ struct boss_mr_smiteAI : public ScriptedAI
         // the normal combat phases
         switch (m_uiPhase)
         {
-            case PHASE_1:
+        case PHASE_1:
             {
                 if (m_creature->GetHealthPercent() < 66.0f)
                 {
@@ -259,9 +256,9 @@ struct boss_mr_smiteAI : public ScriptedAI
                 }
                 break;
             }
-            case PHASE_2:
+        case PHASE_2:
             {
-                if (m_uiThrashTimer < uiDiff)//instead of the aura, because the aura procs too much
+                if (m_uiThrashTimer < uiDiff) // instead of the aura, because the aura procs too much
                 {
                     if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_THRASH) == CAST_OK)
                         m_uiThrashTimer = urand(1500, 4000);
@@ -281,13 +278,13 @@ struct boss_mr_smiteAI : public ScriptedAI
                         m_creature->GetMotionMaster()->Clear();
                         equiping = true;
                         m_creature->AttackStop(true);
-                        //m_creature->RemoveAurasDueToSpell(SPELL_THRASH);
+                        // m_creature->RemoveAurasDueToSpell(SPELL_THRASH);
                     }
                     return;
                 }
                 break;
             }
-            case PHASE_3:
+        case PHASE_3:
             {
                 if (m_uiSlamTimer < uiDiff)
                 {
@@ -301,7 +298,7 @@ struct boss_mr_smiteAI : public ScriptedAI
                 break;
             }
         }
-        if (!equiping && !m_creature->CanReachWithMeleeAutoAttack(target) && m_creature->IsWithinDistInMap(target, m_creature->GetMeleeReach() * 2)) //test Alita GetDistance
+        if (!equiping && !m_creature->CanReachWithMeleeAutoAttack(target) && m_creature->IsWithinDistInMap(target, m_creature->GetMeleeReach() * 2)) // test Alita GetDistance
         {
             float x, y, z;
             m_creature->GetRandomAttackPoint(target, x, y, z);
@@ -311,11 +308,7 @@ struct boss_mr_smiteAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_mr_smite(Creature* pCreature)
-{
-
-    return new boss_mr_smiteAI(pCreature);
-}
+CreatureAI* GetAI_boss_mr_smite(Creature* pCreature) { return new boss_mr_smiteAI(pCreature); }
 
 void AddSC_boss_mr_smite()
 {
@@ -325,5 +318,4 @@ void AddSC_boss_mr_smite()
     pNewScript->Name = "boss_mr_smite";
     pNewScript->GetAI = &GetAI_boss_mr_smite;
     pNewScript->RegisterSelf();
-
 }

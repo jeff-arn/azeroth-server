@@ -26,28 +26,28 @@ EndScriptData */
 
 enum
 {
-    NPC_RAZZASHI_COBRA  = 11373,
+    NPC_RAZZASHI_COBRA = 11373,
 
-    SAY_TRANSFORM       = 10026,
-    SAY_DEATH           = 10460,
+    SAY_TRANSFORM = 10026,
+    SAY_DEATH = 10460,
 
     // P1 spells
-    SPELL_HOLY_NOVA     = 23858,
-    SPELL_DISPELL       = 23859,
-    SPELL_HOLY_FIRE     = 23860,
-    SPELL_RENEW         = 23895,
-    SPELL_HOLY_WRATH    = 23979,
+    SPELL_HOLY_NOVA = 23858,
+    SPELL_DISPELL = 23859,
+    SPELL_HOLY_FIRE = 23860,
+    SPELL_RENEW = 23895,
+    SPELL_HOLY_WRATH = 23979,
 
-    SPELL_SNAKE_FORM    = 23849,
+    SPELL_SNAKE_FORM = 23849,
 
     // P2 spells
-    SPELL_TRASH         = 3391,
-    SPELL_POISON_CLOUD  = 23861,
-    SPELL_VENOMSPIT     = 23862,
+    SPELL_TRASH = 3391,
+    SPELL_POISON_CLOUD = 23861,
+    SPELL_VENOMSPIT = 23862,
 
-    SPELL_FRENZY        = 8269,
+    SPELL_FRENZY = 8269,
     // Cobra spell
-    SPELL_PARASITIC     = 23865,
+    SPELL_PARASITIC = 23865,
 
 
 };
@@ -111,7 +111,7 @@ struct boss_venoxisAI : public ScriptedAI
         {
             for (const auto& guid : lAddsGUIDs)
             {
-                if (Creature *pSerpent = m_creature->GetMap()->GetCreature(guid))
+                if (Creature* pSerpent = m_creature->GetMap()->GetCreature(guid))
                     pSerpent->AddObjectToRemoveList();
             }
         }
@@ -130,7 +130,7 @@ struct boss_venoxisAI : public ScriptedAI
         GetCreatureListWithEntryInGrid(cobras, m_creature, NPC_RAZZASHI_COBRA, DEFAULT_VISIBILITY_INSTANCE);
         for (const auto cobra : cobras)
             cobra->ForcedDespawn();
-        
+
         ScriptedAI::EnterEvadeMode();
     }
 
@@ -182,7 +182,7 @@ struct boss_venoxisAI : public ScriptedAI
         }
 
         // Handle phase change
-        if (!m_bPhaseTwo && m_creature->GetHealthPercent()  < 50)
+        if (!m_bPhaseTwo && m_creature->GetHealthPercent() < 50)
         {
             DoScriptText(SAY_TRANSFORM, m_creature);
 
@@ -295,10 +295,7 @@ struct boss_venoxisAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_venoxis(Creature* pCreature)
-{
-    return new boss_venoxisAI(pCreature);
-}
+CreatureAI* GetAI_boss_venoxis(Creature* pCreature) { return new boss_venoxisAI(pCreature); }
 
 void AddSC_boss_venoxis()
 {

@@ -14,79 +14,50 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "blackwing_lair.h"
+#include "scriptPCH.h"
 
-static const Position EggSpawnCoords[] =
-{
-    {-7579.49f, -1051.48f, 408.157f, 0.523599f},
-    {-7563.15f, -1088.71f, 413.381f, -0.453786f},
-    {-7568.27f, -1097.68f, 413.381f, 2.79253f},
-    {-7578.64f, -1089.95f, 413.381f, 2.21657f},
-    {-7568.62f, -1086.58f, 413.381f, 0.855211f},
-    {-7572.49f, -1095.03f, 413.381f, -2.86234f},
-    {-7569.38f, -1079.73f, 413.381f, -2.68781f},
-    {-7576.92f, -1083.69f, 413.381f, -2.89725f},
-    {-7580.80f, -1067.29f, 408.490f, -2.98451f},
-    {-7592.38f, -1035.68f, 408.157f, 1.62316f},
-    {-7588.84f, -1053.79f, 408.157f, -1.72788f},
-    {-7597.53f, -1094.54f, 408.490f, 2.37365f},
-    {-7594.37f, -1102.90f, 408.490f, -0.907571f},
-    {-7584.68f, -1075.84f, 408.490f, 3.01942f},
-    {-7601.14f, -1077.11f, 408.218f, -1.27409f},
-    {-7599.00f, -1044.77f, 408.157f, -1.02974f},
-    {-7604.36f, -1060.25f, 408.157f, -2.77507f},
-    { -7618.1f, -1069.33f, 408.490f, -1.32645f},
-    {-7619.76f, -1058.94f, 408.490f, 1.81514f},
-    {-7586.36f, -1024.43f, 408.490f, -2.93215f},
-    {-7609.94f, -1035.11f, 408.490f, -1.93731f},
-    {-7628.32f, -1044.57f, 408.490f, -0.174533f},
-    {-7592.35f, -1010.84f, 408.490f, -2.54818f},
-    {-7611.60f, -1020.32f, 413.381f, 3.08923f},
-    {-7626.69f, -1011.71f, 413.381f, 0.226893f},
-    {-7577.84f, -1035.97f, 408.490f, -1.11701f},
-    {-7564.89f, -1058.87f, 408.490f, 2.28638f},
-    {-7566.00f, -1045.93f, 408.490f, 3.05433f},
-    {-7554.42f, -1061.50f, 408.490f, -2.28638f},
-    {-7549.48f, -1069.96f, 408.490f, -0.523599f},
+static const Position EggSpawnCoords[] = {
+    {-7579.49f, -1051.48f, 408.157f, 0.523599f}, {-7563.15f, -1088.71f, 413.381f, -0.453786f}, {-7568.27f, -1097.68f, 413.381f, 2.79253f}, {-7578.64f, -1089.95f, 413.381f, 2.21657f}, {-7568.62f, -1086.58f, 413.381f, 0.855211f}, {-7572.49f, -1095.03f, 413.381f, -2.86234f}, {-7569.38f, -1079.73f, 413.381f, -2.68781f},  {-7576.92f, -1083.69f, 413.381f, -2.89725f}, {-7580.80f, -1067.29f, 408.490f, -2.98451f}, {-7592.38f, -1035.68f, 408.157f, 1.62316f},  {-7588.84f, -1053.79f, 408.157f, -1.72788f}, {-7597.53f, -1094.54f, 408.490f, 2.37365f}, {-7594.37f, -1102.90f, 408.490f, -0.907571f}, {-7584.68f, -1075.84f, 408.490f, 3.01942f},  {-7601.14f, -1077.11f, 408.218f, -1.27409f},
+    {-7599.00f, -1044.77f, 408.157f, -1.02974f}, {-7604.36f, -1060.25f, 408.157f, -2.77507f},  {-7618.1f, -1069.33f, 408.490f, -1.32645f}, {-7619.76f, -1058.94f, 408.490f, 1.81514f}, {-7586.36f, -1024.43f, 408.490f, -2.93215f}, {-7609.94f, -1035.11f, 408.490f, -1.93731f}, {-7628.32f, -1044.57f, 408.490f, -0.174533f}, {-7592.35f, -1010.84f, 408.490f, -2.54818f}, {-7611.60f, -1020.32f, 413.381f, 3.08923f},  {-7626.69f, -1011.71f, 413.381f, 0.226893f}, {-7577.84f, -1035.97f, 408.490f, -1.11701f}, {-7564.89f, -1058.87f, 408.490f, 2.28638f}, {-7566.00f, -1045.93f, 408.490f, 3.05433f},   {-7554.42f, -1061.50f, 408.490f, -2.28638f}, {-7549.48f, -1069.96f, 408.490f, -0.523599f},
 };
 
 enum
 {
-    AT_ORB_OF_COMMAND           = 3847,
-    AT_ENTER_VAEL_ROOM          = 3626,
+    AT_ORB_OF_COMMAND = 3847,
+    AT_ENTER_VAEL_ROOM = 3626,
 
-    EGGS_COUNT                  = 30,
+    EGGS_COUNT = 30,
 
-    SPELL_NATURE_IMMUNITY       = 7941,
-    SPELL_FROST_IMMUNITY        = 7940,
-    SPELL_FIRE_IMMUNITY         = 7942,
-    SPELL_ARCANE_IMMUNITY       = 33020, // Spell_mod
-    SPELL_MIND_EXHAUSTION       = 23958,
-    SPELL_WARMING_FLAMES        = 23040,
-    SPELL_SUPPRESSION_AURA      = 22247,
+    SPELL_NATURE_IMMUNITY = 7941,
+    SPELL_FROST_IMMUNITY = 7940,
+    SPELL_FIRE_IMMUNITY = 7942,
+    SPELL_ARCANE_IMMUNITY = 33020, // Spell_mod
+    SPELL_MIND_EXHAUSTION = 23958,
+    SPELL_WARMING_FLAMES = 23040,
+    SPELL_SUPPRESSION_AURA = 22247,
 
-    GO_DOOR_RAZORGORE_ENTER     = 176964,
-    GO_DOOR_RAZORGORE_EXIT      = 176965,
-    GO_DOOR_NEFARIAN            = 176966,
-    GO_DOOR_CHROMAGGUS_ENTER    = 179115,
-    GO_DOOR_CHROMAGGUS_SIDE     = 179116,
-    GO_LEVER_CHROMAGGUS_SIDE    = 179148,
-    GO_DOOR_CHROMAGGUS_EXIT     = 179117,
-    GO_DOOR_VAELASTRASZ         = 179364,
-    GO_DOOR_LASHLAYER           = 179365,
-    GO_BLACK_DRAGON_EGG         = 177807,
-    GO_ORB_OF_DOMINATION        = 177808,
-    GO_SUPPRESSION_ENGINE       = 179784,
+    GO_DOOR_RAZORGORE_ENTER = 176964,
+    GO_DOOR_RAZORGORE_EXIT = 176965,
+    GO_DOOR_NEFARIAN = 176966,
+    GO_DOOR_CHROMAGGUS_ENTER = 179115,
+    GO_DOOR_CHROMAGGUS_SIDE = 179116,
+    GO_LEVER_CHROMAGGUS_SIDE = 179148,
+    GO_DOOR_CHROMAGGUS_EXIT = 179117,
+    GO_DOOR_VAELASTRASZ = 179364,
+    GO_DOOR_LASHLAYER = 179365,
+    GO_BLACK_DRAGON_EGG = 177807,
+    GO_ORB_OF_DOMINATION = 177808,
+    GO_SUPPRESSION_ENGINE = 179784,
 
-    GOSSIP_OPTION_NEFARIUS      = 6045,
+    GOSSIP_OPTION_NEFARIUS = 6045,
 
-    CONDITION_SCEPTER_FAIL      = 1,
-    CONDITION_SCEPTER_WIN       = 2,
+    CONDITION_SCEPTER_FAIL = 1,
+    CONDITION_SCEPTER_WIN = 2,
 
-    SAY_DEATH                   = 9591,
+    SAY_DEATH = 9591,
 
-    QUEST_BLACKHANDS_COMMAND    = 7761
+    QUEST_BLACKHANDS_COMMAND = 7761
 };
 
 void NefariusGossipOptionClicked(Creature* pCreature);
@@ -94,12 +65,7 @@ void NefariusGossipOptionClicked(Creature* pCreature);
 struct blackwing_technicians_helper
 {
 public:
-    blackwing_technicians_helper(ScriptedInstance *pInstance) :
-        m_bUpdated(false),
-        m_uiTechniciansUpdate(0),
-        m_pInstance(pInstance)
-    {
-    }
+    blackwing_technicians_helper(ScriptedInstance* pInstance) : m_bUpdated(false), m_uiTechniciansUpdate(0), m_pInstance(pInstance) {}
 
     void AddTechnician(Creature* pTechnician)
     {
@@ -158,10 +124,7 @@ public:
             m_mThreatGuid.erase(itr);
     }
 
-    ScriptedInstance* GetInstance() const
-    {
-        return m_pInstance;
-    }
+    ScriptedInstance* GetInstance() const { return m_pInstance; }
 
     void RecalculateThreat()
     {
@@ -197,6 +160,7 @@ public:
             }
         }
     }
+
 private:
     bool m_bUpdated;
     uint32 m_uiTechniciansUpdate;
@@ -207,10 +171,7 @@ private:
 
 struct instance_blackwing_lair : public ScriptedInstance
 {
-    instance_blackwing_lair(Map* pMap) : ScriptedInstance(pMap), m_hBlackwingTechnicians(this)
-    {
-        Initialize();
-    };
+    instance_blackwing_lair(Map* pMap) : ScriptedInstance(pMap), m_hBlackwingTechnicians(this) { Initialize(); };
 
     uint32 m_auiEncounter[MAX_ENCOUNTER];
     uint64 m_auiData[MAX_DATAS];
@@ -246,51 +207,51 @@ struct instance_blackwing_lair : public ScriptedInstance
     {
         switch (pGo->GetEntry())
         {
-            case GO_DOOR_RAZORGORE_ENTER:
-                m_auiData[DATA_DOOR_RAZORGORE_ENTER] = pGo->GetObjectGuid();
-                break;
-            case GO_DOOR_RAZORGORE_EXIT:
-                m_auiData[DATA_DOOR_RAZORGORE_EXIT] = pGo->GetObjectGuid();
-                if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
-                    pGo->SetGoState(GO_STATE_ACTIVE);
-                break;
-            case GO_DOOR_NEFARIAN:
-                m_auiData[DATA_DOOR_NEFARIAN] = pGo->GetObjectGuid();
-                break;
-            case GO_DOOR_CHROMAGGUS_ENTER:
-                m_auiData[DATA_DOOR_CHROMAGGUS_ENTER] = pGo->GetObjectGuid();
-                break;
-            case GO_DOOR_CHROMAGGUS_SIDE:
-                m_auiData[DATA_DOOR_CHROMAGGUS_SIDE] = pGo->GetObjectGuid();
-                if (m_auiEncounter[TYPE_CHROMAGGUS] == DONE)
-                    pGo->SetGoState(GO_STATE_ACTIVE);
-                break;
-            case GO_DOOR_CHROMAGGUS_EXIT:
-                m_auiData[DATA_DOOR_CHROMAGGUS_EXIT] = pGo->GetObjectGuid();
-                if (m_auiEncounter[TYPE_CHROMAGGUS] == DONE)
-                    pGo->SetGoState(GO_STATE_ACTIVE);
-                break;
-            case GO_DOOR_VAELASTRASZ:
-                m_auiData[DATA_DOOR_VAELASTRASZ] = pGo->GetObjectGuid();
-                if (m_auiEncounter[TYPE_VAELASTRASZ] == DONE)
-                    pGo->SetGoState(GO_STATE_ACTIVE);
-                break;
-            case GO_DOOR_LASHLAYER:
-                m_auiData[DATA_DOOR_LASHLAYER] = pGo->GetObjectGuid();
-                if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
-                    pGo->DeleteLater();
-                break;
-            case GO_ORB_OF_DOMINATION:
-                m_auiData[DATA_ORB_DOMINATION_GUID] = pGo->GetObjectGuid();
-                // no break - intended?
-            case GO_BLACK_DRAGON_EGG:
-                if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
-                    pGo->DeleteLater();
-                break;
-            case GO_SUPPRESSION_ENGINE:
-                if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
-                    pGo->DeleteLater();
-                break;
+        case GO_DOOR_RAZORGORE_ENTER:
+            m_auiData[DATA_DOOR_RAZORGORE_ENTER] = pGo->GetObjectGuid();
+            break;
+        case GO_DOOR_RAZORGORE_EXIT:
+            m_auiData[DATA_DOOR_RAZORGORE_EXIT] = pGo->GetObjectGuid();
+            if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
+                pGo->SetGoState(GO_STATE_ACTIVE);
+            break;
+        case GO_DOOR_NEFARIAN:
+            m_auiData[DATA_DOOR_NEFARIAN] = pGo->GetObjectGuid();
+            break;
+        case GO_DOOR_CHROMAGGUS_ENTER:
+            m_auiData[DATA_DOOR_CHROMAGGUS_ENTER] = pGo->GetObjectGuid();
+            break;
+        case GO_DOOR_CHROMAGGUS_SIDE:
+            m_auiData[DATA_DOOR_CHROMAGGUS_SIDE] = pGo->GetObjectGuid();
+            if (m_auiEncounter[TYPE_CHROMAGGUS] == DONE)
+                pGo->SetGoState(GO_STATE_ACTIVE);
+            break;
+        case GO_DOOR_CHROMAGGUS_EXIT:
+            m_auiData[DATA_DOOR_CHROMAGGUS_EXIT] = pGo->GetObjectGuid();
+            if (m_auiEncounter[TYPE_CHROMAGGUS] == DONE)
+                pGo->SetGoState(GO_STATE_ACTIVE);
+            break;
+        case GO_DOOR_VAELASTRASZ:
+            m_auiData[DATA_DOOR_VAELASTRASZ] = pGo->GetObjectGuid();
+            if (m_auiEncounter[TYPE_VAELASTRASZ] == DONE)
+                pGo->SetGoState(GO_STATE_ACTIVE);
+            break;
+        case GO_DOOR_LASHLAYER:
+            m_auiData[DATA_DOOR_LASHLAYER] = pGo->GetObjectGuid();
+            if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
+                pGo->DeleteLater();
+            break;
+        case GO_ORB_OF_DOMINATION:
+            m_auiData[DATA_ORB_DOMINATION_GUID] = pGo->GetObjectGuid();
+            // no break - intended?
+        case GO_BLACK_DRAGON_EGG:
+            if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
+                pGo->DeleteLater();
+            break;
+        case GO_SUPPRESSION_ENGINE:
+            if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
+                pGo->DeleteLater();
+            break;
         }
     }
 
@@ -298,8 +259,8 @@ struct instance_blackwing_lair : public ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_GRETHOK_THE_CONTROLLER:
-            case NPC_BLACKWING_GUARDSMAN:
+        case NPC_GRETHOK_THE_CONTROLLER:
+        case NPC_BLACKWING_GUARDSMAN:
             {
                 if (m_auiEncounter[TYPE_RAZORGORE] == NOT_STARTED)
                     m_auiEncounter[TYPE_RAZORGORE] = IN_PROGRESS;
@@ -310,7 +271,7 @@ struct instance_blackwing_lair : public ScriptedInstance
                 }
                 break;
             }
-            case NPC_RAZORGORE:
+        case NPC_RAZORGORE:
             {
                 if (Creature* pCreature = instance->GetCreature(m_auiData[DATA_GRETOK_GUID]))
                 {
@@ -326,18 +287,18 @@ struct instance_blackwing_lair : public ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_CORRUPTED_GREEN_WHELP:
-                pCreature->AddAura(SPELL_NATURE_IMMUNITY, ADD_AURA_PERMANENT);
-                break;
-            case NPC_CORRUPTED_BLUE_WHELP:
-                pCreature->AddAura(SPELL_FROST_IMMUNITY, ADD_AURA_PERMANENT);
-                break;
-            case NPC_CORRUPTED_RED_WHELP:
-                pCreature->AddAura(SPELL_FIRE_IMMUNITY, ADD_AURA_PERMANENT);
-                break;
-            case NPC_CORRUPTED_BRONZE_WHELP:
-                pCreature->AddAura(SPELL_ARCANE_IMMUNITY, ADD_AURA_PERMANENT);
-                break;
+        case NPC_CORRUPTED_GREEN_WHELP:
+            pCreature->AddAura(SPELL_NATURE_IMMUNITY, ADD_AURA_PERMANENT);
+            break;
+        case NPC_CORRUPTED_BLUE_WHELP:
+            pCreature->AddAura(SPELL_FROST_IMMUNITY, ADD_AURA_PERMANENT);
+            break;
+        case NPC_CORRUPTED_RED_WHELP:
+            pCreature->AddAura(SPELL_FIRE_IMMUNITY, ADD_AURA_PERMANENT);
+            break;
+        case NPC_CORRUPTED_BRONZE_WHELP:
+            pCreature->AddAura(SPELL_ARCANE_IMMUNITY, ADD_AURA_PERMANENT);
+            break;
         }
     }
 
@@ -345,88 +306,86 @@ struct instance_blackwing_lair : public ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_ORB_OF_DOMINATION:
+        case NPC_ORB_OF_DOMINATION:
+            pCreature->DeleteLater();
+            break;
+        case NPC_GRETHOK_THE_CONTROLLER:
+        case NPC_BLACKWING_GUARDSMAN:
+            if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
                 pCreature->DeleteLater();
+            break;
+        case NPC_CORRUPTED_GREEN_WHELP:
+        case NPC_CORRUPTED_BLUE_WHELP:
+        case NPC_CORRUPTED_RED_WHELP:
+        case NPC_CORRUPTED_BRONZE_WHELP:
+            switch (urand(0, 3))
+            {
+            case 0:
+                pCreature->SetEntry(NPC_CORRUPTED_BLUE_WHELP);
+                pCreature->UpdateEntry(NPC_CORRUPTED_BLUE_WHELP);
+                pCreature->RemoveAllAuras();
+                pCreature->AddAura(SPELL_FROST_IMMUNITY, ADD_AURA_PERMANENT);
                 break;
-            case NPC_GRETHOK_THE_CONTROLLER:
-            case NPC_BLACKWING_GUARDSMAN:
-                if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
-                    pCreature->DeleteLater();
+            case 1:
+                pCreature->SetEntry(NPC_CORRUPTED_GREEN_WHELP);
+                pCreature->UpdateEntry(NPC_CORRUPTED_GREEN_WHELP);
+                pCreature->RemoveAllAuras();
+                pCreature->AddAura(SPELL_NATURE_IMMUNITY, ADD_AURA_PERMANENT);
                 break;
-            case NPC_CORRUPTED_GREEN_WHELP:
-            case NPC_CORRUPTED_BLUE_WHELP:
-            case NPC_CORRUPTED_RED_WHELP:
-            case NPC_CORRUPTED_BRONZE_WHELP:
-                switch (urand(0, 3))
-                {
-                    case 0:
-                        pCreature->SetEntry(NPC_CORRUPTED_BLUE_WHELP);
-                        pCreature->UpdateEntry(NPC_CORRUPTED_BLUE_WHELP);
-                        pCreature->RemoveAllAuras();
-                        pCreature->AddAura(SPELL_FROST_IMMUNITY, ADD_AURA_PERMANENT);
-                        break;
-                    case 1:
-                        pCreature->SetEntry(NPC_CORRUPTED_GREEN_WHELP);
-                        pCreature->UpdateEntry(NPC_CORRUPTED_GREEN_WHELP);
-                        pCreature->RemoveAllAuras();
-                        pCreature->AddAura(SPELL_NATURE_IMMUNITY, ADD_AURA_PERMANENT);
-                        break;
-                    case 2:
-                        pCreature->SetEntry(NPC_CORRUPTED_RED_WHELP);
-                        pCreature->UpdateEntry(NPC_CORRUPTED_RED_WHELP);
-                        pCreature->RemoveAllAuras();
-                        pCreature->AddAura(SPELL_FIRE_IMMUNITY, ADD_AURA_PERMANENT);
-                        break;
-                    case 3:
-                        pCreature->SetEntry(NPC_CORRUPTED_BRONZE_WHELP);
-                        pCreature->UpdateEntry(NPC_CORRUPTED_BRONZE_WHELP);
-                        pCreature->RemoveAllAuras();
-                        pCreature->AddAura(SPELL_ARCANE_IMMUNITY, ADD_AURA_PERMANENT);
-                        break;
-                }
-                if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
-                    pCreature->DeleteLater();
-                else if (m_auiEncounter[TYPE_LASHLAYER] == IN_PROGRESS)
-                {
-                    pCreature->SetVisibility(VISIBILITY_OFF);
-                    pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_NPC);
-                    pCreature->ForcedDespawn(1000);
-                }
-                else if (m_auiEncounter[TYPE_LASHLAYER] == FAIL)
-                {
-                    pCreature->SetVisibility(VISIBILITY_ON);
-                    pCreature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_NPC);
-                }
+            case 2:
+                pCreature->SetEntry(NPC_CORRUPTED_RED_WHELP);
+                pCreature->UpdateEntry(NPC_CORRUPTED_RED_WHELP);
+                pCreature->RemoveAllAuras();
+                pCreature->AddAura(SPELL_FIRE_IMMUNITY, ADD_AURA_PERMANENT);
                 break;
-            case NPC_DEATH_TALON_HATCHER:
-            case NPC_BLACKWING_TASKMASTER:
-            case NPC_DEATH_TALON_SEETHER:
-            case NPC_DEATH_TALON_WYRMKIN:
-            case NPC_DEATH_TALON_FLAMESCALE:
-            case NPC_DEATH_TALON_CAPTAIN:
-                if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
-                    pCreature->DeleteLater();
+            case 3:
+                pCreature->SetEntry(NPC_CORRUPTED_BRONZE_WHELP);
+                pCreature->UpdateEntry(NPC_CORRUPTED_BRONZE_WHELP);
+                pCreature->RemoveAllAuras();
+                pCreature->AddAura(SPELL_ARCANE_IMMUNITY, ADD_AURA_PERMANENT);
                 break;
-            case NPC_BLACKWING_WARLOCK:
-            case NPC_BLACKWING_SPELLBINDER:
-            case NPC_DEATH_TALON_WYRMGUARD:
-            case NPC_BLACKWING_TECHNICIAN:
-            case NPC_DEATH_TALON_OVERSEER:
-                if (m_auiEncounter[TYPE_FIREMAW] == DONE &&
-                        m_auiEncounter[TYPE_EBONROC] == DONE &&
-                        m_auiEncounter[TYPE_FLAMEGOR] == DONE)
-                    pCreature->DeleteLater();
+            }
+            if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
+                pCreature->DeleteLater();
+            else if (m_auiEncounter[TYPE_LASHLAYER] == IN_PROGRESS)
+            {
+                pCreature->SetVisibility(VISIBILITY_OFF);
+                pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_NPC);
+                pCreature->ForcedDespawn(1000);
+            }
+            else if (m_auiEncounter[TYPE_LASHLAYER] == FAIL)
+            {
+                pCreature->SetVisibility(VISIBILITY_ON);
+                pCreature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_NPC);
+            }
+            break;
+        case NPC_DEATH_TALON_HATCHER:
+        case NPC_BLACKWING_TASKMASTER:
+        case NPC_DEATH_TALON_SEETHER:
+        case NPC_DEATH_TALON_WYRMKIN:
+        case NPC_DEATH_TALON_FLAMESCALE:
+        case NPC_DEATH_TALON_CAPTAIN:
+            if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
+                pCreature->DeleteLater();
+            break;
+        case NPC_BLACKWING_WARLOCK:
+        case NPC_BLACKWING_SPELLBINDER:
+        case NPC_DEATH_TALON_WYRMGUARD:
+        case NPC_BLACKWING_TECHNICIAN:
+        case NPC_DEATH_TALON_OVERSEER:
+            if (m_auiEncounter[TYPE_FIREMAW] == DONE && m_auiEncounter[TYPE_EBONROC] == DONE && m_auiEncounter[TYPE_FLAMEGOR] == DONE)
+                pCreature->DeleteLater();
+            break;
+        case NPC_VAELASTRASZ:
+            if (m_auiEncounter[TYPE_VAELASTRASZ] == DONE)
+                pCreature->DeleteLater();
+            break;
+        case NPC_LORD_NEFARIAN:
+            if (pCreature->IsTemporarySummon()) // second nefarion summoned temporarily for vael event
                 break;
-            case NPC_VAELASTRASZ:
-                if (m_auiEncounter[TYPE_VAELASTRASZ] == DONE)
-                    pCreature->DeleteLater();
-                break;
-            case NPC_LORD_NEFARIAN:
-                if (pCreature->IsTemporarySummon()) // second nefarion summoned temporarily for vael event
-                    break;
-                if (m_auiEncounter[TYPE_NEFARIAN] == DONE)
-                    pCreature->DeleteLater();
-                break;
+            if (m_auiEncounter[TYPE_NEFARIAN] == DONE)
+                pCreature->DeleteLater();
+            break;
         }
     }
 
@@ -434,7 +393,7 @@ struct instance_blackwing_lair : public ScriptedInstance
     {
         switch (who->GetEntry())
         {
-            case NPC_RAZORGORE:
+        case NPC_RAZORGORE:
             {
                 if (m_auiEncounter[TYPE_RAZORGORE] == FAIL)
                 {
@@ -452,86 +411,86 @@ struct instance_blackwing_lair : public ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_RAZORGORE:
-                m_auiData[DATA_RAZORGORE_GUID] = pCreature->GetObjectGuid();
+        case NPC_RAZORGORE:
+            m_auiData[DATA_RAZORGORE_GUID] = pCreature->GetObjectGuid();
+            break;
+        case NPC_VAELASTRASZ:
+            m_auiData[DATA_VAELASTRASZ_GUID] = pCreature->GetObjectGuid();
+            if (m_auiEncounter[TYPE_VAELASTRASZ] == DONE)
+                pCreature->DeleteLater();
+            break;
+        case NPC_LASHLAYER:
+            m_auiData[DATA_LASHLAYER_GUID] = pCreature->GetObjectGuid();
+            break;
+        case NPC_FIREMAW:
+            m_auiData[DATA_FIREMAW_GUID] = pCreature->GetObjectGuid();
+            break;
+        case NPC_EBONROC:
+            m_auiData[DATA_EBONROC_GUID] = pCreature->GetObjectGuid();
+            break;
+        case NPC_FLAMEGOR:
+            m_auiData[DATA_FLAMEGOR_GUID] = pCreature->GetObjectGuid();
+            break;
+        case NPC_CHROMAGGUS:
+            m_auiData[DATA_CHROMAGGUS_GUID] = pCreature->GetObjectGuid();
+            break;
+        case NPC_NEFARIAN:
+            m_auiData[DATA_NEFARIAN_GUID] = pCreature->GetObjectGuid();
+            break;
+        case NPC_LORD_NEFARIAN:
+            if (pCreature->IsTemporarySummon()) // second nefarion summoned temporarily for vael event
                 break;
-            case NPC_VAELASTRASZ:
-                m_auiData[DATA_VAELASTRASZ_GUID] = pCreature->GetObjectGuid();
-                if (m_auiEncounter[TYPE_VAELASTRASZ] == DONE)
-                    pCreature->DeleteLater();
+            m_auiData[DATA_NEFARIUS_GUID] = pCreature->GetObjectGuid();
+            if (m_auiEncounter[TYPE_NEFARIAN] == DONE)
+                pCreature->DeleteLater();
+            break;
+        case NPC_GRETHOK_THE_CONTROLLER:
+            m_auiData[DATA_GRETOK_GUID] = pCreature->GetObjectGuid();
+            // no break - intended?
+        case NPC_BLACKWING_GUARDSMAN:
+            if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
+                pCreature->DeleteLater();
+            break;
+        case NPC_ORB_OF_DOMINATION:
+            m_auiData[DATA_TRIGGER_GUID] = pCreature->GetObjectGuid();
+            break;
+        case NPC_CORRUPTED_GREEN_WHELP:
+        case NPC_CORRUPTED_BLUE_WHELP:
+        case NPC_CORRUPTED_RED_WHELP:
+        case NPC_CORRUPTED_BRONZE_WHELP:
+            switch (urand(0, 3))
+            {
+            case 0:
+                pCreature->SetEntry(NPC_CORRUPTED_BLUE_WHELP);
+                pCreature->UpdateEntry(NPC_CORRUPTED_BLUE_WHELP);
+                pCreature->RemoveAllAuras();
+                pCreature->AddAura(SPELL_FROST_IMMUNITY, ADD_AURA_PERMANENT);
                 break;
-            case NPC_LASHLAYER:
-                m_auiData[DATA_LASHLAYER_GUID] = pCreature->GetObjectGuid();
+            case 1:
+                pCreature->SetEntry(NPC_CORRUPTED_GREEN_WHELP);
+                pCreature->UpdateEntry(NPC_CORRUPTED_GREEN_WHELP);
+                pCreature->RemoveAllAuras();
+                pCreature->AddAura(SPELL_NATURE_IMMUNITY, ADD_AURA_PERMANENT);
                 break;
-            case NPC_FIREMAW:
-                m_auiData[DATA_FIREMAW_GUID] = pCreature->GetObjectGuid();
+            case 2:
+                pCreature->SetEntry(NPC_CORRUPTED_RED_WHELP);
+                pCreature->UpdateEntry(NPC_CORRUPTED_RED_WHELP);
+                pCreature->RemoveAllAuras();
+                pCreature->AddAura(SPELL_FIRE_IMMUNITY, ADD_AURA_PERMANENT);
                 break;
-            case NPC_EBONROC:
-                m_auiData[DATA_EBONROC_GUID] = pCreature->GetObjectGuid();
+            case 3:
+                pCreature->SetEntry(NPC_CORRUPTED_BRONZE_WHELP);
+                pCreature->UpdateEntry(NPC_CORRUPTED_BRONZE_WHELP);
+                pCreature->RemoveAllAuras();
+                pCreature->AddAura(SPELL_ARCANE_IMMUNITY, ADD_AURA_PERMANENT);
                 break;
-            case NPC_FLAMEGOR:
-                m_auiData[DATA_FLAMEGOR_GUID] = pCreature->GetObjectGuid();
-                break;
-            case NPC_CHROMAGGUS:
-                m_auiData[DATA_CHROMAGGUS_GUID] = pCreature->GetObjectGuid();
-                break;
-            case NPC_NEFARIAN:
-                m_auiData[DATA_NEFARIAN_GUID] = pCreature->GetObjectGuid();
-                break;
-            case NPC_LORD_NEFARIAN:
-                if (pCreature->IsTemporarySummon()) // second nefarion summoned temporarily for vael event
-                    break;
-                m_auiData[DATA_NEFARIUS_GUID] = pCreature->GetObjectGuid();
-                if (m_auiEncounter[TYPE_NEFARIAN] == DONE)
-                    pCreature->DeleteLater();
-                break;
-            case NPC_GRETHOK_THE_CONTROLLER:
-                m_auiData[DATA_GRETOK_GUID] = pCreature->GetObjectGuid();
-                // no break - intended?
-            case NPC_BLACKWING_GUARDSMAN:
-                if (m_auiEncounter[TYPE_RAZORGORE] == DONE)
-                    pCreature->DeleteLater();
-                break;
-            case NPC_ORB_OF_DOMINATION:
-                m_auiData[DATA_TRIGGER_GUID] = pCreature->GetObjectGuid();
-                break;
-            case NPC_CORRUPTED_GREEN_WHELP:
-            case NPC_CORRUPTED_BLUE_WHELP:
-            case NPC_CORRUPTED_RED_WHELP:
-            case NPC_CORRUPTED_BRONZE_WHELP:
-                switch (urand(0, 3))
-                {
-                    case 0:
-                        pCreature->SetEntry(NPC_CORRUPTED_BLUE_WHELP);
-                        pCreature->UpdateEntry(NPC_CORRUPTED_BLUE_WHELP);
-                        pCreature->RemoveAllAuras();
-                        pCreature->AddAura(SPELL_FROST_IMMUNITY, ADD_AURA_PERMANENT);
-                        break;
-                    case 1:
-                        pCreature->SetEntry(NPC_CORRUPTED_GREEN_WHELP);
-                        pCreature->UpdateEntry(NPC_CORRUPTED_GREEN_WHELP);
-                        pCreature->RemoveAllAuras();
-                        pCreature->AddAura(SPELL_NATURE_IMMUNITY, ADD_AURA_PERMANENT);
-                        break;
-                    case 2:
-                        pCreature->SetEntry(NPC_CORRUPTED_RED_WHELP);
-                        pCreature->UpdateEntry(NPC_CORRUPTED_RED_WHELP);
-                        pCreature->RemoveAllAuras();
-                        pCreature->AddAura(SPELL_FIRE_IMMUNITY, ADD_AURA_PERMANENT);
-                        break;
-                    case 3:
-                        pCreature->SetEntry(NPC_CORRUPTED_BRONZE_WHELP);
-                        pCreature->UpdateEntry(NPC_CORRUPTED_BRONZE_WHELP);
-                        pCreature->RemoveAllAuras();
-                        pCreature->AddAura(SPELL_ARCANE_IMMUNITY, ADD_AURA_PERMANENT);
-                        break;
-                }
-                if (m_auiEncounter[TYPE_LASHLAYER] == DONE || m_auiEncounter[TYPE_LASHLAYER] == IN_PROGRESS)
-                    pCreature->DeleteLater();
-                break;
-            case NPC_DEATH_TALON_SEETHER:
-            case NPC_DEATH_TALON_WYRMKIN:
-            case NPC_DEATH_TALON_FLAMESCALE:
+            }
+            if (m_auiEncounter[TYPE_LASHLAYER] == DONE || m_auiEncounter[TYPE_LASHLAYER] == IN_PROGRESS)
+                pCreature->DeleteLater();
+            break;
+        case NPC_DEATH_TALON_SEETHER:
+        case NPC_DEATH_TALON_WYRMKIN:
+        case NPC_DEATH_TALON_FLAMESCALE:
             {
                 if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
                 {
@@ -551,41 +510,36 @@ struct instance_blackwing_lair : public ScriptedInstance
                 */
                 break;
             }
-            case NPC_DEATH_TALON_CAPTAIN:
-            case NPC_DEATH_TALON_HATCHER:
-            case NPC_BLACKWING_TASKMASTER:
-                if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
-                    pCreature->DeleteLater();
-                break;
-            case NPC_BLACKWING_TECHNICIAN:
-                if (pCreature->GetPositionZ() < 420.0f)
+        case NPC_DEATH_TALON_CAPTAIN:
+        case NPC_DEATH_TALON_HATCHER:
+        case NPC_BLACKWING_TASKMASTER:
+            if (m_auiEncounter[TYPE_LASHLAYER] == DONE)
+                pCreature->DeleteLater();
+            break;
+        case NPC_BLACKWING_TECHNICIAN:
+            if (pCreature->GetPositionZ() < 420.0f)
+            {
+                if (m_auiEncounter[TYPE_VAEL_EVENT] == DONE)
                 {
-                    if (m_auiEncounter[TYPE_VAEL_EVENT] == DONE)
-                    {
-                        pCreature->DeleteLater();
-                        break;
-                    }
-                    if (m_auiEncounter[TYPE_RAZORGORE] != DONE)
-                        pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
-                    m_lVaelGobs.push_back(pCreature->GetObjectGuid());
-                    // no break - intended?
-                 }
-            case NPC_BLACKWING_WARLOCK:
-            case NPC_BLACKWING_SPELLBINDER:
-            case NPC_DEATH_TALON_WYRMGUARD:
-            case NPC_DEATH_TALON_OVERSEER:
-                if (m_auiEncounter[TYPE_FIREMAW] == DONE &&
-                    m_auiEncounter[TYPE_EBONROC] == DONE &&
-                    m_auiEncounter[TYPE_FLAMEGOR] == DONE)
                     pCreature->DeleteLater();
-                break;
+                    break;
+                }
+                if (m_auiEncounter[TYPE_RAZORGORE] != DONE)
+                    pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
+                m_lVaelGobs.push_back(pCreature->GetObjectGuid());
+                // no break - intended?
+            }
+        case NPC_BLACKWING_WARLOCK:
+        case NPC_BLACKWING_SPELLBINDER:
+        case NPC_DEATH_TALON_WYRMGUARD:
+        case NPC_DEATH_TALON_OVERSEER:
+            if (m_auiEncounter[TYPE_FIREMAW] == DONE && m_auiEncounter[TYPE_EBONROC] == DONE && m_auiEncounter[TYPE_FLAMEGOR] == DONE)
+                pCreature->DeleteLater();
+            break;
         }
     }
 
-    void OnPlayerDeath(Player *player) override
-    {
-        m_hBlackwingTechnicians.RemovePotentialVictim(player->GetObjectGuid());
-    }
+    void OnPlayerDeath(Player* player) override { m_hBlackwingTechnicians.RemovePotentialVictim(player->GetObjectGuid()); }
 
     uint64 GetData64(uint32 data) override
     {
@@ -598,12 +552,12 @@ struct instance_blackwing_lair : public ScriptedInstance
     {
         switch (uiType)
         {
-            case DATA_SCEPTER_RUN_TIME:
+        case DATA_SCEPTER_RUN_TIME:
             {
                 m_auiData[DATA_SCEPTER_RUN_TIME] = uiData;
                 break;
             }
-            case TYPE_RAZORGORE:
+        case TYPE_RAZORGORE:
             {
                 m_auiEncounter[TYPE_RAZORGORE] = uiData;
                 if (uiData == IN_PROGRESS)
@@ -655,7 +609,7 @@ struct instance_blackwing_lair : public ScriptedInstance
                 }
                 break;
             }
-            case TYPE_VAELASTRASZ:
+        case TYPE_VAELASTRASZ:
             {
                 m_auiEncounter[TYPE_VAELASTRASZ] = uiData;
                 if (uiData == IN_PROGRESS)
@@ -697,7 +651,7 @@ struct instance_blackwing_lair : public ScriptedInstance
                 }
                 break;
             }
-            case TYPE_LASHLAYER:
+        case TYPE_LASHLAYER:
             {
                 m_auiEncounter[TYPE_LASHLAYER] = uiData;
                 if (uiData == DONE)
@@ -712,22 +666,22 @@ struct instance_blackwing_lair : public ScriptedInstance
                 }
                 break;
             }
-            case TYPE_FIREMAW:
+        case TYPE_FIREMAW:
             {
                 m_auiEncounter[TYPE_FIREMAW] = uiData;
                 break;
             }
-            case TYPE_EBONROC:
+        case TYPE_EBONROC:
             {
                 m_auiEncounter[TYPE_EBONROC] = uiData;
                 break;
             }
-            case TYPE_FLAMEGOR:
+        case TYPE_FLAMEGOR:
             {
                 m_auiEncounter[TYPE_FLAMEGOR] = uiData;
                 break;
             }
-            case TYPE_CHROMAGGUS:
+        case TYPE_CHROMAGGUS:
             {
                 m_auiEncounter[TYPE_CHROMAGGUS] = uiData;
                 if (uiData == DONE)
@@ -742,7 +696,7 @@ struct instance_blackwing_lair : public ScriptedInstance
                 }
                 break;
             }
-            case TYPE_NEFARIAN:
+        case TYPE_NEFARIAN:
             {
                 m_auiEncounter[TYPE_NEFARIAN] = uiData;
                 if (uiData == DONE || uiData == FAIL)
@@ -767,7 +721,7 @@ struct instance_blackwing_lair : public ScriptedInstance
                 }
                 break;
             }
-            case TYPE_VAEL_EVENT:
+        case TYPE_VAEL_EVENT:
             {
                 m_auiEncounter[TYPE_VAEL_EVENT] = uiData;
                 if (uiData == DONE)
@@ -787,7 +741,7 @@ struct instance_blackwing_lair : public ScriptedInstance
                 }
                 break;
             }
-            case DATA_EGG:
+        case DATA_EGG:
             {
                 if (uiData == IN_PROGRESS)
                 {
@@ -807,17 +761,17 @@ struct instance_blackwing_lair : public ScriptedInstance
                 }
                 break;
             }
-            case TYPE_SCEPTER_RUN:
+        case TYPE_SCEPTER_RUN:
             {
                 m_auiEncounter[TYPE_SCEPTER_RUN] = uiData;
                 break;
             }
-            case DATA_SCEPTER_CHAMPION:
+        case DATA_SCEPTER_CHAMPION:
             {
                 m_auiData[DATA_SCEPTER_CHAMPION] = uiData;
                 break;
             }
-            case GOSSIP_OPTION_NEFARIUS:
+        case GOSSIP_OPTION_NEFARIUS:
             {
                 if (Creature* pCreature = GetCreature(m_auiData[DATA_NEFARIUS_GUID]))
                 {
@@ -832,9 +786,7 @@ struct instance_blackwing_lair : public ScriptedInstance
             OUT_SAVE_INST_DATA;
 
             std::ostringstream saveStream;
-            saveStream << m_auiEncounter[0] << " " << m_auiEncounter[1] << " " << m_auiEncounter[2] << " " << m_auiEncounter[3] << " " << m_auiEncounter[4] << 
-            " " << m_auiEncounter[5] << " " << m_auiEncounter[6] << " " << m_auiEncounter[7] << " " << m_auiEncounter[8] << " " << m_auiData[DATA_CHROM_BREATH] << 
-            " " << m_auiData[DATA_NEF_COLOR] << " " << m_auiEncounter[9] << " " << m_auiData[DATA_SCEPTER_RUN_TIME] << " " << m_auiData[DATA_SCEPTER_CHAMPION];
+            saveStream << m_auiEncounter[0] << " " << m_auiEncounter[1] << " " << m_auiEncounter[2] << " " << m_auiEncounter[3] << " " << m_auiEncounter[4] << " " << m_auiEncounter[5] << " " << m_auiEncounter[6] << " " << m_auiEncounter[7] << " " << m_auiEncounter[8] << " " << m_auiData[DATA_CHROM_BREATH] << " " << m_auiData[DATA_NEF_COLOR] << " " << m_auiEncounter[9] << " " << m_auiData[DATA_SCEPTER_RUN_TIME] << " " << m_auiData[DATA_SCEPTER_CHAMPION];
 
             strInstData = saveStream.str();
 
@@ -872,10 +824,7 @@ struct instance_blackwing_lair : public ScriptedInstance
         return false;
     }
 
-    char const* Save() override
-    {
-        return strInstData.c_str();
-    }
+    char const* Save() override { return strInstData.c_str(); }
 
     uint32 GetData(uint32 uiType) override
     {
@@ -896,14 +845,11 @@ struct instance_blackwing_lair : public ScriptedInstance
 
         std::istringstream loadStream(chrIn);
 
-        loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2] >> m_auiEncounter[3] >> 
-        m_auiEncounter[4] >> m_auiEncounter[5] >> m_auiEncounter[6] >> m_auiEncounter[7] >> m_auiEncounter[8] >> 
-        m_auiData[DATA_CHROM_BREATH] >> m_auiData[DATA_NEF_COLOR] >> m_auiEncounter[9] >> m_auiData[DATA_SCEPTER_RUN_TIME]
-        >> m_auiData[DATA_SCEPTER_CHAMPION];
+        loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2] >> m_auiEncounter[3] >> m_auiEncounter[4] >> m_auiEncounter[5] >> m_auiEncounter[6] >> m_auiEncounter[7] >> m_auiEncounter[8] >> m_auiData[DATA_CHROM_BREATH] >> m_auiData[DATA_NEF_COLOR] >> m_auiEncounter[9] >> m_auiData[DATA_SCEPTER_RUN_TIME] >> m_auiData[DATA_SCEPTER_CHAMPION];
 
         for (uint8 i = 0; i < MAX_ENCOUNTER; ++i)
             if (TYPE_SCEPTER_RUN != i)
-                if (m_auiEncounter[i] == IN_PROGRESS)           // Do not load an encounter as "In Progress" - reset it instead.
+                if (m_auiEncounter[i] == IN_PROGRESS) // Do not load an encounter as "In Progress" - reset it instead.
                     m_auiEncounter[i] = NOT_STARTED;
 
         OUT_LOAD_INST_DATA_COMPLETE;
@@ -929,10 +875,7 @@ struct instance_blackwing_lair : public ScriptedInstance
     blackwing_technicians_helper* GetTechnicianHelper() { return &m_hBlackwingTechnicians; }
 };
 
-InstanceData* GetInstanceData_instance_blackwing_lair(Map* pMap)
-{
-    return new instance_blackwing_lair(pMap);
-}
+InstanceData* GetInstanceData_instance_blackwing_lair(Map* pMap) { return new instance_blackwing_lair(pMap); }
 
 bool GOHello_go_orb_of_domination(Player* pPlayer, GameObject* pGo)
 {
@@ -977,7 +920,7 @@ enum EggsOfRaz : uint32
     SAY_EGGS_BROKEN_3 = 9963
 };
 
-struct go_egg_razAI: public GameObjectAI
+struct go_egg_razAI : public GameObjectAI
 {
     explicit go_egg_razAI(GameObject* pGo) : GameObjectAI(pGo) {}
 
@@ -994,17 +937,17 @@ struct go_egg_razAI: public GameObjectAI
             {
                 switch (urand(0, 5))
                 {
-                    case 0:
+                case 0:
                     {
                         DoScriptText(SAY_EGGS_BROKEN_1, pUser);
                         break;
                     }
-                    case 1:
+                case 1:
                     {
                         DoScriptText(SAY_EGGS_BROKEN_2, pUser);
                         break;
                     }
-                    case 2:
+                case 2:
                     {
                         DoScriptText(SAY_EGGS_BROKEN_3, pUser);
                         break;
@@ -1028,12 +971,9 @@ struct go_egg_razAI: public GameObjectAI
     }
 };
 
-GameObjectAI* GetAIgo_egg_raz(GameObject* pGo)
-{
-    return new go_egg_razAI(pGo);
-}
+GameObjectAI* GetAIgo_egg_raz(GameObject* pGo) { return new go_egg_razAI(pGo); }
 
-struct go_engin_suppressionAI: public GameObjectAI
+struct go_engin_suppressionAI : public GameObjectAI
 {
     go_engin_suppressionAI(GameObject* pGo) : GameObjectAI(pGo), m_uiCheckTimer(urand(6000, 12000)), m_bActive(true) {}
 
@@ -1097,20 +1037,14 @@ struct go_engin_suppressionAI: public GameObjectAI
     }
 };
 
-GameObjectAI* GetAIgo_engin_suppression(GameObject *pGo)
-{
-    return new go_engin_suppressionAI(pGo);
-}
+GameObjectAI* GetAIgo_engin_suppression(GameObject* pGo) { return new go_engin_suppressionAI(pGo); }
 
 bool AreaTrigger_at_orb_of_command(Player* pPlayer, AreaTriggerEntry const* pAt)
 {
     if (pAt->id == AT_ORB_OF_COMMAND)
     {
         Corpse* pCorpse = pPlayer->GetCorpse();
-        if (pCorpse &&
-            pPlayer->IsDead() &&
-            pPlayer->GetQuestRewardStatus(QUEST_BLACKHANDS_COMMAND) &&
-            pCorpse->GetMapId() == MAP_BLACKWING_LAIR)
+        if (pCorpse && pPlayer->IsDead() && pPlayer->GetQuestRewardStatus(QUEST_BLACKHANDS_COMMAND) && pCorpse->GetMapId() == MAP_BLACKWING_LAIR)
         {
             pPlayer->ResurrectPlayer(0.5f);
             pPlayer->SpawnCorpseBones();
@@ -1121,7 +1055,7 @@ bool AreaTrigger_at_orb_of_command(Player* pPlayer, AreaTriggerEntry const* pAt)
     return false;
 }
 
-bool AreaTrigger_at_enter_vael_room(Player *pPlayer, AreaTriggerEntry const* pAt)
+bool AreaTrigger_at_enter_vael_room(Player* pPlayer, AreaTriggerEntry const* pAt)
 {
     if (pAt->id == AT_ENTER_VAEL_ROOM)
     {
@@ -1144,20 +1078,20 @@ bool AreaTrigger_at_enter_vael_room(Player *pPlayer, AreaTriggerEntry const* pAt
 
 enum
 {
-    SPELL_CLEAVE                = 15284,
-    SPELL_WARSTOMP              = 24375,
-    SPELL_FIREBLAST             = 20623,
-    SPELL_BROODPOWER_BLUE       = 22285,
-    SPELL_BROODPOWER_BLACK      = 22287,
-    SPELL_BROODPOWER_BRONZE     = 22286,
-    SPELL_BROODPOWER_RED        = 22283,
-    SPELL_BROODPOWER_GREEN      = 22288,
+    SPELL_CLEAVE = 15284,
+    SPELL_WARSTOMP = 24375,
+    SPELL_FIREBLAST = 20623,
+    SPELL_BROODPOWER_BLUE = 22285,
+    SPELL_BROODPOWER_BLACK = 22287,
+    SPELL_BROODPOWER_BRONZE = 22286,
+    SPELL_BROODPOWER_RED = 22283,
+    SPELL_BROODPOWER_GREEN = 22288,
 
-    SPELL_FIRE_VULNERABILITY    = 22277,
-    SPELL_FROST_VULNERABILITY   = 22278,
-    SPELL_SHADOW_VULNERABILITY  = 22279,
-    SPELL_NATURE_VULNERABILITY  = 22280,
-    SPELL_ARCANE_VULNERABILITY  = 22281
+    SPELL_FIRE_VULNERABILITY = 22277,
+    SPELL_FROST_VULNERABILITY = 22278,
+    SPELL_SHADOW_VULNERABILITY = 22279,
+    SPELL_NATURE_VULNERABILITY = 22280,
+    SPELL_ARCANE_VULNERABILITY = 22281
 };
 
 struct npc_death_talonAI : public ScriptedAI
@@ -1179,9 +1113,9 @@ struct npc_death_talonAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiCleaveTimer     = urand(5000, 9000);
-        m_uiWarStompTimer   = 8000;
-        m_uiFireBlastTimer  = 8000;
+        m_uiCleaveTimer = urand(5000, 9000);
+        m_uiWarStompTimer = 8000;
+        m_uiFireBlastTimer = 8000;
     }
 
     void JustDied(Unit* /*pKiller*/) override
@@ -1197,25 +1131,9 @@ struct npc_death_talonAI : public ScriptedAI
             m_creature->CallForHelp(15.0f);
     }
 
-    uint32 RandomPower()
-    {
-        return PickRandomValue(
-            SPELL_BROODPOWER_BLUE,
-            SPELL_BROODPOWER_BLACK,
-            SPELL_BROODPOWER_BRONZE,
-            SPELL_BROODPOWER_RED,
-            SPELL_BROODPOWER_GREEN);
-    }
+    uint32 RandomPower() { return PickRandomValue(SPELL_BROODPOWER_BLUE, SPELL_BROODPOWER_BLACK, SPELL_BROODPOWER_BRONZE, SPELL_BROODPOWER_RED, SPELL_BROODPOWER_GREEN); }
 
-    uint32 RandomSensibility()
-    {
-        return PickRandomValue(
-            SPELL_FIRE_VULNERABILITY,
-            SPELL_FROST_VULNERABILITY,
-            SPELL_SHADOW_VULNERABILITY,
-            SPELL_NATURE_VULNERABILITY,
-            SPELL_ARCANE_VULNERABILITY);
-    }
+    uint32 RandomSensibility() { return PickRandomValue(SPELL_FIRE_VULNERABILITY, SPELL_FROST_VULNERABILITY, SPELL_SHADOW_VULNERABILITY, SPELL_NATURE_VULNERABILITY, SPELL_ARCANE_VULNERABILITY); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -1264,14 +1182,11 @@ struct npc_death_talonAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_death_talon(Creature* pCreature)
-{
-    return new npc_death_talonAI(pCreature);
-}
+CreatureAI* GetAI_npc_death_talon(Creature* pCreature) { return new npc_death_talonAI(pCreature); }
 
 enum
 {
-    SPELL_BOMB          = 22334,
+    SPELL_BOMB = 22334,
     SPELL_POISON_BOTTLE = 22335
 };
 
@@ -1295,7 +1210,7 @@ struct npc_blackwing_technicianAI : public ScriptedAI
     uint32 m_uiEmoteTimer;
     bool m_bVaelGob;
     bool m_bAdded;
-    blackwing_technicians_helper *m_pTechnicianHelper;
+    blackwing_technicians_helper* m_pTechnicianHelper;
 
     void Reset() override
     {
@@ -1348,7 +1263,8 @@ struct npc_blackwing_technicianAI : public ScriptedAI
                 m_creature->HandleEmote(EMOTE_STATE_USESTANDING_NOSHEATHE);
                 m_uiEmoteTimer = 0;
             }
-            else m_uiEmoteTimer -= uiDiff;
+            else
+                m_uiEmoteTimer -= uiDiff;
         }
 
         // If we don't have a current victim and we're not added to the helper, stop AI.
@@ -1372,7 +1288,7 @@ struct npc_blackwing_technicianAI : public ScriptedAI
         if (m_pTechnicianHelper)
             if (ObjectGuid victimGuid = m_pTechnicianHelper->GetVictimGuid())
                 victim = m_pTechnicianHelper->GetInstance()->instance->GetUnit(victimGuid);
-        
+
         if (!victim)
             return;
 
@@ -1398,22 +1314,14 @@ struct npc_blackwing_technicianAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_blackwing_technician(Creature* pCreature)
-{
-    return new npc_blackwing_technicianAI(pCreature);
-}
+CreatureAI* GetAI_npc_blackwing_technician(Creature* pCreature) { return new npc_blackwing_technicianAI(pCreature); }
 
 struct CorruptedWhelpAI : public ScriptedAI
 {
-    CorruptedWhelpAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    CorruptedWhelpAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
 
-    void Reset() override
-    {
-    }
+    void Reset() override {}
 
     /*
     void Aggro(Unit* pWho)
@@ -1431,10 +1339,7 @@ struct CorruptedWhelpAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_corrupted_whelp(Creature* pCreature)
-{
-    return new CorruptedWhelpAI(pCreature);
-}
+CreatureAI* GetAI_npc_corrupted_whelp(Creature* pCreature) { return new CorruptedWhelpAI(pCreature); }
 
 void AddSC_instance_blackwing_lair()
 {

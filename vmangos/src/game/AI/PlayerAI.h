@@ -31,45 +31,44 @@ class SpellEntry;
 
 class PlayerAI
 {
-    public:
-        explicit PlayerAI(Player* pPlayer) : me(pPlayer), enablePositiveSpells(false) {}
-        virtual ~PlayerAI();
-        void SetPlayer(Player* player) { me = player; }
-        virtual void Remove();
+public:
+    explicit PlayerAI(Player* pPlayer) : me(pPlayer), enablePositiveSpells(false) {}
+    virtual ~PlayerAI();
+    void SetPlayer(Player* player) { me = player; }
+    virtual void Remove();
 
-        // Called at World update tick
-        virtual void UpdateAI(uint32 const /*diff*/);
-        virtual void MovementInform(uint32 MovementType, uint32 Data = 0) {}
+    // Called at World update tick
+    virtual void UpdateAI(uint32 const /*diff*/);
+    virtual void MovementInform(uint32 MovementType, uint32 Data = 0) {}
 
-        // == Helpers =====================================
-        bool CanCastSpell(Unit* pTarget, SpellEntry const* pSpell, bool isTriggered, bool checkControlled = true);
+    // == Helpers =====================================
+    bool CanCastSpell(Unit* pTarget, SpellEntry const* pSpell, bool isTriggered, bool checkControlled = true);
 
-        // == Fields =======================================
+    // == Fields =======================================
 
-        // Pointer to controlled by AI player
-        Player* me;
-        bool enablePositiveSpells;
+    // Pointer to controlled by AI player
+    Player* me;
+    bool enablePositiveSpells;
 };
 
-class PlayerControlledAI: public PlayerAI
+class PlayerControlledAI : public PlayerAI
 {
-    public:
-        explicit PlayerControlledAI(Player* pPlayer, Unit* caster = nullptr);
+public:
+    explicit PlayerControlledAI(Player* pPlayer, Unit* caster = nullptr);
 
-        ~PlayerControlledAI() override;
+    ~PlayerControlledAI() override;
 
-        // Called at World update tick
-        void UpdateAI(uint32 const /*diff*/) override;
-        Unit* FindController();
-        void UpdateTarget(Unit* victim);
+    // Called at World update tick
+    void UpdateAI(uint32 const /*diff*/) override;
+    Unit* FindController();
+    void UpdateTarget(Unit* victim);
 
-        // == Fields =======================================
-        ObjectGuid controllerGuid;
-        uint32 uiGlobalCD;
-        std::vector<uint32> usableSpells;
-        bool bIsMelee;
-        bool isHealer;
-        
+    // == Fields =======================================
+    ObjectGuid controllerGuid;
+    uint32 uiGlobalCD;
+    std::vector<uint32> usableSpells;
+    bool bIsMelee;
+    bool isHealer;
 };
 
 #endif

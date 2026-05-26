@@ -25,20 +25,17 @@ EndScriptData */
 
 enum
 {
-    SPELL_WARSTOMP    = 24375,
-    SPELL_STRIKE      = 18368,
-    SPELL_REND        = 18106,
+    SPELL_WARSTOMP = 24375,
+    SPELL_STRIKE = 18368,
+    SPELL_REND = 18106,
     SPELL_SUNDERARMOR = 24317,
-    SPELL_KNOCKAWAY   = 20686,
-    SPELL_SLOW        = 22356
+    SPELL_KNOCKAWAY = 20686,
+    SPELL_SLOW = 22356
 };
 
 struct boss_highlordomokkAI : public ScriptedAI
 {
-    boss_highlordomokkAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_highlordomokkAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiWarStompTimer;
     uint32 m_uiStrikeTimer;
@@ -49,17 +46,17 @@ struct boss_highlordomokkAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiWarStompTimer    = 15000;
-        m_uiStrikeTimer      = 10000;
-        m_uiRendTimer        = 14000;
+        m_uiWarStompTimer = 15000;
+        m_uiStrikeTimer = 10000;
+        m_uiRendTimer = 14000;
         m_uiSunderArmorTimer = 2000;
-        m_uiKnockAwayTimer   = 18000;
-        m_uiSlowTimer        = 24000;
+        m_uiKnockAwayTimer = 18000;
+        m_uiSlowTimer = 24000;
     }
 
     void UpdateAI(uint32 const uiDiff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
@@ -121,10 +118,7 @@ struct boss_highlordomokkAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_highlordomokk(Creature* pCreature)
-{
-    return new boss_highlordomokkAI(pCreature);
-}
+CreatureAI* GetAI_boss_highlordomokk(Creature* pCreature) { return new boss_highlordomokkAI(pCreature); }
 
 void AddSC_boss_highlordomokk()
 {

@@ -32,74 +32,73 @@ class Map;
 // Scripts TC
 class ZoneScript_Script
 {
-    public:
-        ZoneScript_Script() {}
-        virtual ~ZoneScript_Script() {}
-        virtual ZoneScript* GetZoneScript() const = 0;
-        virtual uint32 GetMapId() const = 0;
+public:
+    ZoneScript_Script() {}
+    virtual ~ZoneScript_Script() {}
+    virtual ZoneScript* GetZoneScript() const = 0;
+    virtual uint32 GetMapId() const = 0;
 };
 
 // class to handle player enter / leave / areatrigger / GO use events
 class ZoneScriptMgr
 {
-    public:
+public:
+    // ctor
+    ZoneScriptMgr();
 
-        // ctor
-        ZoneScriptMgr();
+    // dtor
+    ~ZoneScriptMgr();
 
-        // dtor
-        ~ZoneScriptMgr();
+    // create outdoor pvp events
+    void InitZoneScripts();
+    void InitMapZoneScripts(uint32 mapId, Map* pMap);
+    void MapLoaded(uint32 mapId, Map* pMap) { InitMapZoneScripts(mapId, pMap); }
 
-        // create outdoor pvp events
-        void InitZoneScripts();
-        void InitMapZoneScripts(uint32 mapId, Map* pMap);
-        void MapLoaded(uint32 mapId, Map* pMap) { InitMapZoneScripts(mapId, pMap); }
+    // called when a player enters an outdoor pvp area
+    void HandlePlayerEnterZone(Player* plr, uint32 areaflag);
 
-        // called when a player enters an outdoor pvp area
-        void HandlePlayerEnterZone(Player* plr, uint32 areaflag);
+    // called when player leaves an outdoor pvp area
+    void HandlePlayerLeaveZone(Player* plr, uint32 areaflag);
 
-        // called when player leaves an outdoor pvp area
-        void HandlePlayerLeaveZone(Player* plr, uint32 areaflag);
+    // return assigned outdoor pvp
+    ZoneScript* GetZoneScriptToZoneId(uint32 zoneid);
 
-        // return assigned outdoor pvp
-        ZoneScript* GetZoneScriptToZoneId(uint32 zoneid);
+    // handle custom (non-exist in dbc) spell if registered
+    bool HandleCustomSpell(Player* plr, uint32 spellId, GameObject* go);
 
-        // handle custom (non-exist in dbc) spell if registered
-        bool HandleCustomSpell(Player* plr, uint32 spellId, GameObject* go);
+    // handle custom go if registered
+    bool HandleOpenGo(Player* plr, uint64 guid);
 
-        // handle custom go if registered
-        bool HandleOpenGo(Player* plr, uint64 guid);
+    ZoneScript* GetZoneScript(uint32 zoneId);
 
-        ZoneScript* GetZoneScript(uint32 zoneId);
+    void AddZone(uint32 zoneid, ZoneScript* handle);
 
-        void AddZone(uint32 zoneid, ZoneScript * handle);
+    void Update(uint32 diff);
 
-        void Update(uint32 diff);
+    void HandleGossipOption(Player* player, uint64 guid, uint32 gossipid);
 
-        void HandleGossipOption(Player* player, uint64 guid, uint32 gossipid);
+    void HandleDropFlag(Player* plr, uint32 spellId);
 
-        void HandleDropFlag(Player* plr, uint32 spellId);
+    typedef std::set<ZoneScript*> ZoneScriptsSet;
+    typedef std::vector<ZoneScript_Script*> ZoneScript_ScriptSet;
+    typedef std::map<uint32 /* zoneid */, ZoneScript*> ZoneScriptsMap;
+    void AddScript(ZoneScript_Script* pScript) { m_ZoneScripts_Scripts.push_back(pScript); }
+    void OnMapCrashed(Map* map);
 
-        typedef std::set<ZoneScript*> ZoneScriptsSet;
-        typedef std::vector<ZoneScript_Script*> ZoneScript_ScriptSet;
-        typedef std::map<uint32 /* zoneid */, ZoneScript*> ZoneScriptsMap;
-        void AddScript(ZoneScript_Script* pScript) { m_ZoneScripts_Scripts.push_back(pScript); }
-        void OnMapCrashed(Map* map);
+private:
+    // HACK : les scripts
+    ZoneScript_ScriptSet m_ZoneScripts_Scripts;
 
-    private:
-        // HACK : les scripts
-        ZoneScript_ScriptSet m_ZoneScripts_Scripts;
+    // contains all initiated outdoor pvp events
+    // used when initing / cleaning up
+    ZoneScriptsSet m_ZoneScriptsSet;
 
-        // contains all initiated outdoor pvp events
-        // used when initing / cleaning up
-        ZoneScriptsSet  m_ZoneScriptsSet;
+    // maps the zone ids to an outdoor pvp event
+    // used in player event handling
+    ZoneScriptsMap m_ZoneScriptsMap;
 
-        // maps the zone ids to an outdoor pvp event
-        // used in player event handling
-        ZoneScriptsMap   m_ZoneScriptsMap;
-
-        // update interval
-        uint32 m_UpdateTimer;
+    // update interval
+    uint32 m_UpdateTimer;
 };
 
 #define sZoneScriptMgr MaNGOS::Singleton<ZoneScriptMgr>::Instance()

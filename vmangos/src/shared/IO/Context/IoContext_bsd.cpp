@@ -1,18 +1,12 @@
-#include <unistd.h>
 #include <sys/event.h>
-#include "Log.h"
-#include "IoContext.h"
+#include <unistd.h>
 #include "IO/SystemErrorToString.h"
+#include "IoContext.h"
+#include "Log.h"
 
-IO::IoContext::IoContext(IO::Native::FileHandle kqueueDescriptor)
-        : m_kqueueDescriptor(kqueueDescriptor), m_isRunning{true}
-{
-}
+IO::IoContext::IoContext(IO::Native::FileHandle kqueueDescriptor) : m_kqueueDescriptor(kqueueDescriptor), m_isRunning{true} {}
 
-IO::IoContext::~IoContext()
-{
-    ::close(m_kqueueDescriptor);
-}
+IO::IoContext::~IoContext() { ::close(m_kqueueDescriptor); }
 
 std::unique_ptr<IO::IoContext> IO::IoContext::CreateIoContext()
 {
@@ -55,19 +49,15 @@ void IO::IoContext::RunUntilShutdown()
     }
 }
 
-bool IO::IoContext::IsRunning() const
-{
-    return m_isRunning;
-}
+bool IO::IoContext::IsRunning() const { return m_isRunning; }
 
-void IO::IoContext::Shutdown()
-{
-    m_isRunning = false;
-}
+void IO::IoContext::Shutdown() { m_isRunning = false; }
 
 void IO::IoContext::PostForImmediateInvocation(IO::SystemIoEventReceiver* eventReceiver)
 {
-    struct kevent addedEvent{};
+    struct kevent addedEvent
+    {
+    };
 
     // Create and trigger a one-time event
 #if defined(__APPLE__)

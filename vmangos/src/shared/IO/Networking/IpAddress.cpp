@@ -34,7 +34,7 @@ nonstd::optional<IO::Networking::IpAddress> IO::Networking::IpAddress::TryParseF
             tmpLastEndPtr = fixEndPtr;
 
             // Parse a number. Must be in range [0-255]
-            int64_t segment = std::strtoll(tmpStartPtr, const_cast<char **>(&tmpLastEndPtr), 10);
+            int64_t segment = std::strtoll(tmpStartPtr, const_cast<char**>(&tmpLastEndPtr), 10);
             if (segment < 0 || segment > 255)
                 return nonstd::nullopt; // invalid number range, only [0..255] is valid
 
@@ -50,7 +50,7 @@ nonstd::optional<IO::Networking::IpAddress> IO::Networking::IpAddress::TryParseF
                     return nonstd::nullopt;
             }
             result.m_address.ipv4 <<= 8;
-            result.m_address.ipv4 |= (uint8_t) segment;
+            result.m_address.ipv4 |= (uint8_t)segment;
         }
     }
     else
@@ -65,10 +65,7 @@ nonstd::optional<IO::Networking::IpAddress> IO::Networking::IpAddress::TryParseF
     return result;
 }
 
-IO::Networking::IpAddress::Type IO::Networking::IpAddress::GetType() const
-{
-    return m_address.type;
-}
+IO::Networking::IpAddress::Type IO::Networking::IpAddress::GetType() const { return m_address.type; }
 
 /// "127.0.0.1" would return 2130706433
 uint32_t IO::Networking::IpAddress::_getInternalIPv4ReprAsUint32() const
@@ -83,10 +80,7 @@ void IO::Networking::IpAddress::UpdateCachedString()
 {
     if (m_address.type == Type::IPv4)
     {
-        m_cachedToString = std::to_string((m_address.ipv4 >> (3*8)) & 0xFF) + "." +
-                           std::to_string((m_address.ipv4 >> (2*8)) & 0xFF) + "." +
-                           std::to_string((m_address.ipv4 >> (1*8)) & 0xFF) + "." +
-                           std::to_string((m_address.ipv4 >> (0*8)) & 0xFF);
+        m_cachedToString = std::to_string((m_address.ipv4 >> (3 * 8)) & 0xFF) + "." + std::to_string((m_address.ipv4 >> (2 * 8)) & 0xFF) + "." + std::to_string((m_address.ipv4 >> (1 * 8)) & 0xFF) + "." + std::to_string((m_address.ipv4 >> (0 * 8)) & 0xFF);
     }
     else
     {
@@ -153,16 +147,13 @@ bool IO::Networking::operator==(IpAddress const& lhs, IpAddress const& rhs)
 
     switch (lhs.GetType())
     {
-        case IpAddress::Type::IPv4:
-            return lhs.m_address.ipv4 == rhs.m_address.ipv4;
-        case IpAddress::Type::IPv6:
-            return lhs.m_address.ipv6 == rhs.m_address.ipv6;
+    case IpAddress::Type::IPv4:
+        return lhs.m_address.ipv4 == rhs.m_address.ipv4;
+    case IpAddress::Type::IPv6:
+        return lhs.m_address.ipv6 == rhs.m_address.ipv6;
     }
 
     return false;
 }
 
-bool IO::Networking::operator==(IpEndpoint const& lhs, IpEndpoint const& rhs)
-{
-    return lhs.ip == rhs.ip && lhs.port == rhs.port;
-}
+bool IO::Networking::operator==(IpEndpoint const& lhs, IpEndpoint const& rhs) { return lhs.ip == rhs.ip && lhs.port == rhs.port; }

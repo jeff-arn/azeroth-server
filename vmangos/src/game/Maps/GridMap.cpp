@@ -16,33 +16,33 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "MapManager.h"
-#include "Log.h"
-#include "GridStates.h"
+#include "GridMap.h"
 #include "CellImpl.h"
-#include "Map.h"
 #include "DBCEnums.h"
 #include "DBCStores.h"
-#include "GridMap.h"
-#include "VMapFactory.h"
+#include "GridStates.h"
+#include "Log.h"
+#include "Map.h"
+#include "MapManager.h"
 #include "MoveMap.h"
-#include "World.h"
 #include "Policies/SingletonImp.h"
-#include "Util.h"
 #include "SQLStorages.h"
+#include "Util.h"
+#include "VMapFactory.h"
+#include "World.h"
 
-char const* MAP_MAGIC         = "MAPS";
+char const* MAP_MAGIC = "MAPS";
 char const* MAP_VERSION_MAGIC = "z1.4";
-char const* MAP_AREA_MAGIC    = "AREA";
-char const* MAP_HEIGHT_MAGIC  = "MHGT";
-char const* MAP_LIQUID_MAGIC  = "MLIQ";
+char const* MAP_AREA_MAGIC = "AREA";
+char const* MAP_HEIGHT_MAGIC = "MHGT";
+char const* MAP_LIQUID_MAGIC = "MLIQ";
 
-static uint16 holetab_h[4] = { 0x1111, 0x2222, 0x4444, 0x8888 };
-static uint16 holetab_v[4] = { 0x000F, 0x00F0, 0x0F00, 0xF000 };
+static uint16 holetab_h[4] = {0x1111, 0x2222, 0x4444, 0x8888};
+static uint16 holetab_v[4] = {0x000F, 0x00F0, 0x0F00, 0xF000};
 
-GridMap::GridMap(): m_gridIntHeightMultiplier(0)
+GridMap::GridMap() : m_gridIntHeightMultiplier(0)
 {
-   // m_flags = 0;
+    // m_flags = 0;
 
     // Area data
     m_gridArea = 0;
@@ -58,20 +58,17 @@ GridMap::GridMap(): m_gridIntHeightMultiplier(0)
     // Liquid data
     m_liquidGlobalEntry = 0;
     m_liquidGlobalFlags = 0;
-    m_liquid_offX   = 0;
-    m_liquid_offY   = 0;
-    m_liquid_width  = 0;
+    m_liquid_offX = 0;
+    m_liquid_offY = 0;
+    m_liquid_width = 0;
     m_liquid_height = 0;
     m_liquidLevel = INVALID_HEIGHT_VALUE;
     m_liquidFlags = nullptr;
     m_liquidEntry = nullptr;
-    m_liquid_map  = nullptr;
+    m_liquid_map = nullptr;
 }
 
-GridMap::~GridMap()
-{
-    unloadData();
-}
+GridMap::~GridMap() { unloadData(); }
 
 bool GridMap::loadData(char const* filename)
 {
@@ -85,8 +82,7 @@ bool GridMap::loadData(char const* filename)
         return true;
 
     fread(&header, sizeof(header), 1, in);
-    if (header.mapMagic     == *((uint32 const*)(MAP_MAGIC)) &&
-            header.versionMagic == *((uint32 const*)(MAP_VERSION_MAGIC)))
+    if (header.mapMagic == *((uint32 const*)(MAP_MAGIC)) && header.versionMagic == *((uint32 const*)(MAP_VERSION_MAGIC)))
     {
         // loadup area data
         if (header.areaMapOffset && !loadAreaData(in, header.areaMapOffset, header.areaMapSize))
@@ -143,7 +139,7 @@ void GridMap::unloadData()
     m_V8 = nullptr;
     m_liquidEntry = nullptr;
     m_liquidFlags = nullptr;
-    m_liquid_map  = nullptr;
+    m_liquid_map = nullptr;
     m_gridGetHeight = &GridMap::getHeightFromFlat;
 }
 
@@ -158,7 +154,7 @@ bool GridMap::loadAreaData(FILE* in, uint32 offset, uint32 /*size*/)
     m_gridArea = header.gridArea;
     if (!(header.flags & MAP_AREA_NO_AREA))
     {
-        m_area_map = new uint16 [16 * 16];
+        m_area_map = new uint16[16 * 16];
         fread(m_area_map, sizeof(uint16), 16 * 16, in);
     }
 
@@ -178,8 +174,8 @@ bool GridMap::loadHeightData(FILE* in, uint32 offset, uint32 /*size*/)
     {
         if ((header.flags & MAP_HEIGHT_AS_INT16))
         {
-            m_uint16_V9 = new uint16 [129 * 129];
-            m_uint16_V8 = new uint16 [128 * 128];
+            m_uint16_V9 = new uint16[129 * 129];
+            m_uint16_V8 = new uint16[128 * 128];
             fread(m_uint16_V9, sizeof(uint16), 129 * 129, in);
             fread(m_uint16_V8, sizeof(uint16), 128 * 128, in);
             m_gridIntHeightMultiplier = (header.gridMaxHeight - header.gridHeight) / 65535;
@@ -187,8 +183,8 @@ bool GridMap::loadHeightData(FILE* in, uint32 offset, uint32 /*size*/)
         }
         else if ((header.flags & MAP_HEIGHT_AS_INT8))
         {
-            m_uint8_V9 = new uint8 [129 * 129];
-            m_uint8_V8 = new uint8 [128 * 128];
+            m_uint8_V9 = new uint8[129 * 129];
+            m_uint8_V8 = new uint8[128 * 128];
             fread(m_uint8_V9, sizeof(uint8), 129 * 129, in);
             fread(m_uint8_V8, sizeof(uint8), 128 * 128, in);
             m_gridIntHeightMultiplier = (header.gridMaxHeight - header.gridHeight) / 255;
@@ -196,8 +192,8 @@ bool GridMap::loadHeightData(FILE* in, uint32 offset, uint32 /*size*/)
         }
         else
         {
-            m_V9 = new float [129 * 129];
-            m_V8 = new float [128 * 128];
+            m_V9 = new float[129 * 129];
+            m_V8 = new float[128 * 128];
             fread(m_V9, sizeof(float), 129 * 129, in);
             fread(m_V8, sizeof(float), 128 * 128, in);
             m_gridGetHeight = &GridMap::getHeightFromFloat;
@@ -229,11 +225,11 @@ bool GridMap::loadGridMapLiquidData(FILE* in, uint32 offset, uint32 /*size*/)
 
     m_liquidGlobalEntry = header.liquidType;
     m_liquidGlobalFlags = header.liquidFlags;
-    m_liquid_offX   = header.offsetX;
-    m_liquid_offY   = header.offsetY;
-    m_liquid_width  = header.width;
+    m_liquid_offX = header.offsetX;
+    m_liquid_offY = header.offsetY;
+    m_liquid_width = header.width;
     m_liquid_height = header.height;
-    m_liquidLevel   = header.liquidLevel;
+    m_liquidLevel = header.liquidLevel;
 
     if (!(header.flags & MAP_LIQUID_NO_TYPE))
     {
@@ -246,7 +242,7 @@ bool GridMap::loadGridMapLiquidData(FILE* in, uint32 offset, uint32 /*size*/)
 
     if (!(header.flags & MAP_LIQUID_NO_HEIGHT))
     {
-        m_liquid_map = new float [m_liquid_width * m_liquid_height];
+        m_liquid_map = new float[m_liquid_width * m_liquid_height];
         fread(m_liquid_map, sizeof(float), m_liquid_width * m_liquid_height, in);
     }
 
@@ -265,14 +261,11 @@ uint16 GridMap::getArea(float x, float y) const
     return m_area_map[lx * 16 + ly];
 }
 
-float GridMap::getHeightFromFlat(float /*x*/, float /*y*/) const
-{
-    return m_gridHeight;
-}
+float GridMap::getHeightFromFlat(float /*x*/, float /*y*/) const { return m_gridHeight; }
 
 bool GridMap::isHole(int row, int col) const
 {
-    int cellRow = row / 8;     // 8 squares per cell
+    int cellRow = row / 8; // 8 squares per cell
     int cellCol = col / 8;
     int holeRow = row % 8 / 2;
     int holeCol = (col - (cellCol * 8)) / 2;
@@ -332,7 +325,7 @@ float GridMap::getHeightFromFloat(float x, float y) const
         else
         {
             // 2 triangle (h1, h3, h5 points)
-            float h1 = m_V9[x_int * 129 + y_int  ];
+            float h1 = m_V9[x_int * 129 + y_int];
             float h3 = m_V9[x_int * 129 + y_int + 1];
             float h5 = 2 * m_V8[x_int * 128 + y_int];
             a = h5 - h1 - h3;
@@ -345,7 +338,7 @@ float GridMap::getHeightFromFloat(float x, float y) const
         if (x > y)
         {
             // 3 triangle (h2, h4, h5 points)
-            float h2 = m_V9[(x_int + 1) * 129 + y_int  ];
+            float h2 = m_V9[(x_int + 1) * 129 + y_int];
             float h4 = m_V9[(x_int + 1) * 129 + y_int + 1];
             float h5 = 2 * m_V8[x_int * 128 + y_int];
             a = h2 + h4 - h5;
@@ -389,7 +382,7 @@ float GridMap::getHeightFromUint8(float x, float y) const
         if (x > y)
         {
             // 1 triangle (h1, h2, h5 points)
-            int32 h1 = V9_h1_ptr[  0];
+            int32 h1 = V9_h1_ptr[0];
             int32 h2 = V9_h1_ptr[129];
             int32 h5 = 2 * m_uint8_V8[x_int * 128 + y_int];
             a = h2 - h1;
@@ -422,7 +415,7 @@ float GridMap::getHeightFromUint8(float x, float y) const
         else
         {
             // 4 triangle (h3, h4, h5 points)
-            int32 h3 = V9_h1_ptr[  1];
+            int32 h3 = V9_h1_ptr[1];
             int32 h4 = V9_h1_ptr[130];
             int32 h5 = 2 * m_uint8_V8[x_int * 128 + y_int];
             a = h4 - h3;
@@ -457,7 +450,7 @@ float GridMap::getHeightFromUint16(float x, float y) const
         if (x > y)
         {
             // 1 triangle (h1, h2, h5 points)
-            int32 h1 = V9_h1_ptr[  0];
+            int32 h1 = V9_h1_ptr[0];
             int32 h2 = V9_h1_ptr[129];
             int32 h5 = 2 * m_uint16_V8[x_int * 128 + y_int];
             a = h2 - h1;
@@ -490,7 +483,7 @@ float GridMap::getHeightFromUint16(float x, float y) const
         else
         {
             // 4 triangle (h3, h4, h5 points)
-            int32 h3 = V9_h1_ptr[  1];
+            int32 h3 = V9_h1_ptr[1];
             int32 h4 = V9_h1_ptr[130];
             int32 h5 = 2 * m_uint16_V8[x_int * 128 + y_int];
             a = h4 - h3;
@@ -560,7 +553,7 @@ GridMapLiquidStatus GridMap::getLiquidStatus(float x, float y, float z, uint8 Re
         uint32 liqTypeIdx = liquidEntry->Type;
         if (entry < 21)
         {
-            if (const auto *areaEntry = AreaEntry::GetById(getArea(x, y)))
+            if (const auto* areaEntry = AreaEntry::GetById(getArea(x, y)))
             {
                 uint32 overrideLiquid = areaEntry->LiquidTypeId;
                 if (!overrideLiquid && !areaEntry->IsZone())
@@ -621,13 +614,13 @@ GridMapLiquidStatus GridMap::getLiquidStatus(float x, float y, float z, uint8 Re
     int delta = int((liquid_level - z) * 10);
 
     // Get position delta
-    if (delta > 20)                                         // Under water
+    if (delta > 20) // Under water
         return LIQUID_MAP_UNDER_WATER;
 
-    if (delta > 0)                                          // In water
+    if (delta > 0) // In water
         return LIQUID_MAP_IN_WATER;
 
-    if (delta > -1)                                         // Walk on water
+    if (delta > -1) // Walk on water
         return LIQUID_MAP_WATER_WALK;
     // Above water
     return LIQUID_MAP_ABOVE_WATER;
@@ -650,12 +643,11 @@ bool GridMap::ExistMap(uint32 mapid, int gx, int gy)
 
     GridMapFileHeader header;
     fread(&header, sizeof(header), 1, pf);
-    if (header.mapMagic     != *((uint32 const*)(MAP_MAGIC)) ||
-            header.versionMagic != *((uint32 const*)(MAP_VERSION_MAGIC)))
+    if (header.mapMagic != *((uint32 const*)(MAP_MAGIC)) || header.versionMagic != *((uint32 const*)(MAP_VERSION_MAGIC)))
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Map file '%s' is non-compatible version (outdated?). Please, create new using ad.exe program.", tmp);
         delete[] tmp;
-        fclose(pf);                                         // close file before return
+        fclose(pf); // close file before return
         return false;
     }
 
@@ -671,7 +663,7 @@ bool GridMap::ExistVMap(uint32 mapid, int gx, int gy)
         if (vmgr->isMapLoadingEnabled())
         {
             // x and y are swapped !! => fixed now
-            bool exists = vmgr->existsMap((sWorld.GetDataPath() + "vmaps").c_str(),  mapid, gx, gy);
+            bool exists = vmgr->existsMap((sWorld.GetDataPath() + "vmaps").c_str(), mapid, gx, gy);
             if (!exists)
             {
                 std::string name = vmgr->getDirFileName(mapid, gx, gy);
@@ -811,10 +803,10 @@ int TerrainInfo::UnrefGrid(uint32 const& x, uint32 const& y)
     return 0;
 }
 
-float TerrainInfo::GetHeightStatic(float x, float y, float z, bool useVmaps/*=true*/, float maxSearchDist/*=DEFAULT_HEIGHT_SEARCH*/) const
+float TerrainInfo::GetHeightStatic(float x, float y, float z, bool useVmaps /*=true*/, float maxSearchDist /*=DEFAULT_HEIGHT_SEARCH*/) const
 {
-    float mapHeight = VMAP_INVALID_HEIGHT_VALUE;            // Store Height obtained by maps
-    float vmapHeight = VMAP_INVALID_HEIGHT_VALUE;           // Store Height obtained by vmaps (in "corridor" of z (or slightly above z)
+    float mapHeight = VMAP_INVALID_HEIGHT_VALUE; // Store Height obtained by maps
+    float vmapHeight = VMAP_INVALID_HEIGHT_VALUE; // Store Height obtained by vmaps (in "corridor" of z (or slightly above z)
 
     float z2 = z + 2.f;
 
@@ -831,7 +823,7 @@ float TerrainInfo::GetHeightStatic(float x, float y, float z, bool useVmaps/*=tr
             // this prevent case when original Z "too high above ground and vmap height search fail"
             // this will not affect most normal cases (no map in instance, or stay at ground at continent)
             if (mapHeight > INVALID_HEIGHT && z2 - mapHeight > maxSearchDist)
-                maxSearchDist = z2 - mapHeight + 1.0f;      // 1.0 make sure that we not fail for case when map height near but above for vamp height
+                maxSearchDist = z2 - mapHeight + 1.0f; // 1.0 make sure that we not fail for case when map height near but above for vamp height
 
             // look from a bit higher pos to find the floor
             vmapHeight = vmgr->getHeight(GetMapId(), x, y, z2, maxSearchDist);
@@ -861,20 +853,17 @@ float TerrainInfo::GetHeightStatic(float x, float y, float z, bool useVmaps/*=tr
             // we are already under the surface or vmap height above map heigt
             if (z < mapHeight || vmapHeight > mapHeight)
                 return vmapHeight;
-            return mapHeight;                               // better use .map surface height
+            return mapHeight; // better use .map surface height
         }
         else
-            return vmapHeight;                              // we have only vmapHeight (if have)
+            return vmapHeight; // we have only vmapHeight (if have)
     }
 
     return mapHeight;
 }
 
 
-inline bool IsOutdoorWMO(uint32 mogpFlags)
-{
-    return (mogpFlags & 0x8000) != 0;
-}
+inline bool IsOutdoorWMO(uint32 mogpFlags) { return (mogpFlags & 0x8000) != 0; }
 
 bool TerrainInfo::IsOutdoors(float x, float y, float z) const
 {
@@ -902,7 +891,7 @@ bool TerrainInfo::GetAreaInfo(float x, float y, float z, uint32& flags, int32& a
         {
             float _mapheight = gmap->getHeight(x, y);
             // z + 2.0f condition taken from GetHeightStatic(), not sure if it's such a great choice...
-            if (z + 2.0f > _mapheight &&  _mapheight > vmap_z)
+            if (z + 2.0f > _mapheight && _mapheight > vmap_z)
                 return false;
         }
         return true;
@@ -955,20 +944,11 @@ uint8 TerrainInfo::GetTerrainType(float x, float y) const
     return 0;
 }
 
-uint32 TerrainInfo::GetAreaId(float x, float y, float z) const
-{
-    return TerrainManager::GetAreaIdByAreaFlag(GetAreaFlag(x, y, z), m_mapId);
-}
+uint32 TerrainInfo::GetAreaId(float x, float y, float z) const { return TerrainManager::GetAreaIdByAreaFlag(GetAreaFlag(x, y, z), m_mapId); }
 
-uint32 TerrainInfo::GetZoneId(float x, float y, float z) const
-{
-    return TerrainManager::GetZoneIdByAreaFlag(GetAreaFlag(x, y, z), m_mapId);
-}
+uint32 TerrainInfo::GetZoneId(float x, float y, float z) const { return TerrainManager::GetZoneIdByAreaFlag(GetAreaFlag(x, y, z), m_mapId); }
 
-void TerrainInfo::GetZoneAndAreaId(uint32& zoneid, uint32& areaid, float x, float y, float z) const
-{
-    TerrainManager::GetZoneAndAreaIdByAreaFlag(zoneid, areaid, GetAreaFlag(x, y, z), m_mapId);
-}
+void TerrainInfo::GetZoneAndAreaId(uint32& zoneid, uint32& areaid, float x, float y, float z) const { TerrainManager::GetZoneAndAreaIdByAreaFlag(zoneid, areaid, GetAreaFlag(x, y, z), m_mapId); }
 
 GridMapLiquidStatus TerrainInfo::getLiquidStatus(float x, float y, float z, uint8 ReqLiquidType, GridMapLiquidData* data) const
 {
@@ -980,8 +960,8 @@ GridMapLiquidStatus TerrainInfo::getLiquidStatus(float x, float y, float z, uint
 
     if (vmgr->GetLiquidLevel(GetMapId(), x, y, z, ReqLiquidType, liquid_level, ground_level, liquid_type))
     {
-        //sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "getLiquidStatus(): vmap liquid level: %f ground: %f type: %u", liquid_level, ground_level, liquid_type);
-        // Check water level and ground level
+        // sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "getLiquidStatus(): vmap liquid level: %f ground: %f type: %u", liquid_level, ground_level, liquid_type);
+        //  Check water level and ground level
         if (liquid_level > ground_level && z > ground_level - 2)
         {
             // All ok in water -> store data
@@ -1022,11 +1002,11 @@ GridMapLiquidStatus TerrainInfo::getLiquidStatus(float x, float y, float z, uint
             int delta = int((liquid_level - z) * 10);
 
             // Get position delta
-            if (delta > 20)                   // Under water
+            if (delta > 20) // Under water
                 return LIQUID_MAP_UNDER_WATER;
-            if (delta > 0)                    // In water
+            if (delta > 0) // In water
                 return LIQUID_MAP_IN_WATER;
-            if (delta > -1)                   // Walk on water
+            if (delta > -1) // Walk on water
                 return LIQUID_MAP_WATER_WALK;
             result = LIQUID_MAP_ABOVE_WATER;
         }
@@ -1058,8 +1038,7 @@ bool TerrainInfo::IsSwimmable(float x, float y, float z, float radius /*= 1.5f*/
         GridMapLiquidData liquid_status;
         GridMapLiquidData* liquid_ptr = data ? data : &liquid_status;
         auto const status = getLiquidStatus(x, y, z, MAP_ALL_LIQUIDS, liquid_ptr);
-        if (status == LIQUID_MAP_IN_WATER || status == LIQUID_MAP_UNDER_WATER || status == LIQUID_MAP_WATER_WALK || 
-           ((status == LIQUID_MAP_ABOVE_WATER) && (liquid_ptr->level + JUMP_HEIGHT >= z)))
+        if (status == LIQUID_MAP_IN_WATER || status == LIQUID_MAP_UNDER_WATER || status == LIQUID_MAP_WATER_WALK || ((status == LIQUID_MAP_ABOVE_WATER) && (liquid_ptr->level + JUMP_HEIGHT >= z)))
         {
             if (liquid_ptr->level - liquid_ptr->depth_level > radius) // is unit have enough space to swim
                 return true;
@@ -1088,7 +1067,7 @@ bool TerrainInfo::IsUnderWater(float x, float y, float z) const
     ASSERT(MaNGOS::IsValidMapCoord(x, y, z));
     if (const_cast<TerrainInfo*>(this)->GetGrid(x, y))
     {
-        if (getLiquidStatus(x, y, z, MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN)&LIQUID_MAP_UNDER_WATER)
+        if (getLiquidStatus(x, y, z, MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN) & LIQUID_MAP_UNDER_WATER)
             return true;
     }
     return false;
@@ -1106,10 +1085,7 @@ bool TerrainInfo::IsUnderWater(float x, float y, float z) const
  *
  * @return           calculated z coordinate
  */
-float TerrainInfo::GetWaterOrGroundLevel(Position const& position, float* pGround, bool swim) const
-{
-    return GetWaterOrGroundLevel(position.x, position.y, position.z, pGround, swim);
-}
+float TerrainInfo::GetWaterOrGroundLevel(Position const& position, float* pGround, bool swim) const { return GetWaterOrGroundLevel(position.x, position.y, position.z, pGround, swim); }
 float TerrainInfo::GetWaterOrGroundLevel(float x, float y, float z, float* pGround /*= nullptr*/, bool swim /*= false*/) const
 {
     if (const_cast<TerrainInfo*>(this)->GetGrid(x, y))
@@ -1131,8 +1107,8 @@ float TerrainInfo::GetWaterOrGroundLevel(float x, float y, float z, float* pGrou
 GridMap* TerrainInfo::GetGrid(float const x, float const y)
 {
     // Giperion Elysium: It's reversed. That's ok
-    int gx = (int)(32 - y / SIZE_OF_GRIDS);                 // grid x
-    int gy = (int)(32 - x / SIZE_OF_GRIDS);                 // grid y
+    int gx = (int)(32 - y / SIZE_OF_GRIDS); // grid x
+    int gy = (int)(32 - x / SIZE_OF_GRIDS); // grid y
 
     // quick check if GridMap already loaded
     GridMap* pMap = m_GridMaps[gx][gy];
@@ -1171,17 +1147,17 @@ GridMap* TerrainInfo::LoadMapAndVMap(uint32 const x, uint32 const y)
             MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(m_mapId);
             char const* mapName = mapEntry ? mapEntry->name : "UNNAMEDMAP\x0";
 
-            int vmapLoadResult = VMAP::VMapFactory::createOrGetVMapManager()->loadMap((sWorld.GetDataPath() + "vmaps").c_str(),  m_mapId, x, y);
+            int vmapLoadResult = VMAP::VMapFactory::createOrGetVMapManager()->loadMap((sWorld.GetDataPath() + "vmaps").c_str(), m_mapId, x, y);
             switch (vmapLoadResult)
             {
-                case VMAP::VMAP_LOAD_RESULT_OK:
-                    break;
-                case VMAP::VMAP_LOAD_RESULT_ERROR:
-                    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Could not load VMAP name:%s, id:%d, x:%d, y:%d (vmap rep.: x:%d, y:%d)", mapName, m_mapId, x, y, x, y);
-                    break;
-                case VMAP::VMAP_LOAD_RESULT_IGNORED:
-                    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Ignored VMAP name:%s, id:%d, x:%d, y:%d (vmap rep.: x:%d, y:%d)", mapName, m_mapId, x, y, x, y);
-                    break;
+            case VMAP::VMAP_LOAD_RESULT_OK:
+                break;
+            case VMAP::VMAP_LOAD_RESULT_ERROR:
+                sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Could not load VMAP name:%s, id:%d, x:%d, y:%d (vmap rep.: x:%d, y:%d)", mapName, m_mapId, x, y, x, y);
+                break;
+            case VMAP::VMAP_LOAD_RESULT_IGNORED:
+                sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Ignored VMAP name:%s, id:%d, x:%d, y:%d (vmap rep.: x:%d, y:%d)", mapName, m_mapId, x, y, x, y);
+                break;
             }
 
             // load navmesh
@@ -1189,7 +1165,7 @@ GridMap* TerrainInfo::LoadMapAndVMap(uint32 const x, uint32 const y)
         }
     }
 
-    return  m_GridMaps[x][y];
+    return m_GridMaps[x][y];
 }
 
 float TerrainInfo::GetWaterLevel(float x, float y, float z, float* pGround /*= nullptr*/) const
@@ -1288,7 +1264,7 @@ void TerrainManager::UnloadAll()
 
 uint32 TerrainManager::GetAreaIdByAreaFlag(uint16 areaflag, uint32 map_id)
 {
-    const auto *entry = AreaEntry::GetByAreaFlagAndMap(areaflag, map_id);
+    const auto* entry = AreaEntry::GetByAreaFlagAndMap(areaflag, map_id);
 
     if (entry)
         return entry->Id;
@@ -1297,7 +1273,7 @@ uint32 TerrainManager::GetAreaIdByAreaFlag(uint16 areaflag, uint32 map_id)
 
 uint32 TerrainManager::GetZoneIdByAreaFlag(uint16 areaflag, uint32 map_id)
 {
-    const auto *entry = AreaEntry::GetByAreaFlagAndMap(areaflag, map_id);
+    const auto* entry = AreaEntry::GetByAreaFlagAndMap(areaflag, map_id);
 
     if (entry)
         return !entry->IsZone() ? entry->ZoneId : entry->Id;
@@ -1306,7 +1282,7 @@ uint32 TerrainManager::GetZoneIdByAreaFlag(uint16 areaflag, uint32 map_id)
 
 void TerrainManager::GetZoneAndAreaIdByAreaFlag(uint32& zoneid, uint32& areaid, uint16 areaflag, uint32 map_id)
 {
-    const auto *entry = AreaEntry::GetByAreaFlagAndMap(areaflag, map_id);
+    const auto* entry = AreaEntry::GetByAreaFlagAndMap(areaflag, map_id);
 
     areaid = entry ? entry->Id : 0;
     zoneid = entry ? (!entry->IsZone() ? entry->ZoneId : entry->Id) : 0;

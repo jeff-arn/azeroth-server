@@ -40,31 +40,31 @@ bool GOHello_go_gong_of_bethekk(Player* pPlayer, GameObject* pGo)
 
 enum
 {
-    SAY_AGGRO                   = 10461,
-    SAY_FEAST_PANTHER           = 10472,
-    SAY_DEATH                   = 10450,
+    SAY_AGGRO = 10461,
+    SAY_FEAST_PANTHER = 10472,
+    SAY_DEATH = 10450,
 
-    SPELL_SHADOWWORDPAIN        = 24212, // Mot de l'ombre : douleur
-    SPELL_GOUGE                 = 12540, // Suriner
-    SPELL_MARK                  = 24210,
-    SPELL_CLEAVE                = 26350,                    //Perhaps not right. Not a red aura...
-    SPELL_PANTHER_TRANSFORM     = 24190,
-    SPELL_BACKSTAB              = 15582, // Attaque sournoise
-    SPELL_TOURBILLON            = 15589,
-    SPELL_ATTAQUE_MENTALE       = 15587,
-    SPELL_ROSSER                = 3391,
-    SPELL_RAVAGE                = 24213,
+    SPELL_SHADOWWORDPAIN = 24212, // Mot de l'ombre : douleur
+    SPELL_GOUGE = 12540, // Suriner
+    SPELL_MARK = 24210,
+    SPELL_CLEAVE = 26350, // Perhaps not right. Not a red aura...
+    SPELL_PANTHER_TRANSFORM = 24190,
+    SPELL_BACKSTAB = 15582, // Attaque sournoise
+    SPELL_TOURBILLON = 15589,
+    SPELL_ATTAQUE_MENTALE = 15587,
+    SPELL_ROSSER = 3391,
+    SPELL_RAVAGE = 24213,
 
-    MODEL_ID_NORMAL             = 15218,
-    MODEL_ID_PANTHER            = 15215,
-    MODEL_ID_BLANK              = 11686,
+    MODEL_ID_NORMAL = 15218,
+    MODEL_ID_PANTHER = 15215,
+    MODEL_ID_BLANK = 11686,
 
-    NPC_ZULIAN_PROWLER          = 15101,
-//    NPC_ARLOKK                  = 14515, // zulgurub.h
-    MAX_PANTHER_COUNT           = 30,
+    NPC_ZULIAN_PROWLER = 15101,
+    //    NPC_ARLOKK                  = 14515, // zulgurub.h
+    MAX_PANTHER_COUNT = 30,
 
-    GO_ARLOKK_FORCE_FIELD       = 180497,
-    GO_ARLOKK_GONG              = 180526
+    GO_ARLOKK_FORCE_FIELD = 180497,
+    GO_ARLOKK_GONG = 180526
 };
 
 /*
@@ -148,7 +148,7 @@ struct boss_arlokkAI : public ScriptedAI
             door->ResetDoorOrButton();
         if (GameObject* gong = m_creature->FindNearestGameObject(GO_ARLOKK_GONG, 100.0f))
             gong->Respawn();
-        //we should be summoned, so despawn
+        // we should be summoned, so despawn
         m_creature->ForcedDespawn();
     }
 
@@ -193,7 +193,7 @@ struct boss_arlokkAI : public ScriptedAI
                 return;
             }
         }
-        if (Unit *pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
+        if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
         {
             pSummoned->AI()->AttackStart(pTarget);
             ++m_uiSummonCount;
@@ -209,7 +209,7 @@ struct boss_arlokkAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        if (!m_bIsPhaseTwo && !m_bIsVanished) //P1
+        if (!m_bIsPhaseTwo && !m_bIsVanished) // P1
         {
             if (m_uiShadowWordPain_Timer < uiDiff)
             {
@@ -275,7 +275,7 @@ struct boss_arlokkAI : public ScriptedAI
             else
                 m_uiRavage_Timer -= uiDiff;
 
-            //Gouge_Timer
+            // Gouge_Timer
             if (m_uiGouge_Timer < uiDiff)
             {
                 if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_GOUGE) == CAST_OK)
@@ -315,7 +315,7 @@ struct boss_arlokkAI : public ScriptedAI
         // Troll -> Vanish
         if (m_uiVanish_Timer < uiDiff)
         {
-            //Invisble Model
+            // Invisble Model
             m_creature->RemoveAurasDueToSpell(SPELL_PANTHER_TRANSFORM);
             EnterVanish();
 
@@ -323,7 +323,7 @@ struct boss_arlokkAI : public ScriptedAI
 
             // Disparait entre 35 sec et 50 sec
             m_uiVisible_Timer = urand(35000, 50000);
-            m_uiVanish_Timer  = DISABLE_TIMER;
+            m_uiVanish_Timer = DISABLE_TIMER;
         }
         else
             m_uiVanish_Timer -= uiDiff;
@@ -384,9 +384,7 @@ struct mob_prowlerAI : public ScriptedAI
     uint32 m_uiThrash_Timer;
     uint32 m_uiUpdateTarget_Timer;
 
-    mob_prowlerAI(Creature* pCreature) : ScriptedAI(pCreature), m_uiArlokkGuid(0), m_uiThrash_Timer(0), m_uiUpdateTarget_Timer(0)
-    {
-    }
+    mob_prowlerAI(Creature* pCreature) : ScriptedAI(pCreature), m_uiArlokkGuid(0), m_uiThrash_Timer(0), m_uiUpdateTarget_Timer(0) {}
 
 
     boss_arlokkAI* GetArlokkAI()
@@ -417,7 +415,7 @@ struct mob_prowlerAI : public ScriptedAI
     {
         if (m_uiUpdateTarget_Timer <= uiDiff)
         {
-            Unit *pMarkedTarget = nullptr;
+            Unit* pMarkedTarget = nullptr;
             if (boss_arlokkAI* pArlokkAI = GetArlokkAI())
                 pMarkedTarget = m_creature->GetMap()->GetUnit(pArlokkAI->m_uiMarkedGUID);
             else
@@ -429,9 +427,9 @@ struct mob_prowlerAI : public ScriptedAI
                 DoModifyThreatPercent(m_creature->GetVictim(), -100);
             if (pMarkedTarget)
             {
-                
+
                 m_creature->AI()->AttackStart(pMarkedTarget);
-DoCast(m_creature, 22766);
+                DoCast(m_creature, 22766);
             }
             m_uiUpdateTarget_Timer = 2000;
         }
@@ -451,14 +449,8 @@ DoCast(m_creature, 22766);
     }
 };
 
-CreatureAI* GetAI_boss_arlokk(Creature* pCreature)
-{
-    return new boss_arlokkAI(pCreature);
-}
-CreatureAI* GetAI_mob_prowler(Creature* pCreature)
-{
-    return new mob_prowlerAI(pCreature);
-}
+CreatureAI* GetAI_boss_arlokk(Creature* pCreature) { return new boss_arlokkAI(pCreature); }
+CreatureAI* GetAI_mob_prowler(Creature* pCreature) { return new mob_prowlerAI(pCreature); }
 
 void AddSC_boss_arlokk()
 {

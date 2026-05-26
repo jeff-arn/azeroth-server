@@ -17,16 +17,16 @@
  */
 
 #include "Common.h"
-#include "WorldPacket.h"
-#include "Opcodes.h"
-#include "Log.h"
-#include "Player.h"
-#include "ObjectMgr.h"
-#include "WorldSession.h"
-#include "Object.h"
-#include "World.h"
 #include "Group.h"
 #include "LFGMgr.h"
+#include "Log.h"
+#include "Object.h"
+#include "ObjectMgr.h"
+#include "Opcodes.h"
+#include "Player.h"
+#include "World.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 void WorldSession::HandleMeetingStoneJoinOpcode(WorldPacket& recv_data)
 {
@@ -72,9 +72,9 @@ void WorldSession::HandleMeetingStoneJoinOpcode(WorldPacket& recv_data)
     }
 
 
-   GameObjectInfo const* gInfo = sObjectMgr.GetGameObjectTemplate(obj->GetEntry());
+    GameObjectInfo const* gInfo = sObjectMgr.GetGameObjectTemplate(obj->GetEntry());
 
-   sLFGMgr.AddToQueue(_player, gInfo->meetingstone.areaID);
+    sLFGMgr.AddToQueue(_player, gInfo->meetingstone.areaID);
 }
 
 void WorldSession::HandleMeetingStoneLeaveOpcode(WorldPacket& /*recv_data*/)
@@ -83,10 +83,7 @@ void WorldSession::HandleMeetingStoneLeaveOpcode(WorldPacket& /*recv_data*/)
     {
         if (grp->IsLeader(_player->GetObjectGuid()) && grp->IsInLFG())
         {
-            sWorld.GetLFGQueue().GetMessager().AddMessage([groupId = grp->GetId()](LFGQueue* queue)
-            {
-                queue->RemoveGroupFromQueue(groupId);
-            });
+            sWorld.GetLFGQueue().GetMessager().AddMessage([groupId = grp->GetId()](LFGQueue* queue) { queue->RemoveGroupFromQueue(groupId); });
         }
         else
         {
@@ -95,10 +92,7 @@ void WorldSession::HandleMeetingStoneLeaveOpcode(WorldPacket& /*recv_data*/)
     }
     else
     {
-        sWorld.GetLFGQueue().GetMessager().AddMessage([playerGuid = _player->GetObjectGuid()](LFGQueue* queue)
-        {
-            queue->RemovePlayerFromQueue(playerGuid);
-        });
+        sWorld.GetLFGQueue().GetMessager().AddMessage([playerGuid = _player->GetObjectGuid()](LFGQueue* queue) { queue->RemovePlayerFromQueue(playerGuid); });
     }
 }
 
@@ -120,10 +114,7 @@ void WorldSession::HandleMeetingStoneInfoOpcode(WorldPacket& /*recv_data*/)
         if (!_player || !_player->GetSession())
             return;
 
-        sWorld.GetLFGQueue().GetMessager().AddMessage([playerGuid = _player->GetObjectGuid()](LFGQueue* queue)
-        {
-            queue->RestoreOfflinePlayer(playerGuid);
-        });
+        sWorld.GetLFGQueue().GetMessager().AddMessage([playerGuid = _player->GetObjectGuid()](LFGQueue* queue) { queue->RestoreOfflinePlayer(playerGuid); });
     }
 }
 

@@ -29,15 +29,15 @@ class Player;
 
 class MapReference : public Reference<Map, Player>
 {
-    protected:
-        void targetObjectBuildLink() override;
-        void targetObjectDestroyLink() override;
-        void sourceObjectDestroyLink() override;
+protected:
+    void targetObjectBuildLink() override;
+    void targetObjectDestroyLink() override;
+    void sourceObjectDestroyLink() override;
 
-    public:
-        MapReference() : Reference<Map, Player>() {}
-        ~MapReference() override { unlink(); }
-        MapReference *next() { return (MapReference*)Reference<Map, Player>::next(); }
-        MapReference const* next() const { return (MapReference const*)Reference<Map, Player>::next(); }
+public:
+    MapReference() : Reference<Map, Player>() {}
+    ~MapReference() override { unlink(); }
+    MapReference* next() { return (MapReference*)Reference<Map, Player>::next(); }
+    MapReference const* next() const { return (MapReference const*)Reference<Map, Player>::next(); }
 };
 #endif

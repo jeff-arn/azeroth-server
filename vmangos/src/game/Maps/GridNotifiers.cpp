@@ -20,14 +20,14 @@
  */
 
 #include "GridNotifiers.h"
+#include "BattleGroundMgr.h"
+#include "Map.h"
+#include "ObjectAccessor.h"
+#include "PlayerBroadcaster.h"
+#include "Transport.h"
+#include "UpdateData.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "UpdateData.h"
-#include "Map.h"
-#include "Transport.h"
-#include "ObjectAccessor.h"
-#include "BattleGroundMgr.h"
-#include "PlayerBroadcaster.h"
 
 using namespace MaNGOS;
 
@@ -51,21 +51,21 @@ void VisibleNotifier::Notify()
                 i_clientGUIDs.erase(itr->GetObjectGuid());
                 switch (itr->GetTypeId())
                 {
-                    case TYPEID_GAMEOBJECT:
-                        player.UpdateVisibilityOf(&player, itr->ToGameObject(), i_data);
-                        break;
-                    case TYPEID_PLAYER:
-                        player.UpdateVisibilityOf(&player, itr->ToPlayer(), i_data);
-                        itr->ToPlayer()->UpdateVisibilityOf(itr, &player);
-                        break;
-                    case TYPEID_UNIT:
-                        player.UpdateVisibilityOf(&player, itr->ToCreature(), i_data);
-                        break;
-                    case TYPEID_DYNAMICOBJECT:
-                        player.UpdateVisibilityOf(&player, (DynamicObject*)itr, i_data);
-                        break;
-                    default:
-                        break;
+                case TYPEID_GAMEOBJECT:
+                    player.UpdateVisibilityOf(&player, itr->ToGameObject(), i_data);
+                    break;
+                case TYPEID_PLAYER:
+                    player.UpdateVisibilityOf(&player, itr->ToPlayer(), i_data);
+                    itr->ToPlayer()->UpdateVisibilityOf(itr, &player);
+                    break;
+                case TYPEID_UNIT:
+                    player.UpdateVisibilityOf(&player, itr->ToCreature(), i_data);
+                    break;
+                case TYPEID_DYNAMICOBJECT:
+                    player.UpdateVisibilityOf(&player, (DynamicObject*)itr, i_data);
+                    break;
+                default:
+                    break;
                 }
             }
         }
@@ -90,8 +90,7 @@ void VisibleNotifier::Notify()
 
         player.m_visibleGUIDs.erase(*itr);
 
-        DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "%s is out of range (no in active cells set) now for %s",
-                         itr->GetString().c_str(), player.GetGuidStr().c_str());
+        DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "%s is out of range (no in active cells set) now for %s", itr->GetString().c_str(), player.GetGuidStr().c_str());
     }
     lock.unlock();
 
@@ -157,9 +156,7 @@ void MessageDistDeliverer::Visit(CameraMapType& m)
     {
         Player* owner = iter.getSource()->GetOwner();
 
-        if ((i_toSelf || owner != &i_player) &&
-                (!i_ownTeamOnly || owner->GetTeam() == i_player.GetTeam()) &&
-                (!i_dist || iter.getSource()->GetBody()->IsWithinDist(&i_player, i_dist)))
+        if ((i_toSelf || owner != &i_player) && (!i_ownTeamOnly || owner->GetTeam() == i_player.GetTeam()) && (!i_dist || iter.getSource()->GetBody()->IsWithinDist(&i_player, i_dist)))
         {
             if (WorldSession* session = owner->GetSession())
                 session->SendPacket(i_message);
@@ -179,7 +176,7 @@ void ObjectMessageDistDeliverer::Visit(CameraMapType& m)
     }
 }
 
-template<class T>
+template <class T>
 void ObjectUpdater::Visit(GridRefManager<T>& m)
 {
     for (typename GridRefManager<T>::iterator iter = m.begin(); iter != m.end(); ++iter)

@@ -3,8 +3,8 @@
 
 #include <cinttypes>
 #if defined(WIN32)
-#include <string>
 #include <functional>
+#include <string>
 #include "../../Errors.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -37,10 +37,7 @@ namespace IO
             m_callback = nullptr;
         }
 
-        void OnComplete(DWORD errorCode)
-        {
-            m_callback(errorCode);
-        }
+        void OnComplete(DWORD errorCode) { m_callback(errorCode); }
 
         std::function<void(DWORD errorCode)> m_callback = nullptr;
     };
@@ -56,6 +53,6 @@ namespace IO
     };
     typedef SystemIoEventReceiver AsyncIoOperation;
 #endif
-}
+} // namespace IO
 
-#endif //MANGOS_IO_IOOPERATION_H
+#endif // MANGOS_IO_IOOPERATION_H

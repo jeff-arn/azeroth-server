@@ -23,7 +23,7 @@ struct PaladinHammerOfWrathScript : SpellScript
     {
         if (effIdx == EFFECT_INDEX_0 && spell->GetUnitTarget())
         {
-            spell->m_attackType = BASE_ATTACK;    // Set as base attack to benefit from melee crit
+            spell->m_attackType = BASE_ATTACK; // Set as base attack to benefit from melee crit
             spell->damage = spell->m_caster->SpellDamageBonusDone(spell->GetUnitTarget(), spell->m_spellInfo, effIdx, spell->damage, SPELL_DIRECT_DAMAGE);
             spell->damage = spell->GetUnitTarget()->SpellDamageBonusTaken(spell->m_caster, spell->m_spellInfo, effIdx, spell->damage, SPELL_DIRECT_DAMAGE);
         }
@@ -31,10 +31,7 @@ struct PaladinHammerOfWrathScript : SpellScript
     }
 };
 
-SpellScript* GetScript_PaladinHammerOfWrath(SpellEntry const*)
-{
-    return new PaladinHammerOfWrathScript();
-}
+SpellScript* GetScript_PaladinHammerOfWrath(SpellEntry const*) { return new PaladinHammerOfWrathScript(); }
 
 // 20467, 20963, 20964, 20965, 20966 - Judgement of Command
 struct PaladinJudgementOfCommandDamageScript : SpellScript
@@ -54,10 +51,7 @@ struct PaladinJudgementOfCommandDamageScript : SpellScript
     }
 };
 
-SpellScript* GetScript_PaladinJudgementOfCommandDamage(SpellEntry const*)
-{
-    return new PaladinJudgementOfCommandDamageScript();
-}
+SpellScript* GetScript_PaladinJudgementOfCommandDamage(SpellEntry const*) { return new PaladinJudgementOfCommandDamageScript(); }
 
 // 20425, 20961, 20962, 20967, 20968 - Judgement of Command
 struct PaladinJudgementOfCommandDummyScript : SpellScript
@@ -77,19 +71,14 @@ struct PaladinJudgementOfCommandDummyScript : SpellScript
     }
 };
 
-SpellScript* GetScript_PaladinJudgementOfCommandDummy(SpellEntry const*)
-{
-    return new PaladinJudgementOfCommandDummyScript();
-}
+SpellScript* GetScript_PaladinJudgementOfCommandDummy(SpellEntry const*) { return new PaladinJudgementOfCommandDummyScript(); }
 
 // 20473, 20929, 20930 - Holy Shock
 struct PaladinHolyShockScript : SpellScript
 {
     SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const final
     {
-        if (spell->m_targets.getUnitTarget() &&
-            !spell->m_caster->IsFriendlyTo(spell->m_targets.getUnitTarget()) &&
-            !spell->m_caster->IsFacingTarget(spell->m_targets.getUnitTarget()))
+        if (spell->m_targets.getUnitTarget() && !spell->m_caster->IsFriendlyTo(spell->m_targets.getUnitTarget()) && !spell->m_caster->IsFacingTarget(spell->m_targets.getUnitTarget()))
             return SPELL_FAILED_UNIT_NOT_INFRONT;
 
         return SPELL_CAST_OK;
@@ -104,21 +93,21 @@ struct PaladinHolyShockScript : SpellScript
 
             switch (spell->m_spellInfo->Id)
             {
-                case 20473:
-                    hurt = 25912;
-                    heal = 25914;
-                    break;
-                case 20929:
-                    hurt = 25911;
-                    heal = 25913;
-                    break;
-                case 20930:
-                    hurt = 25902;
-                    heal = 25903;
-                    break;
-                default:
-                    sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Spell::EffectDummy: Spell %u not handled in HS", spell->m_spellInfo->Id);
-                    return false;
+            case 20473:
+                hurt = 25912;
+                heal = 25914;
+                break;
+            case 20929:
+                hurt = 25911;
+                heal = 25913;
+                break;
+            case 20930:
+                hurt = 25902;
+                heal = 25903;
+                break;
+            default:
+                sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Spell::EffectDummy: Spell %u not handled in HS", spell->m_spellInfo->Id);
+                return false;
             }
 
             if (spell->m_caster->IsFriendlyTo(spell->GetUnitTarget()))
@@ -130,10 +119,7 @@ struct PaladinHolyShockScript : SpellScript
     }
 };
 
-SpellScript* GetScript_PaladinHolyShock(SpellEntry const*)
-{
-    return new PaladinHolyShockScript();
-}
+SpellScript* GetScript_PaladinHolyShock(SpellEntry const*) { return new PaladinHolyShockScript(); }
 
 // 20185, 20344, 20345, 20346, 25751 - Judgement of Light
 struct PaladinJudgementOfLightProcAuraScript : SpellScript
@@ -150,10 +136,7 @@ struct PaladinJudgementOfLightProcAuraScript : SpellScript
     }
 };
 
-SpellScript* GetScript_PaladinJudgementOfLightProcAura(SpellEntry const*)
-{
-    return new PaladinJudgementOfLightProcAuraScript();
-}
+SpellScript* GetScript_PaladinJudgementOfLightProcAura(SpellEntry const*) { return new PaladinJudgementOfLightProcAuraScript(); }
 
 // 20267, 20341, 20342, 20343 - Judgement of Light
 struct PaladinJudgementOfLightHealScript : SpellScript
@@ -170,10 +153,7 @@ struct PaladinJudgementOfLightHealScript : SpellScript
     }
 };
 
-SpellScript* GetScript_PaladinJudgementOfLightHeal(SpellEntry const*)
-{
-    return new PaladinJudgementOfLightHealScript();
-}
+SpellScript* GetScript_PaladinJudgementOfLightHeal(SpellEntry const*) { return new PaladinJudgementOfLightHealScript(); }
 
 // 20178 - Reckoning
 struct PaladinReckoningScript : SpellScript
@@ -203,10 +183,7 @@ struct PaladinReckoningScript : SpellScript
     }
 };
 
-SpellScript* GetScript_PaladinReckoning(SpellEntry const*)
-{
-    return new PaladinReckoningScript();
-}
+SpellScript* GetScript_PaladinReckoning(SpellEntry const*) { return new PaladinReckoningScript(); }
 
 enum
 {
@@ -225,10 +202,7 @@ struct PaladinBubbleScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_PaladinBubble(SpellEntry const*)
-{
-    return new PaladinBubbleScript();
-}
+SpellScript* GetScript_PaladinBubble(SpellEntry const*) { return new PaladinBubbleScript(); }
 
 void AddSC_paladin_spell_scripts()
 {

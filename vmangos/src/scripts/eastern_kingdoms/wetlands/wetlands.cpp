@@ -41,7 +41,7 @@ enum
     SAY_PROGRESS_3_TAP = 1743, // Okay, okay! No need to get all violent. I'll talk. I'll talk!
     SAY_PROGRESS_4_TAP = 1744, // I have a few notes from the job back at my place. I'll get them and then meet you back in the inn.
     SAY_PROGRESS_5_MIC = 4169, // I'm glad the commotions died down some around here. The last thing this place needs is another brawl.
-    // quest id
+                               // quest id
     QUEST_MISSING_DIPLOMAT_PART11 = 1249,
     // factions
     FACTION_FRIENDLY = 11, // taken from DB
@@ -53,11 +53,11 @@ enum
     SPELL_STEALTH = 6634, // used during escape from the inn.
     SPELL_CALL_FRIENDS = 16457, // summons 1x friend
     SPELL_PUMMEL = 12555, // used to interrupt enemy spells.
-    // spells used by Slim's Friend
+                          // spells used by Slim's Friend
     SPELL_SLOWING_POISON = 7992,
     SPELL_POISON_PROC = 3616, // Aura used on spawn, which procs spell id:744.
-    SPELL_BACKSTAB = 15582,//15657, // or 15582? not sure which one.
-    // NPC ids
+    SPELL_BACKSTAB = 15582, // 15657, // or 15582? not sure which one.
+                            //  NPC ids
     NPC_MIKHAIL = 4963, // Quest giver, starts an event
     NPC_SLIMS_FRIEND = 4971, // NPC that helps Tapoke Slim
     NPC_TAPOKE_SLIM_JAHN = 4962,
@@ -70,10 +70,7 @@ enum
 class npc_slims_friendAI : public ScriptedAI
 {
 public:
-    npc_slims_friendAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_slims_friendAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     void Reset() override
     {
@@ -162,10 +159,7 @@ private:
     uint32 m_backstabTimer;
 };
 
-CreatureAI* GetAI_npc_slims_friend(Creature* pCreature)
-{
-    return new npc_slims_friendAI(pCreature);
-}
+CreatureAI* GetAI_npc_slims_friend(Creature* pCreature) { return new npc_slims_friendAI(pCreature); }
 //-----------------------------------------------------------------------------
 // Tapoke "Slim: Jahn AI
 struct npc_tapoke_slim_jahnAI : public npc_escortAI
@@ -235,14 +229,14 @@ struct npc_tapoke_slim_jahnAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case WAYPOINT_MAILBOX:
+        case WAYPOINT_MAILBOX:
             {
                 SetRun();
                 // change faction, which makes him attackable.
                 m_creature->SetFactionTemplateId(FACTION_NEUTRAL);
             }
             break;
-            case WAYPOINT_GATE:
+        case WAYPOINT_GATE:
             {
                 // set quest failed if tapoke slim escaped
                 Player* player = GetPlayerForEscort();
@@ -258,7 +252,7 @@ struct npc_tapoke_slim_jahnAI : public npc_escortAI
     void Aggro(Unit* pWho) override
     {
         // This function is also called when Tapoke Slim Jahn has been defeated!
-        if (Pet *slimsFriend = m_creature->FindGuardianWithEntry(NPC_SLIMS_FRIEND))
+        if (Pet* slimsFriend = m_creature->FindGuardianWithEntry(NPC_SLIMS_FRIEND))
             return;
 
         // calls a friend
@@ -290,7 +284,7 @@ struct npc_tapoke_slim_jahnAI : public npc_escortAI
             {
                 switch (m_mdDialogPhase)
                 {
-                    case 0:
+                case 0:
                     {
                         // Set Tapoke Tapoke Slim Jahn and his friend facing to player character.
                         // An better option can be to move this to DamageTaken(), but it will not work.
@@ -299,8 +293,8 @@ struct npc_tapoke_slim_jahnAI : public npc_escortAI
                         if (player)
                         {
                             m_creature->SetFacingToObject(player);
-                    
-                            if (Pet *slimsFriend = m_creature->FindGuardianWithEntry(NPC_SLIMS_FRIEND))
+
+                            if (Pet* slimsFriend = m_creature->FindGuardianWithEntry(NPC_SLIMS_FRIEND))
                             {
                                 if (slimsFriend->IsAlive())
                                     slimsFriend->SetFacingToObject(player);
@@ -309,7 +303,7 @@ struct npc_tapoke_slim_jahnAI : public npc_escortAI
                         m_nextPhaseDelay = 2000;
                     }
                     break;
-                    case 1: // Say_0
+                case 1: // Say_0
                     {
                         // despawn Slims friend
                         DespawnFriendIfExists();
@@ -319,14 +313,14 @@ struct npc_tapoke_slim_jahnAI : public npc_escortAI
                         m_nextPhaseDelay = 4000;
                     }
                     break;
-                    case 2: // Say_1
+                case 2: // Say_1
                     {
                         m_creature->HandleEmote(EMOTE_ONESHOT_TALK);
                         DoScriptText(SAY_PROGRESS_4_TAP, m_creature);
                         m_nextPhaseDelay = 6000;
                     }
                     break;
-                    case 3: // The End
+                case 3: // The End
                     {
                         Player* player = GetPlayerForEscort();
                         if (player)
@@ -416,10 +410,7 @@ struct npc_tapoke_slim_jahnAI : public npc_escortAI
     }
 };
 
-CreatureAI* GetAI_npc_tapoke_slim_jahn(Creature* pCreature)
-{
-    return new npc_tapoke_slim_jahnAI(pCreature);
-}
+CreatureAI* GetAI_npc_tapoke_slim_jahn(Creature* pCreature) { return new npc_tapoke_slim_jahnAI(pCreature); }
 
 //-----------------------------------------------------------------------------
 // Mikhail gossip scripts

@@ -33,7 +33,7 @@ EndContentData */
 
 struct mob_yennikuAI : public ScriptedAI
 {
-    mob_yennikuAI(Creature *c) : ScriptedAI(c)
+    mob_yennikuAI(Creature* c) : ScriptedAI(c)
     {
         bReset = false;
         Reset();
@@ -52,13 +52,13 @@ struct mob_yennikuAI : public ScriptedAI
     {
         if (caster->GetTypeId() == TYPEID_PLAYER)
         {
-            //Yenniku's Release
+            // Yenniku's Release
             if (!bReset && ((Player*)caster)->GetQuestStatus(592) == QUEST_STATUS_INCOMPLETE && spell->Id == 3607)
             {
                 m_creature->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_STATE_STUN);
-                m_creature->CombatStop();                   //stop combat
-                m_creature->DeleteThreatList();             //unsure of this
-                m_creature->SetFactionTemplateId(83);                 //horde generic
+                m_creature->CombatStop(); // stop combat
+                m_creature->DeleteThreatList(); // unsure of this
+                m_creature->SetFactionTemplateId(83); // horde generic
 
                 bReset = true;
                 Reset_Timer = 60000;
@@ -66,7 +66,7 @@ struct mob_yennikuAI : public ScriptedAI
         }
     }
 
-    void Aggro(Unit *who) override { }
+    void Aggro(Unit* who) override {}
 
     void UpdateAI(uint32 const diff) override
     {
@@ -76,13 +76,13 @@ struct mob_yennikuAI : public ScriptedAI
             {
                 EnterEvadeMode();
                 bReset = false;
-                m_creature->SetFactionTemplateId(28);                     //troll, bloodscalp
+                m_creature->SetFactionTemplateId(28); // troll, bloodscalp
             }
             else
                 Reset_Timer -= diff;
         }
 
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
@@ -90,24 +90,15 @@ struct mob_yennikuAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_mob_yenniku(Creature *_Creature)
-{
-    return new mob_yennikuAI(_Creature);
-}
+CreatureAI* GetAI_mob_yenniku(Creature* _Creature) { return new mob_yennikuAI(_Creature); }
 
 struct mob_assistant_kryll : public ScriptedAI
 {
-    mob_assistant_kryll(Creature *c) : ScriptedAI(c)
-    {
-        Reset();
-    }
+    mob_assistant_kryll(Creature* c) : ScriptedAI(c) { Reset(); }
 
-    uint32 Speach_Timer;    
+    uint32 Speach_Timer;
 
-    void Reset() override
-    {
-        Speach_Timer = 360000;
-    }
+    void Reset() override { Speach_Timer = 360000; }
 
     void UpdateAI(uint32 const diff) override
     {
@@ -115,47 +106,41 @@ struct mob_assistant_kryll : public ScriptedAI
         {
             switch (urand(0, 2))
             {
-                case 0:
-                    m_creature->MonsterSay("Psst... go to Booty Bay, Kryll needs hands...");
-                    break;
-                case 1:
-                    m_creature->MonsterSay("Kryll needs your help in Booty Bay!");
-                    break;
-                case 2:
-                    m_creature->MonsterSay("Kryll's invention may drastically change your life... Help him in Booty Bay!");
-                    break;
+            case 0:
+                m_creature->MonsterSay("Psst... go to Booty Bay, Kryll needs hands...");
+                break;
+            case 1:
+                m_creature->MonsterSay("Kryll needs your help in Booty Bay!");
+                break;
+            case 2:
+                m_creature->MonsterSay("Kryll's invention may drastically change your life... Help him in Booty Bay!");
+                break;
             }
-            Speach_Timer = urand(15, 40)*60*1000;
+            Speach_Timer = urand(15, 40) * 60 * 1000;
         }
         else
             Speach_Timer -= diff;
     }
 };
 
-CreatureAI* GetAI_mob_assistant_kryll(Creature *_Creature)
-{
-    return new mob_assistant_kryll(_Creature);
-}
+CreatureAI* GetAI_mob_assistant_kryll(Creature* _Creature) { return new mob_assistant_kryll(_Creature); }
 
-struct go_transpolyporterAI: public GameObjectAI
+struct go_transpolyporterAI : public GameObjectAI
 {
-    go_transpolyporterAI(GameObject* pGo) : GameObjectAI(pGo) { }
+    go_transpolyporterAI(GameObject* pGo) : GameObjectAI(pGo) {}
 
     bool OnUse(Unit* user) override
     {
         if (user && user->IsPlayer())
         {
-            if (((Player*) user)->HasItemCount(9173, 1, false))
+            if (((Player*)user)->HasItemCount(9173, 1, false))
                 return false;
         }
         return true;
     }
 };
 
-GameObjectAI* GetAIgo_transpolyporter(GameObject *pGo)
-{
-    return new go_transpolyporterAI(pGo);
-}
+GameObjectAI* GetAIgo_transpolyporter(GameObject* pGo) { return new go_transpolyporterAI(pGo); }
 
 /*######
 ## npc_pats_hellfire_guy
@@ -168,17 +153,11 @@ enum PatsHellfireGuyData
 
 struct npc_pats_hellfire_guyAI : public ScriptedAI
 {
-    npc_pats_hellfire_guyAI(Creature *pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_pats_hellfire_guyAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiCastDelay;
 
-    void Reset() override
-    {
-        m_uiCastDelay = 2000;
-    }
+    void Reset() override { m_uiCastDelay = 2000; }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -195,10 +174,7 @@ struct npc_pats_hellfire_guyAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_pats_hellfire_guy(Creature *pCreature)
-{
-    return new npc_pats_hellfire_guyAI(pCreature);
-}
+CreatureAI* GetAI_npc_pats_hellfire_guy(Creature* pCreature) { return new npc_pats_hellfire_guyAI(pCreature); }
 
 /*
  * Witch Doctor Unbagwa
@@ -206,19 +182,16 @@ CreatureAI* GetAI_npc_pats_hellfire_guy(Creature *pCreature)
 
 enum WitchDoctorUnbagwaData
 {
-    NPC_ENRAGED_SILVERBACK_GORILLA  = 1511,
-    NPC_KONDA                       = 1516,
-    NPC_MOKK_THE_SAVAGE             = 1514,
+    NPC_ENRAGED_SILVERBACK_GORILLA = 1511,
+    NPC_KONDA = 1516,
+    NPC_MOKK_THE_SAVAGE = 1514,
 
-    QUEST_STRANHLETHORN_FEVER       = 349,
+    QUEST_STRANHLETHORN_FEVER = 349,
 
-    MAX_WAVE_COUNT                  = 3
+    MAX_WAVE_COUNT = 3
 };
 
-float const ApesSummon[4] =
-{
-    -13773.6231f, -3.8856f, 41.5641f, 5.7f
-};
+float const ApesSummon[4] = {-13773.6231f, -3.8856f, 41.5641f, 5.7f};
 
 struct npc_witch_doctor_unbagwaAI : ScriptedAI
 {
@@ -234,7 +207,7 @@ struct npc_witch_doctor_unbagwaAI : ScriptedAI
     bool m_bStartEvent;
     bool m_bResetEvent;
 
-    void Reset() override { }
+    void Reset() override {}
 
     void ResetCreature() override
     {
@@ -256,7 +229,7 @@ struct npc_witch_doctor_unbagwaAI : ScriptedAI
 
         if (m_uiAttackersCount > 0)
             --m_uiAttackersCount;
-        
+
         if (!m_uiAttackersCount)
             ResetCreature();
     }
@@ -269,7 +242,7 @@ struct npc_witch_doctor_unbagwaAI : ScriptedAI
         if (m_uiAttackersCount > 0)
             --m_uiAttackersCount;
 
-        if (!m_uiAttackersCount && (m_bResetEvent || m_uiWaveCount > MAX_WAVE_COUNT))         
+        if (!m_uiAttackersCount && (m_bResetEvent || m_uiWaveCount > MAX_WAVE_COUNT))
             ResetCreature();
     }
 
@@ -300,9 +273,15 @@ struct npc_witch_doctor_unbagwaAI : ScriptedAI
                 {
                     switch (m_uiWaveCount)
                     {
-                        case 1: m_uiAttackersCount = 3; break;
-                        case 2: m_uiAttackersCount = 5; break;
-                        case 3: m_uiAttackersCount = 6; break;
+                    case 1:
+                        m_uiAttackersCount = 3;
+                        break;
+                    case 2:
+                        m_uiAttackersCount = 5;
+                        break;
+                    case 3:
+                        m_uiAttackersCount = 6;
+                        break;
                     }
 
                     uint32 uiAttackersEntry = NPC_ENRAGED_SILVERBACK_GORILLA;
@@ -312,16 +291,15 @@ struct npc_witch_doctor_unbagwaAI : ScriptedAI
                         {
                             switch (m_uiWaveCount)
                             {
-                            case 2: uiAttackersEntry = NPC_KONDA; break;
-                            case 3: uiAttackersEntry = NPC_MOKK_THE_SAVAGE; break;
+                            case 2:
+                                uiAttackersEntry = NPC_KONDA;
+                                break;
+                            case 3:
+                                uiAttackersEntry = NPC_MOKK_THE_SAVAGE;
+                                break;
                             }
                         }
-                        m_creature->SummonCreature(uiAttackersEntry,
-                            ApesSummon[0] + frand(-3, 3),
-                            ApesSummon[1] + frand(-3, 3),
-                            ApesSummon[2],
-                            ApesSummon[3],
-                            TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 3 * MINUTE * IN_MILLISECONDS);
+                        m_creature->SummonCreature(uiAttackersEntry, ApesSummon[0] + frand(-3, 3), ApesSummon[1] + frand(-3, 3), ApesSummon[2], ApesSummon[3], TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 3 * MINUTE * IN_MILLISECONDS);
                     }
 
                     m_uiMobWaveTimer = 10000;
@@ -350,10 +328,7 @@ bool QuestRewarded_npc_witch_doctor_unbagwa(Player* /*pPlayer*/, Creature* pCrea
     return true;
 }
 
-CreatureAI* GetAI_npc_witch_doctor_unbagwa(Creature* pCreature)
-{
-    return new npc_witch_doctor_unbagwaAI(pCreature);
-}
+CreatureAI* GetAI_npc_witch_doctor_unbagwa(Creature* pCreature) { return new npc_witch_doctor_unbagwaAI(pCreature); }
 
 void AddSC_stranglethorn_vale()
 {
@@ -372,7 +347,7 @@ void AddSC_stranglethorn_vale()
     newscript = new Script;
     newscript->Name = "go_transpolyporter";
     newscript->GOGetAI = &GetAIgo_transpolyporter;
-    //newscript->pGOHello = &GOHello_go_transpolyporter;
+    // newscript->pGOHello = &GOHello_go_transpolyporter;
     newscript->RegisterSelf();
 
     newscript = new Script;

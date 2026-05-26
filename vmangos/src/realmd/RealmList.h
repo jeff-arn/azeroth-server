@@ -27,8 +27,8 @@
 #define _REALMLIST_H
 
 #include "Common.h"
-#include "RealmZone.h"
 #include "IO/Networking/IpAddress.h"
+#include "RealmZone.h"
 
 #include <array>
 
@@ -41,7 +41,7 @@ struct RealmBuildInfo
     uint16 build = 0;
     std::string os;
     std::string platform;
-    std::array<uint8, 20> integrityHash = { };
+    std::array<uint8, 20> integrityHash = {};
 };
 
 RealmBuildInfo const* FindBuildInfo(uint16 build);
@@ -57,14 +57,14 @@ struct Realm
     uint32 id = 0;
     IO::Networking::IpEndpoint externalAddress;
     IO::Networking::IpEndpoint localAddress;
-    uint8 localSubnetMaskCidr = 0;                          // only valid if localAddress is IPv4
+    uint8 localSubnetMaskCidr = 0; // only valid if localAddress is IPv4
     uint8 icon = 0;
     RealmFlags realmFlags = REALM_FLAG_NONE;
     uint8 timeZone = 0;
-    AccountTypes allowedSecurityLevel = SEC_PLAYER;         // required security level to join (shows as locked for other accounts)
+    AccountTypes allowedSecurityLevel = SEC_PLAYER; // required security level to join (shows as locked for other accounts)
     float populationLevel = 0.0f;
-    RealmBuilds realmBuilds;                                // list of supported builds (updated in DB by mangosd)
-    RealmBuildInfo realmBuildInfo;                          // build info for showing version in list
+    RealmBuilds realmBuilds; // list of supported builds (updated in DB by mangosd)
+    RealmBuildInfo realmBuildInfo; // build info for showing version in list
 
     IO::Networking::IpEndpoint GetAddressForClient(IO::Networking::IpAddress const& clientAddr) const;
 };
@@ -72,41 +72,31 @@ struct Realm
 // Storage object for the list of realms on the server
 class RealmList
 {
-    public:
-        typedef std::map<std::string, Realm> RealmMap;
+public:
+    typedef std::map<std::string, Realm> RealmMap;
 
-        static RealmList& Instance();
+    static RealmList& Instance();
 
-        RealmList();
-        ~RealmList() {}
+    RealmList();
+    ~RealmList() {}
 
-        void Initialize(uint32 updateInterval);
+    void Initialize(uint32 updateInterval);
 
-        void UpdateIfNeed();
+    void UpdateIfNeed();
 
-        RealmMap::const_iterator begin() const { return m_realms.begin(); }
-        RealmMap::const_iterator end() const { return m_realms.end(); }
-        uint32 size() const { return m_realms.size(); }
-    private:
-        void UpdateRealms(bool init);
-        void UpdateRealm(
-                uint32 realmId,
-                std::string const& name,
-                IO::Networking::IpAddress const& externalIpAddress,
-                IO::Networking::IpAddress const& localIpAddress,
-                uint8 localSubnetMaskCidr,
-                uint16 port,
-                uint8 icon,
-                RealmFlags realmFlags,
-                uint8 timeZone,
-                AccountTypes allowedSecurityLevel,
-                float population,
-                std::string const& builds);
-        void LoadAllowedClients();
-    private:
-        RealmMap m_realms;                                  // Internal map of realms
-        uint32   m_UpdateInterval;
-        time_t   m_NextUpdateTime;
+    RealmMap::const_iterator begin() const { return m_realms.begin(); }
+    RealmMap::const_iterator end() const { return m_realms.end(); }
+    uint32 size() const { return m_realms.size(); }
+
+private:
+    void UpdateRealms(bool init);
+    void UpdateRealm(uint32 realmId, std::string const& name, IO::Networking::IpAddress const& externalIpAddress, IO::Networking::IpAddress const& localIpAddress, uint8 localSubnetMaskCidr, uint16 port, uint8 icon, RealmFlags realmFlags, uint8 timeZone, AccountTypes allowedSecurityLevel, float population, std::string const& builds);
+    void LoadAllowedClients();
+
+private:
+    RealmMap m_realms; // Internal map of realms
+    uint32 m_UpdateInterval;
+    time_t m_NextUpdateTime;
 };
 
 #define sRealmList RealmList::Instance()

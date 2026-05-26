@@ -22,37 +22,37 @@
 #ifndef _PLAYER_DUMP_H
 #define _PLAYER_DUMP_H
 
-#include <string>
 #include <map>
 #include <set>
+#include <string>
 
 enum DumpTableType
 {
-    DTT_CHARACTER,      //    -> guid, name                 // characters
+    DTT_CHARACTER, //    -> guid, name                 // characters
 
-    DTT_CHAR_TABLE,     //                                  // character_action, character_aura, character_homebind,
-                                                            // character_queststatus, character_reputation,
-                                                            // character_spell, character_spell_cooldown,
-                                                            // character_tutorial
+    DTT_CHAR_TABLE, //                                  // character_action, character_aura, character_homebind,
+                    // character_queststatus, character_reputation,
+                    // character_spell, character_spell_cooldown,
+                    // character_tutorial
 
-    DTT_INVENTORY,      //    -> item guids collection      // character_inventory
+    DTT_INVENTORY, //    -> item guids collection      // character_inventory
 
-    DTT_MAIL,           //    -> mail ids collection        // mail
-                        //    -> item_text
+    DTT_MAIL, //    -> mail ids collection        // mail
+              //    -> item_text
 
-    DTT_MAIL_ITEM,      // <- mail ids                      // mail_items
-                        //    -> item guids collection
+    DTT_MAIL_ITEM, // <- mail ids                      // mail_items
+                   //    -> item guids collection
 
-    DTT_ITEM,           // <- item guids                    // item_instance
-                        //    -> item_text
+    DTT_ITEM, // <- item guids                    // item_instance
+              //    -> item_text
 
-    DTT_ITEM_GIFT,      // <- item guids                    // character_gifts
+    DTT_ITEM_GIFT, // <- item guids                    // character_gifts
 
-    DTT_ITEM_LOOT,      // <- item guids                    // item_loot
+    DTT_ITEM_LOOT, // <- item guids                    // item_loot
 
-    DTT_PET,            //    -> pet guids collection       // character_pet
-    DTT_PET_TABLE,      // <- pet guids                     // pet_aura, pet_spell, pet_spell_cooldown
-    DTT_ITEM_TEXT,      // <- item_text                     // item_text
+    DTT_PET, //    -> pet guids collection       // character_pet
+    DTT_PET_TABLE, // <- pet guids                     // pet_aura, pet_spell, pet_spell_cooldown
+    DTT_ITEM_TEXT, // <- item_text                     // item_text
 };
 
 enum DumpReturn
@@ -66,36 +66,37 @@ enum DumpReturn
 
 class PlayerDump
 {
-    protected:
-        PlayerDump() {}
+protected:
+    PlayerDump() {}
 };
 
 class PlayerDumpWriter : public PlayerDump
 {
-    public:
-        PlayerDumpWriter() {}
+public:
+    PlayerDumpWriter() {}
 
-        std::string GetDump(uint32 guid);
-        DumpReturn WriteDump(std::string const& file, uint32 guid);
-    private:
-        typedef std::set<uint32> GUIDs;
+    std::string GetDump(uint32 guid);
+    DumpReturn WriteDump(std::string const& file, uint32 guid);
 
-        void DumpTableContent(std::string& dump, uint32 guid, char const*tableFrom, char const*tableTo, DumpTableType type);
-        std::string GenerateWhereStr(char const* field, GUIDs const& guids, GUIDs::const_iterator& itr);
-        std::string GenerateWhereStr(char const* field, uint32 guid);
+private:
+    typedef std::set<uint32> GUIDs;
 
-        GUIDs pets;
-        GUIDs mails;
-        GUIDs items;
-        GUIDs texts;
+    void DumpTableContent(std::string& dump, uint32 guid, char const* tableFrom, char const* tableTo, DumpTableType type);
+    std::string GenerateWhereStr(char const* field, GUIDs const& guids, GUIDs::const_iterator& itr);
+    std::string GenerateWhereStr(char const* field, uint32 guid);
+
+    GUIDs pets;
+    GUIDs mails;
+    GUIDs items;
+    GUIDs texts;
 };
 
 class PlayerDumpReader : public PlayerDump
 {
-    public:
-        PlayerDumpReader() {}
+public:
+    PlayerDumpReader() {}
 
-        DumpReturn LoadDump(std::string const& file, uint32 account, std::string name, uint32 guid);
+    DumpReturn LoadDump(std::string const& file, uint32 account, std::string name, uint32 guid);
 };
 
 #endif

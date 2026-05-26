@@ -48,26 +48,18 @@ struct CellArea
 
 struct Cell
 {
-    Cell() : data() { };
+    Cell() : data(){};
     explicit Cell(CellPair const& p);
 
     void Compute(uint32& x, uint32& y) const
     {
-        x = data.Part.grid_x*MAX_NUMBER_OF_CELLS + data.Part.cell_x;
-        y = data.Part.grid_y*MAX_NUMBER_OF_CELLS + data.Part.cell_y;
+        x = data.Part.grid_x * MAX_NUMBER_OF_CELLS + data.Part.cell_x;
+        y = data.Part.grid_y * MAX_NUMBER_OF_CELLS + data.Part.cell_y;
     }
 
-    bool DiffCell(Cell const& cell) const
-    {
-        return (data.Part.cell_x != cell.data.Part.cell_x ||
-                data.Part.cell_y != cell.data.Part.cell_y);
-    }
+    bool DiffCell(Cell const& cell) const { return (data.Part.cell_x != cell.data.Part.cell_x || data.Part.cell_y != cell.data.Part.cell_y); }
 
-    bool DiffGrid(Cell const& cell) const
-    {
-        return (data.Part.grid_x != cell.data.Part.grid_x ||
-                data.Part.grid_y != cell.data.Part.grid_y);
-    }
+    bool DiffGrid(Cell const& cell) const { return (data.Part.grid_x != cell.data.Part.grid_x || data.Part.grid_y != cell.data.Part.grid_y); }
 
     uint32 CellX() const { return data.Part.cell_x; }
     uint32 CellY() const { return data.Part.cell_y; }
@@ -76,14 +68,9 @@ struct Cell
     bool NoCreate() const { return data.Part.nocreate; }
     void SetNoCreate() { data.Part.nocreate = 1; }
 
-    GridPair gridPair() const { return GridPair(GridX(),GridY()); }
+    GridPair gridPair() const { return GridPair(GridX(), GridY()); }
 
-    CellPair cellPair() const
-    {
-        return CellPair(
-            data.Part.grid_x*MAX_NUMBER_OF_CELLS+data.Part.cell_x,
-            data.Part.grid_y*MAX_NUMBER_OF_CELLS+data.Part.cell_y);
-    }
+    CellPair cellPair() const { return CellPair(data.Part.grid_x * MAX_NUMBER_OF_CELLS + data.Part.cell_x, data.Part.grid_y * MAX_NUMBER_OF_CELLS + data.Part.cell_y); }
 
     bool operator==(Cell const& cell) const { return (data.All == cell.data.All); }
     bool operator!=(Cell const& cell) const { return !operator==(cell); }
@@ -91,30 +78,39 @@ struct Cell
     {
         struct
         {
-            uint8  grid_x : 8;
-            uint8  grid_y : 8;
-            uint8  cell_x : 8;
-            uint8  cell_y : 8;
-            uint8  nocreate : 8;
+            uint8 grid_x : 8;
+            uint8 grid_y : 8;
+            uint8 cell_x : 8;
+            uint8 cell_y : 8;
+            uint8 nocreate : 8;
         } Part;
         uint64 All;
     } data;
 
-    template<class T, class CONTAINER> void Visit(CellPair const& cellPair, TypeContainerVisitor<T, CONTAINER>& visitor, Map& m, float x, float y, float radius) const;
-    template<class T, class CONTAINER> void Visit(CellPair const& cellPair, TypeContainerVisitor<T, CONTAINER>& visitor, Map& m, WorldObject const& obj, float radius) const;
+    template <class T, class CONTAINER>
+    void Visit(CellPair const& cellPair, TypeContainerVisitor<T, CONTAINER>& visitor, Map& m, float x, float y, float radius) const;
+    template <class T, class CONTAINER>
+    void Visit(CellPair const& cellPair, TypeContainerVisitor<T, CONTAINER>& visitor, Map& m, WorldObject const& obj, float radius) const;
 
     static CellArea CalculateCellArea(float x, float y, float radius);
 
-    template<class T> static void VisitGridObjects(WorldObject const* obj, T &visitor, float radius, bool dont_load = true);
-    template<class T> static void VisitWorldObjects(WorldObject const* obj, T &visitor, float radius, bool dont_load = true);
-    template<class T> static void VisitAllObjects(WorldObject const* obj, T &visitor, float radius, bool dont_load = true);
+    template <class T>
+    static void VisitGridObjects(WorldObject const* obj, T& visitor, float radius, bool dont_load = true);
+    template <class T>
+    static void VisitWorldObjects(WorldObject const* obj, T& visitor, float radius, bool dont_load = true);
+    template <class T>
+    static void VisitAllObjects(WorldObject const* obj, T& visitor, float radius, bool dont_load = true);
 
-    template<class T> static void VisitGridObjects(float x, float y, Map* map, T &visitor, float radius, bool dont_load = true);
-    template<class T> static void VisitWorldObjects(float x, float y, Map* map, T &visitor, float radius, bool dont_load = true);
-    template<class T> static void VisitAllObjects(float x, float y, Map* map, T &visitor, float radius, bool dont_load = true);
+    template <class T>
+    static void VisitGridObjects(float x, float y, Map* map, T& visitor, float radius, bool dont_load = true);
+    template <class T>
+    static void VisitWorldObjects(float x, float y, Map* map, T& visitor, float radius, bool dont_load = true);
+    template <class T>
+    static void VisitAllObjects(float x, float y, Map* map, T& visitor, float radius, bool dont_load = true);
 
 private:
-    template<class T, class CONTAINER> void VisitCircle(TypeContainerVisitor<T, CONTAINER>&, Map&, CellPair const&, CellPair const&) const;
+    template <class T, class CONTAINER>
+    void VisitCircle(TypeContainerVisitor<T, CONTAINER>&, Map&, CellPair const&, CellPair const&) const;
 };
 
 #endif

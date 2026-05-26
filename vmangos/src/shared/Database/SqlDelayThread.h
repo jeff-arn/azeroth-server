@@ -33,27 +33,31 @@ class SqlDelayThread
 {
     typedef LockedQueue<SqlOperation*, std::mutex> SqlQueue;
 
-    private:
-        SqlQueue m_sqlQueue;                                // Queue of SQL statements
-        Database *m_dbEngine;                               // Pointer to used Database engine
-        SqlQueue m_serialDelayQueue;
-        SqlConnection *m_dbConnection;                      // Pointer to DB connection
-        volatile bool m_running;
+private:
+    SqlQueue m_sqlQueue; // Queue of SQL statements
+    Database* m_dbEngine; // Pointer to used Database engine
+    SqlQueue m_serialDelayQueue;
+    SqlConnection* m_dbConnection; // Pointer to DB connection
+    volatile bool m_running;
 
 
-        //process all enqueued requests
-        void ProcessRequests();
+    // process all enqueued requests
+    void ProcessRequests();
 
-    public:
-        SqlDelayThread(Database* db, SqlConnection* conn);
-        ~SqlDelayThread();
+public:
+    SqlDelayThread(Database* db, SqlConnection* conn);
+    ~SqlDelayThread();
 
-        // Put sql statement to delay queue
-        bool Delay(SqlOperation* sql) { m_sqlQueue.add(sql); return true; }
-        void addSerialOperation(SqlOperation *op);
-        bool HasAsyncQuery();
+    // Put sql statement to delay queue
+    bool Delay(SqlOperation* sql)
+    {
+        m_sqlQueue.add(sql);
+        return true;
+    }
+    void addSerialOperation(SqlOperation* op);
+    bool HasAsyncQuery();
 
-        virtual void Stop();                                // Stop event
-        void run();                                         // Main Thread loop
+    virtual void Stop(); // Stop event
+    void run(); // Main Thread loop
 };
-#endif                                                      //__SQLDELAYTHREAD_H
+#endif //__SQLDELAYTHREAD_H

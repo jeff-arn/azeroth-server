@@ -16,17 +16,17 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Creature.h"
 #include "RandomMovementGenerator.h"
-#include "Util.h"
-#include "MoveSplineInit.h"
+#include "Creature.h"
 #include "MoveSpline.h"
+#include "MoveSplineInit.h"
+#include "Util.h"
 
-void RandomMovementGenerator::_setRandomLocation(Creature &creature)
+void RandomMovementGenerator::_setRandomLocation(Creature& creature)
 {
     if (creature.CanFly())
     {
-        //typedef std::vector<Vector3> PointsArray;
+        // typedef std::vector<Vector3> PointsArray;
         Movement::PointsArray path;
         uint32 ptsPerCycle = ceil(i_wanderDistance * 2);
         static uint32 const nbCyclesPerPacket = 1;
@@ -65,7 +65,7 @@ void RandomMovementGenerator::_setRandomLocation(Creature &creature)
     }
 }
 
-void RandomMovementGenerator::Initialize(Creature &creature)
+void RandomMovementGenerator::Initialize(Creature& creature)
 {
     if (!creature.IsAlive())
         return;
@@ -74,24 +74,21 @@ void RandomMovementGenerator::Initialize(Creature &creature)
     i_nextMoveTime.Reset(1000);
 }
 
-void RandomMovementGenerator::Reset(Creature &creature)
-{
-    Initialize(creature);
-}
+void RandomMovementGenerator::Reset(Creature& creature) { Initialize(creature); }
 
-void RandomMovementGenerator::Interrupt(Creature &creature)
+void RandomMovementGenerator::Interrupt(Creature& creature)
 {
     creature.ClearUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
     creature.SetWalk(!creature.HasUnitState(UNIT_STATE_RUNNING), false);
 }
 
-void RandomMovementGenerator::Finalize(Creature &creature)
+void RandomMovementGenerator::Finalize(Creature& creature)
 {
     creature.ClearUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
     creature.SetWalk(!creature.HasUnitState(UNIT_STATE_RUNNING), false);
 }
 
-bool RandomMovementGenerator::Update(Creature &creature, uint32 const& diff)
+bool RandomMovementGenerator::Update(Creature& creature, uint32 const& diff)
 {
     if (i_expireTime)
     {
@@ -105,13 +102,13 @@ bool RandomMovementGenerator::Update(Creature &creature, uint32 const& diff)
     return true;
 }
 
-void RandomMovementGenerator::UpdateAsync(Creature &creature, uint32 diff)
+void RandomMovementGenerator::UpdateAsync(Creature& creature, uint32 diff)
 {
     // Lock async updates for safety, see Unit::asyncMovesplineLock doc
     std::unique_lock<std::mutex> guard(creature.asyncMovesplineLock);
     if (creature.HasUnitState(UNIT_STATE_CAN_NOT_MOVE | UNIT_STATE_DISTRACTED))
     {
-        i_nextMoveTime.Reset(0);  // Expire the timer
+        i_nextMoveTime.Reset(0); // Expire the timer
         creature.ClearUnitState(UNIT_STATE_ROAMING_MOVE);
     }
     else if (creature.IsNoMovementSpellCasted())

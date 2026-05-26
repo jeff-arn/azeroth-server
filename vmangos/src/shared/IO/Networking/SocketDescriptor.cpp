@@ -3,15 +3,9 @@
 
 #include "Errors.h"
 
-IO::Networking::SocketDescriptor::SocketDescriptor(IO::Native::SocketHandle nativeSocket, IO::Networking::IpEndpoint remoteEndpoint)
-    : m_nativeSocket(nativeSocket), m_remoteEndpoint(remoteEndpoint), m_isClosed(false)
-{
-}
+IO::Networking::SocketDescriptor::SocketDescriptor(IO::Native::SocketHandle nativeSocket, IO::Networking::IpEndpoint remoteEndpoint) : m_nativeSocket(nativeSocket), m_remoteEndpoint(remoteEndpoint), m_isClosed(false) {}
 
-IO::Networking::SocketDescriptor::~SocketDescriptor()
-{
-    MANGOS_ASSERT(m_isClosed);
-}
+IO::Networking::SocketDescriptor::~SocketDescriptor() { MANGOS_ASSERT(m_isClosed); }
 
 void IO::Networking::SocketDescriptor::CloseSocket()
 {

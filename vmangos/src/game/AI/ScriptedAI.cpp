@@ -2,14 +2,11 @@
  * This program is free software licensed under GPL version 2
  * Please see the included DOCS/LICENSE.TXT for more information */
 
-#include "WorldPacket.h"
 #include "ScriptedAI.h"
 #include "GridSearchers.h"
+#include "WorldPacket.h"
 
-ScriptedAI::ScriptedAI(Creature* pCreature) : BasicAI(pCreature),
-    me(pCreature),
-    m_uiEvadeCheckCooldown(2500),
-    m_uiHomeArea(m_creature->GetAreaId())
+ScriptedAI::ScriptedAI(Creature* pCreature) : BasicAI(pCreature), me(pCreature), m_uiEvadeCheckCooldown(2500), m_uiHomeArea(m_creature->GetAreaId())
 {
     m_bEvadeOutOfHomeArea = false;
 
@@ -28,9 +25,7 @@ void ScriptedAI::EnterCombat(Unit* pEnemy)
     Aggro(pEnemy);
 }
 
-void ScriptedAI::Aggro(Unit* pEnemy)
-{
-}
+void ScriptedAI::Aggro(Unit* pEnemy) {}
 
 void ScriptedAI::EnterEvadeMode()
 {
@@ -96,10 +91,7 @@ void ScriptedAI::DoPlaySoundToSet(WorldObject* pSource, uint32 uiSoundId)
     pSource->PlayDirectSound(uiSoundId);
 }
 
-Creature* ScriptedAI::DoSpawnCreature(uint32 uiId, float fX, float fY, float fZ, float fAngle, uint32 uiType, uint32 uiDespawntime)
-{
-    return m_creature->SummonCreature(uiId,m_creature->GetPositionX()+fX, m_creature->GetPositionY()+fY, m_creature->GetPositionZ()+fZ, fAngle, (TempSummonType)uiType, uiDespawntime);
-}
+Creature* ScriptedAI::DoSpawnCreature(uint32 uiId, float fX, float fY, float fZ, float fAngle, uint32 uiType, uint32 uiDespawntime) { return m_creature->SummonCreature(uiId, m_creature->GetPositionX() + fX, m_creature->GetPositionY() + fY, m_creature->GetPositionZ() + fZ, fAngle, (TempSummonType)uiType, uiDespawntime); }
 
 Creature* ScriptedAI::DoSpawnCreature(uint32 id, float dist, uint32 type, uint32 despawntime)
 {
@@ -109,10 +101,7 @@ Creature* ScriptedAI::DoSpawnCreature(uint32 id, float dist, uint32 type, uint32
     return m_creature->SummonCreature(id, x, y, z, m_creature->GetAngle(x, y) + M_PI, (TempSummonType)type, despawntime);
 }
 
-void ScriptedAI::DoResetThreat()
-{
-    m_creature->DoResetThreat();
-}
+void ScriptedAI::DoResetThreat() { m_creature->DoResetThreat(); }
 
 void ScriptedAI::DoTeleportPlayer(Unit* pUnit, float fX, float fY, float fZ, float fO)
 {
@@ -175,7 +164,7 @@ void ScriptedAI::SetEquipmentSlots(bool bLoadDefault, int32 uiMainHand, int32 ui
 {
     if (bLoadDefault)
     {
-        m_creature->LoadEquipment(m_creature->GetCreatureInfo()->equipment_id,true);
+        m_creature->LoadEquipment(m_creature->GetCreatureInfo()->equipment_id, true);
         return;
     }
 
@@ -193,9 +182,9 @@ void ScriptedAI::SetEquipmentSlots(bool bLoadDefault, int32 uiMainHand, int32 ui
 // It is assumed the information is found elswehere and can be handled by mangos. So far no luck finding such information/way to extract it.
 enum
 {
-    NPC_BROODLORD   = 12017,
-    NPC_VISCIDUS    = 15299,
-    NPC_SYLVANAS    = 10181,
+    NPC_BROODLORD = 12017,
+    NPC_VISCIDUS = 15299,
+    NPC_SYLVANAS = 10181,
     NPC_VARIMATHRAS = 2425
 };
 
@@ -216,24 +205,24 @@ bool ScriptedAI::EnterEvadeIfOutOfCombatArea(uint32 const uiDiff)
     float fY = m_creature->GetPositionY();
     float fZ = m_creature->GetPositionZ();
 
-    switch(m_creature->GetEntry())
+    switch (m_creature->GetEntry())
     {
-        case NPC_BROODLORD:                                 // broodlord (not move down stairs)
-            if (fZ > 448.60f)
-                return false;
-            break;
-        case NPC_VISCIDUS:
-            if (fZ < -30.0f)
-                return false;
-            break;
-        case NPC_SYLVANAS:
-        case NPC_VARIMATHRAS:
-            if (m_creature->GetDistance(fX, fY, fZ) < 120.0f)
-                return false;
-            break;
-        default:
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "EnterEvadeIfOutOfCombatArea used for creature entry %u, but does not have any definition.", m_creature->GetEntry());
+    case NPC_BROODLORD: // broodlord (not move down stairs)
+        if (fZ > 448.60f)
             return false;
+        break;
+    case NPC_VISCIDUS:
+        if (fZ < -30.0f)
+            return false;
+        break;
+    case NPC_SYLVANAS:
+    case NPC_VARIMATHRAS:
+        if (m_creature->GetDistance(fX, fY, fZ) < 120.0f)
+            return false;
+        break;
+    default:
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "EnterEvadeIfOutOfCombatArea used for creature entry %u, but does not have any definition.", m_creature->GetEntry());
+        return false;
     }
 
     EnterEvadeMode();
@@ -271,25 +260,21 @@ void ScriptedAI::DoGoHome()
 // TrinityCore
 float ScriptedAI::DoGetThreat(Unit* pUnit)
 {
-    if (!pUnit) return 0.0f;
+    if (!pUnit)
+        return 0.0f;
     return me->GetThreatManager().getThreat(pUnit);
 }
 
 void ScriptedAI::DoModifyThreatPercent(Unit* pUnit, int32 pct)
 {
-    if (!pUnit) return;
+    if (!pUnit)
+        return;
     me->GetThreatManager().modifyThreatPercent(pUnit, pct);
 }
 
-void ScriptedAI::DoTeleportTo(float fX, float fY, float fZ)
-{
-    me->NearTeleportTo(fX, fY, fZ, me->GetOrientation());
-}
+void ScriptedAI::DoTeleportTo(float fX, float fY, float fZ) { me->NearTeleportTo(fX, fY, fZ, me->GetOrientation()); }
 
-void ScriptedAI::DoTeleportTo(float const fPos[4])
-{
-    me->NearTeleportTo(fPos[0], fPos[1], fPos[2], fPos[3]);
-}
+void ScriptedAI::DoTeleportTo(float const fPos[4]) { me->NearTeleportTo(fPos[0], fPos[1], fPos[2], fPos[3]); }
 
 void ScriptedAI::DoTeleportAll(float fX, float fY, float fZ, float fO)
 {

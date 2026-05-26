@@ -14,27 +14,27 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "blackwing_lair.h"
+#include "scriptPCH.h"
 
 enum Broodlord : uint32
 {
-    SAY_AGGRO                   = 9967,
-    SAY_LEASH                   = 9968,
+    SAY_AGGRO = 9967,
+    SAY_LEASH = 9968,
 
-    SPELL_CLEAVE                = 15284, //26350
-    SPELL_KNOCK_AWAY            = 18670, //25778
-    SPELL_BLAST_WAVE            = 23331,
+    SPELL_CLEAVE = 15284, // 26350
+    SPELL_KNOCK_AWAY = 18670, // 25778
+    SPELL_BLAST_WAVE = 23331,
 
-    // World of Warcraft Client Patch 1.8.0 (2005-10-11)
-    // - Fixed a bug that was causing Broodlord Lashlayer to do less damage 
-    //   than intended with his Mortal Strike.
+// World of Warcraft Client Patch 1.8.0 (2005-10-11)
+// - Fixed a bug that was causing Broodlord Lashlayer to do less damage
+//   than intended with his Mortal Strike.
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_7_1
-    SPELL_MORTAL_STRIKE         = 24573, // added to dbc in 1.7.0
+    SPELL_MORTAL_STRIKE = 24573, // added to dbc in 1.7.0
 #else
-    SPELL_MORTAL_STRIKE         = 23847, // added to dbc in 1.6.0, removed in 1.8.0
+    SPELL_MORTAL_STRIKE = 23847, // added to dbc in 1.6.0, removed in 1.8.0
 #endif
-    
+
 };
 
 struct boss_broodlordAI : public ScriptedAI
@@ -57,11 +57,11 @@ struct boss_broodlordAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiCleaveTimer         = 8000; // These times are probably wrong
-        m_uiBlastWaveTimer      = 20000;
-        m_uiMortalStrikeTimer   = 25000;
-        m_uiKnockAwayTimer      = urand(20000, 25000);
-        m_uiInCombatTimer       = 2000;
+        m_uiCleaveTimer = 8000; // These times are probably wrong
+        m_uiBlastWaveTimer = 20000;
+        m_uiMortalStrikeTimer = 25000;
+        m_uiKnockAwayTimer = urand(20000, 25000);
+        m_uiInCombatTimer = 2000;
     }
 
     void Aggro(Unit* /*pWho*/) override
@@ -95,8 +95,7 @@ struct boss_broodlordAI : public ScriptedAI
 
     void MoveInLineOfSight(Unit* who) override
     {
-        if (who->GetTypeId() == TYPEID_PLAYER && m_creature->IsWithinDistInMap(who, 40.0f) && m_creature->IsWithinLOSInMap(who) && !m_creature->IsInCombat()
-                && who->IsInAccessablePlaceFor(m_creature) && !who->HasStealthAura())
+        if (who->GetTypeId() == TYPEID_PLAYER && m_creature->IsWithinDistInMap(who, 40.0f) && m_creature->IsWithinLOSInMap(who) && !m_creature->IsInCombat() && who->IsInAccessablePlaceFor(m_creature) && !who->HasStealthAura())
             m_creature->SetInCombatWithZone();
     }
 
@@ -111,13 +110,7 @@ struct boss_broodlordAI : public ScriptedAI
         if (m_bMobsDesactives == on)
             return;
 
-        std::vector<uint32> mobsEntries =
-        {
-            NPC_BLACKWING_WARLOCK,
-            NPC_BLACKWING_TECHNICIAN,
-            NPC_BLACKWING_SPELLBINDER,
-            NPC_DEATH_TALON_OVERSEER
-        };
+        std::vector<uint32> mobsEntries = {NPC_BLACKWING_WARLOCK, NPC_BLACKWING_TECHNICIAN, NPC_BLACKWING_SPELLBINDER, NPC_DEATH_TALON_OVERSEER};
 
         std::vector<uint32>::iterator entriesIt;
         for (entriesIt = mobsEntries.begin(); entriesIt != mobsEntries.end(); ++entriesIt)
@@ -200,10 +193,7 @@ struct boss_broodlordAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_broodlord(Creature* pCreature)
-{
-    return new boss_broodlordAI(pCreature);
-}
+CreatureAI* GetAI_boss_broodlord(Creature* pCreature) { return new boss_broodlordAI(pCreature); }
 
 void AddSC_boss_broodlord()
 {

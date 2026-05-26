@@ -1,21 +1,16 @@
 #include "IO/Filesystem/FileHandle.h"
-#include "Log.h"
-#include "IO/SystemErrorToString.h"
 #include "Errors.h"
+#include "IO/SystemErrorToString.h"
+#include "Log.h"
 
 #include <sys/stat.h>
 #include <unistd.h>
 
-IO::Filesystem::FileHandle::~FileHandle()
-{
-    ::close(m_nativeFileHandle);
-}
+IO::Filesystem::FileHandle::~FileHandle() { ::close(m_nativeFileHandle); }
 
 void IO::Filesystem::FileHandle::Seek(IO::Filesystem::SeekDirection direction, int64_t offset)
 {
-    int nativeDirection = direction == SeekDirection::Start   ? SEEK_SET
-                        : direction == SeekDirection::Current ? SEEK_CUR
-                                                              : SEEK_END;
+    int nativeDirection = direction == SeekDirection::Start ? SEEK_SET : direction == SeekDirection::Current ? SEEK_CUR : SEEK_END;
 
     MANGOS_ASSERT(::lseek(m_nativeFileHandle, offset, nativeDirection) != -1);
 }
@@ -43,17 +38,14 @@ std::chrono::system_clock::time_point IO::Filesystem::FileHandle::GetLastModifyD
     return result;
 }
 
-std::string IO::Filesystem::FileHandle::GetFilePath() const
-{
-    return m_filePath;
-}
+std::string IO::Filesystem::FileHandle::GetFilePath() const { return m_filePath; }
 
 uint64_t IO::Filesystem::FileHandleReadonly::ReadSync(uint8_t* dest, uint64_t amountToRead)
 {
     uint64_t leftToRead = amountToRead;
     while (leftToRead > 0)
     {
-        size_t amountToReadThisCycle = (size_t) std::min(leftToRead, ((uint64_t) std::numeric_limits<size_t>::max()) - 1);
+        size_t amountToReadThisCycle = (size_t)std::min(leftToRead, ((uint64_t)std::numeric_limits<size_t>::max()) - 1);
 
         ssize_t actuallyReadThisCycle = ::read(m_nativeFileHandle, dest, amountToReadThisCycle);
         if (actuallyReadThisCycle == -1)

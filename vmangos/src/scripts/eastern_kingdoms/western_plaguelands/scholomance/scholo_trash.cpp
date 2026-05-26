@@ -2,9 +2,9 @@
 
 enum
 {
-    SPELL_DARK_PLAGUE_AURA  = 12038,    // procs 18270
-    SPELL_FULL_HEAL         = 17683,
-    SPELL_EXPLOSION         = 17689,
+    SPELL_DARK_PLAGUE_AURA = 12038, // procs 18270
+    SPELL_FULL_HEAL = 17683,
+    SPELL_EXPLOSION = 17689,
 };
 
 /*
@@ -25,15 +25,9 @@ struct npc_unstable_corpseAI : public ScriptedAI
 
     void Reset() override {}
 
-    void Aggro(Unit* /*pWho*/) override
-    {
-        DoCastSpellIfCan(m_creature, SPELL_DARK_PLAGUE_AURA, CF_TRIGGERED | CF_AURA_NOT_PRESENT);        
-    }
+    void Aggro(Unit* /*pWho*/) override { DoCastSpellIfCan(m_creature, SPELL_DARK_PLAGUE_AURA, CF_TRIGGERED | CF_AURA_NOT_PRESENT); }
 
-    void JustDied(Unit* pKiller) override
-    {
-        m_creature->CastSpell(m_creature, SPELL_EXPLOSION, true);
-    }
+    void JustDied(Unit* pKiller) override { m_creature->CastSpell(m_creature, SPELL_EXPLOSION, true); }
 
     void UpdateAI(uint32 const diff) override
     {
@@ -44,10 +38,7 @@ struct npc_unstable_corpseAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_unstable_corpse(Creature* pCreature)
-{
-    return new npc_unstable_corpseAI(pCreature);
-}
+CreatureAI* GetAI_npc_unstable_corpse(Creature* pCreature) { return new npc_unstable_corpseAI(pCreature); }
 
 /*######
 ## npc_reanimated_corpse
@@ -55,10 +46,7 @@ CreatureAI* GetAI_npc_unstable_corpse(Creature* pCreature)
 
 struct npc_reanimated_corpseAI : public ScriptedAI
 {
-    npc_reanimated_corpseAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_reanimated_corpseAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiHealTimer;
     bool m_bHasRessed;
@@ -70,10 +58,7 @@ struct npc_reanimated_corpseAI : public ScriptedAI
         m_creature->SetInvincibilityHpThreshold(1);
     }
 
-    void Aggro(Unit* /*pWho*/) override
-    {
-        DoCastSpellIfCan(m_creature, SPELL_DARK_PLAGUE_AURA, CF_TRIGGERED | CF_AURA_NOT_PRESENT);        
-    }
+    void Aggro(Unit* /*pWho*/) override { DoCastSpellIfCan(m_creature, SPELL_DARK_PLAGUE_AURA, CF_TRIGGERED | CF_AURA_NOT_PRESENT); }
 
     void Resurrect()
     {
@@ -124,20 +109,17 @@ struct npc_reanimated_corpseAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_reanimated_corpse(Creature* pCreature)
-{
-    return new npc_reanimated_corpseAI(pCreature);
-}
+CreatureAI* GetAI_npc_reanimated_corpse(Creature* pCreature) { return new npc_reanimated_corpseAI(pCreature); }
 
 
 enum
 {
     NPC_SPECTRAL_PROJECTION = 11263,
 
-    SPELL_MANA_BURN         = 17630,
-    SPELL_SILENCE           = 12528,
-    SPELL_IMAGE_PROJECTION  = 17651,
-    SPELL_PROJECTION_LEECH  = 17652,
+    SPELL_MANA_BURN = 17630,
+    SPELL_SILENCE = 12528,
+    SPELL_IMAGE_PROJECTION = 17651,
+    SPELL_PROJECTION_LEECH = 17652,
     SPELL_SUMMON_PROJECTION = 17653
 };
 
@@ -145,10 +127,7 @@ struct npc_spectral_projectionAI : public ScriptedAI
 {
     npc_spectral_projectionAI(Creature* pCreature) : ScriptedAI(pCreature) { npc_spectral_projectionAI::Reset(); }
 
-    void Reset() override
-    {
-
-    }
+    void Reset() override {}
 
     void SpellHit(SpellCaster* pCaster, SpellEntry const* pSpell) override
     {
@@ -158,17 +137,14 @@ struct npc_spectral_projectionAI : public ScriptedAI
             {
                 // hack life leech effect
                 pUnit->SetHealth(pUnit->GetHealth() + 1000.0f);
-                // remove from world, or projections will respawn 
+                // remove from world, or projections will respawn
                 m_creature->RemoveFromWorld();
             }
         }
     }
 };
 
-CreatureAI* GetAI_npc_spectral_projection(Creature* pCreature)
-{
-    return new npc_spectral_projectionAI(pCreature);
-}
+CreatureAI* GetAI_npc_spectral_projection(Creature* pCreature) { return new npc_spectral_projectionAI(pCreature); }
 
 void AddSC_scholo_trash()
 {

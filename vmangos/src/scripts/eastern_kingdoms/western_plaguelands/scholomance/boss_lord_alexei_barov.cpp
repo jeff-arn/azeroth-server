@@ -21,18 +21,15 @@ SDComment: aura applied/defined in database
 SDCategory: Scholomance
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "scholomance.h"
+#include "scriptPCH.h"
 
-#define SPELL_IMMOLATE             15570
-#define SPELL_VEILOFSHADOW         17820
+#define SPELL_IMMOLATE 15570
+#define SPELL_VEILOFSHADOW 17820
 
 struct boss_lordalexeibarovAI : public ScriptedAI
 {
-    boss_lordalexeibarovAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_lordalexeibarovAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 Immolate_Timer;
     uint32 VeilofShadow_Timer;
@@ -45,7 +42,7 @@ struct boss_lordalexeibarovAI : public ScriptedAI
         m_creature->LoadCreatureAddon(true);
     }
 
-    void JustDied(Unit *killer) override
+    void JustDied(Unit* killer) override
     {
         if (ScriptedInstance* pInstance = (ScriptedInstance*)m_creature->GetInstanceData())
             pInstance->SetData(TYPE_ALEXEIBAROV, DONE);
@@ -56,32 +53,32 @@ struct boss_lordalexeibarovAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //Immolate_Timer
+        // Immolate_Timer
         if (Immolate_Timer < diff)
         {
             Unit* target = nullptr;
             target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
-            if (target) DoCastSpellIfCan(target, SPELL_IMMOLATE);
+            if (target)
+                DoCastSpellIfCan(target, SPELL_IMMOLATE);
 
             Immolate_Timer = 12000;
         }
-        else Immolate_Timer -= diff;
+        else
+            Immolate_Timer -= diff;
 
-        //VeilofShadow_Timer
+        // VeilofShadow_Timer
         if (VeilofShadow_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_VEILOFSHADOW);
             VeilofShadow_Timer = 20000;
         }
-        else VeilofShadow_Timer -= diff;
+        else
+            VeilofShadow_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_lordalexeibarov(Creature* pCreature)
-{
-    return new boss_lordalexeibarovAI(pCreature);
-}
+CreatureAI* GetAI_boss_lordalexeibarov(Creature* pCreature) { return new boss_lordalexeibarovAI(pCreature); }
 
 void AddSC_boss_lordalexeibarov()
 {

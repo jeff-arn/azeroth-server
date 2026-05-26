@@ -1,5 +1,3 @@
 #include "scriptPCH.h"
 
-void AddScripts()
-{
-}
+void AddScripts() {}

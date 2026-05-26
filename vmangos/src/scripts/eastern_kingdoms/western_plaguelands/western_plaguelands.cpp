@@ -18,28 +18,22 @@ EndContentData */
 
 struct npc_the_scourge_cauldronAI : public ScriptedAI
 {
-    npc_the_scourge_cauldronAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_the_scourge_cauldronAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
-    void Reset() override
-    {
-        m_creature->EnableMoveInLosEvent();
-    }
+    void Reset() override { m_creature->EnableMoveInLosEvent(); }
 
     void DoDie()
     {
-        //summoner dies here
+        // summoner dies here
         m_creature->SetInvincibilityHpThreshold(0);
         m_creature->DealDamage(m_creature, m_creature->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
-        //override any database `spawntimesecs` to prevent duplicated summons
+        // override any database `spawntimesecs` to prevent duplicated summons
         uint32 rTime = m_creature->GetRespawnDelay();
         if (rTime < 600)
             m_creature->SetRespawnDelay(600);
     }
 
-    void MoveInLineOfSight(Unit *who) override
+    void MoveInLineOfSight(Unit* who) override
     {
         if (!who || who->GetTypeId() != TYPEID_PLAYER)
             return;
@@ -48,63 +42,50 @@ struct npc_the_scourge_cauldronAI : public ScriptedAI
         {
             switch (m_creature->GetAreaId())
             {
-                case 199:                                   //felstone
-                    if (((Player*)who)->GetQuestStatus(5216) == QUEST_STATUS_INCOMPLETE ||
-                            ((Player*)who)->GetQuestStatus(5229) == QUEST_STATUS_INCOMPLETE)
-                    {
-                        m_creature->SummonCreature(11075, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 600000);
-                        DoDie();
-                    }
-                    break;
-                case 200:                                   //dalson
-                    if (((Player*)who)->GetQuestStatus(5219) == QUEST_STATUS_INCOMPLETE ||
-                            ((Player*)who)->GetQuestStatus(5231) == QUEST_STATUS_INCOMPLETE)
-                    {
-                        m_creature->SummonCreature(11077, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 600000);
-                        DoDie();
-                    }
-                    break;
-                case 201:                                   //gahrron
-                    if (((Player*)who)->GetQuestStatus(5225) == QUEST_STATUS_INCOMPLETE ||
-                            ((Player*)who)->GetQuestStatus(5235) == QUEST_STATUS_INCOMPLETE)
-                    {
-                        m_creature->SummonCreature(11078, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 600000);
-                        DoDie();
-                    }
-                    break;
-                case 202:                                   //writhing
-                    if (((Player*)who)->GetQuestStatus(5222) == QUEST_STATUS_INCOMPLETE ||
-                            ((Player*)who)->GetQuestStatus(5233) == QUEST_STATUS_INCOMPLETE)
-                    {
-                        m_creature->SummonCreature(11076, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 600000);
-                        DoDie();
-                    }
-                    break;
+            case 199: // felstone
+                if (((Player*)who)->GetQuestStatus(5216) == QUEST_STATUS_INCOMPLETE || ((Player*)who)->GetQuestStatus(5229) == QUEST_STATUS_INCOMPLETE)
+                {
+                    m_creature->SummonCreature(11075, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 600000);
+                    DoDie();
+                }
+                break;
+            case 200: // dalson
+                if (((Player*)who)->GetQuestStatus(5219) == QUEST_STATUS_INCOMPLETE || ((Player*)who)->GetQuestStatus(5231) == QUEST_STATUS_INCOMPLETE)
+                {
+                    m_creature->SummonCreature(11077, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 600000);
+                    DoDie();
+                }
+                break;
+            case 201: // gahrron
+                if (((Player*)who)->GetQuestStatus(5225) == QUEST_STATUS_INCOMPLETE || ((Player*)who)->GetQuestStatus(5235) == QUEST_STATUS_INCOMPLETE)
+                {
+                    m_creature->SummonCreature(11078, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 600000);
+                    DoDie();
+                }
+                break;
+            case 202: // writhing
+                if (((Player*)who)->GetQuestStatus(5222) == QUEST_STATUS_INCOMPLETE || ((Player*)who)->GetQuestStatus(5233) == QUEST_STATUS_INCOMPLETE)
+                {
+                    m_creature->SummonCreature(11076, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 600000);
+                    DoDie();
+                }
+                break;
             }
         }
     }
 };
-CreatureAI* GetAI_npc_the_scourge_cauldron(Creature* pCreature)
-{
-    return new npc_the_scourge_cauldronAI(pCreature);
-}
+CreatureAI* GetAI_npc_the_scourge_cauldron(Creature* pCreature) { return new npc_the_scourge_cauldronAI(pCreature); }
 
 enum eAndorhalTower
 {
-    GO_BEACON_TORCH                             = 176093
+    GO_BEACON_TORCH = 176093
 };
 
 struct npc_andorhal_towerAI : public Scripted_NoMovementAI
 {
-    npc_andorhal_towerAI(Creature *c) : Scripted_NoMovementAI(c)
-    {
-        Reset();
-    }
+    npc_andorhal_towerAI(Creature* c) : Scripted_NoMovementAI(c) { Reset(); }
 
-    void Reset() override
-    {
-        m_creature->EnableMoveInLosEvent();
-    }
+    void Reset() override { m_creature->EnableMoveInLosEvent(); }
 
     void MoveInLineOfSight(Unit* pWho) override
     {
@@ -116,10 +97,7 @@ struct npc_andorhal_towerAI : public Scripted_NoMovementAI
     }
 };
 
-CreatureAI* GetAI_npc_andorhal_tower(Creature* pCreature)
-{
-    return new npc_andorhal_towerAI(pCreature);
-}
+CreatureAI* GetAI_npc_andorhal_tower(Creature* pCreature) { return new npc_andorhal_towerAI(pCreature); }
 
 /*######
 ## npc_HighProtectorLorik
@@ -127,20 +105,17 @@ CreatureAI* GetAI_npc_andorhal_tower(Creature* pCreature)
 
 enum
 {
-    NPC_HIGHPROTECTORLORIK   = 1846,
-    SPELL_RETRIBUTIONAURA    = 8990,
-    SPELL_ARCANEBLAST        = 10833,
-    SPELL_DIVINESHIELD       = 13874,
-    SPELL_HOLYLIGHT          = 15493,
-    SPELL_SHIELDSLAM         = 15655
+    NPC_HIGHPROTECTORLORIK = 1846,
+    SPELL_RETRIBUTIONAURA = 8990,
+    SPELL_ARCANEBLAST = 10833,
+    SPELL_DIVINESHIELD = 13874,
+    SPELL_HOLYLIGHT = 15493,
+    SPELL_SHIELDSLAM = 15655
 };
 
 struct npc_highprotectorlorikAI : public ScriptedAI
 {
-    npc_highprotectorlorikAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_highprotectorlorikAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiGlobalCooldown;
     uint32 m_uiDiff_Add;
@@ -151,12 +126,12 @@ struct npc_highprotectorlorikAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiGlobalCooldown          = 0;
-        m_uiDiff_Add                = 0;
-        m_uiArcaneBlastTimer        = 7000;
-        m_uiDivineShieldTimer       = 2000;
-        m_uiHolyLightTimer          = 2000;
-        m_uiShieldSlamTimer         = 2000;
+        m_uiGlobalCooldown = 0;
+        m_uiDiff_Add = 0;
+        m_uiArcaneBlastTimer = 7000;
+        m_uiDivineShieldTimer = 2000;
+        m_uiHolyLightTimer = 2000;
+        m_uiShieldSlamTimer = 2000;
     }
 
     void UpdateAI(uint32 const uiDiff) override
@@ -240,14 +215,10 @@ struct npc_highprotectorlorikAI : public ScriptedAI
             m_uiShieldSlamTimer -= uiDiff;
 
         DoMeleeAttackIfReady();
-
     }
 };
 
-CreatureAI* GetAI_npc_highprotectorlorik(Creature* pCreature)
-{
-    return new npc_highprotectorlorikAI(pCreature);
-}
+CreatureAI* GetAI_npc_highprotectorlorik(Creature* pCreature) { return new npc_highprotectorlorikAI(pCreature); }
 
 
 /*######

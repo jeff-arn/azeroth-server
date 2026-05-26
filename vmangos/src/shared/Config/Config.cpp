@@ -24,10 +24,10 @@ static bool IsLineEndChar(char chr)
 {
     switch (chr)
     {
-        case '\0':
-        case '\n':
-        case '\r':
-            return true;
+    case '\0':
+    case '\n':
+    case '\r':
+        return true;
     }
 
     return false;
@@ -80,55 +80,55 @@ bool Config::ProcessLine(char const* line)
 
         switch (stage)
         {
-            case STAGE_FIND_NAME:
-            case STAGE_READ_NAME:
+        case STAGE_FIND_NAME:
+        case STAGE_READ_NAME:
             {
                 switch (line[i])
                 {
-                    case '#': // comment at unexpected place
-                    case '[': // section
+                case '#': // comment at unexpected place
+                case '[': // section
+                    return false;
+                case ' ': // skip white space
+                    break;
+                case '=': // name has been read
+                    if (stage == STAGE_FIND_NAME)
                         return false;
-                    case ' ': // skip white space
-                        break;
-                    case '=': // name has been read
-                        if (stage == STAGE_FIND_NAME)
-                            return false;
-                        if (name.empty())
-                            return false;
-                        stage = STAGE_FIND_VALUE;
-                        break;
-                    default:
-                        name += line[i];
-                        stage = STAGE_READ_NAME;
-                        break;
+                    if (name.empty())
+                        return false;
+                    stage = STAGE_FIND_VALUE;
+                    break;
+                default:
+                    name += line[i];
+                    stage = STAGE_READ_NAME;
+                    break;
                 }
                 break;
             }
-            case STAGE_FIND_VALUE:
-            case STAGE_READ_VALUE:
+        case STAGE_FIND_VALUE:
+        case STAGE_READ_VALUE:
             {
                 switch (line[i])
                 {
-                    case '#': // comment can only be at end of line, stop reading
-                        if (!quoteFound)
-                            stop = true;
-                        break;
-                    case '"': // handle quoted text
-                        if (quoteFound)
-                            stop = true;
-                        else
-                        {
-                            quoteFound = true;
-                            stage = STAGE_READ_VALUE;
-                        }
-                        break;
-                    case ' ': // ignore white space until text found
-                        if (stage == STAGE_FIND_VALUE)
-                            break;
-                    default:
-                        value += line[i];
+                case '#': // comment can only be at end of line, stop reading
+                    if (!quoteFound)
+                        stop = true;
+                    break;
+                case '"': // handle quoted text
+                    if (quoteFound)
+                        stop = true;
+                    else
+                    {
+                        quoteFound = true;
                         stage = STAGE_READ_VALUE;
+                    }
+                    break;
+                case ' ': // ignore white space until text found
+                    if (stage == STAGE_FIND_VALUE)
                         break;
+                default:
+                    value += line[i];
+                    stage = STAGE_READ_VALUE;
+                    break;
                 }
                 break;
             }
@@ -143,7 +143,7 @@ bool Config::ProcessLine(char const* line)
     if (name.empty() || value.empty())
         return false;
 
-    if (!m_configMap.insert({ name, value }).second)
+    if (!m_configMap.insert({name, value}).second)
     {
         printf("Config setting '%s' appear twice in config! Ignoring second occurrence.\n", name.c_str());
         return false;
@@ -152,12 +152,9 @@ bool Config::ProcessLine(char const* line)
     return true;
 }
 
-std::string Config::GetFilename() const
-{
-    return m_fileName;
-}
+std::string Config::GetFilename() const { return m_fileName; }
 
-bool Config::GetValueHelper(char const* name, std::string &result) const
+bool Config::GetValueHelper(char const* name, std::string& result) const
 {
     std::shared_lock<std::shared_timed_mutex> guard(m_configLock);
 
@@ -187,11 +184,7 @@ bool Config::GetBoolDefault(char const* name, bool def) const
     if (!GetValueHelper(name, val))
         return def;
 
-    return val == "true"
-        || val == "TRUE"
-        || val == "yes"
-        || val == "YES"
-        || val == "1";
+    return val == "true" || val == "TRUE" || val == "yes" || val == "YES" || val == "1";
 }
 
 int32 Config::GetIntDefault(char const* name, int32 def) const

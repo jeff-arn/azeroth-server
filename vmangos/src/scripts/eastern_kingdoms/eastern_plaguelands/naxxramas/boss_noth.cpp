@@ -16,9 +16,9 @@
 
 // Rewritten completely by Gemt
 
-#include "scriptPCH.h"
-#include "naxxramas.h"
 #include "Duration.h"
+#include "naxxramas.h"
+#include "scriptPCH.h"
 
 #include <algorithm>
 
@@ -26,18 +26,18 @@
 // pastbin link above has various noted timers and sources. Not much useful, but it's some of my notes
 // from when researching the encounter.
 
-// Regarding summoning add spells, there are a few spells which summon both two types of mobs, 
+// Regarding summoning add spells, there are a few spells which summon both two types of mobs,
 // or multiple of the same mob in different locations with the same spell. However
-// our core does not support multiple spell target coordinates due to limitations with the DB, so 
+// our core does not support multiple spell target coordinates due to limitations with the DB, so
 // we have to use the spells which summon a single creature.
 
 enum eSpell
 {
-    SPELL_TP_CENTER           = 29231,
-    SPELL_TP_BALC             = 29216,
-    SPELL_CRIPPLE             = 29212, // used on players where noth blinked FROM 
+    SPELL_TP_CENTER = 29231,
+    SPELL_TP_BALC = 29216,
+    SPELL_CRIPPLE = 29212, // used on players where noth blinked FROM
     SPELL_CURSE_PLAGUEBRINGER = 29213,
-    SPELL_IMMUNE_ALL          = 29230, // used on TP to balc
+    SPELL_IMMUNE_ALL = 29230, // used on TP to balc
 
     SPELL_BLINK_1 = 29208,
     SPELL_BLINK_2 = 29209,
@@ -52,38 +52,29 @@ enum eSpell
     SPELL_SUM_CHAMP_SW2 = 29224,
     SPELL_SUM_CHAMP_SW3 = 29225,
     SPELL_SUM_CHAMP_SW4 = 29227,
-    
-    SPELL_SUM_CHAMP_W   = 29238,
-    
+
+    SPELL_SUM_CHAMP_W = 29238,
+
     SPELL_SUM_CHAMP_NW1 = 29255,
     SPELL_SUM_CHAMP_NW2 = 29267,
     SPELL_SUM_CHAMP_NW3 = 29257,
-    
+
     SPELL_SUM_CHAMP_NE1 = 29258,
     SPELL_SUM_CHAMP_NE2 = 29262,
-    
+
     SPELL_SUM_GUARD_NE = 29226,
     SPELL_SUM_GUARD_NW = 29239,
     SPELL_SUM_GUARD_SW1 = 29256,
     SPELL_SUM_GUARD_SW2 = 29268
 };
 
-static uint32 const ChampionSpells[10] =
-{
-    //g1
-    SPELL_SUM_CHAMP_SW1,
-    SPELL_SUM_CHAMP_SW2,
-    SPELL_SUM_CHAMP_SW3,
-    SPELL_SUM_CHAMP_SW4,
-    //g2
-    SPELL_SUM_CHAMP_W,
-    SPELL_SUM_CHAMP_NW1,
-    SPELL_SUM_CHAMP_NW2,
-    SPELL_SUM_CHAMP_NW3,
-    //g3
-    SPELL_SUM_CHAMP_NE1,
-    SPELL_SUM_CHAMP_NE2
-};
+static uint32 const ChampionSpells[10] = {
+    // g1
+    SPELL_SUM_CHAMP_SW1, SPELL_SUM_CHAMP_SW2, SPELL_SUM_CHAMP_SW3, SPELL_SUM_CHAMP_SW4,
+    // g2
+    SPELL_SUM_CHAMP_W, SPELL_SUM_CHAMP_NW1, SPELL_SUM_CHAMP_NW2, SPELL_SUM_CHAMP_NW3,
+    // g3
+    SPELL_SUM_CHAMP_NE1, SPELL_SUM_CHAMP_NE2};
 
 static uint8 const g1_start = 0, g1_size = 4;
 static uint8 const g2_start = 4, g2_size = 4;
@@ -91,22 +82,22 @@ static uint8 const g3_start = 8, g3_size = 2;
 
 enum eScriptText
 {
-    SAY_AGGRO1                          = 13061,
-    SAY_AGGRO2                          = 13062,
-    SAY_AGGRO3                          = 13063,
-    SAY_SUMMON                          = 13067,
+    SAY_AGGRO1 = 13061,
+    SAY_AGGRO2 = 13062,
+    SAY_AGGRO3 = 13063,
+    SAY_SUMMON = 13067,
 
-    SAY_SLAY1                           = 13065,
-    SAY_SLAY2                           = 13066,
-    SAY_DEATH                           = 13064
+    SAY_SLAY1 = 13065,
+    SAY_SLAY2 = 13066,
+    SAY_DEATH = 13064
 };
 
 enum eNPCs
 {
-    NPC_PLAGUED_GUARDIAN  = 16981,
+    NPC_PLAGUED_GUARDIAN = 16981,
     NPC_PLAGUED_CONSTRUCT = 16982, // unknown if this was ever used
-    NPC_PLAGUED_CHAMPION  = 16983,
-    NPC_PLAGUED_WARRIOR   = 16984
+    NPC_PLAGUED_CHAMPION = 16983,
+    NPC_PLAGUED_WARRIOR = 16984
 };
 
 enum eEvents
@@ -148,7 +139,7 @@ struct boss_nothAI : public ScriptedAI
             m_pInstance->SetData(TYPE_NOTH, FAIL);
 
         std::list<Creature*> clist;
-        GetCreatureListWithEntryInGrid(clist, m_creature, { NPC_PLAGUED_GUARDIAN, NPC_PLAGUED_CONSTRUCT, NPC_PLAGUED_CHAMPION, NPC_PLAGUED_WARRIOR }, 150.0f);
+        GetCreatureListWithEntryInGrid(clist, m_creature, {NPC_PLAGUED_GUARDIAN, NPC_PLAGUED_CONSTRUCT, NPC_PLAGUED_CHAMPION, NPC_PLAGUED_WARRIOR}, 150.0f);
         for (Creature* pC : clist)
         {
             pC->DeleteLater();
@@ -159,10 +150,10 @@ struct boss_nothAI : public ScriptedAI
     {
         m_creature->SetInCombatWithZone();
 
-        m_events.ScheduleEvent(EVENT_CURSE,    Seconds(urand(8,12)));
-        m_events.ScheduleEvent(EVENT_BLINK,    Seconds(urand(30,40)));
+        m_events.ScheduleEvent(EVENT_CURSE, Seconds(urand(8, 12)));
+        m_events.ScheduleEvent(EVENT_BLINK, Seconds(urand(30, 40)));
         m_events.ScheduleEvent(EVENT_WARRIORS, Seconds(10));
-        m_events.ScheduleEvent(EVENT_TP_BALC,  Seconds(90));
+        m_events.ScheduleEvent(EVENT_TP_BALC, Seconds(90));
 
         DoScriptText(urand(SAY_AGGRO1, SAY_AGGRO3), m_creature);
 
@@ -183,13 +174,10 @@ struct boss_nothAI : public ScriptedAI
 
     void BlinkAndRepeatEvent()
     {
-        static uint32 const auiSpellBlink[4] =
-        {
-            SPELL_BLINK_1, SPELL_BLINK_2, SPELL_BLINK_3, SPELL_BLINK_4
-        };
+        static uint32 const auiSpellBlink[4] = {SPELL_BLINK_1, SPELL_BLINK_2, SPELL_BLINK_3, SPELL_BLINK_4};
 
         DoCastSpellIfCan(m_creature, SPELL_CRIPPLE, CF_TRIGGERED | CF_FORCE_CAST);
-        DoCastSpellIfCan(m_creature, auiSpellBlink[urand(0, 3)], CF_TRIGGERED|CF_FORCE_CAST);
+        DoCastSpellIfCan(m_creature, auiSpellBlink[urand(0, 3)], CF_TRIGGERED | CF_FORCE_CAST);
         m_events.Repeat(Seconds(urand(30, 40)));
         DoResetThreat();
         if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
@@ -203,8 +191,7 @@ struct boss_nothAI : public ScriptedAI
         if (Unit* pTarget = m_creature->GetVictim())
         {
             DoCastSpellIfCan(pTarget, SPELL_CURSE_PLAGUEBRINGER);
-            m_events.Repeat(Seconds(urand(50,60))); //It's somewhere around 50seconds+
-
+            m_events.Repeat(Seconds(urand(50, 60))); // It's somewhere around 50seconds+
         }
         else
         {
@@ -214,7 +201,7 @@ struct boss_nothAI : public ScriptedAI
 
     void TeleportToBalc()
     {
-        if (DoCastSpellIfCan(m_creature, SPELL_TP_BALC, CF_TRIGGERED|CF_FORCE_CAST) != CAST_OK)
+        if (DoCastSpellIfCan(m_creature, SPELL_TP_BALC, CF_TRIGGERED | CF_FORCE_CAST) != CAST_OK)
         {
             m_events.Repeat(100); // try again
             return;
@@ -229,15 +216,15 @@ struct boss_nothAI : public ScriptedAI
         m_events.ScheduleEvent(EVENT_BALC_ADDS, first_spawn);
         switch (phaseCounter)
         {
-            case 0:
-                m_events.ScheduleEvent(EVENT_BALC_ADDS, first_spawn + Seconds(25 + urand(0,5)));
-                break;
-            case 1:
-                m_events.ScheduleEvent(EVENT_BALC_ADDS, first_spawn + Seconds(44 + urand(0, 5)));
-                break;
-            case 2:
-                m_events.ScheduleEvent(EVENT_BALC_ADDS, first_spawn + Seconds(57 + urand(0, 5)));
-                break;
+        case 0:
+            m_events.ScheduleEvent(EVENT_BALC_ADDS, first_spawn + Seconds(25 + urand(0, 5)));
+            break;
+        case 1:
+            m_events.ScheduleEvent(EVENT_BALC_ADDS, first_spawn + Seconds(44 + urand(0, 5)));
+            break;
+        case 2:
+            m_events.ScheduleEvent(EVENT_BALC_ADDS, first_spawn + Seconds(57 + urand(0, 5)));
+            break;
         }
 
         m_creature->CastSpell(m_creature, SPELL_IMMUNE_ALL, true);
@@ -262,12 +249,12 @@ struct boss_nothAI : public ScriptedAI
         // We need to spawn 4 champions. We have 10 different possible locations,
         // and the adds need to be somewhat evenly spread out, yet somewhat randomized.
         std::vector<uint32> champs(ChampionSpells, ChampionSpells + sizeof(ChampionSpells) / sizeof(uint32));
-        
+
         // First selecting one random champ from each of the 3 main groups
         uint32 champ1 = champs[urand(g1_start, g1_start + g1_size - 1)];
         uint32 champ2 = champs[urand(g2_start, g2_start + g2_size - 1)];
         uint32 champ3 = champs[urand(g3_start, g3_start + g3_size - 1)];
-        
+
         // Moving the selected champions to the end of the vector
         auto nend = std::remove(champs.begin(), champs.end(), champ1);
         nend = std::remove(champs.begin(), nend, champ2);
@@ -277,7 +264,7 @@ struct boss_nothAI : public ScriptedAI
         DoCastSpellIfCan(m_creature, champ1, CF_TRIGGERED);
         DoCastSpellIfCan(m_creature, champ2, CF_TRIGGERED);
         DoCastSpellIfCan(m_creature, champ3, CF_TRIGGERED);
-        
+
         // Choosing the final champion at random between the remaining 7 locations
         uint32 champ4 = champs[urand(0, std::distance(champs.begin(), nend))];
         DoCastSpellIfCan(m_creature, champ4, CF_TRIGGERED);
@@ -302,18 +289,18 @@ struct boss_nothAI : public ScriptedAI
         DoScriptText(SAY_SUMMON, m_creature);
         switch (phaseCounter)
         {
-            case 0:
-                Summon4Champions();
-                break;
-            case 1:
-                Summon4Champions();
-                Summon2Guardians();
-                break;
-            default: // third balc phase and onwards
-                Summon4Champions();
-                Summon2Guardians();
-                Summon3Constructs();
-                break;
+        case 0:
+            Summon4Champions();
+            break;
+        case 1:
+            Summon4Champions();
+            Summon2Guardians();
+            break;
+        default: // third balc phase and onwards
+            Summon4Champions();
+            Summon2Guardians();
+            Summon3Constructs();
+            break;
         }
     }
 
@@ -324,7 +311,7 @@ struct boss_nothAI : public ScriptedAI
         m_events.Reset();
         m_events.ScheduleEvent(EVENT_BLINK, Seconds(urand(2, 10)));
         m_events.ScheduleEvent(EVENT_CURSE, Seconds(urand(2, 10)));
-        m_events.ScheduleEvent(EVENT_WARRIORS, Seconds(urand(2,10)));
+        m_events.ScheduleEvent(EVENT_WARRIORS, Seconds(urand(2, 10)));
         m_creature->RemoveAurasDueToSpell(SPELL_IMMUNE_ALL);
 
         DoResetThreat();
@@ -332,33 +319,27 @@ struct boss_nothAI : public ScriptedAI
             AttackStart(target);
 
         // note that we increment phaseCounter here
-        switch (++phaseCounter) 
+        switch (++phaseCounter)
         {
-            // case 0: won't happen, its initialized from Aggro()
-            case 1:
-                m_events.ScheduleEvent(EVENT_TP_BALC, Seconds(110));
-                break;
-            case 2:
-                m_events.ScheduleEvent(EVENT_TP_BALC, Seconds(180));
-                break;
-            default:
-                // No good sources on duration of 4th ground phase, all guides explain it as a wipe
-                // if you don't kill him during the 3rd ground phase. We'll just repeat previous phase logic
-                // after this. It's highly unlikely that any guild get to this stage without killing him or wiping.
-                m_events.ScheduleEvent(EVENT_TP_BALC, Seconds(180));
-                //sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "boss_nothAI::OnRemoveVulnerability() called with phaseCounter: %d", phaseCounter);
+        // case 0: won't happen, its initialized from Aggro()
+        case 1:
+            m_events.ScheduleEvent(EVENT_TP_BALC, Seconds(110));
+            break;
+        case 2:
+            m_events.ScheduleEvent(EVENT_TP_BALC, Seconds(180));
+            break;
+        default:
+            // No good sources on duration of 4th ground phase, all guides explain it as a wipe
+            // if you don't kill him during the 3rd ground phase. We'll just repeat previous phase logic
+            // after this. It's highly unlikely that any guild get to this stage without killing him or wiping.
+            m_events.ScheduleEvent(EVENT_TP_BALC, Seconds(180));
+            // sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "boss_nothAI::OnRemoveVulnerability() called with phaseCounter: %d", phaseCounter);
         }
     }
 
-    void SummonedCreatureJustDied(Creature* unit) override 
-    {
-        unit->ForcedDespawn(3000);
-    }
+    void SummonedCreatureJustDied(Creature* unit) override { unit->ForcedDespawn(3000); }
 
-    void JustSummoned(Creature* pSummoned) override
-    {
-        pSummoned->SetInCombatWithZone();
-    }
+    void JustSummoned(Creature* pSummoned) override { pSummoned->SetInCombatWithZone(); }
 
     void KilledUnit(Unit* pVictim) override
     {
@@ -383,7 +364,7 @@ struct boss_nothAI : public ScriptedAI
             ScriptedAI::AttackStart(pWho);
     }
 
-    void DamageTaken(Unit* /*pDoneBy*/, uint32& uiDamage) override 
+    void DamageTaken(Unit* /*pDoneBy*/, uint32& uiDamage) override
     {
         if (isOnBalc && uiDamage > 0)
             uiDamage = 0;
@@ -409,34 +390,34 @@ struct boss_nothAI : public ScriptedAI
                 }
             }
         }
-        
+
         killSayCooldown -= std::min(killSayCooldown, uiDiff);
         m_events.Update(uiDiff);
         while (auto l_EventId = m_events.ExecuteEvent())
         {
             switch (l_EventId)
             {
-                case EVENT_BLINK:
-                    BlinkAndRepeatEvent();
-                    break;
-                case EVENT_CURSE:
-                    CurseAndRepeatEvent();
-                    break;
-                case EVENT_TP_BALC:
-                    TeleportToBalc();
-                    break;
-                case EVENT_TP_GROUND:
-                    TeleportFromBalc();
-                    break;
-                case EVENT_RMV_INVULN:
-                    OnRemoveVulnerability();
-                    break;
-                case EVENT_BALC_ADDS:
-                    SpawnBalcAdds();
-                    break;
-                case EVENT_WARRIORS:
-                    SpawnWarriorsAndRepeatEvent();
-                    break;
+            case EVENT_BLINK:
+                BlinkAndRepeatEvent();
+                break;
+            case EVENT_CURSE:
+                CurseAndRepeatEvent();
+                break;
+            case EVENT_TP_BALC:
+                TeleportToBalc();
+                break;
+            case EVENT_TP_GROUND:
+                TeleportFromBalc();
+                break;
+            case EVENT_RMV_INVULN:
+                OnRemoveVulnerability();
+                break;
+            case EVENT_BALC_ADDS:
+                SpawnBalcAdds();
+                break;
+            case EVENT_WARRIORS:
+                SpawnWarriorsAndRepeatEvent();
+                break;
             }
         }
 
@@ -445,24 +426,15 @@ struct boss_nothAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_noth(Creature* pCreature)
-{
-    return new boss_nothAI(pCreature);
-}
+CreatureAI* GetAI_boss_noth(Creature* pCreature) { return new boss_nothAI(pCreature); }
 
 // 29213 - Curse of the Plaguebringer (Naxxramas, Noth the Plaguebringer)
 struct NothCurseOfThePlaguebringerScript : SpellScript
 {
-    void OnSetTargetMap(Spell* /*spell*/, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& /*unMaxTargets*/, bool& selectClosestTargets) const final
-    {
-        selectClosestTargets = true;
-    }
+    void OnSetTargetMap(Spell* /*spell*/, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& /*unMaxTargets*/, bool& selectClosestTargets) const final { selectClosestTargets = true; }
 };
 
-SpellScript* GetScript_NothCurseOfThePlaguebringer(SpellEntry const*)
-{
-    return new NothCurseOfThePlaguebringerScript();
-}
+SpellScript* GetScript_NothCurseOfThePlaguebringer(SpellEntry const*) { return new NothCurseOfThePlaguebringerScript(); }
 
 void AddSC_boss_noth()
 {

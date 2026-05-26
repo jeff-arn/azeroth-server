@@ -17,21 +17,16 @@
  */
 
 #include "LFGQueue.h"
-#include "World.h"
-#include "LFGMgr.h"
-#include "WorldPacket.h"
-#include "Player.h"
-#include "ObjectMgr.h"
 #include "Group.h"
+#include "LFGMgr.h"
+#include "ObjectMgr.h"
+#include "Player.h"
+#include "World.h"
+#include "WorldPacket.h"
 
 #include <array>
 
-std::array<LfgRoles, 3> PotentialRoles =
-{
-    PLAYER_ROLE_TANK,
-    PLAYER_ROLE_HEALER,
-    PLAYER_ROLE_DAMAGE
-};
+std::array<LfgRoles, 3> PotentialRoles = {PLAYER_ROLE_TANK, PLAYER_ROLE_HEALER, PLAYER_ROLE_DAMAGE};
 
 void LFGPlayerQueueInfo::CalculateRoles(Classes playerClass)
 {
@@ -111,8 +106,7 @@ void LFGQueue::Update()
                     ++next;
 
                     // Check here that players team and areaId they're in queue are same
-                    if (qPlayer->second.team == qGroup->second.team &&
-                        qPlayer->second.areaId == qGroup->second.areaId)
+                    if (qPlayer->second.team == qGroup->second.team && qPlayer->second.areaId == qGroup->second.areaId)
                     {
                         bool groupFound = false;
                         // Find any role that this player matches and that the group requires. If none,
@@ -148,15 +142,16 @@ void LFGQueue::Update()
                 if (qGroup->second.groupTimer <= diff)
                 {
                     qGroup->second.groupTimer = 5 * MINUTE * IN_MILLISECONDS;
-                    sWorld.GetMessager().AddMessage([groupId = qGroup->first](World* world)
-                    {
-                        Group* group = sObjectMgr.GetGroupById(groupId);
-                        
-                        WorldPacket data;
-                        LFGMgr::BuildInProgressPacket(data);
+                    sWorld.GetMessager().AddMessage(
+                        [groupId = qGroup->first](World* world)
+                        {
+                            Group* group = sObjectMgr.GetGroupById(groupId);
 
-                        group->BroadcastPacket(&data, true);
-                    });
+                            WorldPacket data;
+                            LFGMgr::BuildInProgressPacket(data);
+
+                            group->BroadcastPacket(&data, true);
+                        });
                 }
                 else
                 {
@@ -186,34 +181,35 @@ void LFGQueue::Update()
                 RemovePlayerFromQueue(leaderGuid, PLAYER_SYSTEM_LEAVE);
                 RemovePlayerFromQueue(memberGuid, PLAYER_SYSTEM_LEAVE);
 
-                sWorld.GetMessager().AddMessage([leaderGuid, memberGuid, areaId](World* world)
-                {
-                    Player* leader = sObjectMgr.GetPlayer(leaderGuid);
-                    Player* member = sObjectMgr.GetPlayer(memberGuid);
-
-                    WorldPacket data;
-                    LFGMgr::BuildMemberAddedPacket(data, member->GetObjectGuid());
-
-                    leader->GetSession()->SendPacket(&data);
-
-                    Group* newQueueGroup = new Group;
-                    if (!newQueueGroup->IsCreated())
+                sWorld.GetMessager().AddMessage(
+                    [leaderGuid, memberGuid, areaId](World* world)
                     {
-                        if (newQueueGroup->Create(leader->GetObjectGuid(), leader->GetName()))
-                            sObjectMgr.AddGroup(newQueueGroup);
-                        else
+                        Player* leader = sObjectMgr.GetPlayer(leaderGuid);
+                        Player* member = sObjectMgr.GetPlayer(memberGuid);
+
+                        WorldPacket data;
+                        LFGMgr::BuildMemberAddedPacket(data, member->GetObjectGuid());
+
+                        leader->GetSession()->SendPacket(&data);
+
+                        Group* newQueueGroup = new Group;
+                        if (!newQueueGroup->IsCreated())
                         {
-                            // should never be reached for a newly created group
-                            MANGOS_ASSERT(false);
+                            if (newQueueGroup->Create(leader->GetObjectGuid(), leader->GetName()))
+                                sObjectMgr.AddGroup(newQueueGroup);
+                            else
+                            {
+                                // should never be reached for a newly created group
+                                MANGOS_ASSERT(false);
+                            }
                         }
-                    }
 
-                    // Add member to the group. Leader is already added upon creation of group.
-                    newQueueGroup->AddMember(member->GetObjectGuid(), member->GetName(), GROUP_LFG);
+                        // Add member to the group. Leader is already added upon creation of group.
+                        newQueueGroup->AddMember(member->GetObjectGuid(), member->GetName(), GROUP_LFG);
 
-                    // Add this new group to GroupQueue now and remove players from PlayerQueue - there will be a moment in time when the group isnt in queue
-                    sLFGMgr.AddToQueue(leader, areaId);
-                });
+                        // Add this new group to GroupQueue now and remove players from PlayerQueue - there will be a moment in time when the group isnt in queue
+                        sLFGMgr.AddToQueue(leader, areaId);
+                    });
             }
         }
 
@@ -223,15 +219,9 @@ void LFGQueue::Update()
     }
 }
 
-bool LFGQueue::IsPlayerInQueue(ObjectGuid const& plrGuid) const
-{
-    return m_queuedPlayers.find(plrGuid) != m_queuedPlayers.end();
-}
+bool LFGQueue::IsPlayerInQueue(ObjectGuid const& plrGuid) const { return m_queuedPlayers.find(plrGuid) != m_queuedPlayers.end(); }
 
-bool LFGQueue::IsGroupInQueue(uint32 groupId) const
-{
-    return m_queuedGroups.find(groupId) != m_queuedGroups.end();
-}
+bool LFGQueue::IsGroupInQueue(uint32 groupId) const { return m_queuedGroups.find(groupId) != m_queuedGroups.end(); }
 
 void LFGQueue::UpdateGroup(LFGGroupQueueInfo const& groupInfo, bool join, ObjectGuid playerGuid, uint32 groupId)
 {
@@ -252,27 +242,29 @@ void LFGQueue::AddGroup(LFGGroupQueueInfo const& groupInfo, uint32 groupId)
 {
     m_queuedGroups[groupId] = groupInfo;
 
-    sWorld.GetMessager().AddMessage([groupId = groupId, areaId = groupInfo.areaId](World* world)
-    {
-        Group* group = sObjectMgr.GetGroupById(groupId);
+    sWorld.GetMessager().AddMessage(
+        [groupId = groupId, areaId = groupInfo.areaId](World* world)
+        {
+            Group* group = sObjectMgr.GetGroupById(groupId);
 
-        WorldPacket data;
-        LFGMgr::BuildSetQueuePacket(data, areaId, MEETINGSTONE_STATUS_JOINED_QUEUE);
+            WorldPacket data;
+            LFGMgr::BuildSetQueuePacket(data, areaId, MEETINGSTONE_STATUS_JOINED_QUEUE);
 
-        group->BroadcastPacket(&data, true);
-    });
+            group->BroadcastPacket(&data, true);
+        });
 }
 
 void LFGQueue::AddPlayer(LFGPlayerQueueInfo const& playerInfo, ObjectGuid playerGuid)
 {
     m_queuedPlayers[playerGuid] = playerInfo;
 
-    sWorld.GetMessager().AddMessage([playerGuid, areaId = playerInfo.areaId](World* world)
-    {
-        Player* player = sObjectMgr.GetPlayer(playerGuid);
+    sWorld.GetMessager().AddMessage(
+        [playerGuid, areaId = playerInfo.areaId](World* world)
+        {
+            Player* player = sObjectMgr.GetPlayer(playerGuid);
 
-        player->GetSession()->SendMeetingstoneSetqueue(areaId, MEETINGSTONE_STATUS_JOINED_QUEUE);
-    });
+            player->GetSession()->SendMeetingstoneSetqueue(areaId, MEETINGSTONE_STATUS_JOINED_QUEUE);
+        });
 }
 
 void LFGQueue::FindInArea(std::vector<ObjectGuid>& players, uint32 area, uint32 team, ObjectGuid const& exclude)
@@ -332,19 +324,19 @@ bool LFGQueue::FindRoleToGroup(ObjectGuid playerGuid, uint32 groupId, LfgRoles r
 
         switch (role)
         {
-            case PLAYER_ROLE_TANK:
+        case PLAYER_ROLE_TANK:
             {
                 // Remove tank flag if player can perform tank role.
                 qGroup->second.availableRoles &= ~PLAYER_ROLE_TANK;
                 break;
             }
-            case PLAYER_ROLE_HEALER:
+        case PLAYER_ROLE_HEALER:
             {
                 // Remove healer flag if player can perform healer role.
                 qGroup->second.availableRoles &= ~PLAYER_ROLE_HEALER;
                 break;
             }
-            case PLAYER_ROLE_DAMAGE:
+        case PLAYER_ROLE_DAMAGE:
             {
                 if (qGroup->second.dpsCount < LFGMgr::GetMaximumDPSSlots())
                 {
@@ -357,7 +349,7 @@ bool LFGQueue::FindRoleToGroup(ObjectGuid playerGuid, uint32 groupId, LfgRoles r
                 }
                 break;
             }
-            default:
+        default:
             {
                 return false;
             }
@@ -368,18 +360,19 @@ bool LFGQueue::FindRoleToGroup(ObjectGuid playerGuid, uint32 groupId, LfgRoles r
 
         ++qGroup->second.playerCount;
 
-        sWorld.GetMessager().AddMessage([playerGuid, groupId](World* world)
-        {
-            Group* group = sObjectMgr.GetGroupById(groupId);
-            Player* player = sObjectMgr.GetPlayer(playerGuid);
+        sWorld.GetMessager().AddMessage(
+            [playerGuid, groupId](World* world)
+            {
+                Group* group = sObjectMgr.GetGroupById(groupId);
+                Player* player = sObjectMgr.GetPlayer(playerGuid);
 
-            WorldPacket data;
-            LFGMgr::BuildMemberAddedPacket(data, playerGuid);
-            group->BroadcastPacket(&data, true);
+                WorldPacket data;
+                LFGMgr::BuildMemberAddedPacket(data, playerGuid);
+                group->BroadcastPacket(&data, true);
 
-            // Add member to the group.
-            group->AddMember(playerGuid, player->GetName(), GROUP_LFG);
-        });
+                // Add member to the group.
+                group->AddMember(playerGuid, player->GetName(), GROUP_LFG);
+            });
 
         // Found player return true.
         return true;
@@ -395,7 +388,8 @@ void LFGQueue::RemovePlayerFromQueue(ObjectGuid playerGuid, PlayerLeaveMethod le
     {
         if (leaveMethod == PLAYER_CLIENT_LEAVE)
         {
-            sWorld.GetMessager().AddMessage([playerGuid](World* world)
+            sWorld.GetMessager().AddMessage(
+                [playerGuid](World* world)
                 {
                     if (Player* player = sObjectMgr.GetPlayer(playerGuid))
                     {
@@ -421,31 +415,32 @@ void LFGQueue::RemoveGroupFromQueue(uint32 groupId, GroupLeaveMethod leaveMethod
 
     if (iter != m_queuedGroups.end())
     {
-        sWorld.GetMessager().AddMessage([groupId, leaveMethod](World* world)
-        {
-            if (Group* grp = sObjectMgr.GetGroupById(groupId))
+        sWorld.GetMessager().AddMessage(
+            [groupId, leaveMethod](World* world)
             {
-                if (leaveMethod == GROUP_CLIENT_LEAVE)
+                if (Group* grp = sObjectMgr.GetGroupById(groupId))
                 {
-                    WorldPacket data;
-                    LFGMgr::BuildSetQueuePacket(data, 0, MEETINGSTONE_STATUS_LEAVE_QUEUE);
-                    grp->BroadcastPacket(&data, true);
-                }
-                else
-                {
-                    // Send complete information to party
-                    WorldPacket data;
-                    LFGMgr::BuildCompletePacket(data);
-                    grp->BroadcastPacket(&data, true);
+                    if (leaveMethod == GROUP_CLIENT_LEAVE)
+                    {
+                        WorldPacket data;
+                        LFGMgr::BuildSetQueuePacket(data, 0, MEETINGSTONE_STATUS_LEAVE_QUEUE);
+                        grp->BroadcastPacket(&data, true);
+                    }
+                    else
+                    {
+                        // Send complete information to party
+                        WorldPacket data;
+                        LFGMgr::BuildCompletePacket(data);
+                        grp->BroadcastPacket(&data, true);
 
-                    // Reset UI for party
-                    LFGMgr::BuildSetQueuePacket(data, 0, MEETINGSTONE_STATUS_NONE);
-                    grp->BroadcastPacket(&data, true);
-                }
+                        // Reset UI for party
+                        LFGMgr::BuildSetQueuePacket(data, 0, MEETINGSTONE_STATUS_NONE);
+                        grp->BroadcastPacket(&data, true);
+                    }
 
-                grp->SetLFGAreaId(0);
-            }
-        });
+                    grp->SetLFGAreaId(0);
+                }
+            });
 
         m_queuedGroups.erase(iter);
     }
@@ -459,18 +454,20 @@ void LFGQueue::RestoreOfflinePlayer(ObjectGuid playerGuid)
     {
         m_queuedPlayers[playerGuid] = itr->second;
         m_offlinePlayers.erase(itr);
-        sWorld.GetMessager().AddMessage([playerGuid, areaId = itr->second.areaId](World* world)
-        {
-            if (Player* player = sObjectMgr.GetPlayer(playerGuid))
-                player->GetSession()->SendMeetingstoneSetqueue(areaId, MEETINGSTONE_STATUS_JOINED_QUEUE);
-        });
+        sWorld.GetMessager().AddMessage(
+            [playerGuid, areaId = itr->second.areaId](World* world)
+            {
+                if (Player* player = sObjectMgr.GetPlayer(playerGuid))
+                    player->GetSession()->SendMeetingstoneSetqueue(areaId, MEETINGSTONE_STATUS_JOINED_QUEUE);
+            });
     }
     else
     {
-        sWorld.GetMessager().AddMessage([playerGuid](World* world)
-        {
-            if (Player* player = sObjectMgr.GetPlayer(playerGuid))
-                player->GetSession()->SendMeetingstoneSetqueue(0, MEETINGSTONE_STATUS_NONE);
-        });
+        sWorld.GetMessager().AddMessage(
+            [playerGuid](World* world)
+            {
+                if (Player* player = sObjectMgr.GetPlayer(playerGuid))
+                    player->GetSession()->SendMeetingstoneSetqueue(0, MEETINGSTONE_STATUS_NONE);
+            });
     }
 }

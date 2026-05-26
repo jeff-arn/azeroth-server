@@ -2,47 +2,44 @@
  *
  */
 
-#include "scriptPCH.h"
 #include "boss_dragon_of_nightmare.h"
+#include "scriptPCH.h"
 
 enum
 {
-    SAY_TAERAR_AGGRO                = 10886,
-    SAY_SUMMON_SHADE                = 10887,
+    SAY_TAERAR_AGGRO = 10886,
+    SAY_SUMMON_SHADE = 10887,
 
-    SPELL_ARCANE_BLAST              = 24857,
-    SPELL_BELLOWING_ROAR            = 22686,
+    SPELL_ARCANE_BLAST = 24857,
+    SPELL_BELLOWING_ROAR = 22686,
 
-    SPELL_SHADE_OF_TAERAR_LEFT      = 24841,
-    SPELL_SHADE_OF_TAERAR_RIGHT     = 24842,
-    SPELL_SHADE_OF_TAERAR_FRONT     = 24843,
-    SPELL_SELF_STUN                 = 24883,
+    SPELL_SHADE_OF_TAERAR_LEFT = 24841,
+    SPELL_SHADE_OF_TAERAR_RIGHT = 24842,
+    SPELL_SHADE_OF_TAERAR_FRONT = 24843,
+    SPELL_SELF_STUN = 24883,
 
     // Shade of Taerar spells
-    SPELL_ACID_BREATH               = 24839,
-    SPELL_POISON_CLOUD              = 24840,
+    SPELL_ACID_BREATH = 24839,
+    SPELL_POISON_CLOUD = 24840,
 
-    NPC_SHADE_OF_TAERAR             = 15302
+    NPC_SHADE_OF_TAERAR = 15302
 };
 
 /*
  *
  */
 
-boss_taerarAI::boss_taerarAI(Creature* pCreature) : boss_dragon_of_nightmareAI(pCreature)
-{
-    boss_taerarAI::Reset();
-}
+boss_taerarAI::boss_taerarAI(Creature* pCreature) : boss_dragon_of_nightmareAI(pCreature) { boss_taerarAI::Reset(); }
 
 void boss_taerarAI::Reset()
 {
     boss_dragon_of_nightmareAI::Reset();
 
-    m_uiArcaneBlastTimer       = urand(11000, 13000);
-    m_uiBellowingRoarTimer     = urand(27000, 30000);
-    m_uiShadesTimeoutTimer     = 0;
+    m_uiArcaneBlastTimer = urand(11000, 13000);
+    m_uiBellowingRoarTimer = urand(27000, 30000);
+    m_uiShadesTimeoutTimer = 0;
 
-    m_uiShadesDead             = 0;
+    m_uiShadesDead = 0;
 }
 
 void boss_taerarAI::Aggro(Unit* pWho)
@@ -63,7 +60,7 @@ bool boss_taerarAI::DoSpecialAbility()
 {
     if (DoCastSpellIfCan(m_creature, SPELL_SELF_STUN) == CAST_OK)
     {
-        DoCastSpellIfCan(m_creature, SPELL_SHADE_OF_TAERAR_LEFT,  CF_TRIGGERED);
+        DoCastSpellIfCan(m_creature, SPELL_SHADE_OF_TAERAR_LEFT, CF_TRIGGERED);
         DoCastSpellIfCan(m_creature, SPELL_SHADE_OF_TAERAR_RIGHT, CF_TRIGGERED);
         DoCastSpellIfCan(m_creature, SPELL_SHADE_OF_TAERAR_FRONT, CF_TRIGGERED);
 
@@ -89,7 +86,7 @@ void boss_taerarAI::SummonedCreatureJustDied(Creature* pSummoned)
         {
             DoUnbanish();
             m_creature->RemoveGuardians();
-        }            
+        }
     }
 }
 

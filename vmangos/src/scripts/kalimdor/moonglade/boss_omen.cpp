@@ -2,23 +2,17 @@
  * Copyright (C) 2010-2014 Anathema Script Engine project <http://valkyrie-wow.com/>
  */
 
-#include "scriptPCH.h"
 #include "boss_omen.h"
 #include "GameEventMgr.h"
+#include "scriptPCH.h"
 
 /*
  *
  */
 
-boss_omenAI::boss_omenAI(Creature* pCreature) : ScriptedAI(pCreature)
-{
-    boss_omenAI::Reset();
-}
+boss_omenAI::boss_omenAI(Creature* pCreature) : ScriptedAI(pCreature) { boss_omenAI::Reset(); }
 
-void boss_omenAI::Reset()
-{
-
-}
+void boss_omenAI::Reset() {}
 
 void boss_omenAI::OnRemoveFromWorld()
 {
@@ -58,11 +52,11 @@ void boss_omenAI::SpellHit(SpellCaster* /*pCaster*/, SpellEntry const* pSpellEnt
     if (pSpellEntry->Id == SPELL_ELUNES_CANDLE)
     {
         // proofs required
-        //if (m_uiStarfallTimer < 2000)
+        // if (m_uiStarfallTimer < 2000)
         //    m_uiStarfallTimer = 2000;
 
         DoCastSpellIfCan(m_creature, SPELL_SELF_DAMAGE, true);
-    }      
+    }
 }
 
 void boss_omenAI::JustDied(Unit* /*pKiller*/)
@@ -79,8 +73,7 @@ void boss_omenAI::OnFireworkLaunch(Unit* pSummoner)
     {
         ++OmenData.m_uiFireworksCount;
 
-        if (OmenData.m_uiFireworksCount >= 3 &&
-            !sGameEventMgr.IsActiveEvent(GAME_EVENT_MINIONS_OF_OMEN))
+        if (OmenData.m_uiFireworksCount >= 3 && !sGameEventMgr.IsActiveEvent(GAME_EVENT_MINIONS_OF_OMEN))
             sGameEventMgr.StartEvent(GAME_EVENT_MINIONS_OF_OMEN);
 
         if (OmenData.m_uiFireworksCount < 20)
@@ -88,11 +81,7 @@ void boss_omenAI::OnFireworkLaunch(Unit* pSummoner)
 
         if (OmenData.m_uiNextRespawn < time(nullptr))
         {
-            auto pOmen = pSummoner->SummonCreature(NPC_OMEN,
-                OmenSummon.x,
-                OmenSummon.y,
-                OmenSummon.z,
-                OmenSummon.o, TEMPSUMMON_TIMED_COMBAT_OR_DEAD_DESPAWN, 2 * HOUR * IN_MILLISECONDS, true);
+            auto pOmen = pSummoner->SummonCreature(NPC_OMEN, OmenSummon.x, OmenSummon.y, OmenSummon.z, OmenSummon.o, TEMPSUMMON_TIMED_COMBAT_OR_DEAD_DESPAWN, 2 * HOUR * IN_MILLISECONDS, true);
 
             if (pOmen)
             {
@@ -101,18 +90,22 @@ void boss_omenAI::OnFireworkLaunch(Unit* pSummoner)
                 pOmen->SetHomePosition(OmenHome.x, OmenHome.y, OmenHome.z, OmenHome.o);
                 pOmen->SetWanderDistance(10.0f);
                 pOmen->SetDefaultMovementType(RANDOM_MOTION_TYPE);
-                pOmen->m_Events.AddLambdaEventAtOffset([pOmen]
-                {
-                    pOmen->PlayDistanceSound(SOUND_CHARACTER_SPLASH);
-                    pOmen->PlayDistanceSound(SOUND_HYDRA_SPECIAL_AGGRO);
-                }, 800);
-                pOmen->m_Events.AddLambdaEventAtOffset([pOmen]
-                {
-                    if (!pOmen->IsInCombat())
-                        pOmen->GetMotionMaster()->MovePoint(1, 7553.95f, -2848.48f, 454.56f, MOVE_RUN_MODE);
-                    pOmen->GetMotionMaster()->InitializeNewDefault(true);
-                }, 4000);
-                
+                pOmen->m_Events.AddLambdaEventAtOffset(
+                    [pOmen]
+                    {
+                        pOmen->PlayDistanceSound(SOUND_CHARACTER_SPLASH);
+                        pOmen->PlayDistanceSound(SOUND_HYDRA_SPECIAL_AGGRO);
+                    },
+                    800);
+                pOmen->m_Events.AddLambdaEventAtOffset(
+                    [pOmen]
+                    {
+                        if (!pOmen->IsInCombat())
+                            pOmen->GetMotionMaster()->MovePoint(1, 7553.95f, -2848.48f, 454.56f, MOVE_RUN_MODE);
+                        pOmen->GetMotionMaster()->InitializeNewDefault(true);
+                    },
+                    4000);
+
                 sLog.Out(LOG_SCRIPTS, LOG_LVL_MINIMAL, "[Moonglade.Omen] Summoned.");
             }
             else
@@ -121,10 +114,7 @@ void boss_omenAI::OnFireworkLaunch(Unit* pSummoner)
     }
 }
 
-CreatureAI* GetAI_boss_omen(Creature* creature)
-{
-    return new boss_omenAI(creature);
-}
+CreatureAI* GetAI_boss_omen(Creature* creature) { return new boss_omenAI(creature); }
 
 void AddSC_boss_omen()
 {

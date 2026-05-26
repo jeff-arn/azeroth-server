@@ -26,27 +26,27 @@ struct PriestTouchOfWeaknessScript : SpellScript
             uint32 spellId;
             switch (spell->m_triggeredByAuraSpell->Id)
             {
-                case 2652:
-                    spellId = 2943;
-                    break; // Rank 1
-                case 19261:
-                    spellId = 19249;
-                    break; // Rank 2
-                case 19262:
-                    spellId = 19251;
-                    break; // Rank 3
-                case 19264:
-                    spellId = 19252;
-                    break; // Rank 4
-                case 19265:
-                    spellId = 19253;
-                    break; // Rank 5
-                case 19266:
-                    spellId = 19254;
-                    break; // Rank 6
-                default:
-                    sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Spell::EffectDummy: Spell 28598 triggered by unhandeled spell %u", spell->m_triggeredByAuraSpell->Id);
-                    return false;
+            case 2652:
+                spellId = 2943;
+                break; // Rank 1
+            case 19261:
+                spellId = 19249;
+                break; // Rank 2
+            case 19262:
+                spellId = 19251;
+                break; // Rank 3
+            case 19264:
+                spellId = 19252;
+                break; // Rank 4
+            case 19265:
+                spellId = 19253;
+                break; // Rank 5
+            case 19266:
+                spellId = 19254;
+                break; // Rank 6
+            default:
+                sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Spell::EffectDummy: Spell 28598 triggered by unhandeled spell %u", spell->m_triggeredByAuraSpell->Id);
+                return false;
             }
             spell->m_caster->CastSpell(spell->GetUnitTarget(), spellId, true, nullptr);
         }
@@ -54,10 +54,7 @@ struct PriestTouchOfWeaknessScript : SpellScript
     }
 };
 
-SpellScript* GetScript_PriestTouchOfWeakness(SpellEntry const*)
-{
-    return new PriestTouchOfWeaknessScript();
-}
+SpellScript* GetScript_PriestTouchOfWeakness(SpellEntry const*) { return new PriestTouchOfWeaknessScript(); }
 
 // 17, 592, 600, 3747, 6065, 6066, 10898, 10899, 10900, 10901, 27607 - Power Word: Shield
 struct PriestPowerWordShieldScript : SpellScript
@@ -76,10 +73,7 @@ struct PriestPowerWordShieldScript : SpellScript
     }
 };
 
-SpellScript* GetScript_PriestPowerWordShield(SpellEntry const*)
-{
-    return new PriestPowerWordShieldScript();
-}
+SpellScript* GetScript_PriestPowerWordShield(SpellEntry const*) { return new PriestPowerWordShieldScript(); }
 
 // 15237, 15430, 15431, 27799, 27800, 27801 - Holy Nova
 struct PriestHolyNovaScript : public SpellScript
@@ -92,27 +86,27 @@ struct PriestHolyNovaScript : public SpellScript
         uint32 spellId;
         switch (spell->m_spellInfo->Id)
         {
-            case 15237:
-                spellId = 23455;
-                break;// Holy Nova, rank 1
-            case 15430:
-                spellId = 23458;
-                break;// Holy Nova, rank 2
-            case 15431:
-                spellId = 23459;
-                break;// Holy Nova, rank 3
-            case 27799:
-                spellId = 27803;
-                break;// Holy Nova, rank 4
-            case 27800:
-                spellId = 27804;
-                break;// Holy Nova, rank 5
-            case 27801:
-                spellId = 27805;
-                break;// Holy Nova, rank 6
-            default:
-                sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Holy Nova spell script assigned to unhandled spell id %u.", spell->m_spellInfo->Id);
-                return;
+        case 15237:
+            spellId = 23455;
+            break; // Holy Nova, rank 1
+        case 15430:
+            spellId = 23458;
+            break; // Holy Nova, rank 2
+        case 15431:
+            spellId = 23459;
+            break; // Holy Nova, rank 3
+        case 27799:
+            spellId = 27803;
+            break; // Holy Nova, rank 4
+        case 27800:
+            spellId = 27804;
+            break; // Holy Nova, rank 5
+        case 27801:
+            spellId = 27805;
+            break; // Holy Nova, rank 6
+        default:
+            sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Holy Nova spell script assigned to unhandled spell id %u.", spell->m_spellInfo->Id);
+            return;
         }
 
         SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(spellId);
@@ -124,10 +118,7 @@ struct PriestHolyNovaScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_PriestHolyNova(SpellEntry const*)
-{
-    return new PriestHolyNovaScript();
-}
+SpellScript* GetScript_PriestHolyNova(SpellEntry const*) { return new PriestHolyNovaScript(); }
 
 void AddSC_priest_spell_scripts()
 {

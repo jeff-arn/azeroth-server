@@ -14,21 +14,21 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "AccountMgr.h"
+#include "Anticheat.h"
+#include "AsyncCommandHandlers.h"
+#include "Chat.h"
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
 #include "Database/DatabaseImpl.h"
-#include "World.h"
+#include "Language.h"
+#include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "Player.h"
 #include "SpellAuras.h"
-#include "Chat.h"
-#include "ObjectAccessor.h"
-#include "Language.h"
-#include "AccountMgr.h"
-#include "ObjectMgr.h"
 #include "SystemConfig.h"
 #include "Util.h"
-#include "AsyncCommandHandlers.h"
-#include "Anticheat.h"
+#include "World.h"
 
 bool ChatHandler::HandleAccountCommand(char* args)
 {
@@ -41,7 +41,7 @@ bool ChatHandler::HandleAccountCommand(char* args)
     return true;
 }
 
- // Set/Unset the expansion level for an account
+// Set/Unset the expansion level for an account
 bool ChatHandler::HandleAccountSetAddonCommand(char* args)
 {
     // Get the command line arguments
@@ -54,8 +54,7 @@ bool ChatHandler::HandleAccountSetAddonCommand(char* args)
 
     // Let set addon state only for lesser (strong) security level
     // or to self account
-    if (GetAccountId() && GetAccountId() != account_id &&
-        HasLowerSecurityAccount(nullptr, account_id, true))
+    if (GetAccountId() && GetAccountId() != account_id && HasLowerSecurityAccount(nullptr, account_id, true))
         return false;
 
     uint32 lev;
@@ -129,8 +128,8 @@ bool ChatHandler::HandleAccountSetPasswordCommand(char* args)
         return false;
 
     // allow or quoted string with possible spaces or literal without spaces
-    char *szPassword1 = ExtractQuotedOrLiteralArg(&args);
-    char *szPassword2 = ExtractQuotedOrLiteralArg(&args);
+    char* szPassword1 = ExtractQuotedOrLiteralArg(&args);
+    char* szPassword2 = ExtractQuotedOrLiteralArg(&args);
     if (!szPassword1 || !szPassword2)
         return false;
 
@@ -150,21 +149,21 @@ bool ChatHandler::HandleAccountSetPasswordCommand(char* args)
 
     switch (result)
     {
-        case AOR_OK:
-            SendSysMessage(LANG_COMMAND_PASSWORD);
-            break;
-        case AOR_NAME_NOT_EXIST:
-            PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, account_name.c_str());
-            SetSentErrorMessage(true);
-            return false;
-        case AOR_PASS_TOO_LONG:
-            SendSysMessage(LANG_PASSWORD_TOO_LONG);
-            SetSentErrorMessage(true);
-            return false;
-        default:
-            SendSysMessage(LANG_COMMAND_NOTCHANGEPASSWORD);
-            SetSentErrorMessage(true);
-            return false;
+    case AOR_OK:
+        SendSysMessage(LANG_COMMAND_PASSWORD);
+        break;
+    case AOR_NAME_NOT_EXIST:
+        PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, account_name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    case AOR_PASS_TOO_LONG:
+        SendSysMessage(LANG_PASSWORD_TOO_LONG);
+        SetSentErrorMessage(true);
+        return false;
+    default:
+        SendSysMessage(LANG_COMMAND_NOTCHANGEPASSWORD);
+        SetSentErrorMessage(true);
+        return false;
     }
 
     return true;
@@ -183,8 +182,7 @@ bool ChatHandler::HandleAccountSetLockedCommand(char* args)
 
     // Let set locked state only for lesser (strong) security level
     // or to self account
-    if (GetAccountId() && GetAccountId() != account_id &&
-        HasLowerSecurityAccount(nullptr, account_id, true))
+    if (GetAccountId() && GetAccountId() != account_id && HasLowerSecurityAccount(nullptr, account_id, true))
         return false;
 
     uint32 value;
@@ -213,16 +211,13 @@ bool ChatHandler::HandleAccountCharactersCommand(char* args)
 {
     // Get the command line arguments
     std::string account_name;
-    Player* target = nullptr;                                  // only for triggering use targeted player account
+    Player* target = nullptr; // only for triggering use targeted player account
     uint32 account_id = ExtractAccountId(&args, &account_name, &target);
     if (!account_id)
         return false;
 
     // Get the characters for account id
-    CharacterDatabase.AsyncPQuery(&PlayerSearchHandler::HandlePlayerCharacterLookupResult,
-        GetAccountId(), 100u,
-        "SELECT `guid`, `name`, `race`, `class`, `level` FROM `characters` WHERE `account` = %u",
-        account_id);
+    CharacterDatabase.AsyncPQuery(&PlayerSearchHandler::HandlePlayerCharacterLookupResult, GetAccountId(), 100u, "SELECT `guid`, `name`, `race`, `class`, `level` FROM `characters` WHERE `account` = %u", account_id);
 
     return true;
 }
@@ -239,8 +234,8 @@ bool ChatHandler::HandleAccountClearDataCommand(char* args)
 bool ChatHandler::HandleAccountCreateCommand(char* args)
 {
     // %Parse the command line arguments
-    char *szAcc = ExtractQuotedOrLiteralArg(&args);
-    char *szPassword = ExtractQuotedOrLiteralArg(&args);
+    char* szAcc = ExtractQuotedOrLiteralArg(&args);
+    char* szPassword = ExtractQuotedOrLiteralArg(&args);
     if (!szAcc || !szPassword)
         return false;
 
@@ -249,27 +244,27 @@ bool ChatHandler::HandleAccountCreateCommand(char* args)
     std::string password = szPassword;
 
     AccountOpResult result = sAccountMgr.CreateAccount(account_name, password);
-    switch(result)
+    switch (result)
     {
-        case AOR_OK:
-            PSendSysMessage(LANG_ACCOUNT_CREATED,account_name.c_str());
-            break;
-        case AOR_NAME_TOO_LONG:
-            SendSysMessage(LANG_ACCOUNT_TOO_LONG);
-            SetSentErrorMessage(true);
-            return false;
-        case AOR_NAME_ALREDY_EXIST:
-            SendSysMessage(LANG_ACCOUNT_ALREADY_EXIST);
-            SetSentErrorMessage(true);
-            return false;
-        case AOR_DB_INTERNAL_ERROR:
-            PSendSysMessage(LANG_ACCOUNT_NOT_CREATED_SQL_ERROR,account_name.c_str());
-            SetSentErrorMessage(true);
-            return false;
-        default:
-            PSendSysMessage(LANG_ACCOUNT_NOT_CREATED,account_name.c_str());
-            SetSentErrorMessage(true);
-            return false;
+    case AOR_OK:
+        PSendSysMessage(LANG_ACCOUNT_CREATED, account_name.c_str());
+        break;
+    case AOR_NAME_TOO_LONG:
+        SendSysMessage(LANG_ACCOUNT_TOO_LONG);
+        SetSentErrorMessage(true);
+        return false;
+    case AOR_NAME_ALREDY_EXIST:
+        SendSysMessage(LANG_ACCOUNT_ALREADY_EXIST);
+        SetSentErrorMessage(true);
+        return false;
+    case AOR_DB_INTERNAL_ERROR:
+        PSendSysMessage(LANG_ACCOUNT_NOT_CREATED_SQL_ERROR, account_name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    default:
+        PSendSysMessage(LANG_ACCOUNT_NOT_CREATED, account_name.c_str());
+        SetSentErrorMessage(true);
+        return false;
     }
 
     return true;
@@ -290,27 +285,27 @@ bool ChatHandler::HandleAccountDeleteCommand(char* args)
     // Commands not recommended call from chat, but support anyway
     // can delete only for account with less security
     // This is also reject self apply in fact
-    if (HasLowerSecurityAccount (nullptr, account_id, true))
+    if (HasLowerSecurityAccount(nullptr, account_id, true))
         return false;
 
     AccountOpResult result = sAccountMgr.DeleteAccount(account_id);
-    switch(result)
+    switch (result)
     {
-        case AOR_OK:
-            PSendSysMessage(LANG_ACCOUNT_DELETED,account_name.c_str());
-            break;
-        case AOR_NAME_NOT_EXIST:
-            PSendSysMessage(LANG_ACCOUNT_NOT_EXIST,account_name.c_str());
-            SetSentErrorMessage(true);
-            return false;
-        case AOR_DB_INTERNAL_ERROR:
-            PSendSysMessage(LANG_ACCOUNT_NOT_DELETED_SQL_ERROR,account_name.c_str());
-            SetSentErrorMessage(true);
-            return false;
-        default:
-            PSendSysMessage(LANG_ACCOUNT_NOT_DELETED,account_name.c_str());
-            SetSentErrorMessage(true);
-            return false;
+    case AOR_OK:
+        PSendSysMessage(LANG_ACCOUNT_DELETED, account_name.c_str());
+        break;
+    case AOR_NAME_NOT_EXIST:
+        PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, account_name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    case AOR_DB_INTERNAL_ERROR:
+        PSendSysMessage(LANG_ACCOUNT_NOT_DELETED_SQL_ERROR, account_name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    default:
+        PSendSysMessage(LANG_ACCOUNT_NOT_DELETED, account_name.c_str());
+        SetSentErrorMessage(true);
+        return false;
     }
 
     return true;
@@ -382,9 +377,9 @@ bool ChatHandler::HandleAccountPasswordCommand(char* args)
     }
 
     // allow or quoted string with possible spaces or literal without spaces
-    char *old_pass = ExtractQuotedOrLiteralArg(&args);
-    char *new_pass = ExtractQuotedOrLiteralArg(&args);
-    char *new_pass_c = ExtractQuotedOrLiteralArg(&args);
+    char* old_pass = ExtractQuotedOrLiteralArg(&args);
+    char* new_pass = ExtractQuotedOrLiteralArg(&args);
+    char* new_pass_c = ExtractQuotedOrLiteralArg(&args);
 
     if (!old_pass || !new_pass || !new_pass_c)
         return false;
@@ -411,18 +406,18 @@ bool ChatHandler::HandleAccountPasswordCommand(char* args)
 
     switch (result)
     {
-        case AOR_OK:
-            SendSysMessage(LANG_COMMAND_PASSWORD);
-            break;
-        case AOR_PASS_TOO_LONG:
-            SendSysMessage(LANG_PASSWORD_TOO_LONG);
-            SetSentErrorMessage(true);
-            return false;
-        case AOR_NAME_NOT_EXIST:                            // not possible case, don't want get account name for output
-        default:
-            SendSysMessage(LANG_COMMAND_NOTCHANGEPASSWORD);
-            SetSentErrorMessage(true);
-            return false;
+    case AOR_OK:
+        SendSysMessage(LANG_COMMAND_PASSWORD);
+        break;
+    case AOR_PASS_TOO_LONG:
+        SendSysMessage(LANG_PASSWORD_TOO_LONG);
+        SetSentErrorMessage(true);
+        return false;
+    case AOR_NAME_NOT_EXIST: // not possible case, don't want get account name for output
+    default:
+        SendSysMessage(LANG_COMMAND_NOTCHANGEPASSWORD);
+        SetSentErrorMessage(true);
+        return false;
     }
     SetSentErrorMessage(true);
     return false;
@@ -486,7 +481,7 @@ bool ChatHandler::HandleWarnCharacterCommand(char* args)
     return true;
 }
 
-bool ChatHandler::HandleKickPlayerCommand(char *args)
+bool ChatHandler::HandleKickPlayerCommand(char* args)
 {
     Player* target;
     if (!ExtractPlayerTarget(&args, &target))
@@ -513,20 +508,11 @@ bool ChatHandler::HandleKickPlayerCommand(char *args)
     return true;
 }
 
-bool ChatHandler::HandleBanAccountCommand(char* args)
-{
-    return HandleBanHelper(BAN_ACCOUNT, args);
-}
+bool ChatHandler::HandleBanAccountCommand(char* args) { return HandleBanHelper(BAN_ACCOUNT, args); }
 
-bool ChatHandler::HandleBanCharacterCommand(char* args)
-{
-    return HandleBanHelper(BAN_CHARACTER, args);
-}
+bool ChatHandler::HandleBanCharacterCommand(char* args) { return HandleBanHelper(BAN_CHARACTER, args); }
 
-bool ChatHandler::HandleBanIPCommand(char* args)
-{
-    return HandleBanHelper(BAN_IP, args);
-}
+bool ChatHandler::HandleBanIPCommand(char* args) { return HandleBanHelper(BAN_IP, args); }
 
 bool ChatHandler::HandleBanAllIPCommand(char* args)
 {
@@ -561,7 +547,8 @@ bool ChatHandler::HandleBanAllIPCommand(char* args)
         allAccounts << fields[0].GetUInt32();
         accountsToBan.insert(fields[0].GetUInt32());
         accountsIdToName[fields[0].GetUInt32()] = fields[1].GetCppString();
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     if (result = CharacterDatabase.PQuery("SELECT `account` FROM `characters` WHERE `account` IN (%s) AND `level` > %u GROUP BY `account`", allAccounts.str().c_str(), maxLevel))
     {
@@ -569,7 +556,8 @@ bool ChatHandler::HandleBanAllIPCommand(char* args)
         {
             Field* fields = result->Fetch();
             accountsToBan.erase(fields[0].GetUInt32());
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     uint32 bannedCount = 0;
@@ -596,7 +584,7 @@ bool ChatHandler::HandleBanHelper(BanMode mode, char* args)
 
     std::string nameOrIP = cnameOrIP;
 
-    char* duration = ExtractArg(&args);                     // time string
+    char* duration = ExtractArg(&args); // time string
     if (!duration)
         return false;
 
@@ -610,26 +598,26 @@ bool ChatHandler::HandleBanHelper(BanMode mode, char* args)
 
     switch (mode)
     {
-        case BAN_ACCOUNT:
-            if (!AccountMgr::normalizeString(nameOrIP))
-            {
-                PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, nameOrIP.c_str());
-                SetSentErrorMessage(true);
-                return false;
-            }
-            break;
-        case BAN_CHARACTER:
-            if (!normalizePlayerName(nameOrIP))
-            {
-                SendSysMessage(LANG_PLAYER_NOT_FOUND);
-                SetSentErrorMessage(true);
-                return false;
-            }
-            break;
-        case BAN_IP:
-            if (!IsIPAddress(nameOrIP.c_str()))
-                return false;
-            break;
+    case BAN_ACCOUNT:
+        if (!AccountMgr::normalizeString(nameOrIP))
+        {
+            PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, nameOrIP.c_str());
+            SetSentErrorMessage(true);
+            return false;
+        }
+        break;
+    case BAN_CHARACTER:
+        if (!normalizePlayerName(nameOrIP))
+        {
+            SendSysMessage(LANG_PLAYER_NOT_FOUND);
+            SetSentErrorMessage(true);
+            return false;
+        }
+        break;
+    case BAN_IP:
+        if (!IsIPAddress(nameOrIP.c_str()))
+            return false;
+        break;
     }
 
     sWorld.BanAccount(mode, nameOrIP, duration_secs, reason, m_session ? m_session->GetPlayerName() : "");
@@ -641,46 +629,37 @@ void ChatHandler::SendBanResult(BanMode mode, BanReturn result, std::string& ban
 {
     switch (result)
     {
-        case BAN_SUCCESS:
-            if (duration_secs > 0)
-                PSendSysMessage(LANG_BAN_YOUBANNED, banTarget.c_str(), secsToTimeString(duration_secs, true).c_str(), reason.c_str());
-            else
-                PSendSysMessage(LANG_BAN_YOUPERMBANNED, banTarget.c_str(), reason.c_str());
+    case BAN_SUCCESS:
+        if (duration_secs > 0)
+            PSendSysMessage(LANG_BAN_YOUBANNED, banTarget.c_str(), secsToTimeString(duration_secs, true).c_str(), reason.c_str());
+        else
+            PSendSysMessage(LANG_BAN_YOUPERMBANNED, banTarget.c_str(), reason.c_str());
+        break;
+    case BAN_SYNTAX_ERROR:
+        return;
+    case BAN_NOTFOUND:
+        switch (mode)
+        {
+        default:
+            PSendSysMessage(LANG_BAN_NOTFOUND, "account", banTarget.c_str());
             break;
-        case BAN_SYNTAX_ERROR:
-            return;
-        case BAN_NOTFOUND:
-            switch (mode)
-            {
-                default:
-                    PSendSysMessage(LANG_BAN_NOTFOUND, "account", banTarget.c_str());
-                    break;
-                case BAN_CHARACTER:
-                    PSendSysMessage(LANG_BAN_NOTFOUND, "character", banTarget.c_str());
-                    break;
-                case BAN_IP:
-                    PSendSysMessage(LANG_BAN_NOTFOUND, "ip", banTarget.c_str());
-                    break;
-            }
-            SetSentErrorMessage(true);
-            return;
+        case BAN_CHARACTER:
+            PSendSysMessage(LANG_BAN_NOTFOUND, "character", banTarget.c_str());
+            break;
+        case BAN_IP:
+            PSendSysMessage(LANG_BAN_NOTFOUND, "ip", banTarget.c_str());
+            break;
+        }
+        SetSentErrorMessage(true);
+        return;
     }
 }
 
-bool ChatHandler::HandleUnBanAccountCommand(char* args)
-{
-    return HandleUnBanHelper(BAN_ACCOUNT, args);
-}
+bool ChatHandler::HandleUnBanAccountCommand(char* args) { return HandleUnBanHelper(BAN_ACCOUNT, args); }
 
-bool ChatHandler::HandleUnBanCharacterCommand(char* args)
-{
-    return HandleUnBanHelper(BAN_CHARACTER, args);
-}
+bool ChatHandler::HandleUnBanCharacterCommand(char* args) { return HandleUnBanHelper(BAN_CHARACTER, args); }
 
-bool ChatHandler::HandleUnBanIPCommand(char* args)
-{
-    return HandleUnBanHelper(BAN_IP, args);
-}
+bool ChatHandler::HandleUnBanIPCommand(char* args) { return HandleUnBanHelper(BAN_IP, args); }
 
 bool ChatHandler::HandleUnBanHelper(BanMode mode, char* args)
 {
@@ -701,26 +680,26 @@ bool ChatHandler::HandleUnBanHelper(BanMode mode, char* args)
 
     switch (mode)
     {
-        case BAN_ACCOUNT:
-            if (!AccountMgr::normalizeString(nameOrIP))
-            {
-                PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, nameOrIP.c_str());
-                SetSentErrorMessage(true);
-                return false;
-            }
-            break;
-        case BAN_CHARACTER:
-            if (!normalizePlayerName(nameOrIP))
-            {
-                SendSysMessage(LANG_PLAYER_NOT_FOUND);
-                SetSentErrorMessage(true);
-                return false;
-            }
-            break;
-        case BAN_IP:
-            if (!IsIPAddress(nameOrIP.c_str()))
-                return false;
-            break;
+    case BAN_ACCOUNT:
+        if (!AccountMgr::normalizeString(nameOrIP))
+        {
+            PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, nameOrIP.c_str());
+            SetSentErrorMessage(true);
+            return false;
+        }
+        break;
+    case BAN_CHARACTER:
+        if (!normalizePlayerName(nameOrIP))
+        {
+            SendSysMessage(LANG_PLAYER_NOT_FOUND);
+            SetSentErrorMessage(true);
+            return false;
+        }
+        break;
+    case BAN_IP:
+        if (!IsIPAddress(nameOrIP.c_str()))
+            return false;
+        break;
     }
 
     std::string source = m_session ? m_session->GetPlayerName() : "CONSOLE";
@@ -750,7 +729,7 @@ bool ChatHandler::HandleBanInfoCharacterCommand(char* args)
 {
     Player* target;
     ObjectGuid target_guid;
-    if (!ExtractPlayerTarget(&args, &target, &target_guid,nullptr,true))
+    if (!ExtractPlayerTarget(&args, &target, &target_guid, nullptr, true))
         return false;
 
     uint32 accountid = target ? target->GetSession()->GetAccountId() : sObjectMgr.GetPlayerAccountIdByGUID(target_guid);
@@ -767,10 +746,10 @@ bool ChatHandler::HandleBanInfoCharacterCommand(char* args)
 
 bool ChatHandler::HandleBanInfoHelper(uint32 accountid, char const* accountname)
 {
-    std::unique_ptr<QueryResult> result = LoginDatabase.PQuery(
-    "SELECT FROM_UNIXTIME(`bandate`), `unbandate`-`bandate`, `active`, `unbandate`,`banreason`,`bannedby`,COALESCE(`name`, \"NoRealm\") , `gmlevel` "
-    "FROM `account_banned` LEFT JOIN `realmlist` ON `realmlist`.`id` = `realm` "
-    "WHERE `account_banned`.`id` = '%u' ORDER BY `bandate` ASC", accountid);
+    std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT FROM_UNIXTIME(`bandate`), `unbandate`-`bandate`, `active`, `unbandate`,`banreason`,`bannedby`,COALESCE(`name`, \"NoRealm\") , `gmlevel` "
+                                                               "FROM `account_banned` LEFT JOIN `realmlist` ON `realmlist`.`id` = `realm` "
+                                                               "WHERE `account_banned`.`id` = '%u' ORDER BY `bandate` ASC",
+                                                               accountid);
     if (!result)
     {
         PSendSysMessage(LANG_BANINFO_NOACCOUNTBAN, accountname);
@@ -794,11 +773,10 @@ bool ChatHandler::HandleBanInfoHelper(uint32 accountid, char const* accountname)
 
         std::string authorName = fields[5].GetCppString() + " (" + fields[6].GetCppString() + ")";
         std::string bantime = permanent ? GetMangosString(LANG_BANINFO_INFINITE) : secsToTimeString(fields[1].GetUInt64(), true);
-        PSendSysMessage(LANG_BANINFO_HISTORYENTRY,
-                        fields[0].GetString(), bantime.c_str(), active ? GetMangosString(LANG_BANINFO_YES) : GetMangosString(LANG_BANINFO_NO), banreason.c_str(), authorName.c_str());
+        PSendSysMessage(LANG_BANINFO_HISTORYENTRY, fields[0].GetString(), bantime.c_str(), active ? GetMangosString(LANG_BANINFO_YES) : GetMangosString(LANG_BANINFO_NO), banreason.c_str(), authorName.c_str());
     }
     while (result->NextRow());
-;
+    ;
     return true;
 }
 
@@ -826,9 +804,7 @@ bool ChatHandler::HandleBanInfoIPCommand(char* args)
 
     Field* fields = result->Fetch();
     bool permanent = !fields[6].GetUInt64();
-    PSendSysMessage(LANG_BANINFO_IPENTRY,
-                    fields[0].GetString(), fields[1].GetString(), permanent ? GetMangosString(LANG_BANINFO_NEVER) : fields[2].GetString(),
-                    permanent ? GetMangosString(LANG_BANINFO_INFINITE) : secsToTimeString(fields[3].GetUInt64(), true).c_str(), fields[4].GetString(), fields[5].GetString());
+    PSendSysMessage(LANG_BANINFO_IPENTRY, fields[0].GetString(), fields[1].GetString(), permanent ? GetMangosString(LANG_BANINFO_NEVER) : fields[2].GetString(), permanent ? GetMangosString(LANG_BANINFO_INFINITE) : secsToTimeString(fields[3].GetUInt64(), true).c_str(), fields[4].GetString(), fields[5].GetString());
     return true;
 }
 
@@ -937,18 +913,13 @@ bool ChatHandler::HandleBanListHelper(std::unique_ptr<QueryResult> result)
 
                     if (fields2[0].GetUInt64() == fields2[1].GetUInt64())
                     {
-                        PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|   permanent  |%-15.15s|%-15.15s|",
-                                        account_name.c_str(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min,
-                                        fields2[2].GetString(), fields2[3].GetString());
+                        PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|   permanent  |%-15.15s|%-15.15s|", account_name.c_str(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min, fields2[2].GetString(), fields2[3].GetString());
                     }
                     else
                     {
                         time_t t_unban = fields2[1].GetUInt64();
                         tm* aTm_unban = localtime(&t_unban);
-                        PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|%02d-%02d-%02d %02d:%02d|%-15.15s|%-15.15s|",
-                                        account_name.c_str(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min,
-                                        aTm_unban->tm_year % 100, aTm_unban->tm_mon + 1, aTm_unban->tm_mday, aTm_unban->tm_hour, aTm_unban->tm_min,
-                                        fields2[2].GetString(), fields2[3].GetString());
+                        PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|%02d-%02d-%02d %02d:%02d|%-15.15s|%-15.15s|", account_name.c_str(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min, aTm_unban->tm_year % 100, aTm_unban->tm_mon + 1, aTm_unban->tm_mday, aTm_unban->tm_hour, aTm_unban->tm_min, fields2[2].GetString(), fields2[3].GetString());
                     }
                 }
                 while (banInfo->NextRow());
@@ -980,8 +951,8 @@ bool ChatHandler::HandleBanListIPCommand(char* args)
     else
     {
         result = LoginDatabase.PQuery("SELECT `ip`,`bandate`,`unbandate`,`bannedby`,`banreason` FROM `ip_banned`"
-                                      " WHERE (`bandate`=`unbandate` OR `unbandate`>UNIX_TIMESTAMP()) AND `ip` " _LIKE_ " " _CONCAT2_("'%s'", "'%%'")
-                                      " ORDER BY `unbandate`", filter.c_str());
+                                      " WHERE (`bandate`=`unbandate` OR `unbandate`>UNIX_TIMESTAMP()) AND `ip` " _LIKE_ " " _CONCAT2_("'%s'", "'%%'") " ORDER BY `unbandate`",
+                                      filter.c_str());
     }
 
     if (!result)
@@ -1015,18 +986,13 @@ bool ChatHandler::HandleBanListIPCommand(char* args)
             tm* aTm_ban = localtime(&t_ban);
             if (fields[1].GetUInt64() == fields[2].GetUInt64())
             {
-                PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|   permanent  |%-15.15s|%-15.15s|",
-                                fields[0].GetString(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min,
-                                fields[3].GetString(), fields[4].GetString());
+                PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|   permanent  |%-15.15s|%-15.15s|", fields[0].GetString(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min, fields[3].GetString(), fields[4].GetString());
             }
             else
             {
                 time_t t_unban = fields[2].GetUInt64();
                 tm* aTm_unban = localtime(&t_unban);
-                PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|%02d-%02d-%02d %02d:%02d|%-15.15s|%-15.15s|",
-                                fields[0].GetString(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min,
-                                aTm_unban->tm_year % 100, aTm_unban->tm_mon + 1, aTm_unban->tm_mday, aTm_unban->tm_hour, aTm_unban->tm_min,
-                                fields[3].GetString(), fields[4].GetString());
+                PSendSysMessage("|%-15.15s|%02d-%02d-%02d %02d:%02d|%02d-%02d-%02d %02d:%02d|%-15.15s|%-15.15s|", fields[0].GetString(), aTm_ban->tm_year % 100, aTm_ban->tm_mon + 1, aTm_ban->tm_mday, aTm_ban->tm_hour, aTm_ban->tm_min, aTm_unban->tm_year % 100, aTm_unban->tm_mon + 1, aTm_unban->tm_mday, aTm_unban->tm_hour, aTm_unban->tm_min, fields[3].GetString(), fields[4].GetString());
             }
         }
         while (result->NextRow());
@@ -1062,7 +1028,7 @@ bool ChatHandler::HandleSpamerMute(char* args)
 
     if (Player* player = ObjectAccessor::FindPlayerByName(cname))
     {
-        if (AntispamInterface *a = sAnticheatMgr->GetAntispam())
+        if (AntispamInterface* a = sAnticheatMgr->GetAntispam())
         {
             a->mute(player->GetSession()->GetAccountId());
             PSendSysMessage("Spamer %s was muted", cname);
@@ -1083,7 +1049,7 @@ bool ChatHandler::HandleSpamerUnmute(char* args)
 
     if (Player* player = ObjectAccessor::FindPlayerByName(cname))
     {
-        if (AntispamInterface *a = sAnticheatMgr->GetAntispam())
+        if (AntispamInterface* a = sAnticheatMgr->GetAntispam())
         {
             a->unmute(player->GetSession()->GetAccountId());
             PSendSysMessage("Spamer %s was unmuted", cname);
@@ -1095,12 +1061,12 @@ bool ChatHandler::HandleSpamerUnmute(char* args)
 
 bool ChatHandler::HandleSpamerList(char* args)
 {
-    if (AntispamInterface *a = sAnticheatMgr->GetAntispam())
+    if (AntispamInterface* a = sAnticheatMgr->GetAntispam())
         a->showMuted(GetSession());
     return true;
 }
 
-//mute player for some times
+// mute player for some times
 bool ChatHandler::HandleMuteCommand(char* args)
 {
     char* nameStr = ExtractOptNotLastArg(&args);
@@ -1147,7 +1113,7 @@ bool ChatHandler::HandleMuteCommand(char* args)
             pAura->SetAuraMaxDuration(notspeaktime * MINUTE * IN_MILLISECONDS);
             pAura->RefreshHolder();
         }
-            
+
         target->PSendSysMessage(LANG_YOUR_CHAT_DISABLED, notspeaktime);
     }
 
@@ -1167,7 +1133,7 @@ bool ChatHandler::HandleMuteCommand(char* args)
     return true;
 }
 
-//unmute player
+// unmute player
 bool ChatHandler::HandleUnmuteCommand(char* args)
 {
     Player* target;
@@ -1207,7 +1173,7 @@ bool ChatHandler::HandleUnmuteCommand(char* args)
     {
         target->RemoveAurasDueToSpell(SPELL_PLAYER_MUTED_VISUAL);
         target->PSendSysMessage(LANG_YOUR_CHAT_ENABLED);
-    } 
+    }
 
     std::string nameLink = playerLink(target_name);
 

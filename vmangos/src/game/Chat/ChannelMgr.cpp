@@ -20,10 +20,10 @@
  */
 
 #include "ChannelMgr.h"
-#include "Policies/SingletonImp.h"
-#include "World.h"
-#include "Util.h"
 #include "DBCStores.h"
+#include "Policies/SingletonImp.h"
+#include "Util.h"
+#include "World.h"
 
 INSTANTIATE_SINGLETON_1(AllianceChannelMgr);
 INSTANTIATE_SINGLETON_1(HordeChannelMgr);
@@ -31,7 +31,7 @@ INSTANTIATE_SINGLETON_1(HordeChannelMgr);
 ChannelMgr* channelMgr(Team team)
 {
     if (sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_CHANNEL))
-        return &MaNGOS::Singleton<AllianceChannelMgr>::Instance();        // cross-faction
+        return &MaNGOS::Singleton<AllianceChannelMgr>::Instance(); // cross-faction
 
     if (team == ALLIANCE)
         return &MaNGOS::Singleton<AllianceChannelMgr>::Instance();
@@ -49,7 +49,7 @@ ChannelMgr::~ChannelMgr()
     channels.clear();
 }
 
-Channel *ChannelMgr::GetJoinChannel(std::string const& name, bool allowAreaDependantChans)
+Channel* ChannelMgr::GetJoinChannel(std::string const& name, bool allowAreaDependantChans)
 {
     std::wstring wname;
     Utf8toWStr(name, wname);
@@ -60,7 +60,7 @@ Channel *ChannelMgr::GetJoinChannel(std::string const& name, bool allowAreaDepen
         ChatChannelsEntry const* ch = GetChannelEntryFor(name);
         if (!allowAreaDependantChans && ch && ch->flags & Channel::CHANNEL_DBC_FLAG_ZONE_DEP)
             return nullptr;
-        Channel *nchan = new Channel(name);
+        Channel* nchan = new Channel(name);
         channels[wname] = nchan;
         return nchan;
     }
@@ -68,7 +68,7 @@ Channel *ChannelMgr::GetJoinChannel(std::string const& name, bool allowAreaDepen
     return channels[wname];
 }
 
-Channel *ChannelMgr::GetChannel(std::string const& name, PlayerPointer p, bool pkt)
+Channel* ChannelMgr::GetChannel(std::string const& name, PlayerPointer p, bool pkt)
 {
     std::wstring wname;
     Utf8toWStr(name, wname);

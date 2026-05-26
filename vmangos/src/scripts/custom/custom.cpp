@@ -14,10 +14,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "custom.h"
+#include "scriptPCH.h"
 
-void AddSC_zero_scripts()
-{
-    AddSC_custom_creatures();
-}
+void AddSC_zero_scripts() { AddSC_custom_creatures(); }

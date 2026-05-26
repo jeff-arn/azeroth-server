@@ -15,10 +15,7 @@ struct npc_narm_faulkAI : ScriptedAI
     uint32 lifeTimer;
     bool spellHit;
 
-    npc_narm_faulkAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        npc_narm_faulkAI::Reset();
-    }
+    npc_narm_faulkAI(Creature* pCreature) : ScriptedAI(pCreature) { npc_narm_faulkAI::Reset(); }
 
     void Reset() override
     {
@@ -28,7 +25,7 @@ struct npc_narm_faulkAI : ScriptedAI
         spellHit = false;
     }
 
-    void MoveInLineOfSight(Unit *who) override { }
+    void MoveInLineOfSight(Unit* who) override {}
 
     void UpdateAI(uint32 const diff) override
     {
@@ -47,17 +44,14 @@ struct npc_narm_faulkAI : ScriptedAI
         {
             m_creature->SetStandState(UNIT_STAND_STATE_STAND);
             m_creature->SetUInt32Value(UNIT_DYNAMIC_FLAGS, 0);
-            //m_creature->RemoveAllAuras();
+            // m_creature->RemoveAllAuras();
             DoScriptText(SAY_HEAL, m_creature, Hitter->ToUnit());
             spellHit = true;
         }
     }
 };
 
-CreatureAI* GetAI_npc_narm_faulk(Creature* pCreature)
-{
-    return new npc_narm_faulkAI(pCreature);
-}
+CreatureAI* GetAI_npc_narm_faulk(Creature* pCreature) { return new npc_narm_faulkAI(pCreature); }
 
 void AddSC_dun_morogh()
 {

@@ -19,27 +19,25 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <functional>
 #include "ItemEnchantmentMgr.h"
+#include <functional>
+#include <list>
+#include <vector>
 #include "Database/DatabaseEnv.h"
 #include "Log.h"
 #include "ObjectMgr.h"
 #include "ProgressBar.h"
-#include <list>
-#include <vector>
 #include "Util.h"
 #include "World.h"
 
 struct EnchStoreItem
 {
-    uint32  ench;
-    float   chance;
+    uint32 ench;
+    float chance;
 
-    EnchStoreItem()
-        : ench(0), chance(0) {}
+    EnchStoreItem() : ench(0), chance(0) {}
 
-    EnchStoreItem(uint32 _ench, float _chance)
-        : ench(_ench), chance(_chance) {}
+    EnchStoreItem(uint32 _ench, float _chance) : ench(_ench), chance(_chance) {}
 };
 
 typedef std::vector<EnchStoreItem> EnchStoreList;
@@ -49,7 +47,7 @@ static EnchantmentStore RandomItemEnch;
 
 void LoadRandomEnchantmentsTable()
 {
-    RandomItemEnch.clear();                                 // for reload case
+    RandomItemEnch.clear(); // for reload case
 
     uint32 entry, ench;
     uint32 count = 0;

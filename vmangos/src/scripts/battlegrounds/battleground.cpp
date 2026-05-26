@@ -37,11 +37,11 @@ EndScriptData */
 
 enum
 {
-    SPELL_SPIRIT_HEAL_CHANNEL       = 22011,                // Spirit Heal Channel
+    SPELL_SPIRIT_HEAL_CHANNEL = 22011, // Spirit Heal Channel
 
-    SPELL_SPIRIT_HEAL               = 22012,                // Spirit Heal
+    SPELL_SPIRIT_HEAL = 22012, // Spirit Heal
 
-    SPELL_WAITING_TO_RESURRECT      = 2584                  // players who cancel this aura don't want a resurrection
+    SPELL_WAITING_TO_RESURRECT = 2584 // players who cancel this aura don't want a resurrection
 };
 
 struct npc_spirit_guideAI : ScriptedAI
@@ -53,16 +53,11 @@ struct npc_spirit_guideAI : ScriptedAI
         npc_spirit_guideAI::Reset();
     }
 
-    void Reset() override
-    {
-    }
+    void Reset() override {}
 
     uint32 uiTimerRez;
 
-    uint32 GetData(uint32 /*type*/) override
-    {
-        return uiTimerRez;
-    }
+    uint32 GetData(uint32 /*type*/) override { return uiTimerRez; }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -77,7 +72,7 @@ struct npc_spirit_guideAI : ScriptedAI
             uiTimerRez -= uiDiff;
     }
 
-    void CorpseRemoved(uint32 &) override
+    void CorpseRemoved(uint32&) override
     {
         // TODO: would be better to cast a dummy spell
         Map* pMap = m_creature->GetMap();
@@ -85,7 +80,7 @@ struct npc_spirit_guideAI : ScriptedAI
         if (!pMap || !pMap->IsBattleGround())
             return;
 
-        Map::PlayerList const &PlayerList = pMap->GetPlayers();
+        Map::PlayerList const& PlayerList = pMap->GetPlayers();
 
         for (const auto& itr : PlayerList)
         {
@@ -98,18 +93,11 @@ struct npc_spirit_guideAI : ScriptedAI
         }
     }
 
-    void AttackedBy(Unit* /*pWho*/) override
-    {
-    }
+    void AttackedBy(Unit* /*pWho*/) override {}
 
-    void AttackStart(Unit* /*pWho*/) override
-    {
-    }
+    void AttackStart(Unit* /*pWho*/) override {}
 
-    void DamageTaken(Unit* /*pFrom*/, uint32 &damage) override
-    {
-        damage = 0;
-    }
+    void DamageTaken(Unit* /*pFrom*/, uint32& damage) override { damage = 0; }
 };
 
 bool GossipHello_npc_spirit_guide(Player* pPlayer, Creature* pCreature)
@@ -118,18 +106,15 @@ bool GossipHello_npc_spirit_guide(Player* pPlayer, Creature* pCreature)
     return true;
 }
 
-CreatureAI* GetAI_npc_spirit_guide(Creature* pCreature)
-{
-    return new npc_spirit_guideAI(pCreature);
-}
+CreatureAI* GetAI_npc_spirit_guide(Creature* pCreature) { return new npc_spirit_guideAI(pCreature); }
 
 enum
 {
-    SPELL_SPAWN_EFFECT     = 23235,
+    SPELL_SPAWN_EFFECT = 23235,
     SPELL_BUFF_ALLIANCE_15 = 23033,
-    SPELL_BUFF_HORDE_15    = 23033,
+    SPELL_BUFF_HORDE_15 = 23033,
     SPELL_BUFF_ALLIANCE_10 = 23574,
-    SPELL_BUFF_HORDE_10    = 23033,
+    SPELL_BUFF_HORDE_10 = 23033,
 };
 /*
 [SQL]
@@ -180,10 +165,7 @@ struct npc_etendardAI : NullCreatureAI
 };
 
 
-CreatureAI* GetAI_npc_etendard(Creature* pCreature)
-{
-    return new npc_etendardAI(pCreature);
-}
+CreatureAI* GetAI_npc_etendard(Creature* pCreature) { return new npc_etendardAI(pCreature); }
 
 void AddSC_battleground()
 {

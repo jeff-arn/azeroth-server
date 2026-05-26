@@ -20,14 +20,10 @@
  */
 
 #include "ByteBuffer.h"
-#include "Log.h"
 #include "Errors.h"
+#include "Log.h"
 
-void ByteBufferException::PrintPosError() const
-{
-    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Attempted to %s in ByteBuffer (pos: " SIZEFMTD " size: " SIZEFMTD ") value with size: " SIZEFMTD,
-        (add ? "put" : "get"), pos, size, esize);
-}
+void ByteBufferException::PrintPosError() const { sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Attempted to %s in ByteBuffer (pos: " SIZEFMTD " size: " SIZEFMTD ") value with size: " SIZEFMTD, (add ? "put" : "get"), pos, size, esize); }
 
 void ByteBuffer::append(uint8 const* src, size_t cnt)
 {
@@ -44,7 +40,7 @@ void ByteBuffer::append(uint8 const* src, size_t cnt)
 
 void ByteBuffer::hexlike() const
 {
-    if (!sLog.HasLogLevelOrHigher(LOG_LVL_DEBUG))   // optimize disabled debug output
+    if (!sLog.HasLogLevelOrHigher(LOG_LVL_DEBUG)) // optimize disabled debug output
         return;
 
     std::ostringstream ss;
@@ -76,7 +72,6 @@ void ByteBuffer::hexlike() const
         char buf[4];
         snprintf(buf, 4, "%02X", read<uint8>(i));
         ss << buf << " ";
-
     }
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, ss.str().c_str());
 }

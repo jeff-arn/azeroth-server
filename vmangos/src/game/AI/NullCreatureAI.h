@@ -22,20 +22,20 @@
 #ifndef MANGOS_NULLCREATUREAI_H
 #define MANGOS_NULLCREATUREAI_H
 
-#include "CreatureAI.h"
 #include "Creature.h"
+#include "CreatureAI.h"
 
 class NullCreatureAI : public CreatureAI
 {
-    public:
-        explicit NullCreatureAI(Creature* c);
-        ~NullCreatureAI() override;
+public:
+    explicit NullCreatureAI(Creature* c);
+    ~NullCreatureAI() override;
 
-        void MoveInLineOfSight(Unit*) override {}
-        void AttackStart(Unit*) override {}
-        void AttackedBy(Unit*) override {}
+    void MoveInLineOfSight(Unit*) override {}
+    void AttackStart(Unit*) override {}
+    void AttackedBy(Unit*) override {}
 
-        void UpdateAI(uint32 const) override;
-        static int Permissible(Creature const*) { return PERMIT_BASE_IDLE;  }
+    void UpdateAI(uint32 const) override;
+    static int Permissible(Creature const*) { return PERMIT_BASE_IDLE; }
 };
 #endif

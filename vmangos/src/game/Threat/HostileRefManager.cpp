@@ -20,20 +20,14 @@
  */
 
 #include "HostileRefManager.h"
-#include "ThreatManager.h"
-#include "Unit.h"
 #include "DBCStructure.h"
 #include "SpellEntry.h"
+#include "ThreatManager.h"
+#include "Unit.h"
 
-HostileRefManager::HostileRefManager(Unit* pOwner) : iOwner(pOwner)
-{
+HostileRefManager::HostileRefManager(Unit* pOwner) : iOwner(pOwner) {}
 
-}
-
-HostileRefManager::~HostileRefManager()
-{
-    deleteReferences();
-}
+HostileRefManager::~HostileRefManager() { deleteReferences(); }
 
 // Sorts par exemple 'oubli'
 void HostileRefManager::addTempThreat(float threat, bool apply)
@@ -64,7 +58,7 @@ void HostileRefManager::threatAssist(Unit* pVictim, float pThreat, SpellEntry co
     if (pThreatSpell && pThreatSpell->HasAttribute(SPELL_ATTR_EX4_NO_HELPFUL_THREAT))
         return;
 
-    uint32 size = pSingleTarget ? 1 : getSize();            // if pSingleTarget do not devide threat
+    uint32 size = pSingleTarget ? 1 : getSize(); // if pSingleTarget do not devide threat
     float threat = pThreat / size;
     HostileReference* ref = getFirst();
     while (ref)

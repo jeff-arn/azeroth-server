@@ -22,9 +22,7 @@
 #include "MovementGenerator.h"
 #include "Unit.h"
 
-MovementGenerator::~MovementGenerator()
-{
-}
+MovementGenerator::~MovementGenerator() {}
 
 bool MovementGenerator::IsActive(Unit& u)
 {

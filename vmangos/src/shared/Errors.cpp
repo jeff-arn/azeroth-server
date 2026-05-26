@@ -5,20 +5,15 @@
 #include <cpptrace/cpptrace.hpp>
 #endif
 
-void MaNGOS::Errors::PrintStacktrace()
-{
-    PrintStacktrace(1, 64);
-}
+void MaNGOS::Errors::PrintStacktrace() { PrintStacktrace(1, 64); }
 
 void MaNGOS::Errors::PrintStacktrace(int skipFrames, int maxFrames)
 {
 #ifndef ENABLE_CPPTRACE
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Stack traces using cpptrace are disabled. Set ENABLE_CPPTRACE=ON (default) during CMake configuration to enable them.");
 #else
-    cpptrace::stacktrace st = cpptrace::generate_trace(
-        std::size_t(skipFrames) + 1, // we want to skip our own frame
-        std::size_t(maxFrames)
-    );
+    cpptrace::stacktrace st = cpptrace::generate_trace(std::size_t(skipFrames) + 1, // we want to skip our own frame
+                                                       std::size_t(maxFrames));
 
     bool hasStacktraceInfo = false;
     for (size_t i = 0; i < st.frames.size(); ++i)
@@ -26,25 +21,12 @@ void MaNGOS::Errors::PrintStacktrace(int skipFrames, int maxFrames)
         cpptrace::stacktrace_frame const& trace = st.frames[i];
         if (trace.line.has_value())
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-                "#%zu [0x%" PRIXPTR "] %s %s:%u",
-                i,
-                trace.object_address,
-                trace.symbol.c_str(),
-                trace.filename.c_str(),
-                trace.line.value()
-            );
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "#%zu [0x%" PRIXPTR "] %s %s:%u", i, trace.object_address, trace.symbol.c_str(), trace.filename.c_str(), trace.line.value());
         }
         else
         {
             // without line
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-                "#%zu [0x%" PRIXPTR "] %s %s",
-                i,
-                trace.object_address,
-                trace.symbol.c_str(),
-                trace.filename.c_str()
-            );
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "#%zu [0x%" PRIXPTR "] %s %s", i, trace.object_address, trace.symbol.c_str(), trace.filename.c_str());
         }
 
         if (!hasStacktraceInfo && trace.line.has_value() && !trace.symbol.empty())

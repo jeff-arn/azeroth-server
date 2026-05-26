@@ -21,8 +21,8 @@ SDComment: Contains GO for event at end door
 SDCategory: Deadmines
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "deadmines.h"
+#include "scriptPCH.h"
 
 bool GOHello_go_door_lever_dm(Player* pPlayer, GameObject* pGo)
 {
@@ -60,7 +60,7 @@ bool GOHello_go_defias_gunpowder(Player* player, GameObject* pGo)
     if (pInstance->GetData(GUN_POWDER_EVENT) == 0)
     {
         Creature* pirate3;
-        if (pirate3 = pGo->SummonCreature(634, -131.290833f, -591.243103f, 18.077190f, 4.792192f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 310000))//DEFIAS_OVERSEER
+        if (pirate3 = pGo->SummonCreature(634, -131.290833f, -591.243103f, 18.077190f, 4.792192f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 310000)) // DEFIAS_OVERSEER
         {
             pirate3->GetMotionMaster()->MovePoint(0, -128.925980f, -616.494629f, 13.532340f, MOVE_PATHFINDING, 0, 6.269623f);
             pirate3->SetRespawnDelay(350);
@@ -70,7 +70,7 @@ bool GOHello_go_defias_gunpowder(Player* player, GameObject* pGo)
     return true;
 }
 
-struct go_defias_gunpowderAI: public GameObjectAI
+struct go_defias_gunpowderAI : public GameObjectAI
 {
     go_defias_gunpowderAI(GameObject* go) : GameObjectAI(go) {}
 
@@ -86,10 +86,7 @@ struct go_defias_gunpowderAI: public GameObjectAI
     }
 };
 
-GameObjectAI* GetAIgo_defias_gunpowder(GameObject *go)
-{
-    return new go_defias_gunpowderAI(go);
-}
+GameObjectAI* GetAIgo_defias_gunpowder(GameObject* go) { return new go_defias_gunpowderAI(go); }
 
 void AddSC_deadmines()
 {

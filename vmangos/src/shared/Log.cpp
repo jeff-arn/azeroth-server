@@ -19,12 +19,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Common.h"
 #include "Log.h"
-#include "Policies/SingletonImp.h"
+#include "Common.h"
 #include "Config/Config.h"
-#include "Util.h"
+#include "Policies/SingletonImp.h"
 #include "ProgressBar.h"
+#include "Util.h"
 
 #include <cstdarg>
 #include <iostream>
@@ -38,28 +38,27 @@ INSTANTIATE_SINGLETON_1(Log);
 
 namespace
 {
-uint16 GetConsoleColor()
-{
-#if PLATFORM == PLATFORM_WINDOWS
-    // Capture initial text color for using as a default
-    CONSOLE_SCREEN_BUFFER_INFO info;
-    if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info))
+    uint16 GetConsoleColor()
     {
-        // default to white on error
-        return FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
-    }
+#if PLATFORM == PLATFORM_WINDOWS
+        // Capture initial text color for using as a default
+        CONSOLE_SCREEN_BUFFER_INFO info;
+        if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info))
+        {
+            // default to white on error
+            return FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
+        }
 
-    return info.wAttributes & 0xF;
+        return info.wAttributes & 0xF;
 #else
-    return 0;
+        return 0;
 #endif
-}
-}
+    }
+} // namespace
 
 extern char const* g_mainLogFileName;
 
-Log::Log() :
-    m_includeTime(false), m_logsTimestamp(GetTimestampStr()), m_defaultColor(GetConsoleColor())
+Log::Log() : m_includeTime(false), m_logsTimestamp(GetTimestampStr()), m_defaultColor(GetConsoleColor())
 {
     for (int i = 0; i < LOG_TYPE_MAX; ++i)
     {
@@ -111,8 +110,7 @@ void Log::OpenWorldLogFiles()
     logFiles[LOG_LEVELUP] = OpenLogFile("LogFile.LevelUp", "LevelUp.log", log_file_timestamp, false);
     logFiles[LOG_PERFORMANCE] = OpenLogFile("LogFile.Performance", "Perf.log", log_file_timestamp, false);
     logFiles[LOG_MONEY_TRADES] = OpenLogFile("LogFile.Trades", "", log_file_timestamp, false);
-    logFiles[LOG_GM] = sConfig.GetBoolDefault("GmLogPerAccount", false) ?
-        OpenLogFile("LogFile.Gm", "", log_file_timestamp, false) : nullptr;
+    logFiles[LOG_GM] = sConfig.GetBoolDefault("GmLogPerAccount", false) ? OpenLogFile("LogFile.Gm", "", log_file_timestamp, false) : nullptr;
     logFiles[LOG_GM_CRITICAL] = OpenLogFile("LogFile.GmCriticalCommands", "gm_critical.log", log_file_timestamp, false);
     logFiles[LOG_ANTICHEAT] = OpenLogFile("LogFile.Anticheat", "Anticheat.log", log_file_timestamp, false);
     logFiles[LOG_SCRIPTS] = OpenLogFile("LogFile.Scripts", "Scripts.log", log_file_timestamp, false);
@@ -164,34 +162,30 @@ void Log::SetColor(FILE* where, Color color) const
 
 #if PLATFORM == PLATFORM_WINDOWS
 
-    static constexpr WORD WinColorFG[] =
-    {
-        0,                                                  // RESET, unused
-        0,                                                  // BLACK
-        FOREGROUND_RED,                                     // RED
-        FOREGROUND_GREEN,                                   // GREEN
-        FOREGROUND_RED | FOREGROUND_GREEN,                  // BROWN
-        FOREGROUND_BLUE,                                    // BLUE
-        FOREGROUND_RED | FOREGROUND_BLUE,// MAGENTA
-        FOREGROUND_GREEN | FOREGROUND_BLUE,                 // CYAN
-        FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,// WHITE
-                                                            // YELLOW
-        FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-        // RED_BOLD
-        FOREGROUND_RED | FOREGROUND_INTENSITY,
-        // GREEN_BOLD
-        FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-        FOREGROUND_BLUE | FOREGROUND_INTENSITY,             // BLUE_BOLD
-                                                            // MAGENTA_BOLD
-        FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-        // CYAN_BOLD
-        FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-        // WHITE_BOLD
-        FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY
-    };
+    static constexpr WORD WinColorFG[] = {0, // RESET, unused
+                                          0, // BLACK
+                                          FOREGROUND_RED, // RED
+                                          FOREGROUND_GREEN, // GREEN
+                                          FOREGROUND_RED | FOREGROUND_GREEN, // BROWN
+                                          FOREGROUND_BLUE, // BLUE
+                                          FOREGROUND_RED | FOREGROUND_BLUE, // MAGENTA
+                                          FOREGROUND_GREEN | FOREGROUND_BLUE, // CYAN
+                                          FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE, // WHITE
+                                                                                               // YELLOW
+                                          FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                                          // RED_BOLD
+                                          FOREGROUND_RED | FOREGROUND_INTENSITY,
+                                          // GREEN_BOLD
+                                          FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                                          FOREGROUND_BLUE | FOREGROUND_INTENSITY, // BLUE_BOLD
+                                                                                  // MAGENTA_BOLD
+                                          FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+                                          // CYAN_BOLD
+                                          FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+                                          // WHITE_BOLD
+                                          FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY};
 
-    static_assert(sizeof(WinColorFG) / sizeof(WinColorFG[0]) == COLOR_COUNT,
-        "WinColorFG size must match COLOR_COUNT");
+    static_assert(sizeof(WinColorFG) / sizeof(WinColorFG[0]) == COLOR_COUNT, "WinColorFG size must match COLOR_COUNT");
 
     HANDLE hConsole = GetStdHandle(where == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
     SetConsoleTextAttribute(hConsole, WinColorFG[color]);
@@ -207,33 +201,45 @@ void Log::SetColor(FILE* where, Color color) const
 
     enum ANSIFgTextAttr
     {
-        FG_BLACK = 30, FG_RED, FG_GREEN, FG_BROWN, FG_BLUE,
-        FG_MAGENTA, FG_CYAN, FG_WHITE, FG_YELLOW
+        FG_BLACK = 30,
+        FG_RED,
+        FG_GREEN,
+        FG_BROWN,
+        FG_BLUE,
+        FG_MAGENTA,
+        FG_CYAN,
+        FG_WHITE,
+        FG_YELLOW
     };
 
     enum ANSIBgTextAttr
     {
-        BG_BLACK = 40, BG_RED, BG_GREEN, BG_BROWN, BG_BLUE,
-        BG_MAGENTA, BG_CYAN, BG_WHITE
+        BG_BLACK = 40,
+        BG_RED,
+        BG_GREEN,
+        BG_BROWN,
+        BG_BLUE,
+        BG_MAGENTA,
+        BG_CYAN,
+        BG_WHITE
     };
 
-    static uint8 UnixColorFG[COLOR_COUNT] =
-    {
-        FG_BLACK,                                           // BLACK
-        FG_RED,                                             // RED
-        FG_GREEN,                                           // GREEN
-        FG_BROWN,                                           // BROWN
-        FG_BLUE,                                            // BLUE
-        FG_MAGENTA,                                         // MAGENTA
-        FG_CYAN,                                            // CYAN
-        FG_WHITE,                                           // WHITE
-        FG_YELLOW,                                          // YELLOW
-        FG_RED,                                             // LRED
-        FG_GREEN,                                           // LGREEN
-        FG_BLUE,                                            // LBLUE
-        FG_MAGENTA,                                         // LMAGENTA
-        FG_CYAN,                                            // LCYAN
-        FG_WHITE                                            // LWHITE
+    static uint8 UnixColorFG[COLOR_COUNT] = {
+        FG_BLACK, // BLACK
+        FG_RED, // RED
+        FG_GREEN, // GREEN
+        FG_BROWN, // BROWN
+        FG_BLUE, // BLUE
+        FG_MAGENTA, // MAGENTA
+        FG_CYAN, // CYAN
+        FG_WHITE, // WHITE
+        FG_YELLOW, // YELLOW
+        FG_RED, // LRED
+        FG_GREEN, // LGREEN
+        FG_BLUE, // LBLUE
+        FG_MAGENTA, // LMAGENTA
+        FG_CYAN, // LCYAN
+        FG_WHITE // LWHITE
     };
 
     fprintf(where, "\x1b[%d%sm", UnixColorFG[color], (color >= YELLOW && color < COLOR_COUNT ? ";1" : ""));
@@ -341,47 +347,47 @@ std::string Log::GetTimestampStr()
     return std::string(buf);
 }
 
-#define LOG_TO_FILE_HELPER(logLevel,logType,format,ap) \
-if (logFiles[logType] && m_fileLevel >= logLevel)                             \
-{                                                                             \
-    if (logType != LOG_DBERRFIX)                                              \
-    {                                                                         \
-        OutTimestamp(logFiles[logType]);                                      \
-        if (logLevel == LOG_LVL_ERROR)                                        \
-            fputs("ERROR: ", logFiles[logType]);                              \
-    }                                                                         \
-    va_start(ap, format);                                                     \
-    vfprintf(logFiles[logType], format, ap);                                  \
-    fputs("\n", logFiles[logType]);                                           \
-    fflush(logFiles[logType]);                                                \
-    va_end(ap);                                                               \
-}                                                                             \
+#define LOG_TO_FILE_HELPER(logLevel, logType, format, ap)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+    if (logFiles[logType] && m_fileLevel >= logLevel)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+        if (logType != LOG_DBERRFIX)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \
+        {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+            OutTimestamp(logFiles[logType]);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          \
+            if (logLevel == LOG_LVL_ERROR)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            \
+                fputs("ERROR: ", logFiles[logType]);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \
+        }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+        va_start(ap, format);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+        vfprintf(logFiles[logType], format, ap);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+        fputs("\n", logFiles[logType]);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+        fflush(logFiles[logType]);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    \
+        va_end(ap);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   \
+    }
 
-#define LOG_TO_CONSOLE_HELPER(logLevel,logType,format,ap) \
-if (logType != LOG_PERFORMANCE && logType != LOG_DBERRFIX && m_consoleLevel >= logLevel) \
-{                                                                             \
-    auto const where = logLevel == LOG_LVL_ERROR ? stderr : stdout;           \
-    SetColor(where, g_logColors[logLevel]);                                   \
-    if (m_includeTime)                                                        \
-        OutTime(where);                                                       \
-    if (logLevel == LOG_LVL_ERROR)                                            \
-        fprintf(where, "ERROR: ");                                            \
-                                                                              \
-    va_start(ap, format);                                                     \
-    vutf8printf(where, format, &ap);                                          \
-    va_end(ap);                                                               \
-                                                                              \
-    ResetColor(where);                                                        \
-    fprintf(where, "\n");                                                     \
-    fflush(where);                                                            \
-                                                                              \
-    if (logType != LOG_BASIC)                                                 \
-    LOG_TO_FILE_HELPER(logLevel, LOG_BASIC, format, ap);                      \
-}                                                                             \
+#define LOG_TO_CONSOLE_HELPER(logLevel, logType, format, ap)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          \
+    if (logType != LOG_PERFORMANCE && logType != LOG_DBERRFIX && m_consoleLevel >= logLevel)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          \
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+        auto const where = logLevel == LOG_LVL_ERROR ? stderr : stdout;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+        SetColor(where, g_logColors[logLevel]);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       \
+        if (m_includeTime)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            \
+            OutTime(where);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           \
+        if (logLevel == LOG_LVL_ERROR)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+            fprintf(where, "ERROR: ");                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+        va_start(ap, format);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+        vutf8printf(where, format, &ap);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              \
+        va_end(ap);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   \
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+        ResetColor(where);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            \
+        fprintf(where, "\n");                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+        fflush(where);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+        if (logType != LOG_BASIC)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     \
+            LOG_TO_FILE_HELPER(logLevel, LOG_BASIC, format, ap);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+    }
 
 void Log::Out(LogType logType, LogLevel logLevel, char const* format, ...)
 {
-    if (!(logType >= 0 && logType < LOG_TYPE_MAX&& logLevel >= 0 && logLevel <= LOG_LVL_DEBUG))
+    if (!(logType >= 0 && logType < LOG_TYPE_MAX && logLevel >= 0 && logLevel <= LOG_LVL_DEBUG))
         return;
 
     if (!format)
@@ -449,11 +455,7 @@ void Log::OutFile(LogType logType, LogLevel logLevel, std::string const& str) co
     fflush(logFiles[logType]);
 }
 
-bool Log::IsSmartLog(uint32 entry, uint32 guid) const
-{
-    return m_smartlogExtraEntries.find(entry) != m_smartlogExtraEntries.end() ||
-        m_smartlogExtraGuids.find(guid) != m_smartlogExtraGuids.end();
-}
+bool Log::IsSmartLog(uint32 entry, uint32 guid) const { return m_smartlogExtraEntries.find(entry) != m_smartlogExtraEntries.end() || m_smartlogExtraGuids.find(guid) != m_smartlogExtraGuids.end(); }
 
 void Log::WaitBeforeContinueIfNeed()
 {

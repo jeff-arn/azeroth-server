@@ -20,17 +20,17 @@
  */
 
 #include "Common.h"
+#include "CreatureAI.h"
+#include "Group.h"
+#include "Log.h"
+#include "ObjectMgr.h"
+#include "Opcodes.h"
+#include "Pet.h"
+#include "Spell.h"
+#include "SpellMgr.h"
+#include "Util.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "ObjectMgr.h"
-#include "SpellMgr.h"
-#include "Log.h"
-#include "Opcodes.h"
-#include "Spell.h"
-#include "CreatureAI.h"
-#include "Util.h"
-#include "Pet.h"
-#include "Group.h"
 
 void WorldSession::HandlePetAction(WorldPacket& recv_data)
 {
@@ -42,7 +42,7 @@ void WorldSession::HandlePetAction(WorldPacket& recv_data)
     recv_data >> targetGuid;
 
     uint32 spellid = UNIT_ACTION_BUTTON_ACTION(data);
-    uint8 flag = UNIT_ACTION_BUTTON_TYPE(data);             // delete = 0x07 CastSpell = C1
+    uint8 flag = UNIT_ACTION_BUTTON_TYPE(data); // delete = 0x07 CastSpell = C1
 
     // used also for charmed creature/player
     Unit* pCharmedUnit = _player->GetMap()->GetUnit(petGuid);
@@ -85,28 +85,28 @@ void WorldSession::HandlePetAction(WorldPacket& recv_data)
 
     switch (flag)
     {
-        case ACT_COMMAND:                                   // 0x07
+    case ACT_COMMAND: // 0x07
         {
             Unit* pTarget = targetGuid.IsEmpty() ? nullptr : _player->GetMap()->GetUnit(targetGuid);
             pCharmedUnit->HandlePetCommand((CommandStates)spellid, pTarget);
             break;
         }
-        case ACT_REACTION:                                  // 0x6
-            switch (spellid)
-            {
-                case REACT_PASSIVE:                         //passive
-                    pCharmedUnit->InterruptNonMeleeSpells(false);
-                    pCharmedUnit->AttackStop();
-                // no break
-                case REACT_DEFENSIVE:                       //recovery
-                case REACT_AGGRESSIVE:                      //activete
-                    charmInfo->SetReactState(ReactStates(spellid));
-                    break;
-            }
+    case ACT_REACTION: // 0x6
+        switch (spellid)
+        {
+        case REACT_PASSIVE: // passive
+            pCharmedUnit->InterruptNonMeleeSpells(false);
+            pCharmedUnit->AttackStop();
+        // no break
+        case REACT_DEFENSIVE: // recovery
+        case REACT_AGGRESSIVE: // activete
+            charmInfo->SetReactState(ReactStates(spellid));
             break;
-        case ACT_DISABLED:                                  // 0x81    spell (disabled), ignore
-        case ACT_PASSIVE:                                   // 0x01
-        case ACT_ENABLED:                                   // 0xC1    spell
+        }
+        break;
+    case ACT_DISABLED: // 0x81    spell (disabled), ignore
+    case ACT_PASSIVE: // 0x01
+    case ACT_ENABLED: // 0xC1    spell
         {
             Unit* pUnitTarget = nullptr;
             if (targetGuid)
@@ -140,13 +140,13 @@ void WorldSession::HandlePetAction(WorldPacket& recv_data)
                 pCharmedUnit->SendPetCastFail(spellid, SPELL_FAILED_BAD_IMPLICIT_TARGETS);
                 return;
             }
-            
-            if (pUnitTarget == pCharmedUnit && 
+
+            if (pUnitTarget == pCharmedUnit &&
                 // Cannot cast negative spells on yourself. Handle it here since casting negative
                 // spells on yourself is frequently used within the core itself for certain mechanics.
                 ((explicitlySelectedTarget && !spellInfo->IsPositiveSpell(pCharmedUnit, pUnitTarget)) ||
-                // spells not castable on self like Fire Shield
-                spellInfo->HasAttribute(SPELL_ATTR_EX_EXCLUDE_CASTER)))
+                 // spells not castable on self like Fire Shield
+                 spellInfo->HasAttribute(SPELL_ATTR_EX_EXCLUDE_CASTER)))
             {
                 pCharmedUnit->SendPetCastFail(spellid, SPELL_FAILED_BAD_TARGETS);
                 return;
@@ -157,8 +157,7 @@ void WorldSession::HandlePetAction(WorldPacket& recv_data)
                 pUnitTarget = nullptr;
 
             // make sure pet is facing target
-            if (pUnitTarget && pUnitTarget != pCharmedUnit && !pCharmedUnit->HasUnitState(UNIT_STATE_CAN_NOT_REACT) &&
-                spellInfo->IsNeedFaceTarget() && !pCharmedUnit->IsFacingTarget(pUnitTarget))
+            if (pUnitTarget && pUnitTarget != pCharmedUnit && !pCharmedUnit->HasUnitState(UNIT_STATE_CAN_NOT_REACT) && spellInfo->IsNeedFaceTarget() && !pCharmedUnit->IsFacingTarget(pUnitTarget))
             {
                 float orientation = pCharmedUnit->GetAngle(pUnitTarget);
                 pCharmedUnit->SetFacingTo(orientation);
@@ -182,8 +181,8 @@ void WorldSession::HandlePetAction(WorldPacket& recv_data)
 
             break;
         }
-        default:
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WORLD: unknown PET flag Action %i and spellid %i.", uint32(flag), spellid);
+    default:
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WORLD: unknown PET flag Action %i and spellid %i.", uint32(flag), spellid);
     }
 }
 
@@ -192,7 +191,7 @@ void WorldSession::HandlePetStopAttack(WorldPacket& recv_data)
     ObjectGuid petGuid;
     recv_data >> petGuid;
 
-    Unit* pet = GetPlayer()->GetMap()->GetUnit(petGuid);    // pet or controlled creature/player
+    Unit* pet = GetPlayer()->GetMap()->GetUnit(petGuid); // pet or controlled creature/player
     if (!pet)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "HandlePetStopAttack: %s doesn't exist.", petGuid.GetString().c_str());
@@ -241,7 +240,7 @@ void WorldSession::SendPetNameQuery(ObjectGuid petGuid, uint32 petNumber)
 void WorldSession::HandlePetSetAction(WorldPacket& recv_data)
 {
     ObjectGuid petGuid;
-    uint8  count;
+    uint8 count;
 
     recv_data >> petGuid;
 
@@ -301,8 +300,7 @@ void WorldSession::HandlePetSetAction(WorldPacket& recv_data)
         {
             uint32 spell_id_0 = UNIT_ACTION_BUTTON_ACTION(data[0]);
             UnitActionBarEntry const* actionEntry_1 = charmInfo->GetActionBarEntry(position[1]);
-            if (!actionEntry_1 || spell_id_0 != actionEntry_1->GetAction() ||
-                    act_state_0 != actionEntry_1->GetType())
+            if (!actionEntry_1 || spell_id_0 != actionEntry_1->GetAction() || act_state_0 != actionEntry_1->GetType())
                 return;
         }
 
@@ -311,8 +309,7 @@ void WorldSession::HandlePetSetAction(WorldPacket& recv_data)
         {
             uint32 spell_id_1 = UNIT_ACTION_BUTTON_ACTION(data[1]);
             UnitActionBarEntry const* actionEntry_0 = charmInfo->GetActionBarEntry(position[0]);
-            if (!actionEntry_0 || spell_id_1 != actionEntry_0->GetAction() ||
-                    act_state_1 != actionEntry_0->GetType())
+            if (!actionEntry_0 || spell_id_1 != actionEntry_0->GetAction() || act_state_1 != actionEntry_0->GetType())
                 return;
         }
     }
@@ -359,13 +356,11 @@ void WorldSession::HandlePetRename(WorldPacket& recv_data)
 
     Pet* pet = _player->GetMap()->GetPet(petGuid);
     // check it!
-    if (!pet || pet->GetPetType() != HUNTER_PET ||
-            !pet->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_RENAME) ||
-            pet->GetOwnerGuid() != _player->GetObjectGuid() || !pet->GetCharmInfo())
+    if (!pet || pet->GetPetType() != HUNTER_PET || !pet->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_RENAME) || pet->GetOwnerGuid() != _player->GetObjectGuid() || !pet->GetCharmInfo())
         return;
 
-    // World of Warcraft Client Patch 1.7.0 (2005-09-13)
-    // - Hunters are now able to rename their pets while mounted.
+        // World of Warcraft Client Patch 1.7.0 (2005-09-13)
+        // - Hunters are now able to rename their pets while mounted.
 #if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_6_1
     if (_player->IsMounted())
         return;
@@ -402,7 +397,7 @@ void WorldSession::HandlePetRename(WorldPacket& recv_data)
 void WorldSession::HandlePetAbandon(WorldPacket& recv_data)
 {
     ObjectGuid guid;
-    recv_data >> guid;                                      // pet guid
+    recv_data >> guid; // pet guid
 
     if (!_player->IsInWorld())
         return;
@@ -435,7 +430,7 @@ void WorldSession::HandlePetAbandon(WorldPacket& recv_data)
 void WorldSession::HandlePetUnlearnOpcode(WorldPacket& recvPacket)
 {
     ObjectGuid guid;
-    recvPacket >> guid;                 // Pet guid
+    recvPacket >> guid; // Pet guid
 
     Pet* pet = _player->GetPet();
 
@@ -465,7 +460,7 @@ void WorldSession::HandlePetUnlearnOpcode(WorldPacket& recvPacket)
 
     for (PetSpellMap::iterator itr = pet->m_petSpells.begin(); itr != pet->m_petSpells.end();)
     {
-        uint32 spellId = itr->first;                       // Pet::RemoveSpell can invalidate iterator at erase NEW spell
+        uint32 spellId = itr->first; // Pet::RemoveSpell can invalidate iterator at erase NEW spell
         ++itr;
         pet->UnlearnSpell(spellId, false);
     }
@@ -491,7 +486,7 @@ void WorldSession::HandlePetSpellAutocastOpcode(WorldPacket& recvPacket)
 {
     ObjectGuid guid;
     uint32 spellid;
-    uint8  state;                                           // 1 for on, 0 for off
+    uint8 state; // 1 for on, 0 for off
     recvPacket >> guid >> spellid >> state;
 
     Creature* pet = _player->GetMap()->GetAnyTypeCreature(guid);
@@ -565,8 +560,8 @@ void WorldSession::HandlePetCastSpellOpcode(WorldPacket& recvPacket)
         {
             ((Pet*)pet)->CheckLearning(spellid);
 
-            //10% chance to play special pet attack talk, else growl
-            //actually this only seems to happen on special spells, fire shield for imp, torment for voidwalker, but it's stupid to check every spell
+            // 10% chance to play special pet attack talk, else growl
+            // actually this only seems to happen on special spells, fire shield for imp, torment for voidwalker, but it's stupid to check every spell
             if (((Pet*)pet)->GetPetType() == SUMMON_PET && (urand(0, 100) < 10))
                 pet->SendPetTalk((uint32)PET_TALK_SPECIAL_SPELL);
             else

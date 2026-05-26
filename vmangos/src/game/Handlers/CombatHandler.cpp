@@ -20,14 +20,14 @@
  */
 
 #include "Common.h"
+#include "CreatureAI.h"
 #include "Log.h"
+#include "Map.h"
+#include "ObjectGuid.h"
 #include "Opcodes.h"
+#include "Player.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "CreatureAI.h"
-#include "ObjectGuid.h"
-#include "Player.h"
-#include "Map.h"
 
 void WorldSession::HandleAttackSwingOpcode(WorldPacket& recv_data)
 {
@@ -95,14 +95,14 @@ void WorldSession::HandleSetSheathedOpcode(WorldPacket& recv_data)
 void WorldSession::SendAttackStop(Unit const* enemy)
 {
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_8_4
-    WorldPacket data(SMSG_ATTACKSTOP, (4 + 20));            // we guess size
+    WorldPacket data(SMSG_ATTACKSTOP, (4 + 20)); // we guess size
     data << GetPlayer()->GetPackGUID();
-    data << (enemy ? enemy->GetPackGUID() : PackedGuid());  // must be packed guid
+    data << (enemy ? enemy->GetPackGUID() : PackedGuid()); // must be packed guid
 #else
     WorldPacket data(SMSG_ATTACKSTOP);
     data << GetPlayer()->GetGUID();
     data << (enemy ? enemy->GetGUID() : uint64());
 #endif
-    data << uint32(0);                                      // unk, can be 1 also
+    data << uint32(0); // unk, can be 1 also
     SendPacket(&data);
 }

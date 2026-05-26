@@ -26,37 +26,34 @@ mob_anubisath_guardian
 mob_flesh_hunter
 EndContentData */
 
-#include "scriptPCH.h"
-#include "CreatureGroups.h"
 #include "ruins_of_ahnqiraj.h"
+#include "CreatureGroups.h"
+#include "scriptPCH.h"
 
 // Anubisath guardian
 enum
 {
-    SPELL_METEOR        =   24340,
-    SPELL_PLAGUE        =   22997,
-    SPELL_SHADOW_STORM  =   26546,
-    SPELL_THUNDER_CLAP  =   26554,
-    SPELL_REFLECT_ARFR  =   13022,
-    SPELL_REFLECT_FSSH  =   19595,
-    SPELL_ENRAGE        =   8269, //8559,
-    SPELL_EXPLODE       =   25699,
-    SPELL_INIT_EXPLODE  =   25698,
+    SPELL_METEOR = 24340,
+    SPELL_PLAGUE = 22997,
+    SPELL_SHADOW_STORM = 26546,
+    SPELL_THUNDER_CLAP = 26554,
+    SPELL_REFLECT_ARFR = 13022,
+    SPELL_REFLECT_FSSH = 19595,
+    SPELL_ENRAGE = 8269, // 8559,
+    SPELL_EXPLODE = 25699,
+    SPELL_INIT_EXPLODE = 25698,
 
-    EMOTE_FRENZY        =   10677,
+    EMOTE_FRENZY = 10677,
 
-    NPC_ANU_WARRIOR     =   15537,
-    NPC_ANU_SWARM       =   15538,
+    NPC_ANU_WARRIOR = 15537,
+    NPC_ANU_SWARM = 15538,
 
     OBJ_SMALL_OBSIDIAN_CHUNK = 181068
 };
 
 struct mob_anubisath_guardianAI : public ScriptedAI
 {
-    mob_anubisath_guardianAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    mob_anubisath_guardianAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiSpell1;
     uint32 m_uiSpell2;
@@ -95,14 +92,11 @@ struct mob_anubisath_guardianAI : public ScriptedAI
 
     void JustDied(Unit* pKiller) override
     {
-        if (GameObject *pObsidian = m_creature->SummonGameObject(OBJ_SMALL_OBSIDIAN_CHUNK, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, 0, 0, 0, 0, -1, false))
+        if (GameObject* pObsidian = m_creature->SummonGameObject(OBJ_SMALL_OBSIDIAN_CHUNK, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, 0, 0, 0, 0, -1, false))
             pObsidian->SetRespawnTime(345600);
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        DoCast(m_creature, m_uiSpell3);
-    }
+    void Aggro(Unit* pWho) override { DoCast(m_creature, m_uiSpell3); }
 
     void JustSummoned(Creature* pSummoned) override
     {
@@ -110,12 +104,9 @@ struct mob_anubisath_guardianAI : public ScriptedAI
         ++m_uiSummonCount;
     }
 
-    void SummonedCreatureDespawn(Creature *pDespawned) override
-    {
-        -- m_uiSummonCount;
-    }
+    void SummonedCreatureDespawn(Creature* pDespawned) override { --m_uiSummonCount; }
 
-    void DamageTaken(Unit* pDoneBy, uint32 &uiDamage) override
+    void DamageTaken(Unit* pDoneBy, uint32& uiDamage) override
     {
         if (!m_bIsEnraged && (m_creature->GetHealth() * 100 / m_creature->GetMaxHealth()) < 10)
         {
@@ -148,8 +139,6 @@ struct mob_anubisath_guardianAI : public ScriptedAI
             m_uiExplode_Timer -= uiDiff;
 
 
-
-
         if (m_uiSpell1_Timer < uiDiff)
         {
             /** Spell1 shall be cast on random target */
@@ -178,13 +167,7 @@ struct mob_anubisath_guardianAI : public ScriptedAI
         {
             if (m_uiSummonCount < 4)
             {
-                m_creature->SummonCreature(m_uiNPCSummon,
-                                           m_creature->GetPositionX(),
-                                           m_creature->GetPositionY(),
-                                           m_creature->GetPositionZ(),
-                                           0,
-                                           TEMPSUMMON_TIMED_DESPAWN,
-                                           60000);
+                m_creature->SummonCreature(m_uiNPCSummon, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN, 60000);
                 // Create visual animation of the teleportation spell
                 m_creature->SendSpellGo(m_creature, 25681);
             }
@@ -210,14 +193,9 @@ struct OssirianTornadoAI : public ScriptedAI
         Reset();
     }
 
-    void Reset() override
-    {
-    }
+    void Reset() override {}
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -229,25 +207,21 @@ struct OssirianTornadoAI : public ScriptedAI
 };
 
 
-
 // Flesh hunter
 
 enum
 {
-    SPELL_TRASH         =   3391,
-    SPELL_CONSUME       =   25371, //26186, //25371,
-    SPELL_CONSUME_HEAL  =   25378,
-    SPELL_POISON_BOLT   =   25424,
-    SPELL_CONSUME_DMG   =   25373,
-    SPELL_SPLIT         =   25383,
+    SPELL_TRASH = 3391,
+    SPELL_CONSUME = 25371, // 26186, //25371,
+    SPELL_CONSUME_HEAL = 25378,
+    SPELL_POISON_BOLT = 25424,
+    SPELL_CONSUME_DMG = 25373,
+    SPELL_SPLIT = 25383,
 };
 
 struct mob_flesh_hunterAI : public ScriptedAI
 {
-    mob_flesh_hunterAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    mob_flesh_hunterAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint64 m_uiConsumeVictim;
 
@@ -271,10 +245,7 @@ struct mob_flesh_hunterAI : public ScriptedAI
         m_bPlayerConsumedCharged = false;
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
     /*
     void AttackStart(Unit* who)
     {
@@ -337,7 +308,7 @@ struct mob_flesh_hunterAI : public ScriptedAI
                 {
                     if (DoCastSpellIfCan(pConsumeTarget, SPELL_CONSUME_DMG) == CAST_OK)
                     {
-//m_creature->GetMotionMaster()->MoveCaster(pConsumeTarget, 320.0f);
+                        // m_creature->GetMotionMaster()->MoveCaster(pConsumeTarget, 320.0f);
                         m_creature->GetMotionMaster()->Initialize();
                         m_creature->StopMoving();
                         m_creature->GetThreatManager().modifyThreatPercent(pConsumeTarget, -100);
@@ -383,17 +354,14 @@ struct mob_flesh_hunterAI : public ScriptedAI
 
 enum
 {
-    SPELL_PURGE             =  25756,
-    SPELL_DRAINMANA         =  25754,
+    SPELL_PURGE = 25756,
+    SPELL_DRAINMANA = 25754,
 };
 
 
 struct ObsidianDestroyerAI : public ScriptedAI
 {
-    ObsidianDestroyerAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    ObsidianDestroyerAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     bool m_bIsInCombat;
     uint32 m_uiDrainMana_Timer;
@@ -418,7 +386,7 @@ struct ObsidianDestroyerAI : public ScriptedAI
 
     void JustDied(Unit* pKiller) override
     {
-        if (GameObject *pObsidian = m_creature->SummonGameObject(OBJ_SMALL_OBSIDIAN_CHUNK, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, 0, 0, 0, 0, -1, false))
+        if (GameObject* pObsidian = m_creature->SummonGameObject(OBJ_SMALL_OBSIDIAN_CHUNK, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, 0, 0, 0, 0, -1, false))
             pObsidian->SetRespawnTime(345600);
     }
 
@@ -430,7 +398,7 @@ struct ObsidianDestroyerAI : public ScriptedAI
         if (m_creature->GetPower(POWER_MANA) >= m_creature->GetMaxPower(POWER_MANA) && m_bIsInCombat)
             DoCast(m_creature, SPELL_PURGE, true);
 
-        //m_uiDrainMana_Timer
+        // m_uiDrainMana_Timer
         if (m_uiDrainMana_Timer < uiDiff)
         {
             DoCast(m_creature, SPELL_DRAINMANA);
@@ -445,17 +413,14 @@ struct ObsidianDestroyerAI : public ScriptedAI
 
 enum
 {
-    SPELL_VENOM_SPIT    =   25497,
-    SPELL_RETALIATION   =   22857,
+    SPELL_VENOM_SPIT = 25497,
+    SPELL_RETALIATION = 22857,
 };
 
 /******************/
 struct HiveZaraSoldierAI : public ScriptedAI
 {
-    HiveZaraSoldierAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    HiveZaraSoldierAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiVenomSpit_Timer;
     bool m_bRetaliation;
@@ -466,10 +431,7 @@ struct HiveZaraSoldierAI : public ScriptedAI
         m_bRetaliation = false;
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -503,7 +465,7 @@ struct HiveZaraSoldierAI : public ScriptedAI
 
 enum
 {
-    SPELL_CLOUD_OF_DISEASE    =   17742,
+    SPELL_CLOUD_OF_DISEASE = 17742,
 };
 
 /******************/
@@ -512,10 +474,7 @@ struct SilicateFeederAI : public ScriptedAI
 
     bool m_bIsAttacked = false;
 
-    SilicateFeederAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    SilicateFeederAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     void Reset() override
     {
@@ -523,10 +482,7 @@ struct SilicateFeederAI : public ScriptedAI
         m_bIsAttacked = false;
     }
 
-    void JustDied(Unit* pKiller) override
-    {
-        DoCastSpellIfCan(m_creature, SPELL_CLOUD_OF_DISEASE);
-    }
+    void JustDied(Unit* pKiller) override { DoCastSpellIfCan(m_creature, SPELL_CLOUD_OF_DISEASE); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -546,28 +502,19 @@ struct SilicateFeederAI : public ScriptedAI
 
 enum
 {
-    SPELL_SUNDERING_CLEAVE    =   25174,
+    SPELL_SUNDERING_CLEAVE = 25174,
 };
 
 /******************/
 struct QirajiSwarmguardAI : public ScriptedAI
 {
-    QirajiSwarmguardAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    QirajiSwarmguardAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiSunder_Timer;
 
-    void Reset() override
-    {
-        m_uiSunder_Timer = 2000;
-    }
+    void Reset() override { m_uiSunder_Timer = 2000; }
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -592,9 +539,9 @@ struct QirajiSwarmguardAI : public ScriptedAI
 
 enum
 {
-    SPELL_TRAMPLE    =   5568,
-    SPELL_UPPERCUT2  =   10966,
-    SPELL_VENGEANCE  =   25164,
+    SPELL_TRAMPLE = 5568,
+    SPELL_UPPERCUT2 = 10966,
+    SPELL_VENGEANCE = 25164,
 };
 
 /******************/
@@ -667,15 +614,12 @@ struct QirajiGladiatorAI : public ScriptedAI
 /*******************/
 enum
 {
-    SPELL_CHARGE_STINGER          =   25190,
+    SPELL_CHARGE_STINGER = 25190,
 };
 
 struct HiveZaraStingerAI : public ScriptedAI
 {
-    HiveZaraStingerAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    HiveZaraStingerAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiCharge_Timer;
     uint32 m_uiChargeCasted_Timer;
@@ -702,7 +646,6 @@ struct HiveZaraStingerAI : public ScriptedAI
                 m_bChargeCasted = true;
                 m_uiChargeCasted_Timer = 500;
             }
-
         }
         else
         {
@@ -718,26 +661,23 @@ struct HiveZaraStingerAI : public ScriptedAI
             }
         }
 
-//        m_creature->GetMotionMaster()->MoveChase(m_creature->GetVictim());
+        //        m_creature->GetMotionMaster()->MoveChase(m_creature->GetVictim());
         DoMeleeAttackIfReady();
     }
 };
 
 enum
 {
-    SAY_TUUBID_KILL       =   -1900117,
-    SPELL_ATTACK_ORDER    =   25471,
-    SPELL_CLEAVE_T        =   26350,
-    SPELL_SUNDER_ARMOR    =   24317,
-    LINK_GROUP_TUUBID     =   115,
+    SAY_TUUBID_KILL = -1900117,
+    SPELL_ATTACK_ORDER = 25471,
+    SPELL_CLEAVE_T = 26350,
+    SPELL_SUNDER_ARMOR = 24317,
+    LINK_GROUP_TUUBID = 115,
 };
 
 struct TuubidAI : public ScriptedAI
 {
-    TuubidAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    TuubidAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiAttackOrder_Timer;
     uint32 m_uiCleave_Timer;
@@ -806,25 +746,22 @@ struct TuubidAI : public ScriptedAI
 
 enum
 {
-    SPELL_ENRAGE_QW       =   8599,
-    SPELL_THUNDERCLAP     =   15588,
-    SPELL_UPPERCUT        =   10966,
-    NPC_TUUBID            =   15392,
+    SPELL_ENRAGE_QW = 8599,
+    SPELL_THUNDERCLAP = 15588,
+    SPELL_UPPERCUT = 10966,
+    NPC_TUUBID = 15392,
 };
 
 struct QirajiWarriorAI : public ScriptedAI
 {
-    QirajiWarriorAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    QirajiWarriorAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
-    uint32     m_uiThunderclap_Timer;
-    uint32     m_uiUppercut_Timer;
-    uint64     m_uiTuubidGuid;
-    uint32     m_uiUpdateTarget_Timer;
-    bool       m_bisTuubidAlive;
-    bool       m_bHasEnraged;
+    uint32 m_uiThunderclap_Timer;
+    uint32 m_uiUppercut_Timer;
+    uint64 m_uiTuubidGuid;
+    uint32 m_uiUpdateTarget_Timer;
+    bool m_bisTuubidAlive;
+    bool m_bHasEnraged;
 
     TuubidAI* GetTuubidAI()
     {
@@ -848,12 +785,9 @@ struct QirajiWarriorAI : public ScriptedAI
         m_bisTuubidAlive = true;
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
 
-    void DamageTaken(Unit* pDoneBy, uint32 &uiDamage) override
+    void DamageTaken(Unit* pDoneBy, uint32& uiDamage) override
     {
         if (!m_bHasEnraged && ((m_creature->GetHealth() * 100) / m_creature->GetMaxHealth()) <= 20 && !m_creature->IsNonMeleeSpellCasted(false))
         {
@@ -919,20 +853,17 @@ struct QirajiWarriorAI : public ScriptedAI
 
 enum
 {
-    SPELL_CLEAVE       =   20684,
+    SPELL_CLEAVE = 20684,
 };
 
 struct SwarmguardNeedlerAI : public ScriptedAI
 {
-    SwarmguardNeedlerAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    SwarmguardNeedlerAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiCleave_Timer;
     uint32 m_uiUpdateTarget_Timer;
     uint64 m_uiTuubidGuid;
-    bool   m_bisTuubidAlive;
+    bool m_bisTuubidAlive;
 
     TuubidAI* GetTuubidAI()
     {
@@ -954,10 +885,7 @@ struct SwarmguardNeedlerAI : public ScriptedAI
         m_bisTuubidAlive = true;
     }
 
-    void Aggro(Unit* pWho) override
-    {
-        m_creature->SetInCombatWithZone();
-    }
+    void Aggro(Unit* pWho) override { m_creature->SetInCombatWithZone(); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -1004,75 +932,36 @@ struct SwarmguardNeedlerAI : public ScriptedAI
 
 /*******************/
 
-CreatureAI* GetAI_Tuubid(Creature* pCreature)
-{
-    return new TuubidAI(pCreature);
-}
+CreatureAI* GetAI_Tuubid(Creature* pCreature) { return new TuubidAI(pCreature); }
 
-CreatureAI* GetAI_SwarmguardNeedler(Creature* pCreature)
-{
-    return new SwarmguardNeedlerAI(pCreature);
-}
+CreatureAI* GetAI_SwarmguardNeedler(Creature* pCreature) { return new SwarmguardNeedlerAI(pCreature); }
 
-CreatureAI* GetAI_QirajiWarrior(Creature* pCreature)
-{
-    return new QirajiWarriorAI(pCreature);
-}
+CreatureAI* GetAI_QirajiWarrior(Creature* pCreature) { return new QirajiWarriorAI(pCreature); }
 
 
-CreatureAI* GetAI_HiveZaraStinger(Creature* pCreature)
-{
-    return new HiveZaraStingerAI(pCreature);
-}
+CreatureAI* GetAI_HiveZaraStinger(Creature* pCreature) { return new HiveZaraStingerAI(pCreature); }
 
-CreatureAI* GetAI_mob_anubisath_guardian(Creature* pCreature)
-{
-    return new mob_anubisath_guardianAI(pCreature);
-}
+CreatureAI* GetAI_mob_anubisath_guardian(Creature* pCreature) { return new mob_anubisath_guardianAI(pCreature); }
 
-CreatureAI* GetAI_OssirianTornado(Creature* pCreature)
-{
-    return new OssirianTornadoAI(pCreature);
-}
+CreatureAI* GetAI_OssirianTornado(Creature* pCreature) { return new OssirianTornadoAI(pCreature); }
 
-CreatureAI* GetAI_mob_flesh_hunter(Creature* pCreature)
-{
-    return new mob_flesh_hunterAI(pCreature);
-}
+CreatureAI* GetAI_mob_flesh_hunter(Creature* pCreature) { return new mob_flesh_hunterAI(pCreature); }
 
-CreatureAI* GetAI_HiveZaraSoldier(Creature* pCreature)
-{
-    return new HiveZaraSoldierAI(pCreature);
-}
+CreatureAI* GetAI_HiveZaraSoldier(Creature* pCreature) { return new HiveZaraSoldierAI(pCreature); }
 
-CreatureAI* GetAI_ObsidianDestroyer(Creature* pCreature)
-{
-    return new ObsidianDestroyerAI(pCreature);
-}
+CreatureAI* GetAI_ObsidianDestroyer(Creature* pCreature) { return new ObsidianDestroyerAI(pCreature); }
 
-CreatureAI* GetAI_SilicateFeeder(Creature* pCreature)
-{
-    return new SilicateFeederAI(pCreature);
-}
+CreatureAI* GetAI_SilicateFeeder(Creature* pCreature) { return new SilicateFeederAI(pCreature); }
 
-CreatureAI* GetAI_QirajiGladiator(Creature* pCreature)
-{
-    return new QirajiGladiatorAI(pCreature);
-}
+CreatureAI* GetAI_QirajiGladiator(Creature* pCreature) { return new QirajiGladiatorAI(pCreature); }
 
-CreatureAI* GetAI_QirajiSwarmguard(Creature* pCreature)
-{
-    return new QirajiSwarmguardAI(pCreature);
-}
+CreatureAI* GetAI_QirajiSwarmguard(Creature* pCreature) { return new QirajiSwarmguardAI(pCreature); }
 
 // 25676 - Drain Mana (Obsidian Destroyer)
 // 25754 - Drain Mana (Moam)
 struct AQ20DrainManaScript : SpellScript
 {
-    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final
-    {
-        unMaxTargets = 6;
-    }
+    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final { unMaxTargets = 6; }
 
     bool OnCheckTarget(Spell const* /*spell*/, Unit* target, SpellEffectIndex /*eff*/) const final
     {
@@ -1083,10 +972,7 @@ struct AQ20DrainManaScript : SpellScript
     }
 };
 
-SpellScript* GetScript_AQ20DrainMana(SpellEntry const*)
-{
-    return new AQ20DrainManaScript();
-}
+SpellScript* GetScript_AQ20DrainMana(SpellEntry const*) { return new AQ20DrainManaScript(); }
 
 // 25599 - Thundercrash
 struct RajaxxThundercrashScript : public SpellScript
@@ -1110,10 +996,7 @@ struct RajaxxThundercrashScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_RajaxxThundercrash(SpellEntry const*)
-{
-    return new RajaxxThundercrashScript();
-}
+SpellScript* GetScript_RajaxxThundercrash(SpellEntry const*) { return new RajaxxThundercrashScript(); }
 
 void AddSC_ruins_of_ahnqiraj()
 {

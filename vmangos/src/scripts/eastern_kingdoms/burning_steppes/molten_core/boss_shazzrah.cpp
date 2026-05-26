@@ -21,16 +21,16 @@ SDComment: Teleport NYI
 SDCategory: Molten Core
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "molten_core.h"
+#include "scriptPCH.h"
 
 enum
 {
-    SPELL_ARCANEEXPLOSION           = 19712,
-    SPELL_SHAZZRAHCURSE             = 19713,
-    SPELL_DEADENMAGIC               = 19714,
-    SPELL_COUNTERSPELL              = 19715,
-    SPELL_GATE_DUMMY                = 23138                 // effect spell: 23139
+    SPELL_ARCANEEXPLOSION = 19712,
+    SPELL_SHAZZRAHCURSE = 19713,
+    SPELL_DEADENMAGIC = 19714,
+    SPELL_COUNTERSPELL = 19715,
+    SPELL_GATE_DUMMY = 23138 // effect spell: 23139
 };
 
 struct boss_shazzrahAI : public ScriptedAI
@@ -78,39 +78,43 @@ struct boss_shazzrahAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //ArcaneExplosion_Timer
+        // ArcaneExplosion_Timer
         if (ArcaneExplosion_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_ARCANEEXPLOSION) == CAST_OK)
                 ArcaneExplosion_Timer = urand(3000, 5000);
         }
-        else ArcaneExplosion_Timer -= diff;
+        else
+            ArcaneExplosion_Timer -= diff;
 
-        //ShazzrahCurse_Timer
+        // ShazzrahCurse_Timer
         if (ShazzrahCurse_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHAZZRAHCURSE, CF_AURA_NOT_PRESENT) == CAST_OK)
                 ShazzrahCurse_Timer = 20000;
         }
-        else ShazzrahCurse_Timer -= diff;
+        else
+            ShazzrahCurse_Timer -= diff;
 
-        //DeadenMagic_Timer
+        // DeadenMagic_Timer
         if (DeadenMagic_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature, SPELL_DEADENMAGIC) == CAST_OK)
                 DeadenMagic_Timer = urand(7000, 14000);
         }
-        else DeadenMagic_Timer -= diff;
+        else
+            DeadenMagic_Timer -= diff;
 
-        //Countspell_Timer
+        // Countspell_Timer
         if (Countspell_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_COUNTERSPELL) == CAST_OK)
                 Countspell_Timer = urand(16000, 18000);
         }
-        else Countspell_Timer -= diff;
+        else
+            Countspell_Timer -= diff;
 
-        //Blink_Timer
+        // Blink_Timer
         if (Blink_Timer < diff)
         {
             // Teleporting him to a random gamer and casting Arcane Explosion after that.
@@ -127,29 +131,21 @@ struct boss_shazzrahAI : public ScriptedAI
                 Blink_Timer = urand(25000, 35000);
             }
         }
-        else Blink_Timer -= diff;
+        else
+            Blink_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_shazzrah(Creature* pCreature)
-{
-    return new boss_shazzrahAI(pCreature);
-}
+CreatureAI* GetAI_boss_shazzrah(Creature* pCreature) { return new boss_shazzrahAI(pCreature); }
 
 // 23138 - Gate of Shazzrah (MC, Shazzrah)
 struct ShazzrahGateScript : SpellScript
 {
-    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final
-    {
-        unMaxTargets = 1;
-    }
+    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final { unMaxTargets = 1; }
 };
 
-SpellScript* GetScript_ShazzrahGate(SpellEntry const*)
-{
-    return new ShazzrahGateScript();
-}
+SpellScript* GetScript_ShazzrahGate(SpellEntry const*) { return new ShazzrahGateScript(); }
 
 void AddSC_boss_shazzrah()
 {

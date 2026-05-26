@@ -31,32 +31,41 @@ class BigNumber;
 
 typedef struct hmac_ctx_st HMAC_CTX;
 
-namespace Crypto { namespace Hash { namespace HMACSHA1
+namespace Crypto
 {
-    typedef SHA1::Digest Digest;
-
-    constexpr Digest CreateEmpty() { return {}; }
-
-    class Generator
+    namespace Hash
     {
-    public:
-        Generator(std::vector<uint8> const& key);
-        Generator(uint8 const* key, size_t len);
-        ~Generator();
+        namespace HMACSHA1
+        {
+            typedef SHA1::Digest Digest;
 
-        template <std::size_t N>
-        void UpdateData(std::array<uint8, N> const& data) { UpdateData(data.data(), data.size()); }
-        void UpdateData(std::vector<uint8> const& data);
-        void UpdateData(std::string const& data);
-        void UpdateData(BigNumber const& data);
-        void UpdateData(uint8 const* data, size_t length);
+            constexpr Digest CreateEmpty() { return {}; }
 
-        Digest GetDigest();
+            class Generator
+            {
+            public:
+                Generator(std::vector<uint8> const& key);
+                Generator(uint8 const* key, size_t len);
+                ~Generator();
 
-    private:
-        HMAC_CTX* m_ctx;
-    };
+                template <std::size_t N>
+                void UpdateData(std::array<uint8, N> const& data)
+                {
+                    UpdateData(data.data(), data.size());
+                }
+                void UpdateData(std::vector<uint8> const& data);
+                void UpdateData(std::string const& data);
+                void UpdateData(BigNumber const& data);
+                void UpdateData(uint8 const* data, size_t length);
 
-}}} // namespace Crypto::Hash::HMACSHA1
+                Digest GetDigest();
+
+            private:
+                HMAC_CTX* m_ctx;
+            };
+
+        } // namespace HMACSHA1
+    } // namespace Hash
+} // namespace Crypto
 
 #endif

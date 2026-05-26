@@ -18,19 +18,19 @@
  */
 
 #include "ScriptMgr.h"
-#include "Policies/SingletonImp.h"
+#include "Conditions.h"
+#include "CreatureGroups.h"
+#include "GameEventMgr.h"
+#include "GossipDef.h"
+#include "InstanceData.h"
 #include "Log.h"
-#include "ProgressBar.h"
 #include "ObjectMgr.h"
+#include "Policies/SingletonImp.h"
+#include "ProgressBar.h"
+#include "ScriptLoader.h"
+#include "SpellAuras.h"
 #include "WaypointManager.h"
 #include "World.h"
-#include "GossipDef.h"
-#include "SpellAuras.h"
-#include "ScriptLoader.h"
-#include "Conditions.h"
-#include "GameEventMgr.h"
-#include "CreatureGroups.h"
-#include "InstanceData.h"
 
 typedef std::vector<Script*> ScriptVector;
 int num_sc_scripts;
@@ -50,9 +50,7 @@ ScriptMapMap sSpellScripts;
 
 INSTANTIATE_SINGLETON_1(ScriptMgr);
 
-ScriptMgr::ScriptMgr() : m_scheduledScripts(0)
-{
-}
+ScriptMgr::ScriptMgr() : m_scheduledScripts(0) {}
 
 ScriptMgr::~ScriptMgr()
 {
@@ -75,12 +73,12 @@ void DisableScriptAction(ScriptInfo& script)
 
 void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 {
-    if (IsScriptScheduled())                                // function don't must be called in time scripts use.
+    if (IsScriptScheduled()) // function don't must be called in time scripts use.
         return;
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "%s :", tablename);
 
-    scripts.clear();                                        // need for reload support
+    scripts.clear(); // need for reload support
 
     //                                                                  0     1        2          3           4            5            6            7                8                9              10            11         12          13          14         15   16   17   18       19
     std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT `id`, `delay`, `command`, `datalong`, `datalong2`, `datalong3`, `datalong4`, `target_param1`, `target_param2`, `target_type`, `data_flags`, `dataint`, `dataint2`, `dataint3`, `dataint4`, `x`, `y`, `z`, `o`, `condition_id` FROM %s ORDER BY `id`, `delay`, `priority`", tablename);
@@ -105,28 +103,28 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
         Field* fields = result->Fetch();
         ScriptInfo tmp;
-        tmp.id           = fields[0].GetUInt32();
-        tmp.delay        = fields[1].GetUInt32();
-        tmp.command      = fields[2].GetUInt32();
-        tmp.raw.data[0]  = fields[3].GetUInt32();
-        tmp.raw.data[1]  = fields[4].GetUInt32();
-        tmp.raw.data[2]  = fields[5].GetUInt32();
-        tmp.raw.data[3]  = fields[6].GetUInt32();
+        tmp.id = fields[0].GetUInt32();
+        tmp.delay = fields[1].GetUInt32();
+        tmp.command = fields[2].GetUInt32();
+        tmp.raw.data[0] = fields[3].GetUInt32();
+        tmp.raw.data[1] = fields[4].GetUInt32();
+        tmp.raw.data[2] = fields[5].GetUInt32();
+        tmp.raw.data[3] = fields[6].GetUInt32();
 
-        tmp.target_param1     = fields[7].GetUInt32();
+        tmp.target_param1 = fields[7].GetUInt32();
         tmp.target_param2 = fields[8].GetUInt32();
-        tmp.target_type   = fields[9].GetUInt8();
+        tmp.target_type = fields[9].GetUInt8();
 
-        tmp.raw.data[4]  = fields[10].GetUInt32();
-        tmp.raw.data[5]  = fields[11].GetInt32();
-        tmp.raw.data[6]  = fields[12].GetInt32();
-        tmp.raw.data[7]  = fields[13].GetInt32();
-        tmp.raw.data[8]  = fields[14].GetInt32();
-        tmp.x            = fields[15].GetFloat();
-        tmp.y            = fields[16].GetFloat();
-        tmp.z            = fields[17].GetFloat();
-        tmp.o            = fields[18].GetFloat();
-        tmp.condition    = fields[19].GetUInt32();
+        tmp.raw.data[4] = fields[10].GetUInt32();
+        tmp.raw.data[5] = fields[11].GetInt32();
+        tmp.raw.data[6] = fields[12].GetInt32();
+        tmp.raw.data[7] = fields[13].GetInt32();
+        tmp.raw.data[8] = fields[14].GetInt32();
+        tmp.x = fields[15].GetFloat();
+        tmp.y = fields[16].GetFloat();
+        tmp.z = fields[17].GetFloat();
+        tmp.o = fields[18].GetFloat();
+        tmp.condition = fields[19].GetUInt32();
 
         if (tmp.condition && !sConditionStorage.LookupEntry<ConditionEntry>(tmp.condition))
         {
@@ -158,7 +156,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
         // generic command args check
         switch (tmp.command)
         {
-            case SCRIPT_COMMAND_TALK:
+        case SCRIPT_COMMAND_TALK:
             {
                 if (tmp.talk.chatType >= CHAT_TYPE_MAX)
                 {
@@ -182,7 +180,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_EMOTE:
+        case SCRIPT_COMMAND_EMOTE:
             {
                 if (!sEmotesStore.LookupEntry(tmp.emote.emoteId[0]))
                 {
@@ -199,12 +197,12 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_FIELD_SET:
+        case SCRIPT_COMMAND_FIELD_SET:
             {
                 tmp.setField.fieldId = GetIndexOfUpdateFieldForCurrentBuild(tmp.setField.fieldId);
                 break;
             }
-            case SCRIPT_COMMAND_MOVE_TO:
+        case SCRIPT_COMMAND_MOVE_TO:
             {
                 if (tmp.moveTo.coordinatesType >= MOVETO_COORDINATES_MAX)
                 {
@@ -221,12 +219,12 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_MODIFY_FLAGS:
+        case SCRIPT_COMMAND_MODIFY_FLAGS:
             {
                 tmp.modFlags.fieldId = GetIndexOfUpdateFieldForCurrentBuild(tmp.modFlags.fieldId);
                 break;
             }
-            case SCRIPT_COMMAND_INTERRUPT_CASTS:
+        case SCRIPT_COMMAND_INTERRUPT_CASTS:
             {
                 if (tmp.interruptCasts.spellId && !sSpellMgr.GetSpellEntry(tmp.interruptCasts.spellId))
                 {
@@ -241,7 +239,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_TELEPORT_TO:
+        case SCRIPT_COMMAND_TELEPORT_TO:
             {
                 if (!sMapStorage.LookupEntry<MapEntry>(tmp.teleportTo.mapId))
                 {
@@ -256,7 +254,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_QUEST_EXPLORED:
+        case SCRIPT_COMMAND_QUEST_EXPLORED:
             {
                 Quest const* quest = sObjectMgr.GetQuestTemplate(tmp.questExplored.questId);
                 if (!quest)
@@ -285,28 +283,25 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 if (float(tmp.questExplored.distance) > DEFAULT_VISIBILITY_DISTANCE)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has too large distance (%u) for exploring objective complete in `datalong2` in SCRIPT_COMMAND_QUEST_EXPLORED in `datalong` for script id %u",
-                                    tablename, tmp.questExplored.distance, tmp.id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has too large distance (%u) for exploring objective complete in `datalong2` in SCRIPT_COMMAND_QUEST_EXPLORED in `datalong` for script id %u", tablename, tmp.questExplored.distance, tmp.id);
                     continue;
                 }
 
                 if (tmp.questExplored.distance && float(tmp.questExplored.distance) > DEFAULT_VISIBILITY_DISTANCE)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has too large distance (%u) for exploring objective complete in `datalong2` in SCRIPT_COMMAND_QUEST_EXPLORED in `datalong` for script id %u, max distance is %f or 0 for disable distance check",
-                                    tablename, tmp.questExplored.distance, tmp.id, DEFAULT_VISIBILITY_DISTANCE);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has too large distance (%u) for exploring objective complete in `datalong2` in SCRIPT_COMMAND_QUEST_EXPLORED in `datalong` for script id %u, max distance is %f or 0 for disable distance check", tablename, tmp.questExplored.distance, tmp.id, DEFAULT_VISIBILITY_DISTANCE);
                     continue;
                 }
 
                 if (tmp.questExplored.distance && float(tmp.questExplored.distance) < INTERACTION_DISTANCE)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has too small distance (%u) for exploring objective complete in `datalong2` in SCRIPT_COMMAND_QUEST_EXPLORED in `datalong` for script id %u, min distance is %f or 0 for disable distance check",
-                                    tablename, tmp.questExplored.distance, tmp.id, INTERACTION_DISTANCE);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has too small distance (%u) for exploring objective complete in `datalong2` in SCRIPT_COMMAND_QUEST_EXPLORED in `datalong` for script id %u, min distance is %f or 0 for disable distance check", tablename, tmp.questExplored.distance, tmp.id, INTERACTION_DISTANCE);
                     continue;
                 }
 
                 break;
             }
-            case SCRIPT_COMMAND_KILL_CREDIT:
+        case SCRIPT_COMMAND_KILL_CREDIT:
             {
                 if (!sObjectMgr.GetCreatureTemplate(tmp.killCredit.creatureEntry))
                 {
@@ -320,7 +315,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_RESPAWN_GAMEOBJECT:
+        case SCRIPT_COMMAND_RESPAWN_GAMEOBJECT:
             {
                 if (tmp.GetGOGuid()) // cant check when using buddy\source\target instead
                 {
@@ -356,10 +351,10 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                         continue;
                     }
                 }
-                
+
                 break;
             }
-            case SCRIPT_COMMAND_TEMP_SUMMON_CREATURE:
+        case SCRIPT_COMMAND_TEMP_SUMMON_CREATURE:
             {
                 if (!MaNGOS::IsValidMapCoord(tmp.x, tmp.y, tmp.z, tmp.o))
                 {
@@ -379,8 +374,8 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_OPEN_DOOR:
-            case SCRIPT_COMMAND_CLOSE_DOOR:
+        case SCRIPT_COMMAND_OPEN_DOOR:
+        case SCRIPT_COMMAND_CLOSE_DOOR:
             {
                 if (tmp.GetGOGuid()) // cant check when using buddy\source\target instead
                 {
@@ -415,14 +410,13 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_REMOVE_AURA:
+        case SCRIPT_COMMAND_REMOVE_AURA:
             {
                 if (tmp.removeAura.spellId && !sSpellMgr.GetSpellEntry(tmp.removeAura.spellId))
                 {
                     if (!sSpellMgr.IsExistingSpellId(tmp.removeAura.spellId))
                     {
-                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using nonexistent spell (id: %u) in SCRIPT_COMMAND_REMOVE_AURA for script id %u",
-                            tablename, tmp.removeAura.spellId, tmp.id);
+                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using nonexistent spell (id: %u) in SCRIPT_COMMAND_REMOVE_AURA for script id %u", tablename, tmp.removeAura.spellId, tmp.id);
                         continue;
                     }
                     else
@@ -430,14 +424,13 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_CAST_SPELL:
+        case SCRIPT_COMMAND_CAST_SPELL:
             {
                 if (!sSpellMgr.GetSpellEntry(tmp.castSpell.spellId))
                 {
                     if (!sSpellMgr.IsExistingSpellId(tmp.castSpell.spellId))
                     {
-                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using nonexistent spell (id: %u) in SCRIPT_COMMAND_CAST_SPELL for script id %u",
-                            tablename, tmp.castSpell.spellId, tmp.id);
+                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using nonexistent spell (id: %u) in SCRIPT_COMMAND_CAST_SPELL for script id %u", tablename, tmp.castSpell.spellId, tmp.id);
                         continue;
                     }
                     else
@@ -445,21 +438,19 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 if (tmp.castSpell.flags & ~ALL_CAST_FLAGS)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using unknown flags in datalong2 (%u) in SCRIPT_COMMAND_CAST_SPELL for script id %u",
-                                    tablename, tmp.castSpell.flags, tmp.id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using unknown flags in datalong2 (%u) in SCRIPT_COMMAND_CAST_SPELL for script id %u", tablename, tmp.castSpell.flags, tmp.id);
                     continue;
                 }
                 break;
             }
-            case SCRIPT_COMMAND_REMOVE_ITEM:
-            case SCRIPT_COMMAND_CREATE_ITEM:
+        case SCRIPT_COMMAND_REMOVE_ITEM:
+        case SCRIPT_COMMAND_CREATE_ITEM:
             {
                 if (!sObjectMgr.GetItemPrototype(tmp.createItem.itemId))
                 {
                     if (!sObjectMgr.IsExistingItemId(tmp.createItem.itemId))
                     {
-                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has nonexistent item (entry: %u) in SCRIPT_COMMAND_*_ITEM for script id %u",
-                            tablename, tmp.createItem.itemId, tmp.id);
+                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has nonexistent item (entry: %u) in SCRIPT_COMMAND_*_ITEM for script id %u", tablename, tmp.createItem.itemId, tmp.id);
                         continue;
                     }
                     else
@@ -467,17 +458,16 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 if (!tmp.createItem.amount)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` SCRIPT_COMMAND_*_ITEM but amount is %u for script id %u",
-                                    tablename, tmp.createItem.amount, tmp.id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` SCRIPT_COMMAND_*_ITEM but amount is %u for script id %u", tablename, tmp.createItem.amount, tmp.id);
                     continue;
                 }
                 break;
             }
-            case SCRIPT_COMMAND_DESPAWN_CREATURE:
+        case SCRIPT_COMMAND_DESPAWN_CREATURE:
             {
                 break;
             }
-            case SCRIPT_COMMAND_SET_EQUIPMENT:
+        case SCRIPT_COMMAND_SET_EQUIPMENT:
             {
                 bool cancel = false;
                 bool disable = false;
@@ -490,8 +480,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                         {
                             if (!sObjectMgr.IsExistingItemId(tmp.createItem.itemId))
                             {
-                                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has nonexistent item (dataint%i: %u) in SCRIPT_COMMAND_SET_EQUIPMENT for script id %u",
-                                    tablename, i, tmp.setEquipment.slot[i], tmp.id);
+                                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has nonexistent item (dataint%i: %u) in SCRIPT_COMMAND_SET_EQUIPMENT for script id %u", tablename, i, tmp.setEquipment.slot[i], tmp.id);
                                 cancel = true;
                             }
                             else
@@ -499,7 +488,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                         }
                     }
                 }
-                
+
                 if (cancel)
                     continue;
 
@@ -508,62 +497,60 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_MOVEMENT:
+        case SCRIPT_COMMAND_MOVEMENT:
             {
                 switch (tmp.movement.movementType)
                 {
-                    case IDLE_MOTION_TYPE:
-                    case RANDOM_MOTION_TYPE:
-                    case WAYPOINT_MOTION_TYPE:
-                    case CONFUSED_MOTION_TYPE:
-                    case CHASE_MOTION_TYPE:
-                    case HOME_MOTION_TYPE:
-                    case FLEEING_MOTION_TYPE:
-                    case DISTRACT_MOTION_TYPE:
-                    case FOLLOW_MOTION_TYPE:
-                    case CHARGE_MOTION_TYPE:
-                    case DISTANCING_MOTION_TYPE:
-                        break;
-                    default:
+                case IDLE_MOTION_TYPE:
+                case RANDOM_MOTION_TYPE:
+                case WAYPOINT_MOTION_TYPE:
+                case CONFUSED_MOTION_TYPE:
+                case CHASE_MOTION_TYPE:
+                case HOME_MOTION_TYPE:
+                case FLEEING_MOTION_TYPE:
+                case DISTRACT_MOTION_TYPE:
+                case FOLLOW_MOTION_TYPE:
+                case CHARGE_MOTION_TYPE:
+                case DISTANCING_MOTION_TYPE:
+                    break;
+                default:
                     {
-                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` SCRIPT_COMMAND_MOVEMENT has invalid MovementType %u for script id %u",
-                            tablename, tmp.movement.movementType, tmp.id);
+                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` SCRIPT_COMMAND_MOVEMENT has invalid MovementType %u for script id %u", tablename, tmp.movement.movementType, tmp.id);
                         continue;
                     }
                 }
 
                 if (tmp.movement.boolParam > 1)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` SCRIPT_COMMAND_MOVEMENT has wrong value in datalong2=%u (must be bool 0/1) for script id %u",
-                                    tablename, tmp.movement.boolParam, tmp.id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` SCRIPT_COMMAND_MOVEMENT has wrong value in datalong2=%u (must be bool 0/1) for script id %u", tablename, tmp.movement.boolParam, tmp.id);
                     continue;
                 }
 
                 break;
             }
-            case SCRIPT_COMMAND_SET_ACTIVEOBJECT:
+        case SCRIPT_COMMAND_SET_ACTIVEOBJECT:
             {
                 break;
             }
-            case SCRIPT_COMMAND_SET_FACTION:
+        case SCRIPT_COMMAND_SET_FACTION:
             {
                 if (tmp.faction.factionId && !sObjectMgr.GetFactionTemplateEntry(tmp.faction.factionId))
                 {
                     switch (tmp.faction.factionId)
                     {
-                        // Hacky fix for the Theramore Duel Event before 1.10, so we don't
-                        // have to add a build column to script tables just for this case.
-                        // Blizzard added new factions for the duelists, because the Red
-                        // team was using a generic hostile faction previously, and would
-                        // regularly aggro unsuspecting alliance players who passed nearby.
-                        // See the wowhead comments on Gaurd Jarad, Guard Tark, Guard Lana.
-                        case 1621: // Blue (added 1.10)
-                            tmp.faction.factionId = 150; // Theramore (same on all patches)
-                            break;
-                        case 1622: // Red (added 1.10)
-                            tmp.faction.factionId = 168; // Enemy (same on all patches)
-                            break;
-                        default:
+                    // Hacky fix for the Theramore Duel Event before 1.10, so we don't
+                    // have to add a build column to script tables just for this case.
+                    // Blizzard added new factions for the duelists, because the Red
+                    // team was using a generic hostile faction previously, and would
+                    // regularly aggro unsuspecting alliance players who passed nearby.
+                    // See the wowhead comments on Gaurd Jarad, Guard Tark, Guard Lana.
+                    case 1621: // Blue (added 1.10)
+                        tmp.faction.factionId = 150; // Theramore (same on all patches)
+                        break;
+                    case 1622: // Red (added 1.10)
+                        tmp.faction.factionId = 168; // Enemy (same on all patches)
+                        break;
+                    default:
                         {
                             sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has datalong2 = %u in SCRIPT_COMMAND_SET_FACTION for script id %u, but this faction does not exist.", tablename, tmp.faction.factionId, tmp.id);
                             continue;
@@ -573,7 +560,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_MORPH_TO_ENTRY_OR_MODEL:
+        case SCRIPT_COMMAND_MORPH_TO_ENTRY_OR_MODEL:
             {
                 if (tmp.morph.isDisplayId)
                 {
@@ -599,7 +586,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_MOUNT_TO_ENTRY_OR_MODEL:
+        case SCRIPT_COMMAND_MOUNT_TO_ENTRY_OR_MODEL:
             {
                 if (tmp.mount.isDisplayId)
                 {
@@ -625,15 +612,15 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_SET_RUN:
+        case SCRIPT_COMMAND_SET_RUN:
             {
                 break;
             }
-            case SCRIPT_COMMAND_ATTACK_START:
+        case SCRIPT_COMMAND_ATTACK_START:
             {
                 break;
             }
-            case SCRIPT_COMMAND_UPDATE_ENTRY:
+        case SCRIPT_COMMAND_UPDATE_ENTRY:
             {
                 if (!sObjectMgr.GetCreatureTemplate(tmp.updateEntry.creatureEntry))
                 {
@@ -648,7 +635,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_STAND_STATE:
+        case SCRIPT_COMMAND_STAND_STATE:
             {
                 if (tmp.standState.standState >= MAX_UNIT_STAND_STATE)
                 {
@@ -657,7 +644,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_MODIFY_THREAT:
+        case SCRIPT_COMMAND_MODIFY_THREAT:
             {
                 if (tmp.modThreat.target > SO_MODIFYTHREAT_ALL_ATTACKERS)
                 {
@@ -666,7 +653,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SEND_TAXI_PATH:
+        case SCRIPT_COMMAND_SEND_TAXI_PATH:
             {
                 if (!sTaxiPathStore.LookupEntry(tmp.sendTaxiPath.taxiPathId))
                 {
@@ -675,7 +662,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_TERMINATE_SCRIPT:
+        case SCRIPT_COMMAND_TERMINATE_SCRIPT:
             {
                 if (tmp.terminateScript.creatureEntry && !sObjectMgr.GetCreatureTemplate(tmp.terminateScript.creatureEntry))
                 {
@@ -694,7 +681,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_TERMINATE_CONDITION:
+        case SCRIPT_COMMAND_TERMINATE_CONDITION:
             {
                 if (!sConditionStorage.LookupEntry<ConditionEntry>(tmp.terminateCond.conditionId))
                 {
@@ -708,15 +695,15 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_ENTER_EVADE_MODE:
+        case SCRIPT_COMMAND_ENTER_EVADE_MODE:
             {
                 break;
             }
-            case SCRIPT_COMMAND_SET_HOME_POSITION:
+        case SCRIPT_COMMAND_SET_HOME_POSITION:
             {
                 break;
             }
-            case SCRIPT_COMMAND_TURN_TO:
+        case SCRIPT_COMMAND_TURN_TO:
             {
                 if (tmp.turnTo.facingLogic > 1)
                 {
@@ -725,7 +712,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_MEETINGSTONE:
+        case SCRIPT_COMMAND_MEETINGSTONE:
             {
                 if (!sAreaStorage.LookupEntry<AreaEntry>(tmp.meetingstone.areaId))
                 {
@@ -734,7 +721,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_INST_DATA:
+        case SCRIPT_COMMAND_SET_INST_DATA:
             {
                 if (tmp.setData.type >= SO_INSTDATA_MAX)
                 {
@@ -743,7 +730,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_INST_DATA64:
+        case SCRIPT_COMMAND_SET_INST_DATA64:
             {
                 if (tmp.setData64.type >= SO_INSTDATA64_MAX)
                 {
@@ -752,8 +739,8 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_START_SCRIPT:
-            case SCRIPT_COMMAND_START_SCRIPT_ON_GROUP:
+        case SCRIPT_COMMAND_START_SCRIPT:
+        case SCRIPT_COMMAND_START_SCRIPT_ON_GROUP:
             {
                 if (100 < (tmp.startScript.chance[0] + tmp.startScript.chance[1] + tmp.startScript.chance[2] + tmp.startScript.chance[3]))
                 {
@@ -788,7 +775,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_SET_PHASE:
+        case SCRIPT_COMMAND_SET_PHASE:
             {
                 if (tmp.setPhase.phase >= 32) // Max EventAI phase.
                 {
@@ -802,7 +789,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_PHASE_RANDOM:
+        case SCRIPT_COMMAND_SET_PHASE_RANDOM:
             {
                 bool error = false;
                 for (uint8 i = 0; i < 4; i++)
@@ -820,7 +807,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_SET_PHASE_RANGE:
+        case SCRIPT_COMMAND_SET_PHASE_RANGE:
             {
                 if (tmp.setPhaseRange.phaseMax >= 32) // Max EventAI phase.
                 {
@@ -834,7 +821,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_DEAL_DAMAGE:
+        case SCRIPT_COMMAND_DEAL_DAMAGE:
             {
                 if (tmp.dealDamage.damage == 0)
                 {
@@ -851,7 +838,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_SHEATH:
+        case SCRIPT_COMMAND_SET_SHEATH:
             {
                 if (tmp.setSheath.sheathState >= MAX_SHEATH_STATE)
                 {
@@ -860,7 +847,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_INVINCIBILITY:
+        case SCRIPT_COMMAND_INVINCIBILITY:
             {
                 if (tmp.invincibility.isPercent)
                 {
@@ -872,7 +859,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_GAME_EVENT:
+        case SCRIPT_COMMAND_GAME_EVENT:
             {
                 if (!sGameEventMgr.IsValidEvent(tmp.gameEvent.eventId))
                 {
@@ -881,7 +868,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_CREATURE_SPELLS:
+        case SCRIPT_COMMAND_CREATURE_SPELLS:
             {
                 if (100 < (tmp.creatureSpells.chance[0] + tmp.creatureSpells.chance[1] + tmp.creatureSpells.chance[2] + tmp.creatureSpells.chance[3]))
                 {
@@ -924,7 +911,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
 
                 break;
             }
-            case SCRIPT_COMMAND_REMOVE_GUARDIANS:
+        case SCRIPT_COMMAND_REMOVE_GUARDIANS:
             {
                 if (tmp.removeGuardian.creatureId)
                 {
@@ -941,7 +928,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_ADD_SPELL_COOLDOWN:
+        case SCRIPT_COMMAND_ADD_SPELL_COOLDOWN:
             {
                 if (!sSpellMgr.GetSpellEntry(tmp.addCooldown.spellId))
                 {
@@ -960,7 +947,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_REMOVE_SPELL_COOLDOWN:
+        case SCRIPT_COMMAND_REMOVE_SPELL_COOLDOWN:
             {
                 if (tmp.removeCooldown.spellId)
                 {
@@ -977,7 +964,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_REACT_STATE:
+        case SCRIPT_COMMAND_SET_REACT_STATE:
             {
                 if (tmp.setReactState.state > REACT_AGGRESSIVE)
                 {
@@ -986,7 +973,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_START_WAYPOINTS:
+        case SCRIPT_COMMAND_START_WAYPOINTS:
             {
                 if (tmp.startWaypoints.wpSource > PATH_FROM_SPECIAL)
                 {
@@ -995,7 +982,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_DEFAULT_MOVEMENT:
+        case SCRIPT_COMMAND_SET_DEFAULT_MOVEMENT:
             {
                 if (tmp.setDefaultMovement.movementType >= MAX_DB_MOTION_TYPE)
                 {
@@ -1004,7 +991,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_START_SCRIPT_FOR_ALL:
+        case SCRIPT_COMMAND_START_SCRIPT_FOR_ALL:
             {
                 if (!tmp.startScriptForAll.searchRadius)
                 {
@@ -1013,7 +1000,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 switch (tmp.startScriptForAll.objectType)
                 {
-                    case SO_STARTFORALL_GAMEOBJECTS:
+                case SO_STARTFORALL_GAMEOBJECTS:
                     {
                         if (tmp.startScriptForAll.objectEntry)
                         {
@@ -1030,7 +1017,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                         }
                         break;
                     }
-                    case SO_STARTFORALL_CREATURES:
+                case SO_STARTFORALL_CREATURES:
                     {
                         if (tmp.startScriptForAll.objectEntry)
                         {
@@ -1047,12 +1034,12 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                         }
                         break;
                     }
-                    case SO_STARTFORALL_UNITS:
-                    case SO_STARTFORALL_PLAYERS:
+                case SO_STARTFORALL_UNITS:
+                case SO_STARTFORALL_PLAYERS:
                     {
                         break;
-                    } 
-                    default:
+                    }
+                default:
                     {
                         sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has datalong2 = %u in SCRIPT_COMMAND_START_SCRIPT_FOR_ALL for script id %u.", tablename, tmp.startScriptForAll.objectType, tmp.id);
                         continue;
@@ -1060,7 +1047,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_FAIL_QUEST:
+        case SCRIPT_COMMAND_FAIL_QUEST:
             {
                 if (!sObjectMgr.GetQuestTemplate(tmp.failQuest.questId))
                 {
@@ -1077,15 +1064,13 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_ADD_AURA:
+        case SCRIPT_COMMAND_ADD_AURA:
             {
                 if (auto pSpellEntry = sSpellMgr.GetSpellEntry(tmp.addAura.spellId))
                 {
-                    if (!pSpellEntry->IsSpellAppliesAura((1 << EFFECT_INDEX_0) | (1 << EFFECT_INDEX_1) | (1 << EFFECT_INDEX_2)) &&
-                        !pSpellEntry->HasEffect(SPELL_EFFECT_PERSISTENT_AREA_AURA))
+                    if (!pSpellEntry->IsSpellAppliesAura((1 << EFFECT_INDEX_0) | (1 << EFFECT_INDEX_1) | (1 << EFFECT_INDEX_2)) && !pSpellEntry->HasEffect(SPELL_EFFECT_PERSISTENT_AREA_AURA))
                     {
-                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has a spell that does not apply any auras (id: %u) in SCRIPT_COMMAND_ADD_AURA for script id %u",
-                            tablename, tmp.addAura.spellId, tmp.id);
+                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has a spell that does not apply any auras (id: %u) in SCRIPT_COMMAND_ADD_AURA for script id %u", tablename, tmp.addAura.spellId, tmp.id);
                         continue;
                     }
                 }
@@ -1093,8 +1078,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 {
                     if (!sSpellMgr.IsExistingSpellId(tmp.addAura.spellId))
                     {
-                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using nonexistent spell (id: %u) in SCRIPT_COMMAND_ADD_AURA for script id %u",
-                            tablename, tmp.addAura.spellId, tmp.id);
+                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using nonexistent spell (id: %u) in SCRIPT_COMMAND_ADD_AURA for script id %u", tablename, tmp.addAura.spellId, tmp.id);
                         continue;
                     }
                     else
@@ -1102,7 +1086,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SUMMON_OBJECT:
+        case SCRIPT_COMMAND_SUMMON_OBJECT:
             {
                 if (!sObjectMgr.GetGameObjectTemplate(tmp.summonObject.gameobject_entry))
                 {
@@ -1116,27 +1100,25 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_JOIN_CREATURE_GROUP:
+        case SCRIPT_COMMAND_JOIN_CREATURE_GROUP:
             {
                 if (tmp.joinCreatureGroup.options & ~ALL_CREATURE_GROUP_OPTIONS)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using unknown option in datalong (%u) in SCRIPT_COMMAND_JOIN_CREATURE_GROUP for script id %u",
-                        tablename, tmp.joinCreatureGroup.options, tmp.id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using unknown option in datalong (%u) in SCRIPT_COMMAND_JOIN_CREATURE_GROUP for script id %u", tablename, tmp.joinCreatureGroup.options, tmp.id);
                     continue;
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_GO_STATE:
+        case SCRIPT_COMMAND_SET_GO_STATE:
             {
                 if (tmp.setGoState.state > GO_STATE_ACTIVE_ALTERNATIVE)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using invalid go state in datalong (%u) in SCRIPT_COMMAND_SET_GO_STATE for script id %u",
-                        tablename, tmp.setGoState.state, tmp.id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using invalid go state in datalong (%u) in SCRIPT_COMMAND_SET_GO_STATE for script id %u", tablename, tmp.setGoState.state, tmp.id);
                     continue;
                 }
                 break;
             }
-            case SCRIPT_COMMAND_DESPAWN_GAMEOBJECT:
+        case SCRIPT_COMMAND_DESPAWN_GAMEOBJECT:
             {
                 if (tmp.GetGOGuid()) // cant check when using buddy\source\target instead
                 {
@@ -1157,7 +1139,7 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_LOAD_GAMEOBJECT_SPAWN:
+        case SCRIPT_COMMAND_LOAD_GAMEOBJECT_SPAWN:
             {
                 if (!sObjectMgr.GetGOData(tmp.GetGOGuid()))
                 {
@@ -1174,34 +1156,31 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_GOSSIP_MENU:
+        case SCRIPT_COMMAND_SET_GOSSIP_MENU:
             {
                 if (tmp.setGossipMenu.gossipMenuId && !sObjectMgr.IsExistingGossipMenuId(tmp.setGossipMenu.gossipMenuId))
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using nonexistent gossip menu (id: %u) in SCRIPT_COMMAND_SET_GOSSIP_MENU for script id %u",
-                        tablename, tmp.setGossipMenu.gossipMenuId, tmp.id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using nonexistent gossip menu (id: %u) in SCRIPT_COMMAND_SET_GOSSIP_MENU for script id %u", tablename, tmp.setGossipMenu.gossipMenuId, tmp.id);
                     continue;
                 }
                 break;
             }
-            case SCRIPT_COMMAND_PLAY_CUSTOM_ANIM:
+        case SCRIPT_COMMAND_PLAY_CUSTOM_ANIM:
             {
                 if (tmp.playCustomAnim.animId > 3)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using invalid anim id in datalong (%u) in SCRIPT_COMMAND_PLAY_CUSTOM_ANIM for script id %u",
-                        tablename, tmp.setGoState.state, tmp.id);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using invalid anim id in datalong (%u) in SCRIPT_COMMAND_PLAY_CUSTOM_ANIM for script id %u", tablename, tmp.setGoState.state, tmp.id);
                     continue;
                 }
                 break;
             }
-            case SCRIPT_COMMAND_LOAD_CREATURE_SPAWN:
+        case SCRIPT_COMMAND_LOAD_CREATURE_SPAWN:
             {
                 if (!sObjectMgr.GetCreatureData(tmp.loadCreature.dbGuid))
                 {
                     if (!sObjectMgr.IsExistingCreatureGuid(tmp.loadCreature.dbGuid))
                     {
-                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using invalid creature guid in datalong (%u) in SCRIPT_COMMAND_LOAD_CREATURE_SPAWN for script id %u",
-                            tablename, tmp.loadCreature.dbGuid, tmp.id);
+                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` using invalid creature guid in datalong (%u) in SCRIPT_COMMAND_LOAD_CREATURE_SPAWN for script id %u", tablename, tmp.loadCreature.dbGuid, tmp.id);
                         continue;
                     }
                     else
@@ -1210,10 +1189,10 @@ void ScriptMgr::LoadScripts(ScriptMapMap& scripts, char const* tablename)
                         break;
                     }
                 }
-                
+
                 break;
             }
-            case SCRIPT_COMMAND_START_SCRIPT_ON_ZONE:
+        case SCRIPT_COMMAND_START_SCRIPT_ON_ZONE:
             {
                 if (!tmp.startScriptOnZone.scriptId)
                 {
@@ -1248,10 +1227,10 @@ bool ScriptMgr::CheckScriptTargets(uint32 targetType, uint32 targetParam1, uint3
 {
     switch (targetType)
     {
-        case TARGET_T_PROVIDED_TARGET:
-        case TARGET_T_HOSTILE:
-        case TARGET_T_OWNER_OR_SELF:
-        case TARGET_T_OWNER:
+    case TARGET_T_PROVIDED_TARGET:
+    case TARGET_T_HOSTILE:
+    case TARGET_T_OWNER_OR_SELF:
+    case TARGET_T_OWNER:
         {
             if (targetParam1)
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param1 = %u with target_type = %u for id %u, but this target type has no parameters.", tableName, targetParam1, targetType, tableEntry);
@@ -1259,14 +1238,14 @@ bool ScriptMgr::CheckScriptTargets(uint32 targetType, uint32 targetParam1, uint3
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param2 = %u with target_type = %u for id %u, but this target type has no parameters.", tableName, targetParam2, targetType, tableEntry);
             break;
         }
-        case TARGET_T_HOSTILE_SECOND_AGGRO:
-        case TARGET_T_HOSTILE_LAST_AGGRO:
-        case TARGET_T_HOSTILE_RANDOM:
-        case TARGET_T_HOSTILE_RANDOM_NOT_TOP:
-        case TARGET_T_HOSTILE_NEAREST:
-        case TARGET_T_HOSTILE_FARTHEST:
+    case TARGET_T_HOSTILE_SECOND_AGGRO:
+    case TARGET_T_HOSTILE_LAST_AGGRO:
+    case TARGET_T_HOSTILE_RANDOM:
+    case TARGET_T_HOSTILE_RANDOM_NOT_TOP:
+    case TARGET_T_HOSTILE_NEAREST:
+    case TARGET_T_HOSTILE_FARTHEST:
         {
-            if (targetParam1& ~MAX_SELECT_FLAG_MASK)
+            if (targetParam1 & ~MAX_SELECT_FLAG_MASK)
             {
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has unknown select flag target_param1 = %u with target_type = %u for id %u.", tableName, targetParam1, targetType, tableEntry);
                 return false;
@@ -1275,8 +1254,8 @@ bool ScriptMgr::CheckScriptTargets(uint32 targetType, uint32 targetParam1, uint3
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param2 = %u with target_type = %u for id %u, but this parameter is unused.", tableName, targetParam2, targetType, tableEntry);
             break;
         }
-        case TARGET_T_NEAREST_CREATURE_WITH_ENTRY:
-        case TARGET_T_RANDOM_CREATURE_WITH_ENTRY:
+    case TARGET_T_NEAREST_CREATURE_WITH_ENTRY:
+    case TARGET_T_RANDOM_CREATURE_WITH_ENTRY:
         {
             if (!sObjectMgr.GetCreatureTemplate(targetParam1))
             {
@@ -1291,7 +1270,7 @@ bool ScriptMgr::CheckScriptTargets(uint32 targetType, uint32 targetParam1, uint3
             }
             break;
         }
-        case TARGET_T_CREATURE_WITH_GUID:
+    case TARGET_T_CREATURE_WITH_GUID:
         {
             m_referencedCreatureGuids.insert(targetParam1);
             if (!sObjectMgr.GetCreatureData(targetParam1))
@@ -1304,8 +1283,8 @@ bool ScriptMgr::CheckScriptTargets(uint32 targetType, uint32 targetParam1, uint3
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param2 = %u with target_type = %u for id %u, but this parameter is unused.", tableName, targetParam2, targetType, tableEntry);
             break;
         }
-        case TARGET_T_NEAREST_GAMEOBJECT_WITH_ENTRY:
-        case TARGET_T_RANDOM_GAMEOBJECT_WITH_ENTRY:
+    case TARGET_T_NEAREST_GAMEOBJECT_WITH_ENTRY:
+    case TARGET_T_RANDOM_GAMEOBJECT_WITH_ENTRY:
         {
             if (!sObjectMgr.GetGameObjectTemplate(targetParam1))
             {
@@ -1320,7 +1299,7 @@ bool ScriptMgr::CheckScriptTargets(uint32 targetType, uint32 targetParam1, uint3
             }
             break;
         }
-        case TARGET_T_GAMEOBJECT_WITH_GUID:
+    case TARGET_T_GAMEOBJECT_WITH_GUID:
         {
             m_referencedGameObjectGuids.insert(targetParam1);
             if (!sObjectMgr.GetGOData(targetParam1))
@@ -1328,49 +1307,48 @@ bool ScriptMgr::CheckScriptTargets(uint32 targetType, uint32 targetParam1, uint3
                 if (!sObjectMgr.IsExistingGameObjectGuid(targetParam1))
                     sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param1 = %u for id %u, but this gameobject guid does not exist.", tableName, targetParam1, tableEntry);
                 return false;
-
             }
             if (targetParam2)
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param2 = %u with target_type = %u for id %u, but this parameter is unused.", tableName, targetParam2, targetType, tableEntry);
             break;
         }
-        case TARGET_T_GAMEOBJECT_FROM_INSTANCE_DATA:
-        case TARGET_T_FRIENDLY_CC:
-        case TARGET_T_NEAREST_PLAYER:
-        case TARGET_T_NEAREST_HOSTILE_PLAYER:
-        case TARGET_T_NEAREST_FRIENDLY_PLAYER:
+    case TARGET_T_GAMEOBJECT_FROM_INSTANCE_DATA:
+    case TARGET_T_FRIENDLY_CC:
+    case TARGET_T_NEAREST_PLAYER:
+    case TARGET_T_NEAREST_HOSTILE_PLAYER:
+    case TARGET_T_NEAREST_FRIENDLY_PLAYER:
         {
             if (targetParam2)
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param2 = %u with target_type = %u for id %u, but this parameter is unused.", tableName, targetParam2, targetType, tableEntry);
             break;
         }
-        case TARGET_T_FRIENDLY:
+    case TARGET_T_FRIENDLY:
         {
             if (targetParam2 > 1)
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param2 = %u with target_type = %u for id %u, but a bool value is expected.", tableName, targetParam2, targetType, tableEntry);
             break;
         }
-        case TARGET_T_FRIENDLY_INJURED:
-        case TARGET_T_FRIENDLY_INJURED_EXCEPT:
+    case TARGET_T_FRIENDLY_INJURED:
+    case TARGET_T_FRIENDLY_INJURED_EXCEPT:
         {
             if (targetParam2 > 100)
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param2 = %u with target_type = %u for id %u, but a percent value is expected.", tableName, targetParam2, targetType, tableEntry);
             break;
         }
-        case TARGET_T_FRIENDLY_MISSING_BUFF:
-        case TARGET_T_FRIENDLY_MISSING_BUFF_EXCEPT:
+    case TARGET_T_FRIENDLY_MISSING_BUFF:
+    case TARGET_T_FRIENDLY_MISSING_BUFF_EXCEPT:
         {
             if (targetParam2 && !sSpellMgr.GetSpellEntry(targetParam2))
             {
                 if (!sSpellMgr.IsExistingSpellId(targetParam2))
                     sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param2 = %u with target_type = %u for id %u, but spell does not exist.", tableName, targetParam2, targetType, tableEntry);
-   
+
                 return false;
             }
             break;
         }
-        case TARGET_T_MAP_EVENT_SOURCE:
-        case TARGET_T_MAP_EVENT_TARGET:
+    case TARGET_T_MAP_EVENT_SOURCE:
+    case TARGET_T_MAP_EVENT_TARGET:
         {
             if (!targetParam1)
             {
@@ -1381,7 +1359,7 @@ bool ScriptMgr::CheckScriptTargets(uint32 targetType, uint32 targetParam1, uint3
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `%s` has target_param2 = %u with target_type = %u for id %u, but this parameter is unused.", tableName, targetParam2, targetType, tableEntry);
             break;
         }
-        case TARGET_T_MAP_EVENT_EXTRA_TARGET:
+    case TARGET_T_MAP_EVENT_EXTRA_TARGET:
         {
             if (!targetParam1)
             {
@@ -1395,7 +1373,7 @@ bool ScriptMgr::CheckScriptTargets(uint32 targetType, uint32 targetParam1, uint3
             }
             break;
         }
-        default:
+    default:
         {
             if (targetType >= TARGET_T_END)
                 sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Table `%s` has an unknown target_type = %u used for id %u.", tableName, targetType, tableEntry);
@@ -1418,7 +1396,8 @@ void ScriptMgr::LoadAreaTriggerScripts()
             Field* fields = result->Fetch();
             uint32 scriptId = fields[0].GetUInt32();
             usedScripts.insert(scriptId);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     // check ids
@@ -1462,7 +1441,8 @@ void ScriptMgr::LoadQuestEndScripts()
             Field* fields = result->Fetch();
             uint32 scriptId = fields[0].GetUInt32();
             usedQuestCompleteScripts.insert(scriptId);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     // check ids
@@ -1486,7 +1466,8 @@ void ScriptMgr::LoadQuestStartScripts()
             Field* fields = result->Fetch();
             uint32 scriptId = fields[0].GetUInt32();
             usedQuestStartScripts.insert(scriptId);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     // check ids
@@ -1510,7 +1491,8 @@ void ScriptMgr::LoadSpellScripts()
             Field* fields = result->Fetch();
             uint32 spellId = fields[0].GetUInt32();
             scriptSpells.insert(spellId);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     // check ids
@@ -1525,7 +1507,7 @@ void ScriptMgr::LoadSpellScripts()
             continue;
         }
 
-        //check for correct spellEffect
+        // check for correct spellEffect
         bool found = false;
         for (uint32 i : spellInfo->Effect)
         {
@@ -1535,7 +1517,7 @@ void ScriptMgr::LoadSpellScripts()
 
             if (i == SPELL_EFFECT_SCRIPT_EFFECT)
             {
-                found =  true;
+                found = true;
                 break;
             }
         }
@@ -1552,7 +1534,7 @@ void ScriptMgr::LoadGenericScripts()
 {
     LoadScripts(sGenericScripts, "generic_scripts");
 
-    std::set<uint32> genericIds;                            // Store possible event ids
+    std::set<uint32> genericIds; // Store possible event ids
     CollectPossibleGenericIds(genericIds);
 
     // Then check if all scripts are in above list of possible script entries.
@@ -1576,7 +1558,7 @@ void ScriptMgr::LoadEventScripts()
 {
     LoadScripts(sEventScripts, "event_scripts");
 
-    std::set<uint32> eventIds;                              // Store possible event ids
+    std::set<uint32> eventIds; // Store possible event ids
 
     CollectPossibleEventIds(eventIds);
 
@@ -1585,8 +1567,7 @@ void ScriptMgr::LoadEventScripts()
     {
         std::set<uint32>::const_iterator itr2 = eventIds.find(itr.first);
         if (itr2 == eventIds.end())
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `event_scripts` has script (Id: %u) not referring to any gameobject_template type 10 data2 field, type 3 data6 field, type 13 data 2 field, type 29 or any spell effect %u",
-                itr.first, SPELL_EFFECT_SEND_EVENT);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `event_scripts` has script (Id: %u) not referring to any gameobject_template type 10 data2 field, type 3 data6 field, type 13 data 2 field, type 29 or any spell effect %u", itr.first, SPELL_EFFECT_SEND_EVENT);
     }
 }
 
@@ -1630,7 +1611,8 @@ void ScriptMgr::LoadCreatureEventAIScripts()
                 fields = result->Fetch();
                 uint32 scriptId = fields[0].GetUInt32();
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `creature_ai_scripts` has script (Id: %u) with delay!=0 but this is not supported for creature AI events.", scriptId);
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
     }
 
@@ -1648,7 +1630,8 @@ void ScriptMgr::LoadCreatureEventAIScripts()
                 uint32 scriptId = fields[0].GetUInt32();
                 if (scriptId)
                     actionIds.insert(scriptId);
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
     }
 
@@ -1696,7 +1679,7 @@ void ScriptMgr::CheckScriptTexts(ScriptMapMap const& scripts)
 
 void ScriptMgr::LoadEventIdScripts()
 {
-    m_EventIdScripts.clear();                           // need for reload case
+    m_EventIdScripts.clear(); // need for reload case
     std::unique_ptr<QueryResult> result = WorldDatabase.Query("SELECT `id`, `script_name` FROM `scripted_event_id`");
 
     uint32 count = 0;
@@ -1713,7 +1696,7 @@ void ScriptMgr::LoadEventIdScripts()
 
     BarGoLink bar(result->GetRowCount());
 
-    std::set<uint32> eventIds;                              // Store possible event ids
+    std::set<uint32> eventIds; // Store possible event ids
 
     CollectPossibleEventIds(eventIds);
 
@@ -1724,13 +1707,12 @@ void ScriptMgr::LoadEventIdScripts()
 
         Field* fields = result->Fetch();
 
-        uint32 eventId          = fields[0].GetUInt32();
-        char const* scriptName  = fields[1].GetString();
+        uint32 eventId = fields[0].GetUInt32();
+        char const* scriptName = fields[1].GetString();
 
         std::set<uint32>::const_iterator itr = eventIds.find(eventId);
         if (itr == eventIds.end())
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `scripted_event_id` has id %u not referring to any gameobject_template type 10 data2 field, type 3 data6 field, type 13 data 2 field, type 29 or any spell effect %u or path taxi node data",
-                            eventId, SPELL_EFFECT_SEND_EVENT);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table `scripted_event_id` has id %u not referring to any gameobject_template type 10 data2 field, type 3 data6 field, type 13 data 2 field, type 29 or any spell effect %u or path taxi node data", eventId, SPELL_EFFECT_SEND_EVENT);
 
         m_EventIdScripts[eventId] = GetScriptId(scriptName);
     }
@@ -1746,15 +1728,7 @@ void ScriptMgr::LoadScriptNames()
 
     BarGoLink bar(6);
     uint32 count = 0;
-    char const* tableNames[6] =
-    {
-        "areatrigger_template",
-        "creature_template",
-        "gameobject_template",
-        "scripted_event_id",
-        "spell_template",
-        "map_template"
-    };
+    char const* tableNames[6] = {"areatrigger_template", "creature_template", "gameobject_template", "scripted_event_id", "spell_template", "map_template"};
 
     for (uint32 i = 0; i < 6; ++i)
     {
@@ -1768,7 +1742,8 @@ void ScriptMgr::LoadScriptNames()
         {
             ++count;
             m_scriptNames.emplace_back((*result)[0].GetString());
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     std::sort(m_scriptNames.begin(), m_scriptNames.end());
@@ -1783,8 +1758,7 @@ uint32 ScriptMgr::GetScriptId(char const* name) const
     if (!name)
         return 0;
 
-    ScriptNameMap::const_iterator itr =
-        std::lower_bound(m_scriptNames.begin(), m_scriptNames.end(), name);
+    ScriptNameMap::const_iterator itr = std::lower_bound(m_scriptNames.begin(), m_scriptNames.end(), name);
 
     if (itr == m_scriptNames.end() || *itr != name)
         return 0;
@@ -2072,25 +2046,13 @@ bool ScriptMgr::OnAuraDummy(Aura const* pAura, bool apply)
     return pTempScript->pEffectAuraDummy(pAura, apply);
 }
 
-uint32 GetEventIdScriptId(uint32 eventId)
-{
-    return sScriptMgr.GetEventIdScriptId(eventId);
-}
+uint32 GetEventIdScriptId(uint32 eventId) { return sScriptMgr.GetEventIdScriptId(eventId); }
 
-uint32 GetScriptId(char const* name)
-{
-    return sScriptMgr.GetScriptId(name);
-}
+uint32 GetScriptId(char const* name) { return sScriptMgr.GetScriptId(name); }
 
-char const* GetScriptName(uint32 id)
-{
-    return sScriptMgr.GetScriptName(id);
-}
+char const* GetScriptName(uint32 id) { return sScriptMgr.GetScriptName(id); }
 
-uint32 GetScriptIdsCount()
-{
-    return sScriptMgr.GetScriptIdsCount();
-}
+uint32 GetScriptIdsCount() { return sScriptMgr.GetScriptIdsCount(); }
 
 void ScriptMgr::Initialize()
 {
@@ -2145,11 +2107,11 @@ void ScriptMgr::LoadScriptTexts()
             Field* pFields = result->Fetch();
             StringTextData pTemp;
 
-            int32 iId           = pFields[0].GetInt32();
-            pTemp.SoundId     = pFields[1].GetUInt32();
-            pTemp.Type        = pFields[2].GetUInt32();
-            pTemp.Language    = pFields[3].GetUInt32();
-            pTemp.Emote       = pFields[4].GetUInt32();
+            int32 iId = pFields[0].GetInt32();
+            pTemp.SoundId = pFields[1].GetUInt32();
+            pTemp.Type = pFields[2].GetUInt32();
+            pTemp.Language = pFields[3].GetUInt32();
+            pTemp.Emote = pFields[4].GetUInt32();
 
             if (iId >= 0)
             {
@@ -2171,7 +2133,8 @@ void ScriptMgr::LoadScriptTexts()
 
             m_mTextDataMap[iId] = pTemp;
             ++uiCount;
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u additional Script Texts data.", uiCount);
@@ -2205,11 +2168,11 @@ void ScriptMgr::LoadScriptTextsCustom()
             Field* pFields = result->Fetch();
             StringTextData pTemp;
 
-            int32 iId              = pFields[0].GetInt32();
-            pTemp.SoundId        = pFields[1].GetUInt32();
-            pTemp.Type           = pFields[2].GetUInt32();
-            pTemp.Language       = pFields[3].GetUInt32();
-            pTemp.Emote          = pFields[4].GetUInt32();
+            int32 iId = pFields[0].GetInt32();
+            pTemp.SoundId = pFields[1].GetUInt32();
+            pTemp.Type = pFields[2].GetUInt32();
+            pTemp.Language = pFields[3].GetUInt32();
+            pTemp.Emote = pFields[4].GetUInt32();
 
             if (iId >= 0)
             {
@@ -2231,7 +2194,8 @@ void ScriptMgr::LoadScriptTextsCustom()
 
             m_mTextDataMap[iId] = pTemp;
             ++uiCount;
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u additional Custom Texts data.", uiCount);
@@ -2274,13 +2238,13 @@ void ScriptMgr::LoadScriptWaypoints()
             Field* pFields = result->Fetch();
             ScriptPointMove pTemp;
 
-            pTemp.uiCreatureEntry   = pFields[0].GetUInt32();
-            uint32 uiEntry          = pTemp.uiCreatureEntry;
-            pTemp.uiPointId         = pFields[1].GetUInt32();
-            pTemp.fX                = pFields[2].GetFloat();
-            pTemp.fY                = pFields[3].GetFloat();
-            pTemp.fZ                = pFields[4].GetFloat();
-            pTemp.uiWaitTime        = pFields[5].GetUInt32();
+            pTemp.uiCreatureEntry = pFields[0].GetUInt32();
+            uint32 uiEntry = pTemp.uiCreatureEntry;
+            pTemp.uiPointId = pFields[1].GetUInt32();
+            pTemp.fX = pFields[2].GetFloat();
+            pTemp.fY = pFields[3].GetFloat();
+            pTemp.fZ = pFields[4].GetFloat();
+            pTemp.uiWaitTime = pFields[5].GetUInt32();
 
             CreatureInfo const* pCInfo = sObjectMgr.GetCreatureTemplate(pTemp.uiCreatureEntry);
 
@@ -2296,7 +2260,8 @@ void ScriptMgr::LoadScriptWaypoints()
 
             m_mPointMoveMap[uiEntry].push_back(pTemp);
             ++uiNodeCount;
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u Script Waypoint nodes.", uiNodeCount);
@@ -2328,9 +2293,9 @@ void ScriptMgr::LoadEscortData()
             Field* pFields = pResult->Fetch();
             CreatureEscortData pTemp;
 
-            pTemp.uiCreatureEntry    = pFields[0].GetUInt32();
-            pTemp.uiQuestEntry       = pFields[1].GetUInt32();
-            pTemp.uiEscortFaction    = pFields[2].GetUInt32();
+            pTemp.uiCreatureEntry = pFields[0].GetUInt32();
+            pTemp.uiQuestEntry = pFields[1].GetUInt32();
+            pTemp.uiEscortFaction = pFields[2].GetUInt32();
 
             CreatureInfo const* pCInfo = sObjectMgr.GetCreatureTemplate(pTemp.uiCreatureEntry);
 
@@ -2352,14 +2317,15 @@ void ScriptMgr::LoadEscortData()
             }
             pTemp.uiLastWaypointEntry = 0;
             std::vector<ScriptPointMove>::const_iterator it;
-            for(it = points.begin(); it != points.end(); ++it)
+            for (it = points.begin(); it != points.end(); ++it)
             {
                 if (it->uiPointId > pTemp.uiLastWaypointEntry)
                     pTemp.uiLastWaypointEntry = it->uiPointId;
             }
             m_mEscortDataMap[pTemp.uiCreatureEntry] = pTemp;
             ++EscortDataCount;
-        } while (pResult->NextRow());
+        }
+        while (pResult->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u Escort Creature Data", EscortDataCount);
@@ -2375,20 +2341,7 @@ void ScriptMgr::LoadEscortData()
 
 void ScriptMgr::CollectPossibleGenericIds(std::set<uint32>& genericIds)
 {
-    char const* script_tables[11] =
-    {
-        "areatrigger_scripts",
-        "creature_ai_scripts",
-        "creature_movement_scripts",
-        "creature_spells_scripts",
-        "event_scripts",
-        "generic_scripts",
-        "gossip_scripts",
-        "gameobject_scripts",
-        "spell_scripts",
-        "quest_end_scripts",
-        "quest_start_scripts"
-    };
+    char const* script_tables[11] = {"areatrigger_scripts", "creature_ai_scripts", "creature_movement_scripts", "creature_spells_scripts", "event_scripts", "generic_scripts", "gossip_scripts", "gameobject_scripts", "spell_scripts", "quest_end_scripts", "quest_start_scripts"};
     Field* fields;
     for (const auto& script_table : script_tables)
     {
@@ -2412,7 +2365,8 @@ void ScriptMgr::CollectPossibleGenericIds(std::set<uint32>& genericIds)
                 uint32 script4 = fields[3].GetUInt32();
                 if (script4)
                     genericIds.insert(script4);
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
 
         // From SCRIPT_COMMAND_TEMP_SUMMON_CREATURE.
@@ -2426,7 +2380,8 @@ void ScriptMgr::CollectPossibleGenericIds(std::set<uint32>& genericIds)
                 uint32 script1 = fields[0].GetUInt32();
                 if (script1)
                     genericIds.insert(script1);
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
 
         // From SCRIPT_COMMAND_START_SCRIPT_FOR_ALL and SCRIPT_COMMAND_START_SCRIPT_ON_ZONE.
@@ -2440,7 +2395,8 @@ void ScriptMgr::CollectPossibleGenericIds(std::set<uint32>& genericIds)
                 uint32 script1 = fields[0].GetUInt32();
                 if (script1)
                     genericIds.insert(script1);
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
 
         // From SCRIPT_COMMAND_START_MAP_EVENT, SCRIPT_COMMAND_ADD_MAP_EVENT_TARGET and SCRIPT_COMMAND_EDIT_MAP_EVENT.
@@ -2457,7 +2413,8 @@ void ScriptMgr::CollectPossibleGenericIds(std::set<uint32>& genericIds)
                 int32 script2 = fields[1].GetInt32();
                 if (script2 > 0)
                     genericIds.insert(script2);
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
     }
 }
@@ -2475,7 +2432,8 @@ void ScriptMgr::CollectPossibleEventIds(std::set<uint32>& eventIds)
             uint32 eventId = fields[0].GetUInt32();
             if (eventId)
                 eventIds.insert(eventId);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
     result = WorldDatabase.Query("SELECT `data6` FROM `gameobject_template` WHERE `type`=3 && `data6` > 0");
     if (result)
@@ -2486,7 +2444,8 @@ void ScriptMgr::CollectPossibleEventIds(std::set<uint32>& eventIds)
             uint32 eventId = fields[0].GetUInt32();
             if (eventId)
                 eventIds.insert(eventId);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
     result = WorldDatabase.Query("SELECT `data2` FROM `gameobject_template` WHERE `type`=13 && `data2` > 0");
     if (result)
@@ -2497,7 +2456,8 @@ void ScriptMgr::CollectPossibleEventIds(std::set<uint32>& eventIds)
             uint32 eventId = fields[0].GetUInt32();
             if (eventId)
                 eventIds.insert(eventId);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
     result = WorldDatabase.Query("SELECT `data4`, `data5`, `data6`, `data7`, `data8`, `data9`, `data10`, `data11` FROM `gameobject_template` WHERE `type`=29");
     if (result)
@@ -2529,7 +2489,8 @@ void ScriptMgr::CollectPossibleEventIds(std::set<uint32>& eventIds)
             uint32 data11 = fields[7].GetUInt32();
             if (data11)
                 eventIds.insert(data11);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     // Load all possible script entries from spells.
@@ -2545,7 +2506,8 @@ void ScriptMgr::CollectPossibleEventIds(std::set<uint32>& eventIds)
                 uint32 eventId = fields[0].GetUInt32();
                 if (eventId)
                     eventIds.insert(eventId);
-            } while (result->NextRow());
+            }
+            while (result->NextRow());
         }
     }
 
@@ -2614,8 +2576,7 @@ void DoScriptText(int32 textId, WorldObject* pSource, Unit* pTarget, int32 chatT
     if (chatTypeOverride >= 0)
         chatType = chatTypeOverride;
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "DoScriptText: textId=%i, soundId=%u, chatType=%u, languageId=%u, emoteId=%u",
-        textId, soundId, chatType, languageId, emoteId);
+    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "DoScriptText: textId=%i, soundId=%u, chatType=%u, languageId=%u, emoteId=%u", textId, soundId, chatType, languageId, emoteId);
 
     if (soundId)
     {
@@ -2643,26 +2604,26 @@ void DoScriptText(int32 textId, WorldObject* pSource, Unit* pTarget, int32 chatT
 
     switch (chatType)
     {
-        case CHAT_TYPE_SAY:
-            pSource->MonsterSay(textId, languageId, pTarget);
-            break;
-        case CHAT_TYPE_YELL:
-            pSource->MonsterYell(textId, languageId, pTarget);
-            break;
-        case CHAT_TYPE_TEXT_EMOTE:
-            pSource->MonsterTextEmote(textId, pTarget);
-            break;
-        case CHAT_TYPE_BOSS_EMOTE:
-            pSource->MonsterTextEmote(textId, pTarget, true);
-            break;
-        case CHAT_TYPE_WHISPER:
-            if (pTarget && pTarget->GetTypeId() == TYPEID_PLAYER)
-                pSource->MonsterWhisper(textId, pTarget);
-            else
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "DoScriptText entry %i cannot whisper without target unit (TYPEID_PLAYER).", textId);
+    case CHAT_TYPE_SAY:
+        pSource->MonsterSay(textId, languageId, pTarget);
+        break;
+    case CHAT_TYPE_YELL:
+        pSource->MonsterYell(textId, languageId, pTarget);
+        break;
+    case CHAT_TYPE_TEXT_EMOTE:
+        pSource->MonsterTextEmote(textId, pTarget);
+        break;
+    case CHAT_TYPE_BOSS_EMOTE:
+        pSource->MonsterTextEmote(textId, pTarget, true);
+        break;
+    case CHAT_TYPE_WHISPER:
+        if (pTarget && pTarget->GetTypeId() == TYPEID_PLAYER)
+            pSource->MonsterWhisper(textId, pTarget);
+        else
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "DoScriptText entry %i cannot whisper without target unit (TYPEID_PLAYER).", textId);
 
-            break;
-        case CHAT_TYPE_BOSS_WHISPER:
+        break;
+    case CHAT_TYPE_BOSS_WHISPER:
         {
             if (pTarget && pTarget->GetTypeId() == TYPEID_PLAYER)
                 pSource->MonsterWhisper(textId, pTarget, true);
@@ -2671,12 +2632,12 @@ void DoScriptText(int32 textId, WorldObject* pSource, Unit* pTarget, int32 chatT
 
             break;
         }
-        case CHAT_TYPE_ZONE_YELL:
-            pSource->MonsterYellToZone(textId, languageId, pTarget);
-            break;
-        case CHAT_TYPE_ZONE_EMOTE:
-            pSource->MonsterScriptToZone(textId, CHAT_MSG_MONSTER_EMOTE, languageId, pTarget);
-            break;
+    case CHAT_TYPE_ZONE_YELL:
+        pSource->MonsterYellToZone(textId, languageId, pTarget);
+        break;
+    case CHAT_TYPE_ZONE_EMOTE:
+        pSource->MonsterScriptToZone(textId, CHAT_MSG_MONSTER_EMOTE, languageId, pTarget);
+        break;
     }
 }
 
@@ -2730,35 +2691,34 @@ void DoOrSimulateScriptTextForMap(int32 textId, uint32 creatureId, Map* pMap, Cr
         }
     }
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "SD2: DoOrSimulateScriptTextForMap: textId=%i, soundId=%u, chatType=%u, languageId=%u, emoteId=%u",
-          textId, soundId, chatType, languageId, emoteId);
+    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "SD2: DoOrSimulateScriptTextForMap: textId=%i, soundId=%u, chatType=%u, languageId=%u, emoteId=%u", textId, soundId, chatType, languageId, emoteId);
 
     uint8 chatMsg;
     switch (chatType)
     {
-        case CHAT_TYPE_SAY:
-            chatMsg = CHAT_MSG_MONSTER_SAY;
-            break;
-        case CHAT_TYPE_YELL:
-        case CHAT_TYPE_ZONE_YELL:
-            chatMsg = CHAT_MSG_MONSTER_YELL;
-            break;
-        case CHAT_TYPE_TEXT_EMOTE:
-        case CHAT_TYPE_ZONE_EMOTE:
-            chatMsg = CHAT_MSG_MONSTER_EMOTE;
-            break;
-        case CHAT_TYPE_BOSS_EMOTE:
-            chatMsg = CHAT_MSG_RAID_BOSS_EMOTE;
-            break;
-        case CHAT_TYPE_WHISPER:
-            chatMsg = CHAT_MSG_MONSTER_WHISPER;
-            break;
-        case CHAT_TYPE_BOSS_WHISPER:
+    case CHAT_TYPE_SAY:
+        chatMsg = CHAT_MSG_MONSTER_SAY;
+        break;
+    case CHAT_TYPE_YELL:
+    case CHAT_TYPE_ZONE_YELL:
+        chatMsg = CHAT_MSG_MONSTER_YELL;
+        break;
+    case CHAT_TYPE_TEXT_EMOTE:
+    case CHAT_TYPE_ZONE_EMOTE:
+        chatMsg = CHAT_MSG_MONSTER_EMOTE;
+        break;
+    case CHAT_TYPE_BOSS_EMOTE:
+        chatMsg = CHAT_MSG_RAID_BOSS_EMOTE;
+        break;
+    case CHAT_TYPE_WHISPER:
+        chatMsg = CHAT_MSG_MONSTER_WHISPER;
+        break;
+    case CHAT_TYPE_BOSS_WHISPER:
         {
             chatMsg = CHAT_MSG_RAID_BOSS_WHISPER;
             break;
         }
-        default:
+    default:
         {
             sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "DoSimulateScriptTextForMap entry %i has not supported chat type %u.", textId, chatType);
             return;
@@ -2795,59 +2755,59 @@ WorldObject* GetTargetByType(WorldObject* pSource, WorldObject* pTarget, Map* pM
 {
     switch (targetType)
     {
-        case TARGET_T_PROVIDED_TARGET:
-            return pTarget;
-        case TARGET_T_HOSTILE:
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->GetVictim();
-            break;
-        case TARGET_T_HOSTILE_SECOND_AGGRO:
-            if (Creature* pCreatureSource = ToCreature(pSource))
-                return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 1, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
-            break;
-        case TARGET_T_HOSTILE_LAST_AGGRO:
-            if (Creature* pCreatureSource = ToCreature(pSource))
-                return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_BOTTOMAGGRO, 0, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
-            break;
-        case TARGET_T_HOSTILE_RANDOM:
-            if (Creature* pCreatureSource = ToCreature(pSource))
-                return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
-            break;
-        case TARGET_T_HOSTILE_RANDOM_NOT_TOP:
-            if (Creature* pCreatureSource = ToCreature(pSource))
-                return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 1, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
-            break;
-        case TARGET_T_HOSTILE_NEAREST:
-            if (Creature* pCreatureSource = ToCreature(pSource))
-                return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_NEAREST, 0, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
-            break;
-        case TARGET_T_HOSTILE_FARTHEST:
-            if (Creature* pCreatureSource = ToCreature(pSource))
-                return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_FARTHEST, 0, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
-            break;
-        case TARGET_T_OWNER_OR_SELF:
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->GetCharmerOrOwnerOrSelf();
-            break;
-        case TARGET_T_OWNER:
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->GetOwner();
-            break;
-        case TARGET_T_NEAREST_CREATURE_WITH_ENTRY:
+    case TARGET_T_PROVIDED_TARGET:
+        return pTarget;
+    case TARGET_T_HOSTILE:
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->GetVictim();
+        break;
+    case TARGET_T_HOSTILE_SECOND_AGGRO:
+        if (Creature* pCreatureSource = ToCreature(pSource))
+            return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 1, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
+        break;
+    case TARGET_T_HOSTILE_LAST_AGGRO:
+        if (Creature* pCreatureSource = ToCreature(pSource))
+            return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_BOTTOMAGGRO, 0, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
+        break;
+    case TARGET_T_HOSTILE_RANDOM:
+        if (Creature* pCreatureSource = ToCreature(pSource))
+            return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
+        break;
+    case TARGET_T_HOSTILE_RANDOM_NOT_TOP:
+        if (Creature* pCreatureSource = ToCreature(pSource))
+            return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 1, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
+        break;
+    case TARGET_T_HOSTILE_NEAREST:
+        if (Creature* pCreatureSource = ToCreature(pSource))
+            return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_NEAREST, 0, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
+        break;
+    case TARGET_T_HOSTILE_FARTHEST:
+        if (Creature* pCreatureSource = ToCreature(pSource))
+            return pCreatureSource->SelectAttackingTarget(ATTACKING_TARGET_FARTHEST, 0, pSpellEntry, param1 ? param1 : SELECT_FLAG_NO_TOTEM);
+        break;
+    case TARGET_T_OWNER_OR_SELF:
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->GetCharmerOrOwnerOrSelf();
+        break;
+    case TARGET_T_OWNER:
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->GetOwner();
+        break;
+    case TARGET_T_NEAREST_CREATURE_WITH_ENTRY:
         {
             WorldObject* pSearcher;
             if (!((pSearcher = pSource) || (pSearcher = pTarget)))
                 return nullptr;
             return pSearcher->FindNearestCreature(param1, param2, true);
         }
-        case TARGET_T_RANDOM_CREATURE_WITH_ENTRY:
+    case TARGET_T_RANDOM_CREATURE_WITH_ENTRY:
         {
             WorldObject* pSearcher;
             if (!((pSearcher = pSource) || (pSearcher = pTarget)))
                 return nullptr;
             return pSearcher->FindRandomCreature(param1, param2, true, pSearcher->ToCreature());
         }
-        case TARGET_T_CREATURE_WITH_GUID:
+    case TARGET_T_CREATURE_WITH_GUID:
         {
             if (!pMap)
                 return nullptr;
@@ -2855,7 +2815,7 @@ WorldObject* GetTargetByType(WorldObject* pSource, WorldObject* pTarget, Map* pM
                 return pMap->GetCreature(ObjectGuid(HIGHGUID_UNIT, pCreatureData->creature_id[0], param1));
             break;
         }
-        case TARGET_T_CREATURE_FROM_INSTANCE_DATA:
+    case TARGET_T_CREATURE_FROM_INSTANCE_DATA:
         {
             if (!pMap)
                 return nullptr;
@@ -2863,21 +2823,21 @@ WorldObject* GetTargetByType(WorldObject* pSource, WorldObject* pTarget, Map* pM
                 return pInstanceData->GetCreature(pInstanceData->GetData64(param1));
             break;
         }
-        case TARGET_T_NEAREST_GAMEOBJECT_WITH_ENTRY:
+    case TARGET_T_NEAREST_GAMEOBJECT_WITH_ENTRY:
         {
             WorldObject* pSearcher;
             if (!((pSearcher = pSource) || (pSearcher = pTarget)))
                 return nullptr;
             return pSearcher->FindNearestGameObject(param1, param2);
         }
-        case TARGET_T_RANDOM_GAMEOBJECT_WITH_ENTRY:
+    case TARGET_T_RANDOM_GAMEOBJECT_WITH_ENTRY:
         {
             WorldObject* pSearcher;
             if (!((pSearcher = pSource) || (pSearcher = pTarget)))
                 return nullptr;
             return pSearcher->FindRandomGameObject(param1, param2);
         }
-        case TARGET_T_GAMEOBJECT_WITH_GUID:
+    case TARGET_T_GAMEOBJECT_WITH_GUID:
         {
             if (!pMap)
                 return nullptr;
@@ -2885,7 +2845,7 @@ WorldObject* GetTargetByType(WorldObject* pSource, WorldObject* pTarget, Map* pM
                 return pMap->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, pGameObjectData->id, param1));
             break;
         }
-        case TARGET_T_GAMEOBJECT_FROM_INSTANCE_DATA:
+    case TARGET_T_GAMEOBJECT_FROM_INSTANCE_DATA:
         {
             if (!pMap)
                 return nullptr;
@@ -2893,78 +2853,78 @@ WorldObject* GetTargetByType(WorldObject* pSource, WorldObject* pTarget, Map* pM
                 return pInstanceData->GetGameObject(pInstanceData->GetData64(param1));
             break;
         }
-        case TARGET_T_FRIENDLY:
-            if (!param1 && pSpellEntry)
-                param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->SelectRandomFriendlyTarget(param2 ? ToUnit(pTarget) : nullptr, param1 ? param1 : 30.0f, true);
-            break;
-        case TARGET_T_FRIENDLY_INJURED:
-            if (!param1 && pSpellEntry)
-                param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->FindLowestHpFriendlyUnit(param1 ? param1 : 30.0f, param2 ? param2 : 50, true);
-            break;
-        case TARGET_T_FRIENDLY_INJURED_EXCEPT:
-            if (!param1 && pSpellEntry)
-                param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->FindLowestHpFriendlyUnit(param1 ? param1 : 30.0f, param2 ? param2 : 50, true, ToUnit(pTarget));
-            break;
-        case TARGET_T_FRIENDLY_MISSING_BUFF:
-            if (!param1 && pSpellEntry)
-                param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->FindFriendlyUnitMissingBuff(param1 ? param1 : 30.0f, param2);
-            break;
-        case TARGET_T_FRIENDLY_MISSING_BUFF_EXCEPT:
-            if (!param1 && pSpellEntry)
-                param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->FindFriendlyUnitMissingBuff(param1 ? param1 : 30.0f, param2, ToUnit(pTarget));
-            break;
-        case TARGET_T_FRIENDLY_CC:
-            if (!param1 && pSpellEntry)
-                param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->FindFriendlyUnitCC(param1 ? param1 : 30.0f);
-            break;
-        case TARGET_T_MAP_EVENT_SOURCE:
-            if (Map* pMap = pSource ? pSource->GetMap() : (pTarget ? pTarget->GetMap() : nullptr))
-                if (ScriptedEvent const* pEvent = pMap->GetScriptedMapEvent(param1))
-                    return pEvent->GetSourceObject();
-            break;
-        case TARGET_T_MAP_EVENT_TARGET:
-            if (Map* pMap = pSource ? pSource->GetMap() : (pTarget ? pTarget->GetMap() : nullptr))
-                if (ScriptedEvent const* pEvent = pMap->GetScriptedMapEvent(param1))
-                    return pEvent->GetTargetObject();
-            break;
-        case TARGET_T_MAP_EVENT_EXTRA_TARGET:
-            if (Map* pMap = pSource ? pSource->GetMap() : (pTarget ? pTarget->GetMap() : nullptr))
-                if (ScriptedEvent const* pEvent = pMap->GetScriptedMapEvent(param1))
-                    for (const auto& target : pEvent->m_vTargets)
-                        if (WorldObject* pObject = pMap->GetWorldObject(target.target))
-                            if (pObject && (pObject->GetEntry() == param2))
-                                return pObject;
-            break;
-        case TARGET_T_NEAREST_PLAYER:
-            if (!param1 && pSpellEntry)
-                param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
-            if (pSource)
-                return pSource->FindNearestPlayer(param1);
-            break;
-        case TARGET_T_NEAREST_HOSTILE_PLAYER:
-            if (!param1 && pSpellEntry)
-                param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->FindNearestHostilePlayer(param1);
-            break;
-        case TARGET_T_NEAREST_FRIENDLY_PLAYER:
-            if (!param1 && pSpellEntry)
-                param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
-            if (Unit* pUnitSource = ToUnit(pSource))
-                return pUnitSource->FindNearestFriendlyPlayer(param1);
-            break;
+    case TARGET_T_FRIENDLY:
+        if (!param1 && pSpellEntry)
+            param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->SelectRandomFriendlyTarget(param2 ? ToUnit(pTarget) : nullptr, param1 ? param1 : 30.0f, true);
+        break;
+    case TARGET_T_FRIENDLY_INJURED:
+        if (!param1 && pSpellEntry)
+            param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->FindLowestHpFriendlyUnit(param1 ? param1 : 30.0f, param2 ? param2 : 50, true);
+        break;
+    case TARGET_T_FRIENDLY_INJURED_EXCEPT:
+        if (!param1 && pSpellEntry)
+            param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->FindLowestHpFriendlyUnit(param1 ? param1 : 30.0f, param2 ? param2 : 50, true, ToUnit(pTarget));
+        break;
+    case TARGET_T_FRIENDLY_MISSING_BUFF:
+        if (!param1 && pSpellEntry)
+            param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->FindFriendlyUnitMissingBuff(param1 ? param1 : 30.0f, param2);
+        break;
+    case TARGET_T_FRIENDLY_MISSING_BUFF_EXCEPT:
+        if (!param1 && pSpellEntry)
+            param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->FindFriendlyUnitMissingBuff(param1 ? param1 : 30.0f, param2, ToUnit(pTarget));
+        break;
+    case TARGET_T_FRIENDLY_CC:
+        if (!param1 && pSpellEntry)
+            param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->FindFriendlyUnitCC(param1 ? param1 : 30.0f);
+        break;
+    case TARGET_T_MAP_EVENT_SOURCE:
+        if (Map* pMap = pSource ? pSource->GetMap() : (pTarget ? pTarget->GetMap() : nullptr))
+            if (ScriptedEvent const* pEvent = pMap->GetScriptedMapEvent(param1))
+                return pEvent->GetSourceObject();
+        break;
+    case TARGET_T_MAP_EVENT_TARGET:
+        if (Map* pMap = pSource ? pSource->GetMap() : (pTarget ? pTarget->GetMap() : nullptr))
+            if (ScriptedEvent const* pEvent = pMap->GetScriptedMapEvent(param1))
+                return pEvent->GetTargetObject();
+        break;
+    case TARGET_T_MAP_EVENT_EXTRA_TARGET:
+        if (Map* pMap = pSource ? pSource->GetMap() : (pTarget ? pTarget->GetMap() : nullptr))
+            if (ScriptedEvent const* pEvent = pMap->GetScriptedMapEvent(param1))
+                for (const auto& target : pEvent->m_vTargets)
+                    if (WorldObject* pObject = pMap->GetWorldObject(target.target))
+                        if (pObject && (pObject->GetEntry() == param2))
+                            return pObject;
+        break;
+    case TARGET_T_NEAREST_PLAYER:
+        if (!param1 && pSpellEntry)
+            param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
+        if (pSource)
+            return pSource->FindNearestPlayer(param1);
+        break;
+    case TARGET_T_NEAREST_HOSTILE_PLAYER:
+        if (!param1 && pSpellEntry)
+            param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->FindNearestHostilePlayer(param1);
+        break;
+    case TARGET_T_NEAREST_FRIENDLY_PLAYER:
+        if (!param1 && pSpellEntry)
+            param1 = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex)->maxRange;
+        if (Unit* pUnitSource = ToUnit(pSource))
+            return pUnitSource->FindNearestFriendlyPlayer(param1);
+        break;
     }
     return nullptr;
 }

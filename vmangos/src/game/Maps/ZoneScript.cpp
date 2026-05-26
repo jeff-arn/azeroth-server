@@ -16,30 +16,22 @@
  */
 
 #include "ZoneScript.h"
-#include "ZoneScriptMgr.h"
-#include "ObjectMgr.h"
-#include "Map.h"
-#include "MapManager.h"
-#include "Group.h"
-#include "WorldPacket.h"
+#include "CellImpl.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
-#include "CellImpl.h"
+#include "Group.h"
+#include "Map.h"
+#include "MapManager.h"
+#include "ObjectMgr.h"
 #include "TemporarySummon.h"
+#include "WorldPacket.h"
+#include "ZoneScriptMgr.h"
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_11_2
 
-OPvPCapturePoint::OPvPCapturePoint(OutdoorPvP* pvp):
-    m_capturePointGUID(0), m_capturePoint(nullptr), m_maxValue(0.0f), m_minValue(0.0f), m_maxSpeed(0.0f),
-    m_value(0.0f), m_team(TEAM_NEUTRAL), m_oldState(OBJECTIVESTATE_NEUTRAL),
-    m_state(OBJECTIVESTATE_NEUTRAL), m_neutralValuePct(0), m_valuePct(0), m_factDiff(0), m_PvP(pvp)
-{
-}
+OPvPCapturePoint::OPvPCapturePoint(OutdoorPvP* pvp) : m_capturePointGUID(0), m_capturePoint(nullptr), m_maxValue(0.0f), m_minValue(0.0f), m_maxSpeed(0.0f), m_value(0.0f), m_team(TEAM_NEUTRAL), m_oldState(OBJECTIVESTATE_NEUTRAL), m_state(OBJECTIVESTATE_NEUTRAL), m_neutralValuePct(0), m_valuePct(0), m_factDiff(0), m_PvP(pvp) {}
 
-Map* OPvPCapturePoint::GetMap() const
-{
-    return m_PvP->GetMap();
-}
+Map* OPvPCapturePoint::GetMap() const { return m_PvP->GetMap(); }
 
 bool OPvPCapturePoint::HandlePlayerEnter(Player* plr)
 {
@@ -49,14 +41,14 @@ bool OPvPCapturePoint::HandlePlayerEnter(Player* plr)
         plr->SendUpdateWorldState(m_capturePoint->GetGOInfo()->capturePoint.worldstate3, m_neutralValuePct);
         /* IMPORTANT!
         EP_UI_TOWER_SLIDER_POS: Should always be sent last and only when the value (m_valuePct) has been updated.
-                                
+
             ------------------------------------------------------------
                               (m_minValue)(-m_minValue)
                   (m_maxValue)     [240]    [-240]     (-m_maxValue)
             Alliance [1200]<=========|===[0]===|=========>[-1200] Horde
                               Blue       Grey      Red
             ------------------------------------------------------------
-            
+
             The Client does auto handle the direction indicator:
             If the previous value was 0 and the new value 1 , the indicator points to the left (Alliance).
             If the previous value was 0 and the new value -1 , the indicator points to the right (Horde).
@@ -160,7 +152,7 @@ bool OPvPCapturePoint::SetCapturePointData(uint32 entry, uint32 mapId, float x, 
         return false;
     }
 
-    Map* map = GetMap(); 
+    Map* map = GetMap();
     if (map->GetId() != mapId)
         map = const_cast<Map*>(sMapMgr.FindMap(mapId, sMapMgr.GetContinentInstanceId(mapId, x, y)));
     if (!map)
@@ -224,7 +216,7 @@ bool OPvPCapturePoint::DelObject(uint32 type)
         m_Objects[type] = 0;
         return false;
     }
-    obj->SetRespawnTime(0);                 // Not save respawn time.
+    obj->SetRespawnTime(0); // Not save respawn time.
     obj->Delete();
     m_ObjectTypes[m_Objects[type]] = 0;
     m_Objects[type] = 0;
@@ -237,7 +229,7 @@ bool OPvPCapturePoint::DelCapturePoint()
 
     if (m_capturePoint)
     {
-        m_capturePoint->SetRespawnTime(0);  // Not save respawn time.
+        m_capturePoint->SetRespawnTime(0); // Not save respawn time.
         m_capturePoint->Delete();
     }
 
@@ -263,9 +255,7 @@ void OutdoorPvP::DeleteSpawns()
     m_capturePoints.clear();
 }
 
-OutdoorPvP::OutdoorPvP() : ZoneScript(), m_objective_changed(false), m_TypeId(0)
-{
-}
+OutdoorPvP::OutdoorPvP() : ZoneScript(), m_objective_changed(false), m_TypeId(0) {}
 
 OutdoorPvP::~OutdoorPvP()
 {
@@ -283,10 +273,7 @@ void OutdoorPvP::OnPlayerLeave(Player* plr)
     ZoneScript::OnPlayerLeave(plr);
 }
 
-void OutdoorPvP::OnPlayerEnter(Player* pPlayer)
-{
-    ZoneScript::OnPlayerEnter(pPlayer);
-}
+void OutdoorPvP::OnPlayerEnter(Player* pPlayer) { ZoneScript::OnPlayerEnter(pPlayer); }
 
 void OutdoorPvP::Update(uint32 diff)
 {
@@ -317,7 +304,7 @@ bool OPvPCapturePoint::Update(uint32 diff)
                 itr = playersPerTeam.erase(itr);
                 continue;
             }
-            
+
             ++itr;
         }
     }
@@ -491,10 +478,7 @@ bool OutdoorPvP::IsInsideObjective(Player* plr) const
     return false;
 }
 
-bool OPvPCapturePoint::IsInsideObjective(Player* plr) const
-{
-    return m_activePlayers[plr->GetTeamId()].find(plr->GetObjectGuid()) != m_activePlayers[plr->GetTeamId()].end();
-}
+bool OPvPCapturePoint::IsInsideObjective(Player* plr) const { return m_activePlayers[plr->GetTeamId()].find(plr->GetObjectGuid()) != m_activePlayers[plr->GetTeamId()].end(); }
 
 bool OutdoorPvP::HandleCustomSpell(Player* plr, uint32 spellId, GameObject* go)
 {
@@ -539,15 +523,9 @@ bool OutdoorPvP::HandleDropFlag(Player* plr, uint32 id)
     return false;
 }
 
-bool OPvPCapturePoint::HandleGossipOption(Player* /*plr*/, uint64 /*guid*/, uint32 /*id*/)
-{
-    return false;
-}
+bool OPvPCapturePoint::HandleGossipOption(Player* /*plr*/, uint64 /*guid*/, uint32 /*id*/) { return false; }
 
-bool OPvPCapturePoint::HandleDropFlag(Player* /*plr*/, uint32 /*id*/)
-{
-    return false;
-}
+bool OPvPCapturePoint::HandleDropFlag(Player* /*plr*/, uint32 /*id*/) { return false; }
 
 int32 OPvPCapturePoint::HandleOpenGo(Player* /*plr*/, uint64 guid)
 {
@@ -557,38 +535,26 @@ int32 OPvPCapturePoint::HandleOpenGo(Player* /*plr*/, uint64 guid)
     return -1;
 }
 
-bool OutdoorPvP::HandleAreaTrigger(Player* /*plr*/, uint32 /*trigger*/)
-{
-    return false;
-}
+bool OutdoorPvP::HandleAreaTrigger(Player* /*plr*/, uint32 /*trigger*/) { return false; }
 
 void OutdoorPvP::OnGameObjectRemove(GameObject* go)
 {
     if (go->GetGoType() != GAMEOBJECT_TYPE_CAPTURE_POINT)
         return;
 
-    if (OPvPCapturePoint *cp = GetCapturePoint(go->GetGUIDLow()))
+    if (OPvPCapturePoint* cp = GetCapturePoint(go->GetGUIDLow()))
         cp->m_capturePoint = nullptr;
 }
 
 #endif
 
-ZoneScript::ZoneScript() : m_pMap(nullptr)
-{
-}
+ZoneScript::ZoneScript() : m_pMap(nullptr) {}
 
-ZoneScript::~ZoneScript()
-{
-}
+ZoneScript::~ZoneScript() {}
 
-void ZoneScript::Update(uint32 diff)
-{
-}
+void ZoneScript::Update(uint32 diff) {}
 
-void ZoneScript::OnPlayerEnter(Player* plr)
-{
-    m_players[plr->GetTeamId()].insert(plr->GetObjectGuid());
-}
+void ZoneScript::OnPlayerEnter(Player* plr) { m_players[plr->GetTeamId()].insert(plr->GetObjectGuid()); }
 
 void ZoneScript::OnPlayerLeave(Player* plr)
 {
@@ -616,15 +582,9 @@ void ZoneScript::BroadcastPacket(WorldPacket& data) const
                 pPlayer->GetSession()->SendPacket(&data);
 }
 
-void ZoneScript::RegisterZone(uint32 zoneId)
-{
-    sZoneScriptMgr.AddZone(zoneId, this);
-}
+void ZoneScript::RegisterZone(uint32 zoneId) { sZoneScriptMgr.AddZone(zoneId, this); }
 
-bool ZoneScript::HasPlayer(Player* plr) const
-{
-    return m_players[plr->GetTeamId()].find(plr->GetObjectGuid()) != m_players[plr->GetTeamId()].end();
-}
+bool ZoneScript::HasPlayer(Player* plr) const { return m_players[plr->GetTeamId()].find(plr->GetObjectGuid()) != m_players[plr->GetTeamId()].end(); }
 
 void ZoneScript::TeamCastSpell(TeamId team, int32 spellId)
 {

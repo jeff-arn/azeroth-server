@@ -20,9 +20,9 @@
 #define TRANSPORTMGR_H
 
 #include <G3D/Quat.h>
-#include "spline.h"
-#include "DBCStores.h"
 #include <map>
+#include "DBCStores.h"
+#include "spline.h"
 
 class Map;
 class ShipTransport;
@@ -33,7 +33,7 @@ typedef std::map<uint32, TransportAnimationEntry const*> TransportPathContainer;
 
 struct TransportAnimation
 {
-    TransportAnimation() : TotalTime(0) { }
+    TransportAnimation() : TotalTime(0) {}
 
     TransportPathContainer Path;
     // TransportPathRotationContainer Rotations;
@@ -46,15 +46,11 @@ struct TransportAnimation
 
 typedef std::map<uint32, TransportAnimation> TransportAnimationContainer;
 
-typedef Movement::Spline<double>                 TransportSpline;
+typedef Movement::Spline<double> TransportSpline;
 
 struct KeyFrame
 {
-    explicit KeyFrame(TaxiPathNodeEntry const& _node) : Index(0), Node(&_node), InitialOrientation(0.0f),
-        DistSinceStop(-1.0f), DistUntilStop(-1.0f), DistFromPrev(-1.0f), TimeFrom(0.0f), TimeTo(0.0f),
-        Teleport(false), Update(false), ArriveTime(0), DepartureTime(0), Spline(nullptr), NextDistFromPrev(0.0f), NextArriveTime(0)
-    {
-    }
+    explicit KeyFrame(TaxiPathNodeEntry const& _node) : Index(0), Node(&_node), InitialOrientation(0.0f), DistSinceStop(-1.0f), DistUntilStop(-1.0f), DistFromPrev(-1.0f), TimeFrom(0.0f), TimeTo(0.0f), Teleport(false), Update(false), ArriveTime(0), DepartureTime(0), Spline(nullptr), NextDistFromPrev(0.0f), NextArriveTime(0) {}
 
     uint32 Index;
     TaxiPathNodeEntry const* Node;
@@ -79,11 +75,11 @@ struct KeyFrame
     bool IsStopFrame() const { return Node->actionFlag == 2; }
 };
 
-typedef std::vector<KeyFrame>  KeyFrameVec;
+typedef std::vector<KeyFrame> KeyFrameVec;
 
 struct TransportTemplate
 {
-    TransportTemplate() : inInstance(false), pathTime(0), accelTime(0.0f), accelDist(0.0f), entry(0), spawned(false) { }
+    TransportTemplate() : inInstance(false), pathTime(0), accelTime(0.0f), accelDist(0.0f), entry(0), spawned(false) {}
     ~TransportTemplate();
 
     std::set<uint32> mapsUsed;
@@ -102,7 +98,6 @@ typedef std::pair<ElevatorTransportMap::const_iterator, ElevatorTransportMap::co
 class TransportMgr
 {
 public:
-
     void LoadTransportAnimationAndRotation();
 
     TransportAnimation const* GetTransportAnimInfo(uint32 entry) const
@@ -121,10 +116,7 @@ public:
     ShipTransport* CreateTransport(uint32 entry, Map* map);
 
     // elevator transports
-    ElevatorTransportMapBounds GetElevatorTransportsForMap(uint32 mapId) const
-    {
-        return m_elevatorTransportsByMap.equal_range(mapId);
-    }
+    ElevatorTransportMapBounds GetElevatorTransportsForMap(uint32 mapId) const { return m_elevatorTransportsByMap.equal_range(mapId); }
     void AddElevatorTransportForMap(uint32 mapId, uint32 guidLow)
     {
         for (auto itr : m_elevatorTransportsByMap)

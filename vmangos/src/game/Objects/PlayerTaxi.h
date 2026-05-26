@@ -37,13 +37,13 @@ public:
 
     bool IsTaximaskNodeKnown(uint32 nodeidx) const
     {
-        uint8  field = uint8((nodeidx - 1) / 32);
+        uint8 field = uint8((nodeidx - 1) / 32);
         uint32 submask = 1 << ((nodeidx - 1) % 32);
         return (m_taximask[field] & submask) == submask;
     }
     bool SetTaximaskNode(uint32 nodeidx)
     {
-        uint8  field = uint8((nodeidx - 1) / 32);
+        uint8 field = uint8((nodeidx - 1) / 32);
         uint32 submask = 1 << ((nodeidx - 1) % 32);
         if ((m_taximask[field] & submask) != submask)
         {
@@ -84,7 +84,8 @@ public:
     }
     bool empty() const { return m_TaxiDestinations.empty(); }
 
-    friend std::ostringstream& operator<< (std::ostringstream& ss, PlayerTaxi const& taxi);
+    friend std::ostringstream& operator<<(std::ostringstream& ss, PlayerTaxi const& taxi);
+
 private:
     float m_discount;
     TaxiMask m_taximask;
@@ -92,6 +93,6 @@ private:
     TaxiPathNodeList m_taxiPath;
 };
 
-std::ostringstream& operator<< (std::ostringstream& ss, PlayerTaxi const& taxi);
+std::ostringstream& operator<<(std::ostringstream& ss, PlayerTaxi const& taxi);
 
 #endif

@@ -35,7 +35,7 @@ namespace MaNGOS
     /// Since you cant use `thread_local` on a non static class member,
     /// this class allows you to have thread specific storage on instances bases.
     /// Meaning instanceA and instanceB on the same thread, have a different object attached to it.
-    template<typename T>
+    template <typename T>
     class ThreadSpecificPtr : public MaNGOS::Policies::NoCopyNoMove
     {
     public:
@@ -53,10 +53,7 @@ namespace MaNGOS
             return nullptr;
         }
 
-        T* operator->() const
-        {
-            return get();
-        }
+        T* operator->() const { return get(); }
         /*
         T& operator*() const
         {
@@ -92,6 +89,6 @@ namespace MaNGOS
             }
         }
     };
-}
+} // namespace MaNGOS
 
-#endif //MANGOS_THREAD_SPECIFIC_PTR_H_
+#endif // MANGOS_THREAD_SPECIFIC_PTR_H_

@@ -25,23 +25,20 @@ class Item;
 
 enum TradeSlots
 {
-    TRADE_SLOT_COUNT            = 7,
-    TRADE_SLOT_TRADED_COUNT     = 6,
-    TRADE_SLOT_NONTRADED        = 6,
-    TRADE_SLOT_INVALID          = -1
+    TRADE_SLOT_COUNT = 7,
+    TRADE_SLOT_TRADED_COUNT = 6,
+    TRADE_SLOT_NONTRADED = 6,
+    TRADE_SLOT_INVALID = -1
 };
 
 struct TransactionPart;
 
 class TradeData
 {
-public:                                                 // constructors
-    TradeData(Player* player, Player* trader) :
-        m_player(player), m_trader(trader), m_accepted(false), m_acceptProccess(false),
-        m_money(0), m_spell(0), m_lastModificationTime(0), m_scamPreventionDelay(0) {}
+public: // constructors
+    TradeData(Player* player, Player* trader) : m_player(player), m_trader(trader), m_accepted(false), m_acceptProccess(false), m_money(0), m_spell(0), m_lastModificationTime(0), m_scamPreventionDelay(0) {}
 
-public:                                                 // access functions
-
+public: // access functions
     Player* GetTrader() const { return m_trader; }
     TradeData* GetTraderData() const;
 
@@ -49,7 +46,7 @@ public:                                                 // access functions
     bool HasItem(ObjectGuid item_guid) const;
 
     uint32 GetSpell() const { return m_spell; }
-    Item*  GetSpellCastItem() const;
+    Item* GetSpellCastItem() const;
     bool HasSpellCastItem() const { return !m_spellCastItem.IsEmpty(); }
 
     uint32 GetMoney() const { return m_money; }
@@ -66,11 +63,15 @@ public:                                                 // access functions
 
     time_t GetScamPreventionDelay() const { return m_scamPreventionDelay; }
     void SetScamPreventionDelay(time_t t) { m_scamPreventionDelay = t; }
-public:                                                 // access functions
 
+public: // access functions
     void SetItem(TradeSlots slot, Item* item);
     void SetSpell(uint32 spellId, Item* castItem = nullptr);
-    void ForceSpell(uint32 spellId) { m_spell = spellId; m_spellCastItem.Clear(); }
+    void ForceSpell(uint32 spellId)
+    {
+        m_spell = spellId;
+        m_spellCastItem.Clear();
+    }
     void SetMoney(uint32 money);
 
     void SetAccepted(bool state, bool crosssend = false);
@@ -78,27 +79,25 @@ public:                                                 // access functions
     // must be called only from accept handler helper functions
     void SetInAcceptProcess(bool state) { m_acceptProccess = state; }
 
-private:                                                // internal functions
-
+private: // internal functions
     void Update(bool for_trader = true);
 
-private:                                                // fields
+private: // fields
+    Player* m_player; // Player who own of this TradeData
+    Player* m_trader; // Player who trade with m_player
 
-    Player*    m_player;                                // Player who own of this TradeData
-    Player*    m_trader;                                // Player who trade with m_player
+    bool m_accepted; // m_player press accept for trade list
+    bool m_acceptProccess; // one from player/trader press accept and this processed
 
-    bool       m_accepted;                              // m_player press accept for trade list
-    bool       m_acceptProccess;                        // one from player/trader press accept and this processed
+    uint32 m_money; // m_player place money to trade
 
-    uint32     m_money;                                 // m_player place money to trade
+    uint32 m_spell; // m_player apply spell to non-traded slot item
+    ObjectGuid m_spellCastItem; // applied spell casted by item use
 
-    uint32     m_spell;                                 // m_player apply spell to non-traded slot item
-    ObjectGuid m_spellCastItem;                         // applied spell casted by item use
+    ObjectGuid m_items[TRADE_SLOT_COUNT]; // traded itmes from m_player side including non-traded slot
 
-    ObjectGuid m_items[TRADE_SLOT_COUNT];               // traded itmes from m_player side including non-traded slot
-
-    time_t     m_lastModificationTime;                  // to prevent scam (change gold before the other validates)
-    time_t     m_scamPreventionDelay;                    // to prevent scam, set a delay in milliseconds (CANNOT be less than or equal to 10ms) before accepting trade.
+    time_t m_lastModificationTime; // to prevent scam (change gold before the other validates)
+    time_t m_scamPreventionDelay; // to prevent scam, set a delay in milliseconds (CANNOT be less than or equal to 10ms) before accepting trade.
 };
 
 #endif

@@ -26,7 +26,7 @@ namespace G3D
     class Vector2;
     class Vector3;
     class Vector4;
-}
+} // namespace G3D
 
 namespace Movement
 {
@@ -34,44 +34,42 @@ namespace Movement
     using G3D::Vector3;
     using G3D::Vector4;
 
-    inline uint32 SecToMS(float sec)
-    {
-        return static_cast<uint32>(sec * 1000.f);
-    }
+    inline uint32 SecToMS(float sec) { return static_cast<uint32>(sec * 1000.f); }
 
-    inline float MSToSec(uint32 ms)
-    {
-        return ms / 1000.f;
-    }
+    inline float MSToSec(uint32 ms) { return ms / 1000.f; }
 
 #ifndef CONCAT1
-    #define CONCAT(x, y) CONCAT1 (x, y)
-    #define CONCAT1(x, y) x##y
+#define CONCAT(x, y) CONCAT1(x, y)
+#define CONCAT1(x, y) x##y
 #endif
 
-    template<class T, T limit>
+    template <class T, T limit>
     class counter
     {
-        public:
-            counter() { init();}
+    public:
+        counter() { init(); }
 
-            void Increase()
-            {
-                if (m_counter == limit)
-                    init();
-                else
-                    ++m_counter;
-            }
+        void Increase()
+        {
+            if (m_counter == limit)
+                init();
+            else
+                ++m_counter;
+        }
 
-            T NewId() { Increase(); return m_counter;}
-            T getCurrent() const { return m_counter;}
+        T NewId()
+        {
+            Increase();
+            return m_counter;
+        }
+        T getCurrent() const { return m_counter; }
 
-        private:
-            void init() { m_counter = 0; }
-            T m_counter;
+    private:
+        void init() { m_counter = 0; }
+        T m_counter;
     };
 
     typedef counter<uint32, 0xFFFFFFFF> UInt32Counter;
-}
+} // namespace Movement
 
 #endif // MANGOSSERVER_TYPEDEFS_H

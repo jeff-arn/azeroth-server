@@ -18,12 +18,12 @@
  */
 
 #include "PlayerAI.h"
-#include "Player.h"
 #include "DBCStores.h"
-#include "SpellMgr.h"
-#include "MotionMaster.h"
-#include "Spell.h"
 #include "Map.h"
+#include "MotionMaster.h"
+#include "Player.h"
+#include "Spell.h"
+#include "SpellMgr.h"
 
 void PlayerAI::Remove()
 {
@@ -31,9 +31,7 @@ void PlayerAI::Remove()
     delete this;
 }
 
-PlayerAI::~PlayerAI()
-{
-}
+PlayerAI::~PlayerAI() {}
 
 bool PlayerAI::CanCastSpell(Unit* pTarget, SpellEntry const* pSpell, bool isTriggered, bool checkControlled)
 {
@@ -75,40 +73,38 @@ bool PlayerAI::CanCastSpell(Unit* pTarget, SpellEntry const* pSpell, bool isTrig
         }
         return true;
     }
-    
+
     return false;
 }
 
-void PlayerAI::UpdateAI(uint32 const /*diff*/)
-{
-}
+void PlayerAI::UpdateAI(uint32 const /*diff*/) {}
 
 PlayerControlledAI::PlayerControlledAI(Player* pPlayer, Unit* caster) : PlayerAI(pPlayer), controllerGuid(caster ? caster->GetObjectGuid() : ObjectGuid()), uiGlobalCD(0)
 {
     ASSERT(pPlayer);
     switch (pPlayer->GetClass())
     {
-        case CLASS_WARRIOR:
-        case CLASS_ROGUE:
-            bIsMelee = true;
-            isHealer = false;
-            break;
-        case CLASS_PALADIN:
-        case CLASS_DRUID:
-            bIsMelee = true;
-            isHealer = true;
-            break;
-        case CLASS_PRIEST:
-        case CLASS_SHAMAN:
-            isHealer = true;
-            bIsMelee = false;
-            break;
-        case CLASS_MAGE:
-        case CLASS_WARLOCK:
-        case CLASS_HUNTER:
-            isHealer = false;
-            bIsMelee = false;
-            break;
+    case CLASS_WARRIOR:
+    case CLASS_ROGUE:
+        bIsMelee = true;
+        isHealer = false;
+        break;
+    case CLASS_PALADIN:
+    case CLASS_DRUID:
+        bIsMelee = true;
+        isHealer = true;
+        break;
+    case CLASS_PRIEST:
+    case CLASS_SHAMAN:
+        isHealer = true;
+        bIsMelee = false;
+        break;
+    case CLASS_MAGE:
+    case CLASS_WARLOCK:
+    case CLASS_HUNTER:
+        isHealer = false;
+        bIsMelee = false;
+        break;
     }
     PlayerSpellMap spells = me->GetSpellMap();
     usableSpells.clear();
@@ -155,19 +151,15 @@ PlayerControlledAI::PlayerControlledAI(Player* pPlayer, Unit* caster) : PlayerAI
         else
             ++it;
     }
-    
+
     me->GetMotionMaster()->Clear();
-    
+
     if (caster && caster->ToCreature())
         if (Unit* victim = caster->ToCreature()->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
             UpdateTarget(victim);
-
 }
 
-Unit* PlayerControlledAI::FindController()
-{
-    return me->GetMap()->GetUnit(controllerGuid);
-}
+Unit* PlayerControlledAI::FindController() { return me->GetMap()->GetUnit(controllerGuid); }
 
 void PlayerControlledAI::UpdateTarget(Unit* victim)
 {
@@ -243,9 +235,7 @@ void PlayerControlledAI::UpdateTarget(Unit* victim)
     }
 }
 
-PlayerControlledAI::~PlayerControlledAI()
-{
-}
+PlayerControlledAI::~PlayerControlledAI() {}
 
 void PlayerControlledAI::UpdateAI(uint32 const uiDiff)
 {

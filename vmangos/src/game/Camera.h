@@ -35,48 +35,49 @@ class Player;
 class Camera
 {
     friend class ViewPoint;
-    public:
 
-        explicit Camera(Player* pl);
-        ~Camera();
+public:
+    explicit Camera(Player* pl);
+    ~Camera();
 
-        WorldObject* GetBody() { return m_source;}
-        Player* GetOwner() { return &m_owner;}
+    WorldObject* GetBody() { return m_source; }
+    Player* GetOwner() { return &m_owner; }
 
-        // set camera's view to any worldobject
-        // Note: this worldobject must be in same map, in same phase with camera's owner(player)
-        // client supports only unit and dynamic objects as farsight objects
-        void SetView(WorldObject* obj, bool update_far_sight_field = true);
+    // set camera's view to any worldobject
+    // Note: this worldobject must be in same map, in same phase with camera's owner(player)
+    // client supports only unit and dynamic objects as farsight objects
+    void SetView(WorldObject* obj, bool update_far_sight_field = true);
 
-        // set view to camera's owner
-        void ResetView(bool update_far_sight_field = true);
+    // set view to camera's owner
+    void ResetView(bool update_far_sight_field = true);
 
-        template<class T>
-        void UpdateVisibilityOf(T* obj, UpdateData& d);
-        void UpdateVisibilityOf(WorldObject* obj);
+    template <class T>
+    void UpdateVisibilityOf(T* obj, UpdateData& d);
+    void UpdateVisibilityOf(WorldObject* obj);
 
-        void ReceivePacket(WorldPacket* data);
+    void ReceivePacket(WorldPacket* data);
 
-        // updates visibility of worldobjects around viewpoint for camera's owner
-        void UpdateVisibilityForOwner();
+    // updates visibility of worldobjects around viewpoint for camera's owner
+    void UpdateVisibilityForOwner();
 
-    private:
-        // called when viewpoint changes visibility state
-        void Event_AddedToWorld();
-        void Event_RemovedFromWorld();
-        void Event_Moved();
-        void Event_ViewPointVisibilityChanged();
+private:
+    // called when viewpoint changes visibility state
+    void Event_AddedToWorld();
+    void Event_RemovedFromWorld();
+    void Event_Moved();
+    void Event_ViewPointVisibilityChanged();
 
-        Player& m_owner;
-        WorldObject* m_source;
+    Player& m_owner;
+    WorldObject* m_source;
 
-        void UpdateForCurrentViewPoint();
+    void UpdateForCurrentViewPoint();
 
-    public:
-        GridReference<Camera>& GetGridRef() { return m_gridRef; }
-        bool IsActiveObject() const { return false; }
-    private:
-        GridReference<Camera> m_gridRef;
+public:
+    GridReference<Camera>& GetGridRef() { return m_gridRef; }
+    bool IsActiveObject() const { return false; }
+
+private:
+    GridReference<Camera> m_gridRef;
 };
 
 // Object-observer, notifies farsight object state to cameras that attached to it
@@ -87,7 +88,7 @@ class ViewPoint
     typedef std::list<Camera*> CameraList;
 
     CameraList m_cameras;
-    GridType * m_grid;
+    GridType* m_grid;
 
     void Attach(Camera* c) { m_cameras.push_back(c); }
     void Detach(Camera* c) { m_cameras.remove(c); }
@@ -96,23 +97,22 @@ class ViewPoint
     {
         if (!m_cameras.empty())
         {
-            for(CameraList::iterator itr = m_cameras.begin(); itr != m_cameras.end();)
+            for (CameraList::iterator itr = m_cameras.begin(); itr != m_cameras.end();)
             {
-                Camera *c = *(itr++);
+                Camera* c = *(itr++);
                 (c->*handler)();
             }
         }
     }
 
 public:
-
     ViewPoint() : m_grid(0) {}
     ~ViewPoint();
 
     bool hasViewers() const { return !m_cameras.empty(); }
 
     // these events are called when viewpoint changes visibility state
-    void Event_AddedToWorld(GridType *grid)
+    void Event_AddedToWorld(GridType* grid)
     {
         m_grid = grid;
         CameraCall(&Camera::Event_AddedToWorld);
@@ -124,21 +124,15 @@ public:
         CameraCall(&Camera::Event_RemovedFromWorld);
     }
 
-    void Event_GridChanged(GridType *grid)
+    void Event_GridChanged(GridType* grid)
     {
         m_grid = grid;
         CameraCall(&Camera::Event_Moved);
     }
 
-    void Event_ViewPointVisibilityChanged()
-    {
-        CameraCall(&Camera::Event_ViewPointVisibilityChanged);
-    }
+    void Event_ViewPointVisibilityChanged() { CameraCall(&Camera::Event_ViewPointVisibilityChanged); }
 
-    void Call_UpdateVisibilityForOwner()
-    {
-        CameraCall(&Camera::UpdateVisibilityForOwner);
-    }
+    void Call_UpdateVisibilityForOwner() { CameraCall(&Camera::UpdateVisibilityForOwner); }
 };
 
 #endif

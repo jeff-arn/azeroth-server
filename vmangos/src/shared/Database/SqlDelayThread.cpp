@@ -19,38 +19,29 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Log.h"
 #include "Database/SqlDelayThread.h"
 #include "Database/SqlOperations.h"
 #include "DatabaseEnv.h"
+#include "Log.h"
 
-SqlDelayThread::SqlDelayThread(Database* db, SqlConnection* conn)
-    : m_dbEngine(db), m_dbConnection(conn), m_running(true)
-{
-}
+SqlDelayThread::SqlDelayThread(Database* db, SqlConnection* conn) : m_dbEngine(db), m_dbConnection(conn), m_running(true) {}
 
 SqlDelayThread::~SqlDelayThread()
 {
-    //process all requests which might have been queued while thread was stopping
+    // process all requests which might have been queued while thread was stopping
     ProcessRequests();
     delete m_dbConnection;
 }
 
-void SqlDelayThread::addSerialOperation(SqlOperation *op)
-{
-    m_serialDelayQueue.add(op);
-}
+void SqlDelayThread::addSerialOperation(SqlOperation* op) { m_serialDelayQueue.add(op); }
 
-bool SqlDelayThread::HasAsyncQuery()
-{
-    return !m_serialDelayQueue.empty_unsafe();
-}
+bool SqlDelayThread::HasAsyncQuery() { return !m_serialDelayQueue.empty_unsafe(); }
 
 void SqlDelayThread::run()
 {
-    #ifndef DO_POSTGRESQL
+#ifndef DO_POSTGRESQL
     mysql_thread_init();
-    #endif
+#endif
 
     auto loopSleepDelay = std::chrono::milliseconds(10);
 
@@ -74,15 +65,12 @@ void SqlDelayThread::run()
         }
     }
 
-    #ifndef DO_POSTGRESQL
+#ifndef DO_POSTGRESQL
     mysql_thread_end();
-    #endif
+#endif
 }
 
-void SqlDelayThread::Stop()
-{
-    m_running = false;
-}
+void SqlDelayThread::Stop() { m_running = false; }
 
 void SqlDelayThread::ProcessRequests()
 {

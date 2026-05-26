@@ -32,7 +32,7 @@ namespace Geometry
         return ang;
     }
 
-    template<class T>
+    template <class T>
     float GetAngle(T const& ownPos, T const& targetPos)
     {
         return GetAngle(ownPos.x, ownPos.y, targetPos.x, targetPos.y);
@@ -46,7 +46,7 @@ namespace Geometry
         return (dist > 0 ? dist : 0);
     }
 
-    template<class A, class B>
+    template <class A, class B>
     float GetDistance2D(A const& from, B const& to)
     {
         return GetDistance2D(from.x, from.y, to.x, to.y);
@@ -61,7 +61,7 @@ namespace Geometry
         return (dist > 0 ? dist : 0);
     }
 
-    template<class A, class B>
+    template <class A, class B>
     float GetDistance3D(A const& from, B const& to)
     {
         return GetDistance3D(from.x, from.y, from.z, to.x, to.y, to.z);
@@ -83,7 +83,7 @@ namespace Geometry
         return distsq < maxRange * maxRange;
     }
 
-    inline void GetNearPoint2DAroundPosition(float ownX, float ownY, float &x, float &y, float distance2d, float absAngle)
+    inline void GetNearPoint2DAroundPosition(float ownX, float ownY, float& x, float& y, float distance2d, float absAngle)
     {
         x = ownX + distance2d * cos(absAngle);
         y = ownY + distance2d * sin(absAngle);
@@ -99,15 +99,15 @@ namespace Geometry
         // to emulate negative numbers
         if (o < 0)
         {
-            float mod = o *-1;
-            mod = fmod(mod, 2.0f*M_PI_F);
-            mod = -mod + 2.0f*M_PI_F;
+            float mod = o * -1;
+            mod = fmod(mod, 2.0f * M_PI_F);
+            mod = -mod + 2.0f * M_PI_F;
             return mod;
         }
-        return fmod(o, 2.0f*M_PI_F);
+        return fmod(o, 2.0f * M_PI_F);
     }
 
-    template<class A, class B>
+    template <class A, class B>
     inline bool IsPointLeftOfLine(A const& lineStart, A const& lineEnd, B const& point)
     {
         return (lineEnd.x - lineStart.x) * (point.y - lineStart.y) - (lineEnd.y - lineStart.y) * (point.x - lineStart.x) > 0;
@@ -130,11 +130,11 @@ namespace Geometry
         y2 += ny * dist;
     }
 
-    template<class A, class B>
+    template <class A, class B>
     inline void Move2dPointTowards(A const& a, B& b, float dist)
     {
         Move2dPointTowards(a.x, a.y, b.x, b.y, dist);
     }
-}
+} // namespace Geometry
 
 #endif

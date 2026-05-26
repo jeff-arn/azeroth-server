@@ -14,18 +14,18 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "naxxramas.h"
+#include "scriptPCH.h"
 
 enum LoathebData
 {
-    SPELL_CORRUPTED_MIND  = 29201, // this triggers the following spells on targets (based on class): 29185, 29194, 29196, 29198
-    SPELL_POISON_AURA     = 29865,
+    SPELL_CORRUPTED_MIND = 29201, // this triggers the following spells on targets (based on class): 29185, 29194, 29196, 29198
+    SPELL_POISON_AURA = 29865,
     SPELL_INEVITABLE_DOOM = 29204,
-    SPELL_REMOVE_CURSE    = 30281, // He periodically removes all curses on himself
-    SPELL_FUNGAL_BLOOM    = 29232, // Cast by spores
+    SPELL_REMOVE_CURSE = 30281, // He periodically removes all curses on himself
+    SPELL_FUNGAL_BLOOM = 29232, // Cast by spores
 
-    NPC_SPORE             = 16286
+    NPC_SPORE = 16286
 };
 
 enum Events
@@ -43,11 +43,7 @@ enum Events
 // it simply seems like one of 2 (potentially 4) location is chosed at random on pull, after that it's
 // constantly spawning there throughout the fight.
 // Presumably spell 29234 was used, it has a radius of 70yd. Can't figure out exactly how it would have been used though.
-static constexpr float SporeLocs[2][3] = 
-{
-    {2951.0f, -4016.0f, 274.0f},
-    {2870.0f, -3978.0f, 274.0f}
-};
+static constexpr float SporeLocs[2][3] = {{2951.0f, -4016.0f, 274.0f}, {2870.0f, -3978.0f, 274.0f}};
 
 static constexpr uint8 MAX_STALKS_UP = 6;
 struct EyeStalkInfo
@@ -65,9 +61,7 @@ struct EyeStalkInfo
 
 struct mob_rottingMaggotAI : public ScriptedAI
 {
-    mob_rottingMaggotAI(Creature* pCreature, bool isDiseased) :
-        ScriptedAI(pCreature),
-        isDiseased(isDiseased)
+    mob_rottingMaggotAI(Creature* pCreature, bool isDiseased) : ScriptedAI(pCreature), isDiseased(isDiseased)
     {
         m_creature->SetNoCallAssistance(true);
         Reset();
@@ -77,7 +71,7 @@ struct mob_rottingMaggotAI : public ScriptedAI
     WorldLocation aggroPossition;
     static constexpr uint32 SPELL_RETCHING_PLAGUE = 30079;
 
-    void Reset() override { }
+    void Reset() override {}
 
     void MoveInLineOfSight(Unit* pWho) override
     {
@@ -130,8 +124,7 @@ struct mob_rottingMaggotAI : public ScriptedAI
 
 struct mob_eyeStalkAI : public ScriptedAI
 {
-    mob_eyeStalkAI(Creature* pCreature) :
-        ScriptedAI(pCreature)
+    mob_eyeStalkAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
         m_creature->SetNoCallAssistance(true);
         SetCombatMovement(false);
@@ -251,11 +244,11 @@ struct boss_loathebAI : public ScriptedAI
     void Aggro(Unit* pWho) override
     {
         numDooms = 0;
-        events.ScheduleEvent(EVENT_SUMMON_SPORE,    Seconds(13));
-        events.ScheduleEvent(EVENT_CORRUPTED_MIND,  Seconds(5));
-        events.ScheduleEvent(EVENT_POISON_AURA,     Seconds(5));
+        events.ScheduleEvent(EVENT_SUMMON_SPORE, Seconds(13));
+        events.ScheduleEvent(EVENT_CORRUPTED_MIND, Seconds(5));
+        events.ScheduleEvent(EVENT_POISON_AURA, Seconds(5));
         events.ScheduleEvent(EVENT_INEVITABLE_DOOM, Minutes(2));
-        events.ScheduleEvent(EVENT_REMOVE_CURSE,    Seconds(5));
+        events.ScheduleEvent(EVENT_REMOVE_CURSE, Seconds(5));
         if (m_pInstance)
             m_pInstance->SetData(TYPE_LOATHEB, IN_PROGRESS);
     }
@@ -315,7 +308,7 @@ struct boss_loathebAI : public ScriptedAI
 
             switch (eyeStalk.currentState)
             {
-                case EyeStalkInfo::COOLDOWN:
+            case EyeStalkInfo::COOLDOWN:
                 {
                     // Summoning a new eye
                     if (eyeStalk.timer < diff)
@@ -344,26 +337,26 @@ struct boss_loathebAI : public ScriptedAI
                     }
                     break;
                 }
-                case EyeStalkInfo::UP:
-                    // Initiating unsummon
-                    if (eyeStalk.timer < diff)
+            case EyeStalkInfo::UP:
+                // Initiating unsummon
+                if (eyeStalk.timer < diff)
+                {
+                    if (Creature* pCreature = m_pInstance->GetCreature(eyeStalk.guid))
                     {
-                        if (Creature* pCreature = m_pInstance->GetCreature(eyeStalk.guid))
+                        // If the eye is currently channeling mind flay we wait with unsummoning it
+                        if (!pCreature->IsNonMeleeSpellCasted())
                         {
-                            // If the eye is currently channeling mind flay we wait with unsummoning it
-                            if (!pCreature->IsNonMeleeSpellCasted())
+                            mob_eyeStalkAI* ai = static_cast<mob_eyeStalkAI*>(pCreature->AI());
+                            if (!ai->haveSubmerged)
                             {
-                                mob_eyeStalkAI* ai = static_cast<mob_eyeStalkAI*>(pCreature->AI());
-                                if (!ai->haveSubmerged)
-                                {
-                                    ai->haveSubmerged = true;
-                                    if (TemporarySummon* ts = static_cast<TemporarySummon*>(pCreature))
-                                        ts->UnSummon(1100);
-                                }
+                                ai->haveSubmerged = true;
+                                if (TemporarySummon* ts = static_cast<TemporarySummon*>(pCreature))
+                                    ts->UnSummon(1100);
                             }
                         }
                     }
-                    break;
+                }
+                break;
             }
         }
     }
@@ -409,10 +402,10 @@ struct boss_loathebAI : public ScriptedAI
     }
 
     /* Loatheb does not automatically remove Vampiric Embrace before TBC, source: https://wowpedia.fandom.com/wiki/Loatheb_(Classic)
-    Shadow priests are excellent for healing groups with current talents (as of 4 January 2007) as shown by Death and Taxes, 
-    who successfully managed to kill him with five people (http://www.dtguilds.com/forums/showthread.php?t=5534). 
-    Movie: http://www.youtube.com/watch?v=raaLqFelbCk. 
-    This was hotfixed later, and Loatheb dispels the Vampiric Embrace off of himself shortly after applied. 
+    Shadow priests are excellent for healing groups with current talents (as of 4 January 2007) as shown by Death and Taxes,
+    who successfully managed to kill him with five people (http://www.dtguilds.com/forums/showthread.php?t=5534).
+    Movie: http://www.youtube.com/watch?v=raaLqFelbCk.
+    This was hotfixed later, and Loatheb dispels the Vampiric Embrace off of himself shortly after applied.
     Vampiric Embrace triggers the Corrupted Mind debuff.
 
     void SpellHit(SpellCaster*, SpellEntry const* pSpell) override
@@ -430,7 +423,7 @@ struct boss_loathebAI : public ScriptedAI
 
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
-        
+
         if (!m_pInstance->HandleEvadeOutOfHome(m_creature))
             return;
 
@@ -439,50 +432,50 @@ struct boss_loathebAI : public ScriptedAI
         {
             switch (eventId)
             {
-                case EVENT_SUMMON_SPORE:
-                    if (Creature* pSpore = m_creature->SummonCreature(NPC_SPORE, SporeLoc[0], SporeLoc[1], SporeLoc[2], 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 5000))
-                    {
-                        m_sporeGuids.insert(pSpore->GetObjectGuid());
-                        if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
-                            pSpore->AddThreat(pTarget);
-                    }
-                    events.Repeat(Seconds(13));
-                    break;
-                case EVENT_CORRUPTED_MIND:
-                    // https://www.youtube.com/watch?v=a0z9qjLxD98&list=PLYsWP02PY54A3RkEJv_VaT-0ZhfMs5zxN&index=4
-                    // shows it refreshing every ~10 sec
-                    if (DoCastSpellIfCan(m_creature, SPELL_CORRUPTED_MIND) == CAST_OK)
-                        events.Repeat(Seconds(10));
+            case EVENT_SUMMON_SPORE:
+                if (Creature* pSpore = m_creature->SummonCreature(NPC_SPORE, SporeLoc[0], SporeLoc[1], SporeLoc[2], 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 5000))
+                {
+                    m_sporeGuids.insert(pSpore->GetObjectGuid());
+                    if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
+                        pSpore->AddThreat(pTarget);
+                }
+                events.Repeat(Seconds(13));
+                break;
+            case EVENT_CORRUPTED_MIND:
+                // https://www.youtube.com/watch?v=a0z9qjLxD98&list=PLYsWP02PY54A3RkEJv_VaT-0ZhfMs5zxN&index=4
+                // shows it refreshing every ~10 sec
+                if (DoCastSpellIfCan(m_creature, SPELL_CORRUPTED_MIND) == CAST_OK)
+                    events.Repeat(Seconds(10));
+                else
+                    events.Repeat(Milliseconds(100));
+                break;
+            case EVENT_POISON_AURA:
+                if (DoCastSpellIfCan(m_creature, SPELL_POISON_AURA) == CAST_OK)
+                    events.Repeat(Seconds(12));
+                else
+                    events.Repeat(Milliseconds(100));
+                break;
+            case EVENT_INEVITABLE_DOOM:
+                if (DoCastSpellIfCan(m_creature, SPELL_INEVITABLE_DOOM) == CAST_OK)
+                {
+                    ++numDooms;
+                    // 2, 2:30, 3, 3:30, 4, 4:30, 5
+                    // after 7 dooms, or 5 minutes into the fight,
+                    // the doom timer becomes 15 instead of 30 seconds.
+                    if (numDooms > 6)
+                        events.Repeat(Seconds(15));
                     else
-                        events.Repeat(Milliseconds(100));
-                    break;
-                case EVENT_POISON_AURA:
-                    if (DoCastSpellIfCan(m_creature, SPELL_POISON_AURA) == CAST_OK)
-                        events.Repeat(Seconds(12));
-                    else
-                        events.Repeat(Milliseconds(100));
-                    break;
-                case EVENT_INEVITABLE_DOOM:
-                    if (DoCastSpellIfCan(m_creature, SPELL_INEVITABLE_DOOM) == CAST_OK)
-                    {
-                        ++numDooms;
-                        // 2, 2:30, 3, 3:30, 4, 4:30, 5
-                        // after 7 dooms, or 5 minutes into the fight,
-                        // the doom timer becomes 15 instead of 30 seconds.
-                        if (numDooms > 6)
-                            events.Repeat(Seconds(15));
-                        else
-                            events.Repeat(Seconds(30));
-                    }
-                    else
-                        events.Repeat(Milliseconds(100));
-                    break;
-                case EVENT_REMOVE_CURSE:
-                    if (DoCastSpellIfCan(m_creature, SPELL_REMOVE_CURSE) == CAST_OK)
                         events.Repeat(Seconds(30));
-                    else
-                        events.Repeat(100);
-                    break;
+                }
+                else
+                    events.Repeat(Milliseconds(100));
+                break;
+            case EVENT_REMOVE_CURSE:
+                if (DoCastSpellIfCan(m_creature, SPELL_REMOVE_CURSE) == CAST_OK)
+                    events.Repeat(Seconds(30));
+                else
+                    events.Repeat(100);
+                break;
             }
         }
 
@@ -490,25 +483,13 @@ struct boss_loathebAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_loatheb(Creature* pCreature)
-{
-    return new boss_loathebAI(pCreature);
-}
+CreatureAI* GetAI_boss_loatheb(Creature* pCreature) { return new boss_loathebAI(pCreature); }
 
-CreatureAI* GetAI_mob_rottingMaggot(Creature* pCreature)
-{
-    return new mob_rottingMaggotAI(pCreature, false);
-}
+CreatureAI* GetAI_mob_rottingMaggot(Creature* pCreature) { return new mob_rottingMaggotAI(pCreature, false); }
 
-CreatureAI* GetAI_mob_diseasedMaggot(Creature* pCreature)
-{
-    return new mob_rottingMaggotAI(pCreature, true);
-}
+CreatureAI* GetAI_mob_diseasedMaggot(Creature* pCreature) { return new mob_rottingMaggotAI(pCreature, true); }
 
-CreatureAI* GetAI_mob_eyeStalk(Creature* pCreature)
-{
-    return new mob_eyeStalkAI(pCreature);
-}
+CreatureAI* GetAI_mob_eyeStalk(Creature* pCreature) { return new mob_eyeStalkAI(pCreature); }
 
 
 // 29201 - Corrupted Mind (Loatheb)
@@ -522,13 +503,22 @@ struct LoathebCorruptedMindAoEScript : public SpellScript
             uint32 spellid;
             switch (spell->GetUnitTarget()->GetClass())
             {
-                // priests should be getting 29185, but it triggers on dmg effects as well, don't know why.
-                // stealing druid version for priests until anyone has a reason priests cant smite.s
-                case CLASS_PRIEST:  spellid = 29194; break;//29185; break;
-                case CLASS_DRUID:   spellid = 29194; break;
-                case CLASS_PALADIN: spellid = 29196; break;
-                case CLASS_SHAMAN:  spellid = 29198; break;
-                default: return false;
+            // priests should be getting 29185, but it triggers on dmg effects as well, don't know why.
+            // stealing druid version for priests until anyone has a reason priests cant smite.s
+            case CLASS_PRIEST:
+                spellid = 29194;
+                break; // 29185; break;
+            case CLASS_DRUID:
+                spellid = 29194;
+                break;
+            case CLASS_PALADIN:
+                spellid = 29196;
+                break;
+            case CLASS_SHAMAN:
+                spellid = 29198;
+                break;
+            default:
+                return false;
             }
             spell->m_caster->CastSpell(spell->GetUnitTarget(), spellid, true);
         }
@@ -536,10 +526,7 @@ struct LoathebCorruptedMindAoEScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_LoathebCorruptedMindAoE(SpellEntry const*)
-{
-    return new LoathebCorruptedMindAoEScript();
-}
+SpellScript* GetScript_LoathebCorruptedMindAoE(SpellEntry const*) { return new LoathebCorruptedMindAoEScript(); }
 
 void AddSC_boss_loatheb()
 {

@@ -14,32 +14,26 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Common.h"
-#include "Database/DatabaseEnv.h"
-#include "Log.h"
 #include "RASocket.h"
-#include "World.h"
-#include "Config/Config.h"
-#include "Util.h"
 #include "AccountMgr.h"
+#include "Common.h"
+#include "Config/Config.h"
+#include "Database/DatabaseEnv.h"
 #include "Language.h"
-#include "ObjectMgr.h"
+#include "Log.h"
 #include "Memory/ArrayDeleter.h"
+#include "ObjectMgr.h"
+#include "Util.h"
+#include "World.h"
 
+#include <string>
 #include <utility>
 #include <vector>
-#include <string>
 
 static std::string const NEWLINE = "\r\n";
 static std::string const PROMPT = "mangos>";
 
-RASocket::RASocket(IO::Networking::AsyncSocket socket)
-  : m_socket(std::move(socket)),
-    m_connectionState(ConnectionState::FreshConnection),
-    m_atLeastOnePacketWasReceived(false),
-    m_accountId(0),
-    m_username(),
-    m_accountLevel(AccountTypes::SEC_PLAYER)
+RASocket::RASocket(IO::Networking::AsyncSocket socket) : m_socket(std::move(socket)), m_connectionState(ConnectionState::FreshConnection), m_atLeastOnePacketWasReceived(false), m_accountId(0), m_username(), m_accountLevel(AccountTypes::SEC_PLAYER)
 {
     if (sConfig.IsSet("Ra.Stricted"))
     {
@@ -50,10 +44,7 @@ RASocket::RASocket(IO::Networking::AsyncSocket socket)
         m_restricted = sConfig.GetBoolDefault("Ra.Restricted", true);
 }
 
-RASocket::~RASocket()
-{
-    sLog.Out(LOG_RA, LOG_LVL_MINIMAL, "[%s] Connection was closed", m_socket.GetRemoteIpString().c_str());
-}
+RASocket::~RASocket() { sLog.Out(LOG_RA, LOG_LVL_MINIMAL, "[%s] Connection was closed", m_socket.GetRemoteIpString().c_str()); }
 
 void RASocket::Start()
 {
@@ -100,53 +91,54 @@ void RASocket::DoRecvIncomingData()
 
     // we need more data to process this message
     std::shared_ptr<std::vector<char>> recvBuffer(new std::vector<char>(1024));
-    m_socket.ReadSome(recvBuffer->data(), recvBuffer->size(), [self = shared_from_this(), recvBuffer](IO::NetworkError const& error, std::size_t amountRead)
-    {
-        if (error)
-        {
-            sLog.Out(LOG_RA, LOG_LVL_ERROR, "[%s] Connection had error: %s", self->m_socket.GetRemoteIpString().c_str(), error.ToString().c_str());
-            return; // implicit socket close
-        }
+    m_socket.ReadSome(recvBuffer->data(), recvBuffer->size(),
+                      [self = shared_from_this(), recvBuffer](IO::NetworkError const& error, std::size_t amountRead)
+                      {
+                          if (error)
+                          {
+                              sLog.Out(LOG_RA, LOG_LVL_ERROR, "[%s] Connection had error: %s", self->m_socket.GetRemoteIpString().c_str(), error.ToString().c_str());
+                              return; // implicit socket close
+                          }
 
-        if (!self->m_atLeastOnePacketWasReceived)
-        {
-            // Some terminals send a negotiation packet in the very first message
-            self->m_atLeastOnePacketWasReceived = true;
-            if (amountRead >= 1 && (static_cast<uint8>(recvBuffer->at(0)) == 0xFF))
-            {
-                // We got a telnet protocol packet, most likely the terminal wants us to tell the capabilities it has, but we are not really interested in it
-                std::vector<uint8> endOfNegotiationResponse = { 0xFF, 0xF0 };
-                self->m_socket.Write(std::move(endOfNegotiationResponse), [self](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
-                return;
-            }
-        }
+                          if (!self->m_atLeastOnePacketWasReceived)
+                          {
+                              // Some terminals send a negotiation packet in the very first message
+                              self->m_atLeastOnePacketWasReceived = true;
+                              if (amountRead >= 1 && (static_cast<uint8>(recvBuffer->at(0)) == 0xFF))
+                              {
+                                  // We got a telnet protocol packet, most likely the terminal wants us to tell the capabilities it has, but we are not really interested in it
+                                  std::vector<uint8> endOfNegotiationResponse = {0xFF, 0xF0};
+                                  self->m_socket.Write(std::move(endOfNegotiationResponse), [self](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
+                                  return;
+                              }
+                          }
 
-        self->m_pendingInputBuffer.append(recvBuffer->data(), amountRead);
-        self->DoRecvIncomingData(); // reprocesses our pending buffer
-    });
+                          self->m_pendingInputBuffer.append(recvBuffer->data(), amountRead);
+                          self->DoRecvIncomingData(); // reprocesses our pending buffer
+                      });
 }
 
 void RASocket::HandleInput(std::string const& line)
 {
     switch (m_connectionState)
     {
-        // If the input is '<username>'
-        case ConnectionState::FreshConnection:
-            HandleInput_FreshConnection(line);
-            break;
+    // If the input is '<username>'
+    case ConnectionState::FreshConnection:
+        HandleInput_FreshConnection(line);
+        break;
 
-        // If the input is '<password>' (and the user already gave his username)
-        case ConnectionState::GotUsername:
-            HandleInput_GotUsername(line);
-            break;
+    // If the input is '<password>' (and the user already gave his username)
+    case ConnectionState::GotUsername:
+        HandleInput_GotUsername(line);
+        break;
 
-        // If user is logged in: parse and execute the command
-        case ConnectionState::Authenticated:
-            HandleInput_Authenticated(line);
-            break;
+    // If user is logged in: parse and execute the command
+    case ConnectionState::Authenticated:
+        HandleInput_Authenticated(line);
+        break;
 
-        default:
-            MANGOS_ASSERT(false);
+    default:
+        MANGOS_ASSERT(false);
     }
 }
 
@@ -177,7 +169,7 @@ void RASocket::HandleInput_GotUsername(std::string const& line)
     {
         if (!sAccountMgr.CheckPassword(m_accountId, line))
         {
-            sLog.Out(LOG_RA, LOG_LVL_MINIMAL,"[%s] Wrong password for account %s", m_socket.GetRemoteIpString().c_str(), m_username.c_str());
+            sLog.Out(LOG_RA, LOG_LVL_MINIMAL, "[%s] Wrong password for account %s", m_socket.GetRemoteIpString().c_str(), m_username.c_str());
             loginSuccessful = false;
         }
     }
@@ -188,7 +180,7 @@ void RASocket::HandleInput_GotUsername(std::string const& line)
 
         if (m_accountLevel < minRequiredAccLevel)
         {
-            sLog.Out(LOG_RA, LOG_LVL_MINIMAL,"[%s] Account %s has no privilege for RA", m_socket.GetRemoteIpString().c_str(), m_username.c_str());
+            sLog.Out(LOG_RA, LOG_LVL_MINIMAL, "[%s] Account %s has no privilege for RA", m_socket.GetRemoteIpString().c_str(), m_username.c_str());
             loginSuccessful = false;
         }
         else
@@ -201,14 +193,14 @@ void RASocket::HandleInput_GotUsername(std::string const& line)
 
     if (loginSuccessful)
     {
-        sLog.Out(LOG_RA, LOG_LVL_MINIMAL,"[%s] Account %s has logged in", m_socket.GetRemoteIpString().c_str(), m_username.c_str());
+        sLog.Out(LOG_RA, LOG_LVL_MINIMAL, "[%s] Account %s has logged in", m_socket.GetRemoteIpString().c_str(), m_username.c_str());
         m_connectionState = ConnectionState::Authenticated;
         SendAndRecvNextInput("+Logged in." + NEWLINE + " " + PROMPT);
     }
     else
     {
         SendAndDisconnect("-Authentication failed. Verify username, password and required accountLevel." + NEWLINE);
-        sLog.Out(LOG_RA, LOG_LVL_MINIMAL,"[%s] Account %s has failed to log in", m_socket.GetRemoteIpString().c_str(), m_username.c_str());
+        sLog.Out(LOG_RA, LOG_LVL_MINIMAL, "[%s] Account %s has failed to log in", m_socket.GetRemoteIpString().c_str(), m_username.c_str());
     }
 }
 
@@ -232,17 +224,13 @@ void RASocket::HandleInput_Authenticated(std::string const& line)
         std::shared_ptr<RASocket> self;
         std::string output;
     };
-    auto* invokeEnvironmentPtr = new InvokeOutputEnvironment
-    {
+    auto* invokeEnvironmentPtr = new InvokeOutputEnvironment{
         shared_from_this(),
         "",
     };
 
     sWorld.QueueCliCommand(new CliCommandHolder(
-        m_accountId,
-        m_accountLevel,
-        invokeEnvironmentPtr,
-        line.c_str(),
+        m_accountId, m_accountLevel, invokeEnvironmentPtr, line.c_str(),
         [](void* opaquePointer, const char* buffer)
         {
             auto* invokeEnvironmentPtr = static_cast<InvokeOutputEnvironment*>(opaquePointer);
@@ -256,8 +244,7 @@ void RASocket::HandleInput_Authenticated(std::string const& line)
             invokeEnvironmentPtr->output.append(statusSymbol + PROMPT);
             invokeEnvironmentPtr->self->SendAndRecvNextInput(invokeEnvironmentPtr->output);
             delete invokeEnvironmentPtr;
-        }
-    ));
+        }));
 }
 
 
@@ -265,24 +252,26 @@ void RASocket::SendAndDisconnect(std::string const& message)
 {
     std::shared_ptr<uint8_t> rawMessage(new uint8_t[message.size()], MaNGOS::Memory::array_deleter<uint8_t>());
     memcpy(rawMessage.get(), message.c_str(), message.size());
-    m_socket.Write({ rawMessage, message.size() }, [self = shared_from_this()](IO::NetworkError const& error)
-    {
-        if (error)
-            sLog.Out(LOG_RA, LOG_LVL_ERROR, "[%s] Sending message failed: %s", self->m_socket.GetRemoteIpString().c_str(), error.ToString().c_str());
-    });
+    m_socket.Write({rawMessage, message.size()},
+                   [self = shared_from_this()](IO::NetworkError const& error)
+                   {
+                       if (error)
+                           sLog.Out(LOG_RA, LOG_LVL_ERROR, "[%s] Sending message failed: %s", self->m_socket.GetRemoteIpString().c_str(), error.ToString().c_str());
+                   });
 }
 
 void RASocket::SendAndRecvNextInput(std::string const& message)
 {
     std::shared_ptr<uint8_t> rawMessage(new uint8_t[message.size()], MaNGOS::Memory::array_deleter<uint8_t>());
     memcpy(rawMessage.get(), message.c_str(), message.size());
-    m_socket.Write({ rawMessage, message.size() }, [self = shared_from_this()](IO::NetworkError const& error)
-    {
-        if (error)
-        {
-            sLog.Out(LOG_RA, LOG_LVL_ERROR, "[%s] Sending message failed: %s", self->m_socket.GetRemoteIpString().c_str(), error.ToString().c_str());
-            return;
-        }
-        self->DoRecvIncomingData();
-    });
+    m_socket.Write({rawMessage, message.size()},
+                   [self = shared_from_this()](IO::NetworkError const& error)
+                   {
+                       if (error)
+                       {
+                           sLog.Out(LOG_RA, LOG_LVL_ERROR, "[%s] Sending message failed: %s", self->m_socket.GetRemoteIpString().c_str(), error.ToString().c_str());
+                           return;
+                       }
+                       self->DoRecvIncomingData();
+                   });
 }

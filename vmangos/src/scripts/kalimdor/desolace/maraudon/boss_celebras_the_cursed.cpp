@@ -21,12 +21,12 @@ SDComment:
 SDCategory: Maraudon
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "maraudon.h"
+#include "scriptPCH.h"
 
-#define SPELL_WRATH                 21807
-#define SPELL_ENTANGLINGROOTS       12747
-#define SPELL_CORRUPT_FORCES        21968
+#define SPELL_WRATH 21807
+#define SPELL_ENTANGLINGROOTS 12747
+#define SPELL_CORRUPT_FORCES 21968
 
 enum
 {
@@ -80,7 +80,7 @@ struct celebras_the_cursedAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //Wrath
+        // Wrath
         if (Wrath_Timer < diff)
         {
             Unit* target = nullptr;
@@ -89,33 +89,33 @@ struct celebras_the_cursedAI : public ScriptedAI
                 DoCastSpellIfCan(target, SPELL_WRATH);
             Wrath_Timer = 8000;
         }
-        else Wrath_Timer -= diff;
+        else
+            Wrath_Timer -= diff;
 
-        //EntanglingRoots
+        // EntanglingRoots
         if (EntanglingRoots_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_ENTANGLINGROOTS);
             EntanglingRoots_Timer = 20000;
         }
-        else EntanglingRoots_Timer -= diff;
+        else
+            EntanglingRoots_Timer -= diff;
 
-        //CorruptForces
+        // CorruptForces
         if (CorruptForces_Timer < diff)
         {
             m_creature->InterruptNonMeleeSpells(false);
             DoCastSpellIfCan(m_creature, SPELL_CORRUPT_FORCES);
             CorruptForces_Timer = 20000;
         }
-        else CorruptForces_Timer -= diff;
+        else
+            CorruptForces_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_celebras_the_cursed(Creature* pCreature)
-{
-    return new celebras_the_cursedAI(pCreature);
-}
+CreatureAI* GetAI_celebras_the_cursed(Creature* pCreature) { return new celebras_the_cursedAI(pCreature); }
 
 struct celebrasSpiritAI : public npc_escortAI
 {
@@ -147,56 +147,56 @@ struct celebrasSpiritAI : public npc_escortAI
         std::list<GameObject*> scepterList;
         switch (i)
         {
-            case 0:
-                m_creature->SetOrientation(5.342044f);
-                m_creature->SetHomePosition(m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetOrientation());
-                break;
+        case 0:
+            m_creature->SetOrientation(5.342044f);
+            m_creature->SetHomePosition(m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetOrientation());
+            break;
 
-            case 1:
-                DoScriptText(SAY_WP_1, m_creature);
-                SetRun(false);
-                break;
+        case 1:
+            DoScriptText(SAY_WP_1, m_creature);
+            SetRun(false);
+            break;
 
-            case 3:
-                if (Player* pPlayer = GetPlayerForEscort())
-                    DoScriptText(SAY_WP_3, m_creature, pPlayer);
-                Event_Timer = 4000;
-                break;
+        case 3:
+            if (Player* pPlayer = GetPlayerForEscort())
+                DoScriptText(SAY_WP_3, m_creature, pPlayer);
+            Event_Timer = 4000;
+            break;
 
-            case 4:
-                m_creature->SetOrientation(3.009412f);
-                SetEscortPaused(true);
-                break;
+        case 4:
+            m_creature->SetOrientation(3.009412f);
+            SetEscortPaused(true);
+            break;
 
-            case 5:
-                //trigger => Player click on the book
-                if (GameObject* pGo = m_creature->FindNearestGameObject(GO_CELEBRAS_BLUE_AURA, 250.0f))
-                {
-                    pGo->SetRespawnTime(6*MINUTE);
-                    pGo->Refresh();
-                }
-                DoScriptText(SAY_WP_5, m_creature);
-                if (GameObject* obj = m_creature->SummonGameObject(GO_CELEBRAS_BLUE_AURA, 652.463013f, 74.085098f, -85.335297f, 3.054616f, 0, 0, 0, 0, -1, false))
-                    auraGUID = obj->GetGUID();
-                break;
+        case 5:
+            // trigger => Player click on the book
+            if (GameObject* pGo = m_creature->FindNearestGameObject(GO_CELEBRAS_BLUE_AURA, 250.0f))
+            {
+                pGo->SetRespawnTime(6 * MINUTE);
+                pGo->Refresh();
+            }
+            DoScriptText(SAY_WP_5, m_creature);
+            if (GameObject* obj = m_creature->SummonGameObject(GO_CELEBRAS_BLUE_AURA, 652.463013f, 74.085098f, -85.335297f, 3.054616f, 0, 0, 0, 0, -1, false))
+                auraGUID = obj->GetGUID();
+            break;
 
-            case 6:
-                DoScriptText(SAY_WP_6, m_creature);
+        case 6:
+            DoScriptText(SAY_WP_6, m_creature);
 
-                GetGameObjectListWithEntryInGrid(scepterList, m_creature, GO_CREATOR, 40.0f);
-                for (const auto& it : scepterList)
-                    it->SetGoState(GO_STATE_ACTIVE);
-                scepterList.clear();
+            GetGameObjectListWithEntryInGrid(scepterList, m_creature, GO_CREATOR, 40.0f);
+            for (const auto& it : scepterList)
+                it->SetGoState(GO_STATE_ACTIVE);
+            scepterList.clear();
 
-                break;
-            case 9:
-                if (GameObject* pAura = m_creature->GetMap()->GetGameObject(auraGUID))
-                    pAura->Delete();
-                break;
-            case 13:
-                Stop();
-                Event_Timer = 3000;
-                break;
+            break;
+        case 9:
+            if (GameObject* pAura = m_creature->GetMap()->GetGameObject(auraGUID))
+                pAura->Delete();
+            break;
+        case 13:
+            Stop();
+            Event_Timer = 3000;
+            break;
         }
     }
 
@@ -231,50 +231,50 @@ struct celebrasSpiritAI : public npc_escortAI
 
                 switch (m_uiPhase)
                 {
-                    case 1:
-                        SetEscortPaused(false);
-                        break;
-                    case 2:
-                        DoScriptText(SAY_PRE_READ, m_creature);
-                        Event_Timer = 1000;
-                        break;
-                    case 3:
-                        m_creature->SummonGameObject(GO_TOME, 652.431f, 74.7087f, -85.3355f, 6.16101f, 0, 0, -0.0610485f, 0.998135f, -1, false);
-                        Event_Timer = 1000;
-                        break;
-                    case 4:
-                        // m_creature->CastSpell(m_creature, SPELL_CHANNEL, true);
-                        DoScriptText(EMOTE_CHANNEL, m_creature, 0, CHAT_TYPE_TEXT_EMOTE);
-                        SetEscortPaused(true);
-                        Event_Timer = m_bBookRead ? 1000 : 30000;
-                        break;
-                    case 5:
-                        if (!m_bBookRead)
-                        {
-                            // timed out waiting for book to be read
-                            ResetEscort();
-                            return;
-                        }
+                case 1:
+                    SetEscortPaused(false);
+                    break;
+                case 2:
+                    DoScriptText(SAY_PRE_READ, m_creature);
+                    Event_Timer = 1000;
+                    break;
+                case 3:
+                    m_creature->SummonGameObject(GO_TOME, 652.431f, 74.7087f, -85.3355f, 6.16101f, 0, 0, -0.0610485f, 0.998135f, -1, false);
+                    Event_Timer = 1000;
+                    break;
+                case 4:
+                    // m_creature->CastSpell(m_creature, SPELL_CHANNEL, true);
+                    DoScriptText(EMOTE_CHANNEL, m_creature, 0, CHAT_TYPE_TEXT_EMOTE);
+                    SetEscortPaused(true);
+                    Event_Timer = m_bBookRead ? 1000 : 30000;
+                    break;
+                case 5:
+                    if (!m_bBookRead)
+                    {
+                        // timed out waiting for book to be read
+                        ResetEscort();
+                        return;
+                    }
 
-                        DoScriptText(SAY_POST_READ, m_creature);
-                        Event_Timer = 1000;
-                        break;
-                    case 6:
-                        SetEscortPaused(false);
-                        break;
-                    case 7:
-                        m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER | UNIT_NPC_FLAG_GOSSIP);
+                    DoScriptText(SAY_POST_READ, m_creature);
+                    Event_Timer = 1000;
+                    break;
+                case 6:
+                    SetEscortPaused(false);
+                    break;
+                case 7:
+                    m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER | UNIT_NPC_FLAG_GOSSIP);
 
-                        if (Player* player = GetPlayerForEscort())
+                    if (Player* player = GetPlayerForEscort())
+                    {
+                        if (player->GetQuestStatus(QUEST_SCEPTER) == QUEST_STATUS_INCOMPLETE)
                         {
-                            if (player->GetQuestStatus(QUEST_SCEPTER) == QUEST_STATUS_INCOMPLETE)
-                            {
-                                player->AreaExploredOrEventHappens(QUEST_SCEPTER);
-                                player->PrepareGossipMenu(m_creature, m_creature->GetCreatureInfo()->gossip_menu_id);
-                                player->SendPreparedGossip(m_creature);
-                            }
+                            player->AreaExploredOrEventHappens(QUEST_SCEPTER);
+                            player->PrepareGossipMenu(m_creature, m_creature->GetCreatureInfo()->gossip_menu_id);
+                            player->SendPreparedGossip(m_creature);
                         }
-                        break;
+                    }
+                    break;
                 }
                 m_uiPhase++;
             }
@@ -318,10 +318,7 @@ bool QuestAccept_celebras_spirit(Player* pPlayer, Creature* pQuestGiver, Quest c
 }
 
 
-CreatureAI* GetAI_celebras_spirit(Creature* pCreature)
-{
-    return new celebrasSpiritAI(pCreature);
-}
+CreatureAI* GetAI_celebras_spirit(Creature* pCreature) { return new celebrasSpiritAI(pCreature); }
 
 void AddSC_boss_celebras_the_cursed()
 {

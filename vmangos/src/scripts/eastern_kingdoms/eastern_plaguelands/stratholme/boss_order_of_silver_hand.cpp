@@ -31,14 +31,14 @@ EndScriptData */
 # Once Aurius is defeated, he should be the one summoning the ghosts.
 #####*/
 
-#define SH_GREGOR           17910
-#define SH_CATHELA          17911
-#define SH_NEMAS            17912
-#define SH_AELMAR           17913
-#define SH_VICAR            17914
-#define SH_QUEST_CREDIT     17915
+#define SH_GREGOR 17910
+#define SH_CATHELA 17911
+#define SH_NEMAS 17912
+#define SH_AELMAR 17913
+#define SH_VICAR 17914
+#define SH_QUEST_CREDIT 17915
 
-#define SPELL_HOLY_LIGHT    25263
+#define SPELL_HOLY_LIGHT 25263
 #define SPELL_DIVINE_SHIELD 13874
 
 struct boss_silver_hand_bossesAI : public ScriptedAI
@@ -63,21 +63,21 @@ struct boss_silver_hand_bossesAI : public ScriptedAI
         {
             switch (m_creature->GetEntry())
             {
-                case SH_AELMAR:
-                    m_pInstance->SetData(TYPE_SH_AELMAR, 0);
-                    break;
-                case SH_CATHELA:
-                    m_pInstance->SetData(TYPE_SH_CATHELA, 0);
-                    break;
-                case SH_GREGOR:
-                    m_pInstance->SetData(TYPE_SH_GREGOR, 0);
-                    break;
-                case SH_NEMAS:
-                    m_pInstance->SetData(TYPE_SH_NEMAS, 0);
-                    break;
-                case SH_VICAR:
-                    m_pInstance->SetData(TYPE_SH_VICAR, 0);
-                    break;
+            case SH_AELMAR:
+                m_pInstance->SetData(TYPE_SH_AELMAR, 0);
+                break;
+            case SH_CATHELA:
+                m_pInstance->SetData(TYPE_SH_CATHELA, 0);
+                break;
+            case SH_GREGOR:
+                m_pInstance->SetData(TYPE_SH_GREGOR, 0);
+                break;
+            case SH_NEMAS:
+                m_pInstance->SetData(TYPE_SH_NEMAS, 0);
+                break;
+            case SH_VICAR:
+                m_pInstance->SetData(TYPE_SH_VICAR, 0);
+                break;
             }
         }
     }
@@ -88,21 +88,21 @@ struct boss_silver_hand_bossesAI : public ScriptedAI
         {
             switch (m_creature->GetEntry())
             {
-                case SH_AELMAR:
-                    m_pInstance->SetData(TYPE_SH_AELMAR, 2);
-                    break;
-                case SH_CATHELA:
-                    m_pInstance->SetData(TYPE_SH_CATHELA, 2);
-                    break;
-                case SH_GREGOR:
-                    m_pInstance->SetData(TYPE_SH_GREGOR, 2);
-                    break;
-                case SH_NEMAS:
-                    m_pInstance->SetData(TYPE_SH_NEMAS, 2);
-                    break;
-                case SH_VICAR:
-                    m_pInstance->SetData(TYPE_SH_VICAR, 2);
-                    break;
+            case SH_AELMAR:
+                m_pInstance->SetData(TYPE_SH_AELMAR, 2);
+                break;
+            case SH_CATHELA:
+                m_pInstance->SetData(TYPE_SH_CATHELA, 2);
+                break;
+            case SH_GREGOR:
+                m_pInstance->SetData(TYPE_SH_GREGOR, 2);
+                break;
+            case SH_NEMAS:
+                m_pInstance->SetData(TYPE_SH_NEMAS, 2);
+                break;
+            case SH_VICAR:
+                m_pInstance->SetData(TYPE_SH_VICAR, 2);
+                break;
             }
             if (m_pInstance->GetData(TYPE_SH_QUEST) && Killer->GetTypeId() == TYPEID_PLAYER)
                 ((Player*)Killer)->KilledMonsterCredit(SH_QUEST_CREDIT, m_creature->GetGUID());
@@ -111,7 +111,7 @@ struct boss_silver_hand_bossesAI : public ScriptedAI
 
     void UpdateAI(uint32 const diff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
@@ -123,7 +123,8 @@ struct boss_silver_hand_bossesAI : public ScriptedAI
                 HolyLight_Timer = 20000;
             }
         }
-        else HolyLight_Timer -= diff;
+        else
+            HolyLight_Timer -= diff;
 
         if (DivineShield_Timer < diff)
         {
@@ -133,16 +134,13 @@ struct boss_silver_hand_bossesAI : public ScriptedAI
                 DivineShield_Timer = 40000;
             }
         }
-        else DivineShield_Timer -= diff;
+        else
+            DivineShield_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
-
 };
-CreatureAI* GetAI_boss_silver_hand_bossesAI(Creature* pCreature)
-{
-    return new boss_silver_hand_bossesAI(pCreature);
-}
+CreatureAI* GetAI_boss_silver_hand_bossesAI(Creature* pCreature) { return new boss_silver_hand_bossesAI(pCreature); }
 
 
 void AddSC_boss_order_of_silver_hand()

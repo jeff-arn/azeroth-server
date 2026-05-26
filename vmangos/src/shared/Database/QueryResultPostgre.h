@@ -24,9 +24,9 @@
 
 #ifdef WIN32
 #define FD_SETSIZE 1024
-#include <winsock2.h>
 #include <postgre/libpq-fe.h>
 #include <postgre/pg_type.h>
+#include <winsock2.h>
 #else
 // Define OID's from pg_type.h in postgresql server includes.
 #define BOOLOID 16
@@ -76,18 +76,18 @@
 
 class QueryResultPostgre : public QueryResult
 {
-    public:
-        QueryResultPostgre(PGresult* result, uint64 rowCount, uint32 fieldCount);
+public:
+    QueryResultPostgre(PGresult* result, uint64 rowCount, uint32 fieldCount);
 
-        ~QueryResultPostgre();
+    ~QueryResultPostgre();
 
-        bool NextRow();
+    bool NextRow();
 
-    private:
-        enum Field::DataTypes ConvertNativeType(Oid pOid) const;
-        void EndQuery();
+private:
+    enum Field::DataTypes ConvertNativeType(Oid pOid) const;
+    void EndQuery();
 
-        PGresult* mResult;
-        uint32 mTableIndex;
+    PGresult* mResult;
+    uint32 mTableIndex;
 };
 #endif

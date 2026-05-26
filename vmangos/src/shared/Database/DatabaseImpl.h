@@ -25,42 +25,45 @@
 
 // Function body definitions for the template function members of the Database class
 
-#define ASYNC_QUERY_BODY(sql) if (!sql || !m_pResultQueue) return false;
-#define ASYNC_DELAYHOLDER_BODY(holder) if (!holder || !m_pResultQueue) return false;
+#define ASYNC_QUERY_BODY(sql)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+    if (!sql || !m_pResultQueue)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+        return false;
+#define ASYNC_DELAYHOLDER_BODY(holder)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+    if (!holder || !m_pResultQueue)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   \
+        return false;
 
-#define ASYNC_PQUERY_BODY(format, szQuery) \
-    if(!format) return false; \
-    \
-    char szQuery [MAX_QUERY_LEN]; \
-    \
-    { \
-        va_list ap; \
-        \
-        va_start(ap, format); \
-        int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap); \
-        va_end(ap); \
-        \
-        if(res==-1) \
-        { \
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format); \
-            return false; \
-        } \
+#define ASYNC_PQUERY_BODY(format, szQuery)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            \
+    if (!format)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+        return false;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+    char szQuery[MAX_QUERY_LEN];                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+        va_list ap;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   \
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+        va_start(ap, format);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+        int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+        va_end(ap);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   \
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+        if (res == -1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+        {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s", format);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       \
+            return false;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+        }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
     }
 
 // -- Query / member --
 
-template<class Class>
-bool
-Database::AsyncQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>), char const* sql)
+template <class Class>
+bool Database::AsyncQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>), char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     AddToDelayQueue(new SqlQuery(sql, new MaNGOS::QueryCallback<Class>(object, method, std::move(std::unique_ptr<QueryResult>(nullptr))), m_pResultQueue));
     return true;
 }
 
-template<class Class>
-bool
-Database::AsyncQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>), char const* sql)
+template <class Class>
+bool Database::AsyncQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>), char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     MaNGOS::QueryCallback<Class>* cb = new MaNGOS::QueryCallback<Class>(object, method, std::move(std::unique_ptr<QueryResult>(nullptr)));
@@ -69,17 +72,15 @@ Database::AsyncQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<
     return true;
 }
 
-template<class Class, typename ParamType1>
-bool
-Database::AsyncQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* sql)
+template <class Class, typename ParamType1>
+bool Database::AsyncQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     AddToDelayQueue(new SqlQuery(sql, new MaNGOS::QueryCallback<Class, ParamType1>(object, method, std::move(std::unique_ptr<QueryResult>(nullptr)), param1), m_pResultQueue));
     return true;
 }
-template<class Class, typename ParamType1>
-bool
-Database::AsyncQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* sql)
+template <class Class, typename ParamType1>
+bool Database::AsyncQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     MaNGOS::QueryCallback<Class, ParamType1>* cb = new MaNGOS::QueryCallback<Class, ParamType1>(object, method, std::move(std::unique_ptr<QueryResult>(nullptr)), param1);
@@ -88,18 +89,16 @@ Database::AsyncQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<
     return true;
 }
 
-template<class Class, typename ParamType1, typename ParamType2>
-bool
-Database::AsyncQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* sql)
+template <class Class, typename ParamType1, typename ParamType2>
+bool Database::AsyncQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     AddToDelayQueue(new SqlQuery(sql, new MaNGOS::QueryCallback<Class, ParamType1, ParamType2>(object, method, std::move(std::unique_ptr<QueryResult>(nullptr)), param1, param2), m_pResultQueue));
     return true;
 }
 
-template<class Class, typename ParamType1, typename ParamType2, typename ParamType3>
-bool
-Database::AsyncQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2, ParamType3), ParamType1 param1, ParamType2 param2, ParamType3 param3, char const* sql)
+template <class Class, typename ParamType1, typename ParamType2, typename ParamType3>
+bool Database::AsyncQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2, ParamType3), ParamType1 param1, ParamType2 param2, ParamType3 param3, char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     AddToDelayQueue(new SqlQuery(sql, new MaNGOS::QueryCallback<Class, ParamType1, ParamType2, ParamType3>(object, method, std::move(std::unique_ptr<QueryResult>(nullptr)), param1, param2, param3), m_pResultQueue));
@@ -108,36 +107,32 @@ Database::AsyncQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryR
 
 // -- Query / static --
 
-template<typename ParamType1>
-bool
-Database::AsyncQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* sql)
+template <typename ParamType1>
+bool Database::AsyncQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     AddToDelayQueue(new SqlQuery(sql, new MaNGOS::SQueryCallback<ParamType1>(method, std::move(std::unique_ptr<QueryResult>(nullptr)), param1), m_pResultQueue));
     return true;
 }
 
-template<typename ParamType1, typename ParamType2>
-bool
-Database::AsyncQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* sql)
+template <typename ParamType1, typename ParamType2>
+bool Database::AsyncQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     AddToDelayQueue(new SqlQuery(sql, new MaNGOS::SQueryCallback<ParamType1, ParamType2>(method, std::move(std::unique_ptr<QueryResult>(nullptr)), param1, param2), m_pResultQueue));
     return true;
 }
 
-template<typename ParamType1, typename ParamType2, typename ParamType3>
-bool
-Database::AsyncQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2, ParamType3), ParamType1 param1, ParamType2 param2, ParamType3 param3, char const* sql)
+template <typename ParamType1, typename ParamType2, typename ParamType3>
+bool Database::AsyncQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2, ParamType3), ParamType1 param1, ParamType2 param2, ParamType3 param3, char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     AddToDelayQueue(new SqlQuery(sql, new MaNGOS::SQueryCallback<ParamType1, ParamType2, ParamType3>(method, std::move(std::unique_ptr<QueryResult>(nullptr)), param1, param2, param3), m_pResultQueue));
     return true;
 }
 
-template<typename ParamType1>
-bool
-Database::AsyncQueryUnsafe(void (*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* sql)
+template <typename ParamType1>
+bool Database::AsyncQueryUnsafe(void (*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     MaNGOS::SQueryCallback<ParamType1>* cb = new MaNGOS::SQueryCallback<ParamType1>(method, std::move(std::unique_ptr<QueryResult>(nullptr)), param1);
@@ -146,9 +141,8 @@ Database::AsyncQueryUnsafe(void (*method)(std::unique_ptr<QueryResult>, ParamTyp
     return true;
 }
 
-template<typename ParamType1, typename ParamType2>
-bool
-Database::AsyncQueryUnsafe(void(*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* sql)
+template <typename ParamType1, typename ParamType2>
+bool Database::AsyncQueryUnsafe(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* sql)
 {
     ASYNC_QUERY_BODY(sql)
     MaNGOS::SQueryCallback<ParamType1, ParamType2>* cb = new MaNGOS::SQueryCallback<ParamType1, ParamType2>(method, std::move(std::unique_ptr<QueryResult>(nullptr)), param1, param2);
@@ -159,47 +153,41 @@ Database::AsyncQueryUnsafe(void(*method)(std::unique_ptr<QueryResult>, ParamType
 
 // -- PQuery / member --
 
-template<class Class>
-bool
-Database::AsyncPQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>), char const* format,...)
+template <class Class>
+bool Database::AsyncPQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>), char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQuery(object, method, szQuery);
 }
 
-template<class Class>
-bool
-Database::AsyncPQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>), char const* format,...)
+template <class Class>
+bool Database::AsyncPQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>), char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQueryUnsafe(object, method, szQuery);
 }
 
-template<class Class, typename ParamType1>
-bool
-Database::AsyncPQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* format,...)
+template <class Class, typename ParamType1>
+bool Database::AsyncPQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQuery(object, method, param1, szQuery);
 }
-template<class Class, typename ParamType1>
-bool
-Database::AsyncPQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* format,...)
+template <class Class, typename ParamType1>
+bool Database::AsyncPQueryUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQueryUnsafe(object, method, param1, szQuery);
 }
-template<class Class, typename ParamType1, typename ParamType2>
-bool
-Database::AsyncPQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* format,...)
+template <class Class, typename ParamType1, typename ParamType2>
+bool Database::AsyncPQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQuery(object, method, param1, param2, szQuery);
 }
 
-template<class Class, typename ParamType1, typename ParamType2, typename ParamType3>
-bool
-Database::AsyncPQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2, ParamType3), ParamType1 param1, ParamType2 param2, ParamType3 param3, char const* format,...)
+template <class Class, typename ParamType1, typename ParamType2, typename ParamType3>
+bool Database::AsyncPQuery(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2, ParamType3), ParamType1 param1, ParamType2 param2, ParamType3 param3, char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQuery(object, method, param1, param2, param3, szQuery);
@@ -207,41 +195,36 @@ Database::AsyncPQuery(Class* object, void (Class::*method)(std::unique_ptr<Query
 
 // -- PQuery / static --
 
-template<typename ParamType1>
-bool
-Database::AsyncPQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* format,...)
+template <typename ParamType1>
+bool Database::AsyncPQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQuery(method, param1, szQuery);
 }
 
-template<typename ParamType1, typename ParamType2>
-bool
-Database::AsyncPQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* format,...)
+template <typename ParamType1, typename ParamType2>
+bool Database::AsyncPQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQuery(method, param1, param2, szQuery);
 }
 
-template<typename ParamType1, typename ParamType2, typename ParamType3>
-bool
-Database::AsyncPQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2, ParamType3), ParamType1 param1, ParamType2 param2, ParamType3 param3, char const* format,...)
+template <typename ParamType1, typename ParamType2, typename ParamType3>
+bool Database::AsyncPQuery(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2, ParamType3), ParamType1 param1, ParamType2 param2, ParamType3 param3, char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQuery(method, param1, param2, param3, szQuery);
 }
 
-template<typename ParamType1>
-bool
-Database::AsyncPQueryUnsafe(void (*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* format, ...)
+template <typename ParamType1>
+bool Database::AsyncPQueryUnsafe(void (*method)(std::unique_ptr<QueryResult>, ParamType1), ParamType1 param1, char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQueryUnsafe(method, param1, szQuery);
 }
 
-template<typename ParamType1, typename ParamType2>
-bool
-Database::AsyncPQueryUnsafe(void(*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* format, ...)
+template <typename ParamType1, typename ParamType2>
+bool Database::AsyncPQueryUnsafe(void (*method)(std::unique_ptr<QueryResult>, ParamType1, ParamType2), ParamType1 param1, ParamType2 param2, char const* format, ...)
 {
     ASYNC_PQUERY_BODY(format, szQuery)
     return AsyncQueryUnsafe(method, param1, param2, szQuery);
@@ -249,42 +232,37 @@ Database::AsyncPQueryUnsafe(void(*method)(std::unique_ptr<QueryResult>, ParamTyp
 
 // -- QueryHolder --
 
-template<class Class>
-bool
-Database::DelayQueryHolder(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*), SqlQueryHolder* holder)
+template <class Class>
+bool Database::DelayQueryHolder(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*), SqlQueryHolder* holder)
 {
     ASYNC_DELAYHOLDER_BODY(holder)
     return holder->Execute(new MaNGOS::QueryCallback<Class, SqlQueryHolder*>(object, method, std::move(std::unique_ptr<QueryResult>(nullptr)), holder), this, m_pResultQueue);
 }
-template<class Class>
-bool
-Database::DelayQueryHolderUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*), SqlQueryHolder* holder)
+template <class Class>
+bool Database::DelayQueryHolderUnsafe(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*), SqlQueryHolder* holder)
 {
     ASYNC_DELAYHOLDER_BODY(holder)
     MaNGOS::QueryCallback<Class, SqlQueryHolder*>* cb = new MaNGOS::QueryCallback<Class, SqlQueryHolder*>(object, method, std::move(std::unique_ptr<QueryResult>(nullptr)), holder);
     cb->threadSafe = false;
     return holder->Execute(cb, this, m_pResultQueue);
 }
-template<class Class, typename ParamType1>
-bool
-Database::DelayQueryHolder(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*, ParamType1), SqlQueryHolder* holder, ParamType1 param1)
+template <class Class, typename ParamType1>
+bool Database::DelayQueryHolder(Class* object, void (Class::*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*, ParamType1), SqlQueryHolder* holder, ParamType1 param1)
 {
     ASYNC_DELAYHOLDER_BODY(holder)
     return holder->Execute(new MaNGOS::QueryCallback<Class, SqlQueryHolder*, ParamType1>(object, method, std::move(std::unique_ptr<QueryResult>(nullptr)), holder, param1), this, m_pResultQueue);
 }
 
 // -- QueryHolder static --
-template<typename ParamType1>
-bool
-Database::DelayQueryHolder(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*, ParamType1), SqlQueryHolder* holder, ParamType1 param1)
+template <typename ParamType1>
+bool Database::DelayQueryHolder(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*, ParamType1), SqlQueryHolder* holder, ParamType1 param1)
 {
     ASYNC_DELAYHOLDER_BODY(holder)
     return holder->Execute(new MaNGOS::SQueryCallback<SqlQueryHolder*, ParamType1>(method, std::move(std::unique_ptr<QueryResult>(nullptr)), holder, param1), this, m_pResultQueue);
 }
 
-template<typename ParamType1>
-bool
-Database::DelayQueryHolderUnsafe(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*, ParamType1), SqlQueryHolder* holder, ParamType1 param1)
+template <typename ParamType1>
+bool Database::DelayQueryHolderUnsafe(void (*method)(std::unique_ptr<QueryResult>, SqlQueryHolder*, ParamType1), SqlQueryHolder* holder, ParamType1 param1)
 {
     ASYNC_DELAYHOLDER_BODY(holder)
     MaNGOS::SQueryCallback<SqlQueryHolder*, ParamType1>* cb = new MaNGOS::SQueryCallback<SqlQueryHolder*, ParamType1>(method, std::move(std::unique_ptr<QueryResult>(nullptr)), holder, param1);

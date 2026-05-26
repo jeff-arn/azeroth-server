@@ -23,15 +23,12 @@ EndScriptData */
 
 #include "scriptPCH.h"
 
-#define SPELL_TOXICVOLLEY           21687
-#define SPELL_UPPERCUT              22916
+#define SPELL_TOXICVOLLEY 21687
+#define SPELL_UPPERCUT 22916
 
 struct boss_noxxionAI : public ScriptedAI
 {
-    boss_noxxionAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_noxxionAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 ToxicVolley_Timer;
     uint32 Uppercut_Timer;
@@ -44,7 +41,7 @@ struct boss_noxxionAI : public ScriptedAI
         ToxicVolley_Timer = 7000;
         Uppercut_Timer = 16000;
         Adds_Timer = 19000;
-        Invisible_Timer = 15000;                            //Too much too low?
+        Invisible_Timer = 15000; // Too much too low?
         Invisible = false;
     }
 
@@ -66,26 +63,26 @@ struct boss_noxxionAI : public ScriptedAI
     {
         if (Invisible && Invisible_Timer < diff)
         {
-            //Become visible again
+            // Become visible again
             m_creature->SetFactionTemplateId(14);
             m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
-            //Noxxion model
+            // Noxxion model
             m_creature->SetDisplayId(11172);
             Invisible = false;
-            //m_creature->m_canMove = true;
+            // m_creature->m_canMove = true;
         }
         else if (Invisible)
         {
             Invisible_Timer -= diff;
-            //Do nothing while invisible
+            // Do nothing while invisible
             return;
         }
 
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //ToxicVolley_Timer
+        // ToxicVolley_Timer
         if (ToxicVolley_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_TOXICVOLLEY) == CAST_OK)
@@ -94,7 +91,7 @@ struct boss_noxxionAI : public ScriptedAI
         else
             ToxicVolley_Timer -= diff;
 
-        //Uppercut_Timer
+        // Uppercut_Timer
         if (Uppercut_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_UPPERCUT) == CAST_OK)
@@ -103,10 +100,10 @@ struct boss_noxxionAI : public ScriptedAI
         else
             Uppercut_Timer -= diff;
 
-        //Adds_Timer
+        // Adds_Timer
         if (!Invisible && Adds_Timer < diff)
         {
-            //Inturrupt any spell casting
+            // Inturrupt any spell casting
             m_creature->InterruptNonMeleeSpells(false);
             m_creature->SetFactionTemplateId(35);
             m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
@@ -125,10 +122,7 @@ struct boss_noxxionAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_noxxion(Creature* pCreature)
-{
-    return new boss_noxxionAI(pCreature);
-}
+CreatureAI* GetAI_boss_noxxion(Creature* pCreature) { return new boss_noxxionAI(pCreature); }
 
 void AddSC_boss_noxxion()
 {

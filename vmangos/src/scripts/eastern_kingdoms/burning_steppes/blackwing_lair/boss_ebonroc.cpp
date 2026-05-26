@@ -14,15 +14,15 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "blackwing_lair.h"
+#include "scriptPCH.h"
 
 enum Ebonroc : uint32
 {
-    SPELL_SHADOW_FLAME      = 22539,
-    SPELL_WING_BUFFET       = 23339,
+    SPELL_SHADOW_FLAME = 22539,
+    SPELL_WING_BUFFET = 23339,
     SPELL_SHADOW_OF_EBONROC = 23340,
-    SPELL_THRASH            = 3391,
+    SPELL_THRASH = 3391,
 };
 
 struct boss_ebonrocAI : public ScriptedAI
@@ -41,9 +41,9 @@ struct boss_ebonrocAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiShadowFlameTimer        = 16000;                // These times are probably wrong
-        m_uiWingBuffetTimer         = 30000;
-        m_uiShadowOfEbonrocTimer    = 8000;
+        m_uiShadowFlameTimer = 16000; // These times are probably wrong
+        m_uiWingBuffetTimer = 30000;
+        m_uiShadowOfEbonrocTimer = 8000;
     }
 
     void Aggro(Unit* /*pWho*/) override
@@ -116,10 +116,7 @@ struct boss_ebonrocAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_ebonroc(Creature* pCreature)
-{
-    return new boss_ebonrocAI(pCreature);
-}
+CreatureAI* GetAI_boss_ebonroc(Creature* pCreature) { return new boss_ebonrocAI(pCreature); }
 
 void AddSC_boss_ebonroc()
 {

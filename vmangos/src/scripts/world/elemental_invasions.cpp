@@ -2,22 +2,22 @@
  *
  */
 
-#include "scriptPCH.h"
 #include "MoveMapSharedDefines.h"
+#include "scriptPCH.h"
 
 enum
 {
-    NPC_INVADER_FIRE    = 14460,
-    NPC_BOSS_FIRE       = 14461,
+    NPC_INVADER_FIRE = 14460,
+    NPC_BOSS_FIRE = 14461,
 
-    NPC_INVADER_WATER   = 14458,
-    NPC_BOSS_WATER      = 14457,
+    NPC_INVADER_WATER = 14458,
+    NPC_BOSS_WATER = 14457,
 
-    NPC_INVADER_EARTH   = 14462,
-    NPC_BOSS_EARTH      = 14464,
+    NPC_INVADER_EARTH = 14462,
+    NPC_BOSS_EARTH = 14464,
 
-    NPC_INVADER_AIR     = 14455,
-    NPC_BOSS_AIR        = 14454,
+    NPC_INVADER_AIR = 14455,
+    NPC_BOSS_AIR = 14454,
 };
 
 struct InvasionDataStruct
@@ -30,19 +30,13 @@ struct InvasionDataStruct
     uint32 varStage;
 };
 
-const static InvasionDataStruct InvasionData[] =
-{
-    { 68,   NPC_BOSS_FIRE,    NPC_INVADER_FIRE,    490,     VAR_FIRE_KILLS,     VAR_FIRE  },
-    { 69,   NPC_BOSS_AIR,     NPC_INVADER_AIR,     1377,    VAR_AIR_KILLS,      VAR_AIR   },
-    { 70,   NPC_BOSS_EARTH,   NPC_INVADER_EARTH,   16,      VAR_EARTH_KILLS,    VAR_EARTH },
-    { 71,   NPC_BOSS_WATER,   NPC_INVADER_WATER,   618,     VAR_WATER_KILLS,    VAR_WATER }
-};
+const static InvasionDataStruct InvasionData[] = {{68, NPC_BOSS_FIRE, NPC_INVADER_FIRE, 490, VAR_FIRE_KILLS, VAR_FIRE}, {69, NPC_BOSS_AIR, NPC_INVADER_AIR, 1377, VAR_AIR_KILLS, VAR_AIR}, {70, NPC_BOSS_EARTH, NPC_INVADER_EARTH, 16, VAR_EARTH_KILLS, VAR_EARTH}, {71, NPC_BOSS_WATER, NPC_INVADER_WATER, 618, VAR_WATER_KILLS, VAR_WATER}};
 
-const static uint32 MIN_RIFT_SPAWN = 3;     // initial spawned invaders per rift
-const static uint32 MAX_RIFT_SPAWN = 6;     // maximum spawned invaders per rift
-const static uint8 DEAD_INVADERS = 50;      // override spawn level immediately if X invaders killed
+const static uint32 MIN_RIFT_SPAWN = 3; // initial spawned invaders per rift
+const static uint32 MAX_RIFT_SPAWN = 6; // maximum spawned invaders per rift
+const static uint8 DEAD_INVADERS = 50; // override spawn level immediately if X invaders killed
 
-class elemental_invasion_riftAI: public GameObjectAI
+class elemental_invasion_riftAI : public GameObjectAI
 {
 public:
     elemental_invasion_riftAI(GameObject* gobj, uint32 eventIndex) : GameObjectAI(gobj), m_uiEventIndex(eventIndex)
@@ -62,7 +56,8 @@ public:
         me->GetPosition(x, y, z);
         auto invader = me->SummonCreature(InvasionData[m_uiEventIndex].invader, x, y, z, 0, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, HOUR * IN_MILLISECONDS);
 
-        if (!invader) return false;
+        if (!invader)
+            return false;
 
         for (uint8 i = 0; i < 20; ++i)
         {
@@ -96,10 +91,12 @@ public:
             m_uiTimer = 70 * IN_MILLISECONDS;
 
             // do nothing if event is not started
-            if (!sGameEventMgr.IsActiveEvent(InvasionData[m_uiEventIndex].event)) return;
+            if (!sGameEventMgr.IsActiveEvent(InvasionData[m_uiEventIndex].event))
+                return;
 
             // do nothing if spawned in another zone
-            if (me->GetZoneId() != InvasionData[m_uiEventIndex].zone) return;
+            if (me->GetZoneId() != InvasionData[m_uiEventIndex].zone)
+                return;
 
             auto deadInvaders = sObjectMgr.GetSavedVariable(InvasionData[m_uiEventIndex].varDeadInvaders, 0);
             auto spawnStage = sObjectMgr.GetSavedVariable(InvasionData[m_uiEventIndex].varStage, 1);
@@ -127,25 +124,13 @@ public:
     }
 };
 
-GameObjectAI* GetAI_go_elemental_invasion_rift_fire(GameObject* gobj)
-{
-    return new elemental_invasion_riftAI(gobj, EVENT_IND_FIRE);
-}
+GameObjectAI* GetAI_go_elemental_invasion_rift_fire(GameObject* gobj) { return new elemental_invasion_riftAI(gobj, EVENT_IND_FIRE); }
 
-GameObjectAI* GetAI_go_elemental_invasion_rift_water(GameObject* gobj)
-{
-    return new elemental_invasion_riftAI(gobj, EVENT_IND_WATER);
-}
+GameObjectAI* GetAI_go_elemental_invasion_rift_water(GameObject* gobj) { return new elemental_invasion_riftAI(gobj, EVENT_IND_WATER); }
 
-GameObjectAI* GetAI_go_elemental_invasion_rift_earth(GameObject* gobj)
-{
-    return new elemental_invasion_riftAI(gobj, EVENT_IND_EARTH);
-}
+GameObjectAI* GetAI_go_elemental_invasion_rift_earth(GameObject* gobj) { return new elemental_invasion_riftAI(gobj, EVENT_IND_EARTH); }
 
-GameObjectAI* GetAI_go_elemental_invasion_rift_air(GameObject* gobj)
-{
-    return new elemental_invasion_riftAI(gobj, EVENT_IND_AIR);
-}
+GameObjectAI* GetAI_go_elemental_invasion_rift_air(GameObject* gobj) { return new elemental_invasion_riftAI(gobj, EVENT_IND_AIR); }
 
 /*
  * Invaders script
@@ -154,28 +139,25 @@ GameObjectAI* GetAI_go_elemental_invasion_rift_air(GameObject* gobj)
 enum
 {
     // Watery Invader
-    SPELL_CHILLED       = 20005,
-    SPELL_FROST_SHOCK   = 19133,
+    SPELL_CHILLED = 20005,
+    SPELL_FROST_SHOCK = 19133,
 
     // Thundering Invader
-    SPELL_KNOCKDOWN     = 11428,
-    SPELL_EARTH_SHOCK   = 23114,
+    SPELL_KNOCKDOWN = 11428,
+    SPELL_EARTH_SHOCK = 23114,
 
     // Whirling Invader
-    SPELL_WHIRLWIND     = 17207,
+    SPELL_WHIRLWIND = 17207,
     SPELL_LIGHTN_SHIELD = 12550,
 
     // Blazing Invader
-    SPELL_BLAST_WAVE    = 23113,
-    SPELL_FIRE_SHIELD   = 11968,
+    SPELL_BLAST_WAVE = 23113,
+    SPELL_FIRE_SHIELD = 11968,
 };
 
 struct npc_invaderAI : ScriptedAI
 {
-    explicit npc_invaderAI(Creature* pCreature, uint32 eventIndex) : ScriptedAI(pCreature), m_uiEventIndex(eventIndex)
-    {
-        npc_invaderAI::Reset();
-    }
+    explicit npc_invaderAI(Creature* pCreature, uint32 eventIndex) : ScriptedAI(pCreature), m_uiEventIndex(eventIndex) { npc_invaderAI::Reset(); }
 
     uint32 m_uiEventIndex;
     uint32 m_uiChilledTimer;
@@ -197,7 +179,8 @@ struct npc_invaderAI : ScriptedAI
 
     void JustDied(Unit* /*pKiller*/) override
     {
-        if (!sGameEventMgr.IsActiveEvent(InvasionData[m_uiEventIndex].event)) return;
+        if (!sGameEventMgr.IsActiveEvent(InvasionData[m_uiEventIndex].event))
+            return;
 
         auto deadInvaders = sObjectMgr.GetSavedVariable(InvasionData[m_uiEventIndex].varDeadInvaders, 0);
         ++deadInvaders;
@@ -301,30 +284,18 @@ struct npc_invaderAI : ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_watery_invader(Creature* pCreature)
-{
-    return new npc_invaderAI(pCreature, EVENT_IND_WATER);
-}
+CreatureAI* GetAI_npc_watery_invader(Creature* pCreature) { return new npc_invaderAI(pCreature, EVENT_IND_WATER); }
 
-CreatureAI* GetAI_npc_whirling_invader(Creature* pCreature)
-{
-    return new npc_invaderAI(pCreature, EVENT_IND_AIR);
-}
+CreatureAI* GetAI_npc_whirling_invader(Creature* pCreature) { return new npc_invaderAI(pCreature, EVENT_IND_AIR); }
 
-CreatureAI* GetAI_npc_blazing_invader(Creature* pCreature)
-{
-    return new npc_invaderAI(pCreature, EVENT_IND_FIRE);
-}
+CreatureAI* GetAI_npc_blazing_invader(Creature* pCreature) { return new npc_invaderAI(pCreature, EVENT_IND_FIRE); }
 
-CreatureAI* GetAI_npc_thundering_invader(Creature* pCreature)
-{
-    return new npc_invaderAI(pCreature, EVENT_IND_EARTH);
-}
+CreatureAI* GetAI_npc_thundering_invader(Creature* pCreature) { return new npc_invaderAI(pCreature, EVENT_IND_EARTH); }
 
 void AddSC_elemental_invasions()
 {
     Script* newscript;
-    
+
     newscript = new Script;
     newscript->Name = "go_elemental_invasion_rift_fire";
     newscript->GOGetAI = &GetAI_go_elemental_invasion_rift_fire;

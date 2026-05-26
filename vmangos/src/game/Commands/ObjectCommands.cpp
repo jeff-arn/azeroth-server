@@ -14,21 +14,21 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include <ctime>
+#include "CellImpl.h"
+#include "Chat.h"
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
-#include "Player.h"
-#include "Chat.h"
-#include "ObjectAccessor.h"
-#include "Language.h"
-#include "ObjectMgr.h"
-#include "ScriptMgr.h"
-#include "Util.h"
 #include "GameEventMgr.h"
-#include "MapManager.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
-#include "CellImpl.h"
-#include <ctime>
+#include "Language.h"
+#include "MapManager.h"
+#include "ObjectAccessor.h"
+#include "ObjectMgr.h"
+#include "Player.h"
+#include "ScriptMgr.h"
+#include "Util.h"
 
 bool ChatHandler::HandleGameObjectTargetCommand(char* args)
 {
@@ -45,17 +45,15 @@ bool ChatHandler::HandleGameObjectTargetCommand(char* args)
         uint32 id;
         if (ExtractUInt32(&cId, id))
         {
-            result = WorldDatabase.PQuery("SELECT guid, id, position_x, position_y, position_z, orientation, map, (POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) AS order_ FROM gameobject WHERE map = '%i' AND id = '%u' ORDER BY order_ ASC LIMIT 1",
-                                          pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), pl->GetMapId(), id);
+            result = WorldDatabase.PQuery("SELECT guid, id, position_x, position_y, position_z, orientation, map, (POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) AS order_ FROM gameobject WHERE map = '%i' AND id = '%u' ORDER BY order_ ASC LIMIT 1", pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), pl->GetMapId(), id);
         }
         else
         {
             std::string name = cId;
             WorldDatabase.escape_string(name);
-            result = WorldDatabase.PQuery(
-                         "SELECT guid, id, position_x, position_y, position_z, orientation, map, (POW(position_x - %f, 2) + POW(position_y - %f, 2) + POW(position_z - %f, 2)) AS order_ "
-                         "FROM gameobject,gameobject_template WHERE gameobject_template.entry = gameobject.id AND map = %i AND name " _LIKE_ " " _CONCAT3_("'%%'", "'%s'", "'%%'")" ORDER BY order_ ASC LIMIT 1",
-                         pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), pl->GetMapId(), name.c_str());
+            result = WorldDatabase.PQuery("SELECT guid, id, position_x, position_y, position_z, orientation, map, (POW(position_x - %f, 2) + POW(position_y - %f, 2) + POW(position_z - %f, 2)) AS order_ "
+                                          "FROM gameobject,gameobject_template WHERE gameobject_template.entry = gameobject.id AND map = %i AND name " _LIKE_ " " _CONCAT3_("'%%'", "'%s'", "'%%'") " ORDER BY order_ ASC LIMIT 1",
+                                          pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), pl->GetMapId(), name.c_str());
         }
     }
     else
@@ -68,7 +66,7 @@ bool ChatHandler::HandleGameObjectTargetCommand(char* args)
         {
             if (initString)
             {
-                eventFilter  <<  "OR event IN (" << itr;
+                eventFilter << "OR event IN (" << itr;
                 initString = false;
             }
             else
@@ -101,12 +99,12 @@ bool ChatHandler::HandleGameObjectTargetCommand(char* args)
     {
         Field* fields = result->Fetch();
         lowguid = fields[0].GetUInt32();
-        id =      fields[1].GetUInt32();
-        x =       fields[2].GetFloat();
-        y =       fields[3].GetFloat();
-        z =       fields[4].GetFloat();
-        o =       fields[5].GetFloat();
-        mapid =   fields[6].GetUInt16();
+        id = fields[1].GetUInt32();
+        x = fields[2].GetFloat();
+        y = fields[3].GetFloat();
+        z = fields[4].GetFloat();
+        o = fields[5].GetFloat();
+        mapid = fields[6].GetUInt16();
         pool_id = sPoolMgr.IsPartOfAPool<GameObject>(lowguid);
         if (!pool_id || pl->GetMap()->GetPersistentState()->IsSpawnedPoolObject<GameObject>(lowguid))
             found = true;
@@ -161,7 +159,7 @@ bool ChatHandler::HandleGameObjectInfoCommand(char* args)
             if (GameObjectData const* go_data = sObjectMgr.GetGOData(lowguid))
                 pGameObject = GetGameObjectWithGuid(lowguid, go_data->id);
         }
-    }  
+    }
 
     if (!pGameObject)
     {
@@ -169,15 +167,8 @@ bool ChatHandler::HandleGameObjectInfoCommand(char* args)
         SetSentErrorMessage(true);
         return false;
     }
-    
-    PSendSysMessage("Entry: %u, GUID: %u\nName: %s\nType: %u, Display Id: %u\nGO State: %u, Loot State: %u",
-        pGameObject->GetEntry(),
-        pGameObject->GetGUIDLow(),
-        pGameObject->GetGOInfo()->name.c_str(),
-        pGameObject->GetGoType(),
-        pGameObject->GetDisplayId(),
-        pGameObject->GetGoState(),
-        pGameObject->getLootState());
+
+    PSendSysMessage("Entry: %u, GUID: %u\nName: %s\nType: %u, Display Id: %u\nGO State: %u, Loot State: %u", pGameObject->GetEntry(), pGameObject->GetGUIDLow(), pGameObject->GetGOInfo()->name.c_str(), pGameObject->GetGoType(), pGameObject->GetDisplayId(), pGameObject->GetGoState(), pGameObject->getLootState());
     if (pGameObject->GetUInt32Value(GAMEOBJECT_FLAGS))
         PSendSysMessage("Flags: %s", FlagsToString(pGameObject->GetUInt32Value(GAMEOBJECT_FLAGS), GameObjectFlagToString).c_str());
     if (pGameObject->GetUInt32Value(GAMEOBJECT_DYN_FLAGS))
@@ -389,7 +380,7 @@ bool ChatHandler::HandleGameObjectDeleteCommand(char* args)
         owner->RemoveGameObject(obj, false);
     }
 
-    obj->SetRespawnTime(0);                                 // not save respawn time
+    obj->SetRespawnTime(0); // not save respawn time
     obj->Delete();
     obj->DeleteFromDB();
 
@@ -478,7 +469,7 @@ bool ChatHandler::HandleGameObjectAddCommand(char* args)
     return true;
 }
 
-bool ChatHandler::HandleGameObjectTempAddCommand(char *args)
+bool ChatHandler::HandleGameObjectTempAddCommand(char* args)
 {
     uint32 id;
     if (!ExtractUint32KeyFromLink(&args, "Hgameobject_entry", id))
@@ -516,10 +507,9 @@ bool ChatHandler::HandleGameObjectNearCommand(char* args)
 
     Player* pl = m_session->GetPlayer();
     std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT guid, id, position_x, position_y, position_z, map, "
-                          "(POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) AS order_ "
-                          "FROM gameobject WHERE map='%u' AND (POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) <= '%f' ORDER BY order_",
-                          pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(),
-                          pl->GetMapId(), pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), distance * distance);
+                                                               "(POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) AS order_ "
+                                                               "FROM gameobject WHERE map='%u' AND (POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) <= '%f' ORDER BY order_",
+                                                               pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), pl->GetMapId(), pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), distance * distance);
 
     if (result)
     {
@@ -551,22 +541,23 @@ bool ChatHandler::HandleGameObjectNearCommand(char* args)
 
 class NearestGameObjectInObjectRangeCheck
 {
-    public:
-        NearestGameObjectInObjectRangeCheck(WorldObject const& obj, float range) : i_obj(obj), i_range(range) {}
-        WorldObject const& GetFocusObject() const { return i_obj; }
-        bool operator()(GameObject* go)
+public:
+    NearestGameObjectInObjectRangeCheck(WorldObject const& obj, float range) : i_obj(obj), i_range(range) {}
+    WorldObject const& GetFocusObject() const { return i_obj; }
+    bool operator()(GameObject* go)
+    {
+        if (i_obj.IsWithinDistInMap(go, i_range))
         {
-            if (i_obj.IsWithinDistInMap(go, i_range))
-            {
-                i_range = i_obj.GetDistance(go);        // use found GO range as new range limit for next check
-                return true;
-            }
-            return false;
+            i_range = i_obj.GetDistance(go); // use found GO range as new range limit for next check
+            return true;
         }
-        float GetLastRange() const { return i_range; }
-    private:
-        WorldObject const& i_obj;
-        float  i_range;
+        return false;
+    }
+    float GetLastRange() const { return i_range; }
+
+private:
+    WorldObject const& i_obj;
+    float i_range;
 };
 
 
@@ -646,7 +637,7 @@ bool ChatHandler::HandleGameObjectToggleCommand(char* args)
     {
         // lowguid arg found, search DB for GO
         if (GameObjectData const* go_data = sObjectMgr.GetGOData(lowguid))
-            obj = GetGameObjectWithGuid(lowguid,go_data->id);
+            obj = GetGameObjectWithGuid(lowguid, go_data->id);
 
         if (!obj)
         {

@@ -19,13 +19,13 @@
 #ifndef THREADPOOL_H
 #define THREADPOOL_H
 
-#include <vector>
-#include <thread>
-#include <shared_mutex>
+#include <atomic>
 #include <condition_variable>
 #include <functional>
-#include <atomic>
 #include <future>
+#include <shared_mutex>
+#include <thread>
+#include <vector>
 
 #ifdef WIN32
 #undef ERROR
@@ -39,6 +39,7 @@ private:
     struct worker_mq;
     template <class T = worker_sq>
     struct worker_mysql;
+
 public:
     using SingleQueue = worker_sq;
     using MultiQueue = worker_mq;
@@ -49,7 +50,8 @@ public:
 
     using workload_t = std::vector<Callable>;
 
-    enum class Status {
+    enum class Status
+    {
         ERROR = -1,
         STOPPED,
         STARTING,
@@ -58,7 +60,8 @@ public:
         TERMINATING
     };
 
-    enum class ClearMode {
+    enum class ClearMode
+    {
         NEVER,
         UPPON_COMPLETION,
         AT_NEXT_WORKLOAD
@@ -71,7 +74,8 @@ public:
      *  LOG:        skip the current task, logs the error
      *  TERMINATE:  skip all remaning tasks
      */
-    enum class ErrorHandling {
+    enum class ErrorHandling
+    {
         NONE,
         IGNORE,
         LOG,
@@ -90,7 +94,7 @@ public:
     /**
      * @brief start creates and start the treads.
      */
-    template<class WORKER_T = SingleQueue>
+    template <class WORKER_T = SingleQueue>
     void start()
     {
         if (m_status != Status::STOPPED || !m_size)
@@ -111,8 +115,8 @@ public:
      * @param workload
      * @param safe if true, it will wait for previous workload to be done
      */
-    std::future<void> processWorkload(workload_t &workload, Callable pre = Callable(), Callable post = Callable());
-    std::future<void> processWorkload(workload_t &&workload,Callable pre = Callable(), Callable post = Callable());
+    std::future<void> processWorkload(workload_t& workload, Callable pre = Callable(), Callable post = Callable());
+    std::future<void> processWorkload(workload_t&& workload, Callable pre = Callable(), Callable post = Callable());
 
     /**
      * @brief status
@@ -148,8 +152,9 @@ public:
     void clearWorkload();
 
 private:
-    struct worker {
-        explicit worker(ThreadPool *pool, int id, ErrorHandling mode);
+    struct worker
+    {
+        explicit worker(ThreadPool* pool, int id, ErrorHandling mode);
         virtual ~worker();
 
         void loop_wrapper();
@@ -161,20 +166,21 @@ private:
         int id;
         ErrorHandling errorHandling;
         volatile bool busy = false;
-        ThreadPool *pool;
+        ThreadPool* pool;
         std::thread thread;
         Callable pre, post;
-
     };
 
-    struct worker_sq : public worker{
-        worker_sq(ThreadPool *pool, int id, ErrorHandling mode);
+    struct worker_sq : public worker
+    {
+        worker_sq(ThreadPool* pool, int id, ErrorHandling mode);
 
         void doWork() override;
     };
 
-    struct worker_mq : public worker{
-        worker_mq(ThreadPool *pool, int id, ErrorHandling mode);
+    struct worker_mq : public worker
+    {
+        worker_mq(ThreadPool* pool, int id, ErrorHandling mode);
 
         void doWork() override;
         void prepare(Callable pre, Callable post) override;
@@ -185,7 +191,7 @@ private:
     template <class T>
     struct worker_mysql : public T
     {
-        worker_mysql(ThreadPool *tp, int id, ErrorHandling e);
+        worker_mysql(ThreadPool* tp, int id, ErrorHandling e);
 
         void doWork() override;
     };
@@ -208,8 +214,8 @@ private:
     workers_t m_workers;
 };
 
-template<typename T>
-std::unique_ptr<ThreadPool> & operator<<(std::unique_ptr<ThreadPool> & tp, T &&f)
+template <typename T>
+std::unique_ptr<ThreadPool>& operator<<(std::unique_ptr<ThreadPool>& tp, T&& f)
 {
     (*tp) << std::forward<T>(f);
     return tp;

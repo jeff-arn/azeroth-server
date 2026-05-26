@@ -45,25 +45,25 @@ enum LogLevel
 // bitmask (not forgot update logFilterData content)
 enum LogFilters
 {
-    LOG_FILTER_TRANSPORT_MOVES    = 0x0001,                 // any related to transport moves
-    LOG_FILTER_CREATURE_MOVES     = 0x0002,                 // creature move by cells
-    LOG_FILTER_VISIBILITY_CHANGES = 0x0004,                 // update visibility for diff objects and players
+    LOG_FILTER_TRANSPORT_MOVES = 0x0001, // any related to transport moves
+    LOG_FILTER_CREATURE_MOVES = 0x0002, // creature move by cells
+    LOG_FILTER_VISIBILITY_CHANGES = 0x0004, // update visibility for diff objects and players
     // reserved for future version
-    LOG_FILTER_WEATHER            = 0x0010,                 // weather changes
-    LOG_FILTER_PLAYER_STATS       = 0x0020,                 // player save data
-    LOG_FILTER_SQL_TEXT           = 0x0040,                 // raw SQL text send to DB engine
-    LOG_FILTER_PLAYER_MOVES       = 0x0080,                 // player moves by grid/cell
-    LOG_FILTER_PERIODIC_AFFECTS   = 0x0100,                 // DoT/HoT apply trace
-    LOG_FILTER_AI_AND_MOVEGENSS   = 0x0200,                 // AI/movement generators debug output
-    LOG_FILTER_DAMAGE             = 0x0400,                 // Direct/Area damage trace
-    LOG_FILTER_COMBAT             = 0x0800,                 // attack states/roll attack results/etc
-    LOG_FILTER_SPELL_CAST         = 0x1000,                 // spell cast/aura apply/spell proc events
-    LOG_FILTER_DB_STRICTED_CHECK  = 0x2000,                 // stricted DB data checks output (with possible false reports) for DB devs
-    LOG_FILTER_PATHFINDING        = 0x4000,
-    LOG_FILTER_HONOR              = 0x8000,                 // Honor
+    LOG_FILTER_WEATHER = 0x0010, // weather changes
+    LOG_FILTER_PLAYER_STATS = 0x0020, // player save data
+    LOG_FILTER_SQL_TEXT = 0x0040, // raw SQL text send to DB engine
+    LOG_FILTER_PLAYER_MOVES = 0x0080, // player moves by grid/cell
+    LOG_FILTER_PERIODIC_AFFECTS = 0x0100, // DoT/HoT apply trace
+    LOG_FILTER_AI_AND_MOVEGENSS = 0x0200, // AI/movement generators debug output
+    LOG_FILTER_DAMAGE = 0x0400, // Direct/Area damage trace
+    LOG_FILTER_COMBAT = 0x0800, // attack states/roll attack results/etc
+    LOG_FILTER_SPELL_CAST = 0x1000, // spell cast/aura apply/spell proc events
+    LOG_FILTER_DB_STRICTED_CHECK = 0x2000, // stricted DB data checks output (with possible false reports) for DB devs
+    LOG_FILTER_PATHFINDING = 0x4000,
+    LOG_FILTER_HONOR = 0x8000, // Honor
 };
 
-#define LOG_FILTER_COUNT            16
+#define LOG_FILTER_COUNT 16
 
 struct LogFilterData
 {
@@ -73,28 +73,11 @@ struct LogFilterData
 };
 
 // TODO: Get rid of these, in favor of additional log types
-constexpr LogFilterData logFilterData[] =
-{
-    { "transport_moves",     "LogFilter_TransportMoves",     true  },
-    { "creature_moves",      "LogFilter_CreatureMoves",      true  },
-    { "visibility_changes",  "LogFilter_VisibilityChanges",  true  },
-    { "",                    "",                             true  },
-    { "weather",             "LogFilter_Weather",            true  },
-    { "player_stats",        "LogFilter_PlayerStats",        false },
-    { "sql_text",            "LogFilter_SQLText",            false },
-    { "player_moves",        "LogFilter_PlayerMoves",        false },
-    { "periodic_effects",    "LogFilter_PeriodicAffects",    false },
-    { "ai_and_movegens",     "LogFilter_AIAndMovegens",      false },
-    { "damage",              "LogFilter_Damage",             false },
-    { "combat",              "LogFilter_Combat",             false },
-    { "spell_cast",          "LogFilter_SpellCast",          false },
-    { "db_stricted_check",   "LogFilter_DbStrictedCheck",    true  },
-    { "pathfinding",         "LogFilter_Pathfinding",        false },
-    { "honor",               "LogFilter_Honor",              true  },
+constexpr LogFilterData logFilterData[] = {
+    {"transport_moves", "LogFilter_TransportMoves", true}, {"creature_moves", "LogFilter_CreatureMoves", true}, {"visibility_changes", "LogFilter_VisibilityChanges", true}, {"", "", true}, {"weather", "LogFilter_Weather", true}, {"player_stats", "LogFilter_PlayerStats", false}, {"sql_text", "LogFilter_SQLText", false}, {"player_moves", "LogFilter_PlayerMoves", false}, {"periodic_effects", "LogFilter_PeriodicAffects", false}, {"ai_and_movegens", "LogFilter_AIAndMovegens", false}, {"damage", "LogFilter_Damage", false}, {"combat", "LogFilter_Combat", false}, {"spell_cast", "LogFilter_SpellCast", false}, {"db_stricted_check", "LogFilter_DbStrictedCheck", true}, {"pathfinding", "LogFilter_Pathfinding", false}, {"honor", "LogFilter_Honor", true},
 };
 
-static_assert(sizeof(logFilterData) / sizeof(logFilterData[0]) == LOG_FILTER_COUNT,
-    "logFilterData size must match LOG_FILTER_COUNT");
+static_assert(sizeof(logFilterData) / sizeof(logFilterData[0]) == LOG_FILTER_COUNT, "logFilterData size must match LOG_FILTER_COUNT");
 
 enum Color
 {
@@ -118,11 +101,11 @@ enum Color
 };
 
 constexpr Color g_logColors[] = {
-    RED,    // error
-    RESET,  // minimal
-    RESET,  // basic
+    RED, // error
+    RESET, // minimal
+    RESET, // basic
     YELLOW, // detail
-    BLUE    // debug
+    BLUE // debug
 };
 
 enum LogType
@@ -148,7 +131,7 @@ enum LogType
     LOG_TYPE_MAX
 };
 
-class Log : public MaNGOS::Singleton<Log, MaNGOS::ClassLevelLockable<Log, std::mutex> >
+class Log : public MaNGOS::Singleton<Log, MaNGOS::ClassLevelLockable<Log, std::mutex>>
 {
     friend class MaNGOS::OperatorNew<Log>;
     Log();
@@ -164,86 +147,96 @@ class Log : public MaNGOS::Singleton<Log, MaNGOS::ClassLevelLockable<Log, std::m
             }
         }
     }
-    public:
-        void OpenWorldLogFiles();
-        void InitSmartlogEntries(std::string const& str);
-        void InitSmartlogGuids(std::string const& str);
 
-        // for general server messages
-        void Out(LogType logType, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(4,5);
+public:
+    void OpenWorldLogFiles();
+    void InitSmartlogEntries(std::string const& str);
+    void InitSmartlogGuids(std::string const& str);
 
-        // for player-specific messages
-        void Player(WorldSession const* session, LogType logType, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(5, 6);
-        void Player(WorldSession const* session, LogType logType, char const* subTytpe, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(6, 7);
-        void OutWarden(Warden const* warden, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(4, 5);
-        void Player(uint32 accountId, LogType logType, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(5, 6);
-        void Player(uint32 accountId, LogType logType, char const* subTytpe, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(6, 7);
+    // for general server messages
+    void Out(LogType logType, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(4, 5);
 
-        bool IsSmartLog(uint32 entry, uint32 guid) const;
+    // for player-specific messages
+    void Player(WorldSession const* session, LogType logType, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(5, 6);
+    void Player(WorldSession const* session, LogType logType, char const* subTytpe, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(6, 7);
+    void OutWarden(Warden const* warden, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(4, 5);
+    void Player(uint32 accountId, LogType logType, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(5, 6);
+    void Player(uint32 accountId, LogType logType, char const* subTytpe, LogLevel logLevel, char const* format, ...) ATTR_PRINTF(6, 7);
 
-        uint32 GetConsoleLevel() const { return m_consoleLevel; }
-        uint32 GetFileLevel() const { return m_fileLevel; }
-        uint32 GetDbLevel() const { return m_dbLevel; }
-        void SetConsoleLevel(LogLevel level);
-        void SetFileLevel(LogLevel level);
+    bool IsSmartLog(uint32 entry, uint32 guid) const;
 
-        static std::string GetTimestampStr();
-        bool HasLogFilter(uint32 filter) const { return m_logFilter & filter; }
-        void SetLogFilter(LogFilters filter, bool on) { if (on) m_logFilter |= filter; else m_logFilter &= ~filter; }
-        bool HasLogLevelOrHigher(LogLevel loglvl) const { return m_consoleLevel >= loglvl || (m_fileLevel >= loglvl && logFiles[LOG_BASIC]); }
-        bool IsIncludeTime() const { return m_includeTime; }
+    uint32 GetConsoleLevel() const { return m_consoleLevel; }
+    uint32 GetFileLevel() const { return m_fileLevel; }
+    uint32 GetDbLevel() const { return m_dbLevel; }
+    void SetConsoleLevel(LogLevel level);
+    void SetFileLevel(LogLevel level);
 
-        static void WaitBeforeContinueIfNeed();
+    static std::string GetTimestampStr();
+    bool HasLogFilter(uint32 filter) const { return m_logFilter & filter; }
+    void SetLogFilter(LogFilters filter, bool on)
+    {
+        if (on)
+            m_logFilter |= filter;
+        else
+            m_logFilter &= ~filter;
+    }
+    bool HasLogLevelOrHigher(LogLevel loglvl) const { return m_consoleLevel >= loglvl || (m_fileLevel >= loglvl && logFiles[LOG_BASIC]); }
+    bool IsIncludeTime() const { return m_includeTime; }
+
+    static void WaitBeforeContinueIfNeed();
 
 
-    private:
-        void OutConsole(LogType logType, LogLevel logLevel, std::string const& str) const;
-        void OutFile(LogType logType, LogLevel logLevel, std::string const& str) const;
-        void PlayerLogHeaderToConsole(uint32 accountId, WorldSession const* session, LogType logType, char const* subType);
-        void PlayerLogHeaderToFile(uint32 accountId, WorldSession const* session, LogType logType, char const* subType);
+private:
+    void OutConsole(LogType logType, LogLevel logLevel, std::string const& str) const;
+    void OutFile(LogType logType, LogLevel logLevel, std::string const& str) const;
+    void PlayerLogHeaderToConsole(uint32 accountId, WorldSession const* session, LogType logType, char const* subType);
+    void PlayerLogHeaderToFile(uint32 accountId, WorldSession const* session, LogType logType, char const* subType);
 
-        void SetColor(FILE* where, Color color) const;
-        void ResetColor(FILE* where) const;
+    void SetColor(FILE* where, Color color) const;
+    void ResetColor(FILE* where) const;
 
-        static void OutTime(FILE* where);
-        static void OutTimestamp(FILE* file);
+    static void OutTime(FILE* where);
+    static void OutTimestamp(FILE* file);
 
-        FILE* OpenLogFile(char const* configFileName, char const* defaultFileName, bool timestampFile, bool overwriteOnOpen) const;
-        FILE* logFiles[LOG_TYPE_MAX];
+    FILE* OpenLogFile(char const* configFileName, char const* defaultFileName, bool timestampFile, bool overwriteOnOpen) const;
+    FILE* logFiles[LOG_TYPE_MAX];
 
-        // log/console control
-        LogLevel m_consoleLevel;
-        LogLevel m_fileLevel;
-        LogLevel m_dbLevel;
-        uint16 const m_defaultColor;
+    // log/console control
+    LogLevel m_consoleLevel;
+    LogLevel m_fileLevel;
+    LogLevel m_dbLevel;
+    uint16 const m_defaultColor;
 
-        // include timestamp in console output
-        bool m_wardenDebug;
-        bool m_includeTime;
-        uint32 m_logFilter;
+    // include timestamp in console output
+    bool m_wardenDebug;
+    bool m_includeTime;
+    uint32 m_logFilter;
 
-        // cache values for after initilization use (like gm log per account case)
-        std::string m_logsDir;
-        std::string const m_logsTimestamp;
+    // cache values for after initilization use (like gm log per account case)
+    std::string m_logsDir;
+    std::string const m_logsTimestamp;
 
-        // smart log for logging events (e.g. deaths) of certain entities
-        std::unordered_set<uint32> m_smartlogExtraEntries;
-        std::unordered_set<uint32> m_smartlogExtraGuids;
-
+    // smart log for logging events (e.g. deaths) of certain entities
+    std::unordered_set<uint32> m_smartlogExtraEntries;
+    std::unordered_set<uint32> m_smartlogExtraGuids;
 };
 
 #define sLog MaNGOS::Singleton<Log>::Instance()
 
-#define DETAIL_FILTER_LOG(F,...)                        \
-    do {                                                \
-        if (sLog.HasLogLevelOrHigher(LOG_LVL_DETAIL) && !sLog.HasLogFilter(F)) \
-            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, __VA_ARGS__);                \
-    } while(0)
+#define DETAIL_FILTER_LOG(F, ...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     \
+    do                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+        if (sLog.HasLogLevelOrHigher(LOG_LVL_DETAIL) && !sLog.HasLogFilter(F))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, __VA_ARGS__);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+    }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+    while (0)
 
-#define DEBUG_FILTER_LOG(F,...)                         \
-    do {                                                \
-        if (sLog.HasLogLevelOrHigher(LOG_LVL_DEBUG) && !sLog.HasLogFilter(F)) \
-            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, __VA_ARGS__);                  \
-    } while(0)
+#define DEBUG_FILTER_LOG(F, ...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+    do                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+        if (sLog.HasLogLevelOrHigher(LOG_LVL_DEBUG) && !sLog.HasLogFilter(F))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, __VA_ARGS__);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          \
+    }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+    while (0)
 
 #endif

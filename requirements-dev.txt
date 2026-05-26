@@ -1,0 +1,6 @@
+pytest>=7.0
+pytest-asyncio>=0.21
+flask>=2.0
+werkzeug>=2.0
+mysql-connector-python
+discord.py>=2.0

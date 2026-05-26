@@ -45,17 +45,17 @@ public:
 
     MirrorTimer(Type type) : m_type(type), m_scale(-1), m_spellId(0), m_status(UNCHANGED), m_active(false), m_frozen(false) {}
 
-    bool     IsActive() const { return m_active; }
-    bool     IsRegenerating() const { return (m_scale > 0); }
-    bool     IsFrozen() const { return (m_frozen && !IsRegenerating()); }
+    bool IsActive() const { return m_active; }
+    bool IsRegenerating() const { return (m_scale > 0); }
+    bool IsFrozen() const { return (m_frozen && !IsRegenerating()); }
 
-    Type     GetType() const { return m_type; }
-    uint32   GetRemaining() const { return (m_tracker.GetInterval() - m_tracker.GetCurrent()); }
-    uint32   GetDuration() const { return m_tracker.GetInterval(); }
-    int32    GetScale() const { return m_scale; }
-    uint32   GetSpellId() const { return m_spellId; }
+    Type GetType() const { return m_type; }
+    uint32 GetRemaining() const { return (m_tracker.GetInterval() - m_tracker.GetCurrent()); }
+    uint32 GetDuration() const { return m_tracker.GetInterval(); }
+    int32 GetScale() const { return m_scale; }
+    uint32 GetSpellId() const { return m_spellId; }
 
-    Status   FetchStatus();
+    Status FetchStatus();
 
     void Stop();
 

@@ -22,9 +22,9 @@
 #ifndef MANGOS_GRIDDEFINES_H
 #define MANGOS_GRIDDEFINES_H
 
+#include <cmath>
 #include "Common.h"
 #include "GameSystem/NGrid.h"
-#include <cmath>
 
 // Forward class definitions
 class Corpse;
@@ -35,52 +35,52 @@ class Pet;
 class Player;
 class Camera;
 
-#define MAX_NUMBER_OF_GRIDS      64
+#define MAX_NUMBER_OF_GRIDS 64
 
-#define SIZE_OF_GRIDS            533.33333f
-#define CENTER_GRID_ID           (MAX_NUMBER_OF_GRIDS/2)
+#define SIZE_OF_GRIDS 533.33333f
+#define CENTER_GRID_ID (MAX_NUMBER_OF_GRIDS / 2)
 
-#define CENTER_GRID_OFFSET      (SIZE_OF_GRIDS/2)
+#define CENTER_GRID_OFFSET (SIZE_OF_GRIDS / 2)
 
-#define MIN_GRID_DELAY          (MINUTE*IN_MILLISECONDS)
-#define MIN_MAP_UPDATE_DELAY    50
+#define MIN_GRID_DELAY (MINUTE * IN_MILLISECONDS)
+#define MIN_MAP_UPDATE_DELAY 50
 
-#define MAX_NUMBER_OF_CELLS     16
-#define SIZE_OF_GRID_CELL       (SIZE_OF_GRIDS/MAX_NUMBER_OF_CELLS)
+#define MAX_NUMBER_OF_CELLS 16
+#define SIZE_OF_GRID_CELL (SIZE_OF_GRIDS / MAX_NUMBER_OF_CELLS)
 
-#define CENTER_GRID_CELL_ID     (MAX_NUMBER_OF_CELLS*MAX_NUMBER_OF_GRIDS/2)
-#define CENTER_GRID_CELL_OFFSET (SIZE_OF_GRID_CELL/2)
+#define CENTER_GRID_CELL_ID (MAX_NUMBER_OF_CELLS * MAX_NUMBER_OF_GRIDS / 2)
+#define CENTER_GRID_CELL_OFFSET (SIZE_OF_GRID_CELL / 2)
 
-#define TOTAL_NUMBER_OF_CELLS_PER_MAP    (MAX_NUMBER_OF_GRIDS*MAX_NUMBER_OF_CELLS)
+#define TOTAL_NUMBER_OF_CELLS_PER_MAP (MAX_NUMBER_OF_GRIDS * MAX_NUMBER_OF_CELLS)
 
 #define MAP_RESOLUTION 128
 
-#define MAP_SIZE                (SIZE_OF_GRIDS*MAX_NUMBER_OF_GRIDS)
-#define MAP_HALFSIZE            (MAP_SIZE/2)
+#define MAP_SIZE (SIZE_OF_GRIDS * MAX_NUMBER_OF_GRIDS)
+#define MAP_HALFSIZE (MAP_SIZE / 2)
 
 // Creature used instead pet to simplify *::Visit templates (not required duplicate code for Creature->Pet case)
 // Cameras in world list just because linked with Player objects
-typedef TYPELIST_4(Player, Creature/*pets*/, Corpse/*resurrectable*/, Camera)           AllWorldObjectTypes;
-typedef TYPELIST_4(GameObject, Creature/*except pets*/, DynamicObject, Corpse/*Bones*/) AllGridObjectTypes;
-typedef TYPELIST_4(Creature, Pet, GameObject, DynamicObject)                            AllMapStoredObjectTypes;
+typedef TYPELIST_4(Player, Creature /*pets*/, Corpse /*resurrectable*/, Camera) AllWorldObjectTypes;
+typedef TYPELIST_4(GameObject, Creature /*except pets*/, DynamicObject, Corpse /*Bones*/) AllGridObjectTypes;
+typedef TYPELIST_4(Creature, Pet, GameObject, DynamicObject) AllMapStoredObjectTypes;
 
-typedef GridRefManager<Camera>          CameraMapType;
-typedef GridRefManager<Corpse>          CorpseMapType;
-typedef GridRefManager<Creature>        CreatureMapType;
-typedef GridRefManager<DynamicObject>   DynamicObjectMapType;
-typedef GridRefManager<GameObject>      GameObjectMapType;
-typedef GridRefManager<Player>          PlayerMapType;
+typedef GridRefManager<Camera> CameraMapType;
+typedef GridRefManager<Corpse> CorpseMapType;
+typedef GridRefManager<Creature> CreatureMapType;
+typedef GridRefManager<DynamicObject> DynamicObjectMapType;
+typedef GridRefManager<GameObject> GameObjectMapType;
+typedef GridRefManager<Player> PlayerMapType;
 
-typedef Grid<Player, AllWorldObjectTypes,AllGridObjectTypes> GridType;
+typedef Grid<Player, AllWorldObjectTypes, AllGridObjectTypes> GridType;
 typedef NGrid<MAX_NUMBER_OF_CELLS, Player, AllWorldObjectTypes, AllGridObjectTypes> NGridType;
 
 typedef TypeMapContainer<AllGridObjectTypes> GridTypeMapContainer;
 typedef TypeMapContainer<AllWorldObjectTypes> WorldTypeMapContainer;
 
-template<unsigned int const LIMIT>
+template <unsigned int const LIMIT>
 struct CoordPair
 {
-    CoordPair(int32 x=0, int32 y=0) : x_coord(x), y_coord(y)
+    CoordPair(int32 x = 0, int32 y = 0) : x_coord(x), y_coord(y)
     {
         // Nostalrius : crashfix
         if (x < 0)
@@ -112,7 +112,7 @@ struct CoordPair
 
     void operator>>(uint32 const val)
     {
-        if (x_coord+val < LIMIT)
+        if (x_coord + val < LIMIT)
             x_coord += val;
         else
             x_coord = LIMIT - 1;
@@ -128,7 +128,7 @@ struct CoordPair
 
     void operator+=(uint32 const val)
     {
-        if (y_coord+val < LIMIT)
+        if (y_coord + val < LIMIT)
             y_coord += val;
         else
             y_coord = LIMIT - 1;
@@ -136,8 +136,8 @@ struct CoordPair
 
     CoordPair& normalize()
     {
-        x_coord = std::min(x_coord, LIMIT-1);
-        y_coord = std::min(y_coord, LIMIT-1);
+        x_coord = std::min(x_coord, LIMIT - 1);
+        y_coord = std::min(y_coord, LIMIT - 1);
         return *this;
     }
 
@@ -150,57 +150,36 @@ typedef CoordPair<TOTAL_NUMBER_OF_CELLS_PER_MAP> CellPair;
 
 namespace MaNGOS
 {
-    template<class RET_TYPE, int CENTER_VAL>
-        inline RET_TYPE Compute(float x, float y, float center_offset, float size)
+    template <class RET_TYPE, int CENTER_VAL>
+    inline RET_TYPE Compute(float x, float y, float center_offset, float size)
     {
         // calculate and store temporary values in double format for having same result as same mySQL calculations
-        double x_offset = (double(x) - center_offset)/size;
-        double y_offset = (double(y) - center_offset)/size;
+        double x_offset = (double(x) - center_offset) / size;
+        double y_offset = (double(y) - center_offset) / size;
 
-        int x_val = int(x_offset+CENTER_VAL + 0.5);
-        int y_val = int(y_offset+CENTER_VAL + 0.5);
+        int x_val = int(x_offset + CENTER_VAL + 0.5);
+        int y_val = int(y_offset + CENTER_VAL + 0.5);
         return RET_TYPE(y_val, x_val);
     }
 
-    inline GridPair ComputeGridPair(float x, float y)
-    {
-        return Compute<GridPair, CENTER_GRID_ID>(x, y, CENTER_GRID_OFFSET, SIZE_OF_GRIDS);
-    }
+    inline GridPair ComputeGridPair(float x, float y) { return Compute<GridPair, CENTER_GRID_ID>(x, y, CENTER_GRID_OFFSET, SIZE_OF_GRIDS); }
 
-    inline CellPair ComputeCellPair(float x, float y)
-    {
-        return Compute<CellPair, CENTER_GRID_CELL_ID>(x, y, CENTER_GRID_CELL_OFFSET, SIZE_OF_GRID_CELL);
-    }
+    inline CellPair ComputeCellPair(float x, float y) { return Compute<CellPair, CENTER_GRID_CELL_ID>(x, y, CENTER_GRID_CELL_OFFSET, SIZE_OF_GRID_CELL); }
 
-    inline void NormalizeMapCoord(float &c)
+    inline void NormalizeMapCoord(float& c)
     {
         if (c > MAP_HALFSIZE - 0.5)
             c = MAP_HALFSIZE - 0.5;
         else if (c < -(MAP_HALFSIZE - 0.5))
             c = -(MAP_HALFSIZE - 0.5);
     }
-    inline bool IsValidZCoord(float z)
-    {
-        return std::fabs(z) <= 400000;
-    }
-    inline bool IsValidMapCoord(float c)
-    {
-        return std::isfinite(c) && (std::fabs(c) <= MAP_HALFSIZE - 0.5);
-    }
+    inline bool IsValidZCoord(float z) { return std::fabs(z) <= 400000; }
+    inline bool IsValidMapCoord(float c) { return std::isfinite(c) && (std::fabs(c) <= MAP_HALFSIZE - 0.5); }
 
-    inline bool IsValidMapCoord(float x, float y)
-    {
-        return IsValidMapCoord(x) && IsValidMapCoord(y);
-    }
+    inline bool IsValidMapCoord(float x, float y) { return IsValidMapCoord(x) && IsValidMapCoord(y); }
 
-    inline bool IsValidMapCoord(float x, float y, float z)
-    {
-        return IsValidMapCoord(x,y) && IsValidZCoord(z);
-    }
+    inline bool IsValidMapCoord(float x, float y, float z) { return IsValidMapCoord(x, y) && IsValidZCoord(z); }
 
-    inline bool IsValidMapCoord(float x, float y, float z, float o)
-    {
-        return IsValidMapCoord(x,y,z) && std::isfinite(o) && fabs(o) <= 4 * M_PI;
-    }
-}
+    inline bool IsValidMapCoord(float x, float y, float z, float o) { return IsValidMapCoord(x, y, z) && std::isfinite(o) && fabs(o) <= 4 * M_PI; }
+} // namespace MaNGOS
 #endif

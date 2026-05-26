@@ -19,10 +19,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "SpellMgr.h"
 #include "SpellModMgr.h"
 #include "Database/DatabaseEnv.h"
 #include "Policies/SingletonImp.h"
+#include "SpellMgr.h"
 
 #include "DBCStores.h"
 #include "Log.h"
@@ -33,37 +33,33 @@ INSTANTIATE_SINGLETON_1(SpellModMgr);
 
 #define ENABLE_INSERT_NEW_SPELLS
 
-SpellModMgr::SpellModMgr()
-{
-}
+SpellModMgr::SpellModMgr() {}
 
-SpellModMgr::~SpellModMgr()
-{
-}
+SpellModMgr::~SpellModMgr() {}
 
 /*
 SQL : cf sql/nostalrius/spell_mod.sql et sql/nostalrius/spell_effect_mod.sql
 */
 
-inline void ModUInt64ValueIfExplicit(Field &f, uint64& value)
+inline void ModUInt64ValueIfExplicit(Field& f, uint64& value)
 {
     if (f.GetInt64() >= 0)
         value = f.GetUInt64();
 }
 
-inline void ModUInt32ValueIfExplicit(Field &f, uint32& value)
+inline void ModUInt32ValueIfExplicit(Field& f, uint32& value)
 {
     if (f.GetInt32() >= 0)
         value = f.GetUInt32();
 }
 
-inline void ModInt32ValueIfExplicit(Field &f, int32& value)
+inline void ModInt32ValueIfExplicit(Field& f, int32& value)
 {
     if (f.GetInt32() != -1)
         value = f.GetInt32();
 }
 
-inline void ModFloatValueIfExplicit(Field &f, float &value)
+inline void ModFloatValueIfExplicit(Field& f, float& value)
 {
     if (f.GetFloat() != -1.0f)
         value = f.GetFloat();
@@ -75,14 +71,13 @@ void SpellModMgr::LoadSpellMods()
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading spell mods ...");
 
     // 1 : Table spell_mod
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query(
-                              "SELECT Id, procChance, procFlags, Custom, DurationIndex, "
-                              "Category, CastingTimeIndex, StackAmount, SpellIconID, activeIconID, manaCost, "
-                              "Attributes, AttributesEx, AttributesEx2, AttributesEx3, AttributesEx4, "
-                              "InterruptFlags, AuraInterruptFlags, ChannelInterruptFlags, Dispel, "
-                              "Stances, StancesNot, SpellVisual, ManaCostPercentage, StartRecoveryCategory, StartRecoveryTime, MaxTargetLevel, MaxAffectedTargets, DmgClass, "
-                              "rangeIndex, RecoveryTime, CategoryRecoveryTime, procCharges, SpellFamilyName, SpellFamilyFlags, Mechanic, EquippedItemClass "
-                              "FROM spell_mod"));
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Id, procChance, procFlags, Custom, DurationIndex, "
+                                                            "Category, CastingTimeIndex, StackAmount, SpellIconID, activeIconID, manaCost, "
+                                                            "Attributes, AttributesEx, AttributesEx2, AttributesEx3, AttributesEx4, "
+                                                            "InterruptFlags, AuraInterruptFlags, ChannelInterruptFlags, Dispel, "
+                                                            "Stances, StancesNot, SpellVisual, ManaCostPercentage, StartRecoveryCategory, StartRecoveryTime, MaxTargetLevel, MaxAffectedTargets, DmgClass, "
+                                                            "rangeIndex, RecoveryTime, CategoryRecoveryTime, procCharges, SpellFamilyName, SpellFamilyFlags, Mechanic, EquippedItemClass "
+                                                            "FROM spell_mod"));
     uint32 total_count = 0;
     if (!result)
     {
@@ -134,7 +129,7 @@ void SpellModMgr::LoadSpellMods()
 
             // 5         6                 7            8            9             10
             // Category, CastingTimeIndex, StackAmount, SpellIconID, activeIconID, manaCost
-            ModUInt32ValueIfExplicit(fields[5],  spell->Category);
+            ModUInt32ValueIfExplicit(fields[5], spell->Category);
             ModUInt32ValueIfExplicit(fields[6], spell->CastingTimeIndex);
             ModUInt32ValueIfExplicit(fields[7], spell->StackAmount);
             ModUInt32ValueIfExplicit(fields[8], spell->SpellIconID);
@@ -194,13 +189,11 @@ void SpellModMgr::LoadSpellMods()
 
     // 2 : Table spell_effect_mod
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading spell effect mods ...");
-    result = WorldDatabase.Query(
-                 "SELECT Id, EffectIndex, Effect, EffectApplyAuraName, EffectMechanic, EffectImplicitTargetA, EffectImplicitTargetB, "
-                 "EffectRadiusIndex, EffectItemType, EffectMiscValue, EffectTriggerSpell, "
-                 "EffectDieSides, EffectBaseDice, EffectBasePoints, EffectAmplitude, EffectChainTarget, " // Int
-                 "EffectDicePerLevel, EffectRealPointsPerLevel, EffectPointsPerComboPoint, EffectMultipleValue " // Float
-                 "FROM spell_effect_mod"
-                );
+    result = WorldDatabase.Query("SELECT Id, EffectIndex, Effect, EffectApplyAuraName, EffectMechanic, EffectImplicitTargetA, EffectImplicitTargetB, "
+                                 "EffectRadiusIndex, EffectItemType, EffectMiscValue, EffectTriggerSpell, "
+                                 "EffectDieSides, EffectBaseDice, EffectBasePoints, EffectAmplitude, EffectChainTarget, " // Int
+                                 "EffectDicePerLevel, EffectRealPointsPerLevel, EffectPointsPerComboPoint, EffectMultipleValue " // Float
+                                 "FROM spell_effect_mod");
     total_count = 0;
 
     if (!result)

@@ -24,7 +24,7 @@
 #define CONFIGENVIRONMENT_H
 
 #include "Common.h"
-#include "dotconfpp/dotconfpp.h"
 #include "Config.h"
+#include "dotconfpp/dotconfpp.h"
 
 #endif

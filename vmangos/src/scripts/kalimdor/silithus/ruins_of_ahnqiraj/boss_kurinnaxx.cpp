@@ -21,22 +21,22 @@ SDComment: Set in DB trap Despawn Time
 SDCategory: Ruins of Ahn'Qiraj
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "ruins_of_ahnqiraj.h"
+#include "scriptPCH.h"
 
 enum
 {
-    EMOTE_FRENZY            = 10645,
+    EMOTE_FRENZY = 10645,
 
-    GO_TRAP                 =   180647,
+    GO_TRAP = 180647,
 
-    SPELL_MORTALWOUND       =   25646,
-    SPELL_SUMMON_SANDTRAP   =   26524,
-    SPELL_ENRAGE            =   26527,
-    SPELL_WIDE_SLASH        =   25814,
-    SPELL_TRASH             =   3391,
+    SPELL_MORTALWOUND = 25646,
+    SPELL_SUMMON_SANDTRAP = 26524,
+    SPELL_ENRAGE = 26527,
+    SPELL_WIDE_SLASH = 25814,
+    SPELL_TRASH = 3391,
 
-    SAY_BREACHED            =   11720
+    SAY_BREACHED = 11720
 };
 
 struct boss_kurinnaxxAI : public ScriptedAI
@@ -84,7 +84,7 @@ struct boss_kurinnaxxAI : public ScriptedAI
         if (!m_pInstance)
             return;
 
-        DoOrSimulateScriptTextForMap(SAY_BREACHED, NPC_OSSIRIAN, m_creature->GetMap());  
+        DoOrSimulateScriptTextForMap(SAY_BREACHED, NPC_OSSIRIAN, m_creature->GetMap());
 
         m_pInstance->SetData(TYPE_KURINNAXX, DONE);
     }
@@ -162,10 +162,7 @@ struct boss_kurinnaxxAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_kurinnaxx(Creature* pCreature)
-{
-    return new boss_kurinnaxxAI(pCreature);
-}
+CreatureAI* GetAI_boss_kurinnaxx(Creature* pCreature) { return new boss_kurinnaxxAI(pCreature); }
 
 void AddSC_boss_kurinnaxx()
 {

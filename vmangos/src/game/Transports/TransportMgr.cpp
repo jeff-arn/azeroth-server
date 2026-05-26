@@ -16,16 +16,16 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Policies/SingletonImp.h"
 #include "TransportMgr.h"
-#include "Transport.h"
 #include "Geometry.h"
-#include "MoveMap.h"
-#include "SQLStorages.h"
-#include "MoveSplineInitArgs.h"
 #include "Map.h"
 #include "MapManager.h"
+#include "MoveMap.h"
+#include "MoveSplineInitArgs.h"
 #include "ObjectMgr.h"
+#include "Policies/SingletonImp.h"
+#include "SQLStorages.h"
+#include "Transport.h"
 
 INSTANTIATE_SINGLETON_1(TransportMgr);
 
@@ -80,15 +80,15 @@ void TransportMgr::LoadTransportTemplates()
             }
             else
                 sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Invalid gameobject %u in transport table.", entry);
-
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 }
 
 class SplineRawInitializer
 {
 public:
-    SplineRawInitializer(Movement::PointsArray& points) : _points(points) { }
+    SplineRawInitializer(Movement::PointsArray& points) : _points(points) {}
 
     void operator()(uint8& mode, bool& cyclic, Movement::PointsArray& points, int& lo, int& hi) const
     {

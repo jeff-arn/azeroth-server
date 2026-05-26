@@ -21,16 +21,13 @@ SDComment: Add in DB and save/load for spawning andorov
 SDCategory: Ruins of Ahn'Qiraj
 EndScriptData */
 
-#include "scriptPCH.h"
-#include "Group.h"
-#include "CreatureGroups.h"
-#include "ruins_of_ahnqiraj.h"
 #include <random>
+#include "CreatureGroups.h"
+#include "Group.h"
+#include "ruins_of_ahnqiraj.h"
+#include "scriptPCH.h"
 
-instance_ruins_of_ahnqiraj::instance_ruins_of_ahnqiraj(Map* pMap) : ScriptedInstance(pMap)
-{
-    Initialize();
-};
+instance_ruins_of_ahnqiraj::instance_ruins_of_ahnqiraj(Map* pMap) : ScriptedInstance(pMap) { Initialize(); };
 
 void instance_ruins_of_ahnqiraj::Initialize()
 {
@@ -77,95 +74,92 @@ uint64 instance_ruins_of_ahnqiraj::GetData64(uint32 uiData)
 
     switch (uiData)
     {
-        case DATA_OSSIRIAN:
-            return m_uiOssirianGUID;
-        case DATA_BURU:
-            return m_uiBuruGUID;
-        case DATA_AYAMISS:
-            return m_uiAyamissGUID;
-        case DATA_MOAM:
-            return m_uiMoamGUID;
-        case DATA_ANDOROV:
-            return m_uiAndorovGUID;
-        case DATA_KURINNAXX:
-            return m_uiKurinnaxxGUID;
-        case DATA_QEEZ:
-            return m_uiQeezGUID;
-        case DATA_TUUBID:
-            return m_uiTuubidGUID;
-        case DATA_DRENN:
-            return m_uiDrennGUID;
-        case DATA_XURREM:
-            return m_uiXurremGUID;
-        case DATA_YEGGETH:
-            return m_uiYeggethGUID;
-        case DATA_PAKKON:
-            return m_uiPakkonGUID;
-        case DATA_ZERRAN:
-            return m_uiZerranGUID;
-        case DATA_RAJAXX:
-            return m_uiRajaxxGUID;
+    case DATA_OSSIRIAN:
+        return m_uiOssirianGUID;
+    case DATA_BURU:
+        return m_uiBuruGUID;
+    case DATA_AYAMISS:
+        return m_uiAyamissGUID;
+    case DATA_MOAM:
+        return m_uiMoamGUID;
+    case DATA_ANDOROV:
+        return m_uiAndorovGUID;
+    case DATA_KURINNAXX:
+        return m_uiKurinnaxxGUID;
+    case DATA_QEEZ:
+        return m_uiQeezGUID;
+    case DATA_TUUBID:
+        return m_uiTuubidGUID;
+    case DATA_DRENN:
+        return m_uiDrennGUID;
+    case DATA_XURREM:
+        return m_uiXurremGUID;
+    case DATA_YEGGETH:
+        return m_uiYeggethGUID;
+    case DATA_PAKKON:
+        return m_uiPakkonGUID;
+    case DATA_ZERRAN:
+        return m_uiZerranGUID;
+    case DATA_RAJAXX:
+        return m_uiRajaxxGUID;
 
-        case DATA_YEGGETH_SHIELD:
-            m_uiGUIDvalue = 0;
-            m_uiYeggethSizeList = m_lYeggethShieldList.size();
-            m_uiRandomYeggethList = urand(0, m_uiYeggethSizeList);
-            m_uiIterator = 0;
+    case DATA_YEGGETH_SHIELD:
+        m_uiGUIDvalue = 0;
+        m_uiYeggethSizeList = m_lYeggethShieldList.size();
+        m_uiRandomYeggethList = urand(0, m_uiYeggethSizeList);
+        m_uiIterator = 0;
 
-            for (std::list<uint64>::const_iterator itr = m_lYeggethShieldList.begin();
-                    itr != m_lYeggethShieldList.end() || m_uiIterator != m_uiRandomYeggethList; itr++)
-            {
-                m_uiGUIDvalue = instance->GetCreature(*itr)->GetObjectGuid();
-                m_uiIterator++;
-            }
-            return m_uiGUIDvalue;
+        for (std::list<uint64>::const_iterator itr = m_lYeggethShieldList.begin(); itr != m_lYeggethShieldList.end() || m_uiIterator != m_uiRandomYeggethList; itr++)
+        {
+            m_uiGUIDvalue = instance->GetCreature(*itr)->GetObjectGuid();
+            m_uiIterator++;
+        }
+        return m_uiGUIDvalue;
 
-        default:
-            return 0;
+    default:
+        return 0;
     }
 }
 
-void instance_ruins_of_ahnqiraj::OnCreatureEnterCombat(Creature * pCreature)
+void instance_ruins_of_ahnqiraj::OnCreatureEnterCombat(Creature* pCreature)
 {
     switch (pCreature->GetEntry())
     {
-        case NPC_CAPTAIN_QEEZ:
-        case NPC_CAPTAIN_TUUBID:
-        case NPC_CAPTAIN_DRENN:
-        case NPC_CAPTAIN_XURREM:
-        case NPC_MAJOR_YEGGETH:
-        case NPC_MAJOR_PAKKON:
-        case NPC_COLONEL_ZERRAN:
-        case NPC_SWARMGUARD_NEEDLER:
-        case NPC_QIRAJI_WARRIOR:
-            /** Create Yeggeth list for Rajaxx Shield ability */
-            if (CreatureGroup* g = pCreature->GetCreatureGroup())
-                if (g->GetOriginalLeaderGuid().GetEntry() == NPC_MAJOR_YEGGETH)
-                    m_lYeggethShieldList.push_back(pCreature->GetGUID());
+    case NPC_CAPTAIN_QEEZ:
+    case NPC_CAPTAIN_TUUBID:
+    case NPC_CAPTAIN_DRENN:
+    case NPC_CAPTAIN_XURREM:
+    case NPC_MAJOR_YEGGETH:
+    case NPC_MAJOR_PAKKON:
+    case NPC_COLONEL_ZERRAN:
+    case NPC_SWARMGUARD_NEEDLER:
+    case NPC_QIRAJI_WARRIOR:
+        /** Create Yeggeth list for Rajaxx Shield ability */
+        if (CreatureGroup* g = pCreature->GetCreatureGroup())
+            if (g->GetOriginalLeaderGuid().GetEntry() == NPC_MAJOR_YEGGETH)
+                m_lYeggethShieldList.push_back(pCreature->GetGUID());
 
-            // Fight Change in 1.10.1
-            // https://wowpedia.fandom.com/wiki/General_Rajaxx?oldid=180046
-            // "Second, the strategy to NOT talk to the NPCs before you start the fight,"
-            // "and just call them at the end to help with Rajaxx himself no longer works,"
-            // "as soon as you pull the liutenant runs in with his group and starts to fight,"
-            // "and actually blizzard even goofed that, if u pull before talking to the NPCs,"
-            // "the NPCs run right past the first wave and wait at the door for them."
-            if (m_auiEncounter[TYPE_RAJAXX] != DONE &&
-               (m_auiEncounter[TYPE_GENERAL_ANDOROV] == NOT_STARTED || m_auiEncounter[TYPE_GENERAL_ANDOROV] == FAIL) &&
-                sWorld.GetWowPatch() >= WOW_PATCH_110)
+        // Fight Change in 1.10.1
+        // https://wowpedia.fandom.com/wiki/General_Rajaxx?oldid=180046
+        // "Second, the strategy to NOT talk to the NPCs before you start the fight,"
+        // "and just call them at the end to help with Rajaxx himself no longer works,"
+        // "as soon as you pull the liutenant runs in with his group and starts to fight,"
+        // "and actually blizzard even goofed that, if u pull before talking to the NPCs,"
+        // "the NPCs run right past the first wave and wait at the door for them."
+        if (m_auiEncounter[TYPE_RAJAXX] != DONE && (m_auiEncounter[TYPE_GENERAL_ANDOROV] == NOT_STARTED || m_auiEncounter[TYPE_GENERAL_ANDOROV] == FAIL) && sWorld.GetWowPatch() >= WOW_PATCH_110)
+        {
+            if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
             {
-                if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
-                {
-                    if (!pAndorov->IsAlive())
-                        pAndorov->Respawn();
-                    GetMap()->ScriptsStart(sGenericScripts, ANDOROV_START_SCRIPT, pAndorov->GetObjectGuid(), pAndorov->GetObjectGuid());
-                    SetData(TYPE_GENERAL_ANDOROV, IN_PROGRESS);
-                }
+                if (!pAndorov->IsAlive())
+                    pAndorov->Respawn();
+                GetMap()->ScriptsStart(sGenericScripts, ANDOROV_START_SCRIPT, pAndorov->GetObjectGuid(), pAndorov->GetObjectGuid());
+                SetData(TYPE_GENERAL_ANDOROV, IN_PROGRESS);
             }
-            m_bRajaxxEventIsToReset = false;
-            break;
-        default:
-            break;
+        }
+        m_bRajaxxEventIsToReset = false;
+        break;
+    default:
+        break;
     }
 }
 
@@ -173,31 +167,31 @@ void instance_ruins_of_ahnqiraj::OnCreatureEvade(Creature* pCreature)
 {
     switch (pCreature->GetEntry())
     {
-        case NPC_CAPTAIN_QEEZ:
-        case NPC_CAPTAIN_TUUBID:
-        case NPC_CAPTAIN_DRENN:
-        case NPC_CAPTAIN_XURREM:
-        case NPC_MAJOR_YEGGETH:
-        case NPC_MAJOR_PAKKON:
-        case NPC_COLONEL_ZERRAN:
-        case NPC_SWARMGUARD_NEEDLER:
-        case NPC_QIRAJI_WARRIOR:
-            // If any creature from Rajaxx's wave is on evade mode, reset Rajaxx.
-            m_uiRajaxxEventResetTimer = 2000;
-            m_bRajaxxEventIsToReset = true;
-            break;
-        case NPC_KALDOREI_ELITE:
-            if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
+    case NPC_CAPTAIN_QEEZ:
+    case NPC_CAPTAIN_TUUBID:
+    case NPC_CAPTAIN_DRENN:
+    case NPC_CAPTAIN_XURREM:
+    case NPC_MAJOR_YEGGETH:
+    case NPC_MAJOR_PAKKON:
+    case NPC_COLONEL_ZERRAN:
+    case NPC_SWARMGUARD_NEEDLER:
+    case NPC_QIRAJI_WARRIOR:
+        // If any creature from Rajaxx's wave is on evade mode, reset Rajaxx.
+        m_uiRajaxxEventResetTimer = 2000;
+        m_bRajaxxEventIsToReset = true;
+        break;
+    case NPC_KALDOREI_ELITE:
+        if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
+        {
+            if (pAndorov->IsInCombat())
             {
-                if (pAndorov->IsInCombat())
-                {
-                    pCreature->AddThreatsOf(pAndorov);
-                    break;
-                }
+                pCreature->AddThreatsOf(pAndorov);
+                break;
             }
-            break;
-        default:
-            break;
+        }
+        break;
+    default:
+        break;
     }
 }
 
@@ -205,76 +199,76 @@ void instance_ruins_of_ahnqiraj::OnCreatureCreate(Creature* pCreature)
 {
     switch (pCreature->GetEntry())
     {
-        case NPC_KURINNAXX:
-            m_uiKurinnaxxGUID = pCreature->GetGUID();
-            break;
-        case NPC_CAPTAIN_QEEZ:
-            m_uiQeezGUID = pCreature->GetGUID();
-            break;
-        case NPC_CAPTAIN_TUUBID:
-            m_uiTuubidGUID = pCreature->GetGUID();
-            break;
-        case NPC_CAPTAIN_DRENN:
-            m_uiDrennGUID = pCreature->GetGUID();
-            break;
-        case NPC_CAPTAIN_XURREM:
-            m_uiXurremGUID = pCreature->GetGUID();
-            break;
-        case NPC_MAJOR_YEGGETH:
-            m_uiYeggethGUID = pCreature->GetGUID();
-            break;
-        case NPC_MAJOR_PAKKON:
-            m_uiPakkonGUID = pCreature->GetGUID();
-            break;
-        case NPC_COLONEL_ZERRAN:
-            m_uiZerranGUID = pCreature->GetGUID();
-            break;
-        case NPC_RAJAXX:
-            m_uiRajaxxGUID = pCreature->GetGUID();
-            break;
-        case NPC_BURU:
-            m_uiBuruGUID = pCreature->GetGUID();
-            break;
-        case NPC_AYAMISS:
-            m_uiAyamissGUID = pCreature->GetGUID();
-            break;
-        case NPC_MOAM:
-            m_uiMoamGUID = pCreature->GetGUID();
-            break;
-        case NPC_OSSIRIAN:
-            m_uiOssirianGUID = pCreature->GetGUID();
-            break;
-        case NPC_GENERAL_ANDOROV:
-            m_uiAndorovGUID = pCreature->GetGUID();
-            break;
-        case NPC_KALDOREI_ELITE:
-            m_lKaldoreiElites.push_back(pCreature->GetGUID());
-            break;
-        default:
-            break;
+    case NPC_KURINNAXX:
+        m_uiKurinnaxxGUID = pCreature->GetGUID();
+        break;
+    case NPC_CAPTAIN_QEEZ:
+        m_uiQeezGUID = pCreature->GetGUID();
+        break;
+    case NPC_CAPTAIN_TUUBID:
+        m_uiTuubidGUID = pCreature->GetGUID();
+        break;
+    case NPC_CAPTAIN_DRENN:
+        m_uiDrennGUID = pCreature->GetGUID();
+        break;
+    case NPC_CAPTAIN_XURREM:
+        m_uiXurremGUID = pCreature->GetGUID();
+        break;
+    case NPC_MAJOR_YEGGETH:
+        m_uiYeggethGUID = pCreature->GetGUID();
+        break;
+    case NPC_MAJOR_PAKKON:
+        m_uiPakkonGUID = pCreature->GetGUID();
+        break;
+    case NPC_COLONEL_ZERRAN:
+        m_uiZerranGUID = pCreature->GetGUID();
+        break;
+    case NPC_RAJAXX:
+        m_uiRajaxxGUID = pCreature->GetGUID();
+        break;
+    case NPC_BURU:
+        m_uiBuruGUID = pCreature->GetGUID();
+        break;
+    case NPC_AYAMISS:
+        m_uiAyamissGUID = pCreature->GetGUID();
+        break;
+    case NPC_MOAM:
+        m_uiMoamGUID = pCreature->GetGUID();
+        break;
+    case NPC_OSSIRIAN:
+        m_uiOssirianGUID = pCreature->GetGUID();
+        break;
+    case NPC_GENERAL_ANDOROV:
+        m_uiAndorovGUID = pCreature->GetGUID();
+        break;
+    case NPC_KALDOREI_ELITE:
+        m_lKaldoreiElites.push_back(pCreature->GetGUID());
+        break;
+    default:
+        break;
     }
 }
 
-void instance_ruins_of_ahnqiraj::OnObjectCreate(GameObject *pGo)
+void instance_ruins_of_ahnqiraj::OnObjectCreate(GameObject* pGo)
 {
     switch (pGo->GetEntry())
     {
-        case 180619:
-            m_lOssirianPylons.push_back(pGo->GetGUID());
-            if (pGo->GetGUID() == 399461)
-            {
-                pGo->SetSpawnedByDefault(false);
-                pGo->SetRespawnTime(-10);
-                pGo->Refresh();
-                pGo->Respawn();
-            }
-            else
-            {
-                pGo->SetSpawnedByDefault(false);
-                pGo->SetRespawnTime(-5);
-                pGo->UpdateObjectVisibility();
-            }
-            break;
+    case 180619:
+        m_lOssirianPylons.push_back(pGo->GetGUID());
+        if (pGo->GetGUID() == 399461)
+        {
+            pGo->SetSpawnedByDefault(false);
+            pGo->SetRespawnTime(-10);
+            pGo->Refresh();
+            pGo->Respawn();
+        }
+        else
+        {
+            pGo->SetSpawnedByDefault(false);
+            pGo->SetRespawnTime(-5);
+            pGo->UpdateObjectVisibility();
+        }
+        break;
     }
 }
 
@@ -282,36 +276,36 @@ void instance_ruins_of_ahnqiraj::OnCreatureDeath(Creature* pCreature)
 {
     switch (pCreature->GetEntry())
     {
-        case NPC_RAJAXX:
-            GiveRepAfterRajaxxDeath(pCreature);
-            break;
-        case NPC_CAPTAIN_QEEZ:
-        case NPC_CAPTAIN_TUUBID:
-        case NPC_CAPTAIN_DRENN:
-        case NPC_CAPTAIN_XURREM:
-        case NPC_MAJOR_YEGGETH:
-        case NPC_MAJOR_PAKKON:
-        case NPC_COLONEL_ZERRAN:
-        case NPC_SWARMGUARD_NEEDLER:
-        case NPC_QIRAJI_WARRIOR:
-            if (pCreature->GetEntry() == NPC_SWARMGUARD_NEEDLER || pCreature->GetEntry() == NPC_QIRAJI_WARRIOR)
-            {
-                pCreature->ForcedDespawn(3000);
-                pCreature->SetRespawnTime(AQ_RESPAWN_FOUR_DAYS);
-            }
-            break;
-        case NPC_GENERAL_ANDOROV:
-            pCreature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
-        // no break
-        case NPC_KALDOREI_ELITE:
-            // No respawn before Kurinaxx's death or during Rajaxx event.
-            if ((m_auiEncounter[TYPE_KURINNAXX] != DONE) || (m_auiEncounter[TYPE_RAJAXX] == IN_PROGRESS))
-                pCreature->SetRespawnTime(AQ_RESPAWN_FOUR_DAYS);
-            else
-                pCreature->SetRespawnTime(AQ_RESPAWN_15_MINUTES);
-            break;
-        default:
-            break;
+    case NPC_RAJAXX:
+        GiveRepAfterRajaxxDeath(pCreature);
+        break;
+    case NPC_CAPTAIN_QEEZ:
+    case NPC_CAPTAIN_TUUBID:
+    case NPC_CAPTAIN_DRENN:
+    case NPC_CAPTAIN_XURREM:
+    case NPC_MAJOR_YEGGETH:
+    case NPC_MAJOR_PAKKON:
+    case NPC_COLONEL_ZERRAN:
+    case NPC_SWARMGUARD_NEEDLER:
+    case NPC_QIRAJI_WARRIOR:
+        if (pCreature->GetEntry() == NPC_SWARMGUARD_NEEDLER || pCreature->GetEntry() == NPC_QIRAJI_WARRIOR)
+        {
+            pCreature->ForcedDespawn(3000);
+            pCreature->SetRespawnTime(AQ_RESPAWN_FOUR_DAYS);
+        }
+        break;
+    case NPC_GENERAL_ANDOROV:
+        pCreature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+    // no break
+    case NPC_KALDOREI_ELITE:
+        // No respawn before Kurinaxx's death or during Rajaxx event.
+        if ((m_auiEncounter[TYPE_KURINNAXX] != DONE) || (m_auiEncounter[TYPE_RAJAXX] == IN_PROGRESS))
+            pCreature->SetRespawnTime(AQ_RESPAWN_FOUR_DAYS);
+        else
+            pCreature->SetRespawnTime(AQ_RESPAWN_15_MINUTES);
+        break;
+    default:
+        break;
     }
 }
 
@@ -319,19 +313,19 @@ uint32 instance_ruins_of_ahnqiraj::GetData(uint32 uiType)
 {
     switch (uiType)
     {
-        case TYPE_QIRAJI_GLADIATOR:
-            return m_uiGladiatorDeath;
-            break;
-        case TYPE_KURINNAXX:
-        case TYPE_GENERAL_ANDOROV:
-        case TYPE_RAJAXX:
-        case TYPE_BURU:
-        case TYPE_MOAM:
-        case TYPE_AYAMISS:
-        case TYPE_OSSIRIAN:
-            return m_auiEncounter[uiType];
-        default:
-            return 0;
+    case TYPE_QIRAJI_GLADIATOR:
+        return m_uiGladiatorDeath;
+        break;
+    case TYPE_KURINNAXX:
+    case TYPE_GENERAL_ANDOROV:
+    case TYPE_RAJAXX:
+    case TYPE_BURU:
+    case TYPE_MOAM:
+    case TYPE_AYAMISS:
+    case TYPE_OSSIRIAN:
+        return m_auiEncounter[uiType];
+    default:
+        return 0;
     }
 }
 
@@ -339,79 +333,79 @@ void instance_ruins_of_ahnqiraj::SetData(uint32 uiType, uint32 uiData)
 {
     switch (uiType)
     {
-        case TYPE_QIRAJI_GLADIATOR:
-            if (uiData > 0)
-                m_uiGladiatorDeath = m_uiGladiatorDeath + uiData;
-            else
-                m_uiGladiatorDeath = 0;
-            return;
-        case TYPE_KURINNAXX:
-            m_auiEncounter[TYPE_KURINNAXX] = uiData;
-            break;
-        case TYPE_GENERAL_ANDOROV:
-            if (uiData == NOT_STARTED || uiData == FAIL)
+    case TYPE_QIRAJI_GLADIATOR:
+        if (uiData > 0)
+            m_uiGladiatorDeath = m_uiGladiatorDeath + uiData;
+        else
+            m_uiGladiatorDeath = 0;
+        return;
+    case TYPE_KURINNAXX:
+        m_auiEncounter[TYPE_KURINNAXX] = uiData;
+        break;
+    case TYPE_GENERAL_ANDOROV:
+        if (uiData == NOT_STARTED || uiData == FAIL)
+        {
+            if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
+                pAndorov->SetDefaultGossipMenuId(ANDOROV_GOSSIP_NOT_STARTED);
+        }
+        if (uiData == IN_PROGRESS)
+        {
+            SetAndorovSquadImmunity(false);
+            if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
             {
-                if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
-                    pAndorov->SetDefaultGossipMenuId(ANDOROV_GOSSIP_NOT_STARTED);
+                pAndorov->SetDefaultGossipMenuId(ANDOROV_GOSSIP_IN_PROGRESS);
+                pAndorov->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_VENDOR);
             }
-            if (uiData == IN_PROGRESS)
+        }
+        m_auiEncounter[TYPE_GENERAL_ANDOROV] = uiData;
+        break;
+    case TYPE_RAJAXX:
+        if (uiData == NOT_STARTED)
+        {
+            /** Respawn Andorov and elite in 15 minutes */
+            if (m_auiEncounter[TYPE_KURINNAXX] == DONE)
+                SetAndorovSquadRespawnTime(AQ_RESPAWN_15_MINUTES);
+        }
+        if (uiData == DONE)
+        {
+            if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
             {
-                SetAndorovSquadImmunity(false);
-                if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
-                {
-                    pAndorov->SetDefaultGossipMenuId(ANDOROV_GOSSIP_IN_PROGRESS);
-                    pAndorov->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_VENDOR);
-                }
-            }
-            m_auiEncounter[TYPE_GENERAL_ANDOROV] = uiData;
-            break;
-        case TYPE_RAJAXX:
-            if (uiData == NOT_STARTED)
-            {
-                /** Respawn Andorov and elite in 15 minutes */
-                if (m_auiEncounter[TYPE_KURINNAXX] == DONE)
-                    SetAndorovSquadRespawnTime(AQ_RESPAWN_15_MINUTES);
-            }
-            if (uiData == DONE)
-            {
-                if (Creature* pAndorov = instance->GetCreature(m_uiAndorovGUID))
-                {
-                    // World of Warcraft Client Patch 1.10.0 (2006-03-28)
-                    // - Lieutenant General Andorov will now offer supplies if kept alive
-                    //   through the battle.
-                    if (sWorld.GetWowPatch() >= WOW_PATCH_110)
-                        pAndorov->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_VENDOR);
+                // World of Warcraft Client Patch 1.10.0 (2006-03-28)
+                // - Lieutenant General Andorov will now offer supplies if kept alive
+                //   through the battle.
+                if (sWorld.GetWowPatch() >= WOW_PATCH_110)
+                    pAndorov->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_VENDOR);
 
-                    pAndorov->SetDefaultGossipMenuId(ANDOROV_GOSSIP_DONE);
-                    pAndorov->SetRespawnTime(AQ_RESPAWN_FOUR_DAYS);
-                }
-                SetAndorovSquadImmunity(true);
+                pAndorov->SetDefaultGossipMenuId(ANDOROV_GOSSIP_DONE);
+                pAndorov->SetRespawnTime(AQ_RESPAWN_FOUR_DAYS);
             }
-            m_bRajaxxEventIsToReset = false;
-            m_auiEncounter[TYPE_RAJAXX] = uiData;
-            break;
-        case TYPE_OSSIRIAN:
-            if (uiData == FAIL || uiData == DONE)
+            SetAndorovSquadImmunity(true);
+        }
+        m_bRajaxxEventIsToReset = false;
+        m_auiEncounter[TYPE_RAJAXX] = uiData;
+        break;
+    case TYPE_OSSIRIAN:
+        if (uiData == FAIL || uiData == DONE)
+        {
+            for (const auto& crystalGuid : crystalGuids)
             {
-                for (const auto& crystalGuid : crystalGuids)
-                {
-                    if (GameObject* invoc = instance->GetGameObject(crystalGuid))
-                        invoc->AddObjectToRemoveList();
-                }
-
-                crystalGuids.clear();
-                crystalIndexes.clear();
-                crystalIndexHistory.clear();
+                if (GameObject* invoc = instance->GetGameObject(crystalGuid))
+                    invoc->AddObjectToRemoveList();
             }
-            m_auiEncounter[TYPE_OSSIRIAN] = uiData;
-            break;
-        case TYPE_BURU:
-        case TYPE_MOAM:
-        case TYPE_AYAMISS:
-            m_auiEncounter[uiType] = uiData;
-            break;
-        default:
-            return;
+
+            crystalGuids.clear();
+            crystalIndexes.clear();
+            crystalIndexHistory.clear();
+        }
+        m_auiEncounter[TYPE_OSSIRIAN] = uiData;
+        break;
+    case TYPE_BURU:
+    case TYPE_MOAM:
+    case TYPE_AYAMISS:
+        m_auiEncounter[uiType] = uiData;
+        break;
+    default:
+        return;
     }
 
     /** What is the goal of this ???? */
@@ -420,8 +414,7 @@ void instance_ruins_of_ahnqiraj::SetData(uint32 uiType, uint32 uiData)
         OUT_SAVE_INST_DATA;
 
         std::ostringstream saveStream;
-        saveStream << m_auiEncounter[0] << " " << m_auiEncounter[1] << " " << m_auiEncounter[2] << " "
-            << m_auiEncounter[3] << " " << m_auiEncounter[4] << " " << m_auiEncounter[5] << " " << m_auiEncounter[6];
+        saveStream << m_auiEncounter[0] << " " << m_auiEncounter[1] << " " << m_auiEncounter[2] << " " << m_auiEncounter[3] << " " << m_auiEncounter[4] << " " << m_auiEncounter[5] << " " << m_auiEncounter[6];
 
         strInstData = saveStream.str();
 
@@ -430,10 +423,7 @@ void instance_ruins_of_ahnqiraj::SetData(uint32 uiType, uint32 uiData)
     }
 }
 
-char const* instance_ruins_of_ahnqiraj::Save()
-{
-    return strInstData.c_str();
-}
+char const* instance_ruins_of_ahnqiraj::Save() { return strInstData.c_str(); }
 
 void instance_ruins_of_ahnqiraj::Load(char const* chrIn)
 {
@@ -447,11 +437,10 @@ void instance_ruins_of_ahnqiraj::Load(char const* chrIn)
 
     std::istringstream loadStream(chrIn);
 
-    loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2] >> m_auiEncounter[3]
-        >> m_auiEncounter[4] >> m_auiEncounter[5] >> m_auiEncounter[6];
+    loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2] >> m_auiEncounter[3] >> m_auiEncounter[4] >> m_auiEncounter[5] >> m_auiEncounter[6];
 
-    for (uint32 & i : m_auiEncounter)
-        if (i == IN_PROGRESS || i > SPECIAL)           // Do not load an encounter as "In Progress" - reset it instead.
+    for (uint32& i : m_auiEncounter)
+        if (i == IN_PROGRESS || i > SPECIAL) // Do not load an encounter as "In Progress" - reset it instead.
             i = NOT_STARTED;
 
     if (m_auiEncounter[TYPE_GENERAL_ANDOROV] == DONE)
@@ -477,11 +466,7 @@ void instance_ruins_of_ahnqiraj::Update(uint32 uiDiff)
         {
             if (m_doorGuid.IsEmpty())
             {
-                if (GameObject* pAQDoor = GetMap()->SummonGameObject(176149,
-                    -8526,
-                    1507.4f,
-                    49,
-                    4.20662f, 0, 0, 0.861534f, -0.5077f, -1, 0))
+                if (GameObject* pAQDoor = GetMap()->SummonGameObject(176149, -8526, 1507.4f, 49, 4.20662f, 0, 0, 0.861534f, -0.5077f, -1, 0))
                     m_doorGuid = pAQDoor->GetObjectGuid();
             }
         }
@@ -588,7 +573,7 @@ void instance_ruins_of_ahnqiraj::SetAndorovSquadImmunity(bool immune)
 
 void instance_ruins_of_ahnqiraj::GiveRepAfterRajaxxDeath(Creature* pRajaxx)
 {
-    FactionEntry const *factionEntry = sObjectMgr.GetFactionEntry(609); // Cenarion Circle
+    FactionEntry const* factionEntry = sObjectMgr.GetFactionEntry(609); // Cenarion Circle
     if (!factionEntry)
     {
         sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Rajaxx just died, unable to find Cenarion Circle faction");
@@ -646,7 +631,7 @@ void instance_ruins_of_ahnqiraj::GiveRepAfterRajaxxDeath(Creature* pRajaxx)
 
         if (Group* pGroup = pLootRecepient->GetGroup())
         {
-            for (GroupReference *itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+            for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
             {
                 Player* pGroupGuy = itr->getSource();
                 if (!pGroupGuy || !pGroupGuy->IsInWorld() || pGroupGuy == pLootRecepient)
@@ -659,21 +644,21 @@ void instance_ruins_of_ahnqiraj::GiveRepAfterRajaxxDeath(Creature* pRajaxx)
 }
 
 /**
-* The spawn logic is as follows (approximated as much as possible from
-* multiple videos):
-* https://www.youtube.com/watch?v=Y2ITGk5_8hc
-* https://www.youtube.com/watch?v=fyivFwDIAtI
-* https://www.youtube.com/watch?v=qb0zZ3xkKLk
-* https://www.youtube.com/watch?v=Mlh8lSaBqPk
-* https://www.youtube.com/watch?v=Je2USKK2qhs
-* 1. From the last crystal used, find a crystal location within 80 yards.
-* 2. Spawn two crystals. One at, and one near to, this location
-* There are some rules regarding how many crystals should be spawned and
-* where.
-* 1. Only 2 crystals should be spawned at once
-* 2. We should not spawn the same crystal as the one used
-* 3. We should maintain a short history of spawned locations to ensure some variety
-*/
+ * The spawn logic is as follows (approximated as much as possible from
+ * multiple videos):
+ * https://www.youtube.com/watch?v=Y2ITGk5_8hc
+ * https://www.youtube.com/watch?v=fyivFwDIAtI
+ * https://www.youtube.com/watch?v=qb0zZ3xkKLk
+ * https://www.youtube.com/watch?v=Mlh8lSaBqPk
+ * https://www.youtube.com/watch?v=Je2USKK2qhs
+ * 1. From the last crystal used, find a crystal location within 80 yards.
+ * 2. Spawn two crystals. One at, and one near to, this location
+ * There are some rules regarding how many crystals should be spawned and
+ * where.
+ * 1. Only 2 crystals should be spawned at once
+ * 2. We should not spawn the same crystal as the one used
+ * 3. We should maintain a short history of spawned locations to ensure some variety
+ */
 void instance_ruins_of_ahnqiraj::SpawnNewCrystals(ObjectGuid usedCrystal)
 {
     uint32 used = 0;
@@ -741,11 +726,7 @@ void instance_ruins_of_ahnqiraj::SpawnNewCrystals(ObjectGuid usedCrystal)
                 continue;
             }
 
-            GameObject* pCrystal = instance->SummonGameObject(GO_OSSIRIAN_CRYSTAL,
-                newLoc.x,
-                newLoc.y,
-                newLoc.z,
-                0, 0, 0, 0, 0, -1, 1);
+            GameObject* pCrystal = instance->SummonGameObject(GO_OSSIRIAN_CRYSTAL, newLoc.x, newLoc.y, newLoc.z, 0, 0, 0, 0, 0, -1, 1);
 
             if (!pCrystal)
             {
@@ -766,10 +747,7 @@ void instance_ruins_of_ahnqiraj::SpawnNewCrystals(ObjectGuid usedCrystal)
     }
 }
 
-InstanceData* GetInstanceData_instance_ruins_of_ahnqiraj(Map* pMap)
-{
-    return new instance_ruins_of_ahnqiraj(pMap);
-}
+InstanceData* GetInstanceData_instance_ruins_of_ahnqiraj(Map* pMap) { return new instance_ruins_of_ahnqiraj(pMap); }
 
 void AddSC_instance_ruins_of_ahnqiraj()
 {
@@ -779,4 +757,3 @@ void AddSC_instance_ruins_of_ahnqiraj()
     newscript->GetInstanceData = &GetInstanceData_instance_ruins_of_ahnqiraj;
     newscript->RegisterSelf();
 }
-

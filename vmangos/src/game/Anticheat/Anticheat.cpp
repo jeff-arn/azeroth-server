@@ -1,18 +1,18 @@
 /*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 #include "Anticheat.h"
 #include "IO/Multithreading/CreateThread.h"
@@ -24,20 +24,17 @@ AnticheatManager* AnticheatManager::instance()
     return &i;
 }
 
-AnticheatManager* GetAnticheatLib()
-{
-    return AnticheatManager::instance();
-}
+AnticheatManager* GetAnticheatLib() { return AnticheatManager::instance(); }
 
 #include "World.h"
 #include "WorldSession.h"
 
 #include "MovementAnticheat/MovementAnticheat.h"
 #include "WardenAnticheat/Warden.hpp"
-#include "WardenAnticheat/WardenScanMgr.hpp"
-#include "WardenAnticheat/WardenModuleMgr.hpp"
-#include "WardenAnticheat/WardenWin.hpp"
 #include "WardenAnticheat/WardenMac.hpp"
+#include "WardenAnticheat/WardenModuleMgr.hpp"
+#include "WardenAnticheat/WardenScanMgr.hpp"
+#include "WardenAnticheat/WardenWin.hpp"
 
 AnticheatManager::~AnticheatManager()
 {
@@ -73,8 +70,7 @@ MovementAnticheat* AnticheatManager::CreateAnticheatFor(Player* player)
 Warden* AnticheatManager::CreateWardenForInternal(WorldSession* client, BigNumber* K)
 {
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_5_1
-    if ((client->GetSecurity() != SEC_PLAYER) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_WARDEN_PLAYERS_ONLY))
+    if ((client->GetSecurity() != SEC_PLAYER) && sWorld.getConfig(CONFIG_BOOL_AC_WARDEN_PLAYERS_ONLY))
         return nullptr;
 
     ClientOSType os = client->GetOS();
@@ -99,7 +95,7 @@ Warden* AnticheatManager::CreateWardenFor(WorldSession* client, BigNumber* K)
 
 void AnticheatManager::StartWardenUpdateThread()
 {
-   m_wardenUpdateThread = IO::Multithreading::CreateThread("WardenSessions", [this]() { UpdateWardenSessions(); });
+    m_wardenUpdateThread = IO::Multithreading::CreateThread("WardenSessions", [this]() { UpdateWardenSessions(); });
 }
 
 void AnticheatManager::StopWardenUpdateThread()
@@ -182,4 +178,3 @@ void AnticheatManager::RemoveWardenSession(Warden* warden)
     std::lock_guard<std::mutex> guard(m_wardenSessionsMutex);
     m_wardenSessionsToRemove.push_back(warden);
 }
-

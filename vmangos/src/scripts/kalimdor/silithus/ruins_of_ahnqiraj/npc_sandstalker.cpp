@@ -2,25 +2,19 @@
  * Auteur        : Ner'zhul
  * All rights reserved */
 
-#include "scriptPCH.h"
 #include "ruins_of_ahnqiraj.h"
+#include "scriptPCH.h"
 
 #define SPELL_BURROW 26381
 
 
 struct npc_sandstalkerAI : public ScriptedAI
 {
-    npc_sandstalkerAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_sandstalkerAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiBurrow_Timer;
 
-    void JustReachedHome() override
-    {
-        EnterVanish();
-    }
+    void JustReachedHome() override { EnterVanish(); }
 
     void Reset() override
     {
@@ -35,10 +29,7 @@ struct npc_sandstalkerAI : public ScriptedAI
         Ambush(pVanishTarget, SPELL_BURROW);
     }
 
-    void JustDied(Unit* pKiller) override
-    {
-        LeaveVanish();
-    }
+    void JustDied(Unit* pKiller) override { LeaveVanish(); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -60,10 +51,7 @@ struct npc_sandstalkerAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_sandstalker(Creature* pCreature)
-{
-    return new npc_sandstalkerAI(pCreature);
-}
+CreatureAI* GetAI_npc_sandstalker(Creature* pCreature) { return new npc_sandstalkerAI(pCreature); }
 
 void AddSC_npc_sandstalker()
 {

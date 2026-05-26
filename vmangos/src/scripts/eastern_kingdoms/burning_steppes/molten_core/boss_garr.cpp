@@ -1,24 +1,24 @@
-#include "scriptPCH.h"
-#include "molten_core.h"
 #include "Utilities/EventMap.h"
+#include "molten_core.h"
+#include "scriptPCH.h"
 
 enum Garr : uint32
 {
     // Spells
-    SPELL_ANTIMAGICPULSE     = 19492,
-    SPELL_MAGMASHACKLES      = 19496,
-    SPELL_ENRAGE             = 19516, // stacks up to 10 times
+    SPELL_ANTIMAGICPULSE = 19492,
+    SPELL_MAGMASHACKLES = 19496,
+    SPELL_ENRAGE = 19516, // stacks up to 10 times
     SPELL_SEPARATION_ANXIETY = 23487,
-    SPELL_ERUPTION_TRIGGER   = 20482,
-    SPELL_ENRAGE_TRIGGER     = 19515,
+    SPELL_ERUPTION_TRIGGER = 20482,
+    SPELL_ENRAGE_TRIGGER = 19515,
 
     // Texts
-    EMOTE_MASSIVE_ERUPTION  = 8254,
+    EMOTE_MASSIVE_ERUPTION = 8254,
 
     // Events
-    EVENT_ANTIMAGICPULSE    = 1,
-    EVENT_MAGMASHACKLES     = 2,
-    EVENT_MASSIVE_ERUPTION  = 3
+    EVENT_ANTIMAGICPULSE = 1,
+    EVENT_MAGMASHACKLES = 2,
+    EVENT_MASSIVE_ERUPTION = 3
 };
 
 struct boss_garrAI : ScriptedAI
@@ -118,8 +118,8 @@ struct boss_garrAI : ScriptedAI
 
     void ScheduleCombatEvents()
     {
-        m_CombatEvents.RescheduleEvent(EVENT_ANTIMAGICPULSE,   Seconds(15));
-        m_CombatEvents.RescheduleEvent(EVENT_MAGMASHACKLES,    Seconds(10));
+        m_CombatEvents.RescheduleEvent(EVENT_ANTIMAGICPULSE, Seconds(15));
+        m_CombatEvents.RescheduleEvent(EVENT_MAGMASHACKLES, Seconds(10));
         m_CombatEvents.RescheduleEvent(EVENT_MASSIVE_ERUPTION, Minutes(6));
     }
 
@@ -129,7 +129,7 @@ struct boss_garrAI : ScriptedAI
         {
             switch (eventId)
             {
-                case EVENT_ANTIMAGICPULSE:
+            case EVENT_ANTIMAGICPULSE:
                 {
                     // Garr lets out anti-magic pulses, removing a beneficial effect from players in the raid.
                     if (DoCastSpellIfCan(m_creature, SPELL_ANTIMAGICPULSE) == CAST_OK)
@@ -142,7 +142,7 @@ struct boss_garrAI : ScriptedAI
                     m_CombatEvents.Repeat(Seconds(1));
                     return;
                 }
-                case EVENT_MAGMASHACKLES:
+            case EVENT_MAGMASHACKLES:
                 {
                     // Garr reduces the movement speed of nearby enemies by 60% for 15 seconds.
                     if (DoCastSpellIfCan(m_creature, SPELL_MAGMASHACKLES) == CAST_OK)
@@ -155,7 +155,7 @@ struct boss_garrAI : ScriptedAI
                     m_CombatEvents.Repeat(Seconds(1));
                     return;
                 }
-                case EVENT_MASSIVE_ERUPTION:
+            case EVENT_MASSIVE_ERUPTION:
                 {
                     // After 6 minutes, Garr will let his adds explode and deal massive damage.
                     // Every further 20s in fight, another add will explode.
@@ -179,18 +179,15 @@ struct boss_garrAI : ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_garr(Creature* pCreature)
-{
-    return new boss_garrAI(pCreature);
-}
+CreatureAI* GetAI_boss_garr(Creature* pCreature) { return new boss_garrAI(pCreature); }
 
 enum GarrAdds : uint32
 {
     // Spells
-    SPELL_THRASH            = 3391,
-    SPELL_IMMOLATE          = 15732,
-    SPELL_ADD_ERUPTION      = 19497,
-    SPELL_MASSIVE_ERUPTION  = 20483,
+    SPELL_THRASH = 3391,
+    SPELL_IMMOLATE = 15732,
+    SPELL_ADD_ERUPTION = 19497,
+    SPELL_MASSIVE_ERUPTION = 20483,
 
     // Events
     EVENT_IMMOLATE = 1
@@ -271,10 +268,7 @@ struct mob_fireswornAI : ScriptedAI
         DoMeleeAttackIfReady();
     }
 
-    void ScheduleCombatEvents()
-    {
-        m_CombatEvents.RescheduleEvent(EVENT_IMMOLATE, Seconds(10));
-    }
+    void ScheduleCombatEvents() { m_CombatEvents.RescheduleEvent(EVENT_IMMOLATE, Seconds(10)); }
 
     void UpdateEvents()
     {
@@ -282,7 +276,7 @@ struct mob_fireswornAI : ScriptedAI
         {
             switch (eventId)
             {
-                case EVENT_IMMOLATE:
+            case EVENT_IMMOLATE:
                 {
                     if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_IMMOLATE) == CAST_OK)
                     {
@@ -299,10 +293,7 @@ struct mob_fireswornAI : ScriptedAI
     }
 };
 
-CreatureAI* GetAI_mob_firesworn(Creature* pCreature)
-{
-    return new mob_fireswornAI(pCreature);
-}
+CreatureAI* GetAI_mob_firesworn(Creature* pCreature) { return new mob_fireswornAI(pCreature); }
 
 void AddSC_boss_garr()
 {

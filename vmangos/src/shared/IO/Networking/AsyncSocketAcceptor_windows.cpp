@@ -1,30 +1,26 @@
 #ifndef MANGOS_IO_NETWORKING_WIN32_AsyncSocketAcceptor_H
 #define MANGOS_IO_NETWORKING_WIN32_AsyncSocketAcceptor_H
 
+#include "IO/Context/AsyncIoOperation.h"
 #include "IO/Networking/AsyncSocketAcceptor.h"
 #include "IO/Networking/Internal.h"
-#include "IO/Context/AsyncIoOperation.h"
 #include "IO/Networking/IpAddress.h"
 #include "IO/Networking/SocketDescriptor.h"
 #include "IO/SystemErrorToString.h"
 #include "Log.h"
 #include "Memory/ArrayDeleter.h"
 
-#include <vector>
+#include <chrono>
 #include <memory>
 #include <string>
-#include <chrono>
+#include <vector>
 
-#include <WinSock2.h>
 #include <MSWSock.h> // TODO: Currently just needed for ::AcceptEx, maybe its better if we get this func-ptr at runtime, just like Microsoft recommends it
+#include <WinSock2.h>
 
-IO::Networking::AsyncSocketAcceptor::AsyncSocketAcceptor(IO::IoContext* ctx, IO::Native::SocketHandle acceptorNativeSocket)
-    : m_ctx(ctx), m_acceptorNativeSocket(acceptorNativeSocket), m_wasClosed(false) {}
+IO::Networking::AsyncSocketAcceptor::AsyncSocketAcceptor(IO::IoContext* ctx, IO::Native::SocketHandle acceptorNativeSocket) : m_ctx(ctx), m_acceptorNativeSocket(acceptorNativeSocket), m_wasClosed(false) {}
 
-IO::Networking::AsyncSocketAcceptor::~AsyncSocketAcceptor()
-{
-    MANGOS_ASSERT(m_wasClosed);
-}
+IO::Networking::AsyncSocketAcceptor::~AsyncSocketAcceptor() { MANGOS_ASSERT(m_wasClosed); }
 
 void IO::Networking::AsyncSocketAcceptor::ClosePortAndStopAcceptingNewConnections()
 {
@@ -67,7 +63,7 @@ std::unique_ptr<IO::Networking::AsyncSocketAcceptor> IO::Networking::AsyncSocket
     }
 
     // Attach our listener socket to our completion port
-    if (::CreateIoCompletionPort((HANDLE) listenNativeSocket, ctx->GetWindowsCompletionPort(), (u_long) 0, 0) != ctx->GetWindowsCompletionPort())
+    if (::CreateIoCompletionPort((HANDLE)listenNativeSocket, ctx->GetWindowsCompletionPort(), (u_long)0, 0) != ctx->GetWindowsCompletionPort())
     {
         sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "::CreateIoCompletionPort(listen, ...) Error: %u", ::WSAGetLastError());
         return nullptr;
@@ -96,18 +92,19 @@ std::unique_ptr<IO::Networking::AsyncSocketAcceptor> IO::Networking::AsyncSocket
 
 void IO::Networking::AsyncSocketAcceptor::AutoAcceptSocketsUntilClose(std::function<void(IO::Networking::SocketDescriptor socketDescriptor)> const& onNewSocket)
 {
-    AcceptOne([onNewSocket, this](nonstd::expected<IO::Networking::SocketDescriptor, IO::NetworkError> acceptResult)
-    {
-        if (!acceptResult.has_value())
+    AcceptOne(
+        [onNewSocket, this](nonstd::expected<IO::Networking::SocketDescriptor, IO::NetworkError> acceptResult)
         {
-            if (!m_wasClosed)
-                sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "AcceptOne Error: %s", acceptResult.error().ToString().c_str());
-            return;
-        }
+            if (!acceptResult.has_value())
+            {
+                if (!m_wasClosed)
+                    sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "AcceptOne Error: %s", acceptResult.error().ToString().c_str());
+                return;
+            }
 
-        onNewSocket(std::move(acceptResult.value()));
-        AutoAcceptSocketsUntilClose(onNewSocket);
-    });
+            onNewSocket(std::move(acceptResult.value()));
+            AutoAcceptSocketsUntilClose(onNewSocket);
+        });
 }
 
 void IO::Networking::AsyncSocketAcceptor::AcceptOne(std::function<void(nonstd::expected<IO::Networking::SocketDescriptor, IO::NetworkError>)> const& afterAccept)
@@ -121,53 +118,46 @@ void IO::Networking::AsyncSocketAcceptor::AcceptOne(std::function<void(nonstd::e
 
     // AcceptEx stores the data in an internal Windows format. It can be read with `::GetAcceptExSockaddrs()`.
     std::shared_ptr<uint8_t> addrBuffer = std::shared_ptr<uint8_t>(new uint8_t[((sizeof(sockaddr_in) + 16) * 2)], MaNGOS::Memory::array_deleter<uint8_t>());
-    m_currentAcceptTask.InitNew([nativePeerSocket, this, addrBuffer, afterAccept](DWORD errorCode)
-    {
-        auto localAfterAccept = std::move(afterAccept);
-        auto localAddrBuffer = std::move(addrBuffer);
-        auto localNativePeerSocket = std::move(nativePeerSocket);
-        auto wasClosed = m_wasClosed;
+    m_currentAcceptTask.InitNew(
+        [nativePeerSocket, this, addrBuffer, afterAccept](DWORD errorCode)
+        {
+            auto localAfterAccept = std::move(afterAccept);
+            auto localAddrBuffer = std::move(addrBuffer);
+            auto localNativePeerSocket = std::move(nativePeerSocket);
+            auto wasClosed = m_wasClosed;
 
-        this->m_currentAcceptTask.Reset(); // IMPORTANT: after we reset, the captured variables are no longer valid
-        // ===== No captured variables after this point =====
+            this->m_currentAcceptTask.Reset(); // IMPORTANT: after we reset, the captured variables are no longer valid
+            // ===== No captured variables after this point =====
 
-        if (!errorCode)
-        { // No error, everything is fine
-            SOCKADDR_IN* localAddr = nullptr;
-            SOCKADDR_IN* remoteAddr = nullptr;
-            int localAddrLen = 0;
-            int remoteAddrLen = 0;
+            if (!errorCode)
+            { // No error, everything is fine
+                SOCKADDR_IN* localAddr = nullptr;
+                SOCKADDR_IN* remoteAddr = nullptr;
+                int localAddrLen = 0;
+                int remoteAddrLen = 0;
 
-            ::GetAcceptExSockaddrs(localAddrBuffer.get(), 0,
-                sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16,
-                (SOCKADDR**)&localAddr, &localAddrLen,
-                (SOCKADDR**)&remoteAddr, &remoteAddrLen);
+                ::GetAcceptExSockaddrs(localAddrBuffer.get(), 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, (SOCKADDR**)&localAddr, &localAddrLen, (SOCKADDR**)&remoteAddr, &remoteAddrLen);
 
-            IpAddress ip = IO::Networking::Internal::inet_ntop(&(remoteAddr->sin_addr));
-            uint16_t port = ::ntohs(remoteAddr->sin_port);
+                IpAddress ip = IO::Networking::Internal::inet_ntop(&(remoteAddr->sin_addr));
+                uint16_t port = ::ntohs(remoteAddr->sin_port);
 
-            localAfterAccept(IO::Networking::SocketDescriptor(localNativePeerSocket, { ip, port }));
-            return;
-        }
+                localAfterAccept(IO::Networking::SocketDescriptor(localNativePeerSocket, {ip, port}));
+                return;
+            }
 
-        if (errorCode == ERROR_OPERATION_ABORTED && wasClosed)
-        { // ignore "aborted" error when we are in a closing state
-            localAfterAccept(nonstd::make_unexpected(IO::NetworkError(NetworkError::ErrorType::SocketClosed, 0)));
-            return;
-        }
+            if (errorCode == ERROR_OPERATION_ABORTED && wasClosed)
+            { // ignore "aborted" error when we are in a closing state
+                localAfterAccept(nonstd::make_unexpected(IO::NetworkError(NetworkError::ErrorType::SocketClosed, 0)));
+                return;
+            }
 
-        // we got a real error
-        localAfterAccept(nonstd::make_unexpected(IO::NetworkError(NetworkError::ErrorType::InternalError, ::WSAGetLastError())));
-    });
+            // we got a real error
+            localAfterAccept(nonstd::make_unexpected(IO::NetworkError(NetworkError::ErrorType::InternalError, ::WSAGetLastError())));
+        });
 
     DWORD bytesWritten = 0;
 
-    bool booleanOkay = ::AcceptEx(m_acceptorNativeSocket, nativePeerSocket,
-        addrBuffer.get(),
-        0,
-        sizeof (sockaddr_in) + 16, sizeof (sockaddr_in) + 16,
-        &bytesWritten, &m_currentAcceptTask
-    );
+    bool booleanOkay = ::AcceptEx(m_acceptorNativeSocket, nativePeerSocket, addrBuffer.get(), 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, &bytesWritten, &m_currentAcceptTask);
     if (!booleanOkay)
     {
         int lastError = ::WSAGetLastError();
@@ -180,4 +170,4 @@ void IO::Networking::AsyncSocketAcceptor::AcceptOne(std::function<void(nonstd::e
     }
 }
 
-#endif //MANGOS_IO_NETWORKING_WIN32_AsyncSocketAcceptor_H
+#endif // MANGOS_IO_NETWORKING_WIN32_AsyncSocketAcceptor_H

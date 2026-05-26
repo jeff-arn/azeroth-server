@@ -47,11 +47,11 @@ struct SituationContext
     Unit* mostInjuredAlly = nullptr;
     uint8 alivePartyMembers = 0;
     uint8 deadPartyMembers = 0;
-    bool anyAllyNeedsHeal = false;      // tank < 80% OR non-tank < 50%
-    bool tankNeedsHeal = false;         // tank < 80%
-    bool criticalHealNeeded = false;    // anyone < 30%
+    bool anyAllyNeedsHeal = false; // tank < 80% OR non-tank < 50%
+    bool tankNeedsHeal = false; // tank < 80%
+    bool criticalHealNeeded = false; // anyone < 30%
     bool healerAvailable = false;
-    bool hasLooseAdds = false;          // party has un-CC'd mobs that aren't the tank's target
+    bool hasLooseAdds = false; // party has un-CC'd mobs that aren't the tank's target
 
     // Encounter
     LearnedPattern const* activePattern = nullptr;

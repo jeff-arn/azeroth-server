@@ -23,24 +23,24 @@
     \ingroup realmd
 */
 
-#include "Common.h"
-#include "Crypto/Hash/HMACSHA1.h"
-#include "Crypto/Encoding/Base32.h"
-#include "Database/DatabaseEnv.h"
-#include "Config/Config.h"
-#include "Log.h"
-#include "RealmList.h"
 #include "AuthSocket.h"
 #include "AuthCodes.h"
-#include "Util.h"
 #include "ClientPatchCache.h"
-#include "Memory/NoDeleter.h"
+#include "Common.h"
+#include "Config/Config.h"
+#include "Crypto/Encoding/Base32.h"
+#include "Crypto/Hash/HMACSHA1.h"
+#include "Database/DatabaseEnv.h"
 #include "Errors.h"
+#include "Log.h"
+#include "Memory/NoDeleter.h"
+#include "RealmList.h"
+#include "Util.h"
 
-#include "IO/Networking/Utils.h"
-#include "IO/Networking/AsyncSocket.h"
-#include "IO/Timer/AsyncSystemTimer.h"
 #include "IO/Filesystem/FileSystem.h"
+#include "IO/Networking/AsyncSocket.h"
+#include "IO/Networking/Utils.h"
+#include "IO/Timer/AsyncSystemTimer.h"
 #include "ProxyProtocol/ProxyV2Reader.h"
 
 #ifdef ENABLE_MAILSENDER
@@ -49,7 +49,7 @@
 #endif
 
 #include <ctime>
-//#include "Util.h" -- for commented utf8ToUpperOnlyLatin
+// #include "Util.h" -- for commented utf8ToUpperOnlyLatin
 
 typedef struct AuthHandler
 {
@@ -58,25 +58,22 @@ typedef struct AuthHandler
     void (AuthSocket::*asyncHandler)();
 } AuthHandler;
 
-std::array<uint8, 16> VersionChallenge = { { 0xBA, 0xA3, 0x1E, 0x99, 0xA0, 0x0B, 0x21, 0x57, 0xFC, 0x37, 0x3F, 0xB3, 0x69, 0xCD, 0xD2, 0xF1 } };
+std::array<uint8, 16> VersionChallenge = {{0xBA, 0xA3, 0x1E, 0x99, 0xA0, 0x0B, 0x21, 0x57, 0xFC, 0x37, 0x3F, 0xB3, 0x69, 0xCD, 0xD2, 0xF1}};
 
 // Accept the connection and set the s random value for SRP6 // TODO where is this SRP6 done?
-AuthSocket::AuthSocket(IO::Networking::AsyncSocket socket) :
-    m_socket(std::move(socket)),
-    m_remoteIpAddressStringAfterProxy(m_socket.GetRemoteIpString())
-{
-}
+AuthSocket::AuthSocket(IO::Networking::AsyncSocket socket) : m_socket(std::move(socket)), m_remoteIpAddressStringAfterProxy(m_socket.GetRemoteIpString()) {}
 
 void AuthSocket::Start()
 {
     if (int secs = sConfig.GetIntDefault("MaxSessionDuration", 300))
     {
-        m_sessionDurationTimeout = sAsyncSystemTimer.ScheduleFunctionOnce(std::chrono::seconds(secs), [this]()
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[%s] Connection has reached MaxSessionDuration. Closing socket...", this->GetRemoteIpString().c_str());
-            // It's correct that we capture _this_ and not a shared_ptr, since the timer will be canceled in destructor
-            this->CloseSocket();
-        });
+        m_sessionDurationTimeout = sAsyncSystemTimer.ScheduleFunctionOnce(std::chrono::seconds(secs),
+                                                                          [this]()
+                                                                          {
+                                                                              sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[%s] Connection has reached MaxSessionDuration. Closing socket...", this->GetRemoteIpString().c_str());
+                                                                              // It's correct that we capture _this_ and not a shared_ptr, since the timer will be canceled in destructor
+                                                                              this->CloseSocket();
+                                                                          });
     }
 
     DoRecvIncomingData();
@@ -106,70 +103,61 @@ void AuthSocket::DoRecvIncomingData()
     std::shared_ptr<eAuthCmd> cmd = std::make_shared<eAuthCmd>();
 
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[%s] DoRecvIncomingData() Reading... Ready for next opcode", GetRemoteIpString().c_str());
-    m_socket.Read((char*)cmd.get(), sizeof(eAuthCmd), [self = shared_from_this(), cmd](IO::NetworkError const& error, size_t) -> void
-    {
-        if (error)
-        {
-            if (error.GetErrorType() != IO::NetworkError::ErrorType::SocketClosed)
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[%s] DoRecvIncomingData Read(cmd) error: %s", self->GetRemoteIpString().c_str(), error.ToString().c_str());
-            return;
-        }
+    m_socket.Read((char*)cmd.get(), sizeof(eAuthCmd),
+                  [self = shared_from_this(), cmd](IO::NetworkError const& error, size_t) -> void
+                  {
+                      if (error)
+                      {
+                          if (error.GetErrorType() != IO::NetworkError::ErrorType::SocketClosed)
+                              sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[%s] DoRecvIncomingData Read(cmd) error: %s", self->GetRemoteIpString().c_str(), error.ToString().c_str());
+                          return;
+                      }
 
-        // benchmarking has demonstrated that this lookup method is faster than std::map
-        constexpr AuthHandler table[] =
-        {
-            { CMD_AUTH_LOGON_CHALLENGE,     STATUS_CHALLENGE,   &AuthSocket::_HandleLogonChallenge },
-            { CMD_AUTH_LOGON_PROOF,         STATUS_LOGON_PROOF, &AuthSocket::_HandleLogonProof },
-            { CMD_AUTH_RECONNECT_CHALLENGE, STATUS_CHALLENGE,   &AuthSocket::_HandleReconnectChallenge },
-            { CMD_AUTH_RECONNECT_PROOF,     STATUS_RECON_PROOF, &AuthSocket::_HandleReconnectProof },
-            { CMD_REALM_LIST,               STATUS_AUTHED,      &AuthSocket::_HandleRealmList },
-            { CMD_XFER_ACCEPT,              STATUS_PATCH,       &AuthSocket::_HandleXferAccept },
-            { CMD_XFER_RESUME,              STATUS_PATCH,       &AuthSocket::_HandleXferResume },
-            { CMD_XFER_CANCEL,              STATUS_PATCH,       &AuthSocket::_HandleXferCancel }
-        };
+                      // benchmarking has demonstrated that this lookup method is faster than std::map
+                      constexpr AuthHandler table[] = {{CMD_AUTH_LOGON_CHALLENGE, STATUS_CHALLENGE, &AuthSocket::_HandleLogonChallenge}, {CMD_AUTH_LOGON_PROOF, STATUS_LOGON_PROOF, &AuthSocket::_HandleLogonProof}, {CMD_AUTH_RECONNECT_CHALLENGE, STATUS_CHALLENGE, &AuthSocket::_HandleReconnectChallenge}, {CMD_AUTH_RECONNECT_PROOF, STATUS_RECON_PROOF, &AuthSocket::_HandleReconnectProof}, {CMD_REALM_LIST, STATUS_AUTHED, &AuthSocket::_HandleRealmList}, {CMD_XFER_ACCEPT, STATUS_PATCH, &AuthSocket::_HandleXferAccept}, {CMD_XFER_RESUME, STATUS_PATCH, &AuthSocket::_HandleXferResume}, {CMD_XFER_CANCEL, STATUS_PATCH, &AuthSocket::_HandleXferCancel}};
 
-        constexpr size_t tableLength = sizeof(table) / sizeof(AuthHandler);
+                      constexpr size_t tableLength = sizeof(table) / sizeof(AuthHandler);
 
-        size_t i;
-        // Circle through known commands and call the correct command handler
-        for (i = 0; i < tableLength; ++i)
-        {
-            if (table[i].cmd != *cmd)
-                continue;
+                      size_t i;
+                      // Circle through known commands and call the correct command handler
+                      for (i = 0; i < tableLength; ++i)
+                      {
+                          if (table[i].cmd != *cmd)
+                              continue;
 
-            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[%s] CMD: %u requires status %u, user has %u", self->GetRemoteIpString().c_str(), *cmd, table[i].status, self->m_status);
+                          sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[%s] CMD: %u requires status %u, user has %u", self->GetRemoteIpString().c_str(), *cmd, table[i].status, self->m_status);
 
-            if (table[i].status != self->m_status)
-            { // unauthorized
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[%s] Received unauthorized command %u", self->GetRemoteIpString().c_str(), *cmd);
-                return;
-            }
+                          if (table[i].status != self->m_status)
+                          { // unauthorized
+                              sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[%s] Received unauthorized command %u", self->GetRemoteIpString().c_str(), *cmd);
+                              return;
+                          }
 
-            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[%s] Got data for cmd %u", self->GetRemoteIpString().c_str(), *cmd);
+                          sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[%s] Got data for cmd %u", self->GetRemoteIpString().c_str(), *cmd);
 
-            // this handler will async call Read and Write, and hopefully will call DoRecvIncomingData or CloseSocket when done.
-            ((*self).*table[i].asyncHandler)();
+                          // this handler will async call Read and Write, and hopefully will call DoRecvIncomingData or CloseSocket when done.
+                          ((*self).*table[i].asyncHandler)();
 
-            break;
-        }
+                          break;
+                      }
 
-        // Report unknown commands in the debug log
-        if (i == tableLength)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[Auth] got unknown packet cmd %u", *cmd);
-            return;
-        }
+                      // Report unknown commands in the debug log
+                      if (i == tableLength)
+                      {
+                          sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[Auth] got unknown packet cmd %u", *cmd);
+                          return;
+                      }
 
-        // if we reach here, it means that a valid opcode was found and the handler completed successfully
-        // TODO: self->m_timeoutTimer.reset();
-    });
+                      // if we reach here, it means that a valid opcode was found and the handler completed successfully
+                      // TODO: self->m_timeoutTimer.reset();
+                  });
 }
 
 std::shared_ptr<ByteBuffer> AuthSocket::GenerateLogonProofResponse(Crypto::Hash::SHA1::Digest const& shaDigest)
 {
     std::shared_ptr<ByteBuffer> pkt(new ByteBuffer());
 
-    if (m_build < 6299)  // before version 2.0.3 (exclusive)
+    if (m_build < 6299) // before version 2.0.3 (exclusive)
     {
         AUTH_LOGON_PROOF_S proof{};
         memcpy(proof.M2, shaDigest.data(), 20);
@@ -215,261 +203,266 @@ void AuthSocket::_HandleLogonChallenge()
     std::shared_ptr<sAuthLogonChallengeHeader> header = std::make_shared<sAuthLogonChallengeHeader>();
 
     // Read the header first, to get the length of the remaining packet
-    m_socket.Read((char*)header.get(), sizeof(sAuthLogonChallengeHeader), [self = shared_from_this(), header](IO::NetworkError const& error, size_t) -> void
-    {
-        if (error)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[Auth] HandleLogonChallenge Read(header) error");
-            self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-            return;
-        }
+    m_socket.Read((char*)header.get(), sizeof(sAuthLogonChallengeHeader),
+                  [self = shared_from_this(), header](IO::NetworkError const& error, size_t) -> void
+                  {
+                      if (error)
+                      {
+                          sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[Auth] HandleLogonChallenge Read(header) error");
+                          self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                          return;
+                      }
 
-        uint16* pUint16 = reinterpret_cast<uint16*>(header.get());
-        EndianConvert(*pUint16);
-        uint16 actualBodySize = header->size;
+                      uint16* pUint16 = reinterpret_cast<uint16*>(header.get());
+                      EndianConvert(*pUint16);
+                      uint16 actualBodySize = header->size;
 
-        if ((actualBodySize < sizeof(sAuthLogonChallengeBody) - AUTH_LOGON_MAX_NAME))
-        { // The paket is too small and has no username???
-            return;
-        }
+                      if ((actualBodySize < sizeof(sAuthLogonChallengeBody) - AUTH_LOGON_MAX_NAME))
+                      { // The paket is too small and has no username???
+                          return;
+                      }
 
-        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] got header, body is %#04x bytes", actualBodySize);
+                      sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] got header, body is %#04x bytes", actualBodySize);
 
-        // Read the remaining of the packet
-        std::shared_ptr<sAuthLogonChallengeBody> body = std::make_shared<sAuthLogonChallengeBody>();
-        self->m_socket.Read((char*)body.get(), actualBodySize, [self, header, body](IO::NetworkError const& error, size_t)
-        {
-            if (error)
-            {
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleLogonChallenge self->m_socket.Read(body): ERROR");
-                self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-                return;
-            }
+                      // Read the remaining of the packet
+                      std::shared_ptr<sAuthLogonChallengeBody> body = std::make_shared<sAuthLogonChallengeBody>();
+                      self->m_socket.Read((char*)body.get(), actualBodySize,
+                                          [self, header, body](IO::NetworkError const& error, size_t)
+                                          {
+                                              if (error)
+                                              {
+                                                  sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleLogonChallenge self->m_socket.Read(body): ERROR");
+                                                  self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                                                  return;
+                                              }
 
-            if (body->username_len > AUTH_LOGON_MAX_NAME)
-                return;
-            body->username[body->username_len] = '\0';
+                                              if (body->username_len > AUTH_LOGON_MAX_NAME)
+                                                  return;
+                                              body->username[body->username_len] = '\0';
 
-            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] got full packet, %#04x bytes", header->size);
-            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] name(%d): '%s'", body->username_len, body->username);
+                                              sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] got full packet, %#04x bytes", header->size);
+                                              sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] name(%d): '%s'", body->username_len, body->username);
 
-            // BigEndian code, nop in little endian case
-            // size already converted
-            EndianConvert(*((uint32*)(&body->gamename[0])));
-            EndianConvert(body->build);
-            EndianConvert(*((uint32*)(&body->platform[0])));
-            EndianConvert(*((uint32*)(&body->os[0])));
-            EndianConvert(*((uint32*)(&body->country[0])));
-            EndianConvert(body->timezone_bias);
-            EndianConvert(body->ip);
+                                              // BigEndian code, nop in little endian case
+                                              // size already converted
+                                              EndianConvert(*((uint32*)(&body->gamename[0])));
+                                              EndianConvert(body->build);
+                                              EndianConvert(*((uint32*)(&body->platform[0])));
+                                              EndianConvert(*((uint32*)(&body->os[0])));
+                                              EndianConvert(*((uint32*)(&body->country[0])));
+                                              EndianConvert(body->timezone_bias);
+                                              EndianConvert(body->ip);
 
-            std::shared_ptr<ByteBuffer> pkt = std::make_shared<ByteBuffer>();
+                                              std::shared_ptr<ByteBuffer> pkt = std::make_shared<ByteBuffer>();
 
-            self->m_build = body->build;
+                                              self->m_build = body->build;
 
-            // Convert uint8[4] to string, restore string order as its byte order is reversed
-            // To it for os
-            body->os[3] = '\0';
-            self->m_os = (char*)body->os;
-            std::reverse(self->m_os.begin(), self->m_os.end());
-            // To it for platform
-            body->platform[3] = '\0';
-            self->m_platform = (char*)body->platform;
-            std::reverse(self->m_platform.begin(), self->m_platform.end());
-            // Do it for locale
-            self->m_localizationName.resize(sizeof(body->country));
-            self->m_localizationName.assign(body->country, (body->country + sizeof(body->country)));
-            std::reverse(self->m_localizationName.begin(), self->m_localizationName.end());
+                                              // Convert uint8[4] to string, restore string order as its byte order is reversed
+                                              // To it for os
+                                              body->os[3] = '\0';
+                                              self->m_os = (char*)body->os;
+                                              std::reverse(self->m_os.begin(), self->m_os.end());
+                                              // To it for platform
+                                              body->platform[3] = '\0';
+                                              self->m_platform = (char*)body->platform;
+                                              std::reverse(self->m_platform.begin(), self->m_platform.end());
+                                              // Do it for locale
+                                              self->m_localizationName.resize(sizeof(body->country));
+                                              self->m_localizationName.assign(body->country, (body->country + sizeof(body->country)));
+                                              std::reverse(self->m_localizationName.begin(), self->m_localizationName.end());
 
-            // Escape the user input used in DB to avoid further SQL injection
-            // Memory will be freed on AuthSocket object destruction
-            self->m_login = (const char*)body->username;
-            self->m_safelogin = self->m_login;
-            LoginDatabase.escape_string(self->m_safelogin);
+                                              // Escape the user input used in DB to avoid further SQL injection
+                                              // Memory will be freed on AuthSocket object destruction
+                                              self->m_login = (const char*)body->username;
+                                              self->m_safelogin = self->m_login;
+                                              LoginDatabase.escape_string(self->m_safelogin);
 
-            *pkt << (uint8) CMD_AUTH_LOGON_CHALLENGE;
-            *pkt << (uint8) 0x00;
+                                              *pkt << (uint8)CMD_AUTH_LOGON_CHALLENGE;
+                                              *pkt << (uint8)0x00;
 
-            // Verify that this IP is not in the ip_banned table
-            // No SQL injection possible (paste the IP address as passed by the socket)
-            //                                                                                                              permanent ban          OR  still banned
-            std::unique_ptr<QueryResult> sqlIpBanResult = LoginDatabase.PQuery("SELECT `unbandate` FROM `ip_banned` WHERE (`unbandate` = `bandate` OR `unbandate` > UNIX_TIMESTAMP()) AND `ip` = '%s'", self->GetRemoteIpString().c_str());
-            if (sqlIpBanResult)
-            {
-                *pkt << uint8(WOW_FAIL_FAIL_NOACCESS);
-                sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Banned ip '%s' tries to login with account '%s'!", self->GetRemoteIpString().c_str(), self->m_login.c_str());
-            }
-            else
-            {
-                // Get the account details from the account table
-                // No SQL injection (escaped username)
-                //                                                                            0     1         2          3    4    5           6              7              8       9
-                std::unique_ptr<QueryResult> sqlAccountResult = LoginDatabase.PQuery("SELECT `id`, `locked`, `last_ip`, `v`, `s`, `security`, `email_verif`, `geolock_pin`, `email`, UNIX_TIMESTAMP(`joindate`) FROM `account` WHERE `username` = '%s'", self->m_safelogin.c_str());
-                if (sqlAccountResult)
-                {
-                    Field* fields = sqlAccountResult->Fetch();
+                                              // Verify that this IP is not in the ip_banned table
+                                              // No SQL injection possible (paste the IP address as passed by the socket)
+                                              //                                                                                                              permanent ban          OR  still banned
+                                              std::unique_ptr<QueryResult> sqlIpBanResult = LoginDatabase.PQuery("SELECT `unbandate` FROM `ip_banned` WHERE (`unbandate` = `bandate` OR `unbandate` > UNIX_TIMESTAMP()) AND `ip` = '%s'", self->GetRemoteIpString().c_str());
+                                              if (sqlIpBanResult)
+                                              {
+                                                  *pkt << uint8(WOW_FAIL_FAIL_NOACCESS);
+                                                  sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Banned ip '%s' tries to login with account '%s'!", self->GetRemoteIpString().c_str(), self->m_login.c_str());
+                                              }
+                                              else
+                                              {
+                                                  // Get the account details from the account table
+                                                  // No SQL injection (escaped username)
+                                                  //                                                                            0     1         2          3    4    5           6              7              8       9
+                                                  std::unique_ptr<QueryResult> sqlAccountResult = LoginDatabase.PQuery("SELECT `id`, `locked`, `last_ip`, `v`, `s`, `security`, `email_verif`, `geolock_pin`, `email`, UNIX_TIMESTAMP(`joindate`) FROM `account` WHERE `username` = '%s'", self->m_safelogin.c_str());
+                                                  if (sqlAccountResult)
+                                                  {
+                                                      Field* fields = sqlAccountResult->Fetch();
 
-                    // Prevent login if the user's email address has not been verified
-                    bool requireVerification = sConfig.GetBoolDefault("ReqEmailVerification", false);
-                    int32 requireEmailSince = sConfig.GetIntDefault("ReqEmailSince", 0);
-                    bool isVerified = fields[6].GetBool();
+                                                      // Prevent login if the user's email address has not been verified
+                                                      bool requireVerification = sConfig.GetBoolDefault("ReqEmailVerification", false);
+                                                      int32 requireEmailSince = sConfig.GetIntDefault("ReqEmailSince", 0);
+                                                      bool isVerified = fields[6].GetBool();
 
-                    // Prevent login if the user's join date is bigger than the timestamp in configuration
-                    if (requireEmailSince > 0)
-                    {
-                        uint32 t = fields[9].GetUInt32();
-                        requireVerification = requireVerification && (t >= uint32(requireEmailSince));
-                    }
+                                                      // Prevent login if the user's join date is bigger than the timestamp in configuration
+                                                      if (requireEmailSince > 0)
+                                                      {
+                                                          uint32 t = fields[9].GetUInt32();
+                                                          requireVerification = requireVerification && (t >= uint32(requireEmailSince));
+                                                      }
 
-                    if (requireVerification && !isVerified)
-                    {
-                        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Account '%s' using IP '%s 'email address requires email verification - rejecting login", self->m_login.c_str(), self->GetRemoteIpString().c_str());
-                        *pkt << (uint8) WOW_FAIL_UNKNOWN_ACCOUNT;
+                                                      if (requireVerification && !isVerified)
+                                                      {
+                                                          sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Account '%s' using IP '%s 'email address requires email verification - rejecting login", self->m_login.c_str(), self->GetRemoteIpString().c_str());
+                                                          *pkt << (uint8)WOW_FAIL_UNKNOWN_ACCOUNT;
 
-                        self->m_socket.Write(std::move(pkt), [self](IO::NetworkError const& error) {
-                            if (error)
-                                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleLogonChallenge self->Write() Error: %s", error.ToString().c_str());
-                            else
-                                self->DoRecvIncomingData();
-                        });
-                        return; // TODO refactor?
-                    }
+                                                          self->m_socket.Write(std::move(pkt),
+                                                                               [self](IO::NetworkError const& error)
+                                                                               {
+                                                                                   if (error)
+                                                                                       sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleLogonChallenge self->Write() Error: %s", error.ToString().c_str());
+                                                                                   else
+                                                                                       self->DoRecvIncomingData();
+                                                                               });
+                                                          return; // TODO refactor?
+                                                      }
 
-                    // If the IP is 'locked', check that the player comes indeed from the correct IP address
-                    bool locked = false;
-                    self->m_lockFlags = (LockFlag)fields[1].GetUInt32();
-                    self->m_securityInfo = fields[5].GetCppString();
-                    self->m_lastIP = fields[2].GetString();
-                    self->m_geoUnlockPIN = fields[7].GetUInt32();
-                    self->m_email = fields[8].GetCppString();
+                                                      // If the IP is 'locked', check that the player comes indeed from the correct IP address
+                                                      bool locked = false;
+                                                      self->m_lockFlags = (LockFlag)fields[1].GetUInt32();
+                                                      self->m_securityInfo = fields[5].GetCppString();
+                                                      self->m_lastIP = fields[2].GetString();
+                                                      self->m_geoUnlockPIN = fields[7].GetUInt32();
+                                                      self->m_email = fields[8].GetCppString();
 
-                    if (self->m_lockFlags & IP_LOCK)
-                    {
-                        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Account '%s' is locked to IP - '%s'", self->m_login.c_str(), self->m_lastIP.c_str());
-                        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Player address is '%s'", self->GetRemoteIpString().c_str());
+                                                      if (self->m_lockFlags & IP_LOCK)
+                                                      {
+                                                          sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Account '%s' is locked to IP - '%s'", self->m_login.c_str(), self->m_lastIP.c_str());
+                                                          sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Player address is '%s'", self->GetRemoteIpString().c_str());
 
-                        if (self->m_lastIP != self->GetRemoteIpString())
-                        {
-                            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Account IP differs");
+                                                          if (self->m_lastIP != self->GetRemoteIpString())
+                                                          {
+                                                              sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Account IP differs");
 
-                            // account is IP locked and the player does not have 2FA enabled
-                            if (((self->m_lockFlags & TOTP) != TOTP && (self->m_lockFlags & FIXED_PIN) != FIXED_PIN))
-                                *pkt << (uint8) WOW_FAIL_SUSPENDED;
+                                                              // account is IP locked and the player does not have 2FA enabled
+                                                              if (((self->m_lockFlags & TOTP) != TOTP && (self->m_lockFlags & FIXED_PIN) != FIXED_PIN))
+                                                                  *pkt << (uint8)WOW_FAIL_SUSPENDED;
 
-                            locked = true;
-                        }
-                        else
-                        {
-                            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Account IP matches");
-                        }
-                    }
-                    else
-                    {
-                        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Account '%s' is not locked to ip", self->m_login.c_str());
-                    }
+                                                              locked = true;
+                                                          }
+                                                          else
+                                                          {
+                                                              sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Account IP matches");
+                                                          }
+                                                      }
+                                                      else
+                                                      {
+                                                          sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Account '%s' is not locked to ip", self->m_login.c_str());
+                                                      }
 
-                    std::string databaseV = fields[3].GetCppString();
-                    std::string databaseS = fields[4].GetCppString();
-                    bool broken = false;
+                                                      std::string databaseV = fields[3].GetCppString();
+                                                      std::string databaseS = fields[4].GetCppString();
+                                                      bool broken = false;
 
-                    if (!self->srp.SetVerifier(databaseV.c_str()) || !self->srp.SetSalt(databaseS.c_str()))
-                    {
-                        *pkt << uint8(WOW_FAIL_FAIL_NOACCESS);
-                        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[AuthChallenge] Broken v/s values in database for account %s!", self->m_login.c_str());
-                        broken = true;
-                    }
+                                                      if (!self->srp.SetVerifier(databaseV.c_str()) || !self->srp.SetSalt(databaseS.c_str()))
+                                                      {
+                                                          *pkt << uint8(WOW_FAIL_FAIL_NOACCESS);
+                                                          sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[AuthChallenge] Broken v/s values in database for account %s!", self->m_login.c_str());
+                                                          broken = true;
+                                                      }
 
-                    if ((!locked || (locked && (self->m_lockFlags & FIXED_PIN || self->m_lockFlags & TOTP))) && !broken)
-                    {
-                        uint32 pendingAccountId = fields[0].GetUInt32();
+                                                      if ((!locked || (locked && (self->m_lockFlags & FIXED_PIN || self->m_lockFlags & TOTP))) && !broken)
+                                                      {
+                                                          uint32 pendingAccountId = fields[0].GetUInt32();
 
-                        // If the account is banned, reject the logon attempt
-                        std::unique_ptr<QueryResult> sqlAccountBanResult = LoginDatabase.PQuery("SELECT `bandate`, `unbandate` FROM `account_banned` WHERE `id` = %u AND `active` = 1 AND (`unbandate` > UNIX_TIMESTAMP() OR `unbandate` = `bandate`) LIMIT 1", pendingAccountId);
-                        if (sqlAccountBanResult)
-                        {
-                            uint64_t banTimestamp = (*sqlAccountBanResult)[0].GetUInt64();
-                            uint64_t unbanTimestamp = (*sqlAccountBanResult)[1].GetUInt64();
-                            if (banTimestamp == unbanTimestamp)
-                            {
-                                *pkt << (uint8) WOW_FAIL_BANNED;
-                                sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Banned account '%s' using IP '%s' tries to login!", self->m_login.c_str(), self->GetRemoteIpString().c_str());
-                            }
-                            else
-                            {
-                                *pkt << (uint8) WOW_FAIL_SUSPENDED;
-                                sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Temporarily banned account '%s' using IP '%s' tries to login!", self->m_login.c_str(), self->GetRemoteIpString().c_str());
-                            }
-                        }
-                        else
-                        {
-                            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "database authentication values: v='%s' s='%s'", databaseV.c_str(), databaseS.c_str());
+                                                          // If the account is banned, reject the logon attempt
+                                                          std::unique_ptr<QueryResult> sqlAccountBanResult = LoginDatabase.PQuery("SELECT `bandate`, `unbandate` FROM `account_banned` WHERE `id` = %u AND `active` = 1 AND (`unbandate` > UNIX_TIMESTAMP() OR `unbandate` = `bandate`) LIMIT 1", pendingAccountId);
+                                                          if (sqlAccountBanResult)
+                                                          {
+                                                              uint64_t banTimestamp = (*sqlAccountBanResult)[0].GetUInt64();
+                                                              uint64_t unbanTimestamp = (*sqlAccountBanResult)[1].GetUInt64();
+                                                              if (banTimestamp == unbanTimestamp)
+                                                              {
+                                                                  *pkt << (uint8)WOW_FAIL_BANNED;
+                                                                  sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Banned account '%s' using IP '%s' tries to login!", self->m_login.c_str(), self->GetRemoteIpString().c_str());
+                                                              }
+                                                              else
+                                                              {
+                                                                  *pkt << (uint8)WOW_FAIL_SUSPENDED;
+                                                                  sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Temporarily banned account '%s' using IP '%s' tries to login!", self->m_login.c_str(), self->GetRemoteIpString().c_str());
+                                                              }
+                                                          }
+                                                          else
+                                                          {
+                                                              sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "database authentication values: v='%s' s='%s'", databaseV.c_str(), databaseS.c_str());
 
-                            BigNumber s;
-                            s.SetHexStr(databaseS.c_str());
+                                                              BigNumber s;
+                                                              s.SetHexStr(databaseS.c_str());
 
-                            self->srp.CalculateHostPublicEphemeral();
+                                                              self->srp.CalculateHostPublicEphemeral();
 
-                            // Fill the response packet with the result
-                            *pkt << uint8(WOW_SUCCESS);
+                                                              // Fill the response packet with the result
+                                                              *pkt << uint8(WOW_SUCCESS);
 
-                            // B may be calculated < 32B so we force minimal length to 32B
-                            pkt->append(self->srp.GetHostPublicEphemeral().AsByteArray(32)); // 32 bytes
-                            *pkt << uint8(1);
-                            pkt->append(self->srp.GetGeneratorModulo().AsByteArray());
-                            *pkt << uint8(32);
-                            pkt->append(self->srp.GetPrime().AsByteArray(32));
-                            pkt->append(s.AsByteArray());// 32 bytes
-                            pkt->append(VersionChallenge.data(), VersionChallenge.size());
+                                                              // B may be calculated < 32B so we force minimal length to 32B
+                                                              pkt->append(self->srp.GetHostPublicEphemeral().AsByteArray(32)); // 32 bytes
+                                                              *pkt << uint8(1);
+                                                              pkt->append(self->srp.GetGeneratorModulo().AsByteArray());
+                                                              *pkt << uint8(32);
+                                                              pkt->append(self->srp.GetPrime().AsByteArray(32));
+                                                              pkt->append(s.AsByteArray()); // 32 bytes
+                                                              pkt->append(VersionChallenge.data(), VersionChallenge.size());
 
-                            // figure out whether we need to display the PIN grid
-                            self->m_promptPin = locked; // always prompt if the account is IP locked & 2FA is enabled
+                                                              // figure out whether we need to display the PIN grid
+                                                              self->m_promptPin = locked; // always prompt if the account is IP locked & 2FA is enabled
 
-                            if ((!locked && ((self->m_lockFlags & ALWAYS_ENFORCE) == ALWAYS_ENFORCE)) || self->m_geoUnlockPIN)
-                            {
-                                self->m_promptPin = true; // prompt if the lock hasn't been triggered but ALWAYS_ENFORCE is set
-                            }
+                                                              if ((!locked && ((self->m_lockFlags & ALWAYS_ENFORCE) == ALWAYS_ENFORCE)) || self->m_geoUnlockPIN)
+                                                              {
+                                                                  self->m_promptPin = true; // prompt if the lock hasn't been triggered but ALWAYS_ENFORCE is set
+                                                              }
 
-                            if (self->m_promptPin)
-                            {
-                                sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Account '%s' using IP '%s' requires PIN authentication", self->m_login.c_str(), self->GetRemoteIpString().c_str());
+                                                              if (self->m_promptPin)
+                                                              {
+                                                                  sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Account '%s' using IP '%s' requires PIN authentication", self->m_login.c_str(), self->GetRemoteIpString().c_str());
 
-                                uint32 gridSeedPkt = self->m_gridSeed = static_cast<uint32>(rand32());
-                                EndianConvert(gridSeedPkt);
-                                self->m_serverSecuritySalt.SetRand(16 * 8); // 16 bytes random
+                                                                  uint32 gridSeedPkt = self->m_gridSeed = static_cast<uint32>(rand32());
+                                                                  EndianConvert(gridSeedPkt);
+                                                                  self->m_serverSecuritySalt.SetRand(16 * 8); // 16 bytes random
 
-                                *pkt << uint8(1); // securityFlags, only '1' is available in classic (PIN input)
-                                *pkt << gridSeedPkt;
-                                pkt->append(self->m_serverSecuritySalt.AsByteArray(16).data(), 16);
-                            }
-                            else
-                            {
-                                if (self->m_build >= 5428)        // version 1.11.0 or later
-                                    *pkt << uint8(0);
-                            }
+                                                                  *pkt << uint8(1); // securityFlags, only '1' is available in classic (PIN input)
+                                                                  *pkt << gridSeedPkt;
+                                                                  pkt->append(self->m_serverSecuritySalt.AsByteArray(16).data(), 16);
+                                                              }
+                                                              else
+                                                              {
+                                                                  if (self->m_build >= 5428) // version 1.11.0 or later
+                                                                      *pkt << uint8(0);
+                                                              }
 
-                            self->LoadAccountSecurityLevels(pendingAccountId);
-                            self->m_accountId = pendingAccountId;
+                                                              self->LoadAccountSecurityLevels(pendingAccountId);
+                                                              self->m_accountId = pendingAccountId;
 
-                            // All good, await client's proof
-                            self->m_status = STATUS_LOGON_PROOF;
-                        }
-                    }
-                }
-                else
-                { // no account
-                    *pkt << (uint8) WOW_FAIL_UNKNOWN_ACCOUNT;
-                }
-            }
+                                                              // All good, await client's proof
+                                                              self->m_status = STATUS_LOGON_PROOF;
+                                                          }
+                                                      }
+                                                  }
+                                                  else
+                                                  { // no account
+                                                      *pkt << (uint8)WOW_FAIL_UNKNOWN_ACCOUNT;
+                                                  }
+                                              }
 
-            self->m_socket.Write(std::move(pkt), [self](IO::NetworkError const& error)
-            {
-                if (error)
-                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleLogonChallenge self->Write() Error: %s", error.ToString().c_str());
-                else
-                    self->DoRecvIncomingData();
-            });
-        });
-    });
+                                              self->m_socket.Write(std::move(pkt),
+                                                                   [self](IO::NetworkError const& error)
+                                                                   {
+                                                                       if (error)
+                                                                           sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleLogonChallenge self->Write() Error: %s", error.ToString().c_str());
+                                                                       else
+                                                                           self->DoRecvIncomingData();
+                                                                   });
+                                          });
+                  });
 }
 
 // Logon Proof command handler
@@ -481,39 +474,38 @@ void AuthSocket::_HandleLogonProof()
     // Read the packet
     std::shared_ptr<sAuthLogonProof_C> lp = std::make_shared<sAuthLogonProof_C>();
     size_t expectedSize = sizeof(sAuthLogonProof_C);
-    if (m_build < 5428) { // Pin support was added in 1.11.0, so if an older client connects, we need to skip those fields
+    if (m_build < 5428)
+    { // Pin support was added in 1.11.0, so if an older client connects, we need to skip those fields
         lp->securityFlags = SECURITY_FLAG_NONE;
         expectedSize = sizeof(sAuthLogonProof_C_Pre_1_11_0);
     }
 
-    m_socket.Read((char*) lp.get(), expectedSize, [self = shared_from_this(), lp](IO::NetworkError const& error, size_t)
-    {
-        if (error)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleLogonChallenge Read(): ERROR");
-            self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-            return;
-        }
+    m_socket.Read((char*)lp.get(), expectedSize,
+                  [self = shared_from_this(), lp](IO::NetworkError const& error, size_t)
+                  {
+                      if (error)
+                      {
+                          sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleLogonChallenge Read(): ERROR");
+                          self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                          return;
+                      }
 
-        if (lp->securityFlags)
-        {
-            if (!(lp->securityFlags & SECURITY_FLAG_PIN))
-            {
-                sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "_HandleLogonChallenge Invalid/Unsupported securityFlags: %u", lp->securityFlags);
-                self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-                return;
-            }
+                      if (lp->securityFlags)
+                      {
+                          if (!(lp->securityFlags & SECURITY_FLAG_PIN))
+                          {
+                              sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "_HandleLogonChallenge Invalid/Unsupported securityFlags: %u", lp->securityFlags);
+                              self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                              return;
+                          }
 
-            std::shared_ptr<PINData> pinData(new PINData());
-            self->m_socket.Read((char*) pinData.get(), sizeof(PINData), [self, lp, pinData](IO::NetworkError const& error, size_t)
-            {
-                self->_HandleLogonProof__PostRecv(lp, pinData);
-            });
-            return;
-        }
+                          std::shared_ptr<PINData> pinData(new PINData());
+                          self->m_socket.Read((char*)pinData.get(), sizeof(PINData), [self, lp, pinData](IO::NetworkError const& error, size_t) { self->_HandleLogonProof__PostRecv(lp, pinData); });
+                          return;
+                      }
 
-        self->_HandleLogonProof__PostRecv(lp, nullptr);
-    });
+                      self->_HandleLogonProof__PostRecv(lp, nullptr);
+                  });
 }
 
 void AuthSocket::_HandleLogonProof__PostRecv_HandleInvalidVersion(std::shared_ptr<sAuthLogonProof_C const> const& lp)
@@ -528,7 +520,7 @@ void AuthSocket::_HandleLogonProof__PostRecv_HandleInvalidVersion(std::shared_pt
     // file looks like: 65535enGB.mpq
     char tmp[256];
 
-    snprintf(tmp, 256, "%s/%d%s.mpq", sConfig.GetStringDefault("PatchesDir","./patches").c_str(), m_build, m_localizationName.c_str());
+    snprintf(tmp, 256, "%s/%d%s.mpq", sConfig.GetStringDefault("PatchesDir", "./patches").c_str(), m_build, m_localizationName.c_str());
 
     std::string pathFilePath = IO::Filesystem::ToAbsolutePath(tmp);
     m_pendingPatchFile = IO::Filesystem::TryOpenFileReadonly(pathFilePath);
@@ -537,21 +529,22 @@ void AuthSocket::_HandleLogonProof__PostRecv_HandleInvalidVersion(std::shared_pt
     {
         // no patch found
         std::shared_ptr<ByteBuffer> pkt(new ByteBuffer());
-        *pkt << (uint8) CMD_AUTH_LOGON_CHALLENGE;
-        *pkt << (uint8) 0x00;
-        *pkt << (uint8) WOW_FAIL_VERSION_INVALID;
+        *pkt << (uint8)CMD_AUTH_LOGON_CHALLENGE;
+        *pkt << (uint8)0x00;
+        *pkt << (uint8)WOW_FAIL_VERSION_INVALID;
         sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] %u is not a valid client version!", m_build);
         sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[AuthChallenge] Patch %s not found", tmp);
-        m_socket.Write(std::move(pkt), [self = shared_from_this(), pkt](IO::NetworkError const& error)
-        {
-            if (error)
-            {
-                sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "_HandleLogonProof__PostRecv Write(...) failed");
-                self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-                return;
-            }
-            self->DoRecvIncomingData();
-        });
+        m_socket.Write(std::move(pkt),
+                       [self = shared_from_this(), pkt](IO::NetworkError const& error)
+                       {
+                           if (error)
+                           {
+                               sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "_HandleLogonProof__PostRecv Write(...) failed");
+                               self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                               return;
+                           }
+                           self->DoRecvIncomingData();
+                       });
     }
     else
     {
@@ -562,8 +555,8 @@ void AuthSocket::_HandleLogonProof__PostRecv_HandleInvalidVersion(std::shared_pt
         std::shared_ptr<ByteBuffer> pkt(new ByteBuffer());
 
         // packet 1
-        *pkt << (uint8) CMD_AUTH_LOGON_PROOF;
-        *pkt << (uint8) WOW_FAIL_VERSION_UPDATE;
+        *pkt << (uint8)CMD_AUTH_LOGON_PROOF;
+        *pkt << (uint8)WOW_FAIL_VERSION_UPDATE;
 
         // packet 2 - XFER_INIT
         XFER_INIT initPkt{};
@@ -577,10 +570,7 @@ void AuthSocket::_HandleLogonProof__PostRecv_HandleInvalidVersion(std::shared_pt
         // Set right status
         m_status = STATUS_PATCH;
 
-        m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error)
-        {
-            self->DoRecvIncomingData();
-        });
+        m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
     }
 }
 
@@ -592,7 +582,7 @@ void AuthSocket::_HandleLogonProof__PostRecv(std::shared_ptr<sAuthLogonProof_C c
     bool valid_version = FindBuildInfo(m_build) != nullptr;
 
     // If the client has no valid version
-    if(!valid_version)
+    if (!valid_version)
     {
         _HandleLogonProof__PostRecv_HandleInvalidVersion(lp);
         return;
@@ -653,12 +643,9 @@ void AuthSocket::_HandleLogonProof__PostRecv(std::shared_ptr<sAuthLogonProof_C c
             sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Account %s tried to login with modified client!", m_login.c_str());
 
             std::shared_ptr<ByteBuffer> pkt(new ByteBuffer());
-            *pkt << (uint8) CMD_AUTH_LOGON_PROOF;
-            *pkt << (uint8) WOW_FAIL_VERSION_INVALID;
-            m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error)
-            {
-                self->DoRecvIncomingData();
-            });
+            *pkt << (uint8)CMD_AUTH_LOGON_PROOF;
+            *pkt << (uint8)WOW_FAIL_VERSION_INVALID;
+            m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
             return;
         }
 
@@ -682,23 +669,16 @@ void AuthSocket::_HandleLogonProof__PostRecv(std::shared_ptr<sAuthLogonProof_C c
                 sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Unable to write geolock PIN for %s - account has not been locked", m_safelogin.c_str());
 
                 std::shared_ptr<ByteBuffer> pkt(new ByteBuffer());
-                *pkt << (uint8) CMD_AUTH_LOGON_PROOF;
-                *pkt << (uint8) WOW_FAIL_DB_BUSY;
-                m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error)
-                {
-                    self->DoRecvIncomingData();
-                });
+                *pkt << (uint8)CMD_AUTH_LOGON_PROOF;
+                *pkt << (uint8)WOW_FAIL_DB_BUSY;
+                m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
                 return;
             }
 
 #ifdef ENABLE_MAILSENDER
             if (sConfig.GetBoolDefault("SendMail", false))
             {
-                auto mail = std::make_unique<SendgridMail>
-                (
-                    sConfig.GetStringDefault("SendGridKey", ""),
-                    sConfig.GetStringDefault("GeolockGUID", "")
-                );
+                auto mail = std::make_unique<SendgridMail>(sConfig.GetStringDefault("SendGridKey", ""), sConfig.GetStringDefault("GeolockGUID", ""));
 
                 mail->recipient(m_email);
                 mail->from(sConfig.GetStringDefault("MailFrom", ""));
@@ -706,22 +686,14 @@ void AuthSocket::_HandleLogonProof__PostRecv(std::shared_ptr<sAuthLogonProof_C c
                 mail->substitution("%unlock_pin%", std::to_string(pin));
                 mail->substitution("%originating_ip%", GetRemoteIpString());
 
-                MailerService::get_global_mailer()->send(std::move(mail),
-                    [](SendgridMail::Result res)
-                    {
-                        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Mail result: %d", res);
-                    }
-                );
+                MailerService::get_global_mailer()->send(std::move(mail), [](SendgridMail::Result res) { sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Mail result: %d", res); });
             }
 #endif
 
             std::shared_ptr<ByteBuffer> pkt(new ByteBuffer());
-            *pkt << (uint8) CMD_AUTH_LOGON_PROOF;
-            *pkt << (uint8) WOW_FAIL_PARENTCONTROL;
-            m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error)
-            {
-                self->DoRecvIncomingData();
-            });
+            *pkt << (uint8)CMD_AUTH_LOGON_PROOF;
+            *pkt << (uint8)WOW_FAIL_PARENTCONTROL;
+            m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
             return;
         }
 
@@ -732,8 +704,7 @@ void AuthSocket::_HandleLogonProof__PostRecv(std::shared_ptr<sAuthLogonProof_C c
         std::string K_hex = srp.GetStrongSessionKey().AsHexStr();
         // Why it must be sync: The new network implementation is so fast that the async db cant execute the UPDATE statement before the client tries to reach mangosd
         // If it is async there would be a race condition
-        bool result = LoginDatabase.PExecute(DbExecMode::MustBeSync, "UPDATE `account` SET `sessionkey` = '%s', `last_ip` = '%s', `last_login` = NOW(), `locale` = '%u', `failed_logins` = 0, `os` = '%s', `platform` = '%s' WHERE `username` = '%s'",
-                                             K_hex.c_str(), GetRemoteIpString().c_str(), GetLocaleByName(m_localizationName), m_os.c_str(), m_platform.c_str(), m_safelogin.c_str() );
+        bool result = LoginDatabase.PExecute(DbExecMode::MustBeSync, "UPDATE `account` SET `sessionkey` = '%s', `last_ip` = '%s', `last_login` = NOW(), `locale` = '%u', `failed_logins` = 0, `os` = '%s', `platform` = '%s' WHERE `username` = '%s'", K_hex.c_str(), GetRemoteIpString().c_str(), GetLocaleByName(m_localizationName), m_os.c_str(), m_platform.c_str(), m_safelogin.c_str());
         if (!result)
         {
             sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Unable to update login stats for account '%s'", m_safelogin.c_str());
@@ -745,66 +716,57 @@ void AuthSocket::_HandleLogonProof__PostRecv(std::shared_ptr<sAuthLogonProof_C c
         std::shared_ptr<ByteBuffer> pkt = GenerateLogonProofResponse(shaDigest);
         m_status = STATUS_AUTHED;
 
-        m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error)
-        {
-            self->DoRecvIncomingData();
-        });
+        m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
     }
     else
     {
         // We are here because the password was incorrect
-        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Account '%s' using IP '%s' tried to login with wrong password!", m_login.c_str (), GetRemoteIpString().c_str());
+        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Account '%s' using IP '%s' tried to login with wrong password!", m_login.c_str(), GetRemoteIpString().c_str());
 
         uint32 MaxWrongPassCount = sConfig.GetIntDefault("WrongPass.MaxCount", 0);
-        if(MaxWrongPassCount > 0)
+        if (MaxWrongPassCount > 0)
         {
-            //Increment number of failed logins by one and if it reaches the limit temporarily ban that account or IP
-            LoginDatabase.PExecute("UPDATE `account` SET `failed_logins` = `failed_logins` + 1 WHERE `username` = '%s'",m_safelogin.c_str());
+            // Increment number of failed logins by one and if it reaches the limit temporarily ban that account or IP
+            LoginDatabase.PExecute("UPDATE `account` SET `failed_logins` = `failed_logins` + 1 WHERE `username` = '%s'", m_safelogin.c_str());
 
             if (std::unique_ptr<QueryResult> failedLoginsDbResult = LoginDatabase.PQuery("SELECT `id`, `failed_logins` FROM `account` WHERE `username` = '%s'", m_safelogin.c_str()))
             {
                 Field* fields = failedLoginsDbResult->Fetch();
                 uint32 failed_logins = fields[1].GetUInt32();
 
-                if( failed_logins >= MaxWrongPassCount )
+                if (failed_logins >= MaxWrongPassCount)
                 {
                     uint32 WrongPassBanTime = sConfig.GetIntDefault("WrongPass.BanTime", 600);
                     bool WrongPassBanType = sConfig.GetBoolDefault("WrongPass.BanType", false);
 
-                    if(WrongPassBanType)
+                    if (WrongPassBanType)
                     {
                         uint32 acc_id = fields[0].GetUInt32();
                         LoginDatabase.PExecute("INSERT INTO `account_banned` (`id`, `bandate`, `unbandate`, `bannedby`, `banreason`, `active`, `realm`) "
-                            "VALUES ('%u',UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+'%u','MaNGOS realmd','Failed login autoban',1,1)",
-                            acc_id, WrongPassBanTime);
-                        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Account '%s' using  IP '%s' got banned for '%u' seconds because it failed to authenticate '%u' times",
-                                 m_login.c_str(), GetRemoteIpString().c_str(), WrongPassBanTime, failed_logins);
+                                               "VALUES ('%u',UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+'%u','MaNGOS realmd','Failed login autoban',1,1)",
+                                               acc_id, WrongPassBanTime);
+                        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] Account '%s' using  IP '%s' got banned for '%u' seconds because it failed to authenticate '%u' times", m_login.c_str(), GetRemoteIpString().c_str(), WrongPassBanTime, failed_logins);
                     }
                     else
                     {
                         std::string current_ip = GetRemoteIpString();
                         LoginDatabase.escape_string(current_ip);
-                        LoginDatabase.PExecute("INSERT INTO `ip_banned` VALUES ('%s',UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+'%u','MaNGOS realmd','Failed login autoban')",
-                            current_ip.c_str(), WrongPassBanTime);
-                        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] IP '%s' got banned for '%u' seconds because account '%s' failed to authenticate '%u' times",
-                            current_ip.c_str(), WrongPassBanTime, m_login.c_str(), failed_logins);
+                        LoginDatabase.PExecute("INSERT INTO `ip_banned` VALUES ('%s',UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+'%u','MaNGOS realmd','Failed login autoban')", current_ip.c_str(), WrongPassBanTime);
+                        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[AuthChallenge] IP '%s' got banned for '%u' seconds because account '%s' failed to authenticate '%u' times", current_ip.c_str(), WrongPassBanTime, m_login.c_str(), failed_logins);
                     }
                 }
             }
         }
 
         std::shared_ptr<ByteBuffer> pkt(new ByteBuffer());
-        *pkt << (uint8) CMD_AUTH_LOGON_PROOF;
-        *pkt << (uint8) WOW_FAIL_UNKNOWN_ACCOUNT;
+        *pkt << (uint8)CMD_AUTH_LOGON_PROOF;
+        *pkt << (uint8)WOW_FAIL_UNKNOWN_ACCOUNT;
         if (m_build > 6005) // > 1.12.2
         {
-            *pkt << (uint8) 0;
-            *pkt << (uint8) 0;
+            *pkt << (uint8)0;
+            *pkt << (uint8)0;
         }
-        m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error)
-        {
-            self->DoRecvIncomingData();
-        });
+        m_socket.Write(std::move(pkt), [self = shared_from_this()](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
     }
 }
 
@@ -816,106 +778,105 @@ void AuthSocket::_HandleReconnectChallenge()
 
     // Read the header first, to get the length of the remaining packet
     std::shared_ptr<sAuthLogonChallengeHeader> header = std::make_shared<sAuthLogonChallengeHeader>();
-    m_socket.Read((char*)header.get(), sizeof(sAuthLogonChallengeHeader), [self = shared_from_this(), header](IO::NetworkError const& error, size_t)
-    {
-        if (error)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleReconnectChallenge Read(header): ERROR");
-            self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-            return;
-        }
+    m_socket.Read((char*)header.get(), sizeof(sAuthLogonChallengeHeader),
+                  [self = shared_from_this(), header](IO::NetworkError const& error, size_t)
+                  {
+                      if (error)
+                      {
+                          sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleReconnectChallenge Read(header): ERROR");
+                          self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                          return;
+                      }
 
-        uint16* pUint16 = reinterpret_cast<uint16*>(header.get());
-        EndianConvert(*pUint16);
-        uint16 actualBodySize = header->size;
+                      uint16* pUint16 = reinterpret_cast<uint16*>(header.get());
+                      EndianConvert(*pUint16);
+                      uint16 actualBodySize = header->size;
 
-        if (actualBodySize < sizeof(sAuthLogonChallengeBody) - AUTH_LOGON_MAX_NAME) // TODO: @cMangos: Why is here "-10" and not AUTH_LOGON_MAX_NAME
-        { // The paket is too small and has no username???
-            return;
-        }
+                      if (actualBodySize < sizeof(sAuthLogonChallengeBody) - AUTH_LOGON_MAX_NAME) // TODO: @cMangos: Why is here "-10" and not AUTH_LOGON_MAX_NAME
+                      { // The paket is too small and has no username???
+                          return;
+                      }
 
-        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[ReconnectChallenge] got header, body is %#04x bytes", actualBodySize);
+                      sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[ReconnectChallenge] got header, body is %#04x bytes", actualBodySize);
 
-        // Read the remaining of the packet
-        std::shared_ptr<sAuthLogonChallengeBody> body = std::make_shared<sAuthLogonChallengeBody>();
-        self->m_socket.Read((char*)body.get(), actualBodySize, [self, header, body](IO::NetworkError const& error, size_t)
-        {
-            if (error)
-            {
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleReconnectChallenge self->m_socket.Read(body): ERROR");
-                self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-                return;
-            }
+                      // Read the remaining of the packet
+                      std::shared_ptr<sAuthLogonChallengeBody> body = std::make_shared<sAuthLogonChallengeBody>();
+                      self->m_socket.Read((char*)body.get(), actualBodySize,
+                                          [self, header, body](IO::NetworkError const& error, size_t)
+                                          {
+                                              if (error)
+                                              {
+                                                  sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleReconnectChallenge self->m_socket.Read(body): ERROR");
+                                                  self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                                                  return;
+                                              }
 
-            if (body->username_len > AUTH_LOGON_MAX_NAME)
-                return;
-            body->username[body->username_len] = '\0';
+                                              if (body->username_len > AUTH_LOGON_MAX_NAME)
+                                                  return;
+                                              body->username[body->username_len] = '\0';
 
-            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[ReconnectChallenge] got full packet, %#04x bytes", header->size);
-            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[ReconnectChallenge] name(%d): '%s'", body->username_len, body->username);
+                                              sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[ReconnectChallenge] got full packet, %#04x bytes", header->size);
+                                              sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[ReconnectChallenge] name(%d): '%s'", body->username_len, body->username);
 
-            // BigEndian code, nop in little endian case
-            // size already converted
-            EndianConvert(*((uint32*)(&body->gamename[0])));
-            EndianConvert(body->build);
-            EndianConvert(*((uint32*)(&body->platform[0])));
-            EndianConvert(*((uint32*)(&body->os[0])));
-            EndianConvert(*((uint32*)(&body->country[0])));
-            EndianConvert(body->timezone_bias);
-            EndianConvert(body->ip);
+                                              // BigEndian code, nop in little endian case
+                                              // size already converted
+                                              EndianConvert(*((uint32*)(&body->gamename[0])));
+                                              EndianConvert(body->build);
+                                              EndianConvert(*((uint32*)(&body->platform[0])));
+                                              EndianConvert(*((uint32*)(&body->os[0])));
+                                              EndianConvert(*((uint32*)(&body->country[0])));
+                                              EndianConvert(body->timezone_bias);
+                                              EndianConvert(body->ip);
 
-            self->m_build = body->build;
+                                              self->m_build = body->build;
 
-            // Convert uint8[4] to string, restore string order as its byte order is reversed
-            // To it for os
-            body->os[3] = '\0';
-            self->m_os = (char*)body->os;
-            std::reverse(self->m_os.begin(), self->m_os.end());
-            // To it for platform
-            body->platform[3] = '\0';
-            self->m_platform = (char*)body->platform;
-            std::reverse(self->m_platform.begin(), self->m_platform.end());
-            // Do it for locale
-            self->m_localizationName.resize(sizeof(body->country));
-            self->m_localizationName.assign(body->country, (body->country + sizeof(body->country)));
-            std::reverse(self->m_localizationName.begin(), self->m_localizationName.end());
+                                              // Convert uint8[4] to string, restore string order as its byte order is reversed
+                                              // To it for os
+                                              body->os[3] = '\0';
+                                              self->m_os = (char*)body->os;
+                                              std::reverse(self->m_os.begin(), self->m_os.end());
+                                              // To it for platform
+                                              body->platform[3] = '\0';
+                                              self->m_platform = (char*)body->platform;
+                                              std::reverse(self->m_platform.begin(), self->m_platform.end());
+                                              // Do it for locale
+                                              self->m_localizationName.resize(sizeof(body->country));
+                                              self->m_localizationName.assign(body->country, (body->country + sizeof(body->country)));
+                                              std::reverse(self->m_localizationName.begin(), self->m_localizationName.end());
 
-            // Escape the user input used in DB to avoid further SQL injection
-            // Memory will be freed on AuthSocket object destruction
-            self->m_login = (char const*)body->username;
-            self->m_safelogin = self->m_login;
-            LoginDatabase.escape_string(self->m_safelogin);
+                                              // Escape the user input used in DB to avoid further SQL injection
+                                              // Memory will be freed on AuthSocket object destruction
+                                              self->m_login = (char const*)body->username;
+                                              self->m_safelogin = self->m_login;
+                                              LoginDatabase.escape_string(self->m_safelogin);
 
-            std::unique_ptr<QueryResult> queryResult = LoginDatabase.PQuery("SELECT `sessionkey`, `id` FROM `account` WHERE `username` = '%s'", self->m_safelogin.c_str());
+                                              std::unique_ptr<QueryResult> queryResult = LoginDatabase.PQuery("SELECT `sessionkey`, `id` FROM `account` WHERE `username` = '%s'", self->m_safelogin.c_str());
 
-            // Stop if the account is not found
-            if (!queryResult)
-            {
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "user %s tried to login and we cannot find his session key in the database.", self->m_login.c_str());
-                self->CloseSocket();
-                return;
-            }
+                                              // Stop if the account is not found
+                                              if (!queryResult)
+                                              {
+                                                  sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "user %s tried to login and we cannot find his session key in the database.", self->m_login.c_str());
+                                                  self->CloseSocket();
+                                                  return;
+                                              }
 
-            Field* fields = queryResult->Fetch();
-            self->srp.SetStrongSessionKey(fields[0].GetString());
-            self->m_accountId = fields[1].GetUInt32();
+                                              Field* fields = queryResult->Fetch();
+                                              self->srp.SetStrongSessionKey(fields[0].GetString());
+                                              self->m_accountId = fields[1].GetUInt32();
 
-            // All good, await client's proof
-            self->m_status = STATUS_RECON_PROOF;
+                                              // All good, await client's proof
+                                              self->m_status = STATUS_RECON_PROOF;
 
-            // Sending response
-            std::shared_ptr<ByteBuffer> pkt = std::make_shared<ByteBuffer>();
-            *pkt << (uint8)CMD_AUTH_RECONNECT_CHALLENGE;
-            *pkt << (uint8)0x00;
-            self->m_reconnectProof.SetRand(16 * 8);
-            pkt->append(self->m_reconnectProof.AsByteArray(16));        // 16 bytes random
-            pkt->append(VersionChallenge.data(), VersionChallenge.size());
-            self->m_socket.Write(std::move(pkt), [self](IO::NetworkError const& error)
-            {
-                self->DoRecvIncomingData();
-            });
-        });
-    });
+                                              // Sending response
+                                              std::shared_ptr<ByteBuffer> pkt = std::make_shared<ByteBuffer>();
+                                              *pkt << (uint8)CMD_AUTH_RECONNECT_CHALLENGE;
+                                              *pkt << (uint8)0x00;
+                                              self->m_reconnectProof.SetRand(16 * 8);
+                                              pkt->append(self->m_reconnectProof.AsByteArray(16)); // 16 bytes random
+                                              pkt->append(VersionChallenge.data(), VersionChallenge.size());
+                                              self->m_socket.Write(std::move(pkt), [self](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
+                                          });
+                  });
 }
 
 // Reconnect Proof command handler
@@ -926,58 +887,56 @@ void AuthSocket::_HandleReconnectProof()
 
     // Read the packet
     std::shared_ptr<AUTH_RECONNECT_PROOF_C> lp(new AUTH_RECONNECT_PROOF_C());
-    m_socket.Read((char*) lp.get(), sizeof(AUTH_RECONNECT_PROOF_C), [self = shared_from_this(), lp](IO::NetworkError const& error, size_t)
-    {
-        if (error)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleReconnectProof self->m_socket.Read(): ERROR");
-            self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-            return;
-        }
+    m_socket.Read((char*)lp.get(), sizeof(AUTH_RECONNECT_PROOF_C),
+                  [self = shared_from_this(), lp](IO::NetworkError const& error, size_t)
+                  {
+                      if (error)
+                      {
+                          sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "_HandleReconnectProof self->m_socket.Read(): ERROR");
+                          self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                          return;
+                      }
 
-        BigNumber K = self->srp.GetStrongSessionKey();
-        if (self->m_login.empty() || !self->m_reconnectProof.GetNumBytes() || !K.GetNumBytes())
-            return;
+                      BigNumber K = self->srp.GetStrongSessionKey();
+                      if (self->m_login.empty() || !self->m_reconnectProof.GetNumBytes() || !K.GetNumBytes())
+                          return;
 
-        BigNumber t1;
-        t1.SetBinary(lp->R1, 16);
+                      BigNumber t1;
+                      t1.SetBinary(lp->R1, 16);
 
-        Crypto::Hash::SHA1::Generator sha;
-        sha.UpdateData(self->m_login);
-        sha.UpdateData(t1);
-        sha.UpdateData(self->m_reconnectProof);
-        sha.UpdateData(K);
-        Crypto::Hash::SHA1::Digest digest = sha.GetDigest();
+                      Crypto::Hash::SHA1::Generator sha;
+                      sha.UpdateData(self->m_login);
+                      sha.UpdateData(t1);
+                      sha.UpdateData(self->m_reconnectProof);
+                      sha.UpdateData(K);
+                      Crypto::Hash::SHA1::Digest digest = sha.GetDigest();
 
-        if (!memcmp(digest.data(), lp->R2, digest.size()))
-        {
-            if (!self->VerifyVersion(lp->R1, sizeof(lp->R1), lp->R3, true))
-            {
-                std::shared_ptr<ByteBuffer> pkt = std::make_shared<ByteBuffer>();
-                *pkt << uint8(CMD_AUTH_RECONNECT_PROOF);
-                *pkt << uint8(WOW_FAIL_VERSION_INVALID);
-                return;
-            }
+                      if (!memcmp(digest.data(), lp->R2, digest.size()))
+                      {
+                          if (!self->VerifyVersion(lp->R1, sizeof(lp->R1), lp->R3, true))
+                          {
+                              std::shared_ptr<ByteBuffer> pkt = std::make_shared<ByteBuffer>();
+                              *pkt << uint8(CMD_AUTH_RECONNECT_PROOF);
+                              *pkt << uint8(WOW_FAIL_VERSION_INVALID);
+                              return;
+                          }
 
-            // Sending response
-            std::shared_ptr<ByteBuffer> pkt = std::make_shared<ByteBuffer>();
-            *pkt << uint8(CMD_AUTH_RECONNECT_PROOF);
-            *pkt << uint8(WOW_SUCCESS);
-            self->m_socket.Write(std::move(pkt), [self](IO::NetworkError const& error)
-            {
-                self->DoRecvIncomingData();
-            });
+                          // Sending response
+                          std::shared_ptr<ByteBuffer> pkt = std::make_shared<ByteBuffer>();
+                          *pkt << uint8(CMD_AUTH_RECONNECT_PROOF);
+                          *pkt << uint8(WOW_SUCCESS);
+                          self->m_socket.Write(std::move(pkt), [self](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
 
-            self->m_status = STATUS_AUTHED;
-            return;
-        }
-        else
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "user %s tried to login, but session invalid.", self->m_login.c_str());
-            self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-            return;
-        }
-    });
+                          self->m_status = STATUS_AUTHED;
+                          return;
+                      }
+                      else
+                      {
+                          sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "user %s tried to login, but session invalid.", self->m_login.c_str());
+                          self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                          return;
+                      }
+                  });
 }
 
 // %Realm List command handler
@@ -986,55 +945,53 @@ void AuthSocket::_HandleRealmList()
     assert(this->m_accountId);
 
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Entering _HandleRealmList");
-    m_socket.ReadSkip(4, [self = shared_from_this()](IO::NetworkError const& error)
-    {
-        if (error)
-        {
-            self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-            return;
-        }
+    m_socket.ReadSkip(4,
+                      [self = shared_from_this()](IO::NetworkError const& error)
+                      {
+                          if (error)
+                          {
+                              self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                              return;
+                          }
 
-        // check for too frequent requests
-        auto const minDelay = sConfig.GetIntDefault("MinRealmListDelay", 1);
-        auto const now = std::chrono::steady_clock::now();
-        if (self->m_lastRealmListRequest.has_value())
-        {
-            auto const delay = std::chrono::duration_cast<std::chrono::seconds>(now - self->m_lastRealmListRequest.value()).count();
-            if (delay < minDelay)
-            {
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "user %s IP %s is sending CMD_REALM_LIST too frequently. Delay = %d seconds", self->m_login.c_str(), self->GetRemoteIpString().c_str(), delay);
+                          // check for too frequent requests
+                          auto const minDelay = sConfig.GetIntDefault("MinRealmListDelay", 1);
+                          auto const now = std::chrono::steady_clock::now();
+                          if (self->m_lastRealmListRequest.has_value())
+                          {
+                              auto const delay = std::chrono::duration_cast<std::chrono::seconds>(now - self->m_lastRealmListRequest.value()).count();
+                              if (delay < minDelay)
+                              {
+                                  sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "user %s IP %s is sending CMD_REALM_LIST too frequently. Delay = %d seconds", self->m_login.c_str(), self->GetRemoteIpString().c_str(), delay);
 
-                self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
-                return;
-            }
-        }
+                                  self->CloseSocket(); // TODO: Remove me. Closing the socket will be done implicitly if all references to this socket are deleted (when there is no IO anymore)
+                                  return;
+                              }
+                          }
 
-        self->m_lastRealmListRequest = now;
+                          self->m_lastRealmListRequest = now;
 
-        // Update realm list if need
-        sRealmList.UpdateIfNeed();
+                          // Update realm list if need
+                          sRealmList.UpdateIfNeed();
 
-        // Circle through realms in the RealmList and construct the return packet (including # of user characters in each realm)
-        ByteBuffer realmlistBuffer;
-        self->LoadRealmlistAndWriteIntoBuffer(realmlistBuffer);
+                          // Circle through realms in the RealmList and construct the return packet (including # of user characters in each realm)
+                          ByteBuffer realmlistBuffer;
+                          self->LoadRealmlistAndWriteIntoBuffer(realmlistBuffer);
 
-        std::shared_ptr<ByteBuffer> pkt(new ByteBuffer());
-        *pkt << (uint8) CMD_REALM_LIST;
-        *pkt << (uint16)realmlistBuffer.size();
-        pkt->append(realmlistBuffer);
+                          std::shared_ptr<ByteBuffer> pkt(new ByteBuffer());
+                          *pkt << (uint8)CMD_REALM_LIST;
+                          *pkt << (uint16)realmlistBuffer.size();
+                          pkt->append(realmlistBuffer);
 
-        self->m_socket.Write(std::move(pkt), [self](IO::NetworkError const& error)
-        {
-            self->DoRecvIncomingData();
-        });
-    });
+                          self->m_socket.Write(std::move(pkt), [self](IO::NetworkError const& error) { self->DoRecvIncomingData(); });
+                      });
 }
 
-void AuthSocket::LoadRealmlistAndWriteIntoBuffer(ByteBuffer &pkt)
+void AuthSocket::LoadRealmlistAndWriteIntoBuffer(ByteBuffer& pkt)
 {
-    if (m_build < 6299)        // before version 2.0.3 (exclusive)
+    if (m_build < 6299) // before version 2.0.3 (exclusive)
     {
-        pkt << uint32(0);                               // unused value
+        pkt << uint32(0); // unused value
         pkt << uint8(sRealmList.size());
 
         for (RealmList::RealmMap::const_iterator i = sRealmList.begin(); i != sRealmList.end(); ++i)
@@ -1045,7 +1002,7 @@ void AuthSocket::LoadRealmlistAndWriteIntoBuffer(ByteBuffer &pkt)
             std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `numchars` FROM `realmcharacters` WHERE `realmid` = '%d' AND `acctid`='%u'", i->second.id, m_accountId);
             if (result)
             {
-                Field *fields = result->Fetch();
+                Field* fields = result->Fetch();
                 AmountOfCharacters = fields[0].GetUInt8();
             }
             else
@@ -1075,21 +1032,21 @@ void AuthSocket::LoadRealmlistAndWriteIntoBuffer(ByteBuffer &pkt)
             std::string realmIpPortStr = i->second.GetAddressForClient(m_socket.GetRemoteEndpoint().ip).toString();
             uint8 const categoryId = GetRealmCategoryIdByBuildAndZone(m_build, RealmZone(i->second.timeZone));
 
-            pkt << uint32(i->second.icon);              // realm type
-            pkt << uint8(realmflags);                   // realmflags
-            pkt << name;                                // name
-            pkt << realmIpPortStr;                      // address
+            pkt << uint32(i->second.icon); // realm type
+            pkt << uint8(realmflags); // realmflags
+            pkt << name; // name
+            pkt << realmIpPortStr; // address
             pkt << float(i->second.populationLevel);
             pkt << uint8(AmountOfCharacters);
-            pkt << uint8(categoryId);                   // realm category
-            pkt << uint8(0x00);                         // unk, may be realm number/id?
+            pkt << uint8(categoryId); // realm category
+            pkt << uint8(0x00); // unk, may be realm number/id?
         }
 
-        pkt << uint16(0x0002);                          // unused value (why 2?)
+        pkt << uint16(0x0002); // unused value (why 2?)
     }
     else
     {
-        pkt << uint32(0);                               // unused value
+        pkt << uint32(0); // unused value
         pkt << uint16(sRealmList.size());
 
         for (RealmList::RealmMap::const_iterator i = sRealmList.begin(); i != sRealmList.end(); ++i)
@@ -1100,7 +1057,7 @@ void AuthSocket::LoadRealmlistAndWriteIntoBuffer(ByteBuffer &pkt)
             std::unique_ptr<QueryResult> result = LoginDatabase.PQuery("SELECT `numchars` FROM `realmcharacters` WHERE `realmid` = '%d' AND `acctid`='%u'", i->second.id, m_accountId);
             if (result)
             {
-                Field *fields = result->Fetch();
+                Field* fields = result->Fetch();
                 AmountOfCharacters = fields[0].GetUInt8();
             }
             else
@@ -1126,15 +1083,15 @@ void AuthSocket::LoadRealmlistAndWriteIntoBuffer(ByteBuffer &pkt)
             std::string realmIpPortStr = i->second.GetAddressForClient(m_socket.GetRemoteEndpoint().ip).toString();
             uint8 const categoryId = GetRealmCategoryIdByBuildAndZone(m_build, RealmZone(i->second.timeZone));
 
-            pkt << uint8(i->second.icon);               // realm type (this is second column in Cfg_Configs.dbc)
-            pkt << uint8(lock);                         // flags, if 0x01, then realm locked
-            pkt << uint8(realmFlags);                   // see enum RealmFlags
-            pkt << i->first;                            // name
-            pkt << realmIpPortStr;                      // address
+            pkt << uint8(i->second.icon); // realm type (this is second column in Cfg_Configs.dbc)
+            pkt << uint8(lock); // flags, if 0x01, then realm locked
+            pkt << uint8(realmFlags); // see enum RealmFlags
+            pkt << i->first; // name
+            pkt << realmIpPortStr; // address
             pkt << float(i->second.populationLevel);
             pkt << uint8(AmountOfCharacters);
-            pkt << uint8(categoryId);                   // realm category (Cfg_Categories.dbc)
-            pkt << uint8(i->second.id);                 // realm id
+            pkt << uint8(categoryId); // realm category (Cfg_Categories.dbc)
+            pkt << uint8(i->second.id); // realm id
 
             if (realmFlags & REALM_FLAG_SPECIFYBUILD)
             {
@@ -1145,7 +1102,7 @@ void AuthSocket::LoadRealmlistAndWriteIntoBuffer(ByteBuffer &pkt)
             }
         }
 
-        pkt << uint16(0x0010);                          // unused value (why 10?)
+        pkt << uint16(0x0010); // unused value (why 10?)
     }
 }
 
@@ -1177,20 +1134,21 @@ void AuthSocket::_HandleXferResume()
     }
 
     auto startPosPtr = std::make_shared<int64>();
-    m_socket.Read(reinterpret_cast<char*>(startPosPtr.get()), sizeof(int64), [self = shared_from_this(), startPosPtr](IO::NetworkError const& error, std::size_t)
-    {
-        int64 startPos = *startPosPtr;
-        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[XFER] User '%s' wants to resume download at byte %llu", self->m_safelogin.c_str(), startPos);
+    m_socket.Read(reinterpret_cast<char*>(startPosPtr.get()), sizeof(int64),
+                  [self = shared_from_this(), startPosPtr](IO::NetworkError const& error, std::size_t)
+                  {
+                      int64 startPos = *startPosPtr;
+                      sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "[XFER] User '%s' wants to resume download at byte %llu", self->m_safelogin.c_str(), startPos);
 
-        if (startPos >= self->m_pendingPatchFile->GetTotalFileSize() || startPos < 0)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[XFER] User '%s' tried to resume download outside file bounds", self->m_safelogin.c_str());
-            return;
-        }
+                      if (startPos >= self->m_pendingPatchFile->GetTotalFileSize() || startPos < 0)
+                      {
+                          sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "[XFER] User '%s' tried to resume download outside file bounds", self->m_safelogin.c_str());
+                          return;
+                      }
 
-        self->m_pendingPatchFile->Seek(IO::Filesystem::SeekDirection::Start, startPos);
-        self->InitAndHandOverControlToPatchHandler();
-    });
+                      self->m_pendingPatchFile->Seek(IO::Filesystem::SeekDirection::Start, startPos);
+                      self->InitAndHandOverControlToPatchHandler();
+                  });
 }
 
 // Cancel patch transfer
@@ -1204,7 +1162,7 @@ void AuthSocket::_HandleXferCancel()
 bool AuthSocket::VerifyPinData(uint32 pin, PINData const& clientData)
 {
     // remap the grid to match the client's layout
-    std::vector<uint8> grid { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    std::vector<uint8> grid{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
     std::vector<uint8> remappedGrid(grid.size());
 
     uint8* remappedIndex = remappedGrid.data();
@@ -1294,8 +1252,7 @@ uint32 AuthSocket::GenerateTotpPin(std::string const& secret, int interval)
     auto hmac_result = hmac.GetDigest();
 
     unsigned int offset = hmac_result[19] & 0xF;
-    std::uint32_t pin = (hmac_result[offset] & 0x7f) << 24 | (hmac_result[offset + 1] & 0xff) << 16
-        | (hmac_result[offset + 2] & 0xff) << 8 | (hmac_result[offset + 3] & 0xff);
+    std::uint32_t pin = (hmac_result[offset] & 0x7f) << 24 | (hmac_result[offset + 1] & 0xff) << 16 | (hmac_result[offset + 2] & 0xff) << 8 | (hmac_result[offset + 3] & 0xff);
     EndianConvert(pin);
 
     pin &= 0x7FFFFFFF;
@@ -1314,20 +1271,21 @@ void AuthSocket::RepeatInternalXferLoop(std::shared_ptr<XFER_DATA_CHUNK> const& 
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[XFER]: Done");
         return;
     }
-    chunk->data_size = (uint16_t) actualReadAmount;
+    chunk->data_size = (uint16_t)actualReadAmount;
 
     // This `fakeSharedPtr` is a bit hacky, we cannot simply Write() a XFER_DATA_CHUNK pointer.
     // This is why we convert it to an uint8 pointer without a deallocator.
     std::shared_ptr<uint8 const> fakeSharedPtr((uint8_t const*)chunk.get(), MaNGOS::Memory::no_deleter<uint8>());
-    m_socket.Write({ fakeSharedPtr, size_t(sizeof(chunk->cmd) + sizeof(chunk->data_size) + actualReadAmount) }, [self = shared_from_this(), chunk](IO::NetworkError const& error)
-    {
-        if (error)
-        {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[XFER]: Write(...) failed: %s", error.ToString().c_str());
-            return;
-        }
-        self->RepeatInternalXferLoop(chunk); // Do it again, until everything is transferred
-    });
+    m_socket.Write({fakeSharedPtr, size_t(sizeof(chunk->cmd) + sizeof(chunk->data_size) + actualReadAmount)},
+                   [self = shared_from_this(), chunk](IO::NetworkError const& error)
+                   {
+                       if (error)
+                       {
+                           sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[XFER]: Write(...) failed: %s", error.ToString().c_str());
+                           return;
+                       }
+                       self->RepeatInternalXferLoop(chunk); // Do it again, until everything is transferred
+                   });
 }
 
 void AuthSocket::InitAndHandOverControlToPatchHandler()
@@ -1348,14 +1306,15 @@ void AuthSocket::LoadAccountSecurityLevels(uint32 accountId)
 
     do
     {
-        Field *fields = result->Fetch();
+        Field* fields = result->Fetch();
         AccountTypes security = AccountTypes(fields[0].GetUInt32());
         int realmId = fields[1].GetInt32();
         if (realmId < 0)
             m_accountDefaultSecurityLevel = security;
         else
             m_accountSecurityOnRealm[realmId] = security;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 }
 
 bool AuthSocket::GeographicalLockCheck()
@@ -1375,21 +1334,17 @@ bool AuthSocket::GeographicalLockCheck()
         return false;
     }
 
-    auto result = std::unique_ptr<QueryResult>(LoginDatabase.PQuery(
-        "SELECT INET_ATON('%s') AS ip, network_start_integer, geoname_id, registered_country_geoname_id "
-        "FROM geoip "
-        "WHERE network_last_integer >= INET_ATON('%s') "
-        "ORDER BY network_last_integer ASC LIMIT 1",
-        GetRemoteIpString().c_str(), GetRemoteIpString().c_str())
-        );
+    auto result = std::unique_ptr<QueryResult>(LoginDatabase.PQuery("SELECT INET_ATON('%s') AS ip, network_start_integer, geoname_id, registered_country_geoname_id "
+                                                                    "FROM geoip "
+                                                                    "WHERE network_last_integer >= INET_ATON('%s') "
+                                                                    "ORDER BY network_last_integer ASC LIMIT 1",
+                                                                    GetRemoteIpString().c_str(), GetRemoteIpString().c_str()));
 
-    auto result_prev = std::unique_ptr<QueryResult>(LoginDatabase.PQuery(
-        "SELECT INET_ATON('%s') AS ip, network_start_integer, geoname_id, registered_country_geoname_id "
-        "FROM geoip "
-        "WHERE network_last_integer >= INET_ATON('%s') "
-        "ORDER BY network_last_integer ASC LIMIT 1",
-        m_lastIP.c_str(), m_lastIP.c_str())
-        );
+    auto result_prev = std::unique_ptr<QueryResult>(LoginDatabase.PQuery("SELECT INET_ATON('%s') AS ip, network_start_integer, geoname_id, registered_country_geoname_id "
+                                                                         "FROM geoip "
+                                                                         "WHERE network_last_integer >= INET_ATON('%s') "
+                                                                         "ORDER BY network_last_integer ASC LIMIT 1",
+                                                                         m_lastIP.c_str(), m_lastIP.c_str()));
 
     if (!result && !result_prev)
     {
@@ -1443,7 +1398,7 @@ bool AuthSocket::VerifyVersion(uint8 const* a, int32 aLength, uint8 const* versi
 
     for (RealmBuildInfo const* pBuildInfo : allowedClients)
     {
-        std::array<uint8, 20> zeros = { {} };
+        std::array<uint8, 20> zeros = {{}};
         std::array<uint8, 20> const* versionHash = nullptr;
         if (!isReconnect)
         {
@@ -1453,7 +1408,7 @@ bool AuthSocket::VerifyVersion(uint8 const* a, int32 aLength, uint8 const* versi
                 return false;
 
             if (!memcmp(versionHash->data(), zeros.data(), zeros.size()))
-                return true;                                                            // not filled serverside
+                return true; // not filled serverside
         }
         else
             versionHash = &zeros;
@@ -1470,7 +1425,4 @@ bool AuthSocket::VerifyVersion(uint8 const* a, int32 aLength, uint8 const* versi
     return false;
 }
 
-void AuthSocket::CloseSocket()
-{
-    m_socket.CloseSocket();
-}
+void AuthSocket::CloseSocket() { m_socket.CloseSocket(); }

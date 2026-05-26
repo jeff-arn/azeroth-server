@@ -17,16 +17,16 @@
  */
 
 #include "ModelInstance.h"
-#include "WorldModel.h"
 #include "MapTree.h"
 #include "VMapDefinitions.h"
+#include "WorldModel.h"
 
-using G3D::Vector3;
 using G3D::Ray;
+using G3D::Vector3;
 
 namespace VMAP
 {
-    ModelInstance::ModelInstance(ModelSpawn const& spawn, std::shared_ptr<WorldModel> model): ModelSpawn(spawn), iModel(model)
+    ModelInstance::ModelInstance(ModelSpawn const& spawn, std::shared_ptr<WorldModel> model) : ModelSpawn(spawn), iModel(model)
     {
         iInvRot = G3D::Matrix3::fromEulerAnglesZYX(G3D::pi() * iRot.y / 180.f, G3D::pi() * iRot.x / 180.f, G3D::pi() * iRot.z / 180.f).inverse();
         iInvScale = 1.f / iScale;
@@ -36,17 +36,17 @@ namespace VMAP
     {
         if (!iModel)
         {
-    #ifdef VMAP_DEBUG
+#ifdef VMAP_DEBUG
             printf("<object not loaded>");
-    #endif
+#endif
             return false;
         }
         float time = pRay.intersectionTime(iBound);
         if (time == G3D::inf())
         {
-    #ifdef VMAP_DEBUG
+#ifdef VMAP_DEBUG
             printf("Ray does not hit '%s'", name.c_str());
-    #endif
+#endif
             return false;
         }
         // child bounds are defined in object space:
@@ -58,7 +58,7 @@ namespace VMAP
         {
             distance *= iScale;
             pMaxDist = distance;
-            //printf("LoS HIT ! Flags 0x%x (%s)", flags, name.c_str());
+            // printf("LoS HIT ! Flags 0x%x (%s)", flags, name.c_str());
         }
         return hit;
     }
@@ -67,9 +67,9 @@ namespace VMAP
     {
         if (!iModel)
         {
-    #ifdef VMAP_DEBUG
+#ifdef VMAP_DEBUG
             printf("<object not loaded>");
-    #endif
+#endif
             return;
         }
 
@@ -101,16 +101,16 @@ namespace VMAP
     {
         if (!iModel)
         {
-    #ifdef VMAP_DEBUG
+#ifdef VMAP_DEBUG
             printf("<object not loaded>");
-    #endif
+#endif
             return false;
         }
 
         // M2 files don't have bounds
         if (flags & MOD_M2)
         {
-            //if (p.
+            // if (p.
         }
         else if (!iBound.contains(p))
             return false;
@@ -125,9 +125,9 @@ namespace VMAP
     {
         if (!iModel)
         {
-    #ifdef VMAP_DEBUG
+#ifdef VMAP_DEBUG
             printf("<object not loaded>");
-    #endif
+#endif
             return false;
         }
 
@@ -238,8 +238,9 @@ namespace VMAP
         }
         uint32 nameLen = spawn.name.length();
         check += fwrite(&nameLen, sizeof(uint32), 1, wf);
-        if (check != uint32(has_bound ? 17 : 11)) return false;
+        if (check != uint32(has_bound ? 17 : 11))
+            return false;
         check = fwrite(spawn.name.c_str(), sizeof(char), nameLen, wf);
         return check == nameLen;
     }
-}
+} // namespace VMAP

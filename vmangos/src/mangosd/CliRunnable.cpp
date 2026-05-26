@@ -23,12 +23,12 @@
 // @{
 // \file
 
-#include "Common.h"
-#include "World.h"
-#include "Config/Config.h"
-#include "Util.h"
 #include "CliRunnable.h"
+#include "Common.h"
+#include "Config/Config.h"
 #include "Database/DatabaseEnv.h"
+#include "Util.h"
+#include "World.h"
 
 #if PLATFORM == PLATFORM_APPLE
 #include <sys/select.h>
@@ -75,7 +75,7 @@ int kb_hit_return()
     tv.tv_usec = 0;
     FD_ZERO(&fds);
     FD_SET(STDIN_FILENO, &fds);
-    select(STDIN_FILENO+1, &fds, nullptr, nullptr, &tv);
+    select(STDIN_FILENO + 1, &fds, nullptr, nullptr, &tv);
     return FD_ISSET(STDIN_FILENO, &fds);
 }
 #endif
@@ -84,13 +84,13 @@ int kb_hit_return()
 void CliRunnable::operator()()
 {
     // Init new SQL thread for the world database (one connection call enough)
-    WorldDatabase.ThreadStart();                                // let thread do safe mySQL requests
+    WorldDatabase.ThreadStart(); // let thread do safe mySQL requests
 
     char commandbuf[256];
 
     // Display the list of available CLI functions then beep
     if (sConfig.GetBoolDefault("BeepAtStart", true))
-        printf("\a");                                       // \a = Alert
+        printf("\a"); // \a = Alert
 
     // print this here the first time
     // later it will be printed after command queue updates
@@ -100,13 +100,13 @@ void CliRunnable::operator()()
     while (!World::IsStopped())
     {
         fflush(stdout);
-        #ifdef linux
+#ifdef linux
         while (!kb_hit_return() && !World::IsStopped())
             // With this, we limit CLI to 10commands/second
             usleep(100);
         if (World::IsStopped())
             break;
-        #endif
+#endif
 
 #ifndef WIN32
 
@@ -122,7 +122,8 @@ void CliRunnable::operator()()
             FD_SET(0, &rfds);
 
             retval = select(1, &rfds, nullptr, nullptr, &tv);
-        } while (!retval);
+        }
+        while (!retval);
 
         if (retval == -1)
         {
@@ -131,25 +132,25 @@ void CliRunnable::operator()()
         }
 #endif
 
-        char *command_str = fgets(commandbuf,sizeof(commandbuf),stdin);
+        char* command_str = fgets(commandbuf, sizeof(commandbuf), stdin);
         if (command_str != nullptr)
         {
-            for(int x=0;command_str[x];x++)
-                if(command_str[x]=='\r'||command_str[x]=='\n')
-            {
-                command_str[x]=0;
-                break;
-            }
+            for (int x = 0; command_str[x]; x++)
+                if (command_str[x] == '\r' || command_str[x] == '\n')
+                {
+                    command_str[x] = 0;
+                    break;
+                }
 
 
-            if(!*command_str)
+            if (!*command_str)
             {
                 printf("mangos>");
                 continue;
             }
 
             std::string command;
-            if(!consoleToUtf8(command_str,command))         // convert from console encoding to utf8
+            if (!consoleToUtf8(command_str, command)) // convert from console encoding to utf8
             {
                 printf("mangos>");
                 continue;
@@ -164,5 +165,5 @@ void CliRunnable::operator()()
     }
 
     // End the database thread
-    WorldDatabase.ThreadEnd();                                  // free mySQL thread resources
+    WorldDatabase.ThreadEnd(); // free mySQL thread resources
 }

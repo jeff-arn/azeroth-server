@@ -46,20 +46,20 @@ struct DruidFerociousBiteScript : SpellScript
             uint32 damageSpellId;
             switch (spell->m_spellInfo->Id)
             {
-                case 22568: // Rank 1
-                    damageSpellId = 22851;
-                    break;
-                case 22827: // Rank 2
-                    damageSpellId = 22853;
-                    break;
-                case 22828: // Rank 3
-                    damageSpellId = 22861;
-                    break;
-                case 22829: // Rank 4
-                    damageSpellId = 22862;
-                    break;
-                default:
-                    return true;
+            case 22568: // Rank 1
+                damageSpellId = 22851;
+                break;
+            case 22827: // Rank 2
+                damageSpellId = 22853;
+                break;
+            case 22828: // Rank 3
+                damageSpellId = 22861;
+                break;
+            case 22829: // Rank 4
+                damageSpellId = 22862;
+                break;
+            default:
+                return true;
             }
 
             int32 dmg = pPlayer->GetPower(POWER_ENERGY) * spell->m_spellInfo->DmgMultiplier[effIdx];
@@ -71,10 +71,7 @@ struct DruidFerociousBiteScript : SpellScript
     }
 };
 
-SpellScript* GetScript_DruidFerociousBite(SpellEntry const*)
-{
-    return new DruidFerociousBiteScript();
-}
+SpellScript* GetScript_DruidFerociousBite(SpellEntry const*) { return new DruidFerociousBiteScript(); }
 
 // 5229 - Enrage
 struct DruidEnrageScript : SpellScript
@@ -93,10 +90,7 @@ struct DruidEnrageScript : SpellScript
     }
 };
 
-SpellScript* GetScript_DruidEnrage(SpellEntry const*)
-{
-    return new DruidEnrageScript();
-}
+SpellScript* GetScript_DruidEnrage(SpellEntry const*) { return new DruidEnrageScript(); }
 
 // 18562 - Swiftmend
 struct DruidSwiftmendScript : SpellScript
@@ -162,10 +156,7 @@ struct DruidSwiftmendScript : SpellScript
     }
 };
 
-SpellScript* GetScript_DruidSwiftmend(SpellEntry const*)
-{
-    return new DruidSwiftmendScript();
-}
+SpellScript* GetScript_DruidSwiftmend(SpellEntry const*) { return new DruidSwiftmendScript(); }
 
 void AddSC_druid_spell_scripts()
 {

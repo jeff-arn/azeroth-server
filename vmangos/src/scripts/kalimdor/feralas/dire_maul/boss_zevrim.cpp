@@ -2,14 +2,14 @@
  * Auteur        : Daemon
  * All rights reserved */
 
-#include "scriptPCH.h"
 #include "dire_maul.h"
+#include "scriptPCH.h"
 
 
 enum
 {
-    SPELL_INTENSIVE_PAIN =   22478,
-    SPELL_SACRIFICE      =   22651,
+    SPELL_INTENSIVE_PAIN = 22478,
+    SPELL_SACRIFICE = 22651,
 };
 
 // boss_zevrim
@@ -17,7 +17,7 @@ struct boss_zevrimAI : public ScriptedAI
 {
     boss_zevrimAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (instance_dire_maul*) pCreature->GetInstanceData();
+        m_pInstance = (instance_dire_maul*)pCreature->GetInstanceData();
         Reset();
     }
 
@@ -33,8 +33,8 @@ struct boss_zevrimAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiIntensePainTimer    = urand(5000, 9000);
-        m_uiSacrificeTimer      = urand(9000, 12000);
+        m_uiIntensePainTimer = urand(5000, 9000);
+        m_uiSacrificeTimer = urand(9000, 12000);
     }
 
     void UpdateAI(uint32 const uiDiff) override
@@ -66,10 +66,7 @@ struct boss_zevrimAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_zevrim(Creature* pCreature)
-{
-    return new boss_zevrimAI(pCreature);
-}
+CreatureAI* GetAI_boss_zevrim(Creature* pCreature) { return new boss_zevrimAI(pCreature); }
 
 void AddSC_boss_zevrim()
 {

@@ -22,10 +22,10 @@
 #include "WaypointManager.h"
 #include "Database/DatabaseEnv.h"
 #include "GridDefines.h"
-#include "Policies/SingletonImp.h"
-#include "ProgressBar.h"
 #include "MapManager.h"
 #include "ObjectMgr.h"
+#include "Policies/SingletonImp.h"
+#include "ProgressBar.h"
 #include "ScriptMgr.h"
 
 INSTANTIATE_SINGLETON_1(WaypointManager);
@@ -86,9 +86,9 @@ void WaypointManager::Load()
         {
             barRow.step();
             Field* fields = result->Fetch();
-            uint32 id           = fields[0].GetUInt32();
-            uint32 point        = fields[1].GetUInt32();
-            uint32 script_id    = fields[7].GetUInt32();
+            uint32 id = fields[0].GetUInt32();
+            uint32 point = fields[1].GetUInt32();
+            uint32 script_id = fields[7].GetUInt32();
 
             if (script_id)
             {
@@ -110,21 +110,21 @@ void WaypointManager::Load()
                 continue;
             }
 
-            WaypointPath &path  = m_pathMap[id];
+            WaypointPath& path = m_pathMap[id];
 
             // the cleanup queries make sure the following is true
             MANGOS_ASSERT(point >= 1);
 
-            WaypointNode &node  = path[point - 1];
+            WaypointNode& node = path[point - 1];
 
-            node.x              = fields[2].GetFloat();
-            node.y              = fields[3].GetFloat();
-            node.z              = fields[4].GetFloat();
-            node.orientation    = fields[8].GetFloat();
-            node.delay          = fields[5].GetUInt32();
+            node.x = fields[2].GetFloat();
+            node.y = fields[3].GetFloat();
+            node.z = fields[4].GetFloat();
+            node.orientation = fields[8].GetFloat();
+            node.delay = fields[5].GetUInt32();
             node.wander_distance = fields[6].GetFloat();
-            node.script_id      = fields[7].GetUInt32();
-            node.path_id        = fields[9].GetUInt32();
+            node.script_id = fields[7].GetUInt32();
+            node.path_id = fields[9].GetUInt32();
 
             if (node.path_id)
                 specialPathSet.insert(node.path_id);
@@ -134,11 +134,9 @@ void WaypointManager::Load()
             {
                 std::unique_ptr<QueryResult> result1 = WorldDatabase.PQuery("SELECT `id`, `map` FROM `creature` WHERE `guid` = '%u'", id);
                 if (result1)
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Creature (guidlow %d, entry %d) have invalid coordinates in his waypoint %d (X: %f, Y: %f).",
-                                    id, result1->Fetch()[0].GetUInt32(), point, node.x, node.y);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Creature (guidlow %d, entry %d) have invalid coordinates in his waypoint %d (X: %f, Y: %f).", id, result1->Fetch()[0].GetUInt32(), point, node.x, node.y);
                 else
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Waypoint path %d, have invalid coordinates in his waypoint %d (X: %f, Y: %f).",
-                                    id, point, node.x, node.y);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Waypoint path %d, have invalid coordinates in his waypoint %d (X: %f, Y: %f).", id, point, node.x, node.y);
 
                 MaNGOS::NormalizeMapCoord(node.x);
                 MaNGOS::NormalizeMapCoord(node.y);
@@ -204,9 +202,9 @@ void WaypointManager::Load()
             bar.step();
             Field* fields = result->Fetch();
 
-            uint32 entry        = fields[0].GetUInt32();
-            uint32 point        = fields[1].GetUInt32();
-            uint32 script_id    = fields[7].GetUInt32();
+            uint32 entry = fields[0].GetUInt32();
+            uint32 point = fields[1].GetUInt32();
+            uint32 script_id = fields[7].GetUInt32();
 
             if (script_id)
             {
@@ -228,21 +226,21 @@ void WaypointManager::Load()
                 continue;
             }
 
-            WaypointPath &path  = m_pathTemplateMap[entry << 8];
+            WaypointPath& path = m_pathTemplateMap[entry << 8];
 
             // the cleanup queries make sure the following is true
             MANGOS_ASSERT(point >= 1);
 
-            WaypointNode &node  = path[point - 1];
+            WaypointNode& node = path[point - 1];
 
-            node.x              = fields[2].GetFloat();
-            node.y              = fields[3].GetFloat();
-            node.z              = fields[4].GetFloat();
-            node.orientation    = fields[8].GetFloat();
-            node.delay          = fields[5].GetUInt32();
+            node.x = fields[2].GetFloat();
+            node.y = fields[3].GetFloat();
+            node.z = fields[4].GetFloat();
+            node.orientation = fields[8].GetFloat();
+            node.delay = fields[5].GetUInt32();
             node.wander_distance = fields[6].GetFloat();
-            node.script_id      = fields[7].GetUInt32();
-            node.path_id        = fields[9].GetUInt32();
+            node.script_id = fields[7].GetUInt32();
+            node.path_id = fields[9].GetUInt32();
 
             if (node.path_id)
                 specialPathSet.insert(node.path_id);
@@ -250,14 +248,12 @@ void WaypointManager::Load()
             // prevent using invalid coordinates
             if (!MaNGOS::IsValidMapCoord(node.x, node.y, node.z, node.orientation == 100.0f ? 0.0f : node.orientation))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table creature_movement_template for entry %u (point %u) are using invalid coordinates position_x: %f, position_y: %f)",
-                                entry, point, node.x, node.y);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table creature_movement_template for entry %u (point %u) are using invalid coordinates position_x: %f, position_y: %f)", entry, point, node.x, node.y);
 
                 MaNGOS::NormalizeMapCoord(node.x);
                 MaNGOS::NormalizeMapCoord(node.y);
 
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table creature_movement_template for entry %u (point %u) are auto corrected to normalized position_x=%f, position_y=%f",
-                                entry, point, node.x, node.y);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table creature_movement_template for entry %u (point %u) are auto corrected to normalized position_x=%f, position_y=%f", entry, point, node.x, node.y);
 
                 WorldDatabase.PExecute("UPDATE `creature_movement_template` SET `position_x` = '%f', `position_y` = '%f' WHERE `entry` = %u AND `point` = %u", node.x, node.y, entry, point);
             }
@@ -314,9 +310,9 @@ void WaypointManager::Load()
         {
             barRow.step();
             Field* fields = result->Fetch();
-            uint32 id           = fields[0].GetUInt32();
-            uint32 point        = fields[1].GetUInt32();
-            uint32 script_id    = fields[7].GetUInt32();
+            uint32 id = fields[0].GetUInt32();
+            uint32 point = fields[1].GetUInt32();
+            uint32 script_id = fields[7].GetUInt32();
 
             if (script_id)
             {
@@ -329,21 +325,21 @@ void WaypointManager::Load()
                 movementScriptSet.erase(script_id);
             }
 
-            WaypointPath &path  = m_pathSpecialMap[id];
+            WaypointPath& path = m_pathSpecialMap[id];
 
             // the cleanup queries make sure the following is true
             MANGOS_ASSERT(point >= 1);
 
-            WaypointNode &node  = path[point - 1];
+            WaypointNode& node = path[point - 1];
 
-            node.x              = fields[2].GetFloat();
-            node.y              = fields[3].GetFloat();
-            node.z              = fields[4].GetFloat();
-            node.orientation    = fields[8].GetFloat();
-            node.delay          = fields[5].GetUInt32();
+            node.x = fields[2].GetFloat();
+            node.y = fields[3].GetFloat();
+            node.z = fields[4].GetFloat();
+            node.orientation = fields[8].GetFloat();
+            node.delay = fields[5].GetUInt32();
             node.wander_distance = fields[6].GetFloat();
-            node.script_id      = fields[7].GetUInt32();
-            node.path_id        = fields[9].GetUInt32();
+            node.script_id = fields[7].GetUInt32();
+            node.path_id = fields[9].GetUInt32();
 
             if (node.path_id)
                 specialPathSet.insert(node.path_id);
@@ -351,14 +347,12 @@ void WaypointManager::Load()
             // prevent using invalid coordinates
             if (!MaNGOS::IsValidMapCoord(node.x, node.y, node.z, node.orientation == 100.0f ? 0.0f : node.orientation))
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table creature_movement_special for Id %u (point %u) are using invalid coordinates position_x: %f, position_y: %f)",
-                    id, point, node.x, node.y);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table creature_movement_special for Id %u (point %u) are using invalid coordinates position_x: %f, position_y: %f)", id, point, node.x, node.y);
 
                 MaNGOS::NormalizeMapCoord(node.x);
                 MaNGOS::NormalizeMapCoord(node.y);
 
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table creature_movement_special for Id %u (point %u) are auto corrected to normalized position_x=%f, position_y=%f",
-                    id, point, node.x, node.y);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Table creature_movement_special for Id %u (point %u) are auto corrected to normalized position_x=%f, position_y=%f", id, point, node.x, node.y);
 
                 WorldDatabase.PExecute("UPDATE `creature_movement_special` SET `position_x` = '%f', `position_y` = '%f' WHERE `id` = %u AND `point` = %u", node.x, node.y, id, point);
             }
@@ -442,10 +436,7 @@ void WaypointManager::Unload()
     m_pathSpecialMap.clear();
 }
 
-void WaypointManager::_clearPath(WaypointPath &path)
-{
-    path.clear();
-}
+void WaypointManager::_clearPath(WaypointPath& path) { path.clear(); }
 
 // Insert at a certain point, if pointId == 0 insert last. In this case pointId will be changed to the id to which the node was added
 WaypointNode const* WaypointManager::AddNode(uint32 entry, uint32 dbGuid, uint32& pointId, WaypointPathOrigin wpDest, float x, float y, float z)
@@ -463,20 +454,21 @@ WaypointNode const* WaypointManager::AddNode(uint32 entry, uint32 dbGuid, uint32
 
     WaypointPath& path = (*wpMap)[key];
 
-    if (pointId == 0 && !path.empty())                      // Start with highest waypoint
+    if (pointId == 0 && !path.empty()) // Start with highest waypoint
         pointId = path.rbegin()->first + 1;
 
     uint32 nextPoint = pointId;
     WaypointNode temp = WaypointNode(x, y, z, 100, 0, 0, 0, 0);
     WaypointPath::iterator find = path.find(nextPoint);
-    if (find != path.end())                                 // Point already exists
+    if (find != path.end()) // Point already exists
     {
-        do                                                  // Move points along until a free spot is found
+        do // Move points along until a free spot is found
         {
             std::swap(temp, find->second);
             ++find;
             ++nextPoint;
-        } while (find != path.end() && find->first == nextPoint);
+        }
+        while (find != path.end() && find->first == nextPoint);
         // After this, we have:
         // pointId, pointId+1, ..., nextPoint [ Can be == path.end ]]
     }
@@ -491,7 +483,7 @@ WaypointNode const* WaypointManager::AddNode(uint32 entry, uint32 dbGuid, uint32
             WorldDatabase.PExecuteLog("UPDATE %s SET point=point+1 WHERE %s=%u AND point=%u", table, key_field, keydb, rItr->first);
     }
     // Insert new Point to database
-    WorldDatabase.PExecuteLog("INSERT INTO %s (%s,point,position_x,position_y,position_z,orientation) VALUES (%u,%u, %f,%f,%f, 100)", table, key_field, keydb, pointId+1, x, y, z);
+    WorldDatabase.PExecuteLog("INSERT INTO %s (%s,point,position_x,position_y,position_z,orientation) VALUES (%u,%u, %f,%f,%f, 100)", table, key_field, keydb, pointId + 1, x, y, z);
 
     return &path[pointId];
 }
@@ -521,7 +513,7 @@ void WaypointManager::DeleteNode(uint32 entry, uint32 dbGuid, uint32 point, int3
     char const* const table = wpOrigin == PATH_FROM_GUID ? "creature_movement" : "creature_movement_template";
     char const* const key_field = wpOrigin == PATH_FROM_GUID ? "id" : "entry";
     uint32 const key = wpOrigin == PATH_FROM_GUID ? dbGuid : entry;
-    WorldDatabase.PExecuteLog("DELETE FROM %s WHERE %s=%u AND point=%u", table, key_field, key, point+1);
+    WorldDatabase.PExecuteLog("DELETE FROM %s WHERE %s=%u AND point=%u", table, key_field, key, point + 1);
 
     for (WaypointPath::iterator itr = path->begin(); itr != path->end(); ++itr)
         if (itr->first > point)
@@ -559,7 +551,7 @@ void WaypointManager::SetNodePosition(uint32 entry, uint32 dbGuid, uint32 point,
     char const* const table = wpOrigin == PATH_FROM_GUID ? "creature_movement" : "creature_movement_template";
     char const* const key_field = wpOrigin == PATH_FROM_GUID ? "id" : "entry";
     uint32 const key = wpOrigin == PATH_FROM_GUID ? dbGuid : entry;
-    WorldDatabase.PExecuteLog("UPDATE %s SET position_x=%f, position_y=%f, position_z=%f WHERE %s=%u AND point=%u", table, x, y, z, key_field, key, point+1);
+    WorldDatabase.PExecuteLog("UPDATE %s SET position_x=%f, position_y=%f, position_z=%f WHERE %s=%u AND point=%u", table, x, y, z, key_field, key, point + 1);
 
     WaypointPath::iterator find = path->find(point);
     if (find != path->end())
@@ -583,7 +575,7 @@ void WaypointManager::SetNodeWaittime(uint32 entry, uint32 dbGuid, uint32 point,
     char const* const table = wpOrigin == PATH_FROM_GUID ? "creature_movement" : "creature_movement_template";
     char const* const key_field = wpOrigin == PATH_FROM_GUID ? "id" : "entry";
     uint32 const key = wpOrigin == PATH_FROM_GUID ? dbGuid : entry;
-    WorldDatabase.PExecuteLog("UPDATE %s SET waittime=%u WHERE %s=%u AND point=%u", table, waittime, key_field, key, point+1);
+    WorldDatabase.PExecuteLog("UPDATE %s SET waittime=%u WHERE %s=%u AND point=%u", table, waittime, key_field, key, point + 1);
 
     WaypointPath::iterator find = path->find(point);
     if (find != path->end())
@@ -603,7 +595,7 @@ void WaypointManager::SetNodeOrientation(uint32 entry, uint32 dbGuid, uint32 poi
     char const* const table = wpOrigin == PATH_FROM_GUID ? "creature_movement" : "creature_movement_template";
     char const* const key_field = wpOrigin == PATH_FROM_GUID ? "id" : "entry";
     uint32 const key = wpOrigin == PATH_FROM_GUID ? dbGuid : entry;
-    WorldDatabase.PExecuteLog("UPDATE %s SET orientation=%f WHERE %s=%u AND point=%u", table, orientation, key_field, key, point+1);
+    WorldDatabase.PExecuteLog("UPDATE %s SET orientation=%f WHERE %s=%u AND point=%u", table, orientation, key_field, key, point + 1);
 
     WaypointPath::iterator find = path->find(point);
     if (find != path->end())
@@ -624,7 +616,7 @@ bool WaypointManager::SetNodeScriptId(uint32 entry, uint32 dbGuid, uint32 point,
     char const* const table = wpOrigin == PATH_FROM_GUID ? "creature_movement" : "creature_movement_template";
     char const* const key_field = wpOrigin == PATH_FROM_GUID ? "id" : "entry";
     uint32 const key = wpOrigin == PATH_FROM_GUID ? dbGuid : entry;
-    WorldDatabase.PExecuteLog("UPDATE %s SET script_id=%u WHERE %s=%u AND point=%u", table, scriptId, key_field, key, point+1);
+    WorldDatabase.PExecuteLog("UPDATE %s SET script_id=%u WHERE %s=%u AND point=%u", table, scriptId, key_field, key, point + 1);
 
     WaypointPath::iterator find = path->find(point);
     if (find != path->end())

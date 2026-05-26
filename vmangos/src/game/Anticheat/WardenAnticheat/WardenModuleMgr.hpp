@@ -14,20 +14,20 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
- /*
-  *
-  * This code was written by namreeb (legal@namreeb.org) and is released with
-  * permission as part of vmangos (https://github.com/vmangos/core)
-  *
-  */
+/*
+ *
+ * This code was written by namreeb (legal@namreeb.org) and is released with
+ * permission as part of vmangos (https://github.com/vmangos/core)
+ *
+ */
 
 #ifndef __WARDENMODULEMGR_HPP_
 #define __WARDENMODULEMGR_HPP_
 
 #include "WardenModule.hpp"
 
-#include "Policies/Singleton.h"
 #include "Platform/Define.h"
+#include "Policies/Singleton.h"
 
 #include <vector>
 

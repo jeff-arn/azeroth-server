@@ -32,10 +32,10 @@ enum
     // Emotes
     // ------
 
-    SAY_AGGRO                   = 10447,
-    SAY_FLEEING                 = 10635,
-    SAY_MINION_DESTROY          = 10594,                //where does it belong?
-    SAY_PROTECT_ALTAR           = 10546,                //where does it belong?
+    SAY_AGGRO = 10447,
+    SAY_FLEEING = 10635,
+    SAY_MINION_DESTROY = 10594, // where does it belong?
+    SAY_PROTECT_ALTAR = 10546, // where does it belong?
     /*
     /run PlaySoundFile("SOUND\\CREATURE\\HAKKAR\\VO_ZG2_HAKKAR_DEFEAT_01.ogg");
     /run PlaySoundFile("SOUND\\CREATURE\\HAKKAR\\VO_ZG2_HAKKAR_DEFEAT_02.ogg");
@@ -46,27 +46,27 @@ enum
     // Hakkar's spells
     // ---------------
 
-    SPELL_BLOODSIPHON_STUN       = 24324, // Joueur assomme
-    SPELL_BLOODSIPHON_DAMAGE     = 24323, // "Votre sang est empoisonne"
-    SPELL_BLOODSIPHON_HEAL       = 24322, // "Inflige 200 points de dégâts par seconde. Donne à Hakkar 1000 points de vie par seconde." -> Rend de la vie aux joueurs ...
-    SPELL_CORRUPTEDBLOOD         = 24328,
-    SPELL_CAUSEINSANITY          = 24327,
-    SPELL_WILLOFHAKKAR           = 24178,
+    SPELL_BLOODSIPHON_STUN = 24324, // Joueur assomme
+    SPELL_BLOODSIPHON_DAMAGE = 24323, // "Votre sang est empoisonne"
+    SPELL_BLOODSIPHON_HEAL = 24322, // "Inflige 200 points de dégâts par seconde. Donne à Hakkar 1000 points de vie par seconde." -> Rend de la vie aux joueurs ...
+    SPELL_CORRUPTEDBLOOD = 24328,
+    SPELL_CAUSEINSANITY = 24327,
+    SPELL_WILLOFHAKKAR = 24178,
     // SPELL_ENRAGE                 = 24318,
-    SPELL_BERSERK                = 27680,
+    SPELL_BERSERK = 27680,
 
     // Aspects of High Priests
     // -----------------------
 
-    SPELL_ASPECT_OF_JEKLIK       = 24687, // silence 4 sec
-    SPELL_ASPECT_OF_VENOXIS      = 24688, // poison
-    SPELL_ASPECT_OF_MARLI        = 24686, // étourdi 5 sec
-    SPELL_ASPECT_OF_THEKAL       = 24689, // enrage qqs sec
-    SPELL_ASPECT_OF_ARLOKK       = 24690, // vanish qqs secs
+    SPELL_ASPECT_OF_JEKLIK = 24687, // silence 4 sec
+    SPELL_ASPECT_OF_VENOXIS = 24688, // poison
+    SPELL_ASPECT_OF_MARLI = 24686, // étourdi 5 sec
+    SPELL_ASPECT_OF_THEKAL = 24689, // enrage qqs sec
+    SPELL_ASPECT_OF_ARLOKK = 24690, // vanish qqs secs
 
     // Other spells
     // ------------
-    SPELL_POISONOUS_BLOOD        = 24321
+    SPELL_POISONOUS_BLOOD = 24321
 };
 
 struct boss_hakkarAI : public ScriptedAI
@@ -117,7 +117,7 @@ struct boss_hakkarAI : public ScriptedAI
             m_pInstance->SetData(TYPE_HAKKAR, NOT_STARTED);
     }
 
-    void Aggro(Unit *who) override
+    void Aggro(Unit* who) override
     {
         if (m_pInstance)
             m_pInstance->SetData(TYPE_HAKKAR, IN_PROGRESS);
@@ -190,7 +190,6 @@ struct boss_hakkarAI : public ScriptedAI
                 if (DoCastSpellIfCan(target, SPELL_CORRUPTEDBLOOD) == CAST_OK)
                     CorruptedBlood_Timer = urand(14000, 16000);
             }
-
         }
         else
             CorruptedBlood_Timer -= diff;
@@ -206,7 +205,7 @@ struct boss_hakkarAI : public ScriptedAI
                 if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CAUSEINSANITY) == CAST_OK)
                 {
                     CCDelayInsanity_Timer = 4000;
-                    //DoScriptText(SAY_FLEEING, m_creature);
+                    // DoScriptText(SAY_FLEEING, m_creature);
                     CauseInsanity_Timer = urand(20000, 25000);
                 }
             }
@@ -224,7 +223,7 @@ struct boss_hakkarAI : public ScriptedAI
         else
             Berserk_Timer -= diff;
 
-        //Checking if Jeklik is dead. If not we cast her Aspect
+        // Checking if Jeklik is dead. If not we cast her Aspect
         if (m_pInstance->GetData(TYPE_JEKLIK) != DONE)
         {
             if (AspectOfJeklik_Timer < diff)
@@ -236,7 +235,7 @@ struct boss_hakkarAI : public ScriptedAI
                 AspectOfJeklik_Timer -= diff;
         }
 
-        //Checking if Venoxis is dead. If not we cast his Aspect
+        // Checking if Venoxis is dead. If not we cast his Aspect
         if (m_pInstance->GetData(TYPE_VENOXIS) != DONE)
         {
             if (AspectOfVenoxis_Timer < diff)
@@ -248,7 +247,7 @@ struct boss_hakkarAI : public ScriptedAI
                 AspectOfVenoxis_Timer -= diff;
         }
 
-        //Checking if Marli is dead. If not we cast her Aspect
+        // Checking if Marli is dead. If not we cast her Aspect
         if (m_pInstance->GetData(TYPE_MARLI) != DONE)
         {
             if (AspectOfMarli_Timer < diff)
@@ -260,7 +259,7 @@ struct boss_hakkarAI : public ScriptedAI
                 AspectOfMarli_Timer -= diff;
         }
 
-        //Checking if Thekal is dead. If not we cast his Aspect
+        // Checking if Thekal is dead. If not we cast his Aspect
         if (m_pInstance->GetData(TYPE_THEKAL) != DONE)
         {
             if (AspectOfThekal_Timer < diff)
@@ -272,7 +271,7 @@ struct boss_hakkarAI : public ScriptedAI
                 AspectOfThekal_Timer -= diff;
         }
 
-        //Checking if Arlokk is dead. If not we cast her Aspect
+        // Checking if Arlokk is dead. If not we cast her Aspect
         if (m_pInstance->GetData(TYPE_ARLOKK) != DONE)
         {
             if (AspectOfArlokk_Timer < diff)
@@ -288,10 +287,7 @@ struct boss_hakkarAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_hakkar(Creature* pCreature)
-{
-    return new boss_hakkarAI(pCreature);
-}
+CreatureAI* GetAI_boss_hakkar(Creature* pCreature) { return new boss_hakkarAI(pCreature); }
 
 void AddSC_boss_hakkar()
 {

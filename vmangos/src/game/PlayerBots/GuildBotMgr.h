@@ -1,45 +1,45 @@
 #ifndef _GUILDBOTMGR_H
 #define _GUILDBOTMGR_H
 
-#include "Common.h"
-#include "Policies/Singleton.h"
-#include "ObjectGuid.h"
 #include "BotChatManager.h"
+#include "Common.h"
+#include "ObjectGuid.h"
+#include "Policies/Singleton.h"
 
-#include <vector>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class Player;
 
 enum GuildBotRole : uint8
 {
-    GUILD_BOT_ROLE_TANK   = 0,
+    GUILD_BOT_ROLE_TANK = 0,
     GUILD_BOT_ROLE_HEALER = 1,
-    GUILD_BOT_ROLE_DPS    = 2,
+    GUILD_BOT_ROLE_DPS = 2,
 };
 
 enum GuildBotGearTier : uint8
 {
-    GUILD_BOT_GEAR_FRESH_60       = 0,
+    GUILD_BOT_GEAR_FRESH_60 = 0,
     GUILD_BOT_GEAR_DUNGEON_GEARED = 1,
-    GUILD_BOT_GEAR_PRE_RAID_BIS   = 2,
+    GUILD_BOT_GEAR_PRE_RAID_BIS = 2,
 };
 
 struct GuildBotInfo
 {
     uint32 guid;
     std::string name;
-    uint8  race;
-    uint8  cls;
+    uint8 race;
+    uint8 cls;
     std::string spec;
     GuildBotRole role;
     bool raidAssigned;
     bool active;
     float gearScore;
     GuildBotGearTier gearTier;
-    bool hasLootUpgrades;  // true if bot has received any items via loot (never wipe their gear)
-    bool online;           // true if currently spawned as a bot in-world
+    bool hasLootUpgrades; // true if bot has received any items via loot (never wipe their gear)
+    bool online; // true if currently spawned as a bot in-world
     BotPersonality personality;
 };
 
@@ -92,7 +92,7 @@ public:
 
     // Gear tier management
     void SetGearTier(uint32 botGuid, GuildBotGearTier tier);
-    void ApplyGearTier(uint32 botGuid);  // Log/validate on spawn; no-op if bot has loot upgrades
+    void ApplyGearTier(uint32 botGuid); // Log/validate on spawn; no-op if bot has loot upgrades
     bool HasLootUpgrades(uint32 botGuid) const;
     uint32 GetAutoEquipOptionForTier(GuildBotGearTier tier) const;
 
@@ -131,20 +131,20 @@ private:
 
     bool m_presenceEnabled;
     uint32 m_presenceTimer;
-    uint32 m_presenceCheckInterval;  // ms
+    uint32 m_presenceCheckInterval; // ms
     uint32 m_presencePeakCount;
     uint32 m_presenceOffPeakCount;
     uint32 m_presencePeakHour;
-    int32  m_presenceTimezoneOffset;
+    int32 m_presenceTimezoneOffset;
 
     bool m_enabled;
     uint32 m_guildId;
     uint32 m_accountId;
     uint32 m_levelSyncTimer;
-    static const uint32 LEVEL_SYNC_INTERVAL = 5 * 60 * 1000;  // 5 minutes
+    static const uint32 LEVEL_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
     std::vector<GuildBotInfo> m_roster;
-    std::unordered_map<uint32, size_t> m_guidToIndex;  // guid -> index into m_roster
+    std::unordered_map<uint32, size_t> m_guidToIndex; // guid -> index into m_roster
 
     // Key: (class << 8) | hash of spec string — or just a combined string key
     std::unordered_map<std::string, GuildBotSpecWeights> m_specWeights;

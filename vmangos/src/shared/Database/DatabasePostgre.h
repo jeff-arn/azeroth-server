@@ -22,59 +22,59 @@
 #ifndef _DatabasePostgre_H
 #define _DatabasePostgre_H
 
+#include <stdarg.h>
 #include "Common.h"
 #include "Database.h"
 #include "Policies/Singleton.h"
-#include <stdarg.h>
 
 #ifdef WIN32
 #define FD_SETSIZE 1024
-#include <winsock2.h>
 #include <postgre/libpq-fe.h>
+#include <winsock2.h>
 #else
 #include <libpq-fe.h>
 #endif
 
 class PostgreSQLConnection : public SqlConnection
 {
-    public:
-        PostgreSQLConnection() : mPGconn(nullptr) {}
-        ~PostgreSQLConnection();
+public:
+    PostgreSQLConnection() : mPGconn(nullptr) {}
+    ~PostgreSQLConnection();
 
-        bool OpenConnection(bool reconnect);
+    bool OpenConnection(bool reconnect);
 
-        std::unique_ptr<QueryResult> Query(std::string const& sql) override;
-        std::unique_ptr<QueryNamedResult> QueryNamed(std::string const& sql) override;
-        bool Execute(std::string const& sql) override;
+    std::unique_ptr<QueryResult> Query(std::string const& sql) override;
+    std::unique_ptr<QueryNamedResult> QueryNamed(std::string const& sql) override;
+    bool Execute(std::string const& sql) override;
 
-        unsigned long escape_string(char* to, char const* from, unsigned long length);
+    unsigned long escape_string(char* to, char const* from, unsigned long length);
 
-        bool BeginTransaction() override;
-        bool CommitTransaction() override;
-        bool RollbackTransaction() override;
+    bool BeginTransaction() override;
+    bool CommitTransaction() override;
+    bool RollbackTransaction() override;
 
-    private:
-        bool _TransactionCmd(std::string const& sql);
-        bool _Query(std::string const& sql, PGresult** pResult, uint64* pRowCount, uint32* pFieldCount);
+private:
+    bool _TransactionCmd(std::string const& sql);
+    bool _Query(std::string const& sql, PGresult** pResult, uint64* pRowCount, uint32* pFieldCount);
 
-        PGconn* mPGconn;
+    PGconn* mPGconn;
 };
 
 class DatabasePostgre : public Database
 {
     friend class MaNGOS::OperatorNew<DatabasePostgre>;
 
-    public:
-        DatabasePostgre();
-        ~DatabasePostgre();
+public:
+    DatabasePostgre();
+    ~DatabasePostgre();
 
-        //! Initializes Postgres and connects to a server.
-        /*! infoString should be formated like hostname;username;password;database. */
+    //! Initializes Postgres and connects to a server.
+    /*! infoString should be formated like hostname;username;password;database. */
 
-    protected:
-        virtual SqlConnection* CreateConnection();
+protected:
+    virtual SqlConnection* CreateConnection();
 
-    private:
-        static size_t db_count;
+private:
+    static size_t db_count;
 };
 #endif

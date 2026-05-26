@@ -2,39 +2,36 @@
 
 enum
 {
-    GO_SUMMON_CIRCLE        = 175571,
-    GO_AUTEL_OFFRANDES      = 175621,
-    GO_CHALLENGE_UROK       = 175584,
+    GO_SUMMON_CIRCLE = 175571,
+    GO_AUTEL_OFFRANDES = 175621,
+    GO_CHALLENGE_UROK = 175584,
 
-    NPC_UROK_MASSACRER      = 10601, // Cac
-    NPC_UROK_MAGE           = 10602, // Caster
-    NPC_UROK_DOOMHOWL       = 10584, // le Boss
+    NPC_UROK_MASSACRER = 10601, // Cac
+    NPC_UROK_MAGE = 10602, // Caster
+    NPC_UROK_DOOMHOWL = 10584, // le Boss
 
-    SPELL_DECLENCHER_DEFIS  = 16447, // Clic droit sur 'GO_CHALLENGE_UROK'
-    SPELL_UROK_SUMMONED     = 16473, // Visuel d'eclairs
+    SPELL_DECLENCHER_DEFIS = 16447, // Clic droit sur 'GO_CHALLENGE_UROK'
+    SPELL_UROK_SUMMONED = 16473, // Visuel d'eclairs
     SPELL_UROK_ADD_SUMMONED = 16562, // Visuel de teleportation
-    SPELL_KILL_UROK_ADD     = 16452,
-    SPELL_DESTROY_SPEAR     = 16557,
-    SPELL_DESTROY_SPEAR2    = 16558,
-    SPELL_BLOODLUST         = 6742,
-    SPELL_SLOW              = 13747,
-    SPELL_ARCANE_BOLT       = 15979
+    SPELL_KILL_UROK_ADD = 16452,
+    SPELL_DESTROY_SPEAR = 16557,
+    SPELL_DESTROY_SPEAR2 = 16558,
+    SPELL_BLOODLUST = 6742,
+    SPELL_SLOW = 13747,
+    SPELL_ARCANE_BOLT = 15979
 };
 
-void DefineGoChallenge(Creature * crea, uint64 gobjGUID);
+void DefineGoChallenge(Creature* crea, uint64 gobjGUID);
 
 // Challenge GameObject Script (GO_CHALLENGE_UROK)
-struct go_urok_challengeAI: public GameObjectAI
+struct go_urok_challengeAI : public GameObjectAI
 {
-    go_urok_challengeAI(GameObject* go) : GameObjectAI(go), _actived(true), _step(0), _timer(0), _spellTimer(0)
-    {
-        nbDeadUnderlings=0;
-    }
+    go_urok_challengeAI(GameObject* go) : GameObjectAI(go), _actived(true), _step(0), _timer(0), _spellTimer(0) { nbDeadUnderlings = 0; }
 
-    bool       _actived;
-    uint32     _step;
-    uint32     _timer;
-    uint32     _spellTimer;
+    bool _actived;
+    uint32 _step;
+    uint32 _timer;
+    uint32 _spellTimer;
     ObjectGuid _runes[6];
 
     // Fonction appellees toutes les 100ms en moyenne.
@@ -52,21 +49,21 @@ struct go_urok_challengeAI: public GameObjectAI
             {
                 switch (_step)
                 {
-                    case 0:
-                        SpawnRune(0, -13.7275f, -384.816f, 48.9746f, 3.68265f);
-                        SpawnRune(1, -27.8804f, -385.891f, 48.5067f, 3.7001f);
-                        SpawnRune(2, -24.8824f, -369.619f, 49.7059f, 3.4034f);
-                        SpawnRune(3, -12.3689f, -376.475f, 49.335f, 5.044f);
-                        SpawnRune(4, -34.5437f, -370.233f, 50.3396f, 5.35816f);
-                        SpawnRune(5, -47.9095f, -369.089f, 51.5425f, 1.37881f);
-                        _timer = 3000;
-                        break;
-                    case 1:
-                        SpawnAtRune(0, NPC_UROK_MAGE,0);
-                        SpawnAtRune(2, NPC_UROK_MASSACRER,1);
-                        SpawnAtRune(3, NPC_UROK_MASSACRER,2);
-                        _timer = 10000;
-                        break;
+                case 0:
+                    SpawnRune(0, -13.7275f, -384.816f, 48.9746f, 3.68265f);
+                    SpawnRune(1, -27.8804f, -385.891f, 48.5067f, 3.7001f);
+                    SpawnRune(2, -24.8824f, -369.619f, 49.7059f, 3.4034f);
+                    SpawnRune(3, -12.3689f, -376.475f, 49.335f, 5.044f);
+                    SpawnRune(4, -34.5437f, -370.233f, 50.3396f, 5.35816f);
+                    SpawnRune(5, -47.9095f, -369.089f, 51.5425f, 1.37881f);
+                    _timer = 3000;
+                    break;
+                case 1:
+                    SpawnAtRune(0, NPC_UROK_MAGE, 0);
+                    SpawnAtRune(2, NPC_UROK_MASSACRER, 1);
+                    SpawnAtRune(3, NPC_UROK_MASSACRER, 2);
+                    _timer = 10000;
+                    break;
                 }
                 ++_step;
             }
@@ -75,7 +72,7 @@ struct go_urok_challengeAI: public GameObjectAI
         }
     }
 
-    void SpawnAtRune(uint32 rune, uint32 entry, int i=0)
+    void SpawnAtRune(uint32 rune, uint32 entry, int i = 0)
     {
         if (GameObject* go = me->GetMap()->GetGameObject(_runes[rune]))
         {
@@ -87,7 +84,7 @@ struct go_urok_challengeAI: public GameObjectAI
                     invoc->SendSpellGo(invoc, SPELL_UROK_SUMMONED);
                 else
                 {
-                    guidCurrentUnderlings[i]=invoc->GetGUID();
+                    guidCurrentUnderlings[i] = invoc->GetGUID();
                     DefineGoChallenge(invoc, me->GetGUID());
                     invoc->SendSpellGo(invoc, SPELL_UROK_ADD_SUMMONED);
                 }
@@ -123,8 +120,8 @@ struct go_urok_challengeAI: public GameObjectAI
     Unit* NearestOgre()
     {
         Unit* massacrer = me->FindNearestCreature(NPC_UROK_MASSACRER, 20.0f);
-        Unit* mage      = me->FindNearestCreature(NPC_UROK_MAGE, 20.0f);
-        Unit* target    = nullptr;
+        Unit* mage = me->FindNearestCreature(NPC_UROK_MAGE, 20.0f);
+        Unit* target = nullptr;
         if (!mage)
             target = massacrer;
         else if (massacrer)
@@ -159,30 +156,30 @@ struct go_urok_challengeAI: public GameObjectAI
 
     void EventBannerDestroyed(uint64 sourceGuid)
     {
-        if(!_actived)
+        if (!_actived)
             return;
         _actived = false;
         DespawnRunes();
         me->Despawn();
     }
-    uint8 runeOrder[10] = {0,2,3,1,4,5,1,2,3,5};
+    uint8 runeOrder[10] = {0, 2, 3, 1, 4, 5, 1, 2, 3, 5};
     uint8 nbDeadUnderlings;
     uint64 guidCurrentUnderlings[3];
     void UrokUnderlingDied(uint64 creatureGUID)
     {
-        if(! _actived)
+        if (!_actived)
             return;
-        for(int i=0; i<3; i++)
+        for (int i = 0; i < 3; i++)
         {
-            if(creatureGUID == guidCurrentUnderlings[i])
+            if (creatureGUID == guidCurrentUnderlings[i])
             {
                 nbDeadUnderlings++;
-                if(nbDeadUnderlings<8)
+                if (nbDeadUnderlings < 8)
                 {
-                    uint32 entry = urand(0,1)?  NPC_UROK_MAGE: NPC_UROK_MASSACRER;
-                    SpawnAtRune(runeOrder[nbDeadUnderlings+2], entry, i);
+                    uint32 entry = urand(0, 1) ? NPC_UROK_MAGE : NPC_UROK_MASSACRER;
+                    SpawnAtRune(runeOrder[nbDeadUnderlings + 2], entry, i);
                 }
-                else if (nbDeadUnderlings==8)
+                else if (nbDeadUnderlings == 8)
                 {
                     SpawnBoss();
                 }
@@ -191,26 +188,17 @@ struct go_urok_challengeAI: public GameObjectAI
     }
 };
 
-GameObjectAI* GetAIgo_urok_challenge(GameObject *go)
-{
-    return new go_urok_challengeAI(go);
-}
+GameObjectAI* GetAIgo_urok_challenge(GameObject* go) { return new go_urok_challengeAI(go); }
 
 struct urokUnderlingAI : public ScriptedAI
 {
-    urokUnderlingAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        timer=0;
-    }
-    void Reset() override
-    {
-        timer=0;
-    }
+    urokUnderlingAI(Creature* pCreature) : ScriptedAI(pCreature) { timer = 0; }
+    void Reset() override { timer = 0; }
     uint32 timer;
     uint64 guidMound;
     void JustDied(Unit* pKiller) override
     {
-        if(GameObject* gobj=m_creature->GetMap()->GetGameObject(guidMound))
+        if (GameObject* gobj = m_creature->GetMap()->GetGameObject(guidMound))
         {
             if (go_urok_challengeAI* pMoundAI = dynamic_cast<go_urok_challengeAI*>(gobj->AI()))
             {
@@ -226,15 +214,15 @@ struct urokUnderlingAI : public ScriptedAI
             return;
         HitBanner();
     }
-    void AttackStart(Unit * unit) override
+    void AttackStart(Unit* unit) override
     {
-      if( m_creature->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
+        if (m_creature->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
             return;
         ScriptedAI::AttackStart(unit);
     }
     void BannerDestroyed()
     {
-        if(GameObject* pGo=m_creature->FindNearestGameObject(GO_CHALLENGE_UROK, 40))
+        if (GameObject* pGo = m_creature->FindNearestGameObject(GO_CHALLENGE_UROK, 40))
         {
             if (go_urok_challengeAI* pPedestalAI = dynamic_cast<go_urok_challengeAI*>((pGo)->AI()))
                 pPedestalAI->EventBannerDestroyed(m_creature->GetGUID());
@@ -243,30 +231,30 @@ struct urokUnderlingAI : public ScriptedAI
 
     bool HitBanner()
     {
-         if(GameObject* pGo=m_creature->FindNearestGameObject(GO_CHALLENGE_UROK, CONTACT_DISTANCE+1))
-         {
+        if (GameObject* pGo = m_creature->FindNearestGameObject(GO_CHALLENGE_UROK, CONTACT_DISTANCE + 1))
+        {
             float x, y, z;
             pGo->GetPosition(x, y, z);
             m_creature->CastSpell(x, y, z, SPELL_DESTROY_SPEAR, false);
-            timer=11000;
+            timer = 11000;
             return true;
-          }
-          return false;
+        }
+        return false;
     }
     void UpdateAI(uint32 const uiDiff) override
     {
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
-            if ( timer < uiDiff)
+            if (timer < uiDiff)
             {
-                if(!HitBanner())
+                if (!HitBanner())
                 {
                     if (GameObject* pGo = m_creature->FindNearestGameObject(GO_CHALLENGE_UROK, 50))
                     {
                         float fX, fY, fZ;
                         pGo->GetContactPoint(m_creature, fX, fY, fZ, CONTACT_DISTANCE);
                         m_creature->GetMotionMaster()->MovePoint(2, fX, fY, fZ, MOVE_PATHFINDING);
-                        timer=10000;
+                        timer = 10000;
                     }
                 }
             }
@@ -277,17 +265,12 @@ struct urokUnderlingAI : public ScriptedAI
         abilityCombatUpdate(uiDiff);
         DoMeleeAttackIfReady();
     }
-    virtual void abilityCombatUpdate(uint32 uiDiff){}
-    void SetMoundGuid(uint64 moundGuid)
-    {
-        guidMound=moundGuid;
-    }
+    virtual void abilityCombatUpdate(uint32 uiDiff) {}
+    void SetMoundGuid(uint64 moundGuid) { guidMound = moundGuid; }
 };
 struct urokEnforcerAI : public urokUnderlingAI
 {
-    urokEnforcerAI(Creature* pCreature) : urokUnderlingAI(pCreature)
-    {
-    }
+    urokEnforcerAI(Creature* pCreature) : urokUnderlingAI(pCreature) {}
 
     void abilityCombatUpdate(uint32 uiDiff) override
     {
@@ -297,15 +280,10 @@ struct urokEnforcerAI : public urokUnderlingAI
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_npc_urok_enforcer(Creature* pCreature)
-{
-    return new urokEnforcerAI(pCreature);
-}
+CreatureAI* GetAI_npc_urok_enforcer(Creature* pCreature) { return new urokEnforcerAI(pCreature); }
 struct urokOgreMagusAI : public urokUnderlingAI
 {
-    urokOgreMagusAI(Creature* pCreature) : urokUnderlingAI(pCreature)
-    {
-    }
+    urokOgreMagusAI(Creature* pCreature) : urokUnderlingAI(pCreature) {}
 
     void abilityCombatUpdate(uint32 uiDiff) override
     {
@@ -315,19 +293,16 @@ struct urokOgreMagusAI : public urokUnderlingAI
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_npc_urok_ogre_magus(Creature* pCreature)
-{
-    return new urokOgreMagusAI(pCreature);
-}
-//event 4777
+CreatureAI* GetAI_npc_urok_ogre_magus(Creature* pCreature) { return new urokOgreMagusAI(pCreature); }
+// event 4777
 bool ProcessEventId_event_banner_destroyed(uint32 eventId, Object* source, Object* target, bool isStart)
 {
-    //we go through the source because target is null.... maybe because it is a summoned object.
-    if(!target)
+    // we go through the source because target is null.... maybe because it is a summoned object.
+    if (!target)
     {
-        if(source && source->IsCreature())
+        if (source && source->IsCreature())
         {
-            if (urokUnderlingAI* underlingAI = dynamic_cast<urokUnderlingAI*>( ((Creature*)source)->AI() ) )
+            if (urokUnderlingAI* underlingAI = dynamic_cast<urokUnderlingAI*>(((Creature*)source)->AI()))
             {
                 underlingAI->BannerDestroyed();
             }
@@ -337,13 +312,13 @@ bool ProcessEventId_event_banner_destroyed(uint32 eventId, Object* source, Objec
     {
         if (targetGuid.IsGameObject())
         {
-            if (go_urok_challengeAI* pPedestalAI = dynamic_cast<go_urok_challengeAI*>(((GameObject*) target)->AI()))
+            if (go_urok_challengeAI* pPedestalAI = dynamic_cast<go_urok_challengeAI*>(((GameObject*)target)->AI()))
                 pPedestalAI->EventBannerDestroyed(source->GetGUID());
         }
     }
-    return true;//to always override what could be in DB.
+    return true; // to always override what could be in DB.
 }
-void DefineGoChallenge(Creature * crea, uint64 gobjGUID)
+void DefineGoChallenge(Creature* crea, uint64 gobjGUID)
 {
     if (urokUnderlingAI* underlingAI = dynamic_cast<urokUnderlingAI*>(crea->AI()))
     {

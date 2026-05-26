@@ -3,16 +3,16 @@
 #include "Errors.h"
 
 #if defined(WIN32)
-#include <WinSock2.h>
 #include <WS2tcpip.h>
+#include <WinSock2.h>
 #elif defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-#include <unistd.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 #endif
 
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 
 #ifdef inet_ntop
 #undef inet_ntop
@@ -45,7 +45,7 @@ IO::Networking::IpAddress IO::Networking::Internal::inet_ntop(in_addr const* nat
     __inet_ntop(AF_INET, nativeAddress, ipv4AddressString, INET_ADDRSTRLEN);
     auto ipAddress = IO::Networking::IpAddress::TryParseFromString(ipv4AddressString);
 #else
-    #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
     MANGOS_ASSERT(ipAddress.has_value()); // this should never fail, since we got a valid IP from IN_ADDR
     return ipAddress.value();
@@ -58,7 +58,7 @@ void IO::Networking::Internal::CloseSocket(IO::Native::SocketHandle nativeSocket
 #elif defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
     ::close(nativeSocket);
 #else
-    #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }
 
@@ -76,6 +76,6 @@ void IO::Networking::Internal::inet_pton(IO::Networking::IpAddress const& ipAddr
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
     MANGOS_ASSERT(__inet_pton(AF_INET, ipAddress.ToString().c_str(), out_dest) == 1);
 #else
-    #error "Unsupported platform"
+#error "Unsupported platform"
 #endif
 }

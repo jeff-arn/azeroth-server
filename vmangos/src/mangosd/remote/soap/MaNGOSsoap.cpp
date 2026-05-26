@@ -1,21 +1,18 @@
 #include "MaNGOSsoap.h"
 #include "stdsoap2.h"
 
-#include "World.h"
-#include "Log.h"
 #include "AccountMgr.h"
+#include "Log.h"
+#include "World.h"
 
-#include "IO/Networking/IpAddress.h"
 #include "IO/Multithreading/CreateThread.h"
+#include "IO/Networking/IpAddress.h"
 
 class SOAPCommand
 {
- public:
+public:
     /// Blocks until OnCommandFinished is called
-    bool WaitAndGetSuccessStatus()
-    {
-        return m_successStatusPromise.get_future().get();
-    }
+    bool WaitAndGetSuccessStatus() { return m_successStatusPromise.get_future().get(); }
 
     static void OnPrint(void* opaquePointer, char const* msg)
     {
@@ -75,8 +72,7 @@ std::unique_ptr<std::thread> StartSoapThread(std::string const& bindHost, uint16
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "MaNGOSsoap: Bound to http://%s:%d/", bindHost.c_str(), bindPort);
 
-    return IO::Multithreading::CreateThreadPtr("SOAP", [soap]()
-    { SoapThreadBody(soap); });
+    return IO::Multithreading::CreateThreadPtr("SOAP", [soap]() { SoapThreadBody(soap); });
 }
 
 /// Defined by soap.stub
@@ -134,11 +130,9 @@ int ns1__executeCommand(soap* soap, char* command, char** result)
 
 /// Namespace definition for gSOAP.
 /// We must define this, because gSOAP is using it as an external symbol
-struct Namespace namespaces[] =
-    {{ "SOAP-ENV", "http://schemas.xmlsoap.org/soap/envelope/" }, // must be first
-     { "SOAP-ENC", "http://schemas.xmlsoap.org/soap/encoding/" }, // must be second
-     { "xsi", "http://www.w3.org/1999/XMLSchema-instance", "http://www.w3.org/*/XMLSchema-instance" },
-     { "xsd", "http://www.w3.org/1999/XMLSchema", "http://www.w3.org/*/XMLSchema" },
-     { "ns1", "urn:MaNGOS" },     // "ns1" namespace prefix
-     { nullptr, nullptr }
-    };
+struct Namespace namespaces[] = {{"SOAP-ENV", "http://schemas.xmlsoap.org/soap/envelope/"}, // must be first
+                                 {"SOAP-ENC", "http://schemas.xmlsoap.org/soap/encoding/"}, // must be second
+                                 {"xsi", "http://www.w3.org/1999/XMLSchema-instance", "http://www.w3.org/*/XMLSchema-instance"},
+                                 {"xsd", "http://www.w3.org/1999/XMLSchema", "http://www.w3.org/*/XMLSchema"},
+                                 {"ns1", "urn:MaNGOS"}, // "ns1" namespace prefix
+                                 {nullptr, nullptr}};

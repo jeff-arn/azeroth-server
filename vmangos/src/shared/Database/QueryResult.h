@@ -22,65 +22,64 @@
 #ifndef QUERYRESULT_H
 #define QUERYRESULT_H
 
+#include <memory>
 #include "Common.h"
 #include "Field.h"
-#include <memory>
 
 class QueryResult
 {
-    public:
-        QueryResult(uint64 rowCount, uint32 fieldCount)
-            : mCurrentRow(nullptr), mFieldCount(fieldCount), mRowCount(rowCount) {}
+public:
+    QueryResult(uint64 rowCount, uint32 fieldCount) : mCurrentRow(nullptr), mFieldCount(fieldCount), mRowCount(rowCount) {}
 
-        virtual ~QueryResult() {}
+    virtual ~QueryResult() {}
 
-        virtual bool NextRow() = 0;
+    virtual bool NextRow() = 0;
 
-        Field* Fetch() const { return mCurrentRow; }
+    Field* Fetch() const { return mCurrentRow; }
 
-        Field const& operator [] (int index) const { return mCurrentRow[index]; }
+    Field const& operator[](int index) const { return mCurrentRow[index]; }
 
-        uint32 GetFieldCount() const { return mFieldCount; }
-        uint64 GetRowCount() const { return mRowCount; }
+    uint32 GetFieldCount() const { return mFieldCount; }
+    uint64 GetRowCount() const { return mRowCount; }
 
-    protected:
-        Field* mCurrentRow;
-        uint32 mFieldCount;
-        uint64 mRowCount;
+protected:
+    Field* mCurrentRow;
+    uint32 mFieldCount;
+    uint64 mRowCount;
 };
 
 typedef std::vector<std::string> QueryFieldNames;
 
 class QueryNamedResult
 {
-    public:
-        explicit QueryNamedResult(std::unique_ptr<QueryResult> query, QueryFieldNames names) : mQuery(std::move(query)), mFieldNames(std::move(names)) {}
+public:
+    explicit QueryNamedResult(std::unique_ptr<QueryResult> query, QueryFieldNames names) : mQuery(std::move(query)), mFieldNames(std::move(names)) {}
 
-        // compatible interface with QueryResult
-        bool NextRow() { return mQuery->NextRow(); }
-        Field* Fetch() const { return mQuery->Fetch(); }
-        uint32 GetFieldCount() const { return mQuery->GetFieldCount(); }
-        uint64 GetRowCount() const { return mQuery->GetRowCount(); }
-        Field const& operator[] (int index) const { return (*mQuery)[index]; }
+    // compatible interface with QueryResult
+    bool NextRow() { return mQuery->NextRow(); }
+    Field* Fetch() const { return mQuery->Fetch(); }
+    uint32 GetFieldCount() const { return mQuery->GetFieldCount(); }
+    uint64 GetRowCount() const { return mQuery->GetRowCount(); }
+    Field const& operator[](int index) const { return (*mQuery)[index]; }
 
-        // named access
-        Field const& operator[] (std::string const& name) const { return mQuery->Fetch()[GetField_idx(name)]; }
-        QueryFieldNames const& GetFieldNames() const { return mFieldNames; }
+    // named access
+    Field const& operator[](std::string const& name) const { return mQuery->Fetch()[GetField_idx(name)]; }
+    QueryFieldNames const& GetFieldNames() const { return mFieldNames; }
 
-        uint32 GetField_idx(std::string const& name) const
+    uint32 GetField_idx(std::string const& name) const
+    {
+        for (size_t idx = 0; idx < mFieldNames.size(); ++idx)
         {
-            for(size_t idx = 0; idx < mFieldNames.size(); ++idx)
-            {
-                if(mFieldNames[idx] == name)
-                    return idx;
-            }
-            throw std::runtime_error("unknown field name");
-            return uint32(-1);
+            if (mFieldNames[idx] == name)
+                return idx;
         }
+        throw std::runtime_error("unknown field name");
+        return uint32(-1);
+    }
 
-    protected:
-        std::unique_ptr<QueryResult> mQuery;
-        QueryFieldNames mFieldNames;
+protected:
+    std::unique_ptr<QueryResult> mQuery;
+    QueryFieldNames mFieldNames;
 };
 
 #endif

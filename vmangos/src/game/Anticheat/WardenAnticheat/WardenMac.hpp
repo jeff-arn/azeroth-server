@@ -14,12 +14,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
- /*
-  *
-  * This code was written by namreeb (legal@namreeb.org) and is released with
-  * permission as part of vmangos (https://github.com/vmangos/core)
-  *
-  */
+/*
+ *
+ * This code was written by namreeb (legal@namreeb.org) and is released with
+ * permission as part of vmangos (https://github.com/vmangos/core)
+ *
+ */
 
 #ifndef __WARDENMAC_HPP_
 #define __WARDENMAC_HPP_
@@ -35,27 +35,26 @@ class BigNumber;
 
 class WardenMac final : public Warden
 {
-    private:
-        bool m_fingerprintSaved;
+private:
+    bool m_fingerprintSaved;
 
-        WorldPacket m_charEnum;
+    WorldPacket m_charEnum;
 
-        virtual ScanFlags GetScanFlags() const;
+    virtual ScanFlags GetScanFlags() const;
 
-        virtual void InitializeClient();
+    virtual void InitializeClient();
 
-    public:
-        static void LoadScriptedScans();
+public:
+    static void LoadScriptedScans();
 
-        WardenMac(WorldSession* session, BigNumber const& K);
+    WardenMac(WorldSession* session, BigNumber const& K);
 
-        void Update();
+    void Update();
 
-        // set pending character enum packet (to be sent once we are satisfied that Warden is loaded)
-        virtual void SetCharEnumPacket(WorldPacket&& packet);
+    // set pending character enum packet (to be sent once we are satisfied that Warden is loaded)
+    virtual void SetCharEnumPacket(WorldPacket&& packet);
 
-        virtual void GetPlayerInfo(std::string& clock, std::string& fingerprint, std::string& hypervisors,
-            std::string& renderer, std::string& proxifier) const {}
+    virtual void GetPlayerInfo(std::string& clock, std::string& fingerprint, std::string& hypervisors, std::string& renderer, std::string& proxifier) const {}
 };
 
 #endif /*!__WARDENMAC_HPP_*/

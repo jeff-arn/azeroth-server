@@ -14,15 +14,15 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "blackwing_lair.h"
+#include "scriptPCH.h"
 
 enum Firemaw : uint32
 {
-    SPELL_SHADOW_FLAME  = 22539,
-    SPELL_WING_BUFFET   = 23339,
-    SPELL_FLAME_BUFFET  = 23341,
-    SPELL_THRASH        = 3391,
+    SPELL_SHADOW_FLAME = 22539,
+    SPELL_WING_BUFFET = 23339,
+    SPELL_FLAME_BUFFET = 23341,
+    SPELL_THRASH = 3391,
 };
 
 struct boss_firemawAI : public ScriptedAI
@@ -42,7 +42,7 @@ struct boss_firemawAI : public ScriptedAI
     void Reset() override
     {
         m_uiShadowFlameTimer = 16000;
-        m_uiWingBuffetTimer  = 30000;
+        m_uiWingBuffetTimer = 30000;
         m_uiFlameBuffetTimer = 2000;
     }
 
@@ -121,10 +121,7 @@ struct boss_firemawAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_firemaw(Creature* pCreature)
-{
-    return new boss_firemawAI(pCreature);
-}
+CreatureAI* GetAI_boss_firemaw(Creature* pCreature) { return new boss_firemawAI(pCreature); }
 
 void AddSC_boss_firemaw()
 {

@@ -9,8 +9,8 @@ npc_korv
 npc_va_jashni
 */
 
-#include "scriptPCH.h"
 #include "blackrock_depths.h"
+#include "scriptPCH.h"
 
 /*######
 ## npc_theldren
@@ -18,44 +18,41 @@ npc_va_jashni
 
 enum
 {
-    SPELL_THELDREN_MORTAL_STRIKE        = 17547,
-    SPELL_THELDREN_CHARGE               = 22911,
-    SPELL_THELDREN_INTIMIDATING_SHOUT   = 19134,
+    SPELL_THELDREN_MORTAL_STRIKE = 17547,
+    SPELL_THELDREN_CHARGE = 22911,
+    SPELL_THELDREN_INTIMIDATING_SHOUT = 19134,
 
-    SPELL_VA_JASHNI_FLASH_HEAL          = 17138,
-    SPELL_VA_JASHNI_SHIELD              = 20697,
-    SPELL_VA_JASHNI_RENEW               = 23895,
+    SPELL_VA_JASHNI_FLASH_HEAL = 17138,
+    SPELL_VA_JASHNI_SHIELD = 20697,
+    SPELL_VA_JASHNI_RENEW = 23895,
 
-    SPELL_KORV_FROST_SHOCK              = 21401,
-    SPELL_KORV_EARTHBIND_TOTEM          = 15786,
-    SPELL_KORV_FIRENOVA_TOTEM           = 11314,
+    SPELL_KORV_FROST_SHOCK = 21401,
+    SPELL_KORV_EARTHBIND_TOTEM = 15786,
+    SPELL_KORV_FIRENOVA_TOTEM = 11314,
 
-    SPELL_LEFTY_FIVE_FAT_FINGERS        = 27673,
+    SPELL_LEFTY_FIVE_FAT_FINGERS = 27673,
 
-    SPELL_SNOKH_BLACKSPINE_PYROBLAST    = 17273,
-    SPELL_SNOKH_BLACKSPINE_SCORCH       = 13878,
-    SPELL_SNOKH_BLACKSPINE_FLAMESTRIKE  = 18399,
-    SPELL_SNOKH_BLACKSPINE_POLYMORPH    = 13323,
+    SPELL_SNOKH_BLACKSPINE_PYROBLAST = 17273,
+    SPELL_SNOKH_BLACKSPINE_SCORCH = 13878,
+    SPELL_SNOKH_BLACKSPINE_FLAMESTRIKE = 18399,
+    SPELL_SNOKH_BLACKSPINE_POLYMORPH = 13323,
 
-    SPELL_VOLIDA_BLIZZARD               = 27618,
-    SPELL_VOLIDA_CONEOFCOLD             = 12557,
+    SPELL_VOLIDA_BLIZZARD = 27618,
+    SPELL_VOLIDA_CONEOFCOLD = 12557,
 
-    SPELL_MALGEN_LONGSPEAR_AIMED_SHOT   = 20902,
-    SPELL_MALGEN_LONGSPEAR_MULTISHOT    = 20735,
-    SPELL_MALGEN_LONGSPEAR_FEIGN_DEATH  = 5384,
-    SPELL_MALGEN_LONGSPEAR_FROST_TRAP   = 13809,
-    SPELL_MALGEN_LONGSPEAR_PET          = 19561,
-    SPELL_MALGEN_LONGSPEAR_SHOOT        = 6660,
+    SPELL_MALGEN_LONGSPEAR_AIMED_SHOT = 20902,
+    SPELL_MALGEN_LONGSPEAR_MULTISHOT = 20735,
+    SPELL_MALGEN_LONGSPEAR_FEIGN_DEATH = 5384,
+    SPELL_MALGEN_LONGSPEAR_FROST_TRAP = 13809,
+    SPELL_MALGEN_LONGSPEAR_PET = 19561,
+    SPELL_MALGEN_LONGSPEAR_SHOOT = 6660,
 
-    NPC_MALGEN_LONGSPEAR_PET_GNASHJAW   = 16095
+    NPC_MALGEN_LONGSPEAR_PET_GNASHJAW = 16095
 };
 
 struct npc_theldrenAI : public ScriptedAI
 {
-    npc_theldrenAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_theldrenAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiInterceptTimer;
     uint32 m_uiMortalStrikeTimer;
@@ -75,7 +72,7 @@ struct npc_theldrenAI : public ScriptedAI
 
         if (m_uiInterceptTimer < diff)
         {
-            Unit *target = GetPlayerAtMinimumRange(8.0f);
+            Unit* target = GetPlayerAtMinimumRange(8.0f);
 
             if (target && DoCastSpellIfCan(target, SPELL_THELDREN_CHARGE) == CAST_OK)
                 m_uiInterceptTimer = urand(20000, 30000);
@@ -103,17 +100,11 @@ struct npc_theldrenAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_theldren(Creature* pCreature)
-{
-    return new npc_theldrenAI(pCreature);
-}
+CreatureAI* GetAI_npc_theldren(Creature* pCreature) { return new npc_theldrenAI(pCreature); }
 
 struct npc_va_jashniAI : public ScriptedAI
 {
-    npc_va_jashniAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_va_jashniAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiFlashHealTimer;
     uint32 m_uiShieldTimer;
@@ -125,14 +116,14 @@ struct npc_va_jashniAI : public ScriptedAI
         // should have massive cooldowns
         m_uiFlashHealTimer = 10000;
         m_uiShieldTimer = 20000; // shield is 5000 health...
-        m_uiRenewTimer = 30000;  // renew is 2000 health every 3 sec...
+        m_uiRenewTimer = 30000; // renew is 2000 health every 3 sec...
     }
 
     void UpdateAI(uint32 const diff) override
     {
         if (m_uiFlashHealTimer < diff)
         {
-            Unit *target = m_creature->FindLowestHpFriendlyUnit(40.0f, 1);
+            Unit* target = m_creature->FindLowestHpFriendlyUnit(40.0f, 1);
 
             if (target && DoCastSpellIfCan(target, SPELL_VA_JASHNI_FLASH_HEAL) == CAST_OK)
                 m_uiFlashHealTimer = urand(8000, 14000);
@@ -142,7 +133,7 @@ struct npc_va_jashniAI : public ScriptedAI
 
         if (m_uiShieldTimer < diff)
         {
-            Unit *target = m_creature->FindLowestHpFriendlyUnit(40.0f, 1);
+            Unit* target = m_creature->FindLowestHpFriendlyUnit(40.0f, 1);
 
             if (target && DoCastSpellIfCan(target, SPELL_VA_JASHNI_SHIELD) == CAST_OK)
                 m_uiShieldTimer = urand(40000, 50000);
@@ -152,7 +143,7 @@ struct npc_va_jashniAI : public ScriptedAI
 
         if (m_uiRenewTimer < diff)
         {
-            Unit *target = m_creature->FindLowestHpFriendlyUnit(40.0f, 1);
+            Unit* target = m_creature->FindLowestHpFriendlyUnit(40.0f, 1);
 
             if (target && DoCastSpellIfCan(target, SPELL_VA_JASHNI_RENEW) == CAST_OK)
                 m_uiRenewTimer = urand(55000, 65000);
@@ -167,17 +158,11 @@ struct npc_va_jashniAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_va_jashni(Creature* pCreature)
-{
-    return new npc_va_jashniAI(pCreature);
-}
+CreatureAI* GetAI_npc_va_jashni(Creature* pCreature) { return new npc_va_jashniAI(pCreature); }
 
 struct npc_korvAI : public ScriptedAI
 {
-    npc_korvAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_korvAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiFrostShockTimer;
     uint32 m_uiEarthbindTimer;
@@ -198,7 +183,7 @@ struct npc_korvAI : public ScriptedAI
         if (m_uiFrostShockTimer < diff)
         {
             // Spam dat frost shock on random players!
-            Unit *target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
+            Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
 
             if (target && DoCastSpellIfCan(target, SPELL_KORV_FROST_SHOCK) == CAST_OK)
                 m_uiFrostShockTimer = urand(10000, 12000);
@@ -226,24 +211,15 @@ struct npc_korvAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_korv(Creature* pCreature)
-{
-    return new npc_korvAI(pCreature);
-}
+CreatureAI* GetAI_npc_korv(Creature* pCreature) { return new npc_korvAI(pCreature); }
 
 struct npc_leftyAI : public ScriptedAI
 {
-    npc_leftyAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_leftyAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiFiveFingerTimer;
 
-    void Reset() override
-    {
-        m_uiFiveFingerTimer = 2000;
-    }
+    void Reset() override { m_uiFiveFingerTimer = 2000; }
 
     void UpdateAI(uint32 const diff) override
     {
@@ -262,17 +238,11 @@ struct npc_leftyAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_lefty(Creature* pCreature)
-{
-    return new npc_leftyAI(pCreature);
-}
+CreatureAI* GetAI_npc_lefty(Creature* pCreature) { return new npc_leftyAI(pCreature); }
 
 struct npc_snokh_blackspineAI : public ScriptedAI
 {
-    npc_snokh_blackspineAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_snokh_blackspineAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiPyroblastTimer;
     uint32 m_uiScorchTimer;
@@ -310,7 +280,7 @@ struct npc_snokh_blackspineAI : public ScriptedAI
 
         if (m_uiFlamestrikeTimer < diff)
         {
-            Unit *target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
+            Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
 
             if (target && DoCastSpellIfCan(target, SPELL_SNOKH_BLACKSPINE_FLAMESTRIKE) == CAST_OK)
                 m_uiFlamestrikeTimer = urand(10000, 20000);
@@ -320,7 +290,7 @@ struct npc_snokh_blackspineAI : public ScriptedAI
 
         if (m_uiPolymorphTimer < diff)
         {
-            Unit *target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
+            Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
 
             if (target && DoCastSpellIfCan(target, SPELL_SNOKH_BLACKSPINE_POLYMORPH) == CAST_OK)
                 m_uiPolymorphTimer = urand(25000, 30000);
@@ -332,17 +302,11 @@ struct npc_snokh_blackspineAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_snokh_blackspine(Creature* pCreature)
-{
-    return new npc_snokh_blackspineAI(pCreature);
-}
+CreatureAI* GetAI_npc_snokh_blackspine(Creature* pCreature) { return new npc_snokh_blackspineAI(pCreature); }
 
 struct npc_volidaAI : public ScriptedAI
 {
-    npc_volidaAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_volidaAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiBlizzardTimer;
     uint32 m_uiConeOfColdTimer;
@@ -360,7 +324,7 @@ struct npc_volidaAI : public ScriptedAI
 
         if (m_uiBlizzardTimer < diff)
         {
-            Unit *target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
+            Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
 
             if (target && DoCastSpellIfCan(target, SPELL_VOLIDA_BLIZZARD) == CAST_OK)
                 m_uiBlizzardTimer = urand(14000, 18000);
@@ -380,17 +344,11 @@ struct npc_volidaAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_volida(Creature* pCreature)
-{
-    return new npc_volidaAI(pCreature);
-}
+CreatureAI* GetAI_npc_volida(Creature* pCreature) { return new npc_volidaAI(pCreature); }
 
 struct npc_malgen_longspearAI : public ScriptedAI
 {
-    npc_malgen_longspearAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_malgen_longspearAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiAimedShotTimer;
     uint32 m_uiMultiShotTimer;
@@ -413,21 +371,20 @@ struct npc_malgen_longspearAI : public ScriptedAI
 
     void EnterEvadeMode() override
     {
-        if (Creature *creature = m_creature->GetMap()->GetCreature(m_petGuid))
+        if (Creature* creature = m_creature->GetMap()->GetCreature(m_petGuid))
         {
             creature->ForcedDespawn();
             m_petGuid = ObjectGuid();
         }
     }
 
-    void EnterCombat(Unit *enemy) override
+    void EnterCombat(Unit* enemy) override
     {
         // Summon pet
-        if (Creature *creature = m_creature->GetMap()->GetCreature(m_petGuid))
+        if (Creature* creature = m_creature->GetMap()->GetCreature(m_petGuid))
             return;
 
-        if (Creature *pet = m_creature->SummonCreature(NPC_MALGEN_LONGSPEAR_PET_GNASHJAW, m_creature->GetPositionX(),
-            m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10000))
+        if (Creature* pet = m_creature->SummonCreature(NPC_MALGEN_LONGSPEAR_PET_GNASHJAW, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10000))
         {
             m_petGuid = pet->GetObjectGuid();
         }
@@ -451,19 +408,19 @@ struct npc_malgen_longspearAI : public ScriptedAI
         }
         else
             m_uiFeignDeathTimer -= diff;
-        
+
         if (m_uiFrostTrapTimer)
         {
             if (m_uiFrostTrapTimer < diff)
             {
                 m_creature->RemoveAurasDueToSpell(SPELL_MALGEN_LONGSPEAR_FEIGN_DEATH);
-                
+
                 DoCastSpellIfCan(m_creature, SPELL_MALGEN_LONGSPEAR_FROST_TRAP, CF_TRIGGERED);
                 m_uiFrostTrapTimer = 0;
 
                 m_bIsFeigned = false;
 
-                Unit *target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
+                Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
                 if (target)
                 {
                     m_creature->GetMotionMaster()->MoveChase(target);
@@ -472,14 +429,14 @@ struct npc_malgen_longspearAI : public ScriptedAI
             else
                 m_uiFrostTrapTimer -= diff;
         }
-        
+
 
         if (m_bIsFeigned)
             return;
 
         if (m_uiAimedShotTimer < diff)
         {
-            Unit *target = GetPlayerAtMinimumRange(8.0f);
+            Unit* target = GetPlayerAtMinimumRange(8.0f);
 
             if (target && DoCastSpellIfCan(target, SPELL_MALGEN_LONGSPEAR_AIMED_SHOT) == CAST_OK)
                 m_uiAimedShotTimer = urand(18000, 24000);
@@ -489,7 +446,7 @@ struct npc_malgen_longspearAI : public ScriptedAI
 
         if (m_uiMultiShotTimer < diff)
         {
-            Unit *target = GetPlayerAtMinimumRange(8.0f);
+            Unit* target = GetPlayerAtMinimumRange(8.0f);
 
             if (target && DoCastSpellIfCan(target, SPELL_MALGEN_LONGSPEAR_MULTISHOT) == CAST_OK)
                 m_uiMultiShotTimer = 20000;
@@ -501,10 +458,7 @@ struct npc_malgen_longspearAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_malgen_longspear(Creature* pCreature)
-{
-    return new npc_malgen_longspearAI(pCreature);
-}
+CreatureAI* GetAI_npc_malgen_longspear(Creature* pCreature) { return new npc_malgen_longspearAI(pCreature); }
 
 void AddSC_blackrock_depths_arena_challenge()
 {

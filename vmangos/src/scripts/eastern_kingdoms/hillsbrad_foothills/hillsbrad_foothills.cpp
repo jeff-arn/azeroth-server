@@ -1,21 +1,18 @@
 /* Nostalrius
-*Alita: j'inaugure ce fichier!
-*
-*
-*
-*/
+ *Alita: j'inaugure ce fichier!
+ *
+ *
+ *
+ */
 
 /* ContentData
 EndContentData */
 
 #include "scriptPCH.h"
 
-struct go_helcular_s_graveAI: public GameObjectAI
+struct go_helcular_s_graveAI : public GameObjectAI
 {
-    go_helcular_s_graveAI(GameObject* pGo) : GameObjectAI(pGo)
-    {
-        guid_helcular = 0;
-    }
+    go_helcular_s_graveAI(GameObject* pGo) : GameObjectAI(pGo) { guid_helcular = 0; }
 
     uint64 guid_helcular;
 
@@ -26,16 +23,10 @@ struct go_helcular_s_graveAI: public GameObjectAI
         return false;
     }
 
-    void SetHelcularGuid(Creature* crea)
-    {
-        guid_helcular = crea->GetGUID();
-    }
+    void SetHelcularGuid(Creature* crea) { guid_helcular = crea->GetGUID(); }
 };
 
-GameObjectAI* GetAIgo_helcular_s_grave(GameObject *pGo)
-{
-    return new go_helcular_s_graveAI(pGo);
-}
+GameObjectAI* GetAIgo_helcular_s_grave(GameObject* pGo) { return new go_helcular_s_graveAI(pGo); }
 
 bool QuestRewarded_go_helcular_s_grave(Player* pPlayer, GameObject* pGo, Quest const* pQuest)
 {
@@ -52,13 +43,13 @@ bool QuestRewarded_go_helcular_s_grave(Player* pPlayer, GameObject* pGo, Quest c
 
 enum
 {
-    NPC_CAPTURED_FARMER     = 2284,
+    NPC_CAPTURED_FARMER = 2284,
 
-    GO_TAINTED_KEG          = 1729,
-    GO_TAINTED_KEG_SMOKE    = 1730
+    GO_TAINTED_KEG = 1729,
+    GO_TAINTED_KEG_SMOKE = 1730
 };
 
-struct go_dusty_rugAI: public GameObjectAI
+struct go_dusty_rugAI : public GameObjectAI
 {
     go_dusty_rugAI(GameObject* pGo) : GameObjectAI(pGo)
     {
@@ -67,7 +58,7 @@ struct go_dusty_rugAI: public GameObjectAI
     }
     uint32 timer;
     GuidList Farmers;
-    uint8 step;//0 = usual, nothing giong on // 1+ event going on
+    uint8 step; // 0 = usual, nothing giong on // 1+ event going on
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -78,56 +69,56 @@ struct go_dusty_rugAI: public GameObjectAI
                 Creature* curr = nullptr;
                 switch (step)
                 {
-                    case 1:
-                        float fX, fY, fZ;
-                        if (GameObject* pKeg = me->FindNearestGameObject(GO_TAINTED_KEG, 10.000000))
+                case 1:
+                    float fX, fY, fZ;
+                    if (GameObject* pKeg = me->FindNearestGameObject(GO_TAINTED_KEG, 10.000000))
+                    {
+                        std::list<Creature*> lCrea;
+                        me->GetCreatureListWithEntryInGrid(lCrea, NPC_CAPTURED_FARMER, 30.0f);
+                        for (const auto& it : lCrea)
                         {
-                            std::list<Creature*> lCrea;
-                            me->GetCreatureListWithEntryInGrid(lCrea, NPC_CAPTURED_FARMER, 30.0f);
-                            for (const auto& it : lCrea)
+                            if (it->IsAlive())
                             {
-                                if (it->IsAlive())
-                                {
-                                    Farmers.push_back(it->GetGUID());
-                                    pKeg->GetContactPoint(it, fX, fY, fZ, CONTACT_DISTANCE);
-                                    it->GetMotionMaster()->MovePoint(1, fX, fY, fZ, MOVE_PATHFINDING);
-                                }
+                                Farmers.push_back(it->GetGUID());
+                                pKeg->GetContactPoint(it, fX, fY, fZ, CONTACT_DISTANCE);
+                                it->GetMotionMaster()->MovePoint(1, fX, fY, fZ, MOVE_PATHFINDING);
                             }
                         }
-                        timer = 4500;
-                        step++;
-                        break;
-                    case 2:
+                    }
+                    timer = 4500;
+                    step++;
+                    break;
+                case 2:
+                    if (curr = me->GetMap()->GetCreature(Farmers.front()))
+                        curr->SetStandState(UNIT_STAND_STATE_KNEEL);
+                    timer = 2000;
+                    step++;
+                    break;
+                case 3:
+                    if (GameObject* pBaril = me->FindNearestGameObject(GO_TAINTED_KEG, 10.000000))
+                    {
+                        float fX, fY, fZ;
+                        pBaril->GetPosition(fX, fY, fZ);
+                        me->SummonGameObject(GO_TAINTED_KEG_SMOKE, fX, fY, fZ + 1, 0, 0, 0, 0, 0, 120);
+                    }
+                    if (curr = me->GetMap()->GetCreature(Farmers.front()))
+                        curr->SetStandState(UNIT_STAND_STATE_STAND);
+                    curr = nullptr;
+                    while (!Farmers.empty())
+                    {
                         if (curr = me->GetMap()->GetCreature(Farmers.front()))
-                            curr->SetStandState(UNIT_STAND_STATE_KNEEL);
-                        timer = 2000;
-                        step++;
-                        break;
-                    case 3:
-                        if (GameObject* pBaril = me->FindNearestGameObject(GO_TAINTED_KEG, 10.000000))
-                        {
-                            float fX, fY, fZ;
-                            pBaril->GetPosition(fX, fY, fZ);
-                            me->SummonGameObject(GO_TAINTED_KEG_SMOKE, fX, fY, fZ + 1, 0, 0, 0, 0, 0, 120);
-                        }
-                        if (curr = me->GetMap()->GetCreature(Farmers.front()))
-                            curr->SetStandState(UNIT_STAND_STATE_STAND);
+                            curr->DealDamage(curr, curr->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+                        Farmers.pop_front();
                         curr = nullptr;
-                        while (!Farmers.empty())
-                        {
-                            if (curr = me->GetMap()->GetCreature(Farmers.front()))
-                                curr->DealDamage(curr, curr->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
-                            Farmers.pop_front();
-                            curr = nullptr;
-                        }
+                    }
 
-                        timer = 20000;
-                        step++;
-                        break;
-                    case 4:
-                        timer = 0;
-                        step = 0;
-                        break;
+                    timer = 20000;
+                    step++;
+                    break;
+                case 4:
+                    timer = 0;
+                    step = 0;
+                    break;
                 }
             }
             else
@@ -149,10 +140,7 @@ struct go_dusty_rugAI: public GameObjectAI
     }
 };
 
-GameObjectAI* GetAIgo_dusty_rug(GameObject *pGo)
-{
-    return new go_dusty_rugAI(pGo);
-}
+GameObjectAI* GetAIgo_dusty_rug(GameObject* pGo) { return new go_dusty_rugAI(pGo); }
 
 bool QuestRewarded_go_dusty_rug(Player* pPlayer, GameObject* pGo, Quest const* pQuest)
 {

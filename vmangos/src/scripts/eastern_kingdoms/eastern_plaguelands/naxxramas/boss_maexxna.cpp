@@ -17,33 +17,33 @@
 /* ScriptData
 SDName: Boss_Maexxna
 SD%Complete:
-SDComment: 
+SDComment:
 SDCategory: Naxxramas
 EndScriptData */
 
-#include "scriptPCH.h"
-#include "naxxramas.h"
-#include <random>
 #include <algorithm>
 #include <array>
+#include <random>
+#include "naxxramas.h"
+#include "scriptPCH.h"
 
 enum MaexxnaData
 {
-    EMOTE_BOSS_GENERIC_ENRAGE   = 2384,
+    EMOTE_BOSS_GENERIC_ENRAGE = 2384,
 
-    SPELL_WEBWRAP               = 28622,    
+    SPELL_WEBWRAP = 28622,
 
-    SPELL_WEBSPRAY              = 29484,
-    SPELL_POISONSHOCK           = 28741,
-    SPELL_NECROTICPOISON        = 28776,    // 90% reduced healing. Dispelllable
-    SPELL_ENRAGE                = 28747,    // 30% enrage
+    SPELL_WEBSPRAY = 29484,
+    SPELL_POISONSHOCK = 28741,
+    SPELL_NECROTICPOISON = 28776, // 90% reduced healing. Dispelllable
+    SPELL_ENRAGE = 28747, // 30% enrage
 
-    SPELL_SUMMON_SPIDERLING     = 29434,
+    SPELL_SUMMON_SPIDERLING = 29434,
 
-    SPELL_DOUBLE_ATTACK = 19818,            // seems it adds an aura, must be removed manually?
+    SPELL_DOUBLE_ATTACK = 19818, // seems it adds an aura, must be removed manually?
 
-    //SPELL_WEBWRAP = 28622,
-    SPELL_WEBWRAP_2 = 28673,                // does an attack animation, purpose unknown
+    // SPELL_WEBWRAP = 28622,
+    SPELL_WEBWRAP_2 = 28673, // does an attack animation, purpose unknown
 
     NPC_WEB_WRAP = 16486,
     NPC_SPIDERLING = 17055,
@@ -51,7 +51,7 @@ enum MaexxnaData
     // SPELL_SUMMON_SPIDERLING_1 = 29434,                   // works.
     // SPELL_SUMMON_SPIDERLING_2 = 30076,                   // works
 
-    SPELL_SUMMON_WEB_WRAP     = 28627,
+    SPELL_SUMMON_WEB_WRAP = 28627,
     /*
     SPELL_WEB_WRAP_UNKNOWN   = 28617,
     SPELL_WEB_WRAP_1         = 28618,
@@ -63,22 +63,19 @@ enum MaexxnaData
     SPELL_CLEAR_WEB_WRAP     = 28629,
     */
 
-    MAX_SPIDERLINGS         = 10, // 8 in cmangos, should be 10 
-    MAX_WEB_WRAP_POSITIONS  = 3
+    MAX_SPIDERLINGS = 10, // 8 in cmangos, should be 10
+    MAX_WEB_WRAP_POSITIONS = 3
 };
 
-static float WebWrapCooldown(bool initial = false)            { return initial ? 20000 : 40000; }
-static float SummonSpiderlingsCooldown(bool initial = false)  { return initial ? 30000 : 40000; }
-static float WebSprayCooldown(bool initial = false)           { return initial ? 40000 : 40000; }
-static float PoisonShockCooldown(bool initial = false)        { return urand(9000,11000); }
-static float NecroticPoisonCooldown(bool initial = false)     { return initial ? 15000 : urand(5000, 10000); } 
+static float WebWrapCooldown(bool initial = false) { return initial ? 20000 : 40000; }
+static float SummonSpiderlingsCooldown(bool initial = false) { return initial ? 30000 : 40000; }
+static float WebSprayCooldown(bool initial = false) { return initial ? 40000 : 40000; }
+static float PoisonShockCooldown(bool initial = false) { return urand(9000, 11000); }
+static float NecroticPoisonCooldown(bool initial = false) { return initial ? 15000 : urand(5000, 10000); }
 
 struct mob_webwrapAI : public ScriptedAI
 {
-    mob_webwrapAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset(); 
-    }
+    mob_webwrapAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     ObjectGuid m_victimGuid;
     uint32 m_uiWebWrapTimer;
@@ -90,8 +87,8 @@ struct mob_webwrapAI : public ScriptedAI
         webWrapDone = false;
     }
 
-    void MoveInLineOfSight(Unit* /*pWho*/) override { }
-    void AttackStart(Unit* /*pWho*/) override { }
+    void MoveInLineOfSight(Unit* /*pWho*/) override {}
+    void AttackStart(Unit* /*pWho*/) override {}
 
     void SetVictim(Unit* pVictim)
     {
@@ -103,8 +100,7 @@ struct mob_webwrapAI : public ScriptedAI
 
         pVictim->AddAura(SPELL_SUMMON_WEB_WRAP);
         m_victimGuid = pVictim->GetObjectGuid();
-        m_creature->GetMotionMaster()->MovePoint(0, pVictim->GetPositionX(), pVictim->GetPositionY(), pVictim->GetPositionZ(),
-            MOVE_FLY_MODE | MOVE_CYCLIC, 0.0f, 0);
+        m_creature->GetMotionMaster()->MovePoint(0, pVictim->GetPositionX(), pVictim->GetPositionY(), pVictim->GetPositionZ(), MOVE_FLY_MODE | MOVE_CYCLIC, 0.0f, 0);
     }
 
     void JustDied(Unit* /*pKiller*/) override
@@ -158,24 +154,14 @@ struct boss_maexxnaAI : public ScriptedAI
     uint32 m_uiSummonSpiderlingTimer;
     bool m_bEnraged;
     std::random_device m_randDevice;
-    std::mt19937 m_random { m_randDevice() };
+    std::mt19937 m_random{m_randDevice()};
 
     std::vector<std::pair<uint32, ObjectGuid>> wraps;
     std::vector<std::pair<uint32, ObjectGuid>> wraps2;
 
     // todo: only aproximate coordinates. Might be good enough,
     // but should be double-checked.
-    std::vector<std::array<float,3>> wepWrapLoc =
-    {
-        {3562.40f, -3890.35f, 314.30f},
-        {3560.78f, -3878.10f, 316.18f},
-        {3554.95f, -3863.24f, 314.46f},
-        {3549.02f, -3855.07f, 311.58f},
-        {3538.34f, -3844.68f, 314.21f},
-        {3526.43f, -3838.73f, 317.10f},
-        {3507.84f, -3832.71f, 319.00f},
-        {3493.35f, -3834.06f, 318.71f}
-    };
+    std::vector<std::array<float, 3>> wepWrapLoc = {{3562.40f, -3890.35f, 314.30f}, {3560.78f, -3878.10f, 316.18f}, {3554.95f, -3863.24f, 314.46f}, {3549.02f, -3855.07f, 311.58f}, {3538.34f, -3844.68f, 314.21f}, {3526.43f, -3838.73f, 317.10f}, {3507.84f, -3832.71f, 319.00f}, {3493.35f, -3834.06f, 318.71f}};
 
     void Reset() override
     {
@@ -201,7 +187,7 @@ struct boss_maexxnaAI : public ScriptedAI
             m_pInstance->SetData(TYPE_MAEXXNA, DONE);
     }
 
-    void MoveInLineOfSight(Unit* pWho) override 
+    void MoveInLineOfSight(Unit* pWho) override
     {
         if (!m_creature->IsWithinDistInMap(pWho, 40.0f))
             return;
@@ -220,7 +206,7 @@ struct boss_maexxnaAI : public ScriptedAI
             }
         }
     }
-    
+
     void JustReachedHome() override
     {
         if (m_pInstance)
@@ -230,7 +216,7 @@ struct boss_maexxnaAI : public ScriptedAI
         for (Creature* pSpider : spiderlings)
             pSpider->DeleteLater();
     }
-    
+
     bool DoCastWebWrap()
     {
         ThreatList const& tList = m_creature->GetThreatManager().getThreatList();
@@ -243,13 +229,13 @@ struct boss_maexxnaAI : public ScriptedAI
         for (it; it != tList.end(); ++it)
         {
             Player* pPlayer = (*it)->getTarget()->ToPlayer();
-            if (!pPlayer) continue;
+            if (!pPlayer)
+                continue;
 
             // todo: verify that IsWithinLOSInMap does not screw anyting up. Afaik there should be nowhere
             // to los in maexxnas room, so would only stop us from selecting players outside the room, which is good.
-            if (pPlayer->IsAlive() && !pPlayer->IsGameMaster()
-                && m_creature->IsWithinLOSInMap(pPlayer)        // Only players in the room
-                && !pPlayer->HasAura(SPELL_WEBWRAP))            // Don't retarget players who are still wrapped
+            if (pPlayer->IsAlive() && !pPlayer->IsGameMaster() && m_creature->IsWithinLOSInMap(pPlayer) // Only players in the room
+                && !pPlayer->HasAura(SPELL_WEBWRAP)) // Don't retarget players who are still wrapped
             {
                 candidates.push_back(pPlayer);
             }
@@ -266,7 +252,7 @@ struct boss_maexxnaAI : public ScriptedAI
                 break;
             auto candIt = candidates.begin();
 
-            if(candidates.size() > 1)
+            if (candidates.size() > 1)
                 std::advance(candIt, urand(0, candidates.size() - 1));
 
             Unit* pTarget = *candIt;
@@ -281,10 +267,10 @@ struct boss_maexxnaAI : public ScriptedAI
             // velocity based on how close we are to it. If we are close initially, reduce the travel-time
             // by increasing horizontal velocity, in which case we won't need as much vertical velocity, thus
             // won't hit the ceiling.
-            //s=ut+(0.5a*t^2) || s = vertical speed, u = initial up velocity, a = gravity factor(negative), t = time of flight
+            // s=ut+(0.5a*t^2) || s = vertical speed, u = initial up velocity, a = gravity factor(negative), t = time of flight
             // sadly this only aproximates some parts of this formula
-            float horizontalSpeed = dist/1.5f;
-            float verticalSpeed = 20.0f + (yDist*0.5f);
+            float horizontalSpeed = dist / 1.5f;
+            float verticalSpeed = 20.0f + (yDist * 0.5f);
             float angle = pTarget->GetAngle(wepWrapLoc[i][0], wepWrapLoc[i][1]);
 
             // set immune anticheat and calculate speed
@@ -365,16 +351,16 @@ struct boss_maexxnaAI : public ScriptedAI
         // Web Wrap
         if (m_uiWebWrapTimer < uiDiff)
         {
-            DoCastWebWrap();    // probably no point checking if successfull.*
+            DoCastWebWrap(); // probably no point checking if successfull.*
             m_uiWebWrapTimer = WebWrapCooldown();
         }
         else
             m_uiWebWrapTimer -= uiDiff;
-        
+
         // Web Spray
         if (m_uiWebSprayTimer < uiDiff)
         {
-            if(DoCastSpellIfCan(m_creature->GetVictim(), SPELL_WEBSPRAY) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_WEBSPRAY) == CAST_OK)
                 m_uiWebSprayTimer = WebSprayCooldown();
         }
         else
@@ -383,7 +369,7 @@ struct boss_maexxnaAI : public ScriptedAI
         // Poison Shock
         if (m_uiPoisonShockTimer < uiDiff)
         {
-            if(DoCastSpellIfCan(m_creature->GetVictim(), SPELL_POISONSHOCK) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_POISONSHOCK) == CAST_OK)
                 m_uiPoisonShockTimer = PoisonShockCooldown();
         }
         else
@@ -392,7 +378,7 @@ struct boss_maexxnaAI : public ScriptedAI
         // Necrotic Poison
         if (m_uiNecroticPoisonTimer < uiDiff)
         {
-            if(DoCastSpellIfCan(m_creature->GetVictim(), SPELL_NECROTICPOISON) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_NECROTICPOISON) == CAST_OK)
                 m_uiNecroticPoisonTimer = NecroticPoisonCooldown();
         }
         else
@@ -401,13 +387,13 @@ struct boss_maexxnaAI : public ScriptedAI
         // Summon Spiderling
         if (m_uiSummonSpiderlingTimer < uiDiff)
         {
-            if(DoCastSpellIfCan(m_creature, SPELL_SUMMON_SPIDERLING) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature, SPELL_SUMMON_SPIDERLING) == CAST_OK)
                 m_uiSummonSpiderlingTimer = SummonSpiderlingsCooldown();
         }
         else
             m_uiSummonSpiderlingTimer -= uiDiff;
 
-        //Enrage if not already enraged and below 30%
+        // Enrage if not already enraged and below 30%
         if (!m_bEnraged && m_creature->GetHealthPercent() < 30.0f)
         {
             if (DoCastSpellIfCan(m_creature, SPELL_ENRAGE) == CAST_OK)
@@ -421,15 +407,9 @@ struct boss_maexxnaAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_mob_webwrap(Creature* pCreature)
-{
-    return new mob_webwrapAI(pCreature);
-}
+CreatureAI* GetAI_mob_webwrap(Creature* pCreature) { return new mob_webwrapAI(pCreature); }
 
-CreatureAI* GetAI_boss_maexxna(Creature* pCreature)
-{
-    return new boss_maexxnaAI(pCreature);
-}
+CreatureAI* GetAI_boss_maexxna(Creature* pCreature) { return new boss_maexxnaAI(pCreature); }
 
 // 29484 - Web Spray (Naxx, Maexxna)
 struct MaexxnaWebSprayScript : SpellScript
@@ -443,10 +423,7 @@ struct MaexxnaWebSprayScript : SpellScript
     }
 };
 
-SpellScript* GetScript_MaexxnaWebSpray(SpellEntry const*)
-{
-    return new MaexxnaWebSprayScript();
-}
+SpellScript* GetScript_MaexxnaWebSpray(SpellEntry const*) { return new MaexxnaWebSprayScript(); }
 
 // 28434 - Spider Web (Naxx, Maexxna)
 struct MaexxnaSpiderWebScript : public SpellScript
@@ -461,7 +438,7 @@ struct MaexxnaSpiderWebScript : public SpellScript
             float dist = sqrt((dx * dx) + (dy * dy));
             float yDist = spell->m_caster->GetPositionZ() - spell->GetUnitTarget()->GetPositionZ();
             float horizontalSpeed = dist / 1.5f;
-            float verticalSpeed = 12.0f + (yDist*0.5f);
+            float verticalSpeed = 12.0f + (yDist * 0.5f);
             float angle = spell->GetUnitTarget()->GetAngle(spell->m_caster->GetPositionX(), spell->m_caster->GetPositionY());
 
             // set immune anticheat and calculate speed
@@ -475,10 +452,7 @@ struct MaexxnaSpiderWebScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_MaexxnaSpiderWeb(SpellEntry const*)
-{
-    return new MaexxnaSpiderWebScript();
-}
+SpellScript* GetScript_MaexxnaSpiderWeb(SpellEntry const*) { return new MaexxnaSpiderWebScript(); }
 
 void AddSC_boss_maexxna()
 {
