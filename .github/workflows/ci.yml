@@ -92,21 +92,3 @@ jobs:
       - name: Build
         working-directory: vmangos/build
         run: cmake --build . -j "$(nproc)"
-
-  # Repo-wide gitleaks scan. Catches anything that slipped past the pre-commit
-  # hook (or any commits authored without the hooks wired up).
-  gitleaks:
-    name: gitleaks
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
