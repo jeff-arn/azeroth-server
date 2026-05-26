@@ -37,6 +37,7 @@ class SqlQueryHolder;
 class SqlStmtParameters;
 class SqlParamBinder;
 class Database;
+class QueryNamedResult;
 
 #define MAX_QUERY_LEN (32 * 1024)
 
