@@ -1,23 +1,23 @@
 /*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 #include "UpdateFields.h"
+#include <array>
 #include "Log.h"
 #include "ObjectGuid.h"
-#include <array>
 
 #if SUPPORTED_CLIENT_BUILD >= CLIENT_BUILD_1_12_1
 #include "UpdateFields_1_12_1.cpp"
@@ -43,7 +43,7 @@
 #include "UpdateFields_1_2_4.cpp"
 #endif
 
-template<std::size_t SIZE>
+template <std::size_t SIZE>
 static std::array<uint16, SIZE> SetupUpdateFieldFlagsArray(uint8 objectTypeMask)
 {
     std::array<uint16, SIZE> flagsArray;
@@ -70,25 +70,25 @@ uint16 const* UpdateFields::GetUpdateFieldFlagsArray(uint8 objectTypeId)
 {
     switch (objectTypeId)
     {
-        case TYPEID_ITEM:
-        case TYPEID_CONTAINER:
+    case TYPEID_ITEM:
+    case TYPEID_CONTAINER:
         {
             return g_containerUpdateFieldFlags.data();
         }
-        case TYPEID_UNIT:
-        case TYPEID_PLAYER:
+    case TYPEID_UNIT:
+    case TYPEID_PLAYER:
         {
             return g_playerUpdateFieldFlags.data();
         }
-        case TYPEID_GAMEOBJECT:
+    case TYPEID_GAMEOBJECT:
         {
             return g_gameObjectUpdateFieldFlags.data();
         }
-        case TYPEID_DYNAMICOBJECT:
+    case TYPEID_DYNAMICOBJECT:
         {
             return g_dynamicObjectUpdateFieldFlags.data();
         }
-        case TYPEID_CORPSE:
+    case TYPEID_CORPSE:
         {
             return g_corpseUpdateFieldFlags.data();
         }

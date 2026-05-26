@@ -5,23 +5,29 @@
 #include <memory>
 #include <utility>
 
-namespace IO { namespace Timer {
-    class AsyncSystemTimer;
-
-    class TimerHandle : public std::enable_shared_from_this<TimerHandle>
+namespace IO
+{
+    namespace Timer
     {
-        friend IO::Timer::AsyncSystemTimer;
-    public:
-        void Cancel();
-    private:
-        explicit TimerHandle(IO::Timer::AsyncSystemTimer* systemTimer, std::function<void()> callbackFunction);
+        class AsyncSystemTimer;
 
-        IO::Timer::AsyncSystemTimer* m_asyncSystemTimer = nullptr;
-        std::function<void()> m_callback = nullptr;
+        class TimerHandle : public std::enable_shared_from_this<TimerHandle>
+        {
+            friend IO::Timer::AsyncSystemTimer;
+
+        public:
+            void Cancel();
+
+        private:
+            explicit TimerHandle(IO::Timer::AsyncSystemTimer* systemTimer, std::function<void()> callbackFunction);
+
+            IO::Timer::AsyncSystemTimer* m_asyncSystemTimer = nullptr;
+            std::function<void()> m_callback = nullptr;
 #if defined(WIN32)
-        void* m_nativeTimerHandle = nullptr;
+            void* m_nativeTimerHandle = nullptr;
 #endif
-    };
-}} // namespace IO::Timer
+        };
+    } // namespace Timer
+} // namespace IO
 
-#endif //MANGOS_IO_TIMER_TIMERHANDLE_H
+#endif // MANGOS_IO_TIMER_TIMERHANDLE_H

@@ -19,19 +19,14 @@
 #include "HomeMovementGenerator.h"
 #include "Creature.h"
 #include "CreatureAI.h"
-#include "MoveSplineInit.h"
 #include "MoveSpline.h"
+#include "MoveSplineInit.h"
 
-void HomeMovementGenerator<Creature>::Initialize(Creature & owner)
-{
-    _setTargetLocation(owner);
-}
+void HomeMovementGenerator<Creature>::Initialize(Creature& owner) { _setTargetLocation(owner); }
 
-void HomeMovementGenerator<Creature>::Reset(Creature &)
-{
-}
+void HomeMovementGenerator<Creature>::Reset(Creature&) {}
 
-void HomeMovementGenerator<Creature>::_setTargetLocation(Creature & owner)
+void HomeMovementGenerator<Creature>::_setTargetLocation(Creature& owner)
 {
     if (owner.HasUnitState(UNIT_STATE_CAN_NOT_MOVE))
         return;
@@ -68,13 +63,13 @@ void HomeMovementGenerator<Creature>::_setTargetLocation(Creature & owner)
         else // too far away or no path
             owner.NearTeleportTo(x, y, z, setFacing ? o : owner.GetOrientation());
     }
-    
+
     arrived = false;
 
     owner.ClearUnitState(UNIT_STATE_ALL_DYN_STATES);
 }
 
-bool HomeMovementGenerator<Creature>::Update(Creature &owner, uint32 const& /*time_diff*/)
+bool HomeMovementGenerator<Creature>::Update(Creature& owner, uint32 const& /*time_diff*/)
 {
     arrived = owner.movespline->Finalized();
     return !arrived;

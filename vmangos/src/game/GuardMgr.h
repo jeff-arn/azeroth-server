@@ -17,11 +17,11 @@
 #ifndef MANGOS_GUARD_MGR_H
 #define MANGOS_GUARD_MGR_H
 
+#include <unordered_map>
 #include "Common.h"
-#include "SharedDefines.h"
 #include "Platform/Define.h"
 #include "Policies/Singleton.h"
-#include <unordered_map>
+#include "SharedDefines.h"
 
 #define GUARD_POST_MAX_CHARGES 10
 
@@ -40,10 +40,10 @@ struct AreaGuardInfo
     {
         switch (team)
         {
-            case HORDE:
-                return creatureIdHorde;
-            case ALLIANCE:
-                return creatureIdAlliance;
+        case HORDE:
+            return creatureIdHorde;
+        case ALLIANCE:
+            return creatureIdAlliance;
         }
         return 0;
     }
@@ -51,16 +51,17 @@ struct AreaGuardInfo
 
 class GuardMgr
 {
-    public:
-        GuardMgr();
-        ~GuardMgr() {}
-        void Update(uint32 diff);
-        uint32 GetTextId(uint32 factionTemplateId, uint32 areaId, uint32 displayId) const;
-        Team GetTeam(Creature* pCivilian, Unit* pEnemy);
-        bool SummonGuard(Creature* pCivilian, Unit* pEnemy);
-    private:
-        std::unordered_map<uint32, AreaGuardInfo> m_mAreaGuardInfo;
-        uint32 m_uiRechargeTimer;
+public:
+    GuardMgr();
+    ~GuardMgr() {}
+    void Update(uint32 diff);
+    uint32 GetTextId(uint32 factionTemplateId, uint32 areaId, uint32 displayId) const;
+    Team GetTeam(Creature* pCivilian, Unit* pEnemy);
+    bool SummonGuard(Creature* pCivilian, Unit* pEnemy);
+
+private:
+    std::unordered_map<uint32, AreaGuardInfo> m_mAreaGuardInfo;
+    uint32 m_uiRechargeTimer;
 };
 
 #define sGuardMgr MaNGOS::Singleton<GuardMgr>::Instance()

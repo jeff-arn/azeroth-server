@@ -1,22 +1,22 @@
 #include "BotChatManager.h"
 #include "BotServiceMgr.h"
-#include "GuildBotMgr.h"
-#include "Group.h"
-#include "Opcodes.h"
-#include "Policies/SingletonImp.h"
-#include "Player.h"
-#include "ObjectAccessor.h"
-#include "ObjectMgr.h"
-#include "World.h"
-#include "Chat/Chat.h"
 #include "Chat/Channel.h"
 #include "Chat/ChannelMgr.h"
+#include "Chat/Chat.h"
+#include "Config/Config.h"
+#include "Group.h"
 #include "Guild/Guild.h"
 #include "Guild/GuildMgr.h"
-#include "PlayerBotMgr.h"
-#include "Config/Config.h"
+#include "GuildBotMgr.h"
 #include "Log.h"
+#include "ObjectAccessor.h"
+#include "ObjectMgr.h"
+#include "Opcodes.h"
+#include "Player.h"
+#include "PlayerBotMgr.h"
+#include "Policies/SingletonImp.h"
 #include "Util.h"
+#include "World.h"
 
 INSTANTIATE_SINGLETON_1(BotChatManager);
 
@@ -26,10 +26,14 @@ INSTANTIATE_SINGLETON_1(BotChatManager);
 
 BotPersonality BotPersonalityFromString(const std::string& str)
 {
-    if (str == "enthusiastic") return BOT_PERSONALITY_ENTHUSIASTIC;
-    if (str == "chill")        return BOT_PERSONALITY_CHILL;
-    if (str == "sarcastic")    return BOT_PERSONALITY_SARCASTIC;
-    if (str == "quiet")        return BOT_PERSONALITY_QUIET;
+    if (str == "enthusiastic")
+        return BOT_PERSONALITY_ENTHUSIASTIC;
+    if (str == "chill")
+        return BOT_PERSONALITY_CHILL;
+    if (str == "sarcastic")
+        return BOT_PERSONALITY_SARCASTIC;
+    if (str == "quiet")
+        return BOT_PERSONALITY_QUIET;
     return BOT_PERSONALITY_GENERIC;
 }
 
@@ -37,11 +41,16 @@ const char* BotPersonalityToString(BotPersonality p)
 {
     switch (p)
     {
-        case BOT_PERSONALITY_ENTHUSIASTIC: return "enthusiastic";
-        case BOT_PERSONALITY_CHILL:        return "chill";
-        case BOT_PERSONALITY_SARCASTIC:    return "sarcastic";
-        case BOT_PERSONALITY_QUIET:        return "quiet";
-        default:                           return "generic";
+    case BOT_PERSONALITY_ENTHUSIASTIC:
+        return "enthusiastic";
+    case BOT_PERSONALITY_CHILL:
+        return "chill";
+    case BOT_PERSONALITY_SARCASTIC:
+        return "sarcastic";
+    case BOT_PERSONALITY_QUIET:
+        return "quiet";
+    default:
+        return "generic";
     }
 }
 
@@ -77,11 +86,7 @@ static const char* PickPersonalityMessage(const PersonalityMessage* pool, uint32
 // ============================================================================
 
 static const char* TRADE_MESSAGES_ENCHANTER[] = {
-    "WTS enchants, your mats + tip. [Crusader] [+30 SP] [+55 Healing] and more. PST",
-    "Enchanting services - all enchants available. Your mats, tips appreciated",
-    "WTS [Enchant Weapon - Crusader] your mats, 5g tip. PST",
-    "WTS enchants! +15 agi gloves, +4 stats chest, Crusader, and more. PST",
-    "Enchanter LF work, have all recipes. Mats + tip",
+    "WTS enchants, your mats + tip. [Crusader] [+30 SP] [+55 Healing] and more. PST", "Enchanting services - all enchants available. Your mats, tips appreciated", "WTS [Enchant Weapon - Crusader] your mats, 5g tip. PST", "WTS enchants! +15 agi gloves, +4 stats chest, Crusader, and more. PST", "Enchanter LF work, have all recipes. Mats + tip",
 };
 static const uint32 TRADE_ENCHANTER_COUNT = sizeof(TRADE_MESSAGES_ENCHANTER) / sizeof(TRADE_MESSAGES_ENCHANTER[0]);
 
@@ -101,16 +106,7 @@ static const char* TRADE_MESSAGES_CRAFTER[] = {
 static const uint32 TRADE_CRAFTER_COUNT = sizeof(TRADE_MESSAGES_CRAFTER) / sizeof(TRADE_MESSAGES_CRAFTER[0]);
 
 static const char* TRADE_MESSAGES_GENERAL[] = {
-    "WTB [Black Lotus] paying well, PST",
-    "WTS [Greater Fire Protection Potion] x5, 4g each. PST",
-    "WTB [Arcane Crystal] paying 20g each, PST",
-    "WTS [Elixir of the Mongoose] x10, 3g each PST",
-    "WTS various herbs and pots, check AH or PST for deals",
-    "WTB [Righteous Orb] paying 5g, PST",
-    "WTS [Flask of the Titans] 50g PST",
-    "LF enchanter with Crusader, have mats + tip",
-    "WTB [Large Brilliant Shard] x5, paying 6g each",
-    "WTS [Arcanite Bar] 30g, PST",
+    "WTB [Black Lotus] paying well, PST", "WTS [Greater Fire Protection Potion] x5, 4g each. PST", "WTB [Arcane Crystal] paying 20g each, PST", "WTS [Elixir of the Mongoose] x10, 3g each PST", "WTS various herbs and pots, check AH or PST for deals", "WTB [Righteous Orb] paying 5g, PST", "WTS [Flask of the Titans] 50g PST", "LF enchanter with Crusader, have mats + tip", "WTB [Large Brilliant Shard] x5, paying 6g each", "WTS [Arcanite Bar] 30g, PST",
 };
 static const uint32 TRADE_GENERAL_COUNT = sizeof(TRADE_MESSAGES_GENERAL) / sizeof(TRADE_MESSAGES_GENERAL[0]);
 
@@ -129,32 +125,32 @@ static const uint32 TRADE_LOWLEVEL_COUNT = sizeof(TRADE_MESSAGES_LOWLEVEL) / siz
 
 struct WhisperPattern
 {
-    const char* keyword;     // substring to match (case-insensitive)
+    const char* keyword; // substring to match (case-insensitive)
     const char* responses[4];
     uint32 responseCount;
 };
 
 static const WhisperPattern WHISPER_PATTERNS[] = {
-    { "hi",      { "hey", "hey there", "yo", "sup" }, 4 },
-    { "hello",   { "hey!", "hello", "hi there", "hey what's up" }, 4 },
-    { "hey",     { "hey", "what's up", "yo", "hey there" }, 4 },
-    { "thanks",  { "np", "np!", "anytime", "no problem" }, 4 },
-    { "thank",   { "np", "you're welcome", "sure thing", "anytime" }, 4 },
-    { "ty",      { "np", "yw", "anytime", "np!" }, 4 },
-    { "price",   { "check the AH, good deals up", "depends, what are you looking for?", "PST me what you need" }, 3 },
-    { "enchant", { "what enchant do you need?", "I can do most enchants, what do you need?", "sure, your mats + tip?" }, 3 },
-    { "crusader",{ "yeah I can do Crusader, 5g tip + your mats", "got Crusader, meet me in IF?" }, 2 },
-    { "portal",  { "where do you need a port?", "sure, 1g for a portal", "which city?" }, 3 },
-    { "transmute",{"CD is up, 3g. meet in IF?", "sure, got your mats?", "yeah transmute ready, 3g" }, 3 },
-    { "inv",     { "sure, one sec", "yeah give me a sec", "omw" }, 3 },
-    { "invite",  { "sure, one sec", "yeah give me a sec", "incoming" }, 3 },
-    { "wtb",     { "check the AH, I put some stuff up", "how much you paying?", "PST me what you need" }, 3 },
-    { "wts",     { "how much?", "what's the price?", "interested, how much?" }, 3 },
-    { "help",    { "what do you need?", "sure, what's up?", "how can I help?" }, 3 },
-    { "lfg",     { "what are you running?", "which dungeon?", "I might be down, what instance?" }, 3 },
-    { "lol",     { "lol", "haha", "xD", ":P" }, 4 },
-    { "gg",      { "gg", "gg!", "good stuff" }, 3 },
-    { "bye",     { "cya", "later", "peace", "take it easy" }, 4 },
+    {"hi", {"hey", "hey there", "yo", "sup"}, 4},
+    {"hello", {"hey!", "hello", "hi there", "hey what's up"}, 4},
+    {"hey", {"hey", "what's up", "yo", "hey there"}, 4},
+    {"thanks", {"np", "np!", "anytime", "no problem"}, 4},
+    {"thank", {"np", "you're welcome", "sure thing", "anytime"}, 4},
+    {"ty", {"np", "yw", "anytime", "np!"}, 4},
+    {"price", {"check the AH, good deals up", "depends, what are you looking for?", "PST me what you need"}, 3},
+    {"enchant", {"what enchant do you need?", "I can do most enchants, what do you need?", "sure, your mats + tip?"}, 3},
+    {"crusader", {"yeah I can do Crusader, 5g tip + your mats", "got Crusader, meet me in IF?"}, 2},
+    {"portal", {"where do you need a port?", "sure, 1g for a portal", "which city?"}, 3},
+    {"transmute", {"CD is up, 3g. meet in IF?", "sure, got your mats?", "yeah transmute ready, 3g"}, 3},
+    {"inv", {"sure, one sec", "yeah give me a sec", "omw"}, 3},
+    {"invite", {"sure, one sec", "yeah give me a sec", "incoming"}, 3},
+    {"wtb", {"check the AH, I put some stuff up", "how much you paying?", "PST me what you need"}, 3},
+    {"wts", {"how much?", "what's the price?", "interested, how much?"}, 3},
+    {"help", {"what do you need?", "sure, what's up?", "how can I help?"}, 3},
+    {"lfg", {"what are you running?", "which dungeon?", "I might be down, what instance?"}, 3},
+    {"lol", {"lol", "haha", "xD", ":P"}, 4},
+    {"gg", {"gg", "gg!", "good stuff"}, 3},
+    {"bye", {"cya", "later", "peace", "take it easy"}, 4},
 };
 static const uint32 WHISPER_PATTERN_COUNT = sizeof(WHISPER_PATTERNS) / sizeof(WHISPER_PATTERNS[0]);
 
@@ -167,12 +163,12 @@ static const uint32 WHISPER_FALLBACK_COUNT = sizeof(WHISPER_FALLBACK) / sizeof(W
 // Capital city zone IDs for detecting city bots.
 // ============================================================================
 static const uint32 CITY_ZONES[] = {
-    1519,  // Stormwind
-    1537,  // Ironforge
-    1657,  // Darnassus
-    1637,  // Orgrimmar
-    1638,  // Thunder Bluff
-    1497,  // Undercity
+    1519, // Stormwind
+    1537, // Ironforge
+    1657, // Darnassus
+    1637, // Orgrimmar
+    1638, // Thunder Bluff
+    1497, // Undercity
 };
 static const uint32 CITY_ZONE_COUNT = sizeof(CITY_ZONES) / sizeof(CITY_ZONES[0]);
 
@@ -189,20 +185,12 @@ bool BotChatManager::IsInCity(Player* player)
 // Implementation
 // ============================================================================
 
-BotChatManager::BotChatManager()
-    : m_tradeChatTimer(0)
-    , m_tradeChatIntervalMin(120000)  // 2 min
-    , m_tradeChatIntervalMax(300000)  // 5 min
-    , m_cooldownCleanupTimer(0)
-    , m_cooldownTradeChat(300)
-    , m_cooldownGuildChat(180)
-    , m_cooldownPartyChat(30)
-    , m_cooldownSayChat(120)
-    , m_cooldownGeneralChat(120)
-    , m_cooldownScaleThreshold(30)
-    , m_nextChainId(1)
-    , m_enabled(false)
-    , m_loaded(false)
+BotChatManager::BotChatManager() :
+    m_tradeChatTimer(0), m_tradeChatIntervalMin(120000) // 2 min
+    ,
+    m_tradeChatIntervalMax(300000) // 5 min
+    ,
+    m_cooldownCleanupTimer(0), m_cooldownTradeChat(300), m_cooldownGuildChat(180), m_cooldownPartyChat(30), m_cooldownSayChat(120), m_cooldownGeneralChat(120), m_cooldownScaleThreshold(30), m_nextChainId(1), m_enabled(false), m_loaded(false)
 {
 }
 
@@ -220,19 +208,17 @@ void BotChatManager::Load()
     m_guildChatTimer.Reset(urand(m_guildChatIntervalMin, m_guildChatIntervalMax));
 
     // Spam control cooldowns (seconds)
-    m_cooldownTradeChat      = sConfig.GetIntDefault("BotChat.Cooldown.TradeChat", 300);
-    m_cooldownGuildChat      = sConfig.GetIntDefault("BotChat.Cooldown.GuildChat", 180);
-    m_cooldownPartyChat      = sConfig.GetIntDefault("BotChat.Cooldown.PartyChat", 30);
-    m_cooldownSayChat        = sConfig.GetIntDefault("BotChat.Cooldown.SayChat", 120);
-    m_cooldownGeneralChat    = sConfig.GetIntDefault("BotChat.Cooldown.GeneralChat", 120);
+    m_cooldownTradeChat = sConfig.GetIntDefault("BotChat.Cooldown.TradeChat", 300);
+    m_cooldownGuildChat = sConfig.GetIntDefault("BotChat.Cooldown.GuildChat", 180);
+    m_cooldownPartyChat = sConfig.GetIntDefault("BotChat.Cooldown.PartyChat", 30);
+    m_cooldownSayChat = sConfig.GetIntDefault("BotChat.Cooldown.SayChat", 120);
+    m_cooldownGeneralChat = sConfig.GetIntDefault("BotChat.Cooldown.GeneralChat", 120);
     m_cooldownScaleThreshold = sConfig.GetIntDefault("BotChat.Cooldown.ScaleThreshold", 30);
 
-    m_cooldownCleanupTimer.Reset(60000);  // cleanup every 60s
+    m_cooldownCleanupTimer.Reset(60000); // cleanup every 60s
 
     m_loaded = true;
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotChat: Loaded. Trade chat interval: %u-%us, Guild chat interval: %u-%us.",
-        m_tradeChatIntervalMin / 1000, m_tradeChatIntervalMax / 1000,
-        m_guildChatIntervalMin / 1000, m_guildChatIntervalMax / 1000);
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotChat: Loaded. Trade chat interval: %u-%us, Guild chat interval: %u-%us.", m_tradeChatIntervalMin / 1000, m_tradeChatIntervalMax / 1000, m_guildChatIntervalMin / 1000, m_guildChatIntervalMax / 1000);
 }
 
 void BotChatManager::Update(uint32 diff)
@@ -298,8 +284,7 @@ void BotChatManager::UpdateTradeChat()
     // Send to trade chat using skipCheck to bypass membership requirement.
     tradeChannel->Say(bot->GetObjectGuid(), message, LANG_UNIVERSAL, /*skipCheck=*/true);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotChat] %s says in Trade: %s",
-        bot->GetName(), message);
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[BotChat] %s says in Trade: %s", bot->GetName(), message);
 }
 
 Player* BotChatManager::FindRandomCityBot() const
@@ -398,8 +383,7 @@ const char* BotChatManager::PickWhisperResponse(const std::string& incomingMessa
     {
         if (lower.find(WHISPER_PATTERNS[i].keyword) != std::string::npos)
         {
-            return WHISPER_PATTERNS[i].responses[
-                urand(0, WHISPER_PATTERNS[i].responseCount - 1)];
+            return WHISPER_PATTERNS[i].responses[urand(0, WHISPER_PATTERNS[i].responseCount - 1)];
         }
     }
 
@@ -415,12 +399,10 @@ void BotChatManager::SendWhisperToPlayer(Player* bot, ObjectGuid targetGuid, con
 
     // Build whisper packet from bot to player.
     WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, message,
-        LANG_UNIVERSAL, bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, message, LANG_UNIVERSAL, bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
     target->GetSession()->SendPacket(&data);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s whispers to %s: %s",
-        bot->GetName(), target->GetName(), message);
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s whispers to %s: %s", bot->GetName(), target->GetName(), message);
 }
 
 // ============================================================================
@@ -429,43 +411,43 @@ void BotChatManager::SendWhisperToPlayer(Player* bot, ObjectGuid targetGuid, con
 
 static const PersonalityMessage GUILD_CHAT_IDLE[] = {
     // Generic — usable by any personality
-    { "anyone up for a dungeon later?",                              BOT_PERSONALITY_GENERIC },
-    { "just finished farming, got some good drops",                  BOT_PERSONALITY_GENERIC },
-    { "how's everyone doing today",                                  BOT_PERSONALITY_GENERIC },
-    { "anyone need help with anything?",                             BOT_PERSONALITY_GENERIC },
-    { "been working on my pre-raid gear, getting close",             BOT_PERSONALITY_GENERIC },
-    { "quiet day on the server",                                     BOT_PERSONALITY_GENERIC },
-    { "anyone seen any good BoE drops lately?",                      BOT_PERSONALITY_GENERIC },
-    { "I need to farm some gold tonight",                            BOT_PERSONALITY_GENERIC },
-    { "thinking about running Strat later if anyone's interested",   BOT_PERSONALITY_GENERIC },
-    { "finally got my last piece from BRD",                          BOT_PERSONALITY_GENERIC },
-    { "who's available for raid this week?",                         BOT_PERSONALITY_GENERIC },
-    { "what consumables should I bring for next raid?",              BOT_PERSONALITY_GENERIC },
+    {"anyone up for a dungeon later?", BOT_PERSONALITY_GENERIC},
+    {"just finished farming, got some good drops", BOT_PERSONALITY_GENERIC},
+    {"how's everyone doing today", BOT_PERSONALITY_GENERIC},
+    {"anyone need help with anything?", BOT_PERSONALITY_GENERIC},
+    {"been working on my pre-raid gear, getting close", BOT_PERSONALITY_GENERIC},
+    {"quiet day on the server", BOT_PERSONALITY_GENERIC},
+    {"anyone seen any good BoE drops lately?", BOT_PERSONALITY_GENERIC},
+    {"I need to farm some gold tonight", BOT_PERSONALITY_GENERIC},
+    {"thinking about running Strat later if anyone's interested", BOT_PERSONALITY_GENERIC},
+    {"finally got my last piece from BRD", BOT_PERSONALITY_GENERIC},
+    {"who's available for raid this week?", BOT_PERSONALITY_GENERIC},
+    {"what consumables should I bring for next raid?", BOT_PERSONALITY_GENERIC},
     // Enthusiastic
-    { "LET'S GO boys who's ready to run some dungeons!!",            BOT_PERSONALITY_ENTHUSIASTIC },
-    { "just got an epic drop I'm so hyped right now!!!",             BOT_PERSONALITY_ENTHUSIASTIC },
-    { "this guild is the best, love you guys!",                      BOT_PERSONALITY_ENTHUSIASTIC },
-    { "I am SO ready for raid night, been farming consumes all week", BOT_PERSONALITY_ENTHUSIASTIC },
-    { "grats grats grats to everyone on progression!!",              BOT_PERSONALITY_ENTHUSIASTIC },
-    { "who wants to grind some rep?? I'm down for anything!",        BOT_PERSONALITY_ENTHUSIASTIC },
+    {"LET'S GO boys who's ready to run some dungeons!!", BOT_PERSONALITY_ENTHUSIASTIC},
+    {"just got an epic drop I'm so hyped right now!!!", BOT_PERSONALITY_ENTHUSIASTIC},
+    {"this guild is the best, love you guys!", BOT_PERSONALITY_ENTHUSIASTIC},
+    {"I am SO ready for raid night, been farming consumes all week", BOT_PERSONALITY_ENTHUSIASTIC},
+    {"grats grats grats to everyone on progression!!", BOT_PERSONALITY_ENTHUSIASTIC},
+    {"who wants to grind some rep?? I'm down for anything!", BOT_PERSONALITY_ENTHUSIASTIC},
     // Chill
-    { "sup",                                                         BOT_PERSONALITY_CHILL },
-    { "yeah just chillin, farming some stuff",                       BOT_PERSONALITY_CHILL },
-    { "anyone wanna run something idc what",                         BOT_PERSONALITY_CHILL },
-    { "lol k",                                                       BOT_PERSONALITY_CHILL },
-    { "just vibing in IF",                                           BOT_PERSONALITY_CHILL },
-    { "might do a dungeon later, we'll see",                         BOT_PERSONALITY_CHILL },
+    {"sup", BOT_PERSONALITY_CHILL},
+    {"yeah just chillin, farming some stuff", BOT_PERSONALITY_CHILL},
+    {"anyone wanna run something idc what", BOT_PERSONALITY_CHILL},
+    {"lol k", BOT_PERSONALITY_CHILL},
+    {"just vibing in IF", BOT_PERSONALITY_CHILL},
+    {"might do a dungeon later, we'll see", BOT_PERSONALITY_CHILL},
     // Sarcastic
-    { "oh good another day of farming thorium, living the dream",    BOT_PERSONALITY_SARCASTIC },
-    { "can't wait to wipe on trash again",                           BOT_PERSONALITY_SARCASTIC },
-    { "sure would be nice if something actually dropped for once",   BOT_PERSONALITY_SARCASTIC },
-    { "another day another 50 silver repair bill",                   BOT_PERSONALITY_SARCASTIC },
-    { "who needs sleep when you can farm fire resist gear",          BOT_PERSONALITY_SARCASTIC },
-    { "I'm sure this UBRS run will be the one where dal'rends drop", BOT_PERSONALITY_SARCASTIC },
+    {"oh good another day of farming thorium, living the dream", BOT_PERSONALITY_SARCASTIC},
+    {"can't wait to wipe on trash again", BOT_PERSONALITY_SARCASTIC},
+    {"sure would be nice if something actually dropped for once", BOT_PERSONALITY_SARCASTIC},
+    {"another day another 50 silver repair bill", BOT_PERSONALITY_SARCASTIC},
+    {"who needs sleep when you can farm fire resist gear", BOT_PERSONALITY_SARCASTIC},
+    {"I'm sure this UBRS run will be the one where dal'rends drop", BOT_PERSONALITY_SARCASTIC},
     // Quiet — uses generic pool but at reduced frequency (handled at callsite)
-    { "hey",                                                         BOT_PERSONALITY_QUIET },
-    { "o/",                                                          BOT_PERSONALITY_QUIET },
-    { "mhm",                                                         BOT_PERSONALITY_QUIET },
+    {"hey", BOT_PERSONALITY_QUIET},
+    {"o/", BOT_PERSONALITY_QUIET},
+    {"mhm", BOT_PERSONALITY_QUIET},
 };
 static const uint32 GUILD_IDLE_COUNT = sizeof(GUILD_CHAT_IDLE) / sizeof(GUILD_CHAT_IDLE[0]);
 
@@ -517,10 +499,7 @@ Player* BotChatManager::FindRandomOnlineGuildBot() const
     return onlineBots[urand(0, static_cast<uint32>(onlineBots.size()) - 1)];
 }
 
-const char* BotChatManager::PickGuildChatMessage(BotPersonality personality) const
-{
-    return PickPersonalityMessage(GUILD_CHAT_IDLE, GUILD_IDLE_COUNT, personality);
-}
+const char* BotChatManager::PickGuildChatMessage(BotPersonality personality) const { return PickPersonalityMessage(GUILD_CHAT_IDLE, GUILD_IDLE_COUNT, personality); }
 
 void BotChatManager::SendGuildChat(Player* bot, const char* message)
 {
@@ -534,8 +513,7 @@ void BotChatManager::SendGuildChat(Player* bot, const char* message)
 
     guild->BroadcastToGuild(bot->GetSession(), message, LANG_UNIVERSAL);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s says in guild: %s",
-        bot->GetName(), message);
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s says in guild: %s", bot->GetName(), message);
 }
 
 // ============================================================================
@@ -564,12 +542,18 @@ uint32 BotChatManager::GetCooldownForType(ChatCooldownType type) const
 {
     switch (type)
     {
-        case CHAT_COOLDOWN_TRADE:   return m_cooldownTradeChat;
-        case CHAT_COOLDOWN_GUILD:   return m_cooldownGuildChat;
-        case CHAT_COOLDOWN_PARTY:   return m_cooldownPartyChat;
-        case CHAT_COOLDOWN_SAY:     return m_cooldownSayChat;
-        case CHAT_COOLDOWN_GENERAL: return m_cooldownGeneralChat;
-        default:                    return 60;
+    case CHAT_COOLDOWN_TRADE:
+        return m_cooldownTradeChat;
+    case CHAT_COOLDOWN_GUILD:
+        return m_cooldownGuildChat;
+    case CHAT_COOLDOWN_PARTY:
+        return m_cooldownPartyChat;
+    case CHAT_COOLDOWN_SAY:
+        return m_cooldownSayChat;
+    case CHAT_COOLDOWN_GENERAL:
+        return m_cooldownGeneralChat;
+    default:
+        return 60;
     }
 }
 
@@ -624,10 +608,7 @@ bool BotChatManager::CanChat(uint32 botGuid, ChatCooldownType type) const
     return IsChatCooldownExpired(now, lastChat, effectiveCooldown);
 }
 
-void BotChatManager::RecordChat(uint32 botGuid, ChatCooldownType type)
-{
-    m_cooldowns[botGuid].lastChat[type] = time(nullptr);
-}
+void BotChatManager::RecordChat(uint32 botGuid, ChatCooldownType type) { m_cooldowns[botGuid].lastChat[type] = time(nullptr); }
 
 void BotChatManager::CleanupCooldowns()
 {
@@ -658,60 +639,22 @@ void BotChatManager::CleanupCooldowns()
 // ============================================================================
 
 static const PersonalityMessage PARTY_GREET[] = {
-    { "hey",                     BOT_PERSONALITY_GENERIC },
-    { "o/",                      BOT_PERSONALITY_GENERIC },
-    { "sup",                     BOT_PERSONALITY_GENERIC },
-    { "hey all",                 BOT_PERSONALITY_GENERIC },
-    { "ready when you are",      BOT_PERSONALITY_GENERIC },
-    { "lets gooo!!",             BOT_PERSONALITY_ENTHUSIASTIC },
-    { "hype! ready to go!",      BOT_PERSONALITY_ENTHUSIASTIC },
-    { "yo",                      BOT_PERSONALITY_CHILL },
-    { "heya",                    BOT_PERSONALITY_CHILL },
-    { "oh good, more people",    BOT_PERSONALITY_SARCASTIC },
-    { "hi",                      BOT_PERSONALITY_QUIET },
+    {"hey", BOT_PERSONALITY_GENERIC}, {"o/", BOT_PERSONALITY_GENERIC}, {"sup", BOT_PERSONALITY_GENERIC}, {"hey all", BOT_PERSONALITY_GENERIC}, {"ready when you are", BOT_PERSONALITY_GENERIC}, {"lets gooo!!", BOT_PERSONALITY_ENTHUSIASTIC}, {"hype! ready to go!", BOT_PERSONALITY_ENTHUSIASTIC}, {"yo", BOT_PERSONALITY_CHILL}, {"heya", BOT_PERSONALITY_CHILL}, {"oh good, more people", BOT_PERSONALITY_SARCASTIC}, {"hi", BOT_PERSONALITY_QUIET},
 };
 static const uint32 PARTY_GREET_COUNT = sizeof(PARTY_GREET) / sizeof(PARTY_GREET[0]);
 
 static const PersonalityMessage PARTY_GRATZ[] = {
-    { "grats!",                  BOT_PERSONALITY_GENERIC },
-    { "gz",                      BOT_PERSONALITY_GENERIC },
-    { "nice!",                   BOT_PERSONALITY_GENERIC },
-    { "grats dude",              BOT_PERSONALITY_GENERIC },
-    { "GRATS!!!",                BOT_PERSONALITY_ENTHUSIASTIC },
-    { "woooo grats!!",           BOT_PERSONALITY_ENTHUSIASTIC },
-    { "gz",                      BOT_PERSONALITY_CHILL },
-    { "nice gz",                 BOT_PERSONALITY_CHILL },
-    { "only took forever",       BOT_PERSONALITY_SARCASTIC },
-    { "gz",                      BOT_PERSONALITY_QUIET },
+    {"grats!", BOT_PERSONALITY_GENERIC}, {"gz", BOT_PERSONALITY_GENERIC}, {"nice!", BOT_PERSONALITY_GENERIC}, {"grats dude", BOT_PERSONALITY_GENERIC}, {"GRATS!!!", BOT_PERSONALITY_ENTHUSIASTIC}, {"woooo grats!!", BOT_PERSONALITY_ENTHUSIASTIC}, {"gz", BOT_PERSONALITY_CHILL}, {"nice gz", BOT_PERSONALITY_CHILL}, {"only took forever", BOT_PERSONALITY_SARCASTIC}, {"gz", BOT_PERSONALITY_QUIET},
 };
 static const uint32 PARTY_GRATZ_COUNT = sizeof(PARTY_GRATZ) / sizeof(PARTY_GRATZ[0]);
 
 static const PersonalityMessage PARTY_BOSS_KILL[] = {
-    { "nice kill",               BOT_PERSONALITY_GENERIC },
-    { "gg",                      BOT_PERSONALITY_GENERIC },
-    { "good fight",              BOT_PERSONALITY_GENERIC },
-    { "down!",                   BOT_PERSONALITY_GENERIC },
-    { "LETS GOOO!! GG!!!",       BOT_PERSONALITY_ENTHUSIASTIC },
-    { "YESSS nice kill!!",       BOT_PERSONALITY_ENTHUSIASTIC },
-    { "ez",                      BOT_PERSONALITY_CHILL },
-    { "gg",                      BOT_PERSONALITY_CHILL },
-    { "finally lol",             BOT_PERSONALITY_SARCASTIC },
-    { "wow that only took 3 tries", BOT_PERSONALITY_SARCASTIC },
-    { "gg",                      BOT_PERSONALITY_QUIET },
+    {"nice kill", BOT_PERSONALITY_GENERIC}, {"gg", BOT_PERSONALITY_GENERIC}, {"good fight", BOT_PERSONALITY_GENERIC}, {"down!", BOT_PERSONALITY_GENERIC}, {"LETS GOOO!! GG!!!", BOT_PERSONALITY_ENTHUSIASTIC}, {"YESSS nice kill!!", BOT_PERSONALITY_ENTHUSIASTIC}, {"ez", BOT_PERSONALITY_CHILL}, {"gg", BOT_PERSONALITY_CHILL}, {"finally lol", BOT_PERSONALITY_SARCASTIC}, {"wow that only took 3 tries", BOT_PERSONALITY_SARCASTIC}, {"gg", BOT_PERSONALITY_QUIET},
 };
 static const uint32 PARTY_BOSS_KILL_COUNT = sizeof(PARTY_BOSS_KILL) / sizeof(PARTY_BOSS_KILL[0]);
 
 static const PersonalityMessage PARTY_WIPE[] = {
-    { "oof",                     BOT_PERSONALITY_GENERIC },
-    { "rip",                     BOT_PERSONALITY_GENERIC },
-    { "that was rough",          BOT_PERSONALITY_GENERIC },
-    { "we'll get it next time!", BOT_PERSONALITY_ENTHUSIASTIC },
-    { "again! we got this!",     BOT_PERSONALITY_ENTHUSIASTIC },
-    { "F",                       BOT_PERSONALITY_CHILL },
-    { "rip",                     BOT_PERSONALITY_CHILL },
-    { "shocking",                BOT_PERSONALITY_SARCASTIC },
-    { "well that was fun",       BOT_PERSONALITY_SARCASTIC },
-    { "who could have possibly seen that coming", BOT_PERSONALITY_SARCASTIC },
+    {"oof", BOT_PERSONALITY_GENERIC}, {"rip", BOT_PERSONALITY_GENERIC}, {"that was rough", BOT_PERSONALITY_GENERIC}, {"we'll get it next time!", BOT_PERSONALITY_ENTHUSIASTIC}, {"again! we got this!", BOT_PERSONALITY_ENTHUSIASTIC}, {"F", BOT_PERSONALITY_CHILL}, {"rip", BOT_PERSONALITY_CHILL}, {"shocking", BOT_PERSONALITY_SARCASTIC}, {"well that was fun", BOT_PERSONALITY_SARCASTIC}, {"who could have possibly seen that coming", BOT_PERSONALITY_SARCASTIC},
 };
 static const uint32 PARTY_WIPE_COUNT = sizeof(PARTY_WIPE) / sizeof(PARTY_WIPE[0]);
 
@@ -740,12 +683,10 @@ void BotChatManager::SendPartyChat(Player* bot, const char* message)
         return;
 
     WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_PARTY, message,
-        LANG_UNIVERSAL, bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_PARTY, message, LANG_UNIVERSAL, bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
     group->BroadcastPacket(&data, true);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s says in party: %s",
-        bot->GetName(), message);
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s says in party: %s", bot->GetName(), message);
 }
 
 void BotChatManager::SendPartyEmote(Player* bot, uint32 emoteId)
@@ -774,7 +715,7 @@ void BotChatManager::OnGroupMemberJoined(Player* bot, Group* group)
     const char* msg = PickPersonalityMessage(PARTY_GREET, PARTY_GREET_COUNT, personality);
     RecordChat(bot->GetGUIDLow(), CHAT_COOLDOWN_PARTY);
     SendPartyChat(bot, msg);
-    SendPartyEmote(bot, 3);  // EMOTE_ONESHOT_WAVE
+    SendPartyEmote(bot, 3); // EMOTE_ONESHOT_WAVE
 }
 
 void BotChatManager::OnGroupMemberLevelUp(Player* leveledPlayer)
@@ -854,7 +795,7 @@ void BotChatManager::OnBossKilled(Group* group, uint32 /*creatureEntry*/)
         const char* msg = PickPersonalityMessage(PARTY_BOSS_KILL, PARTY_BOSS_KILL_COUNT, personality);
         RecordChat(bot->GetGUIDLow(), CHAT_COOLDOWN_PARTY);
         SendPartyChat(bot, msg);
-        SendPartyEmote(bot, 4);  // EMOTE_ONESHOT_CHEER
+        SendPartyEmote(bot, 4); // EMOTE_ONESHOT_CHEER
 
         bots.erase(bots.begin() + idx);
     }
@@ -886,7 +827,7 @@ void BotChatManager::OnPartyWipe(Group* group)
 
         const char* msg = PickPersonalityMessage(PARTY_WIPE, PARTY_WIPE_COUNT, personality);
         SendPartyChat(bot, msg);
-        SendPartyEmote(bot, 18);  // EMOTE_ONESHOT_CRY
+        SendPartyEmote(bot, 18); // EMOTE_ONESHOT_CRY
 
         bots.erase(bots.begin() + idx);
     }
@@ -901,22 +842,11 @@ struct TradeChatTrigger
 {
     const char* keyword;
     BotServiceType serviceType;
-    uint8 requiredClass;  // 0 = any, CLASS_MAGE, etc.
+    uint8 requiredClass; // 0 = any, CLASS_MAGE, etc.
 };
 
 static const TradeChatTrigger TRADE_TRIGGERS[] = {
-    { "wtb port",     BOT_SERVICE_PORTAL,    CLASS_MAGE },
-    { "lf port",      BOT_SERVICE_PORTAL,    CLASS_MAGE },
-    { "need port",    BOT_SERVICE_PORTAL,    CLASS_MAGE },
-    { "lfm port",     BOT_SERVICE_PORTAL,    CLASS_MAGE },
-    { "wtb enchant",  BOT_SERVICE_ENCHANT,   0 },
-    { "lf enchant",   BOT_SERVICE_ENCHANT,   0 },
-    { "need enchant", BOT_SERVICE_ENCHANT,   0 },
-    { "lf chanter",   BOT_SERVICE_ENCHANT,   0 },
-    { "wtb transmute",BOT_SERVICE_TRANSMUTE, 0 },
-    { "lf alch",      BOT_SERVICE_TRANSMUTE, 0 },
-    { "wtb mooncloth",BOT_SERVICE_MOONCLOTH, 0 },
-    { "lf tailor",    BOT_SERVICE_MOONCLOTH, 0 },
+    {"wtb port", BOT_SERVICE_PORTAL, CLASS_MAGE}, {"lf port", BOT_SERVICE_PORTAL, CLASS_MAGE}, {"need port", BOT_SERVICE_PORTAL, CLASS_MAGE}, {"lfm port", BOT_SERVICE_PORTAL, CLASS_MAGE}, {"wtb enchant", BOT_SERVICE_ENCHANT, 0}, {"lf enchant", BOT_SERVICE_ENCHANT, 0}, {"need enchant", BOT_SERVICE_ENCHANT, 0}, {"lf chanter", BOT_SERVICE_ENCHANT, 0}, {"wtb transmute", BOT_SERVICE_TRANSMUTE, 0}, {"lf alch", BOT_SERVICE_TRANSMUTE, 0}, {"wtb mooncloth", BOT_SERVICE_MOONCLOTH, 0}, {"lf tailor", BOT_SERVICE_MOONCLOTH, 0},
 };
 static const uint32 TRADE_TRIGGER_COUNT = sizeof(TRADE_TRIGGERS) / sizeof(TRADE_TRIGGERS[0]);
 
@@ -962,17 +892,13 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
                 continue;
 
             // Class/profession check
-            if (TRADE_TRIGGERS[i].requiredClass != 0 &&
-                p->GetClass() != TRADE_TRIGGERS[i].requiredClass)
+            if (TRADE_TRIGGERS[i].requiredClass != 0 && p->GetClass() != TRADE_TRIGGERS[i].requiredClass)
                 continue;
-            if (TRADE_TRIGGERS[i].serviceType == BOT_SERVICE_ENCHANT &&
-                !BotServiceMgr::IsEnchanterBot(p))
+            if (TRADE_TRIGGERS[i].serviceType == BOT_SERVICE_ENCHANT && !BotServiceMgr::IsEnchanterBot(p))
                 continue;
-            if (TRADE_TRIGGERS[i].serviceType == BOT_SERVICE_TRANSMUTE &&
-                !BotServiceMgr::IsAlchemistBot(p))
+            if (TRADE_TRIGGERS[i].serviceType == BOT_SERVICE_TRANSMUTE && !BotServiceMgr::IsAlchemistBot(p))
                 continue;
-            if (TRADE_TRIGGERS[i].serviceType == BOT_SERVICE_MOONCLOTH &&
-                !BotServiceMgr::IsTailorBot(p))
+            if (TRADE_TRIGGERS[i].serviceType == BOT_SERVICE_MOONCLOTH && !BotServiceMgr::IsTailorBot(p))
                 continue;
 
             if (CanChat(p->GetGUIDLow(), CHAT_COOLDOWN_TRADE))
@@ -1000,7 +926,7 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
 
         switch (TRADE_TRIGGERS[i].serviceType)
         {
-            case BOT_SERVICE_PORTAL:
+        case BOT_SERVICE_PORTAL:
             {
                 // Try to resolve destination from the trade chat message
                 sBotServiceMgr.CreateProactiveRequest(bot, senderGuid, BOT_SERVICE_PORTAL, message);
@@ -1020,7 +946,7 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
                 }
                 break;
             }
-            case BOT_SERVICE_ENCHANT:
+        case BOT_SERVICE_ENCHANT:
             {
                 sBotServiceMgr.CreateProactiveRequest(bot, senderGuid, BOT_SERVICE_ENCHANT, message);
                 BotServiceRequest* req = sBotServiceMgr.GetPendingRequest(bot->GetObjectGuid(), senderGuid);
@@ -1038,7 +964,7 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
                 }
                 break;
             }
-            case BOT_SERVICE_TRANSMUTE:
+        case BOT_SERVICE_TRANSMUTE:
             {
                 char buf[256];
                 snprintf(buf, sizeof(buf), "transmute CD is up, 3g. I'm %s, trade me", location.c_str());
@@ -1046,7 +972,7 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
                 sBotServiceMgr.CreateProactiveRequest(bot, senderGuid, BOT_SERVICE_TRANSMUTE, message);
                 break;
             }
-            case BOT_SERVICE_MOONCLOTH:
+        case BOT_SERVICE_MOONCLOTH:
             {
                 char buf[256];
                 snprintf(buf, sizeof(buf), "mooncloth CD is up, 3g. I'm %s, trade me", location.c_str());
@@ -1054,18 +980,16 @@ void BotChatManager::OnTradeChatMessage(ObjectGuid senderGuid, const std::string
                 sBotServiceMgr.CreateProactiveRequest(bot, senderGuid, BOT_SERVICE_MOONCLOTH, message);
                 break;
             }
-            default:
-                pw.message = "hey I can help with that, PST me";
-                break;
+        default:
+            pw.message = "hey I can help with that, PST me";
+            break;
         }
 
         m_pendingWhispers.push_back(pw);
         RecordChat(bot->GetGUIDLow(), CHAT_COOLDOWN_TRADE);
 
-        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL,
-            "BotChat: %s will whisper %s about trade request (delay %ums)",
-            bot->GetName(), sender->GetName(), pw.delayMs);
-        return;  // only one bot responds per message
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s will whisper %s about trade request (delay %ums)", bot->GetName(), sender->GetName(), pw.delayMs);
+        return; // only one bot responds per message
     }
 }
 
@@ -1075,11 +999,11 @@ void BotChatManager::SendMinimapPing(Player* bot, Player* target)
         return;
 
     WorldPacket data(SMSG_GOSSIP_POI, (4 + 4 + 4 + 4 + 4 + 40));
-    data << uint32(99);    // Flags (standard POI flags)
+    data << uint32(99); // Flags (standard POI flags)
     data << float(bot->GetPositionX());
     data << float(bot->GetPositionY());
-    data << uint32(6);     // Icon: red flag marker
-    data << uint32(0);     // Data
+    data << uint32(6); // Icon: red flag marker
+    data << uint32(0); // Data
     data << bot->GetName();
     target->GetSession()->SendPacket(&data);
 }
@@ -1122,91 +1046,42 @@ void BotChatManager::UpdatePendingWhispers(uint32 diff)
 // --- Topic pools: idle messages grouped by theme ---
 
 static const char* TOPIC_LFG_MESSAGES[] = {
-    "lfg BRD",
-    "lfm UBRS need tank and heals",
-    "LF healer Strat live pst",
-    "LF tank BRD full run",
-    "lfm Scholo need dps",
-    "anyone wanna do LBRS?",
-    "need 1 more for strat UD",
-    "lfm DM:W tribute run, need lock",
-    "anybody running DM tonight?",
-    "LF1M UBRS, have key",
-    "lfg strat UD, 58 lock",
-    "anyone need BRD arena/anger/golem?",
+    "lfg BRD", "lfm UBRS need tank and heals", "LF healer Strat live pst", "LF tank BRD full run", "lfm Scholo need dps", "anyone wanna do LBRS?", "need 1 more for strat UD", "lfm DM:W tribute run, need lock", "anybody running DM tonight?", "LF1M UBRS, have key", "lfg strat UD, 58 lock", "anyone need BRD arena/anger/golem?",
 };
 static const uint32 TOPIC_LFG_COUNT = sizeof(TOPIC_LFG_MESSAGES) / sizeof(TOPIC_LFG_MESSAGES[0]);
 
 static const char* TOPIC_GOLD_MESSAGES[] = {
-    "I need to farm more gold",
-    "did they nerf DM:E lasher farming?",
-    "how much is arcanite bar going for?",
-    "WTB runecloth 3g a stack",
-    "anyone selling flask of titans?",
-    "what's the best gold farm at 60",
-    "just lost 50g on the AH fml",
-    "how do people afford epic mount",
+    "I need to farm more gold", "did they nerf DM:E lasher farming?", "how much is arcanite bar going for?", "WTB runecloth 3g a stack", "anyone selling flask of titans?", "what's the best gold farm at 60", "just lost 50g on the AH fml", "how do people afford epic mount",
 };
 static const uint32 TOPIC_GOLD_COUNT = sizeof(TOPIC_GOLD_MESSAGES) / sizeof(TOPIC_GOLD_MESSAGES[0]);
 
 static const char* TOPIC_GEAR_MESSAGES[] = {
-    "how much hit do warriors need for raids",
-    "is there a pre-raid bis list somewhere",
-    "need to get my fire resist set together",
-    "just got my dal'rends finally",
-    "anyone know the drop rate on ironfoe",
-    "is devilsaur set worth it",
+    "how much hit do warriors need for raids", "is there a pre-raid bis list somewhere", "need to get my fire resist set together", "just got my dal'rends finally", "anyone know the drop rate on ironfoe", "is devilsaur set worth it",
 };
 static const uint32 TOPIC_GEAR_COUNT = sizeof(TOPIC_GEAR_MESSAGES) / sizeof(TOPIC_GEAR_MESSAGES[0]);
 
 static const char* TOPIC_BORED_MESSAGES[] = {
-    "so bored",
-    "brb bio",
-    "finally done with that quest",
-    "heading to IF anyone need anything?",
-    "server seems pretty busy today",
-    "is it just me or is the AH dead today",
-    "anyone else just sitting in IF doing nothing",
+    "so bored", "brb bio", "finally done with that quest", "heading to IF anyone need anything?", "server seems pretty busy today", "is it just me or is the AH dead today", "anyone else just sitting in IF doing nothing",
 };
 static const uint32 TOPIC_BORED_COUNT = sizeof(TOPIC_BORED_MESSAGES) / sizeof(TOPIC_BORED_MESSAGES[0]);
 
 static const char* TOPIC_NEWBIE_MESSAGES[] = {
-    "just hit 60 what do I do now",
-    "where do I get the ony attune quest",
-    "what level can I start BRD",
-    "anyone know where the enchanting trainer is?",
-    "how do I get to BRM",
-    "is there a flight path to searing gorge",
+    "just hit 60 what do I do now", "where do I get the ony attune quest", "what level can I start BRD", "anyone know where the enchanting trainer is?", "how do I get to BRM", "is there a flight path to searing gorge",
 };
 static const uint32 TOPIC_NEWBIE_COUNT = sizeof(TOPIC_NEWBIE_MESSAGES) / sizeof(TOPIC_NEWBIE_MESSAGES[0]);
 
 static const char* TOPIC_SERVER_MESSAGES[] = {
-    "any guilds recruiting?",
-    "server seems laggy today",
-    "who's got the cheapest ports",
-    "when's the next world boss",
-    "did azuregos spawn yet",
-    "server feels dead today",
+    "any guilds recruiting?", "server seems laggy today", "who's got the cheapest ports", "when's the next world boss", "did azuregos spawn yet", "server feels dead today",
 };
 static const uint32 TOPIC_SERVER_COUNT = sizeof(TOPIC_SERVER_MESSAGES) / sizeof(TOPIC_SERVER_MESSAGES[0]);
 
 static const char* TOPIC_PVP_MESSAGES[] = {
-    "anyone doing WSG premades?",
-    "AV queue is insane right now",
-    "just got stomped in WSG by a premade",
-    "how much honor for rank 10",
-    "are there any world pvp raids happening",
-    "horde camping BRM again",
+    "anyone doing WSG premades?", "AV queue is insane right now", "just got stomped in WSG by a premade", "how much honor for rank 10", "are there any world pvp raids happening", "horde camping BRM again",
 };
 static const uint32 TOPIC_PVP_COUNT = sizeof(TOPIC_PVP_MESSAGES) / sizeof(TOPIC_PVP_MESSAGES[0]);
 
 static const char* TOPIC_PROFESSION_MESSAGES[] = {
-    "what's the fastest way to level enchanting",
-    "anyone have mooncloth CD up",
-    "is alchemy profitable at all",
-    "engineering is so expensive to level",
-    "just hit 300 mining finally",
-    "anyone need a transmute",
+    "what's the fastest way to level enchanting", "anyone have mooncloth CD up", "is alchemy profitable at all", "engineering is so expensive to level", "just hit 300 mining finally", "anyone need a transmute",
 };
 static const uint32 TOPIC_PROFESSION_COUNT = sizeof(TOPIC_PROFESSION_MESSAGES) / sizeof(TOPIC_PROFESSION_MESSAGES[0]);
 
@@ -1217,197 +1092,549 @@ struct TopicPoolEntry
 };
 
 static const TopicPoolEntry TOPIC_POOLS[TOPIC_MAX] = {
-    { TOPIC_LFG_MESSAGES,        TOPIC_LFG_COUNT },
-    { TOPIC_GOLD_MESSAGES,       TOPIC_GOLD_COUNT },
-    { TOPIC_GEAR_MESSAGES,       TOPIC_GEAR_COUNT },
-    { TOPIC_BORED_MESSAGES,      TOPIC_BORED_COUNT },
-    { TOPIC_NEWBIE_MESSAGES,     TOPIC_NEWBIE_COUNT },
-    { TOPIC_SERVER_MESSAGES,     TOPIC_SERVER_COUNT },
-    { TOPIC_PVP_MESSAGES,        TOPIC_PVP_COUNT },
-    { TOPIC_PROFESSION_MESSAGES, TOPIC_PROFESSION_COUNT },
+    {TOPIC_LFG_MESSAGES, TOPIC_LFG_COUNT}, {TOPIC_GOLD_MESSAGES, TOPIC_GOLD_COUNT}, {TOPIC_GEAR_MESSAGES, TOPIC_GEAR_COUNT}, {TOPIC_BORED_MESSAGES, TOPIC_BORED_COUNT}, {TOPIC_NEWBIE_MESSAGES, TOPIC_NEWBIE_COUNT}, {TOPIC_SERVER_MESSAGES, TOPIC_SERVER_COUNT}, {TOPIC_PVP_MESSAGES, TOPIC_PVP_COUNT}, {TOPIC_PROFESSION_MESSAGES, TOPIC_PROFESSION_COUNT},
 };
 
 // --- Conversation chains: scripted 2-4 bot exchanges ---
 
 static const ConversationChain GENERAL_CHAINS[] = {
-    { "lfg_brd", 3, {
-        { 0, "anyone running BRD?",                     0,     0,     },
-        { 1, "yeah I need to go for my Ironfoe",         15000, 30000, },
-        { 0, "cool, I need arena/anger/golem runs",      10000, 25000, },
-        { 2, "I can heal if you need",                   15000, 30000, },
-    }, 4 },
-    { "lfg_strat", 2, {
-        { 0, "lfg strat UD, need 2 dps",                0,     0,     },
-        { 1, "what class you looking for?",              15000, 25000, },
-        { 0, "anything really, just need warm bodies",   10000, 20000, },
-        { 1, "lol I can come on my mage, inv",           15000, 30000, },
-    }, 4 },
-    { "gold_farming", 2, {
-        { 0, "how do you guys make gold at 60",          0,     0,     },
-        { 1, "DM:E lashers, like 40-50g/hr",            15000, 25000, },
-        { 0, "I keep dying in there tho",                10000, 20000, },
-        { 1, "just watch a guide it's easy once you get it", 15000, 30000, },
-    }, 4 },
-    { "epic_mount", 2, {
-        { 0, "how long did it take you guys to get epic mount", 0, 0, },
-        { 1, "like 3 weeks of farming, it sucked",      15000, 30000, },
-        { 0, "I've been at it for a month",              10000, 25000, },
-        { 1, "just do DM:E or sell boosts if you can",   15000, 25000, },
-    }, 4 },
-    { "ony_attune", 3, {
-        { 0, "where do I start the ony attunement",      0,     0,     },
-        { 1, "starts in burning steppes, talk to the npc near the bridge", 15000, 30000, },
-        { 2, "it's a long chain, prepare to run BRD and UBRS", 10000, 25000, },
-        { 0, "great, thanks",                            10000, 20000, },
-    }, 4 },
-    { "server_guilds", 2, {
-        { 0, "any guilds recruiting? just hit 60",       0,     0,     },
-        { 1, "what class are you",                       15000, 25000, },
-        { 0, "warrior, want to tank eventually",         10000, 20000, },
-        { 1, "tanks are always in demand, just apply to anyone raiding", 15000, 30000, },
-    }, 4 },
-    { "raid_prep", 2, {
-        { 0, "what do I need for MC",                    0,     0,     },
-        { 1, "fire resist and patience",                 15000, 25000, },
-        { 0, "how much FR?",                             10000, 20000, },
-        { 1, "like 100+ for most fights, more for rag",  15000, 30000, },
-    }, 4 },
-    { "pvp_queues", 2, {
-        { 0, "is AV worth it for honor?",                0,     0,     },
-        { 1, "if you win fast yeah, WSG premades are better tho", 15000, 30000, },
-        { 0, "I don't have a premade group",             10000, 20000, },
-        { 1, "just queue AV then and do objectives",     10000, 25000, },
-    }, 4 },
-    { "drop_rng", 2, {
-        { 0, "been farming this item for 3 days straight", 0,   0,     },
-        { 1, "which item",                               15000, 25000, },
-        { 0, "SGC, it just won't drop",                  10000, 20000, },
-        { 1, "lmao good luck with that one, took me 200+ runs", 15000, 30000, },
-    }, 4 },
-    { "thorium_veins", 3, {
-        { 0, "anyone know where thorium veins are in UN?", 0,   0,     },
-        { 1, "winterspring has a good loop",             15000, 25000, },
-        { 2, "EPL is better imo",                        10000, 20000, },
-        { 1, "nah winterspring is way less contested",   15000, 25000, },
-    }, 4 },
-    { "dungeon_run", 2, {
-        { 0, "anyone wanna do LBRS?",                    0,     0,     },
-        { 1, "do you have the key?",                     15000, 25000, },
-        { 0, "yeah I have the UBRS key too if people want to chain them", 10000, 25000, },
-        { 1, "nice, I'll come on my healer",             15000, 30000, },
-    }, 4 },
-    { "class_quest", 2, {
-        { 0, "has anyone done the warrior whirlwind quest", 0, 0,     },
-        { 1, "yeah it's brutal, the elementals hit hard", 15000, 25000, },
-        { 0, "I keep dying to the cyclonian",            10000, 20000, },
-        { 1, "get a group, it's way easier with help",   15000, 25000, },
-    }, 4 },
-    { "lfg_dm_tribute", 3, {
-        { 0, "lfm DM:W tribute run",                    0,     0,     },
-        { 1, "need a lock?",                             15000, 25000, },
-        { 0, "yeah, need lock and heals",                10000, 20000, },
-        { 2, "I'll heal, inv me",                        15000, 30000, },
-    }, 4 },
-    { "world_buff", 2, {
-        { 0, "anyone know when ony head is being popped", 0,   0,     },
-        { 1, "probably tonight, guild said they killed her earlier", 15000, 30000, },
-        { 0, "nice, I need those buffs for raid",        10000, 25000, },
-        { 1, "make sure you log out in IF after you get it", 15000, 25000, },
-    }, 4 },
-    { "professions", 2, {
-        { 0, "is engineering worth it?",                 0,     0,     },
-        { 1, "100% for pvp, grenades are insane",        15000, 25000, },
-        { 0, "how expensive is it to level",             10000, 20000, },
-        { 1, "very, like 200-300g depending on AH prices", 15000, 30000, },
-    }, 4 },
+    {"lfg_brd",
+     3,
+     {
+         {
+             0,
+             "anyone running BRD?",
+             0,
+             0,
+         },
+         {
+             1,
+             "yeah I need to go for my Ironfoe",
+             15000,
+             30000,
+         },
+         {
+             0,
+             "cool, I need arena/anger/golem runs",
+             10000,
+             25000,
+         },
+         {
+             2,
+             "I can heal if you need",
+             15000,
+             30000,
+         },
+     },
+     4},
+    {"lfg_strat",
+     2,
+     {
+         {
+             0,
+             "lfg strat UD, need 2 dps",
+             0,
+             0,
+         },
+         {
+             1,
+             "what class you looking for?",
+             15000,
+             25000,
+         },
+         {
+             0,
+             "anything really, just need warm bodies",
+             10000,
+             20000,
+         },
+         {
+             1,
+             "lol I can come on my mage, inv",
+             15000,
+             30000,
+         },
+     },
+     4},
+    {"gold_farming",
+     2,
+     {
+         {
+             0,
+             "how do you guys make gold at 60",
+             0,
+             0,
+         },
+         {
+             1,
+             "DM:E lashers, like 40-50g/hr",
+             15000,
+             25000,
+         },
+         {
+             0,
+             "I keep dying in there tho",
+             10000,
+             20000,
+         },
+         {
+             1,
+             "just watch a guide it's easy once you get it",
+             15000,
+             30000,
+         },
+     },
+     4},
+    {"epic_mount",
+     2,
+     {
+         {
+             0,
+             "how long did it take you guys to get epic mount",
+             0,
+             0,
+         },
+         {
+             1,
+             "like 3 weeks of farming, it sucked",
+             15000,
+             30000,
+         },
+         {
+             0,
+             "I've been at it for a month",
+             10000,
+             25000,
+         },
+         {
+             1,
+             "just do DM:E or sell boosts if you can",
+             15000,
+             25000,
+         },
+     },
+     4},
+    {"ony_attune",
+     3,
+     {
+         {
+             0,
+             "where do I start the ony attunement",
+             0,
+             0,
+         },
+         {
+             1,
+             "starts in burning steppes, talk to the npc near the bridge",
+             15000,
+             30000,
+         },
+         {
+             2,
+             "it's a long chain, prepare to run BRD and UBRS",
+             10000,
+             25000,
+         },
+         {
+             0,
+             "great, thanks",
+             10000,
+             20000,
+         },
+     },
+     4},
+    {"server_guilds",
+     2,
+     {
+         {
+             0,
+             "any guilds recruiting? just hit 60",
+             0,
+             0,
+         },
+         {
+             1,
+             "what class are you",
+             15000,
+             25000,
+         },
+         {
+             0,
+             "warrior, want to tank eventually",
+             10000,
+             20000,
+         },
+         {
+             1,
+             "tanks are always in demand, just apply to anyone raiding",
+             15000,
+             30000,
+         },
+     },
+     4},
+    {"raid_prep",
+     2,
+     {
+         {
+             0,
+             "what do I need for MC",
+             0,
+             0,
+         },
+         {
+             1,
+             "fire resist and patience",
+             15000,
+             25000,
+         },
+         {
+             0,
+             "how much FR?",
+             10000,
+             20000,
+         },
+         {
+             1,
+             "like 100+ for most fights, more for rag",
+             15000,
+             30000,
+         },
+     },
+     4},
+    {"pvp_queues",
+     2,
+     {
+         {
+             0,
+             "is AV worth it for honor?",
+             0,
+             0,
+         },
+         {
+             1,
+             "if you win fast yeah, WSG premades are better tho",
+             15000,
+             30000,
+         },
+         {
+             0,
+             "I don't have a premade group",
+             10000,
+             20000,
+         },
+         {
+             1,
+             "just queue AV then and do objectives",
+             10000,
+             25000,
+         },
+     },
+     4},
+    {"drop_rng",
+     2,
+     {
+         {
+             0,
+             "been farming this item for 3 days straight",
+             0,
+             0,
+         },
+         {
+             1,
+             "which item",
+             15000,
+             25000,
+         },
+         {
+             0,
+             "SGC, it just won't drop",
+             10000,
+             20000,
+         },
+         {
+             1,
+             "lmao good luck with that one, took me 200+ runs",
+             15000,
+             30000,
+         },
+     },
+     4},
+    {"thorium_veins",
+     3,
+     {
+         {
+             0,
+             "anyone know where thorium veins are in UN?",
+             0,
+             0,
+         },
+         {
+             1,
+             "winterspring has a good loop",
+             15000,
+             25000,
+         },
+         {
+             2,
+             "EPL is better imo",
+             10000,
+             20000,
+         },
+         {
+             1,
+             "nah winterspring is way less contested",
+             15000,
+             25000,
+         },
+     },
+     4},
+    {"dungeon_run",
+     2,
+     {
+         {
+             0,
+             "anyone wanna do LBRS?",
+             0,
+             0,
+         },
+         {
+             1,
+             "do you have the key?",
+             15000,
+             25000,
+         },
+         {
+             0,
+             "yeah I have the UBRS key too if people want to chain them",
+             10000,
+             25000,
+         },
+         {
+             1,
+             "nice, I'll come on my healer",
+             15000,
+             30000,
+         },
+     },
+     4},
+    {"class_quest",
+     2,
+     {
+         {
+             0,
+             "has anyone done the warrior whirlwind quest",
+             0,
+             0,
+         },
+         {
+             1,
+             "yeah it's brutal, the elementals hit hard",
+             15000,
+             25000,
+         },
+         {
+             0,
+             "I keep dying to the cyclonian",
+             10000,
+             20000,
+         },
+         {
+             1,
+             "get a group, it's way easier with help",
+             15000,
+             25000,
+         },
+     },
+     4},
+    {"lfg_dm_tribute",
+     3,
+     {
+         {
+             0,
+             "lfm DM:W tribute run",
+             0,
+             0,
+         },
+         {
+             1,
+             "need a lock?",
+             15000,
+             25000,
+         },
+         {
+             0,
+             "yeah, need lock and heals",
+             10000,
+             20000,
+         },
+         {
+             2,
+             "I'll heal, inv me",
+             15000,
+             30000,
+         },
+     },
+     4},
+    {"world_buff",
+     2,
+     {
+         {
+             0,
+             "anyone know when ony head is being popped",
+             0,
+             0,
+         },
+         {
+             1,
+             "probably tonight, guild said they killed her earlier",
+             15000,
+             30000,
+         },
+         {
+             0,
+             "nice, I need those buffs for raid",
+             10000,
+             25000,
+         },
+         {
+             1,
+             "make sure you log out in IF after you get it",
+             15000,
+             25000,
+         },
+     },
+     4},
+    {"professions",
+     2,
+     {
+         {
+             0,
+             "is engineering worth it?",
+             0,
+             0,
+         },
+         {
+             1,
+             "100% for pvp, grenades are insane",
+             15000,
+             25000,
+         },
+         {
+             0,
+             "how expensive is it to level",
+             10000,
+             20000,
+         },
+         {
+             1,
+             "very, like 200-300g depending on AH prices",
+             15000,
+             30000,
+         },
+     },
+     4},
 };
 static const uint32 GENERAL_CHAIN_COUNT = sizeof(GENERAL_CHAINS) / sizeof(GENERAL_CHAINS[0]);
 
 // --- Debate templates: classic WoW General chat arguments ---
 
 static const DebateTemplate GENERAL_DEBATES[] = {
-    { "fury_vs_arms", {
-        { 0, {"fury is way better for raiding", "arms can't compete with fury dps", "dual wield fury is the meta"}, 3, 0, 0 },
-        { 1, {"arms is fine if you have the gear", "lol fury is only better with world buffs"}, 2, 15000, 30000 },
-        { 0, {"bloodthirst crits for like 1500", "dual wield with edgemasters is insane"}, 2, 15000, 25000 },
-        { 1, {"mortal strike in pvp tho", "arms is way more fun anyway", "fury requires way more consumes"}, 3, 10000, 30000 },
-        { 0, {"we're talking pve not pvp", "ok but raids are the endgame"}, 2, 15000, 25000 },
-        { 1, {"whatever man play what you enjoy", "agree to disagree"}, 2, 15000, 35000 },
-    }, 6 },
-    { "best_gold_farm", {
-        { 0, {"DM:E lasher farming is the best gold in the game", "lashers are 50g/hr easy"}, 2, 0, 0 },
-        { 1, {"nah selling DM:N tribute buffs is way better", "mara princess runs are more consistent"}, 2, 15000, 30000 },
-        { 0, {"lasher farm is zero effort tho", "you don't even need good gear for lashers"}, 2, 15000, 25000 },
-        { 1, {"herbing in felwood makes more if you know the route", "devilsaur farming if you're brave enough"}, 2, 10000, 25000 },
-        { 0, {"devilsaur is a nightmare with the mafia controlling it"}, 1, 15000, 30000 },
-        { 1, {"lol true, just stick to whatever you enjoy farming"}, 1, 15000, 25000 },
-    }, 6 },
-    { "horde_vs_alliance", {
-        { 0, {"horde has it so easy with WF totem", "horde racials are just better for pve"}, 2, 0, 0 },
-        { 1, {"alliance has paladins tho, blessings are insane", "fear ward from dwarves is broken"}, 2, 15000, 30000 },
-        { 0, {"will of the forsaken is the best racial in the game"}, 1, 15000, 25000 },
-        { 1, {"stoneform says hi", "human weapon skill though"}, 2, 10000, 25000 },
-        { 0, {"orc stun resist is so annoying in pvp"}, 1, 15000, 30000 },
-        { 1, {"at least we have seal of command lol"}, 1, 15000, 25000 },
-    }, 6 },
-    { "shadow_priest_viable", {
-        { 0, {"shadow priests are actually good in raids", "spriest brings shadow weaving for locks"}, 2, 0, 0 },
-        { 1, {"you're basically a mana battery for the lock group", "it's a waste of a healer spot"}, 2, 15000, 30000 },
-        { 0, {"one spriest makes your locks do way more damage", "shadow weaving is huge"}, 2, 15000, 25000 },
-        { 1, {"just bring another healer and have the lock use curse of shadows"}, 1, 10000, 30000 },
-        { 0, {"you clearly haven't seen the math on this"}, 1, 15000, 25000 },
-        { 1, {"ok fair, one spriest is fine, just not more"}, 1, 15000, 30000 },
-    }, 6 },
-    { "mc_vs_bwl", {
-        { 0, {"MC is so boring at this point", "MC is just a loot piñata now"}, 2, 0, 0 },
-        { 1, {"BWL is way more fun, actually need coordination", "vael is still a dps check"}, 2, 15000, 25000 },
-        { 0, {"nef is the best fight in the game imo", "chromaggus is underrated"}, 2, 10000, 25000 },
-        { 1, {"rag is iconic though, you can't beat the first time you see him"}, 1, 15000, 30000 },
-        { 0, {"true, rag was cool the first time, now it's just annoying"}, 1, 15000, 25000 },
-        { 1, {"at least MC is quick now, 45min with a decent group"}, 1, 15000, 30000 },
-    }, 6 },
-    { "warrior_tank_meta", {
-        { 0, {"can druids tank raids or is it warriors only", "is bear tank viable"}, 2, 0, 0 },
-        { 1, {"warrior is the only real raid tank", "druids can OT at best"}, 2, 15000, 30000 },
-        { 0, {"idk I've seen druid MTs clear BWL", "bear armor is actually insane"}, 2, 15000, 25000 },
-        { 1, {"they can't crit block tho, shield block is huge", "no last stand = dead bear"}, 2, 10000, 25000 },
-        { 0, {"they have more hp to compensate"}, 1, 15000, 30000 },
-        { 1, {"warriors are just safer, but yeah bears can work with gear"}, 1, 15000, 25000 },
-    }, 6 },
-    { "consumable_cost", {
-        { 0, {"raid consumables cost way too much", "I spend like 50g a week on flasks"}, 2, 0, 0 },
-        { 1, {"just farm your own mats", "that's the game at 60, farming for raids"}, 2, 15000, 25000 },
-        { 0, {"I don't have time to farm 20 hours a week", "between raid nights and farming I have no time"}, 2, 15000, 30000 },
-        { 1, {"just get an herb alt, passive income"}, 1, 10000, 25000 },
-        { 0, {"not everyone wants to play the AH game"}, 1, 15000, 25000 },
-        { 1, {"welcome to vanilla lol"}, 1, 15000, 30000 },
-    }, 6 },
+    {"fury_vs_arms",
+     {
+         {0, {"fury is way better for raiding", "arms can't compete with fury dps", "dual wield fury is the meta"}, 3, 0, 0},
+         {1, {"arms is fine if you have the gear", "lol fury is only better with world buffs"}, 2, 15000, 30000},
+         {0, {"bloodthirst crits for like 1500", "dual wield with edgemasters is insane"}, 2, 15000, 25000},
+         {1, {"mortal strike in pvp tho", "arms is way more fun anyway", "fury requires way more consumes"}, 3, 10000, 30000},
+         {0, {"we're talking pve not pvp", "ok but raids are the endgame"}, 2, 15000, 25000},
+         {1, {"whatever man play what you enjoy", "agree to disagree"}, 2, 15000, 35000},
+     },
+     6},
+    {"best_gold_farm",
+     {
+         {0, {"DM:E lasher farming is the best gold in the game", "lashers are 50g/hr easy"}, 2, 0, 0},
+         {1, {"nah selling DM:N tribute buffs is way better", "mara princess runs are more consistent"}, 2, 15000, 30000},
+         {0, {"lasher farm is zero effort tho", "you don't even need good gear for lashers"}, 2, 15000, 25000},
+         {1, {"herbing in felwood makes more if you know the route", "devilsaur farming if you're brave enough"}, 2, 10000, 25000},
+         {0, {"devilsaur is a nightmare with the mafia controlling it"}, 1, 15000, 30000},
+         {1, {"lol true, just stick to whatever you enjoy farming"}, 1, 15000, 25000},
+     },
+     6},
+    {"horde_vs_alliance",
+     {
+         {0, {"horde has it so easy with WF totem", "horde racials are just better for pve"}, 2, 0, 0},
+         {1, {"alliance has paladins tho, blessings are insane", "fear ward from dwarves is broken"}, 2, 15000, 30000},
+         {0, {"will of the forsaken is the best racial in the game"}, 1, 15000, 25000},
+         {1, {"stoneform says hi", "human weapon skill though"}, 2, 10000, 25000},
+         {0, {"orc stun resist is so annoying in pvp"}, 1, 15000, 30000},
+         {1, {"at least we have seal of command lol"}, 1, 15000, 25000},
+     },
+     6},
+    {"shadow_priest_viable",
+     {
+         {0, {"shadow priests are actually good in raids", "spriest brings shadow weaving for locks"}, 2, 0, 0},
+         {1, {"you're basically a mana battery for the lock group", "it's a waste of a healer spot"}, 2, 15000, 30000},
+         {0, {"one spriest makes your locks do way more damage", "shadow weaving is huge"}, 2, 15000, 25000},
+         {1, {"just bring another healer and have the lock use curse of shadows"}, 1, 10000, 30000},
+         {0, {"you clearly haven't seen the math on this"}, 1, 15000, 25000},
+         {1, {"ok fair, one spriest is fine, just not more"}, 1, 15000, 30000},
+     },
+     6},
+    {"mc_vs_bwl",
+     {
+         {0, {"MC is so boring at this point", "MC is just a loot piñata now"}, 2, 0, 0},
+         {1, {"BWL is way more fun, actually need coordination", "vael is still a dps check"}, 2, 15000, 25000},
+         {0, {"nef is the best fight in the game imo", "chromaggus is underrated"}, 2, 10000, 25000},
+         {1, {"rag is iconic though, you can't beat the first time you see him"}, 1, 15000, 30000},
+         {0, {"true, rag was cool the first time, now it's just annoying"}, 1, 15000, 25000},
+         {1, {"at least MC is quick now, 45min with a decent group"}, 1, 15000, 30000},
+     },
+     6},
+    {"warrior_tank_meta",
+     {
+         {0, {"can druids tank raids or is it warriors only", "is bear tank viable"}, 2, 0, 0},
+         {1, {"warrior is the only real raid tank", "druids can OT at best"}, 2, 15000, 30000},
+         {0, {"idk I've seen druid MTs clear BWL", "bear armor is actually insane"}, 2, 15000, 25000},
+         {1, {"they can't crit block tho, shield block is huge", "no last stand = dead bear"}, 2, 10000, 25000},
+         {0, {"they have more hp to compensate"}, 1, 15000, 30000},
+         {1, {"warriors are just safer, but yeah bears can work with gear"}, 1, 15000, 25000},
+     },
+     6},
+    {"consumable_cost",
+     {
+         {0, {"raid consumables cost way too much", "I spend like 50g a week on flasks"}, 2, 0, 0},
+         {1, {"just farm your own mats", "that's the game at 60, farming for raids"}, 2, 15000, 25000},
+         {0, {"I don't have time to farm 20 hours a week", "between raid nights and farming I have no time"}, 2, 15000, 30000},
+         {1, {"just get an herb alt, passive income"}, 1, 10000, 25000},
+         {0, {"not everyone wants to play the AH game"}, 1, 15000, 25000},
+         {1, {"welcome to vanilla lol"}, 1, 15000, 30000},
+     },
+     6},
 };
 static const uint32 GENERAL_DEBATE_COUNT = sizeof(GENERAL_DEBATES) / sizeof(GENERAL_DEBATES[0]);
 
 // --- Reactive keyword hooks: trigger follow-ups to General chat messages ---
 
 static const ReactiveHook GENERAL_REACTIVE_HOOKS[] = {
-    { "brd",     {"BRD takes forever without a good tank", "just skip the bar fight", "emp runs or full?", "I need my jailbreak quest done"}, 4, 25 },
-    { "strat",   {"strat UD is so much better than live", "hope you have holy water", "righteous orb farming?"}, 3, 25 },
-    { "ubrs",    {"need the UBRS key?", "I need rend for my ony attune", "just did UBRS, took forever"}, 3, 25 },
-    { "scholo",  {"scholo is underrated, good loot in there", "that dungeon is so long", "need a key for scholo"}, 3, 20 },
-    { "gold",    {"just farm DM:E lashers", "how much gold do you need?", "I'm always broke"}, 3, 20 },
-    { "mount",   {"epic mount grind is real", "I'm still on the 60% lol", "just save up and don't buy anything else"}, 3, 20 },
-    { "ony",     {"ony buff plz", "did ony head get popped yet?", "anyone doing ony this week?"}, 3, 25 },
-    { "rag",     {"rag is easy now, just need FR", "did the legs drop?", "fire resist check"}, 3, 20 },
-    { "nerf",    {"classic doesn't get nerfed lol", "working as intended", "just adapt"}, 3, 25 },
-    { "lag",     {"yeah it's been laggy", "just me or is everyone lagging?", "rip server"}, 3, 35 },
-    { "pvp",     {"WSG premades are cancer", "just do AV, more honor per hour", "what rank are you going for?"}, 3, 20 },
-    { "druid",   {"innervate bot reporting for duty", "bear or cat?", "druids are slept on"}, 3, 15 },
-    { "hunter",  {"at least you don't have ammo costs", "hunters are a meme class", "nice pet"}, 3, 15 },
-    { "warlock", {"summon plz", "healthstones?", "lock candy plz"}, 3, 15 },
-    { "mage",    {"water plz", "can I get a portal", "mage food please"}, 3, 15 },
-    { "flask",   {"flasks are so overpriced", "flask or elixirs?", "only flask for prog imo"}, 3, 20 },
-    { "raid",    {"which raid?", "what guild are you in?", "MC or BWL?"}, 3, 20 },
-    { "boring",  {"go farm something", "level an alt", "PVP is always fun"}, 3, 20 },
-    { "bored",   {"same", "go do some BGs", "farm gold, always useful"}, 3, 25 },
-    { "help",    {"with what?", "what do you need help with?", "just ask"}, 3, 15 },
+    {"brd", {"BRD takes forever without a good tank", "just skip the bar fight", "emp runs or full?", "I need my jailbreak quest done"}, 4, 25},
+    {"strat", {"strat UD is so much better than live", "hope you have holy water", "righteous orb farming?"}, 3, 25},
+    {"ubrs", {"need the UBRS key?", "I need rend for my ony attune", "just did UBRS, took forever"}, 3, 25},
+    {"scholo", {"scholo is underrated, good loot in there", "that dungeon is so long", "need a key for scholo"}, 3, 20},
+    {"gold", {"just farm DM:E lashers", "how much gold do you need?", "I'm always broke"}, 3, 20},
+    {"mount", {"epic mount grind is real", "I'm still on the 60% lol", "just save up and don't buy anything else"}, 3, 20},
+    {"ony", {"ony buff plz", "did ony head get popped yet?", "anyone doing ony this week?"}, 3, 25},
+    {"rag", {"rag is easy now, just need FR", "did the legs drop?", "fire resist check"}, 3, 20},
+    {"nerf", {"classic doesn't get nerfed lol", "working as intended", "just adapt"}, 3, 25},
+    {"lag", {"yeah it's been laggy", "just me or is everyone lagging?", "rip server"}, 3, 35},
+    {"pvp", {"WSG premades are cancer", "just do AV, more honor per hour", "what rank are you going for?"}, 3, 20},
+    {"druid", {"innervate bot reporting for duty", "bear or cat?", "druids are slept on"}, 3, 15},
+    {"hunter", {"at least you don't have ammo costs", "hunters are a meme class", "nice pet"}, 3, 15},
+    {"warlock", {"summon plz", "healthstones?", "lock candy plz"}, 3, 15},
+    {"mage", {"water plz", "can I get a portal", "mage food please"}, 3, 15},
+    {"flask", {"flasks are so overpriced", "flask or elixirs?", "only flask for prog imo"}, 3, 20},
+    {"raid", {"which raid?", "what guild are you in?", "MC or BWL?"}, 3, 20},
+    {"boring", {"go farm something", "level an alt", "PVP is always fun"}, 3, 20},
+    {"bored", {"same", "go do some BGs", "farm gold, always useful"}, 3, 25},
+    {"help", {"with what?", "what do you need help with?", "just ask"}, 3, 15},
 };
 static const uint32 GENERAL_REACTIVE_HOOKS_COUNT = sizeof(GENERAL_REACTIVE_HOOKS) / sizeof(GENERAL_REACTIVE_HOOKS[0]);
 
@@ -1459,25 +1686,29 @@ void BotChatManager::StartConversationChain(uint32 zoneId, std::vector<Player*>&
 
     // Assign bots to roles — need numParticipants available bots.
     std::unordered_set<uint32> assigned;
-    uint32 participants[3] = { 0, 0, 0 };
+    uint32 participants[3] = {0, 0, 0};
     bool ok = true;
     for (uint8 role = 0; role < chain.numParticipants; ++role)
     {
         Player* bot = FindAvailableBotInZone(zoneBots, assigned);
-        if (!bot) { ok = false; break; }
+        if (!bot)
+        {
+            ok = false;
+            break;
+        }
         participants[role] = bot->GetGUIDLow();
         assigned.insert(bot->GetGUIDLow());
     }
 
     if (!ok)
-        return;  // not enough available bots for this chain
+        return; // not enough available bots for this chain
 
     uint32 chainId = m_nextChainId++;
     ZoneConversationState& state = m_zoneConvoState[zoneId];
     state.chainActive = true;
-    state.chainIndex  = chainIdx;
-    state.chainStep   = 0;
-    state.chainId     = chainId;
+    state.chainIndex = chainIdx;
+    state.chainStep = 0;
+    state.chainId = chainId;
     memcpy(state.chainParticipants, participants, sizeof(participants));
 
     // Schedule all lines using absolute fire times (cumulative seconds from now).
@@ -1493,20 +1724,19 @@ void BotChatManager::StartConversationChain(uint32 zoneId, std::vector<Player*>&
         if (lineIdx > 0)
         {
             uint32 jitterMs = urand(line.delayMinMs, line.delayMaxMs);
-            cumulativeDelaySec += (jitterMs + 500) / 1000;  // round to nearest second
+            cumulativeDelaySec += (jitterMs + 500) / 1000; // round to nearest second
         }
 
         PendingGeneralMessage pending;
         pending.botGuidLow = participants[line.speakerRole];
-        pending.zoneId     = zoneId;
-        pending.message    = line.text;
-        pending.fireTime   = baseTime + cumulativeDelaySec;
-        pending.chainId    = chainId;
+        pending.zoneId = zoneId;
+        pending.message = line.text;
+        pending.fireTime = baseTime + cumulativeDelaySec;
+        pending.chainId = chainId;
         m_pendingGeneralMessages.push_back(std::move(pending));
     }
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Starting chain '%s' in zone %u (chainId %u)",
-        chain.tag, zoneId, chainId);
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Starting chain '%s' in zone %u (chainId %u)", chain.tag, zoneId, chainId);
 }
 
 void BotChatManager::StartDebate(uint32 zoneId, std::vector<Player*>& zoneBots)
@@ -1519,11 +1749,12 @@ void BotChatManager::StartDebate(uint32 zoneId, std::vector<Player*>& zoneBots)
 
     // Need exactly 2 bots for the two sides.
     std::unordered_set<uint32> assigned;
-    uint32 sides[2] = { 0, 0 };
+    uint32 sides[2] = {0, 0};
     for (uint8 side = 0; side < 2; ++side)
     {
         Player* bot = FindAvailableBotInZone(zoneBots, assigned);
-        if (!bot) return;
+        if (!bot)
+            return;
         sides[side] = bot->GetGUIDLow();
         assigned.insert(bot->GetGUIDLow());
     }
@@ -1531,9 +1762,9 @@ void BotChatManager::StartDebate(uint32 zoneId, std::vector<Player*>& zoneBots)
     uint32 debateId = m_nextChainId++;
     ZoneConversationState& state = m_zoneConvoState[zoneId];
     state.debateActive = true;
-    state.debateIndex  = debateIdx;
-    state.debateStep   = 0;
-    state.debateId     = debateId;
+    state.debateIndex = debateIdx;
+    state.debateStep = 0;
+    state.debateId = debateId;
     memcpy(state.debateSides, sides, sizeof(sides));
 
     // Schedule all debate lines using absolute fire times.
@@ -1553,35 +1784,31 @@ void BotChatManager::StartDebate(uint32 zoneId, std::vector<Player*>& zoneBots)
 
         PendingGeneralMessage pending;
         pending.botGuidLow = sides[line.side];
-        pending.zoneId     = zoneId;
-        pending.message    = text;
-        pending.fireTime   = baseTime + cumulativeDelaySec;
-        pending.chainId    = debateId;
+        pending.zoneId = zoneId;
+        pending.message = text;
+        pending.fireTime = baseTime + cumulativeDelaySec;
+        pending.chainId = debateId;
         m_pendingGeneralMessages.push_back(std::move(pending));
     }
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Starting debate '%s' in zone %u (debateId %u)",
-        debate.tag, zoneId, debateId);
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Starting debate '%s' in zone %u (debateId %u)", debate.tag, zoneId, debateId);
 }
 
 // Remove all pending messages for a given chainId and clear zone state.
 void BotChatManager::AbortChainOrDebate(uint32 zoneId, uint32 chainId)
 {
-    m_pendingGeneralMessages.erase(
-        std::remove_if(m_pendingGeneralMessages.begin(), m_pendingGeneralMessages.end(),
-            [chainId](const PendingGeneralMessage& m) { return m.chainId == chainId; }),
-        m_pendingGeneralMessages.end());
+    m_pendingGeneralMessages.erase(std::remove_if(m_pendingGeneralMessages.begin(), m_pendingGeneralMessages.end(), [chainId](const PendingGeneralMessage& m) { return m.chainId == chainId; }), m_pendingGeneralMessages.end());
 
     ZoneConversationState& state = m_zoneConvoState[zoneId];
     if (state.chainActive && state.chainId == chainId)
     {
         state.chainActive = false;
-        state.chainId     = 0;
+        state.chainId = 0;
     }
     if (state.debateActive && state.debateId == chainId)
     {
         state.debateActive = false;
-        state.debateId     = 0;
+        state.debateId = 0;
     }
 }
 
@@ -1623,8 +1850,7 @@ void BotChatManager::UpdatePendingGeneralMessages(uint32 diff)
         // If the pre-assigned speaker is gone or left the zone, abort the whole chain.
         if (pm.botGuidLow && pm.chainId && (!speaker || !speaker->IsInWorld() || speaker->GetZoneId() != pm.zoneId))
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Chain/debate participant gone, aborting chain %u in zone %u",
-                pm.chainId, pm.zoneId);
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Chain/debate participant gone, aborting chain %u in zone %u", pm.chainId, pm.zoneId);
             AbortChainOrDebate(pm.zoneId, pm.chainId);
             // Abort already removed remaining messages — skip this one too.
             continue;
@@ -1640,7 +1866,8 @@ void BotChatManager::UpdatePendingGeneralMessages(uint32 diff)
         if (pm.chainId)
         {
             auto& count = chainMsgCount[pm.chainId];
-            if (count > 0) --count;
+            if (count > 0)
+                --count;
             if (count == 0)
                 completedChainIds.insert(pm.chainId);
         }
@@ -1658,13 +1885,13 @@ void BotChatManager::UpdatePendingGeneralMessages(uint32 diff)
             if (state.chainActive && state.chainId == cid)
             {
                 state.chainActive = false;
-                state.chainId     = 0;
+                state.chainId = 0;
                 sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Chain %u in zone %u completed.", cid, kv.first);
             }
             if (state.debateActive && state.debateId == cid)
             {
                 state.debateActive = false;
-                state.debateId     = 0;
+                state.debateId = 0;
                 sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Debate %u in zone %u completed.", cid, kv.first);
             }
         }
@@ -1728,17 +1955,16 @@ void BotChatManager::OnGeneralChatMessage(uint32 zoneId, ObjectGuid senderGuid, 
         // Schedule reactive response 15-45s from now using absolute fire time.
         PendingGeneralMessage pending;
         pending.botGuidLow = responder->GetGUIDLow();
-        pending.zoneId     = zoneId;
-        pending.message    = response;
-        pending.fireTime   = time(nullptr) + urand(15, 45);
-        pending.chainId    = 0;  // standalone, not part of a chain
+        pending.zoneId = zoneId;
+        pending.message = response;
+        pending.fireTime = time(nullptr) + urand(15, 45);
+        pending.chainId = 0; // standalone, not part of a chain
         m_pendingGeneralMessages.push_back(std::move(pending));
 
         state.lastReactiveHookTime = now;
 
-        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Reactive hook '%s' triggered in zone %u, %s will respond.",
-            hook.keyword, zoneId, responder->GetName());
-        return;  // one hook per message
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: Reactive hook '%s' triggered in zone %u, %s will respond.", hook.keyword, zoneId, responder->GetName());
+        return; // one hook per message
     }
 }
 
@@ -1772,13 +1998,13 @@ void BotChatManager::UpdateGeneralChat(uint32 diff)
 
     for (auto& kv : zoneBots)
     {
-        uint32 zoneId  = kv.first;
+        uint32 zoneId = kv.first;
         std::vector<Player*>& bots = kv.second;
         uint32 botCount = static_cast<uint32>(bots.size());
 
         float expectedMsgs = botCount * GENERAL_MSGS_PER_MIN_PER_BOT * tickFraction;
-        uint32 msgsToSend  = static_cast<uint32>(expectedMsgs);
-        float  fractional  = expectedMsgs - msgsToSend;
+        uint32 msgsToSend = static_cast<uint32>(expectedMsgs);
+        float fractional = expectedMsgs - msgsToSend;
         if (urand(0, 999) < static_cast<uint32>(fractional * 1000.0f))
             ++msgsToSend;
 
@@ -1797,8 +2023,7 @@ void BotChatManager::UpdateGeneralChat(uint32 diff)
             // Expire stale topics (> 2 min or > 4 messages).
             if (state.activeTopic != TOPIC_MAX)
             {
-                bool topicExpired = (state.topicMessagesSent >= 4) ||
-                    (time(nullptr) - state.topicStartTime > 120);
+                bool topicExpired = (state.topicMessagesSent >= 4) || (time(nullptr) - state.topicStartTime > 120);
                 if (topicExpired)
                     state.activeTopic = TOPIC_MAX;
             }
@@ -1832,9 +2057,10 @@ void BotChatManager::UpdateGeneralChat(uint32 diff)
                 {
                     // Topic weights: LFG 25%, GOLD 15%, GEAR 12%, BORED 12%,
                     //                NEWBIE 10%, SERVER 10%, PVP 10%, PROFESSION 6%
-                    static const uint8 TOPIC_WEIGHTS[TOPIC_MAX] = { 25, 15, 12, 12, 10, 10, 10, 6 };
+                    static const uint8 TOPIC_WEIGHTS[TOPIC_MAX] = {25, 15, 12, 12, 10, 10, 10, 6};
                     uint32 totalWeight = 0;
-                    for (uint8 w : TOPIC_WEIGHTS) totalWeight += w;
+                    for (uint8 w : TOPIC_WEIGHTS)
+                        totalWeight += w;
 
                     uint32 r = urand(0, totalWeight - 1);
                     uint32 cumulative = 0;
@@ -1843,9 +2069,9 @@ void BotChatManager::UpdateGeneralChat(uint32 diff)
                         cumulative += TOPIC_WEIGHTS[t];
                         if (r < cumulative)
                         {
-                            state.activeTopic       = static_cast<GeneralTopic>(t);
+                            state.activeTopic = static_cast<GeneralTopic>(t);
                             state.topicMessagesSent = 0;
-                            state.topicStartTime    = time(nullptr);
+                            state.topicStartTime = time(nullptr);
                             break;
                         }
                     }
@@ -1893,6 +2119,5 @@ void BotChatManager::SendGeneralChat(Player* bot, const char* message)
 
     generalChannel->Say(bot->GetObjectGuid(), message, LANG_UNIVERSAL, /*skipCheck=*/true);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s says in General (%s): %s",
-        bot->GetName(), area->Name, message);
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotChat: %s says in General (%s): %s", bot->GetName(), area->Name, message);
 }

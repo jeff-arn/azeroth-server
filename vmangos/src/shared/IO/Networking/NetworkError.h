@@ -5,7 +5,8 @@
 
 namespace IO
 {
-    class NetworkError {
+    class NetworkError
+    {
     public:
         enum class ErrorType : int
         {
@@ -16,6 +17,7 @@ namespace IO
             Timeout,
             InvalidProtocolBehavior,
         };
+
     public:
         explicit constexpr NetworkError(ErrorType errorType) : NetworkError(errorType, 0) {};
         explicit constexpr NetworkError(ErrorType errorType, int osErrorCode) : m_error{errorType}, m_additionalOsErrorCode{osErrorCode} {};
@@ -25,10 +27,8 @@ namespace IO
         explicit operator bool() const { return GetErrorType() != ErrorType::NoError; };
         std::string ToString() const;
 
-        static NetworkError FromSystemError(int osErrorCode)
-        {
-            return NetworkError(ErrorType::InternalError, osErrorCode);
-        }
+        static NetworkError FromSystemError(int osErrorCode) { return NetworkError(ErrorType::InternalError, osErrorCode); }
+
     private:
         ErrorType m_error;
         /// internal variable for ToString(), might be os and situation dependent (On windows there is ::GetLastError()/errno and ::WSAGetLastError())
@@ -37,4 +37,4 @@ namespace IO
 
 } // namespace IO
 
-#endif //MANGOS_IO_NETWORKING_NETWORKERROR_H
+#endif // MANGOS_IO_NETWORKING_NETWORKERROR_H

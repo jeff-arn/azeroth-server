@@ -23,10 +23,7 @@ INSTANTIATE_SINGLETON_1(ZoneScriptMgr);
 
 void RegisterZoneScripts();
 
-ZoneScriptMgr::ZoneScriptMgr()
-{
-    m_UpdateTimer = 0;
-}
+ZoneScriptMgr::ZoneScriptMgr() { m_UpdateTimer = 0; }
 
 ZoneScriptMgr::~ZoneScriptMgr()
 {
@@ -36,10 +33,7 @@ ZoneScriptMgr::~ZoneScriptMgr()
         delete itr;
 }
 
-void ZoneScriptMgr::InitZoneScripts()
-{
-    RegisterZoneScripts();
-}
+void ZoneScriptMgr::InitZoneScripts() { RegisterZoneScripts(); }
 
 void ZoneScriptMgr::InitMapZoneScripts(uint32 mapId, Map* pMap)
 {
@@ -70,10 +64,7 @@ void ZoneScriptMgr::InitMapZoneScripts(uint32 mapId, Map* pMap)
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "ZoneScriptMgr : %u scripts on the map %u.", counter, mapId);
 }
 
-void ZoneScriptMgr::AddZone(uint32 zoneid, ZoneScript *handle)
-{
-    m_ZoneScriptsMap[zoneid] = handle;
-}
+void ZoneScriptMgr::AddZone(uint32 zoneid, ZoneScript* handle) { m_ZoneScriptsMap[zoneid] = handle; }
 
 void ZoneScriptMgr::HandlePlayerEnterZone(Player* plr, uint32 zoneid)
 {
@@ -85,7 +76,7 @@ void ZoneScriptMgr::HandlePlayerEnterZone(Player* plr, uint32 zoneid)
         return;
 
     itr->second->OnPlayerEnter(plr);
-    //sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Player %u entered ZoneScript", plr->GetGUIDLow());
+    // sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Player %u entered ZoneScript", plr->GetGUIDLow());
 }
 
 void ZoneScriptMgr::HandlePlayerLeaveZone(Player* plr, uint32 zoneid)
@@ -99,7 +90,7 @@ void ZoneScriptMgr::HandlePlayerLeaveZone(Player* plr, uint32 zoneid)
         return;
 
     itr->second->OnPlayerLeave(plr);
-    //sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Player %u left ZoneScript", plr->GetGUIDLow());
+    // sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Player %u left ZoneScript", plr->GetGUIDLow());
 }
 
 ZoneScript* ZoneScriptMgr::GetZoneScriptToZoneId(uint32 zoneid)
@@ -108,7 +99,7 @@ ZoneScript* ZoneScriptMgr::GetZoneScriptToZoneId(uint32 zoneid)
     if (itr == m_ZoneScriptsMap.end())
     {
         // no handle for this zone, return
-        //sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Pas de script pour la zone %u", zoneid);
+        // sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Pas de script pour la zone %u", zoneid);
         return nullptr;
     }
     return itr->second;
@@ -190,4 +181,3 @@ void ZoneScriptMgr::OnMapCrashed(Map* map)
             itr2 = m_ZoneScriptsMap.begin();
         }
 }
-

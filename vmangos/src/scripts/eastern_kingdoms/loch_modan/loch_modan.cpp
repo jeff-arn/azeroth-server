@@ -35,26 +35,19 @@ enum MiranData
 {
     QUEST_PROTECTING_THE_SHIPMENT = 309,
 
-    SAY_MIRAN_1           = 510,
-    SAY_DARK_IRON_DWARF   = 1936,
-    SAY_MIRAN_2           = 511,
-    SAY_MIRAN_3           = 498,
+    SAY_MIRAN_1 = 510,
+    SAY_DARK_IRON_DWARF = 1936,
+    SAY_MIRAN_2 = 511,
+    SAY_MIRAN_3 = 498,
 
-    NPC_DARK_IRON_RAIDER  = 2149
+    NPC_DARK_IRON_RAIDER = 2149
 };
 
-static Position const m_afAmbushSpawn[] =
-{
-    { -5691.93f, -3745.91f, 319.159f, 2.21f},
-    { -5706.98f, -3745.39f, 318.728f, 1.04f}
-};
+static Position const m_afAmbushSpawn[] = {{-5691.93f, -3745.91f, 319.159f, 2.21f}, {-5706.98f, -3745.39f, 318.728f, 1.04f}};
 
-struct npc_miranAI: public npc_escortAI
+struct npc_miranAI : public npc_escortAI
 {
-    npc_miranAI(Creature* pCreature): npc_escortAI(pCreature)
-    {
-        Reset();
-    }
+    npc_miranAI(Creature* pCreature) : npc_escortAI(pCreature) { Reset(); }
 
     uint8 m_uiDwarves;
 
@@ -68,16 +61,16 @@ struct npc_miranAI: public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 19:
-                DoScriptText(SAY_MIRAN_1, m_creature);
-                m_creature->SummonCreature(NPC_DARK_IRON_RAIDER, m_afAmbushSpawn[0].x, m_afAmbushSpawn[0].y, m_afAmbushSpawn[0].z, m_afAmbushSpawn[0].o, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
-                m_creature->SummonCreature(NPC_DARK_IRON_RAIDER, m_afAmbushSpawn[1].x, m_afAmbushSpawn[1].y, m_afAmbushSpawn[1].z, m_afAmbushSpawn[1].o, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
-                break;
-            case 23:
-                DoScriptText(SAY_MIRAN_3, m_creature);
-                if (Player* pPlayer = GetPlayerForEscort())
-                    pPlayer->GroupEventHappens(QUEST_PROTECTING_THE_SHIPMENT, m_creature);
-                break;
+        case 19:
+            DoScriptText(SAY_MIRAN_1, m_creature);
+            m_creature->SummonCreature(NPC_DARK_IRON_RAIDER, m_afAmbushSpawn[0].x, m_afAmbushSpawn[0].y, m_afAmbushSpawn[0].z, m_afAmbushSpawn[0].o, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
+            m_creature->SummonCreature(NPC_DARK_IRON_RAIDER, m_afAmbushSpawn[1].x, m_afAmbushSpawn[1].y, m_afAmbushSpawn[1].z, m_afAmbushSpawn[1].o, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
+            break;
+        case 23:
+            DoScriptText(SAY_MIRAN_3, m_creature);
+            if (Player* pPlayer = GetPlayerForEscort())
+                pPlayer->GroupEventHappens(QUEST_PROTECTING_THE_SHIPMENT, m_creature);
+            break;
         }
     }
 
@@ -113,10 +106,7 @@ bool QuestAccept_npc_miran(Player* pPlayer, Creature* pCreature, Quest const* pQ
     return true;
 }
 
-CreatureAI* GetAI_npc_miran(Creature* pCreature)
-{
-    return new npc_miranAI(pCreature);
-}
+CreatureAI* GetAI_npc_miran(Creature* pCreature) { return new npc_miranAI(pCreature); }
 
 //-----------------------------------------------------------------------------
 // Quest event implementation (Resupplying the Excavation id:273).
@@ -126,30 +116,24 @@ CreatureAI* GetAI_npc_miran(Creature* pCreature)
 enum SaeanData
 {
     QUEST_RESUPPLYING_THE_EXCAVATION = 273,
- 
-    NPC_SAEAN              = 1380,
-    NPC_MIRAN              = 1379,
-    NPC_HULDAR             = 2057,
+
+    NPC_SAEAN = 1380,
+    NPC_MIRAN = 1379,
+    NPC_HULDAR = 2057,
     NPC_DARK_IRON_AMBUSHER = 1981,
 
-    FACTION_HOSTILE        = 54
+    FACTION_HOSTILE = 54
 };
 
-static Position const darkIronAmbusherSpawns[] =
-{
-    { -5759.852051f, -3441.279053f, 305.573212f, 2.174024f },
-    { -5757.629883f, -3437.680908f, 304.265106f, 2.610265f }
-};
+static Position const darkIronAmbusherSpawns[] = {{-5759.852051f, -3441.279053f, 305.573212f, 2.174024f}, {-5757.629883f, -3437.680908f, 304.265106f, 2.610265f}};
 
 //-----------------------------------------------------------------------------
 // Miran and Huldar are ambushed when Area Trigger id:171 is triggered and if quest 273 is active
 bool AreaTrigger_at_huldar_miran(Player* pPlayer, AreaTriggerEntry const* /*pAt*/)
 {
     // If player is dead, GM mode is ON, quest complete or no quest
-    if (!pPlayer->IsAlive() || pPlayer->IsGameMaster() ||
-        pPlayer->GetQuestStatus(QUEST_RESUPPLYING_THE_EXCAVATION) == QUEST_STATUS_COMPLETE ||
-        pPlayer->GetQuestStatus(QUEST_RESUPPLYING_THE_EXCAVATION) == QUEST_STATUS_NONE)
-    return false;
+    if (!pPlayer->IsAlive() || pPlayer->IsGameMaster() || pPlayer->GetQuestStatus(QUEST_RESUPPLYING_THE_EXCAVATION) == QUEST_STATUS_COMPLETE || pPlayer->GetQuestStatus(QUEST_RESUPPLYING_THE_EXCAVATION) == QUEST_STATUS_NONE)
+        return false;
 
     // rare case: set quest completed on directly trigger,
     // because if NPCs are not available, killed by someone or died in previous event,
@@ -218,7 +202,7 @@ bool AreaTrigger_at_huldar_miran(Player* pPlayer, AreaTriggerEntry const* /*pAt*
             }
         }
     }
-    
+
     return true;
 }
 

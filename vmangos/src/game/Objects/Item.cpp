@@ -21,13 +21,13 @@
 
 #include "Item.h"
 #include "Bag.h"
-#include "ObjectMgr.h"
+#include "Database/DatabaseEnv.h"
+#include "GuildMgr.h"
+#include "ItemEnchantmentMgr.h"
 #include "ObjectGuid.h"
+#include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "WorldPacket.h"
-#include "Database/DatabaseEnv.h"
-#include "ItemEnchantmentMgr.h"
-#include "GuildMgr.h"
 
 void AddItemsSetItem(Player* player, Item* item)
 {
@@ -73,7 +73,7 @@ void AddItemsSetItem(Player* player, Item* item)
         // new spell
         for (auto& spell : eff->spells)
         {
-            if (!spell)                             // free slot
+            if (!spell) // free slot
             {
                 SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(set->spells[x]);
                 if (!spellInfo)
@@ -132,7 +132,7 @@ void RemoveItemsSetItem(Player* player, ItemPrototype const* proto)
         }
     }
 
-    if (!eff->item_count)                                    // all items of a set were removed
+    if (!eff->item_count) // all items of a set were removed
         player->RemoveItemSetEffect(setid);
 }
 
@@ -143,39 +143,39 @@ bool ItemCanGoIntoBag(ItemPrototype const* pProto, ItemPrototype const* pBagProt
 
     switch (pBagProto->Class)
     {
-        case ITEM_CLASS_CONTAINER:
-            switch (pBagProto->SubClass)
-            {
-                case ITEM_SUBCLASS_CONTAINER:
-                    return true;
-                case ITEM_SUBCLASS_SOUL_CONTAINER:
-                    if (pProto->BagFamily != BAG_FAMILY_SOUL_SHARDS)
-                        return false;
-                    return true;
-                case ITEM_SUBCLASS_HERB_CONTAINER:
-                    if (pProto->BagFamily != BAG_FAMILY_HERBS)
-                        return false;
-                    return true;
-                case ITEM_SUBCLASS_ENCHANTING_CONTAINER:
-                    if (pProto->BagFamily != BAG_FAMILY_ENCHANTING_SUPP)
-                        return false;
-                    return true;
-            }
+    case ITEM_CLASS_CONTAINER:
+        switch (pBagProto->SubClass)
+        {
+        case ITEM_SUBCLASS_CONTAINER:
+            return true;
+        case ITEM_SUBCLASS_SOUL_CONTAINER:
+            if (pProto->BagFamily != BAG_FAMILY_SOUL_SHARDS)
+                return false;
+            return true;
+        case ITEM_SUBCLASS_HERB_CONTAINER:
+            if (pProto->BagFamily != BAG_FAMILY_HERBS)
+                return false;
+            return true;
+        case ITEM_SUBCLASS_ENCHANTING_CONTAINER:
+            if (pProto->BagFamily != BAG_FAMILY_ENCHANTING_SUPP)
+                return false;
+            return true;
+        }
+        return false;
+    case ITEM_CLASS_QUIVER:
+        switch (pBagProto->SubClass)
+        {
+        case ITEM_SUBCLASS_QUIVER:
+            if (pProto->BagFamily != BAG_FAMILY_ARROWS)
+                return false;
+            return true;
+        case ITEM_SUBCLASS_AMMO_POUCH:
+            if (pProto->BagFamily != BAG_FAMILY_BULLETS)
+                return false;
+            return true;
+        default:
             return false;
-        case ITEM_CLASS_QUIVER:
-            switch (pBagProto->SubClass)
-            {
-                case ITEM_SUBCLASS_QUIVER:
-                    if (pProto->BagFamily != BAG_FAMILY_ARROWS)
-                        return false;
-                    return true;
-                case ITEM_SUBCLASS_AMMO_POUCH:
-                    if (pProto->BagFamily != BAG_FAMILY_BULLETS)
-                        return false;
-                    return true;
-                default:
-                    return false;
-            }
+        }
     }
     return false;
 }
@@ -238,7 +238,7 @@ void Item::UpdateDuration(Player* owner, uint32 diff)
     if (!GetUInt32Value(ITEM_FIELD_DURATION))
         return;
 
-    //sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Item::UpdateDuration Item (Entry: %u Duration %u Diff %u)", GetEntry(), GetUInt32Value(ITEM_FIELD_DURATION), diff);
+    // sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Item::UpdateDuration Item (Entry: %u Duration %u Diff %u)", GetEntry(), GetUInt32Value(ITEM_FIELD_DURATION), diff);
 
     if (GetUInt32Value(ITEM_FIELD_DURATION) <= diff)
     {
@@ -247,7 +247,7 @@ void Item::UpdateDuration(Player* owner, uint32 diff)
     }
 
     SetUInt32Value(ITEM_FIELD_DURATION, GetUInt32Value(ITEM_FIELD_DURATION) - diff);
-    SetState(ITEM_CHANGED, owner);                          // save new time in database
+    SetState(ITEM_CHANGED, owner); // save new time in database
 }
 
 void Item::SaveToDB()
@@ -255,7 +255,7 @@ void Item::SaveToDB()
     uint32 guid = GetGUIDLow();
     switch (uState)
     {
-        case ITEM_CHANGED:
+    case ITEM_CHANGED:
         {
             static SqlStatementID updGifts;
             if (HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_WRAPPED))
@@ -264,16 +264,13 @@ void Item::SaveToDB()
                 stmt.PExecute(GetOwnerGuid().GetCounter(), GetGUIDLow());
             }
         }
-        // no break
-        case ITEM_NEW:
+    // no break
+    case ITEM_NEW:
         {
             static SqlStatementID insItem;
             static SqlStatementID updItem;
 
-            SqlStatement stmt = (uState == ITEM_NEW) ?
-                                CharacterDatabase.CreateStatement(insItem, "REPLACE INTO `item_instance` (`item_id`, `owner_guid`, `creator_guid`, `gift_creator_guid`, `count`, `duration`, `charges`, `flags`, `enchantments`, `random_property_id`, `durability`, `text`, `generated_loot`, `guid`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                                :
-                                CharacterDatabase.CreateStatement(updItem, "UPDATE `item_instance` SET `item_id` = ?, `owner_guid` = ?, `creator_guid` = ?, `gift_creator_guid` = ?, `count` = ?, `duration` = ?, `charges` = ?, `flags` = ?, `enchantments` = ?, `random_property_id` = ?, `durability` = ?, `text` = ?, `generated_loot` = ? WHERE `guid` = ?");
+            SqlStatement stmt = (uState == ITEM_NEW) ? CharacterDatabase.CreateStatement(insItem, "REPLACE INTO `item_instance` (`item_id`, `owner_guid`, `creator_guid`, `gift_creator_guid`, `count`, `duration`, `charges`, `flags`, `enchantments`, `random_property_id`, `durability`, `text`, `generated_loot`, `guid`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)") : CharacterDatabase.CreateStatement(updItem, "UPDATE `item_instance` SET `item_id` = ?, `owner_guid` = ?, `creator_guid` = ?, `gift_creator_guid` = ?, `count` = ?, `duration` = ?, `charges` = ?, `flags` = ?, `enchantments` = ?, `random_property_id` = ?, `durability` = ?, `text` = ?, `generated_loot` = ? WHERE `guid` = ?");
             stmt.addUInt32(GetEntry());
             stmt.addUInt32(GetOwnerGuid().GetCounter());
             stmt.addUInt32(GetGuidValue(ITEM_FIELD_CREATOR).GetCounter());
@@ -305,7 +302,7 @@ void Item::SaveToDB()
             stmt.Execute();
         }
         break;
-        case ITEM_REMOVED:
+    case ITEM_REMOVED:
         {
             DeleteAllFromDB();
             if (IsInWorld())
@@ -314,13 +311,13 @@ void Item::SaveToDB()
             delete this;
             return;
         }
-        case ITEM_UNCHANGED:
-            return;
+    case ITEM_UNCHANGED:
+        return;
     }
 
     if (m_lootState == ITEM_LOOT_CHANGED || m_lootState == ITEM_LOOT_REMOVED)
     {
-        static SqlStatementID delLoot ;
+        static SqlStatementID delLoot;
 
         SqlStatement stmt = CharacterDatabase.CreateStatement(delLoot, "DELETE FROM `item_loot` WHERE `guid` = ?");
         stmt.PExecute(GetGUIDLow());
@@ -330,8 +327,8 @@ void Item::SaveToDB()
     {
         if (auto ownerGuid = GetOwnerGuid())
         {
-            static SqlStatementID saveGold ;
-            static SqlStatementID saveLoot ;
+            static SqlStatementID saveGold;
+            static SqlStatementID saveLoot;
 
             // save money as 0 itemid data
             if (loot.gold)
@@ -364,7 +361,6 @@ void Item::SaveToDB()
                 stmt.Execute();
             }
         }
-
     }
 
     if (m_lootState != ITEM_LOOT_NONE && m_lootState != ITEM_LOOT_TEMPORARY)
@@ -393,7 +389,7 @@ bool Item::LoadFromDB(uint32 guidLow, ObjectGuid ownerGuid, Field* fields, uint3
     if (ownerGuid)
         SetOwnerGuid(ownerGuid);
 
-    bool need_save = false;                                 // need explicit save data at load fixes
+    bool need_save = false; // need explicit save data at load fixes
     SetGuidValue(ITEM_FIELD_CREATOR, ObjectGuid(HIGHGUID_PLAYER, fields[0].GetUInt32()));
     SetGuidValue(ITEM_FIELD_GIFTCREATOR, ObjectGuid(HIGHGUID_PLAYER, fields[1].GetUInt32()));
     SetCount(fields[2].GetUInt32());
@@ -453,7 +449,7 @@ bool Item::LoadFromDB(uint32 guidLow, ObjectGuid ownerGuid, Field* fields, uint3
         }
     }
 
-    if (need_save)                                          // normal item changed state set not work at loading
+    if (need_save) // normal item changed state set not work at loading
     {
         static SqlStatementID updItem;
 
@@ -513,9 +509,9 @@ void Item::DeleteAllFromDB(uint32 guidLow)
 
 void Item::LoadLootFromDB(Field* fields)
 {
-    uint32 item_id     = fields[1].GetUInt32();
+    uint32 item_id = fields[1].GetUInt32();
     uint32 item_amount = fields[2].GetUInt32();
-    int32  item_propid = fields[3].GetInt32();
+    int32 item_propid = fields[3].GetInt32();
 
     // money value special case
     if (item_id == 0)
@@ -543,7 +539,7 @@ void Item::LoadLootFromDB(Field* fields)
 
 void Item::DeleteFromDB()
 {
-    static SqlStatementID delItem ;
+    static SqlStatementID delItem;
 
     SqlStatement stmt = CharacterDatabase.CreateStatement(delItem, "DELETE FROM `item_instance` WHERE `guid` = ?");
     stmt.PExecute(GetGUIDLow());
@@ -551,21 +547,15 @@ void Item::DeleteFromDB()
 
 void Item::DeleteFromInventoryDB()
 {
-    static SqlStatementID delInv ;
+    static SqlStatementID delInv;
 
     SqlStatement stmt = CharacterDatabase.CreateStatement(delInv, "DELETE FROM `character_inventory` WHERE `item_guid` = ?");
     stmt.PExecute(GetGUIDLow());
 }
 
-ItemPrototype const* Item::GetProto() const
-{
-    return sObjectMgr.GetItemPrototype(GetEntry());
-}
+ItemPrototype const* Item::GetProto() const { return sObjectMgr.GetItemPrototype(GetEntry()); }
 
-Player* Item::GetOwner()const
-{
-    return sObjectMgr.GetPlayer(GetOwnerGuid());
-}
+Player* Item::GetOwner() const { return sObjectMgr.GetPlayer(GetOwnerGuid()); }
 
 void ItemPrototype::GetAllowedEquipSlots(uint8 slots[4], uint8 classId, bool canDualWield) const
 {
@@ -575,51 +565,51 @@ void ItemPrototype::GetAllowedEquipSlots(uint8 slots[4], uint8 classId, bool can
     slots[3] = NULL_SLOT;
     switch (InventoryType)
     {
-        case INVTYPE_HEAD:
-            slots[0] = EQUIPMENT_SLOT_HEAD;
-            break;
-        case INVTYPE_NECK:
-            slots[0] = EQUIPMENT_SLOT_NECK;
-            break;
-        case INVTYPE_SHOULDERS:
-            slots[0] = EQUIPMENT_SLOT_SHOULDERS;
-            break;
-        case INVTYPE_BODY:
-            slots[0] = EQUIPMENT_SLOT_BODY;
-            break;
-        case INVTYPE_CHEST:
-            slots[0] = EQUIPMENT_SLOT_CHEST;
-            break;
-        case INVTYPE_ROBE:
-            slots[0] = EQUIPMENT_SLOT_CHEST;
-            break;
-        case INVTYPE_WAIST:
-            slots[0] = EQUIPMENT_SLOT_WAIST;
-            break;
-        case INVTYPE_LEGS:
-            slots[0] = EQUIPMENT_SLOT_LEGS;
-            break;
-        case INVTYPE_FEET:
-            slots[0] = EQUIPMENT_SLOT_FEET;
-            break;
-        case INVTYPE_WRISTS:
-            slots[0] = EQUIPMENT_SLOT_WRISTS;
-            break;
-        case INVTYPE_HANDS:
-            slots[0] = EQUIPMENT_SLOT_HANDS;
-            break;
-        case INVTYPE_FINGER:
-            slots[0] = EQUIPMENT_SLOT_FINGER1;
-            slots[1] = EQUIPMENT_SLOT_FINGER2;
-            break;
-        case INVTYPE_TRINKET:
-            slots[0] = EQUIPMENT_SLOT_TRINKET1;
-            slots[1] = EQUIPMENT_SLOT_TRINKET2;
-            break;
-        case INVTYPE_CLOAK:
-            slots[0] =  EQUIPMENT_SLOT_BACK;
-            break;
-        case INVTYPE_WEAPON:
+    case INVTYPE_HEAD:
+        slots[0] = EQUIPMENT_SLOT_HEAD;
+        break;
+    case INVTYPE_NECK:
+        slots[0] = EQUIPMENT_SLOT_NECK;
+        break;
+    case INVTYPE_SHOULDERS:
+        slots[0] = EQUIPMENT_SLOT_SHOULDERS;
+        break;
+    case INVTYPE_BODY:
+        slots[0] = EQUIPMENT_SLOT_BODY;
+        break;
+    case INVTYPE_CHEST:
+        slots[0] = EQUIPMENT_SLOT_CHEST;
+        break;
+    case INVTYPE_ROBE:
+        slots[0] = EQUIPMENT_SLOT_CHEST;
+        break;
+    case INVTYPE_WAIST:
+        slots[0] = EQUIPMENT_SLOT_WAIST;
+        break;
+    case INVTYPE_LEGS:
+        slots[0] = EQUIPMENT_SLOT_LEGS;
+        break;
+    case INVTYPE_FEET:
+        slots[0] = EQUIPMENT_SLOT_FEET;
+        break;
+    case INVTYPE_WRISTS:
+        slots[0] = EQUIPMENT_SLOT_WRISTS;
+        break;
+    case INVTYPE_HANDS:
+        slots[0] = EQUIPMENT_SLOT_HANDS;
+        break;
+    case INVTYPE_FINGER:
+        slots[0] = EQUIPMENT_SLOT_FINGER1;
+        slots[1] = EQUIPMENT_SLOT_FINGER2;
+        break;
+    case INVTYPE_TRINKET:
+        slots[0] = EQUIPMENT_SLOT_TRINKET1;
+        slots[1] = EQUIPMENT_SLOT_TRINKET2;
+        break;
+    case INVTYPE_CLOAK:
+        slots[0] = EQUIPMENT_SLOT_BACK;
+        break;
+    case INVTYPE_WEAPON:
         {
             slots[0] = EQUIPMENT_SLOT_MAINHAND;
 
@@ -629,59 +619,59 @@ void ItemPrototype::GetAllowedEquipSlots(uint8 slots[4], uint8 classId, bool can
                 slots[1] = EQUIPMENT_SLOT_OFFHAND;
             break;
         };
-        case INVTYPE_SHIELD:
-            slots[0] = EQUIPMENT_SLOT_OFFHAND;
-            break;
-        case INVTYPE_RANGED:
-            slots[0] = EQUIPMENT_SLOT_RANGED;
-            break;
-        case INVTYPE_2HWEAPON:
-            slots[0] = EQUIPMENT_SLOT_MAINHAND;
-            break;
-        case INVTYPE_TABARD:
-            slots[0] = EQUIPMENT_SLOT_TABARD;
-            break;
-        case INVTYPE_WEAPONMAINHAND:
-            slots[0] = EQUIPMENT_SLOT_MAINHAND;
-            break;
-        case INVTYPE_WEAPONOFFHAND:
-            slots[0] = EQUIPMENT_SLOT_OFFHAND;
-            break;
-        case INVTYPE_HOLDABLE:
-            slots[0] = EQUIPMENT_SLOT_OFFHAND;
-            break;
-        case INVTYPE_THROWN:
-            slots[0] = EQUIPMENT_SLOT_RANGED;
-            break;
-        case INVTYPE_RANGEDRIGHT:
-            slots[0] = EQUIPMENT_SLOT_RANGED;
-            break;
-        case INVTYPE_BAG:
-            slots[0] = INVENTORY_SLOT_BAG_START + 0;
-            slots[1] = INVENTORY_SLOT_BAG_START + 1;
-            slots[2] = INVENTORY_SLOT_BAG_START + 2;
-            slots[3] = INVENTORY_SLOT_BAG_START + 3;
-            break;
-        case INVTYPE_RELIC:
+    case INVTYPE_SHIELD:
+        slots[0] = EQUIPMENT_SLOT_OFFHAND;
+        break;
+    case INVTYPE_RANGED:
+        slots[0] = EQUIPMENT_SLOT_RANGED;
+        break;
+    case INVTYPE_2HWEAPON:
+        slots[0] = EQUIPMENT_SLOT_MAINHAND;
+        break;
+    case INVTYPE_TABARD:
+        slots[0] = EQUIPMENT_SLOT_TABARD;
+        break;
+    case INVTYPE_WEAPONMAINHAND:
+        slots[0] = EQUIPMENT_SLOT_MAINHAND;
+        break;
+    case INVTYPE_WEAPONOFFHAND:
+        slots[0] = EQUIPMENT_SLOT_OFFHAND;
+        break;
+    case INVTYPE_HOLDABLE:
+        slots[0] = EQUIPMENT_SLOT_OFFHAND;
+        break;
+    case INVTYPE_THROWN:
+        slots[0] = EQUIPMENT_SLOT_RANGED;
+        break;
+    case INVTYPE_RANGEDRIGHT:
+        slots[0] = EQUIPMENT_SLOT_RANGED;
+        break;
+    case INVTYPE_BAG:
+        slots[0] = INVENTORY_SLOT_BAG_START + 0;
+        slots[1] = INVENTORY_SLOT_BAG_START + 1;
+        slots[2] = INVENTORY_SLOT_BAG_START + 2;
+        slots[3] = INVENTORY_SLOT_BAG_START + 3;
+        break;
+    case INVTYPE_RELIC:
         {
             switch (SubClass)
             {
-                case ITEM_SUBCLASS_ARMOR_LIBRAM:
-                    if (classId == CLASS_PALADIN)
-                        slots[0] = EQUIPMENT_SLOT_RANGED;
-                    break;
-                case ITEM_SUBCLASS_ARMOR_IDOL:
-                    if (classId == CLASS_DRUID)
-                        slots[0] = EQUIPMENT_SLOT_RANGED;
-                    break;
-                case ITEM_SUBCLASS_ARMOR_TOTEM:
-                    if (classId == CLASS_SHAMAN)
-                        slots[0] = EQUIPMENT_SLOT_RANGED;
-                    break;
-                case ITEM_SUBCLASS_ARMOR_MISC:
-                    if (classId == CLASS_WARLOCK)
-                        slots[0] = EQUIPMENT_SLOT_RANGED;
-                    break;
+            case ITEM_SUBCLASS_ARMOR_LIBRAM:
+                if (classId == CLASS_PALADIN)
+                    slots[0] = EQUIPMENT_SLOT_RANGED;
+                break;
+            case ITEM_SUBCLASS_ARMOR_IDOL:
+                if (classId == CLASS_DRUID)
+                    slots[0] = EQUIPMENT_SLOT_RANGED;
+                break;
+            case ITEM_SUBCLASS_ARMOR_TOTEM:
+                if (classId == CLASS_SHAMAN)
+                    slots[0] = EQUIPMENT_SLOT_RANGED;
+                break;
+            case ITEM_SUBCLASS_ARMOR_MISC:
+                if (classId == CLASS_WARLOCK)
+                    slots[0] = EQUIPMENT_SLOT_RANGED;
+                break;
             }
             break;
         }
@@ -690,36 +680,26 @@ void ItemPrototype::GetAllowedEquipSlots(uint8 slots[4], uint8 classId, bool can
 
 uint32 ItemPrototype::GetProficiencySkill() const
 {
-    static uint32 const item_weapon_skills[MAX_ITEM_SUBCLASS_WEAPON] =
-    {
-        SKILL_AXES,     SKILL_2H_AXES,  SKILL_BOWS,          SKILL_GUNS,      SKILL_MACES,
-        SKILL_2H_MACES, SKILL_POLEARMS, SKILL_SWORDS,        SKILL_2H_SWORDS, 0,
-        SKILL_STAVES,   0,              0,                   SKILL_UNARMED,   0,
-        SKILL_DAGGERS,  SKILL_THROWN,   SKILL_ASSASSINATION, SKILL_CROSSBOWS, SKILL_WANDS,
-        SKILL_FISHING
-    };
+    static uint32 const item_weapon_skills[MAX_ITEM_SUBCLASS_WEAPON] = {SKILL_AXES, SKILL_2H_AXES, SKILL_BOWS, SKILL_GUNS, SKILL_MACES, SKILL_2H_MACES, SKILL_POLEARMS, SKILL_SWORDS, SKILL_2H_SWORDS, 0, SKILL_STAVES, 0, 0, SKILL_UNARMED, 0, SKILL_DAGGERS, SKILL_THROWN, SKILL_ASSASSINATION, SKILL_CROSSBOWS, SKILL_WANDS, SKILL_FISHING};
 
-    static uint32 const item_armor_skills[MAX_ITEM_SUBCLASS_ARMOR] =
-    {
-        0, SKILL_CLOTH, SKILL_LEATHER, SKILL_MAIL, SKILL_PLATE_MAIL, 0, SKILL_SHIELD, 0, 0, 0
-    };
+    static uint32 const item_armor_skills[MAX_ITEM_SUBCLASS_ARMOR] = {0, SKILL_CLOTH, SKILL_LEATHER, SKILL_MAIL, SKILL_PLATE_MAIL, 0, SKILL_SHIELD, 0, 0, 0};
 
     switch (Class)
     {
-        case ITEM_CLASS_WEAPON:
-            if (SubClass >= MAX_ITEM_SUBCLASS_WEAPON)
-                return 0;
-            else
-                return item_weapon_skills[SubClass];
-
-        case ITEM_CLASS_ARMOR:
-            if (SubClass >= MAX_ITEM_SUBCLASS_ARMOR)
-                return 0;
-            else
-                return item_armor_skills[SubClass];
-
-        default:
+    case ITEM_CLASS_WEAPON:
+        if (SubClass >= MAX_ITEM_SUBCLASS_WEAPON)
             return 0;
+        else
+            return item_weapon_skills[SubClass];
+
+    case ITEM_CLASS_ARMOR:
+        if (SubClass >= MAX_ITEM_SUBCLASS_ARMOR)
+            return 0;
+        else
+            return item_armor_skills[SubClass];
+
+    default:
+        return 0;
     }
 }
 
@@ -727,57 +707,57 @@ uint32 ItemPrototype::GetProficiencySpell() const
 {
     switch (Class)
     {
-        case ITEM_CLASS_WEAPON:
-            switch (SubClass)
-            {
-                case ITEM_SUBCLASS_WEAPON_AXE:
-                    return  196;
-                case ITEM_SUBCLASS_WEAPON_AXE2:
-                    return  197;
-                case ITEM_SUBCLASS_WEAPON_BOW:
-                    return  264;
-                case ITEM_SUBCLASS_WEAPON_GUN:
-                    return  266;
-                case ITEM_SUBCLASS_WEAPON_MACE:
-                    return  198;
-                case ITEM_SUBCLASS_WEAPON_MACE2:
-                    return  199;
-                case ITEM_SUBCLASS_WEAPON_POLEARM:
-                    return  200;
-                case ITEM_SUBCLASS_WEAPON_SWORD:
-                    return  201;
-                case ITEM_SUBCLASS_WEAPON_SWORD2:
-                    return  202;
-                case ITEM_SUBCLASS_WEAPON_STAFF:
-                    return  227;
-                case ITEM_SUBCLASS_WEAPON_DAGGER:
-                    return 1180;
-                case ITEM_SUBCLASS_WEAPON_THROWN:
-                    return 2567;
-                case ITEM_SUBCLASS_WEAPON_SPEAR:
-                    return 3386;
-                case ITEM_SUBCLASS_WEAPON_CROSSBOW:
-                    return 5011;
-                case ITEM_SUBCLASS_WEAPON_WAND:
-                    return 5009;
-            }
+    case ITEM_CLASS_WEAPON:
+        switch (SubClass)
+        {
+        case ITEM_SUBCLASS_WEAPON_AXE:
+            return 196;
+        case ITEM_SUBCLASS_WEAPON_AXE2:
+            return 197;
+        case ITEM_SUBCLASS_WEAPON_BOW:
+            return 264;
+        case ITEM_SUBCLASS_WEAPON_GUN:
+            return 266;
+        case ITEM_SUBCLASS_WEAPON_MACE:
+            return 198;
+        case ITEM_SUBCLASS_WEAPON_MACE2:
+            return 199;
+        case ITEM_SUBCLASS_WEAPON_POLEARM:
+            return 200;
+        case ITEM_SUBCLASS_WEAPON_SWORD:
+            return 201;
+        case ITEM_SUBCLASS_WEAPON_SWORD2:
+            return 202;
+        case ITEM_SUBCLASS_WEAPON_STAFF:
+            return 227;
+        case ITEM_SUBCLASS_WEAPON_DAGGER:
+            return 1180;
+        case ITEM_SUBCLASS_WEAPON_THROWN:
+            return 2567;
+        case ITEM_SUBCLASS_WEAPON_SPEAR:
+            return 3386;
+        case ITEM_SUBCLASS_WEAPON_CROSSBOW:
+            return 5011;
+        case ITEM_SUBCLASS_WEAPON_WAND:
+            return 5009;
+        }
+        return 0;
+    case ITEM_CLASS_ARMOR:
+        switch (SubClass)
+        {
+        case ITEM_SUBCLASS_ARMOR_CLOTH:
+            return 9078;
+        case ITEM_SUBCLASS_ARMOR_LEATHER:
+            return 9077;
+        case ITEM_SUBCLASS_ARMOR_MAIL:
+            return 8737;
+        case ITEM_SUBCLASS_ARMOR_PLATE:
+            return 750;
+        case ITEM_SUBCLASS_ARMOR_SHIELD:
+            return 9116;
+        default:
             return 0;
-        case ITEM_CLASS_ARMOR:
-            switch (SubClass)
-            {
-                case ITEM_SUBCLASS_ARMOR_CLOTH:
-                    return 9078;
-                case ITEM_SUBCLASS_ARMOR_LEATHER:
-                    return 9077;
-                case ITEM_SUBCLASS_ARMOR_MAIL:
-                    return 8737;
-                case ITEM_SUBCLASS_ARMOR_PLATE:
-                    return  750;
-                case ITEM_SUBCLASS_ARMOR_SHIELD:
-                    return 9116;
-                default:
-                    return 0;
-            }
+        }
     }
     return 0;
 }
@@ -840,7 +820,8 @@ void Item::SetState(ItemUpdateState state, Player* forplayer)
     if (state != ITEM_UNCHANGED)
     {
         // new items must stay in new state until saved
-        if (uState != ITEM_NEW) uState = state;
+        if (uState != ITEM_NEW)
+            uState = state;
         AddToUpdateQueueOf(forplayer);
     }
     else
@@ -862,16 +843,14 @@ void Item::AddToUpdateQueueOf(Player* player)
         player = GetOwner();
         if (!player)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Item::AddToUpdateQueueOf - %s current owner (%s) not in world!",
-                          GetGuidStr().c_str(), GetOwnerGuid().GetString().c_str());
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Item::AddToUpdateQueueOf - %s current owner (%s) not in world!", GetGuidStr().c_str(), GetOwnerGuid().GetString().c_str());
             return;
         }
     }
 
     if (player->GetObjectGuid() != GetOwnerGuid())
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Item::AddToUpdateQueueOf - %s current owner (%s) and inventory owner (%s) don't match!",
-                      GetGuidStr().c_str(), GetOwnerGuid().GetString().c_str(), player->GetGuidStr().c_str());
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Item::AddToUpdateQueueOf - %s current owner (%s) and inventory owner (%s) don't match!", GetGuidStr().c_str(), GetOwnerGuid().GetString().c_str(), player->GetGuidStr().c_str());
         return;
     }
 
@@ -892,16 +871,14 @@ void Item::RemoveFromUpdateQueueOf(Player* player)
         player = GetOwner();
         if (!player)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Item::RemoveFromUpdateQueueOf - %s current owner (%s) not in world!",
-                          GetGuidStr().c_str(), GetOwnerGuid().GetString().c_str());
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Item::RemoveFromUpdateQueueOf - %s current owner (%s) not in world!", GetGuidStr().c_str(), GetOwnerGuid().GetString().c_str());
             return;
         }
     }
 
     if (player->GetObjectGuid() != GetOwnerGuid())
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Item::RemoveFromUpdateQueueOf - %s current owner (%s) and inventory owner (%s) don't match!",
-                      GetGuidStr().c_str(), GetOwnerGuid().GetString().c_str(), player->GetGuidStr().c_str());
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Item::RemoveFromUpdateQueueOf - %s current owner (%s) and inventory owner (%s) don't match!", GetGuidStr().c_str(), GetOwnerGuid().GetString().c_str(), player->GetGuidStr().c_str());
         return;
     }
 
@@ -912,15 +889,9 @@ void Item::RemoveFromUpdateQueueOf(Player* player)
     uQueuePos = -1;
 }
 
-uint8 Item::GetBagSlot() const
-{
-    return m_container ? m_container->GetSlot() : uint8(INVENTORY_SLOT_BAG_0);
-}
+uint8 Item::GetBagSlot() const { return m_container ? m_container->GetSlot() : uint8(INVENTORY_SLOT_BAG_0); }
 
-bool Item::IsEquipped() const
-{
-    return !IsInBag() && m_slot < EQUIPMENT_SLOT_END;
-}
+bool Item::IsEquipped() const { return !IsInBag() && m_slot < EQUIPMENT_SLOT_END; }
 
 bool Item::CanBeTraded() const
 {
@@ -931,7 +902,7 @@ bool Item::CanBeTraded() const
 
     if (Player* owner = GetOwner())
     {
-        if (owner->CanUnequipItem(GetPos(), false) !=  EQUIP_ERR_OK)
+        if (owner->CanUnequipItem(GetPos(), false) != EQUIP_ERR_OK)
             return false;
         if (owner->GetLootGuid() == GetObjectGuid())
             return false;
@@ -967,29 +938,29 @@ bool Item::IsBoundByEnchant() const
 
 bool Item::IsFitToSpellRequirements(SpellEntry const* spellInfo, uint32 itemClass, uint32 itemSubClass, uint32 itemInventoryType)
 {
-    if (spellInfo->EquippedItemClass != -1)                 // -1 == any item class
+    if (spellInfo->EquippedItemClass != -1) // -1 == any item class
     {
         // Ustaag <Nostalrius> : ajout exception pour le spell Enchant Cloak - Minor Agility
         // prob de DB : spellInfo->EquippedItemClass == 2 alors qu'il devrait etre == 4
         if (spellInfo->Id == 13419 && itemInventoryType == INVTYPE_CLOAK)
             return true;
         if ((spellInfo->EquippedItemClass != int32(itemClass)) && spellInfo->Id != 13419)
-            return false;                                   //  wrong item class
+            return false; //  wrong item class
 
-        if (spellInfo->EquippedItemSubClassMask != 0)        // 0 == any subclass
+        if (spellInfo->EquippedItemSubClassMask != 0) // 0 == any subclass
         {
             if ((spellInfo->EquippedItemSubClassMask & (1 << itemSubClass)) == 0)
-                return false;                               // subclass not present in mask
+                return false; // subclass not present in mask
         }
     }
 
     // Only check for item enchantments (TARGET_FLAG_ITEM), all other spells are either NPC spells
     // or spells where slot requirements are already handled with AttributesEx3 fields
     // and special code (Titan's Grip, Windfury Attack). Check clearly not applicable for Lava Lash.
-    if (spellInfo->EquippedItemInventoryTypeMask != 0 && (spellInfo->Targets & TARGET_FLAG_ITEM))    // 0 == any inventory type
+    if (spellInfo->EquippedItemInventoryTypeMask != 0 && (spellInfo->Targets & TARGET_FLAG_ITEM)) // 0 == any inventory type
     {
-        if ((spellInfo->EquippedItemInventoryTypeMask  & (1 << itemInventoryType)) == 0)
-            return false;                                   // inventory type not present in mask
+        if ((spellInfo->EquippedItemInventoryTypeMask & (1 << itemInventoryType)) == 0)
+            return false; // inventory type not present in mask
     }
 
     return true;
@@ -1024,7 +995,7 @@ void Item::SetEnchantment(EnchantmentSlot slot, uint32 id, uint32 duration, uint
     if ((GetEnchantmentId(slot) == id) && (GetEnchantmentDuration(slot) == duration) && (GetEnchantmentCharges(slot) == charges))
         return;
 
-    
+
     if (slot < MAX_INSPECTED_ENCHANTMENT_SLOT && !casterGuid.IsEmpty())
     {
         if (Player* owner = GetOwner())
@@ -1101,7 +1072,7 @@ void Item::SendTimeUpdate(Player const* owner) const
 Item* Item::CreateItem(uint32 item, uint32 count, ObjectGuid playerGuid)
 {
     if (count < 1)
-        return nullptr;                                        //don't create item at zero count
+        return nullptr; // don't create item at zero count
 
     if (ItemPrototype const* pProto = sObjectMgr.GetItemPrototype(item))
     {
@@ -1130,10 +1101,10 @@ Item* Item::CloneItem(uint32 count, Player const* player) const
     if (!newItem)
         return nullptr;
 
-    newItem->SetGuidValue(ITEM_FIELD_CREATOR,     GetGuidValue(ITEM_FIELD_CREATOR));
+    newItem->SetGuidValue(ITEM_FIELD_CREATOR, GetGuidValue(ITEM_FIELD_CREATOR));
     newItem->SetGuidValue(ITEM_FIELD_GIFTCREATOR, GetGuidValue(ITEM_FIELD_GIFTCREATOR));
-    newItem->SetUInt32Value(ITEM_FIELD_FLAGS,     GetUInt32Value(ITEM_FIELD_FLAGS));
-    newItem->SetUInt32Value(ITEM_FIELD_DURATION,  GetUInt32Value(ITEM_FIELD_DURATION));
+    newItem->SetUInt32Value(ITEM_FIELD_FLAGS, GetUInt32Value(ITEM_FIELD_FLAGS));
+    newItem->SetUInt32Value(ITEM_FIELD_DURATION, GetUInt32Value(ITEM_FIELD_DURATION));
     newItem->SetItemRandomProperties(GetItemRandomPropertyId());
     newItem->generatedLoot = generatedLoot;
     return newItem;
@@ -1204,12 +1175,12 @@ bool ItemRequiredTarget::IsFitToRequirements(Unit* pUnitTarget) const
 
     switch (m_uiType)
     {
-        case ITEM_TARGET_TYPE_CREATURE:
-            return pUnitTarget->IsAlive();
-        case ITEM_TARGET_TYPE_DEAD:
-            return !pUnitTarget->IsAlive();
-        default:
-            return false;
+    case ITEM_TARGET_TYPE_CREATURE:
+        return pUnitTarget->IsAlive();
+    case ITEM_TARGET_TYPE_DEAD:
+        return !pUnitTarget->IsAlive();
+    default:
+        return false;
     }
 }
 
@@ -1220,37 +1191,37 @@ void Item::SetLootState(ItemLootUpdateState state)
     // ITEM_LOOT_NONE -> ITEM_LOOT_NEW -> ITEM_LOOT_UNCHANGED [<-> ITEM_LOOT_CHANGED] -> ITEM_LOOT_REMOVED -> ITEM_LOOT_NONE
     switch (state)
     {
-        case ITEM_LOOT_NONE:
-        case ITEM_LOOT_NEW:
-            ASSERT(false);                                 // not used in state change calls
+    case ITEM_LOOT_NONE:
+    case ITEM_LOOT_NEW:
+        ASSERT(false); // not used in state change calls
+        return;
+    case ITEM_LOOT_TEMPORARY:
+        ASSERT(m_lootState == ITEM_LOOT_NONE); // called only for not generated yet loot case
+        m_lootState = ITEM_LOOT_TEMPORARY;
+        break;
+    case ITEM_LOOT_CHANGED:
+        // new loot must stay in new state until saved, temporary must stay until remove
+        if (m_lootState != ITEM_LOOT_NEW && m_lootState != ITEM_LOOT_TEMPORARY)
+            m_lootState = m_lootState == ITEM_LOOT_NONE ? ITEM_LOOT_NEW : state;
+        break;
+    case ITEM_LOOT_UNCHANGED:
+        // expected that called after DB update or load
+        if (m_lootState == ITEM_LOOT_REMOVED)
+            m_lootState = ITEM_LOOT_NONE;
+        // temporary must stay until remove (ignore any changes)
+        else if (m_lootState != ITEM_LOOT_TEMPORARY)
+            m_lootState = ITEM_LOOT_UNCHANGED;
+        break;
+    case ITEM_LOOT_REMOVED:
+        // if loot not saved then it existence in past can be just ignored
+        if (m_lootState == ITEM_LOOT_NEW || m_lootState == ITEM_LOOT_TEMPORARY)
+        {
+            m_lootState = ITEM_LOOT_NONE;
             return;
-        case ITEM_LOOT_TEMPORARY:
-            ASSERT(m_lootState == ITEM_LOOT_NONE);          // called only for not generated yet loot case
-            m_lootState = ITEM_LOOT_TEMPORARY;
-            break;
-        case ITEM_LOOT_CHANGED:
-            // new loot must stay in new state until saved, temporary must stay until remove
-            if (m_lootState != ITEM_LOOT_NEW && m_lootState != ITEM_LOOT_TEMPORARY)
-                m_lootState = m_lootState == ITEM_LOOT_NONE ? ITEM_LOOT_NEW : state;
-            break;
-        case ITEM_LOOT_UNCHANGED:
-            // expected that called after DB update or load
-            if (m_lootState == ITEM_LOOT_REMOVED)
-                m_lootState = ITEM_LOOT_NONE;
-            // temporary must stay until remove (ignore any changes)
-            else if (m_lootState != ITEM_LOOT_TEMPORARY)
-                m_lootState = ITEM_LOOT_UNCHANGED;
-            break;
-        case ITEM_LOOT_REMOVED:
-            // if loot not saved then it existence in past can be just ignored
-            if (m_lootState == ITEM_LOOT_NEW || m_lootState == ITEM_LOOT_TEMPORARY)
-            {
-                m_lootState = ITEM_LOOT_NONE;
-                return;
-            }
+        }
 
-            m_lootState = ITEM_LOOT_REMOVED;
-            break;
+        m_lootState = ITEM_LOOT_REMOVED;
+        break;
     }
 
     if (m_lootState != ITEM_LOOT_NONE && m_lootState != ITEM_LOOT_UNCHANGED && m_lootState != ITEM_LOOT_TEMPORARY)
@@ -1297,23 +1268,22 @@ void Item::GetLocalizedNameWithSuffix(std::string& name, ItemPrototype const* pr
             // sentence order is different in some languages
             switch (dbcLocale)
             {
-                case LOCALE_koKR:
+            case LOCALE_koKR:
                 {
                     name = nameSuffix + " " + name;
                     break;
                 }
-                case LOCALE_zhCN:
-                case LOCALE_zhTW:
+            case LOCALE_zhCN:
+            case LOCALE_zhTW:
                 {
                     name = nameSuffix + name;
                     break;
                 }
-                default:
+            default:
                 {
                     name += " " + nameSuffix;
                 }
             }
         }
-            
     }
 }

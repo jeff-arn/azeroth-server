@@ -41,10 +41,7 @@ struct ShamanFlametongueProcDummyScript : SpellScript
     }
 };
 
-SpellScript* GetScript_ShamanFlametongueProcDummy(SpellEntry const*)
-{
-    return new ShamanFlametongueProcDummyScript();
-}
+SpellScript* GetScript_ShamanFlametongueProcDummy(SpellEntry const*) { return new ShamanFlametongueProcDummyScript(); }
 
 // 16191 - Mana Tide
 struct ShamanManaTideAuraScript : public AuraScript
@@ -63,10 +60,7 @@ struct ShamanManaTideAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_ShamanManaTide(SpellEntry const*)
-{
-    return new ShamanManaTideAuraScript();
-}
+AuraScript* GetScript_ShamanManaTide(SpellEntry const*) { return new ShamanManaTideAuraScript(); }
 
 void AddSC_shaman_spell_scripts()
 {

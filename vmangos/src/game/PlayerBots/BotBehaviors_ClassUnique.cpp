@@ -2,19 +2,19 @@
 #include "BotSituationContext.h"
 #include "BotSpellKit.h"
 #include "CombatBotBaseAI.h"
-#include "PartyBotAI.h"
-#include "Player.h"
-#include "Pet.h"
-#include "Group.h"
 #include "CreatureAI.h"
+#include "Group.h"
+#include "PartyBotAI.h"
+#include "Pet.h"
+#include "Player.h"
 
 // Warlock pet summon spell IDs
 enum WarlockPetSpellIds
 {
-    PB_SPELL_SUMMON_IMP         = 688,
-    PB_SPELL_SUMMON_VOIDWALKER  = 697,
-    PB_SPELL_SUMMON_FELHUNTER   = 691,
-    PB_SPELL_SUMMON_SUCCUBUS    = 712,
+    PB_SPELL_SUMMON_IMP = 688,
+    PB_SPELL_SUMMON_VOIDWALKER = 697,
+    PB_SPELL_SUMMON_FELHUNTER = 691,
+    PB_SPELL_SUMMON_SUCCUBUS = 712,
 };
 
 // ============================================================
@@ -29,8 +29,7 @@ float BehaviorWarriorStanceDance::Score(SituationContext const& ctx) const
     if (ctx.role == ROLE_TANK)
     {
         // Tank should be in Defensive Stance
-        if (m_ai->m_spells.warrior.pDefensiveStance &&
-            m_ai->me->GetShapeshiftForm() != FORM_DEFENSIVESTANCE)
+        if (m_ai->m_spells.warrior.pDefensiveStance && m_ai->me->GetShapeshiftForm() != FORM_DEFENSIVESTANCE)
             return 88.0f;
     }
     else
@@ -149,8 +148,7 @@ bool BehaviorRogueStealthOpener::Execute(SituationContext const& ctx, BotSpellKi
     }
 
     // Premeditation first
-    if (m_ai->m_spells.rogue.pPremeditation &&
-        m_ai->CanTryToCastSpell(target, m_ai->m_spells.rogue.pPremeditation))
+    if (m_ai->m_spells.rogue.pPremeditation && m_ai->CanTryToCastSpell(target, m_ai->m_spells.rogue.pPremeditation))
     {
         m_ai->DoCastSpell(target, m_ai->m_spells.rogue.pPremeditation);
     }
@@ -176,14 +174,11 @@ float BehaviorRogueComboFinisher::Score(SituationContext const& ctx) const
 bool BehaviorRogueComboFinisher::Execute(SituationContext const& ctx, BotSpellKit& kit)
 {
     // SnD > Kidney Shot (if target casting) > Eviscerate
-    if (m_ai->m_spells.rogue.pSliceAndDice &&
-        !m_ai->me->HasAura(m_ai->m_spells.rogue.pSliceAndDice->Id) &&
-        m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.rogue.pSliceAndDice))
+    if (m_ai->m_spells.rogue.pSliceAndDice && !m_ai->me->HasAura(m_ai->m_spells.rogue.pSliceAndDice->Id) && m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.rogue.pSliceAndDice))
     {
         return m_ai->DoCastSpell(m_ai->me, m_ai->m_spells.rogue.pSliceAndDice) == SPELL_CAST_OK;
     }
-    if (ctx.targetIsCasting && m_ai->m_spells.rogue.pKidneyShot &&
-        m_ai->CanTryToCastSpell(ctx.currentTarget, m_ai->m_spells.rogue.pKidneyShot))
+    if (ctx.targetIsCasting && m_ai->m_spells.rogue.pKidneyShot && m_ai->CanTryToCastSpell(ctx.currentTarget, m_ai->m_spells.rogue.pKidneyShot))
     {
         return m_ai->DoCastSpell(ctx.currentTarget, m_ai->m_spells.rogue.pKidneyShot) == SPELL_CAST_OK;
     }
@@ -209,10 +204,7 @@ float BehaviorRogueStealth::Score(SituationContext const& ctx) const
     return 60.0f;
 }
 
-bool BehaviorRogueStealth::Execute(SituationContext const& ctx, BotSpellKit& kit)
-{
-    return m_ai->EnterStealthIfNeeded(m_ai->m_spells.rogue.pStealth);
-}
+bool BehaviorRogueStealth::Execute(SituationContext const& ctx, BotSpellKit& kit) { return m_ai->EnterStealthIfNeeded(m_ai->m_spells.rogue.pStealth); }
 
 float BehaviorRoguePoisonWeapons::Score(SituationContext const& ctx) const
 {
@@ -288,11 +280,9 @@ float BehaviorHunterAspectSwap::Score(SituationContext const& ctx) const
 
     // Check if we need to swap aspects
     bool inMelee = ctx.distanceToTarget < 8.0f;
-    if (inMelee && m_ai->m_spells.hunter.pAspectOfTheMonkey &&
-        m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.hunter.pAspectOfTheMonkey))
+    if (inMelee && m_ai->m_spells.hunter.pAspectOfTheMonkey && m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.hunter.pAspectOfTheMonkey))
         return 45.0f;
-    if (!inMelee && m_ai->m_spells.hunter.pAspectOfTheHawk &&
-        m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.hunter.pAspectOfTheHawk))
+    if (!inMelee && m_ai->m_spells.hunter.pAspectOfTheHawk && m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.hunter.pAspectOfTheHawk))
         return 45.0f;
 
     return 0.0f;
@@ -343,8 +333,7 @@ bool BehaviorHunterDeadZone::Execute(SituationContext const& ctx, BotSpellKit& k
         m_ai->DoCastSpell(ctx.currentTarget, m_ai->m_spells.hunter.pRaptorStrike);
 
     // Run away to re-establish range
-    if (!m_ai->me->HasUnitState(UNIT_STATE_ROOT) &&
-        m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE)
+    if (!m_ai->me->HasUnitState(UNIT_STATE_ROOT) && m_ai->me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE)
     {
         if (!m_ai->me->IsStopped())
             m_ai->me->StopMoving();
@@ -562,9 +551,7 @@ float BehaviorWarlockCurseManage::Score(SituationContext const& ctx) const
 
     // Check if any curse is already on target
     SpellEntry const* curseSpells[] = {
-        m_ai->m_spells.warlock.pCurseofTongues, m_ai->m_spells.warlock.pCurseoftheElements,
-        m_ai->m_spells.warlock.pCurseofShadow, m_ai->m_spells.warlock.pCurseofDoom,
-        m_ai->m_spells.warlock.pCurseofRecklessness, m_ai->m_spells.warlock.pCurseofAgony,
+        m_ai->m_spells.warlock.pCurseofTongues, m_ai->m_spells.warlock.pCurseoftheElements, m_ai->m_spells.warlock.pCurseofShadow, m_ai->m_spells.warlock.pCurseofDoom, m_ai->m_spells.warlock.pCurseofRecklessness, m_ai->m_spells.warlock.pCurseofAgony,
     };
     for (auto const* pCurse : curseSpells)
     {
@@ -578,9 +565,7 @@ float BehaviorWarlockCurseManage::Score(SituationContext const& ctx) const
 bool BehaviorWarlockCurseManage::Execute(SituationContext const& ctx, BotSpellKit& kit)
 {
     // Curse priority: Tongues (casters) > Elements > Shadow > Doom (bosses) > Agony
-    if (m_ai->m_spells.warlock.pCurseofTongues &&
-        ctx.currentTarget->GetPowerType() == POWER_MANA &&
-        m_ai->CanTryToCastSpell(ctx.currentTarget, m_ai->m_spells.warlock.pCurseofTongues))
+    if (m_ai->m_spells.warlock.pCurseofTongues && ctx.currentTarget->GetPowerType() == POWER_MANA && m_ai->CanTryToCastSpell(ctx.currentTarget, m_ai->m_spells.warlock.pCurseofTongues))
     {
         return m_ai->DoCastSpell(ctx.currentTarget, m_ai->m_spells.warlock.pCurseofTongues) == SPELL_CAST_OK;
     }
@@ -659,16 +644,13 @@ bool BehaviorDruidFormShift::Execute(SituationContext const& ctx, BotSpellKit& k
         return true;
     }
 
-    if (ctx.role == ROLE_TANK && m_ai->m_spells.druid.pBearForm &&
-        m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.druid.pBearForm))
+    if (ctx.role == ROLE_TANK && m_ai->m_spells.druid.pBearForm && m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.druid.pBearForm))
         return m_ai->DoCastSpell(m_ai->me, m_ai->m_spells.druid.pBearForm) == SPELL_CAST_OK;
 
-    if (ctx.role == ROLE_MELEE_DPS && m_ai->m_spells.druid.pCatForm &&
-        m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.druid.pCatForm))
+    if (ctx.role == ROLE_MELEE_DPS && m_ai->m_spells.druid.pCatForm && m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.druid.pCatForm))
         return m_ai->DoCastSpell(m_ai->me, m_ai->m_spells.druid.pCatForm) == SPELL_CAST_OK;
 
-    if (ctx.role == ROLE_RANGE_DPS && m_ai->m_spells.druid.pMoonkinForm &&
-        m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.druid.pMoonkinForm))
+    if (ctx.role == ROLE_RANGE_DPS && m_ai->m_spells.druid.pMoonkinForm && m_ai->CanTryToCastSpell(m_ai->me, m_ai->m_spells.druid.pMoonkinForm))
         return m_ai->DoCastSpell(m_ai->me, m_ai->m_spells.druid.pMoonkinForm) == SPELL_CAST_OK;
 
     return false;
@@ -724,8 +706,7 @@ float BehaviorDruidInnervate::Score(SituationContext const& ctx) const
                 if (pMember == m_ai->me || !pMember->IsAlive())
                     continue;
                 uint8 cls = pMember->GetClass();
-                if ((cls == CLASS_PRIEST || cls == CLASS_DRUID || cls == CLASS_SHAMAN || cls == CLASS_PALADIN) &&
-                    pMember->GetPowerPercent(POWER_MANA) < 30.0f)
+                if ((cls == CLASS_PRIEST || cls == CLASS_DRUID || cls == CLASS_SHAMAN || cls == CLASS_PALADIN) && pMember->GetPowerPercent(POWER_MANA) < 30.0f)
                     return 72.0f;
             }
         }
@@ -749,9 +730,7 @@ bool BehaviorDruidInnervate::Execute(SituationContext const& ctx, BotSpellKit& k
                 if (pMember == m_ai->me || !pMember->IsAlive())
                     continue;
                 uint8 cls = pMember->GetClass();
-                if ((cls == CLASS_PRIEST || cls == CLASS_DRUID || cls == CLASS_SHAMAN || cls == CLASS_PALADIN) &&
-                    pMember->GetPowerPercent(POWER_MANA) < 30.0f &&
-                    m_ai->CanTryToCastSpell(pMember, m_ai->m_spells.druid.pInnervate))
+                if ((cls == CLASS_PRIEST || cls == CLASS_DRUID || cls == CLASS_SHAMAN || cls == CLASS_PALADIN) && pMember->GetPowerPercent(POWER_MANA) < 30.0f && m_ai->CanTryToCastSpell(pMember, m_ai->m_spells.druid.pInnervate))
                 {
                     return m_ai->DoCastSpell(pMember, m_ai->m_spells.druid.pInnervate) == SPELL_CAST_OK;
                 }

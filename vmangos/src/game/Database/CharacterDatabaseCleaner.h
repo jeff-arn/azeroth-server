@@ -27,8 +27,8 @@ namespace CharacterDatabaseCleaner
     enum CleaningFlags
     {
         // reserved for next version          0x1
-        CLEANING_FLAG_SKILLS                = 0x2,
-        CLEANING_FLAG_SPELLS                = 0x4,
+        CLEANING_FLAG_SKILLS = 0x2,
+        CLEANING_FLAG_SPELLS = 0x4,
         // reserved for next version          0x8
     };
 
@@ -42,6 +42,6 @@ namespace CharacterDatabaseCleaner
 
     void CleanCharacterSkills();
     void CleanCharacterSpell();
-}
+} // namespace CharacterDatabaseCleaner
 
 #endif

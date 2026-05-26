@@ -17,32 +17,31 @@
  */
 
 #include "TileAssembler.h"
-#include "MapTree.h"
 #include "BIH.h"
+#include "MapTree.h"
 #include "VMapDefinitions.h"
 
-#include <set>
 #include <iomanip>
+#include <set>
 #include <sstream>
 
-using G3D::Vector3;
 using G3D::AABox;
 using G3D::inf;
+using G3D::Vector3;
 using std::pair;
 
-template<> struct BoundsTrait<VMAP::ModelSpawn*>
+template <>
+struct BoundsTrait<VMAP::ModelSpawn*>
 {
-    static void getBounds(VMAP::ModelSpawn const* const& obj, G3D::AABox& out)
-    {
-        out = obj->getBounds();
-    }
+    static void getBounds(VMAP::ModelSpawn const* const& obj, G3D::AABox& out) { out = obj->getBounds(); }
 };
 
 namespace VMAP
 {
     bool readChunk(FILE* rf, char* dest, char const* compare, uint32 len)
     {
-        if (fread(dest, sizeof(char), len, rf) != len) return false;
+        if (fread(dest, sizeof(char), len, rf) != len)
+            return false;
         return memcmp(dest, compare, len) == 0;
     }
 
@@ -55,9 +54,7 @@ namespace VMAP
 
     //=================================================================
 
-    TileAssembler::TileAssembler(std::string const& pSrcDirName, std::string const& pDestDirName) : iDestDir(pDestDirName), iSrcDir(pSrcDirName)
-    {
-    }
+    TileAssembler::TileAssembler(std::string const& pSrcDirName, std::string const& pDestDirName) : iDestDir(pDestDirName), iSrcDir(pSrcDirName) {}
 
     TileAssembler::~TileAssembler()
     {
@@ -116,16 +113,21 @@ namespace VMAP
             }
 
             // general info
-            if (success && fwrite(VMAP_MAGIC, 1, 8, mapfile) != 8) success = false;
+            if (success && fwrite(VMAP_MAGIC, 1, 8, mapfile) != 8)
+                success = false;
             uint32 globalTileID = StaticMapTree::packTileID(65, 65);
             pair<TileMap::iterator, TileMap::iterator> globalRange = map_iter->second->TileEntries.equal_range(globalTileID);
             char isTiled = globalRange.first == globalRange.second; // only maps without terrain (tiles) have global WMO
-            if (success && fwrite(&isTiled, sizeof(char), 1, mapfile) != 1) success = false;
+            if (success && fwrite(&isTiled, sizeof(char), 1, mapfile) != 1)
+                success = false;
             // Nodes
-            if (success && fwrite("NODE", 4, 1, mapfile) != 1) success = false;
-            if (success) success = pTree.writeToFile(mapfile);
+            if (success && fwrite("NODE", 4, 1, mapfile) != 1)
+                success = false;
+            if (success)
+                success = pTree.writeToFile(mapfile);
             // global map spawns (WDT), if any (most instances)
-            if (success && fwrite("GOBJ", 4, 1, mapfile) != 1) success = false;
+            if (success && fwrite("GOBJ", 4, 1, mapfile) != 1)
+                success = false;
 
             uint32 i = 0;
             for (TileMap::iterator glob = globalRange.first; glob != globalRange.second && success; ++glob, ++i)
@@ -134,7 +136,8 @@ namespace VMAP
                 success = ModelSpawn::writeToFile(mapfile, map_iter->second->UniqueEntries[glob->second]);
                 // MapTree nodes to update when loading tile:
                 std::map<uint32, uint32>::iterator nIdx = modelNodeIdx.find(globSpawn.ID);
-                if (success && fwrite(&nIdx->second, sizeof(uint32), 1, mapfile) != 1) success = false;
+                if (success && fwrite(&nIdx->second, sizeof(uint32), 1, mapfile) != 1)
+                    success = false;
             }
 
             printf("Map %u global objects %u\n", map_iter->first, i);
@@ -149,7 +152,7 @@ namespace VMAP
             for (tile = tileEntries.begin(); tile != tileEntries.end(); ++tile)
             {
                 ModelSpawn const& spawn = map_iter->second->UniqueEntries[tile->second];
-                if (spawn.flags & MOD_WORLDSPAWN)           // WDT spawn, saved as tile 65/65 currently...
+                if (spawn.flags & MOD_WORLDSPAWN) // WDT spawn, saved as tile 65/65 currently...
                     continue;
                 uint32 nSpawns = tileEntries.count(tile->first);
                 std::stringstream tilefilename;
@@ -160,9 +163,11 @@ namespace VMAP
                 tilefilename << std::setw(2) << x << "_" << std::setw(2) << y << ".vmtile";
                 FILE* tilefile = fopen(tilefilename.str().c_str(), "wb");
                 // file header
-                if (success && fwrite(VMAP_MAGIC, 1, 8, tilefile) != 8) success = false;
+                if (success && fwrite(VMAP_MAGIC, 1, 8, tilefile) != 8)
+                    success = false;
                 // write number of tile spawns
-                if (success && fwrite(&nSpawns, sizeof(uint32), 1, tilefile) != 1) success = false;
+                if (success && fwrite(&nSpawns, sizeof(uint32), 1, tilefile) != 1)
+                    success = false;
                 // write tile spawns
                 for (uint32 s = 0; s < nSpawns; ++s)
                 {
@@ -174,7 +179,8 @@ namespace VMAP
                     success = success && ModelSpawn::writeToFile(tilefile, spawn2);
                     // MapTree nodes to update when loading tile:
                     std::map<uint32, uint32>::iterator nIdx = modelNodeIdx.find(spawn2.ID);
-                    if (success && fwrite(&nIdx->second, sizeof(uint32), 1, tilefile) != 1) success = false;
+                    if (success && fwrite(&nIdx->second, sizeof(uint32), 1, tilefile) != 1)
+                        success = false;
                 }
                 fclose(tilefile);
             }
@@ -233,7 +239,8 @@ namespace VMAP
                 printf("spawning Map %u\n", mapID);
                 mapData[mapID] = current = new MapSpawns();
             }
-            else current = (*map_iter).second;
+            else
+                current = (*map_iter).second;
             current->UniqueEntries.insert(pair<uint32, ModelSpawn>(spawn.ID, spawn));
             current->TileEntries.insert(pair<uint32, uint32>(StaticMapTree::packTileID(tileX, tileY), spawn.ID));
         }
@@ -327,7 +334,7 @@ namespace VMAP
             model.setGroupModels(groupsArray);
         }
 
-        //std::cout << "readRawFile2: '" << pModelFilename << "' tris: " << nElements << " nodes: " << nNodes << std::endl;
+        // std::cout << "readRawFile2: '" << pModelFilename << "' tris: " << nElements << " nodes: " << nNodes << std::endl;
         return model.writeFile(iDestDir + "/" + pModelFilename + ".vmo");
     }
 
@@ -394,10 +401,20 @@ namespace VMAP
     }
 
     // temporary use defines to simplify read/check code (close file and return at fail)
-#define READ_OR_RETURN(V,S) if(fread((V), (S), 1, rf) != 1) { \
-                                    fclose(rf); printf("readfail, op = %i\n", readOperation); return(false); }
-#define CMP_OR_RETURN(V,S)  if(strcmp((V),(S)) != 0)        { \
-                                    fclose(rf); printf("cmpfail, %s!=%s\n", V, S);return(false); }
+#define READ_OR_RETURN(V, S)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          \
+    if (fread((V), (S), 1, rf) != 1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+        fclose(rf);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   \
+        printf("readfail, op = %i\n", readOperation);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+        return (false);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    }
+#define CMP_OR_RETURN(V, S)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           \
+    if (strcmp((V), (S)) != 0)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+        fclose(rf);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   \
+        printf("cmpfail, %s!=%s\n", V, S);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            \
+        return (false);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    }
 
     bool GroupModel_Raw::Read(FILE* rf)
     {
@@ -492,10 +509,7 @@ namespace VMAP
         return true;
     }
 
-    GroupModel_Raw::~GroupModel_Raw()
-    {
-        delete liquid;
-    }
+    GroupModel_Raw::~GroupModel_Raw() { delete liquid; }
 
     bool WorldModel_Raw::Read(char const* path)
     {
@@ -531,4 +545,4 @@ namespace VMAP
 // drop of temporary use defines
 #undef READ_OR_RETURN
 #undef CMP_OR_RETURN
-}
+} // namespace VMAP

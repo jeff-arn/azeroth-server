@@ -26,29 +26,30 @@
 
 class BarGoLink
 {
-    public:                                                 // constructors
-        explicit BarGoLink(int row_count);
-        explicit BarGoLink(uint32 row_count);               // row_count < int32::max
-        explicit BarGoLink(uint64 row_count);               // row_count < int32::max
+public: // constructors
+    explicit BarGoLink(int row_count);
+    explicit BarGoLink(uint32 row_count); // row_count < int32::max
+    explicit BarGoLink(uint64 row_count); // row_count < int32::max
 #ifdef __APPLE__
-        explicit BarGoLink(size_t row_count);               // row_count < int32::max
+    explicit BarGoLink(size_t row_count); // row_count < int32::max
 #endif
-        ~BarGoLink();
+    ~BarGoLink();
 
-    public:                                                 // modifiers
-        void step();
+public: // modifiers
+    void step();
 
-        static void SetOutputState(bool on);
-    private:
-        void init(int row_count);
+    static void SetOutputState(bool on);
 
-        static bool m_showOutput;                           // not recommended change with existed active bar
-        static char const * const empty;
-        static char const * const full;
+private:
+    void init(int row_count);
 
-        int rec_no;
-        int rec_pos;
-        int num_rec;
-        int indic_len;
+    static bool m_showOutput; // not recommended change with existed active bar
+    static char const* const empty;
+    static char const* const full;
+
+    int rec_no;
+    int rec_pos;
+    int num_rec;
+    int indic_len;
 };
 #endif

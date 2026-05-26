@@ -19,17 +19,9 @@
 #include "SpellEntry.h"
 #include "SpellMgr.h"
 
-SpellModifier::SpellModifier(SpellModOp _op, SpellModType _type, int32 _value, SpellEntry const* spellEntry, SpellEffectIndex eff, int16 _charges /*= 0*/) :
-    op(_op), type(_type), charges(_charges), value(_value), spellId(spellEntry->Id), ownerAura(nullptr)
-{
-    mask = sSpellMgr.GetSpellAffectMask(spellEntry->Id, eff);
-}
+SpellModifier::SpellModifier(SpellModOp _op, SpellModType _type, int32 _value, SpellEntry const* spellEntry, SpellEffectIndex eff, int16 _charges /*= 0*/) : op(_op), type(_type), charges(_charges), value(_value), spellId(spellEntry->Id), ownerAura(nullptr) { mask = sSpellMgr.GetSpellAffectMask(spellEntry->Id, eff); }
 
-SpellModifier::SpellModifier(SpellModOp _op, SpellModType _type, int32 _value, Aura* aura, int16 _charges /*= 0*/) :
-    op(_op), type(_type), charges(_charges), value(_value), spellId(aura->GetId()), ownerAura(aura)
-{
-    mask = sSpellMgr.GetSpellAffectMask(aura->GetId(), aura->GetEffIndex());
-}
+SpellModifier::SpellModifier(SpellModOp _op, SpellModType _type, int32 _value, Aura* aura, int16 _charges /*= 0*/) : op(_op), type(_type), charges(_charges), value(_value), spellId(aura->GetId()), ownerAura(aura) { mask = sSpellMgr.GetSpellAffectMask(aura->GetId(), aura->GetEffIndex()); }
 
 bool SpellModifier::IsAffectedOnSpell(SpellEntry const* spell) const
 {

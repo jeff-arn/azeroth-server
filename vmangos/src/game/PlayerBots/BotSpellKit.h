@@ -1,8 +1,8 @@
 #ifndef MANGOS_BOT_SPELL_KIT_H
 #define MANGOS_BOT_SPELL_KIT_H
 
-#include "Common.h"
 #include <vector>
+#include "Common.h"
 
 struct SpellEntry;
 class CombatBotBaseAI;
@@ -24,29 +24,29 @@ public:
     CombatBotBaseAI* GetAI() const { return m_ai; }
 
     // === Damage ===
-    SpellEntry const* GetFiller() const;            // Primary nuke/attack
-    SpellEntry const* GetExecuteAbility() const;    // Sub-20% finisher
-    SpellEntry const* GetAoeSpell() const;          // AoE damage
+    SpellEntry const* GetFiller() const; // Primary nuke/attack
+    SpellEntry const* GetExecuteAbility() const; // Sub-20% finisher
+    SpellEntry const* GetAoeSpell() const; // AoE damage
     void GetDotSpells(std::vector<SpellEntry const*>& out) const; // All available DoTs
 
     // === CC / Utility ===
     SpellEntry const* GetCrowdControl() const;
     SpellEntry const* GetRoot() const;
-    SpellEntry const* GetThreatDump() const;        // Feint, Fade, Cower, FD
+    SpellEntry const* GetThreatDump() const; // Feint, Fade, Cower, FD
 
     // === Buffs ===
-    SpellEntry const* GetSelfBuff() const;          // Demon Armor, Ice Armor, etc.
-    SpellEntry const* GetPartyBuff() const;         // MotW, Fort, AI, etc.
+    SpellEntry const* GetSelfBuff() const; // Demon Armor, Ice Armor, etc.
+    SpellEntry const* GetPartyBuff() const; // MotW, Fort, AI, etc.
 
     // === Tank ===
     SpellEntry const* GetTaunt() const;
     SpellEntry const* GetAoeTaunt() const;
 
     // === Emergency ===
-    SpellEntry const* GetEmergencyAbility() const;  // Ice Block, Last Stand, etc.
+    SpellEntry const* GetEmergencyAbility() const; // Ice Block, Last Stand, etc.
 
     // === Movement / Escape ===
-    SpellEntry const* GetEscapeAbility() const;     // Blink, Vanish, Dash, etc.
+    SpellEntry const* GetEscapeAbility() const; // Blink, Vanish, Dash, etc.
 
     // === Class identity ===
     uint8 GetClass() const { return m_classId; }

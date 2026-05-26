@@ -27,83 +27,71 @@
  *
  */
 
-#include "Platform/Define.h"
 #include <mutex>
+#include "Platform/Define.h"
 
 namespace MaNGOS
 {
-    template<typename MUTEX>
+    template <typename MUTEX>
     class GeneralLock
     {
-        public:
+    public:
+        GeneralLock(MUTEX& m) : i_mutex(m) {}
 
-            GeneralLock(MUTEX &m)
-                : i_mutex(m)
-            {
-            }
+        ~GeneralLock() {}
 
-            ~GeneralLock()
-            {
-            }
+        GeneralLock(const GeneralLock&) = delete;
+        GeneralLock& operator=(const GeneralLock&) = delete;
 
-            GeneralLock(const GeneralLock &) = delete;
-            GeneralLock& operator=(const GeneralLock &) = delete;
-        private:
-
-            MUTEX &i_mutex;
-            std::unique_lock<MUTEX> m_lock{i_mutex};
-
+    private:
+        MUTEX& i_mutex;
+        std::unique_lock<MUTEX> m_lock{i_mutex};
     };
 
-    template<class T>
+    template <class T>
     class SingleThreaded
     {
     public:
-
-        struct Lock                                     // empty object
+        struct Lock // empty object
         {
             Lock() = default;
 
-            Lock(const T&) { }
+            Lock(const T&) {}
 
-            Lock(const SingleThreaded<T>&) { }          // for single threaded we ignore this
+            Lock(const SingleThreaded<T>&) {} // for single threaded we ignore this
         };
     };
 
-    template<class T, class MUTEX>
+    template <class T, class MUTEX>
     class ClassLevelLockable
     {
     public:
-
-        ClassLevelLockable()
-        {
-        }
+        ClassLevelLockable() {}
 
         friend class Lock;
 
         class Lock
         {
         public:
+            Lock(const T& /*host*/) {}
 
-            Lock(const T& /*host*/) { }
-
-            Lock(const ClassLevelLockable<T, MUTEX> &) { }
+            Lock(const ClassLevelLockable<T, MUTEX>&) {}
 
             Lock() = default;
+
         private:
             std::unique_lock<MUTEX> m_lock{si_mtx};
         };
 
     private:
-
         static MUTEX si_mtx;
     };
 
-}
+} // namespace MaNGOS
 
-template<class T, class MUTEX> MUTEX MaNGOS::ClassLevelLockable<T, MUTEX>::si_mtx;
+template <class T, class MUTEX>
+MUTEX MaNGOS::ClassLevelLockable<T, MUTEX>::si_mtx;
 
-#define INSTANTIATE_CLASS_MUTEX(CTYPE, MUTEX) \
-    template class MaNGOS::ClassLevelLockable<CTYPE, MUTEX>
+#define INSTANTIATE_CLASS_MUTEX(CTYPE, MUTEX) template class MaNGOS::ClassLevelLockable<CTYPE, MUTEX>
 
 #endif

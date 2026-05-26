@@ -25,18 +25,15 @@ EndScriptData */
 
 enum
 {
-    SPELL_SHADOWWORDPAIN        = 14032,
-    SPELL_MANABURN              = 14033,
-    SPELL_PSYCHICSCREAM         = 13704,
-    SPELL_SHADOWSHIELD          = 12040
+    SPELL_SHADOWWORDPAIN = 14032,
+    SPELL_MANABURN = 14033,
+    SPELL_PSYCHICSCREAM = 13704,
+    SPELL_SHADOWSHIELD = 12040
 };
 
 struct boss_high_interrogator_gerstahnAI : public ScriptedAI
 {
-    boss_high_interrogator_gerstahnAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_high_interrogator_gerstahnAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiShadowWordPain_Timer;
     uint32 m_uiManaBurn_Timer;
@@ -53,11 +50,11 @@ struct boss_high_interrogator_gerstahnAI : public ScriptedAI
 
     void UpdateAI(uint32 const uiDiff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //ShadowWordPain_Timer
+        // ShadowWordPain_Timer
         if (m_uiShadowWordPain_Timer < uiDiff)
         {
             if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
@@ -68,7 +65,7 @@ struct boss_high_interrogator_gerstahnAI : public ScriptedAI
         else
             m_uiShadowWordPain_Timer -= uiDiff;
 
-        //ManaBurn_Timer
+        // ManaBurn_Timer
         if (m_uiManaBurn_Timer < uiDiff)
         {
             if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
@@ -79,7 +76,7 @@ struct boss_high_interrogator_gerstahnAI : public ScriptedAI
         else
             m_uiManaBurn_Timer -= uiDiff;
 
-        //PsychicScream_Timer
+        // PsychicScream_Timer
         if (m_uiPsychicScream_Timer < uiDiff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_PSYCHICSCREAM);
@@ -88,7 +85,7 @@ struct boss_high_interrogator_gerstahnAI : public ScriptedAI
         else
             m_uiPsychicScream_Timer -= uiDiff;
 
-        //ShadowShield_Timer
+        // ShadowShield_Timer
         if (m_uiShadowShield_Timer < uiDiff)
         {
             DoCastSpellIfCan(m_creature, SPELL_SHADOWSHIELD);
@@ -101,10 +98,7 @@ struct boss_high_interrogator_gerstahnAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_high_interrogator_gerstahn(Creature* pCreature)
-{
-    return new boss_high_interrogator_gerstahnAI(pCreature);
-}
+CreatureAI* GetAI_boss_high_interrogator_gerstahn(Creature* pCreature) { return new boss_high_interrogator_gerstahnAI(pCreature); }
 
 void AddSC_boss_high_interrogator_gerstahn()
 {

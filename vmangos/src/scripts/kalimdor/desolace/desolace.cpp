@@ -26,9 +26,9 @@ go_hand_of_iruxos_crystal
 
 EndContentData */
 
-#include "scriptPCH.h"
-#include "MoveMapSharedDefines.h"
 #include "CreatureGroups.h"
+#include "MoveMapSharedDefines.h"
+#include "scriptPCH.h"
 
 /*######
 ## go_hand_of_iruxos_crystal
@@ -36,7 +36,7 @@ EndContentData */
 
 enum
 {
-    DEMON_SPIRIT  = 11876
+    DEMON_SPIRIT = 11876
 };
 
 bool GOHello_go_hand_of_iruxos_crystal(Player* pPlayer, GameObject* pGO)
@@ -55,28 +55,28 @@ bool GOHello_go_hand_of_iruxos_crystal(Player* pPlayer, GameObject* pGO)
 
 enum
 {
-    QUEST_GET_ME_OUT_OF_HERE    = 6132,
+    QUEST_GET_ME_OUT_OF_HERE = 6132,
 
-    GO_MELIZZAS_CAGE            = 177706,
+    GO_MELIZZAS_CAGE = 177706,
 
-    SAY_MELIZZA_START           = 7540,
-    SAY_MELIZZA_FINISH          = 7544,
-    SAY_MELIZZA_1               = 7550,
-    SAY_MELIZZA_2               = 7551,
-    SAY_MELIZZA_3               = 7552,
+    SAY_MELIZZA_START = 7540,
+    SAY_MELIZZA_FINISH = 7544,
+    SAY_MELIZZA_1 = 7550,
+    SAY_MELIZZA_2 = 7551,
+    SAY_MELIZZA_3 = 7552,
 
-    NPC_MARAUDINE_MARAUDER      = 4659,
-    NPC_MARAUDINE_BONEPAW       = 4660,
-    NPC_MARAUDINE_WRANGLER      = 4655,
-    NPC_HORNIZ_BRIMBUZZLE       = 6019,
+    NPC_MARAUDINE_MARAUDER = 4659,
+    NPC_MARAUDINE_BONEPAW = 4660,
+    NPC_MARAUDINE_WRANGLER = 4655,
+    NPC_HORNIZ_BRIMBUZZLE = 6019,
 
-    NPC_MELIZZA                 = 12277,
+    NPC_MELIZZA = 12277,
 
-    POINT_ID_QUEST_COMPLETE     = 1,
-    POINT_ID_EVENT_COMPLETE     = 2,
+    POINT_ID_QUEST_COMPLETE = 1,
+    POINT_ID_EVENT_COMPLETE = 2,
 
-    MAX_MARAUDERS               = 2,
-    MAX_WRANGLERS               = 3,
+    MAX_MARAUDERS = 2,
+    MAX_WRANGLERS = 3,
 };
 
 struct SummonLocation
@@ -84,20 +84,16 @@ struct SummonLocation
     float m_fX, m_fY, m_fZ;
 };
 
-static const SummonLocation aMarauderSpawn[] =
-{
-    { -1291.492f, 2644.650f, 111.556f},
-    { -1306.730f, 2675.163f, 111.561f},
+static const SummonLocation aMarauderSpawn[] = {
+    {-1291.492f, 2644.650f, 111.556f},
+    {-1306.730f, 2675.163f, 111.561f},
 };
 
-static const SummonLocation wranglerSpawn = { -1393.194f, 2429.465f, 88.689f };
+static const SummonLocation wranglerSpawn = {-1393.194f, 2429.465f, 88.689f};
 
 struct npc_melizza_brimbuzzleAI : public npc_escortAI
 {
-    npc_melizza_brimbuzzleAI(Creature* m_creature) : npc_escortAI(m_creature)
-    {
-        Reset();
-    }
+    npc_melizza_brimbuzzleAI(Creature* m_creature) : npc_escortAI(m_creature) { Reset(); }
 
     void Reset() override
     {
@@ -121,47 +117,47 @@ struct npc_melizza_brimbuzzleAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 1:
-                if (Player* pPlayer = GetPlayerForEscort())
-                    DoScriptText(SAY_MELIZZA_START, m_creature, pPlayer);
+        case 1:
+            if (Player* pPlayer = GetPlayerForEscort())
+                DoScriptText(SAY_MELIZZA_START, m_creature, pPlayer);
 
-                m_creature->SetFactionTemporary(FACTION_ESCORT_N_NEUTRAL_PASSIVE, TEMPFACTION_RESTORE_RESPAWN);
-                break;
-            case 4:
-                for (const auto& i : aMarauderSpawn)
+            m_creature->SetFactionTemporary(FACTION_ESCORT_N_NEUTRAL_PASSIVE, TEMPFACTION_RESTORE_RESPAWN);
+            break;
+        case 4:
+            for (const auto& i : aMarauderSpawn)
+            {
+                for (uint8 j = 0; j < MAX_MARAUDERS; ++j)
                 {
-                    for (uint8 j = 0; j < MAX_MARAUDERS; ++j)
-                    {
-                        // Summon 2 Marauders on each point
-                        float fX, fY, fZ;
-                        m_creature->GetRandomPoint(i.m_fX, i.m_fY, i.m_fZ, 7.0f, fX, fY, fZ);
-                        m_creature->SummonCreature(NPC_MARAUDINE_MARAUDER, fX, fY, fZ, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
-                    }
-                }
-                break;
-            case 9:
-                for (uint8 i = 0; i < MAX_WRANGLERS; ++i)
-                {
+                    // Summon 2 Marauders on each point
                     float fX, fY, fZ;
-                    m_creature->GetRandomPoint(wranglerSpawn.m_fX, wranglerSpawn.m_fY, wranglerSpawn.m_fZ, 10.0f, fX, fY, fZ);
-                    m_creature->SummonCreature(NPC_MARAUDINE_BONEPAW, fX, fY, fZ, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
-
-                    m_creature->GetRandomPoint(wranglerSpawn.m_fX, wranglerSpawn.m_fY, wranglerSpawn.m_fZ, 10.0f, fX, fY, fZ);
-                    m_creature->SummonCreature(NPC_MARAUDINE_WRANGLER, fX, fY, fZ, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
+                    m_creature->GetRandomPoint(i.m_fX, i.m_fY, i.m_fZ, 7.0f, fX, fY, fZ);
+                    m_creature->SummonCreature(NPC_MARAUDINE_MARAUDER, fX, fY, fZ, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
                 }
-                break;
-            case 12:
-                m_dialogueStep = 6;
-                SetEscortPaused(true);
-                SetMaxPlayerDistance(100); //Let's not have her despawn so easily.
-                if (Player* player = GetPlayerForEscort())
-                    m_creature->SetFacingToObject(player);
-                m_dialogueTimer = 200;
-                break;
-            case 19:
-                m_dialogueStep = 0;
-                SetEscortPaused(true);
-                break;
+            }
+            break;
+        case 9:
+            for (uint8 i = 0; i < MAX_WRANGLERS; ++i)
+            {
+                float fX, fY, fZ;
+                m_creature->GetRandomPoint(wranglerSpawn.m_fX, wranglerSpawn.m_fY, wranglerSpawn.m_fZ, 10.0f, fX, fY, fZ);
+                m_creature->SummonCreature(NPC_MARAUDINE_BONEPAW, fX, fY, fZ, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
+
+                m_creature->GetRandomPoint(wranglerSpawn.m_fX, wranglerSpawn.m_fY, wranglerSpawn.m_fZ, 10.0f, fX, fY, fZ);
+                m_creature->SummonCreature(NPC_MARAUDINE_WRANGLER, fX, fY, fZ, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 25000);
+            }
+            break;
+        case 12:
+            m_dialogueStep = 6;
+            SetEscortPaused(true);
+            SetMaxPlayerDistance(100); // Let's not have her despawn so easily.
+            if (Player* player = GetPlayerForEscort())
+                m_creature->SetFacingToObject(player);
+            m_dialogueTimer = 200;
+            break;
+        case 19:
+            m_dialogueStep = 0;
+            SetEscortPaused(true);
+            break;
         }
     }
     void Dialogue(uint32 const uiDiff)
@@ -170,47 +166,47 @@ struct npc_melizza_brimbuzzleAI : public npc_escortAI
             return;
         if (m_dialogueTimer < uiDiff)
         {
-            //sLog.nostalrius("Melizza: DialogueStep n°%u",m_dialogueStep);
+            // sLog.nostalrius("Melizza: DialogueStep n°%u",m_dialogueStep);
             switch (m_dialogueStep)
             {
-                case 0:
-                    if (Creature* pHorniz = m_creature->FindNearestCreature(NPC_HORNIZ_BRIMBUZZLE, 30.0f))
-                        m_creature->SetFacingToObject(pHorniz);
-                    DoScriptText(SAY_MELIZZA_1, m_creature);
-                    m_dialogueTimer = 4000;
-                    m_dialogueStep++;
-                    break;
-                case 1:
-                    DoScriptText(SAY_MELIZZA_2, m_creature);
-                    m_dialogueTimer = 5000;
-                    m_dialogueStep++;
-                    break;
-                case 2:
-                    DoScriptText(SAY_MELIZZA_3, m_creature);
-                    m_dialogueTimer = 4000;
-                    m_dialogueStep++;
-                    break;
-                case 3:
-                    SetEscortPaused(false);
-                    m_dialogueTimer = 0;
-                    m_dialogueStep++;
-                    break;
-                case 6:
-                    if (Player* pPlayer = GetPlayerForEscort())
-                    {
-                        DoScriptText(SAY_MELIZZA_FINISH, m_creature, pPlayer);
-                        pPlayer->GroupEventHappens(QUEST_GET_ME_OUT_OF_HERE, m_creature);
-                    }
-                    m_dialogueTimer = 2000;
-                    m_dialogueStep++;
-                    m_creature->ClearTemporaryFaction();
-                    SetRun(true);
-                    SetEscortPaused(false);
-                    break;
+            case 0:
+                if (Creature* pHorniz = m_creature->FindNearestCreature(NPC_HORNIZ_BRIMBUZZLE, 30.0f))
+                    m_creature->SetFacingToObject(pHorniz);
+                DoScriptText(SAY_MELIZZA_1, m_creature);
+                m_dialogueTimer = 4000;
+                m_dialogueStep++;
+                break;
+            case 1:
+                DoScriptText(SAY_MELIZZA_2, m_creature);
+                m_dialogueTimer = 5000;
+                m_dialogueStep++;
+                break;
+            case 2:
+                DoScriptText(SAY_MELIZZA_3, m_creature);
+                m_dialogueTimer = 4000;
+                m_dialogueStep++;
+                break;
+            case 3:
+                SetEscortPaused(false);
+                m_dialogueTimer = 0;
+                m_dialogueStep++;
+                break;
+            case 6:
+                if (Player* pPlayer = GetPlayerForEscort())
+                {
+                    DoScriptText(SAY_MELIZZA_FINISH, m_creature, pPlayer);
+                    pPlayer->GroupEventHappens(QUEST_GET_ME_OUT_OF_HERE, m_creature);
+                }
+                m_dialogueTimer = 2000;
+                m_dialogueStep++;
+                m_creature->ClearTemporaryFaction();
+                SetRun(true);
+                SetEscortPaused(false);
+                break;
             }
         }
         else
-            m_dialogueTimer  -= uiDiff;
+            m_dialogueTimer -= uiDiff;
     }
 
     void UpdateAI(uint32 const uiDiff) override
@@ -224,10 +220,7 @@ struct npc_melizza_brimbuzzleAI : public npc_escortAI
     }
 };
 
-CreatureAI* GetAI_npc_melizza_brimbuzzle(Creature* pCreature)
-{
-    return new npc_melizza_brimbuzzleAI(pCreature);
-}
+CreatureAI* GetAI_npc_melizza_brimbuzzle(Creature* pCreature) { return new npc_melizza_brimbuzzleAI(pCreature); }
 
 bool QuestAccept_npc_melizza_brimbuzzle(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
 {
@@ -246,15 +239,12 @@ bool QuestAccept_npc_melizza_brimbuzzle(Player* pPlayer, Creature* pCreature, Qu
 
 enum
 {
-    QUEST_RETURN_TO_VAHLARRIEL  = 1440,
+    QUEST_RETURN_TO_VAHLARRIEL = 1440,
 };
 
 struct npc_dalinda_malemAI : public npc_escortAI
 {
-    npc_dalinda_malemAI(Creature* m_creature) : npc_escortAI(m_creature)
-    {
-        Reset();
-    }
+    npc_dalinda_malemAI(Creature* m_creature) : npc_escortAI(m_creature) { Reset(); }
 
     void Reset() override {}
 
@@ -264,10 +254,7 @@ struct npc_dalinda_malemAI : public npc_escortAI
         npc_escortAI::JustRespawned();
     }
 
-    void JustStartedEscort() override
-    {
-        m_creature->SetStandState(UNIT_STAND_STATE_STAND);
-    }
+    void JustStartedEscort() override { m_creature->SetStandState(UNIT_STAND_STATE_STAND); }
 
     void WaypointReached(uint32 uiPointId) override
     {
@@ -279,10 +266,7 @@ struct npc_dalinda_malemAI : public npc_escortAI
     }
 };
 
-CreatureAI* GetAI_npc_dalinda_malem(Creature* pCreature)
-{
-    return new npc_dalinda_malemAI(pCreature);
-}
+CreatureAI* GetAI_npc_dalinda_malem(Creature* pCreature) { return new npc_dalinda_malemAI(pCreature); }
 
 bool QuestAccept_npc_dalinda_malem(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
 {
@@ -300,21 +284,21 @@ bool QuestAccept_npc_dalinda_malem(Player* pPlayer, Creature* pCreature, Quest c
 
 enum
 {
-    NPC_MAGRAMI_SPECTRE                 = 11560,
-    GO_GHOST_MAGNET                     = 177746,
-    GO_GHOST_MAGNET_AURA                = 177749,
-    SPELL_CURSE_OF_THE_FALLEN_MAGRAM    = 18159,
-    SPELL_PLACE_GHOST_MAGNET            = 19588,
-    SPELL_DESTROY_MAGNET                = 19571,//not used maybe.
-    SPELL_BLUE_AURA                     = 17327,//neutral, walk to target
-    SPELL_GREEN_AURA                    = 18951, //aura becomes green once they get to magnet. and aggressive
-    FACTION_NEUTRAL                     = 634, //or 58
-    FACTION_ENNEMY                      = 16
+    NPC_MAGRAMI_SPECTRE = 11560,
+    GO_GHOST_MAGNET = 177746,
+    GO_GHOST_MAGNET_AURA = 177749,
+    SPELL_CURSE_OF_THE_FALLEN_MAGRAM = 18159,
+    SPELL_PLACE_GHOST_MAGNET = 19588,
+    SPELL_DESTROY_MAGNET = 19571, // not used maybe.
+    SPELL_BLUE_AURA = 17327, // neutral, walk to target
+    SPELL_GREEN_AURA = 18951, // aura becomes green once they get to magnet. and aggressive
+    FACTION_NEUTRAL = 634, // or 58
+    FACTION_ENNEMY = 16
 };
 
-void DefineMagramiMagnet(Creature * crea, uint64 gobjGUID);
+void DefineMagramiMagnet(Creature* crea, uint64 gobjGUID);
 
-struct go_ghost_magnetAI: public GameObjectAI
+struct go_ghost_magnetAI : public GameObjectAI
 {
     go_ghost_magnetAI(GameObject* pGo) : GameObjectAI(pGo)
     {
@@ -337,13 +321,13 @@ struct go_ghost_magnetAI: public GameObjectAI
         {
             float mx, my, mz;
             me->GetPosition(mx, my, mz);
-            me->SummonGameObject(GO_GHOST_MAGNET_AURA, mx, my, mz, 0, 0, 0, 0, 0, 120);//120sec to go with the 12000 spectre spawn
+            me->SummonGameObject(GO_GHOST_MAGNET_AURA, mx, my, mz, 0, 0, 0, 0, 0, 120); // 120sec to go with the 12000 spectre spawn
         }
     }
     uint32 timer;
     uint32 bigTimer;
     uint16 nbToSpawn;
-    bool state;//0 = already are functioning magnets, do not spawn spectre. //1 = spawning.
+    bool state; // 0 = already are functioning magnets, do not spawn spectre. //1 = spawning.
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -351,11 +335,11 @@ struct go_ghost_magnetAI: public GameObjectAI
         {
             if (bigTimer < uiDiff)
             {
-                state=0;
+                state = 0;
             }
             else
                 bigTimer -= uiDiff;
-            if(nbToSpawn>0)
+            if (nbToSpawn > 0)
             {
                 if (timer < uiDiff)
                 {
@@ -374,8 +358,8 @@ struct go_ghost_magnetAI: public GameObjectAI
         float x, y, z;
         float mx, my, mz;
         me->GetPosition(mx, my, mz);
-        me->GetRandomPoint(mx,my,mz, 40, x, y, z);
-        if (Creature* spectre=me->SummonCreature(NPC_MAGRAMI_SPECTRE, x, y, z, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 120000))
+        me->GetRandomPoint(mx, my, mz, 40, x, y, z);
+        if (Creature* spectre = me->SummonCreature(NPC_MAGRAMI_SPECTRE, x, y, z, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 120000))
             DefineMagramiMagnet(spectre, me->GetGUID());
     }
     void MagramiSpectreDied(uint64 guid)
@@ -384,10 +368,7 @@ struct go_ghost_magnetAI: public GameObjectAI
             spawnSpetre();
     }
 };
-GameObjectAI* GetAIgo_ghost_magnet(GameObject *pGo)
-{
-    return new go_ghost_magnetAI(pGo);
-}
+GameObjectAI* GetAIgo_ghost_magnet(GameObject* pGo) { return new go_ghost_magnetAI(pGo); }
 struct npc_magrami_spetreAI : public ScriptedAI
 {
     npc_magrami_spetreAI(Creature* pCreature) : ScriptedAI(pCreature)
@@ -399,12 +380,12 @@ struct npc_magrami_spetreAI : public ScriptedAI
     }
     void Reset() override
     {
-        timer=0;
+        timer = 0;
         curseTimer = urand(5000, 9000);
-        if(isGreen)
-             m_creature->AddAura(SPELL_GREEN_AURA);
+        if (isGreen)
+            m_creature->AddAura(SPELL_GREEN_AURA);
         else
-             m_creature->AddAura(SPELL_BLUE_AURA);
+            m_creature->AddAura(SPELL_BLUE_AURA);
     }
     uint32 corpseTimer;
     uint32 timer;
@@ -414,15 +395,15 @@ struct npc_magrami_spetreAI : public ScriptedAI
 
     void MovementInform(uint32 uiType, uint32 uiPointId) override
     {
-        if(isGreen)
+        if (isGreen)
             return;
-        if (uiType != POINT_MOTION_TYPE || uiPointId!=2)
+        if (uiType != POINT_MOTION_TYPE || uiPointId != 2)
             return;
         turnGreen();
     }
     void JustReachedHome() override
     {
-        if(!isGreen)
+        if (!isGreen)
             turnGreen();
     }
     void turnGreen()
@@ -430,7 +411,7 @@ struct npc_magrami_spetreAI : public ScriptedAI
         m_creature->RemoveAurasDueToSpell(SPELL_BLUE_AURA);
         m_creature->AddAura(SPELL_GREEN_AURA);
         m_creature->SetFactionTemplateId(FACTION_ENNEMY);
-        isGreen=true;
+        isGreen = true;
     }
 
     void UpdateAI(uint32 const uiDiff) override
@@ -438,9 +419,9 @@ struct npc_magrami_spetreAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        if ( curseTimer < uiDiff)
+        if (curseTimer < uiDiff)
         {
-            if(m_creature->GetVictim()->HasAura(SPELL_CURSE_OF_THE_FALLEN_MAGRAM))
+            if (m_creature->GetVictim()->HasAura(SPELL_CURSE_OF_THE_FALLEN_MAGRAM))
                 curseTimer = 5000;
             else
             {
@@ -454,16 +435,16 @@ struct npc_magrami_spetreAI : public ScriptedAI
     }
     void UpdateAI_corpse(uint32 const uiDiff) override
     {
-        if ( corpseTimer < uiDiff)//purpose is to delay the new spawn.
+        if (corpseTimer < uiDiff) // purpose is to delay the new spawn.
         {
-            if(GameObject* gobj=m_creature->GetMap()->GetGameObject(guidMagnet))
+            if (GameObject* gobj = m_creature->GetMap()->GetGameObject(guidMagnet))
             {
                 if (go_ghost_magnetAI* pMoundAI = dynamic_cast<go_ghost_magnetAI*>(gobj->AI()))
                 {
                     pMoundAI->MagramiSpectreDied(m_creature->GetGUID());
                 }
             }
-            corpseTimer=150000;//after despawn.
+            corpseTimer = 150000; // after despawn.
         }
         else
             corpseTimer -= uiDiff;
@@ -472,21 +453,18 @@ struct npc_magrami_spetreAI : public ScriptedAI
     {
         if (GameObject* gobj = m_creature->GetMap()->GetGameObject(ghostMagnetGuid))
         {
-            float x,y,z;
+            float x, y, z;
 
             gobj->GetContactPoint(m_creature, x, y, z, 1);
             m_creature->SetHomePosition(x, y, z, 0);
             m_creature->GetMotionMaster()->MovePoint(2, x, y, z, MOVE_PATHFINDING);
-            guidMagnet=ghostMagnetGuid;
+            guidMagnet = ghostMagnetGuid;
         }
     }
 };
 
-CreatureAI* GetAI_npc_magrami_spetre(Creature* pCreature)
-{
-    return new npc_magrami_spetreAI(pCreature);
-}
-void DefineMagramiMagnet(Creature * crea, uint64 gobjGUID)
+CreatureAI* GetAI_npc_magrami_spetre(Creature* pCreature) { return new npc_magrami_spetreAI(pCreature); }
+void DefineMagramiMagnet(Creature* crea, uint64 gobjGUID)
 {
     if (npc_magrami_spetreAI* spectreAI = dynamic_cast<npc_magrami_spetreAI*>(crea->AI()))
     {
@@ -503,42 +481,38 @@ struct GizeltonStruct
     int32 onLeave, onAnnounce, onAmbush0, onAmbush1, onAmbush2, onComplete;
 };
 
-const GizeltonStruct CaravanTalk[] = 
-{
-    { 7506, 7475, 7330, 7331, 7332, 7333 },
-    { 7505, 7474, 7310, 7311, 7312, 7334 }
-};
+const GizeltonStruct CaravanTalk[] = {{7506, 7475, 7330, 7331, 7332, 7333}, {7505, 7474, 7310, 7311, 7312, 7334}};
 
 enum
 {
-    NPC_RIGGER_GIZELTON     = 11626,
-    NPC_CORK_GIZELTON       = 11625,
-    NPC_SUPER_SELLER_680    = 12246,
-    NPC_VENDOR_TRON_1000    = 12245,
-    NPC_CARAVAN_KODO        = 11564,
-    NPC_DOOMWARDER          = 4677,
-    NPC_NETHER_SORCERESS    = 4684,
-    NPC_LESSER_INFERNAL     = 4676,
-    NPC_KOLKAR_AMBUSHER     = 12977,
-    NPC_KOLKAR_WAYLAYER     = 12976,
+    NPC_RIGGER_GIZELTON = 11626,
+    NPC_CORK_GIZELTON = 11625,
+    NPC_SUPER_SELLER_680 = 12246,
+    NPC_VENDOR_TRON_1000 = 12245,
+    NPC_CARAVAN_KODO = 11564,
+    NPC_DOOMWARDER = 4677,
+    NPC_NETHER_SORCERESS = 4684,
+    NPC_LESSER_INFERNAL = 4676,
+    NPC_KOLKAR_AMBUSHER = 12977,
+    NPC_KOLKAR_WAYLAYER = 12976,
 
-    POINT_BOT_CAMP          = 279,
-    POINT_BOT_ANNOUNCE      = 14,
-    POINT_BOT_AMBUSH_0      = 28,
-    POINT_BOT_AMBUSH_1      = 34,
-    POINT_BOT_AMBUSH_2      = 40,
-    POINT_BOT_COMPLETE      = 42,
+    POINT_BOT_CAMP = 279,
+    POINT_BOT_ANNOUNCE = 14,
+    POINT_BOT_AMBUSH_0 = 28,
+    POINT_BOT_AMBUSH_1 = 34,
+    POINT_BOT_AMBUSH_2 = 40,
+    POINT_BOT_COMPLETE = 42,
 
-    POINT_TOP_CAMP          = 141,
-    POINT_TOP_ANNOUNCE      = 164,
-    POINT_TOP_AMBUSH_0      = 173,
-    POINT_TOP_AMBUSH_1      = 181,
-    POINT_TOP_AMBUSH_2      = 188,
-    POINT_TOP_COMPLETE      = 195,
-    POINT_END               = 281,
+    POINT_TOP_CAMP = 141,
+    POINT_TOP_ANNOUNCE = 164,
+    POINT_TOP_AMBUSH_0 = 173,
+    POINT_TOP_AMBUSH_1 = 181,
+    POINT_TOP_AMBUSH_2 = 188,
+    POINT_TOP_COMPLETE = 195,
+    POINT_END = 281,
 
-    QUEST_BOTTOM            = 5943,
-    QUEST_TOP               = 5821,
+    QUEST_BOTTOM = 5943,
+    QUEST_TOP = 5821,
 };
 
 struct Coords
@@ -558,45 +532,25 @@ struct CaravanMember
     Formation form;
 };
 
-const Coords Ambusher[] = 
-{
-    { NPC_DOOMWARDER,       -1814.41f, 1983.18f, 58.9549f, 0.0f },
-    { NPC_NETHER_SORCERESS, -1814.41f, 1983.18f, 58.9549f, 0.0f },
-    { NPC_LESSER_INFERNAL,  -1814.41f, 1983.18f, 58.9549f, 0.0f },
+const Coords Ambusher[] = {{NPC_DOOMWARDER, -1814.41f, 1983.18f, 58.9549f, 0.0f},      {NPC_NETHER_SORCERESS, -1814.41f, 1983.18f, 58.9549f, 0.0f}, {NPC_LESSER_INFERNAL, -1814.41f, 1983.18f, 58.9549f, 0.0f},
 
-    { NPC_DOOMWARDER,       -1751.9f, 1917.2f, 59.0003f, 0.0f },
-    { NPC_NETHER_SORCERESS, -1751.9f, 1917.2f, 59.0003f, 0.0f },
-    { NPC_LESSER_INFERNAL,  -1751.9f, 1917.2f, 59.0003f, 0.0f },
+                           {NPC_DOOMWARDER, -1751.9f, 1917.2f, 59.0003f, 0.0f},        {NPC_NETHER_SORCERESS, -1751.9f, 1917.2f, 59.0003f, 0.0f},   {NPC_LESSER_INFERNAL, -1751.9f, 1917.2f, 59.0003f, 0.0f},
 
-    { NPC_DOOMWARDER,       -1684.12f, 1872.66f, 59.0354f, 0.0f },
-    { NPC_NETHER_SORCERESS, -1684.12f, 1872.66f, 59.0354f, 0.0f },
-    { NPC_LESSER_INFERNAL,  -1684.12f, 1872.66f, 59.0354f, 0.0f },
+                           {NPC_DOOMWARDER, -1684.12f, 1872.66f, 59.0354f, 0.0f},      {NPC_NETHER_SORCERESS, -1684.12f, 1872.66f, 59.0354f, 0.0f}, {NPC_LESSER_INFERNAL, -1684.12f, 1872.66f, 59.0354f, 0.0f},
 
-    { NPC_KOLKAR_AMBUSHER,  -792.515f, 1177.07f, 98.8327f, 0.0f },
-    { NPC_KOLKAR_WAYLAYER,  -792.515f, 1177.07f, 98.8327f, 0.0f },
+                           {NPC_KOLKAR_AMBUSHER, -792.515f, 1177.07f, 98.8327f, 0.0f}, {NPC_KOLKAR_WAYLAYER, -792.515f, 1177.07f, 98.8327f, 0.0f},
 
-    { NPC_KOLKAR_AMBUSHER,  -931.15f, 1182.17f, 91.8346f, 0.0f },
-    { NPC_KOLKAR_WAYLAYER,  -931.15f, 1182.17f, 91.8346f, 0.0f },
+                           {NPC_KOLKAR_AMBUSHER, -931.15f, 1182.17f, 91.8346f, 0.0f},  {NPC_KOLKAR_WAYLAYER, -931.15f, 1182.17f, 91.8346f, 0.0f},
 
-    { NPC_KOLKAR_AMBUSHER,  -1073.62f, 1186.33f, 89.7398f, 0.0f },
-    { NPC_KOLKAR_WAYLAYER,  -1073.62f, 1186.33f, 89.7398f, 0.0f }
-};
+                           {NPC_KOLKAR_AMBUSHER, -1073.62f, 1186.33f, 89.7398f, 0.0f}, {NPC_KOLKAR_WAYLAYER, -1073.62f, 1186.33f, 89.7398f, 0.0f}};
 
-const CaravanMember Caravan[] =
-{
-    { {NPC_CARAVAN_KODO,     -1887.26f, 2465.12f, 59.8224f, 4.48f}, { 26.0f, 3.14f } },
-    { {NPC_RIGGER_GIZELTON,  -1883.63f, 2471.68f, 59.8224f, 4.48f}, { 18.0f, 3.14f } },
-    { {NPC_CARAVAN_KODO,     -1882.11f, 2476.80f, 59.8224f, 4.48f}, { 8.0f,  3.14f } }
-};
+const CaravanMember Caravan[] = {{{NPC_CARAVAN_KODO, -1887.26f, 2465.12f, 59.8224f, 4.48f}, {26.0f, 3.14f}}, {{NPC_RIGGER_GIZELTON, -1883.63f, 2471.68f, 59.8224f, 4.48f}, {18.0f, 3.14f}}, {{NPC_CARAVAN_KODO, -1882.11f, 2476.80f, 59.8224f, 4.48f}, {8.0f, 3.14f}}};
 
 struct npc_cork_gizeltonAI : npc_escortAI
 {
-    const Formation FORMATION_CORK = { 32.0f, 6.28f };
+    const Formation FORMATION_CORK = {32.0f, 6.28f};
 
-    explicit npc_cork_gizeltonAI(Creature* pCreature) : npc_escortAI(pCreature)
-    {
-        ResetCreature();
-    }
+    explicit npc_cork_gizeltonAI(Creature* pCreature) : npc_escortAI(pCreature) { ResetCreature(); }
 
     std::vector<ObjectGuid> m_lCaravanGuid;
     ObjectGuid m_RiggerGuid;
@@ -613,10 +567,7 @@ struct npc_cork_gizeltonAI : npc_escortAI
     bool m_bWaitingForDepart;
     bool m_bRigger;
 
-    void Reset() override
-    {
-
-    }
+    void Reset() override {}
 
     void ResetCreature() override
     {
@@ -643,11 +594,7 @@ struct npc_cork_gizeltonAI : npc_escortAI
 
         for (const auto& member : Caravan)
         {
-            if (const auto pCreature = m_creature->SummonCreature(member.coords.entry,
-                member.coords.x,
-                member.coords.y,
-                member.coords.z,
-                member.coords.o, TEMPSUMMON_DEAD_DESPAWN, 30000, true))
+            if (const auto pCreature = m_creature->SummonCreature(member.coords.entry, member.coords.x, member.coords.y, member.coords.z, member.coords.o, TEMPSUMMON_DEAD_DESPAWN, 30000, true))
             {
                 AddToFormation(pCreature, member.form);
             }
@@ -659,10 +606,7 @@ struct npc_cork_gizeltonAI : npc_escortAI
         }
     }
 
-    void JustDied(Unit* /*pKiller*/) override
-    {
-        FailEscort();
-    }
+    void JustDied(Unit* /*pKiller*/) override { FailEscort(); }
 
     void FailEscort()
     {
@@ -784,32 +728,28 @@ struct npc_cork_gizeltonAI : npc_escortAI
         }
     }
 
-    void AddToFormation(Creature* const pWho, Formation const& form) const
-    {
-        pWho->JoinCreatureGroup(m_creature, form.distance, form.angle,
-            OPTION_FORMATION_MOVE | OPTION_AGGRO_TOGETHER);
-    }
+    void AddToFormation(Creature* const pWho, Formation const& form) const { pWho->JoinCreatureGroup(m_creature, form.distance, form.angle, OPTION_FORMATION_MOVE | OPTION_AGGRO_TOGETHER); }
 
     void JustSummoned(Creature* pSummoned) override
     {
         switch (pSummoned->GetEntry())
         {
-            case NPC_RIGGER_GIZELTON:
-                m_RiggerGuid = pSummoned->GetObjectGuid();
-                pSummoned->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
-            case NPC_CARAVAN_KODO:
-                m_lCaravanGuid.push_back(pSummoned->GetObjectGuid());
-                break;
-            default:
-                ++m_uiEnemiesCount;
+        case NPC_RIGGER_GIZELTON:
+            m_RiggerGuid = pSummoned->GetObjectGuid();
+            pSummoned->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+        case NPC_CARAVAN_KODO:
+            m_lCaravanGuid.push_back(pSummoned->GetObjectGuid());
+            break;
+        default:
+            ++m_uiEnemiesCount;
 
-                // pick random caravan target
-                uint8 targetIndex = urand(0, m_lCaravanGuid.size() - 1);
+            // pick random caravan target
+            uint8 targetIndex = urand(0, m_lCaravanGuid.size() - 1);
 
-                auto targetGuid = m_lCaravanGuid[targetIndex];
+            auto targetGuid = m_lCaravanGuid[targetIndex];
 
-                if (auto pCreature = m_creature->GetMap()->GetCreature(targetGuid))
-                    pSummoned->AI()->AttackStart(pCreature);
+            if (auto pCreature = m_creature->GetMap()->GetCreature(targetGuid))
+                pSummoned->AI()->AttackStart(pCreature);
         }
     }
 
@@ -817,15 +757,15 @@ struct npc_cork_gizeltonAI : npc_escortAI
     {
         switch (pSummoned->GetEntry())
         {
-            case NPC_RIGGER_GIZELTON:
-            case NPC_CARAVAN_KODO:
-                FailEscort();
-                break;
-            default:
-                --m_uiEnemiesCount;
+        case NPC_RIGGER_GIZELTON:
+        case NPC_CARAVAN_KODO:
+            FailEscort();
+            break;
+        default:
+            --m_uiEnemiesCount;
 
-                if (!m_uiEnemiesCount)
-                    SetEscortPaused(false);
+            if (!m_uiEnemiesCount)
+                SetEscortPaused(false);
         }
     }
 
@@ -865,10 +805,7 @@ struct npc_cork_gizeltonAI : npc_escortAI
         }
     }
 
-    void CaravanWalk(bool walk) const
-    {
-        m_creature->SetWalk(walk);
-    }
+    void CaravanWalk(bool walk) const { m_creature->SetWalk(walk); }
 
     void DoVendor(bool visible) const
     {
@@ -880,8 +817,8 @@ struct npc_cork_gizeltonAI : npc_escortAI
     {
         switch (uiPoint)
         {
-            case POINT_BOT_CAMP:
-            case POINT_TOP_CAMP:
+        case POINT_BOT_CAMP:
+        case POINT_TOP_CAMP:
             {
                 SetEscortPaused(true);
                 CaravanWalk(true);
@@ -890,8 +827,8 @@ struct npc_cork_gizeltonAI : npc_escortAI
                 DoVendor(true);
                 break;
             }
-            case POINT_BOT_ANNOUNCE:
-            case POINT_TOP_ANNOUNCE:
+        case POINT_BOT_ANNOUNCE:
+        case POINT_TOP_ANNOUNCE:
             {
                 SetEscortPaused(true);
                 GiveQuest(true);
@@ -900,12 +837,12 @@ struct npc_cork_gizeltonAI : npc_escortAI
                 m_bWaitingForPlayer = true;
                 break;
             }
-            case POINT_BOT_AMBUSH_0:
-            case POINT_BOT_AMBUSH_1:
-            case POINT_BOT_AMBUSH_2:
-            case POINT_TOP_AMBUSH_0:
-            case POINT_TOP_AMBUSH_1:
-            case POINT_TOP_AMBUSH_2:
+        case POINT_BOT_AMBUSH_0:
+        case POINT_BOT_AMBUSH_1:
+        case POINT_BOT_AMBUSH_2:
+        case POINT_TOP_AMBUSH_0:
+        case POINT_TOP_AMBUSH_1:
+        case POINT_TOP_AMBUSH_2:
             {
                 if (m_playerGuid)
                 {
@@ -914,8 +851,8 @@ struct npc_cork_gizeltonAI : npc_escortAI
                 }
                 break;
             }
-            case POINT_BOT_COMPLETE:
-            case POINT_TOP_COMPLETE:
+        case POINT_BOT_COMPLETE:
+        case POINT_TOP_COMPLETE:
             {
                 if (auto pPlayer = m_creature->GetMap()->GetPlayer(m_playerGuid))
                 {
@@ -931,7 +868,7 @@ struct npc_cork_gizeltonAI : npc_escortAI
                 m_bRigger = !m_bRigger;
                 break;
             }
-            case POINT_END:
+        case POINT_END:
             {
                 DespawnCaravan();
                 break;
@@ -1014,10 +951,7 @@ struct npc_cork_gizeltonAI : npc_escortAI
     }
 };
 
-CreatureAI* GetAI_npc_cork_gizelton(Creature* pCreature)
-{
-    return new npc_cork_gizeltonAI(pCreature);
-}
+CreatureAI* GetAI_npc_cork_gizelton(Creature* pCreature) { return new npc_cork_gizeltonAI(pCreature); }
 
 bool QuestAccept_npc_cork_gizelton(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
 {

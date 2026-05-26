@@ -31,18 +31,18 @@ struct HunterWyvernStingScript : public AuraScript
 
             switch (aura->GetId())
             {
-                case 19386:
-                    spellId = 24131;
-                    break;
-                case 24132:
-                    spellId = 24134;
-                    break;
-                case 24133:
-                    spellId = 24135;
-                    break;
-                default:
-                    sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Unknown wyvern sting rank with spell id %u!", aura->GetId());
-                    return;
+            case 19386:
+                spellId = 24131;
+                break;
+            case 24132:
+                spellId = 24134;
+                break;
+            case 24133:
+                spellId = 24135;
+                break;
+            default:
+                sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Unknown wyvern sting rank with spell id %u!", aura->GetId());
+                return;
             }
 
             caster->CastSpell(aura->GetTarget(), spellId, true, nullptr, aura);
@@ -50,10 +50,7 @@ struct HunterWyvernStingScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_HunterWyvernSting(SpellEntry const*)
-{
-    return new HunterWyvernStingScript();
-}
+AuraScript* GetScript_HunterWyvernSting(SpellEntry const*) { return new HunterWyvernStingScript(); }
 
 // 23989 - Readiness
 struct HunterReadinessScript : SpellScript
@@ -65,7 +62,7 @@ struct HunterReadinessScript : SpellScript
             if (Player* pPlayer = spell->m_caster->ToPlayer())
             {
                 // immediately finishes the cooldown for hunter abilities
-                auto cdCheck = [](SpellEntry const & spellEntry) -> bool { return (spellEntry.SpellFamilyName == SPELLFAMILY_HUNTER && spellEntry.Id != 23989 && spellEntry.GetRecoveryTime() > 0); };
+                auto cdCheck = [](SpellEntry const& spellEntry) -> bool { return (spellEntry.SpellFamilyName == SPELLFAMILY_HUNTER && spellEntry.Id != 23989 && spellEntry.GetRecoveryTime() > 0); };
                 pPlayer->RemoveSomeCooldown(cdCheck);
             }
         }
@@ -73,10 +70,7 @@ struct HunterReadinessScript : SpellScript
     }
 };
 
-SpellScript* GetScript_HunterReadiness(SpellEntry const*)
-{
-    return new HunterReadinessScript();
-}
+SpellScript* GetScript_HunterReadiness(SpellEntry const*) { return new HunterReadinessScript(); }
 
 // 24531 - Refocus
 struct HunterRefocusScript : SpellScript
@@ -89,7 +83,7 @@ struct HunterRefocusScript : SpellScript
             {
                 // Refocus : "Instantly clears the cooldowns of Aimed Shot, Multishot, Volley, and Arcane Shot."
                 uint32 spellid = spell->m_spellInfo->Id;
-                auto cdCheck = [spellid](SpellEntry const & spellEntry) -> bool { return (spellEntry.IsFitToFamily<SPELLFAMILY_HUNTER, CF_HUNTER_ARCANE_SHOT, CF_HUNTER_MULTI_SHOT, CF_HUNTER_VOLLEY, CF_HUNTER_AIMED_SHOT>() && spellEntry.Id != spellid && spellEntry.GetRecoveryTime() > 0); };
+                auto cdCheck = [spellid](SpellEntry const& spellEntry) -> bool { return (spellEntry.IsFitToFamily<SPELLFAMILY_HUNTER, CF_HUNTER_ARCANE_SHOT, CF_HUNTER_MULTI_SHOT, CF_HUNTER_VOLLEY, CF_HUNTER_AIMED_SHOT>() && spellEntry.Id != spellid && spellEntry.GetRecoveryTime() > 0); };
                 pPlayer->RemoveSomeCooldown(cdCheck);
             }
         }
@@ -97,10 +91,7 @@ struct HunterRefocusScript : SpellScript
     }
 };
 
-SpellScript* GetScript_HunterRefocus(SpellEntry const*)
-{
-    return new HunterRefocusScript();
-}
+SpellScript* GetScript_HunterRefocus(SpellEntry const*) { return new HunterRefocusScript(); }
 
 // 1495, 14269, 14270, 14271 - Mongoose Bite
 struct HunterMongooseBiteScript : SpellScript
@@ -113,10 +104,7 @@ struct HunterMongooseBiteScript : SpellScript
     }
 };
 
-SpellScript* GetScript_HunterMongooseBite(SpellEntry const*)
-{
-    return new HunterMongooseBiteScript();
-}
+SpellScript* GetScript_HunterMongooseBite(SpellEntry const*) { return new HunterMongooseBiteScript(); }
 
 // 19306, 20909, 20910 - Counterattack
 struct HunterCounterAttackScript : SpellScript
@@ -129,10 +117,7 @@ struct HunterCounterAttackScript : SpellScript
     }
 };
 
-SpellScript* GetScript_HunterCounterAttack(SpellEntry const*)
-{
-    return new HunterCounterAttackScript();
-}
+SpellScript* GetScript_HunterCounterAttack(SpellEntry const*) { return new HunterCounterAttackScript(); }
 
 // 13810 - Frost Trap Aura
 struct HunterFrostTrapAuraScript : public AuraScript
@@ -148,10 +133,7 @@ struct HunterFrostTrapAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_HunterFrostTrapAura(SpellEntry const*)
-{
-    return new HunterFrostTrapAuraScript();
-}
+AuraScript* GetScript_HunterFrostTrapAura(SpellEntry const*) { return new HunterFrostTrapAuraScript(); }
 
 void AddSC_hunter_spell_scripts()
 {

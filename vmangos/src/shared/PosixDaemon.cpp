@@ -16,13 +16,13 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#include "Config/Config.h"
 #include "PosixDaemon.h"
 #include <cstdio>
-#include <iostream>
 #include <fstream>
-#include <unistd.h>
+#include <iostream>
 #include <sys/stat.h>
+#include <unistd.h>
+#include "Config/Config.h"
 
 pid_t parent_pid = 0, sid = 0;
 
@@ -133,10 +133,7 @@ void exitDaemon()
 
 struct WatchDog
 {
-    ~WatchDog()
-    {
-        exitDaemon();
-    }
+    ~WatchDog() { exitDaemon(); }
 };
 
 WatchDog dog;

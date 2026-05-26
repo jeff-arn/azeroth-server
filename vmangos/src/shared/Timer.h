@@ -22,8 +22,8 @@
 #ifndef MANGOS_TIMER_H
 #define MANGOS_TIMER_H
 
-#include "Common.h"
 #include <chrono>
+#include "Common.h"
 
 inline std::chrono::steady_clock::time_point GetApplicationStartTime()
 {
@@ -37,10 +37,10 @@ inline std::chrono::steady_clock::time_point GetApplicationStartTime()
 class WorldTimer
 {
 public:
-    //get current server time
+    // get current server time
     static uint32 getMSTime();
 
-    //get time difference between two timestamps
+    // get time difference between two timestamps
     static uint32 getMSTimeDiff(uint32 const& oldMSTime, uint32 const& newMSTime)
     {
         if (oldMSTime > newMSTime)
@@ -55,11 +55,11 @@ public:
     }
     static uint32 getMSTimeDiffToNow(uint32 t) { return getMSTimeDiff(t, getMSTime()); }
 
-    //get last world tick time
+    // get last world tick time
     static uint32 tickTime();
-    //get previous world tick time
+    // get previous world tick time
     static uint32 tickPrevTime();
-    //tick world timer
+    // tick world timer
     static uint32 tick();
 
 private:
@@ -103,10 +103,7 @@ class ShortIntervalTimer
 public:
     ShortIntervalTimer() : _interval(0), _current(0) {}
 
-    void Update(uint32 diff)
-    {
-        _current += diff;
-    }
+    void Update(uint32 diff) { _current += diff; }
 
     bool Passed() const { return _current >= _interval; }
     void Reset()
@@ -139,7 +136,7 @@ private:
 
 struct ShortTimeTracker
 {
-    explicit ShortTimeTracker(int32 expiry=0) : i_expiryTime(expiry) {}
+    explicit ShortTimeTracker(int32 expiry = 0) : i_expiryTime(expiry) {}
     void Update(int32 diff) { i_expiryTime -= diff; }
     bool Passed() const { return i_expiryTime <= 0; }
     void Reset(int32 interval) { i_expiryTime = interval; }

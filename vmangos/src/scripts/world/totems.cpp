@@ -1,5 +1,5 @@
 /*
-*/
+ */
 
 #include "scriptPCH.h"
 
@@ -20,10 +20,7 @@ struct TotemGlebeAI : public TotemAI
     }
 };
 
-CreatureAI* GetAI_TotemGlebe(Creature* pCreature)
-{
-    return new TotemGlebeAI(pCreature);
-}
+CreatureAI* GetAI_TotemGlebe(Creature* pCreature) { return new TotemGlebeAI(pCreature); }
 
 void AddSC_Totems()
 {

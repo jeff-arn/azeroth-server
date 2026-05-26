@@ -1,19 +1,19 @@
 #ifndef MANGOS_ARRAY_DELETER_H
 #define MANGOS_ARRAY_DELETER_H
 
-namespace MaNGOS { namespace Memory
+namespace MaNGOS
 {
-    /// A array deleter implementation that can be used in std::shared_ptr
-    /// In C++14 it is not possible to make a shared_ptr out of an array
-    /// \example std::shared_ptr<uint8_t> mySharedPtr = std::shared_ptr<uint8_t>(new uint8_t[1024], MaNGOS::Memory::array_deleter<uint8_t>());
-    template<typename T>
-    struct array_deleter
+    namespace Memory
     {
-        void operator()(T const* p)
+        /// A array deleter implementation that can be used in std::shared_ptr
+        /// In C++14 it is not possible to make a shared_ptr out of an array
+        /// \example std::shared_ptr<uint8_t> mySharedPtr = std::shared_ptr<uint8_t>(new uint8_t[1024], MaNGOS::Memory::array_deleter<uint8_t>());
+        template <typename T>
+        struct array_deleter
         {
-            delete[] p;
-        }
-    };
-}} // namespace MaNGOS::Memory
+            void operator()(T const* p) { delete[] p; }
+        };
+    } // namespace Memory
+} // namespace MaNGOS
 
 #endif // MANGOS_ARRAY_DELETER_H

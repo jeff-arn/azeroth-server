@@ -19,16 +19,16 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Object.h"
-#include "Player.h"
-#include "BattleGround.h"
 #include "BattleGroundWS.h"
-#include "GameObject.h"
-#include "ObjectMgr.h"
+#include "BattleGround.h"
 #include "BattleGroundMgr.h"
-#include "WorldPacket.h"
+#include "GameObject.h"
 #include "Language.h"
+#include "Object.h"
+#include "ObjectMgr.h"
+#include "Player.h"
 #include "World.h"
+#include "WorldPacket.h"
 
 #if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_6_1
 #include "ScriptMgr.h"
@@ -36,15 +36,13 @@
 
 BattleGroundWS::BattleGroundWS()
 {
-    m_startMessageIds[BG_STARTING_EVENT_FIRST]  = 0;
+    m_startMessageIds[BG_STARTING_EVENT_FIRST] = 0;
     m_startMessageIds[BG_STARTING_EVENT_SECOND] = BCT_BG_WS_START_ONE_MINUTE;
-    m_startMessageIds[BG_STARTING_EVENT_THIRD]  = BCT_BG_WS_START_HALF_MINUTE;
+    m_startMessageIds[BG_STARTING_EVENT_THIRD] = BCT_BG_WS_START_HALF_MINUTE;
     m_startMessageIds[BG_STARTING_EVENT_FOURTH] = BCT_BG_WS_HAS_BEGUN;
 }
 
-BattleGroundWS::~BattleGroundWS()
-{
-}
+BattleGroundWS::~BattleGroundWS() {}
 
 void BattleGroundWS::Update(uint32 diff)
 {
@@ -95,9 +93,7 @@ void BattleGroundWS::Update(uint32 diff)
     BattleGround::Update(diff);
 }
 
-void BattleGroundWS::StartingEventCloseDoors()
-{
-}
+void BattleGroundWS::StartingEventCloseDoors() {}
 
 void BattleGroundWS::StartingEventOpenDoors()
 {
@@ -114,7 +110,7 @@ void BattleGroundWS::StartingEventOpenDoors()
 void BattleGroundWS::AddPlayer(Player* player)
 {
     BattleGround::AddPlayer(player);
-    //create score and add it to map, default values are set in constructor
+    // create score and add it to map, default values are set in constructor
     BattleGroundWGScore* sc = new BattleGroundWGScore;
 
     m_playerScores[player->GetObjectGuid()] = sc;
@@ -137,7 +133,7 @@ void BattleGroundWS::RespawnFlag(Team team, bool captured)
 
     if (captured)
     {
-        //when map_update will be allowed for battlegrounds this code will be useless
+        // when map_update will be allowed for battlegrounds this code will be useless
         SpawnEvent(WS_EVENT_FLAG_A, 0, true, true);
         SpawnEvent(WS_EVENT_FLAG_H, 0, true, true);
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_6_1
@@ -145,7 +141,7 @@ void BattleGroundWS::RespawnFlag(Team team, bool captured)
 #else
         DoOrSimulateScriptTextForMap(BCT_BG_WS_F_PLACED, NPC_WSG_HERALD, GetBgMap());
 #endif
-        PlaySoundToAll(BG_WS_SOUND_FLAGS_RESPAWNED);        // flag respawned sound...
+        PlaySoundToAll(BG_WS_SOUND_FLAGS_RESPAWNED); // flag respawned sound...
     }
 }
 
@@ -201,7 +197,7 @@ void BattleGroundWS::EventPlayerCapturedFlag(Player* source)
     {
         if (!IsHordeFlagPickedup())
             return;
-        ClearHordeFlagPicker();                             // must be before aura remove to prevent 2 events (drop+capture) at the same time
+        ClearHordeFlagPicker(); // must be before aura remove to prevent 2 events (drop+capture) at the same time
         // horde flag in base (but not respawned yet)
         m_flagState[BG_TEAM_HORDE] = BG_WS_FLAG_STATE_WAIT_RESPAWN;
         // Drop Horde Flag from Player
@@ -216,7 +212,7 @@ void BattleGroundWS::EventPlayerCapturedFlag(Player* source)
     {
         if (!IsAllianceFlagPickedup())
             return;
-        ClearAllianceFlagPicker();                          // must be before aura remove to prevent 2 events (drop+capture) at the same time
+        ClearAllianceFlagPicker(); // must be before aura remove to prevent 2 events (drop+capture) at the same time
         // alliance flag in base (but not respawned yet)
         m_flagState[BG_TEAM_ALLIANCE] = BG_WS_FLAG_STATE_WAIT_RESPAWN;
         // Drop Alliance Flag from Player
@@ -227,7 +223,7 @@ void BattleGroundWS::EventPlayerCapturedFlag(Player* source)
         RewardReputationToTeam(889, m_reputationCapture, HORDE);
         UpdateWorldState(BG_WS_FLAG_TAKEN_ALLIANCE, 0);
     }
-    //for flag capture is reward distributed according level range
+    // for flag capture is reward distributed according level range
     RewardHonorToTeam(BG_WSG_FlagCapturedHonor[GetBracketId()], source->GetTeam());
 
     // despawn flags
@@ -245,10 +241,10 @@ void BattleGroundWS::EventPlayerCapturedFlag(Player* source)
         DoOrSimulateScriptTextForMap(BCT_BG_WS_CAPTURED_AF, NPC_WSG_HERALD, GetBgMap(), nullptr, source);
 #endif
 
-    UpdateFlagState(source->GetTeam(), 1);                  // flag state none
+    UpdateFlagState(source->GetTeam(), 1); // flag state none
     UpdateTeamScore(source->GetTeam());
     // only flag capture should be updated
-    UpdatePlayerScore(source, SCORE_FLAG_CAPTURES, 1);      // +1 flag captures
+    UpdatePlayerScore(source, SCORE_FLAG_CAPTURES, 1); // +1 flag captures
 
     if (GetTeamScore(ALLIANCE) == BG_WS_MAX_TEAM_SCORE)
         winner = ALLIANCE;
@@ -363,9 +359,8 @@ void BattleGroundWS::EventPlayerClickedOnFlag(Player* source, GameObject* target
 
     uint8 event = (sBattleGroundMgr.GetGameObjectEventIndex(targetGo->GetGUIDLow())).event1;
 
-    //alliance flag picked up from base
-    if (source->GetTeam() == HORDE && GetFlagState(ALLIANCE) == BG_WS_FLAG_STATE_ON_BASE
-            && event == WS_EVENT_FLAG_A)
+    // alliance flag picked up from base
+    if (source->GetTeam() == HORDE && GetFlagState(ALLIANCE) == BG_WS_FLAG_STATE_ON_BASE && event == WS_EVENT_FLAG_A)
     {
         messageId = BCT_BG_WS_PICKEDUP_AF;
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_6_1
@@ -375,15 +370,14 @@ void BattleGroundWS::EventPlayerClickedOnFlag(Player* source, GameObject* target
         SpawnEvent(WS_EVENT_FLAG_A, 0, false, true);
         SetAllianceFlagPicker(source->GetObjectGuid());
         m_flagState[BG_TEAM_ALLIANCE] = BG_WS_FLAG_STATE_ON_PLAYER;
-        //update world state to show correct flag carrier
+        // update world state to show correct flag carrier
         UpdateFlagState(HORDE, BG_WS_FLAG_STATE_ON_PLAYER);
         UpdateWorldState(BG_WS_FLAG_TAKEN_ALLIANCE, 1);
         source->CastSpell(source, BG_WS_SPELL_SILVERWING_FLAG, true);
     }
 
-    //horde flag picked up from base
-    if (source->GetTeam() == ALLIANCE && GetFlagState(HORDE) == BG_WS_FLAG_STATE_ON_BASE
-            && event == WS_EVENT_FLAG_H)
+    // horde flag picked up from base
+    if (source->GetTeam() == ALLIANCE && GetFlagState(HORDE) == BG_WS_FLAG_STATE_ON_BASE && event == WS_EVENT_FLAG_H)
     {
         messageId = BCT_BG_WS_PICKEDUP_HF;
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_6_1
@@ -393,16 +387,14 @@ void BattleGroundWS::EventPlayerClickedOnFlag(Player* source, GameObject* target
         SpawnEvent(WS_EVENT_FLAG_H, 0, false, true);
         SetHordeFlagPicker(source->GetObjectGuid());
         m_flagState[BG_TEAM_HORDE] = BG_WS_FLAG_STATE_ON_PLAYER;
-        //update world state to show correct flag carrier
+        // update world state to show correct flag carrier
         UpdateFlagState(ALLIANCE, BG_WS_FLAG_STATE_ON_PLAYER);
         UpdateWorldState(BG_WS_FLAG_TAKEN_HORDE, 1);
         source->CastSpell(source, BG_WS_SPELL_WARSONG_FLAG, true);
     }
 
-    //Alliance flag on ground(not in base) (returned or picked up again from ground!)
-    if (GetFlagState(ALLIANCE) == BG_WS_FLAG_STATE_ON_GROUND &&
-            source->IsWithinDistInMap(targetGo, 10) &&
-            targetGo->GetEntry() == WS_ALLIANCE_FLAG_GROUND)
+    // Alliance flag on ground(not in base) (returned or picked up again from ground!)
+    if (GetFlagState(ALLIANCE) == BG_WS_FLAG_STATE_ON_GROUND && source->IsWithinDistInMap(targetGo, 10) && targetGo->GetEntry() == WS_ALLIANCE_FLAG_GROUND)
     {
         if (source->GetTeam() == ALLIANCE)
         {
@@ -430,14 +422,12 @@ void BattleGroundWS::EventPlayerClickedOnFlag(Player* source, GameObject* target
             UpdateFlagState(HORDE, BG_WS_FLAG_STATE_ON_PLAYER);
             UpdateWorldState(BG_WS_FLAG_TAKEN_ALLIANCE, 1);
         }
-        //called in HandleGameObjectUseOpcode:
-        //targetGo->Delete();
+        // called in HandleGameObjectUseOpcode:
+        // targetGo->Delete();
     }
 
-    //Horde flag on ground(not in base) (returned or picked up again)
-    if (GetFlagState(HORDE) == BG_WS_FLAG_STATE_ON_GROUND &&
-            source->IsWithinDistInMap(targetGo, 10) &&
-            targetGo->GetEntry() == WS_HORDE_FLAG_GROUND)
+    // Horde flag on ground(not in base) (returned or picked up again)
+    if (GetFlagState(HORDE) == BG_WS_FLAG_STATE_ON_GROUND && source->IsWithinDistInMap(targetGo, 10) && targetGo->GetEntry() == WS_HORDE_FLAG_GROUND)
     {
         if (source->GetTeam() == HORDE)
         {
@@ -465,8 +455,8 @@ void BattleGroundWS::EventPlayerClickedOnFlag(Player* source, GameObject* target
             UpdateFlagState(ALLIANCE, BG_WS_FLAG_STATE_ON_PLAYER);
             UpdateWorldState(BG_WS_FLAG_TAKEN_HORDE, 1);
         }
-        //called in HandleGameObjectUseOpcode:
-        //targetGo->Delete();
+        // called in HandleGameObjectUseOpcode:
+        // targetGo->Delete();
     }
 
     if (!messageId)
@@ -529,66 +519,63 @@ bool BattleGroundWS::HandleAreaTrigger(Player* source, uint32 trigger)
 
     switch (trigger)
     {
-        case 3686:                                          // Alliance elixir of speed spawn. Trigger not working, because located inside other areatrigger, can be replaced by IsWithinDist(object, dist) in BattleGround::Update().
-        case 3687:                                          // Horde elixir of speed spawn. Trigger not working, because located inside other areatrigger, can be replaced by IsWithinDist(object, dist) in BattleGround::Update().
-        case 3706:                                          // Alliance elixir of regeneration spawn
-        case 3708:                                          // Horde elixir of regeneration spawn
-        case 3707:                                          // Alliance elixir of berserk spawn
-        case 3709:                                          // Horde elixir of berserk spawn
-            return true;
-        case AREATRIGGER_ALLIANCE_FLAG_SPAWN:               // Alliance Flag spawn
-            if (m_flagState[BG_TEAM_HORDE] && !m_flagState[BG_TEAM_ALLIANCE])
-                if (GetHordeFlagPickerGuid() == source->GetObjectGuid())
-                    EventPlayerCapturedFlag(source);
-            return true;
-        case AREATRIGGER_HORDE_FLAG_SPAWN:                  // Horde Flag spawn
-            if (m_flagState[BG_TEAM_ALLIANCE] && !m_flagState[BG_TEAM_HORDE])
-                if (GetAllianceFlagPickerGuid() == source->GetObjectGuid())
-                    EventPlayerCapturedFlag(source);
-            return true;
-        case 3669: // Warsong Gulch - Horde Exit
-            // World of Warcraft Client Patch 1.7.0 (2005-09-13)
-            // - Characters that use the Battlemaster to enter a Battleground will
-            //   now port back to that Battlemaster when they leave the Battleground
-            //   for any reason.
+    case 3686: // Alliance elixir of speed spawn. Trigger not working, because located inside other areatrigger, can be replaced by IsWithinDist(object, dist) in BattleGround::Update().
+    case 3687: // Horde elixir of speed spawn. Trigger not working, because located inside other areatrigger, can be replaced by IsWithinDist(object, dist) in BattleGround::Update().
+    case 3706: // Alliance elixir of regeneration spawn
+    case 3708: // Horde elixir of regeneration spawn
+    case 3707: // Alliance elixir of berserk spawn
+    case 3709: // Horde elixir of berserk spawn
+        return true;
+    case AREATRIGGER_ALLIANCE_FLAG_SPAWN: // Alliance Flag spawn
+        if (m_flagState[BG_TEAM_HORDE] && !m_flagState[BG_TEAM_ALLIANCE])
+            if (GetHordeFlagPickerGuid() == source->GetObjectGuid())
+                EventPlayerCapturedFlag(source);
+        return true;
+    case AREATRIGGER_HORDE_FLAG_SPAWN: // Horde Flag spawn
+        if (m_flagState[BG_TEAM_ALLIANCE] && !m_flagState[BG_TEAM_HORDE])
+            if (GetAllianceFlagPickerGuid() == source->GetObjectGuid())
+                EventPlayerCapturedFlag(source);
+        return true;
+    case 3669: // Warsong Gulch - Horde Exit
+               // World of Warcraft Client Patch 1.7.0 (2005-09-13)
+               // - Characters that use the Battlemaster to enter a Battleground will
+               //   now port back to that Battlemaster when they leave the Battleground
+               //   for any reason.
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_6_1
-            if (source->GetTeam() == HORDE)
-            {
-                source->LeaveBattleground();
-                return true;
-            }
+        if (source->GetTeam() == HORDE)
+        {
+            source->LeaveBattleground();
+            return true;
+        }
 #endif
-            return false;
-        case 3671: // Warsong Gulch - Alliance Exit
+        return false;
+    case 3671: // Warsong Gulch - Alliance Exit
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_6_1
-            if (source->GetTeam() == ALLIANCE)
-            {
-                source->LeaveBattleground();
-                return true;
-            }
+        if (source->GetTeam() == ALLIANCE)
+        {
+            source->LeaveBattleground();
+            return true;
+        }
 #endif
-            return false;
-        /*case 3649:                                          // unk1
-          case 3688:                                          // unk2
-          case 4628:                                          // unk3
-          case 4629:                                          // unk4
-              break; */
-        default:
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WARNING: Unhandled AreaTrigger in Battleground: %u", trigger);
-            source->GetSession()->SendAreaTriggerMessage("Warning: Unhandled AreaTrigger in Battleground: %u", trigger);
-            break;
+        return false;
+    /*case 3649:                                          // unk1
+      case 3688:                                          // unk2
+      case 4628:                                          // unk3
+      case 4629:                                          // unk4
+          break; */
+    default:
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WARNING: Unhandled AreaTrigger in Battleground: %u", trigger);
+        source->GetSession()->SendAreaTriggerMessage("Warning: Unhandled AreaTrigger in Battleground: %u", trigger);
+        break;
     }
     return false;
 }
 
-bool BattleGroundWS::SetupBattleGround()
-{
-    return true;
-}
+bool BattleGroundWS::SetupBattleGround() { return true; }
 
 void BattleGroundWS::Reset()
 {
-    //call parent's class reset
+    // call parent's class reset
     BattleGround::Reset();
 
     // spiritguides and flags not spawned at beginning
@@ -602,8 +589,8 @@ void BattleGroundWS::Reset()
     {
         m_droppedFlagGuid[i].Clear();
         m_flagKeepers[i].Clear();
-        m_flagState[i]       = BG_WS_FLAG_STATE_ON_BASE;
-        m_teamScores[i]      = 0;
+        m_flagState[i] = BG_WS_FLAG_STATE_ON_BASE;
+        m_teamScores[i] = 0;
     }
     bool isBGWeekend = BattleGroundMgr::IsBgWeekend(GetTypeID());
 
@@ -626,7 +613,7 @@ void BattleGroundWS::EndBattleGround(Team winner)
         RewardHonorToTeam(BG_WSG_WinMatchHonorBonusCompleteHolidays[GetBracketId()], ALLIANCE);
         RewardHonorToTeam(BG_WSG_WinMatchHonorBonusCompleteHolidays[GetBracketId()], HORDE);
     }
-    //win reward
+    // win reward
     if (winner == ALLIANCE)
     {
         RewardHonorToTeam(BG_WSG_WinMatchHonor[GetBracketId()], ALLIANCE);
@@ -657,20 +644,20 @@ void BattleGroundWS::UpdatePlayerScore(Player* source, uint32 type, uint32 value
 {
 
     BattleGroundScoreMap::iterator itr = m_playerScores.find(source->GetObjectGuid());
-    if (itr == m_playerScores.end())                        // player not found
+    if (itr == m_playerScores.end()) // player not found
         return;
 
     switch (type)
     {
-        case SCORE_FLAG_CAPTURES:                           // flags captured
-            ((BattleGroundWGScore*)itr->second)->flagCaptures += value;
-            break;
-        case SCORE_FLAG_RETURNS:                            // flags returned
-            ((BattleGroundWGScore*)itr->second)->flagReturns += value;
-            break;
-        default:
-            BattleGround::UpdatePlayerScore(source, type, value);
-            break;
+    case SCORE_FLAG_CAPTURES: // flags captured
+        ((BattleGroundWGScore*)itr->second)->flagCaptures += value;
+        break;
+    case SCORE_FLAG_RETURNS: // flags returned
+        ((BattleGroundWGScore*)itr->second)->flagReturns += value;
+        break;
+    default:
+        BattleGround::UpdatePlayerScore(source, type, value);
+        break;
     }
 }
 

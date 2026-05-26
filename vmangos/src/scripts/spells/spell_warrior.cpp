@@ -29,10 +29,7 @@ struct WarriorIntimidatingShoutScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarriorIntimidatingShout(SpellEntry const*)
-{
-    return new WarriorIntimidatingShoutScript();
-}
+SpellScript* GetScript_WarriorIntimidatingShout(SpellEntry const*) { return new WarriorIntimidatingShoutScript(); }
 
 // 23881, 23892, 23893, 23894 - Bloodthirst
 struct WarriorBloodthirstScript : SpellScript
@@ -50,10 +47,7 @@ struct WarriorBloodthirstScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarriorBloodthirst(SpellEntry const*)
-{
-    return new WarriorBloodthirstScript();
-}
+SpellScript* GetScript_WarriorBloodthirst(SpellEntry const*) { return new WarriorBloodthirstScript(); }
 
 // 23922, 23923, 23924, 23925 - Shield Slam
 struct WarriorShieldSlamScript : SpellScript
@@ -68,10 +62,7 @@ struct WarriorShieldSlamScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarriorShieldSlam(SpellEntry const*)
-{
-    return new WarriorShieldSlamScript();
-}
+SpellScript* GetScript_WarriorShieldSlam(SpellEntry const*) { return new WarriorShieldSlamScript(); }
 
 // 20647 - Execute
 struct WarriorExecuteDamageScript : SpellScript
@@ -86,10 +77,7 @@ struct WarriorExecuteDamageScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarriorExecuteDamage(SpellEntry const*)
-{
-    return new WarriorExecuteDamageScript();
-}
+SpellScript* GetScript_WarriorExecuteDamage(SpellEntry const*) { return new WarriorExecuteDamageScript(); }
 
 // 5308, 20658, 20660, 20661, 20662 - Execute
 struct WarriorExecuteDummyScript : SpellScript
@@ -98,17 +86,14 @@ struct WarriorExecuteDummyScript : SpellScript
     {
         if (!spell->GetUnitTarget() || !spell->m_casterUnit)
             return;
-        
+
         int32 basePoints0 = spell->m_currentBasePoints[0] + dither(spell->m_casterUnit->GetPower(POWER_RAGE) * spell->m_spellInfo->DmgMultiplier[0]);
         // m_casterUnit->SetPower(POWER_RAGE, 0); // Done in spell 20647
         spell->m_casterUnit->CastCustomSpell(spell->GetUnitTarget(), 20647, basePoints0, {}, {}, true, nullptr);
     }
 };
 
-SpellScript* GetScript_WarriorExecuteDummy(SpellEntry const*)
-{
-    return new WarriorExecuteDummyScript();
-}
+SpellScript* GetScript_WarriorExecuteDummy(SpellEntry const*) { return new WarriorExecuteDummyScript(); }
 
 // 21977 - Warrior's Wrath
 struct WarriorWrathScript : SpellScript
@@ -123,10 +108,7 @@ struct WarriorWrathScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarriorWrath(SpellEntry const*)
-{
-    return new WarriorWrathScript();
-}
+SpellScript* GetScript_WarriorWrath(SpellEntry const*) { return new WarriorWrathScript(); }
 
 // 2687 - Bloodrage
 struct WarriorBloodrageScript : SpellScript
@@ -141,10 +123,7 @@ struct WarriorBloodrageScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarriorBloodrage(SpellEntry const*)
-{
-    return new WarriorBloodrageScript();
-}
+SpellScript* GetScript_WarriorBloodrage(SpellEntry const*) { return new WarriorBloodrageScript(); }
 
 // 12292 - Sweeping Strikes
 struct WarriorSweepingStrikesAuraScript : public AuraScript
@@ -156,10 +135,7 @@ struct WarriorSweepingStrikesAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_WarriorSweepingStrikes(SpellEntry const*)
-{
-    return new WarriorSweepingStrikesAuraScript();
-}
+AuraScript* GetScript_WarriorSweepingStrikes(SpellEntry const*) { return new WarriorSweepingStrikesAuraScript(); }
 
 // 23234 - Blood Fury
 struct WarriorBloodFuryAuraScript : public AuraScript
@@ -180,21 +156,20 @@ struct WarriorBloodFuryAuraScript : public AuraScript
         {
             Unit* target = aura->GetTarget();
             // using delayed event because of an error in ExclusiveAuraUnapply
-            target->m_Events.AddLambdaEventAtOffset([target]
-            {
-                int32 attackPower = -25 * (target->GetInt32Value(UNIT_FIELD_ATTACK_POWER)) / 100;
-                if (attackPower < 0)
-                    target->CastCustomSpell(target, SPELL_BLOOD_FURY_DEBUFF, attackPower, {}, {}, true, nullptr);
-            }, 1);
+            target->m_Events.AddLambdaEventAtOffset(
+                [target]
+                {
+                    int32 attackPower = -25 * (target->GetInt32Value(UNIT_FIELD_ATTACK_POWER)) / 100;
+                    if (attackPower < 0)
+                        target->CastCustomSpell(target, SPELL_BLOOD_FURY_DEBUFF, attackPower, {}, {}, true, nullptr);
+                },
+                1);
         }
 #endif
     }
 };
 
-AuraScript* GetScript_WarriorBloodFury(SpellEntry const*)
-{
-    return new WarriorBloodFuryAuraScript();
-}
+AuraScript* GetScript_WarriorBloodFury(SpellEntry const*) { return new WarriorBloodFuryAuraScript(); }
 
 void AddSC_warrior_spell_scripts()
 {

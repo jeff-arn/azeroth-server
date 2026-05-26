@@ -3,8 +3,12 @@
 
 #include <cstdint>
 
-namespace IO { namespace Utils {
-    uint64_t GetCurrentProcessId();
-}} // namespace IO::Utils
+namespace IO
+{
+    namespace Utils
+    {
+        uint64_t GetCurrentProcessId();
+    }
+} // namespace IO
 
 #endif // MANGOS_IO_UTILS_H

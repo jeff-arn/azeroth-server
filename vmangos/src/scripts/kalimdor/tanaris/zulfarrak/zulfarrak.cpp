@@ -16,8 +16,8 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "scriptPCH.h"
 #include "zulfarrak.h"
+#include "scriptPCH.h"
 
 /*######
 ## npc_sergeant_bly
@@ -25,25 +25,25 @@
 
 enum blyAndCrewFactions
 {
-    FACTION_HOSTILE           = 14,
-    FACTION_FRIENDLY          = 35,  //while in cages (so the trolls won't attack them while they're caged)
-    FACTION_FREED             = 250  //after release (so they'll be hostile towards trolls)
+    FACTION_HOSTILE = 14,
+    FACTION_FRIENDLY = 35, // while in cages (so the trolls won't attack them while they're caged)
+    FACTION_FREED = 250 // after release (so they'll be hostile towards trolls)
 };
 
 enum blySays
 {
-    SAY_1       = 3882,
-    SAY_2       = 3884,
-    SAY_WEEGLI  = 3811
+    SAY_1 = 3882,
+    SAY_2 = 3884,
+    SAY_WEEGLI = 3811
 };
 
 enum blySpells
 {
-    SPELL_SHIELD_BASH          = 11972,
-    SPELL_REVENGE              = 12170
+    SPELL_SHIELD_BASH = 11972,
+    SPELL_REVENGE = 12170
 };
 
-#define GOSSIP_BLY                  "That's it! I'm tired of helping you out.  It's time we settled things on the battlefield!"
+#define GOSSIP_BLY "That's it! I'm tired of helping you out.  It's time we settled things on the battlefield!"
 
 
 struct npc_sergeant_blyAI : public ScriptedAI
@@ -62,7 +62,7 @@ struct npc_sergeant_blyAI : public ScriptedAI
     uint32 postGossipStep;
     uint32 Text_Timer;
     uint32 ShieldBash_Timer;
-    uint32 Revenge_Timer;                                   //this is wrong, spell should never be used unless m_creature->GetVictim() dodge, parry or block attack. Trinity support required.
+    uint32 Revenge_Timer; // this is wrong, spell should never be used unless m_creature->GetVictim() dodge, parry or block attack. Trinity support required.
     uint64 PlayerGUID;
 
     void Reset() override
@@ -70,7 +70,7 @@ struct npc_sergeant_blyAI : public ScriptedAI
         ShieldBash_Timer = 5000;
         Revenge_Timer = 8000;
 
-//        m_creature->SetFactionTemplateId(FACTION_FRIENDLY);
+        //        m_creature->SetFactionTemplateId(FACTION_FRIENDLY);
     }
 
     void UpdateAI(uint32 const diff) override
@@ -84,28 +84,28 @@ struct npc_sergeant_blyAI : public ScriptedAI
             {
                 switch (postGossipStep)
                 {
-                    case 1:
-                        DoScriptText(SAY_1, m_creature);
-                        Text_Timer = 5000;
-                        break;
-                    case 2:
-                        DoScriptText(SAY_2, m_creature);
-                        Text_Timer = 5000;
-                        break;
-                    case 3:
-                        m_creature->SetFactionTemplateId(FACTION_HOSTILE);
-                        if (Player* pTarget = ((Player*)Unit::GetUnit(*m_creature, PlayerGUID)))
-                            AttackStart(pTarget);
-                        //weegli doesn't fight - he goes & blows up the door
-                        if (Creature* weegli = pInstance->instance->GetCreature(pInstance->GetData64(ENTRY_WEEGLI)))
-                        {
-                            weegli->AI()->OnScriptEventHappened();
-                            DoScriptText(SAY_WEEGLI, weegli);
-                        }
+                case 1:
+                    DoScriptText(SAY_1, m_creature);
+                    Text_Timer = 5000;
+                    break;
+                case 2:
+                    DoScriptText(SAY_2, m_creature);
+                    Text_Timer = 5000;
+                    break;
+                case 3:
+                    m_creature->SetFactionTemplateId(FACTION_HOSTILE);
+                    if (Player* pTarget = ((Player*)Unit::GetUnit(*m_creature, PlayerGUID)))
+                        AttackStart(pTarget);
+                    // weegli doesn't fight - he goes & blows up the door
+                    if (Creature* weegli = pInstance->instance->GetCreature(pInstance->GetData64(ENTRY_WEEGLI)))
+                    {
+                        weegli->AI()->OnScriptEventHappened();
+                        DoScriptText(SAY_WEEGLI, weegli);
+                    }
 
-                        switchFactionIfAlive(pInstance, ENTRY_RAVEN);
-                        switchFactionIfAlive(pInstance, ENTRY_ORO);
-                        switchFactionIfAlive(pInstance, ENTRY_MURTA);
+                    switchFactionIfAlive(pInstance, ENTRY_RAVEN);
+                    switchFactionIfAlive(pInstance, ENTRY_ORO);
+                    switchFactionIfAlive(pInstance, ENTRY_MURTA);
                 }
                 postGossipStep++;
             }
@@ -181,10 +181,7 @@ bool OnGossipHello_npc_sergeant_bly(Player* pPlayer, Creature* pCreature)
     return false;
 }
 
-CreatureAI* GetAI_npc_sergeant_bly(Creature* pCreature)
-{
-    return new npc_sergeant_blyAI(pCreature);
-}
+CreatureAI* GetAI_npc_sergeant_bly(Creature* pCreature) { return new npc_sergeant_blyAI(pCreature); }
 
 /*######
 +## go_troll_cage
@@ -196,7 +193,7 @@ void initBlyCrewMember(InstanceData* pInstance, uint32 entry, float x, float y, 
 
     if (Creature* crew = pInstance->instance->GetCreature(creaGUID))
     {
-        //crew->GetCharmInfo()->SetReactState(REACT_AGGRESSIVE);
+        // crew->GetCharmInfo()->SetReactState(REACT_AGGRESSIVE);
         crew->SetCombatStartPosition(x, y, z);
         crew->SetHomePosition(x, y, z, 4.7f);
         crew->GetMotionMaster()->MovePoint(1, x, y, z, MOVE_PATHFINDING | MOVE_WALK_MODE);
@@ -210,7 +207,7 @@ bool OnGossipHello_go_troll_cage(Player* pPlayer, GameObject* pGo)
     if (InstanceData* pInstance = pGo->GetInstanceData())
     {
         pInstance->SetData(EVENT_PYRAMID, PYRAMID_CAGES_OPEN);
-        //set bly & co to aggressive & start moving to top of stairs
+        // set bly & co to aggressive & start moving to top of stairs
         initBlyCrewMember(pInstance, ENTRY_BLY, 1887.17f, 1263.72f, 41.484f);
         initBlyCrewMember(pInstance, ENTRY_RAVEN, 1890.76f, 1265.82f, 41.43f);
         initBlyCrewMember(pInstance, ENTRY_ORO, 1883.3f, 1272.53f, 41.87f);
@@ -226,20 +223,20 @@ bool OnGossipHello_go_troll_cage(Player* pPlayer, GameObject* pGo)
 
 enum weegliSpells
 {
-    SPELL_BOMB                 = 8858,
-    SPELL_GOBLIN_LAND_MINE     = 21688,
-    SPELL_SHOOT                = 6660,
-    SPELL_WEEGLIS_BARREL       = 10772
+    SPELL_BOMB = 8858,
+    SPELL_GOBLIN_LAND_MINE = 21688,
+    SPELL_SHOOT = 6660,
+    SPELL_WEEGLIS_BARREL = 10772
 };
 
 enum weegliSays
 {
-    SAY_WEEGLI_OHNO      = 3744,
-    SAY_WEEGLI_OK_I_GO   = 3785,
+    SAY_WEEGLI_OHNO = 3744,
+    SAY_WEEGLI_OK_I_GO = 3785,
     SAY_CHIEF_UKORZ_DOOR = 6067
 };
 
-#define GOSSIP_WEEGLI               "Will you blow up that door now?"
+#define GOSSIP_WEEGLI "Will you blow up that door now?"
 
 
 struct npc_weegli_blastfuseAI : public ScriptedAI
@@ -271,13 +268,13 @@ struct npc_weegli_blastfuseAI : public ScriptedAI
             pInstance->SetData(0, NOT_STARTED);*/
     }
 
-    void AttackStart(Unit *victim) override
+    void AttackStart(Unit* victim) override
     {
         ScriptedAI::AttackStart(victim);
-        //AttackStartCaster(victim,10);//keep back & toss bombs/shoot
+        // AttackStartCaster(victim,10);//keep back & toss bombs/shoot
     }
 
-    void JustDied(Unit * /*victim*/) override
+    void JustDied(Unit* /*victim*/) override
     {
         /*if (pInstance)
             pInstance->SetData(0, DONE);*/
@@ -401,10 +398,7 @@ struct npc_weegli_blastfuseAI : public ScriptedAI
         }
     }
 
-    void OnScriptEventHappened(uint32 /*uiEvent*/ = 0, uint32 /*uiData*/ = 0, WorldObject* /*pInvoker*/ = 0) override
-    {
-        DestroyDoor();
-    }
+    void OnScriptEventHappened(uint32 /*uiEvent*/ = 0, uint32 /*uiData*/ = 0, WorldObject* /*pInvoker*/ = 0) override { DestroyDoor(); }
 
     void DestroyDoor()
     {
@@ -439,7 +433,6 @@ struct npc_weegli_blastfuseAI : public ScriptedAI
             disappear = true;
         }
     }
-
 };
 
 
@@ -448,7 +441,7 @@ bool OnGossipSelect_npc_weegli_blastfuse(Player* pPlayer, Creature* pCreature, u
     if (uiAction == GOSSIP_ACTION_INFO_DEF + 1)
     {
         pPlayer->CLOSE_GOSSIP_MENU();
-        //here we make him run to door, set the charge and run away off to nowhere
+        // here we make him run to door, set the charge and run away off to nowhere
         pCreature->AI()->OnScriptEventHappened();
     }
     return true;
@@ -460,25 +453,22 @@ bool OnGossipHello_npc_weegli_blastfuse(Player* pPlayer, Creature* pCreature)
     {
         switch (pInstance->GetData(EVENT_PYRAMID))
         {
-            case PYRAMID_KILLED_ALL_TROLLS:
-                pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, GOSSIP_WEEGLI, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
-                pPlayer->SEND_GOSSIP_MENU(1514, pCreature->GetGUID());  //if event can proceed to end
-                break;
-            case PYRAMID_NOT_STARTED:
-                pPlayer->SEND_GOSSIP_MENU(1511, pCreature->GetGUID());  //if event not started
-                break;
-            default:
-                pPlayer->SEND_GOSSIP_MENU(1513, pCreature->GetGUID());  //if event are in progress
+        case PYRAMID_KILLED_ALL_TROLLS:
+            pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, GOSSIP_WEEGLI, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
+            pPlayer->SEND_GOSSIP_MENU(1514, pCreature->GetGUID()); // if event can proceed to end
+            break;
+        case PYRAMID_NOT_STARTED:
+            pPlayer->SEND_GOSSIP_MENU(1511, pCreature->GetGUID()); // if event not started
+            break;
+        default:
+            pPlayer->SEND_GOSSIP_MENU(1513, pCreature->GetGUID()); // if event are in progress
         }
         return true;
     }
     return false;
 }
 
-CreatureAI* GetAI_npc_weegli_blastfuse(Creature* pCreature)
-{
-    return new npc_weegli_blastfuseAI(pCreature);
-}
+CreatureAI* GetAI_npc_weegli_blastfuse(Creature* pCreature) { return new npc_weegli_blastfuseAI(pCreature); }
 
 /*######
 ## go_shallow_grave
@@ -527,10 +517,7 @@ bool OnGossipHello_go_table_theka(Player* pPlayer, GameObject* pGo)
 
 struct ward_zumrahAI : public ScriptedAI
 {
-    ward_zumrahAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    ward_zumrahAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiSkeletonTimer;
 
@@ -554,10 +541,7 @@ struct ward_zumrahAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_ward_zumrah(Creature* pCreature)
-{
-    return new ward_zumrahAI(pCreature);
-}
+CreatureAI* GetAI_ward_zumrah(Creature* pCreature) { return new ward_zumrahAI(pCreature); }
 
 /*######
 ## at_zumrah
@@ -566,14 +550,14 @@ CreatureAI* GetAI_ward_zumrah(Creature* pCreature)
 enum
 {
     NPC_WITCH_DOCTOR_ZUMRAH = 7271,
-    ZUMRAH_HOSTILE_FACTION  = 37,
+    ZUMRAH_HOSTILE_FACTION = 37,
 
-    SAY_ZUMRAH_TRIGGER      = 3622,
-    SAY_ZUMRAH_YELL         = 6221,
-    SAY_ZUMRAH_KILLED       = 6222
+    SAY_ZUMRAH_TRIGGER = 3622,
+    SAY_ZUMRAH_YELL = 6221,
+    SAY_ZUMRAH_KILLED = 6222
 };
 
-bool OnTrigger_at_zumrah(Player* pPlayer, AreaTriggerEntry const *at)
+bool OnTrigger_at_zumrah(Player* pPlayer, AreaTriggerEntry const* at)
 {
     Creature* pZumrah = pPlayer->FindNearestCreature(NPC_WITCH_DOCTOR_ZUMRAH, 30.0f);
 
@@ -599,12 +583,12 @@ bool OnTrigger_at_zumrah(Player* pPlayer, AreaTriggerEntry const *at)
 
 enum
 {
-    NPC_ANTUSUL            = 8127,
+    NPC_ANTUSUL = 8127,
     NPS_SULITHUZ_BROODLING = 8138,
-    SAY_ANTUSUL_TRIGGER    = 4166,
+    SAY_ANTUSUL_TRIGGER = 4166,
 };
 
-bool OnTrigger_at_antusul(Player* pPlayer, AreaTriggerEntry const *at)
+bool OnTrigger_at_antusul(Player* pPlayer, AreaTriggerEntry const* at)
 {
     Creature* pAntusul = pPlayer->FindNearestCreature(NPC_ANTUSUL, 100.0f);
 
@@ -614,31 +598,32 @@ bool OnTrigger_at_antusul(Player* pPlayer, AreaTriggerEntry const *at)
     InstanceData* pInstance = pAntusul->GetInstanceData();
     if (!pInstance || pInstance->GetData(EVENT_ANTUSUL) != NOT_STARTED)
         return false;
-    
+
     pInstance->SetData(EVENT_ANTUSUL, IN_PROGRESS);
     DoScriptText(SAY_ANTUSUL_TRIGGER, pAntusul);
-    pAntusul->m_Events.AddLambdaEventAtOffset([pAntusul]()
-    {
-        // World of Warcraft Client Patch 1.12.0 (2006-08-22)
-        // - Antu'sul's Sul'lithuz Broodlings now only hatch 4 at a time and are
-        //   significantly weaker.
-        uint32 count = sWorld.GetWowPatch() < WOW_PATCH_112 ? 2 : 1;
-        for (uint32 i = 0; i < count; ++i)
+    pAntusul->m_Events.AddLambdaEventAtOffset(
+        [pAntusul]()
         {
-            if (Creature* pBroodling = pAntusul->SummonCreature(NPS_SULITHUZ_BROODLING, 1823.415161f, 748.297485f, 20.794931f, 3.944444f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN))
-                pBroodling->SetInCombatWithZone(true);
-            if (Creature* pBroodling = pAntusul->SummonCreature(NPS_SULITHUZ_BROODLING, 1786.019165f, 743.399048f, 15.481779f, 6.108652f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN))
-                pBroodling->SetInCombatWithZone(true);
-            if (Creature* pBroodling = pAntusul->SummonCreature(NPS_SULITHUZ_BROODLING, 1827.460571f, 738.032410f, 19.131363f, 3.385939f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN))
-                pBroodling->SetInCombatWithZone(true);
-            if (Creature* pBroodling = pAntusul->SummonCreature(NPS_SULITHUZ_BROODLING, 1810.196533f, 749.873230f, 17.597878f, 4.555309f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN))
-                pBroodling->SetInCombatWithZone(true);
-        }
-        
-        if (pAntusul->IsAlive() && !pAntusul->IsInCombat())
-            pAntusul->GetMotionMaster()->MovePoint(0, 1805.133667f, 740.349304f, 14.763382f, MOVE_PATHFINDING | MOVE_RUN_MODE);
+            // World of Warcraft Client Patch 1.12.0 (2006-08-22)
+            // - Antu'sul's Sul'lithuz Broodlings now only hatch 4 at a time and are
+            //   significantly weaker.
+            uint32 count = sWorld.GetWowPatch() < WOW_PATCH_112 ? 2 : 1;
+            for (uint32 i = 0; i < count; ++i)
+            {
+                if (Creature* pBroodling = pAntusul->SummonCreature(NPS_SULITHUZ_BROODLING, 1823.415161f, 748.297485f, 20.794931f, 3.944444f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN))
+                    pBroodling->SetInCombatWithZone(true);
+                if (Creature* pBroodling = pAntusul->SummonCreature(NPS_SULITHUZ_BROODLING, 1786.019165f, 743.399048f, 15.481779f, 6.108652f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN))
+                    pBroodling->SetInCombatWithZone(true);
+                if (Creature* pBroodling = pAntusul->SummonCreature(NPS_SULITHUZ_BROODLING, 1827.460571f, 738.032410f, 19.131363f, 3.385939f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN))
+                    pBroodling->SetInCombatWithZone(true);
+                if (Creature* pBroodling = pAntusul->SummonCreature(NPS_SULITHUZ_BROODLING, 1810.196533f, 749.873230f, 17.597878f, 4.555309f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN))
+                    pBroodling->SetInCombatWithZone(true);
+            }
 
-    }, BATCHING_INTERVAL * 3);
+            if (pAntusul->IsAlive() && !pAntusul->IsInCombat())
+                pAntusul->GetMotionMaster()->MovePoint(0, 1805.133667f, 740.349304f, 14.763382f, MOVE_PATHFINDING | MOVE_RUN_MODE);
+        },
+        BATCHING_INTERVAL * 3);
 
     return true;
 }

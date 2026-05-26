@@ -26,77 +26,74 @@
 
 //=====================================================
 
-template<class TO, class FROM>
+template <class TO, class FROM>
 class Reference : public LinkedListElement
 {
-    private:
+private:
+    TO* iRefTo = nullptr;
+    FROM* iRefFrom = nullptr;
 
-        TO* iRefTo = nullptr;
-        FROM* iRefFrom = nullptr;
+protected:
+    // Tell our refTo (target) object that we have a link
+    virtual void targetObjectBuildLink() = 0;
 
-    protected:
+    // Tell our refTo (taget) object, that the link is cut
+    virtual void targetObjectDestroyLink() = 0;
 
-        // Tell our refTo (target) object that we have a link
-        virtual void targetObjectBuildLink() = 0;
+    // Tell our refFrom (source) object, that the link is cut (Target destroyed)
+    virtual void sourceObjectDestroyLink() = 0;
 
-        // Tell our refTo (taget) object, that the link is cut
-        virtual void targetObjectDestroyLink() = 0;
+public:
+    virtual ~Reference() {}
 
-        // Tell our refFrom (source) object, that the link is cut (Target destroyed)
-        virtual void sourceObjectDestroyLink() = 0;
+    // Create new link
+    void link(TO* toObj, FROM* fromObj)
+    {
+        assert(fromObj); // fromObj MUST not be nullptr
+        if (isValid())
+            unlink();
 
-    public:
-
-        virtual ~Reference() {}
-
-        // Create new link
-        void link(TO* toObj, FROM* fromObj)
+        if (toObj != nullptr)
         {
-            assert(fromObj);                                // fromObj MUST not be nullptr
-            if (isValid())
-                unlink();
-
-            if (toObj != nullptr)
-            {
-                iRefTo = toObj;
-                iRefFrom = fromObj;
-                targetObjectBuildLink();
-            }
+            iRefTo = toObj;
+            iRefFrom = fromObj;
+            targetObjectBuildLink();
         }
+    }
 
-        // We don't need the reference anymore. Call comes from the refFrom object
-        // Tell our refTo object, that the link is cut
-        void unlink()
-        {
-            targetObjectDestroyLink();
-            delink();
-            iRefTo = nullptr;
-            iRefFrom = nullptr;
-        }
+    // We don't need the reference anymore. Call comes from the refFrom object
+    // Tell our refTo object, that the link is cut
+    void unlink()
+    {
+        targetObjectDestroyLink();
+        delink();
+        iRefTo = nullptr;
+        iRefFrom = nullptr;
+    }
 
-        // Link is invalid due to destruction of referenced target object. Call comes from the refTo object
-        // Tell our refFrom object, that the link is cut
-        void invalidate()                                   // the iRefFrom MUST remain!!
-        {
-            sourceObjectDestroyLink();
-            delink();
-            iRefTo = nullptr;
-        }
+    // Link is invalid due to destruction of referenced target object. Call comes from the refTo object
+    // Tell our refFrom object, that the link is cut
+    void invalidate() // the iRefFrom MUST remain!!
+    {
+        sourceObjectDestroyLink();
+        delink();
+        iRefTo = nullptr;
+    }
 
-        bool isValid() const                                // Only check the iRefTo
-        {
-            return iRefTo != nullptr;
-        }
+    bool isValid() const // Only check the iRefTo
+    {
+        return iRefTo != nullptr;
+    }
 
-        Reference<TO,FROM>      * next()       { return ((Reference<TO, FROM>      *) LinkedListElement::next()); }
-        Reference<TO,FROM> const* next() const { return ((Reference<TO, FROM> const*) LinkedListElement::next()); }
-        Reference<TO,FROM>      * prev()       { return ((Reference<TO, FROM>      *) LinkedListElement::prev()); }
-        Reference<TO,FROM> const* prev() const { return ((Reference<TO, FROM> const*) LinkedListElement::prev()); }
+    Reference<TO, FROM>* next() { return ((Reference<TO, FROM>*)LinkedListElement::next()); }
+    Reference<TO, FROM> const* next() const { return ((Reference<TO, FROM> const*)LinkedListElement::next()); }
+    Reference<TO, FROM>* prev() { return ((Reference<TO, FROM>*)LinkedListElement::prev()); }
+    Reference<TO, FROM> const* prev() const { return ((Reference<TO, FROM> const*)LinkedListElement::prev()); }
 
-        TO* operator->() const { return iRefTo; }
-        TO* getTarget() const { return iRefTo; }
+    TO* operator->() const { return iRefTo; }
+    TO* getTarget() const { return iRefTo; }
 
-        FROM* getSource() const { return iRefFrom; }
+    FROM* getSource() const { return iRefFrom; }
 };
 
 //=====================================================

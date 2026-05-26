@@ -26,18 +26,18 @@ go_southfury_moonstone
 mobs_spitelashes
 EndContentData */
 
-#include "scriptPCH.h"
 #include "World.h"
+#include "scriptPCH.h"
 
 //--Alita MAWS
 enum
 {
     SPELL_DARK_WATER = 25743,
-    SPELL_FRENZY     = 19812,
-    SPELL_RAMPAGE    = 25744,
+    SPELL_FRENZY = 19812,
+    SPELL_RAMPAGE = 25744,
     EMOTE_THE_BEAST_RETURNS = 11160,
     GO_BAY_OF_STORMS = 180670,
-    FACTION_MONSTER  = 14,
+    FACTION_MONSTER = 14,
 };
 
 struct Locations
@@ -46,27 +46,15 @@ struct Locations
 };
 
 // out of combat waypoints
-static Locations ronde[] =
-{
-    { 3525.413330f, -6673.905273f, -20.0f }, // because of the animation that falls I said to myself hop in the water. Not used.
-    { 3561.725098f, -6647.203613f, -7.5f },  // between 57 and 58 meters from the maelstom // spawn
-    { 3569.491211f, -6601.534668f, -7.5f },
-    { 3567.581787f, -6601.534668f, -7.5f },
+static Locations ronde[] = {{3525.413330f, -6673.905273f, -20.0f}, // because of the animation that falls I said to myself hop in the water. Not used.
+                            {3561.725098f, -6647.203613f, -7.5f}, // between 57 and 58 meters from the maelstom // spawn
+                            {3569.491211f, -6601.534668f, -7.5f},  {3567.581787f, -6601.534668f, -7.5f},
 
-    { 3556.089844f, -6580.337402f, -7.5f },
-    { 3535.929199f, -6566.029785f, -7.5f },
-    { 3512.707275f, -6560.118164f, -7.5f },
-    { 3481.141113f, -6564.093262f, -7.5f },
+                            {3556.089844f, -6580.337402f, -7.5f},  {3535.929199f, -6566.029785f, -7.5f}, {3512.707275f, -6560.118164f, -7.5f}, {3481.141113f, -6564.093262f, -7.5f},
 
-    { 3471.087158f, -6577.640137f, -7.5f },
-    { 3457.589844f, -6601.105957f, -7.5f },
-    { 3455.857666f, -6626.840820f, -7.5f },
-    { 3464.808838f, -6650.078613f, -7.5f },
+                            {3471.087158f, -6577.640137f, -7.5f},  {3457.589844f, -6601.105957f, -7.5f}, {3455.857666f, -6626.840820f, -7.5f}, {3464.808838f, -6650.078613f, -7.5f},
 
-    { 3482.844238f, -6667.317383f, -7.5f },
-    { 3506.620361f, -6675.020020f, -7.5f },
-    { 3525.413330f, -6673.905273f, -7.5f }
-};
+                            {3482.844238f, -6667.317383f, -7.5f},  {3506.620361f, -6675.020020f, -7.5f}, {3525.413330f, -6673.905273f, -7.5f}};
 
 struct mob_mawsAI : public ScriptedAI
 {
@@ -92,10 +80,7 @@ struct mob_mawsAI : public ScriptedAI
             pGo->DeleteLater();
     }
 
-    void OnRemoveFromWorld() override
-    {
-        DespawnBayOfStorms();
-    }
+    void OnRemoveFromWorld() override { DespawnBayOfStorms(); }
 
     void MovementInform(uint32 uiType, uint32 uiPointId) override
     {
@@ -174,7 +159,7 @@ struct mob_mawsAI : public ScriptedAI
             InCombat = 1;
     }
 
-    void DamageTaken(Unit *done_by, uint32 &damage) override // Prevent infinite kiting. Does not apply to charge damage.
+    void DamageTaken(Unit* done_by, uint32& damage) override // Prevent infinite kiting. Does not apply to charge damage.
     {
         LeaveCombatTimer = 30000;
     }
@@ -203,13 +188,9 @@ struct mob_mawsAI : public ScriptedAI
         m_creature->SetWalk(m_creature->GetFactionTemplateId() == FACTION_MONSTER);
         m_creature->GetMotionMaster()->MovePoint(LastWayPoint, ronde[LastWayPoint].x, ronde[LastWayPoint].y, ronde[LastWayPoint].z);
     }
-
 };
 
-CreatureAI* GetAI_mob_maws(Creature* pCreature)
-{
-    return new mob_mawsAI(pCreature);
-}
+CreatureAI* GetAI_mob_maws(Creature* pCreature) { return new mob_mawsAI(pCreature); }
 //--
 
 struct go_bay_of_stormsAI : public GameObjectAI
@@ -240,10 +221,7 @@ struct go_bay_of_stormsAI : public GameObjectAI
     }
 };
 
-GameObjectAI* GetAI_go_bay_of_storms(GameObject* gameobject)
-{
-    return new go_bay_of_stormsAI(gameobject);
-}
+GameObjectAI* GetAI_go_bay_of_storms(GameObject* gameobject) { return new go_bay_of_stormsAI(gameobject); }
 
 void AddSC_azshara()
 {

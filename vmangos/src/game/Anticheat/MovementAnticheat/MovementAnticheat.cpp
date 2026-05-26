@@ -1,18 +1,18 @@
-#include "Common.h"
-#include "Database/DatabaseEnv.h"
-#include "Config/Config.h"
-#include "Opcodes.h"
 #include "MovementAnticheat.h"
-#include "Chat.h"
-#include "Player.h"
-#include "GameObject.h"
-#include "WorldSession.h"
-#include "MoveSpline.h"
-#include "World.h"
-#include "MovementPacketSender.h"
-#include "Geometry.h"
 #include "AccountMgr.h"
 #include "BattleGround.h"
+#include "Chat.h"
+#include "Common.h"
+#include "Config/Config.h"
+#include "Database/DatabaseEnv.h"
+#include "GameObject.h"
+#include "Geometry.h"
+#include "MoveSpline.h"
+#include "MovementPacketSender.h"
+#include "Opcodes.h"
+#include "Player.h"
+#include "World.h"
+#include "WorldSession.h"
 
 using namespace Geometry;
 
@@ -23,86 +23,78 @@ char const* GetMovementCheatName(CheatType flagId)
 {
     switch (flagId)
     {
-        case CHEAT_TYPE_TIME_BACK:
-            return "ReverseTime";
-        case CHEAT_TYPE_NULL_CLIENT_TIME:
-            return "NullClientTime";
-        case CHEAT_TYPE_SKIPPED_HEARTBEATS:
-            return "SkippedHeartbeats";
-        case CHEAT_TYPE_TIME_DESYNC:
-            return "TimeDesync";
-        case CHEAT_TYPE_NUM_DESYNC:
-            return "NumDesyncs";
-        case CHEAT_TYPE_OVERSPEED_DIST:
-            return "OverspeedDist";
-        case CHEAT_TYPE_OVERSPEED_JUMP:
-            return "OverspeedJump";
-        case CHEAT_TYPE_JUMP_SPEED_CHANGE:
-            return "JumpSpeedChange";
-        case CHEAT_TYPE_MULTI_JUMP:
-            return "MultiJump";
-        case CHEAT_TYPE_WALL_CLIMB:
-            return "WallClimb";
-        case CHEAT_TYPE_PVE_FLYHACK:
-            return "PvEUnreachable";
-        case CHEAT_TYPE_FLY_HACK_SWIM:
-            return "FlyHackSwim";
-        case CHEAT_TYPE_NO_FALL_TIME:
-            return "NoFallTime";
-        case CHEAT_TYPE_BAD_FALL_RESET:
-            return "BadFallReset";
-        case CHEAT_TYPE_BAD_FALL_STOP:
-            return "BadFallStop";
-        case CHEAT_TYPE_BAD_MOVE_START:
-            return "BadMoveStart";
-        case CHEAT_TYPE_TELEPORT:
-            return "TeleportHack";
-        case CHEAT_TYPE_TELEPORT_TRANSPORT:
-            return "TeleToTransport";
-        case CHEAT_TYPE_FAKE_TRANSPORT:
-            return "FakeTransport";
-        case CHEAT_TYPE_WATER_WALK:
-            return "WaterWalk";
-        case CHEAT_TYPE_SLOW_FALL:
-            return "SlowFall";
-        case CHEAT_TYPE_HOVER:
-            return "Hover";
-        case CHEAT_TYPE_FIXED_Z:
-            return "FixedZ";
-        case CHEAT_TYPE_ROOT_MOVE:
-            return "MovementRooted";
-        case CHEAT_TYPE_SELF_ROOT:
-            return "SelfRoot";
-        case CHEAT_TYPE_WRONG_ACK_DATA:
-            return "WrongAckData";
-        case CHEAT_TYPE_PENDING_ACK_DELAY:
-            return "PendingAckDelay";
-        case CHEAT_TYPE_EXPLORE:
-            return "Exploration";
-        case CHEAT_TYPE_EXPLORE_HIGH_LEVEL:
-            return "ExploreHighLevelArea";
-        case CHEAT_TYPE_FORBIDDEN_AREA:
-            return "ForbiddenArea";
-        case CHEAT_TYPE_BOTTING:
-            return "Botting";
+    case CHEAT_TYPE_TIME_BACK:
+        return "ReverseTime";
+    case CHEAT_TYPE_NULL_CLIENT_TIME:
+        return "NullClientTime";
+    case CHEAT_TYPE_SKIPPED_HEARTBEATS:
+        return "SkippedHeartbeats";
+    case CHEAT_TYPE_TIME_DESYNC:
+        return "TimeDesync";
+    case CHEAT_TYPE_NUM_DESYNC:
+        return "NumDesyncs";
+    case CHEAT_TYPE_OVERSPEED_DIST:
+        return "OverspeedDist";
+    case CHEAT_TYPE_OVERSPEED_JUMP:
+        return "OverspeedJump";
+    case CHEAT_TYPE_JUMP_SPEED_CHANGE:
+        return "JumpSpeedChange";
+    case CHEAT_TYPE_MULTI_JUMP:
+        return "MultiJump";
+    case CHEAT_TYPE_WALL_CLIMB:
+        return "WallClimb";
+    case CHEAT_TYPE_PVE_FLYHACK:
+        return "PvEUnreachable";
+    case CHEAT_TYPE_FLY_HACK_SWIM:
+        return "FlyHackSwim";
+    case CHEAT_TYPE_NO_FALL_TIME:
+        return "NoFallTime";
+    case CHEAT_TYPE_BAD_FALL_RESET:
+        return "BadFallReset";
+    case CHEAT_TYPE_BAD_FALL_STOP:
+        return "BadFallStop";
+    case CHEAT_TYPE_BAD_MOVE_START:
+        return "BadMoveStart";
+    case CHEAT_TYPE_TELEPORT:
+        return "TeleportHack";
+    case CHEAT_TYPE_TELEPORT_TRANSPORT:
+        return "TeleToTransport";
+    case CHEAT_TYPE_FAKE_TRANSPORT:
+        return "FakeTransport";
+    case CHEAT_TYPE_WATER_WALK:
+        return "WaterWalk";
+    case CHEAT_TYPE_SLOW_FALL:
+        return "SlowFall";
+    case CHEAT_TYPE_HOVER:
+        return "Hover";
+    case CHEAT_TYPE_FIXED_Z:
+        return "FixedZ";
+    case CHEAT_TYPE_ROOT_MOVE:
+        return "MovementRooted";
+    case CHEAT_TYPE_SELF_ROOT:
+        return "SelfRoot";
+    case CHEAT_TYPE_WRONG_ACK_DATA:
+        return "WrongAckData";
+    case CHEAT_TYPE_PENDING_ACK_DELAY:
+        return "PendingAckDelay";
+    case CHEAT_TYPE_EXPLORE:
+        return "Exploration";
+    case CHEAT_TYPE_EXPLORE_HIGH_LEVEL:
+        return "ExploreHighLevelArea";
+    case CHEAT_TYPE_FORBIDDEN_AREA:
+        return "ForbiddenArea";
+    case CHEAT_TYPE_BOTTING:
+        return "Botting";
     }
 
     return "UnknownCheat";
 }
 
-MovementAnticheat::MovementAnticheat(Player* _me) : me(_me), m_session(_me->GetSession())
-{
-}
+MovementAnticheat::MovementAnticheat(Player* _me) : me(_me), m_session(_me->GetSession()) {}
 
-MovementInfo& MovementAnticheat::GetLastMovementInfo()
-{
-    return me->m_movementInfo;
-}
+MovementInfo& MovementAnticheat::GetLastMovementInfo() { return me->m_movementInfo; }
 
-MovementInfo const& MovementAnticheat::GetLastMovementInfo() const
-{
-    return me->m_movementInfo;
-}
+MovementInfo const& MovementAnticheat::GetLastMovementInfo() const { return me->m_movementInfo; }
 
 uint32 MovementAnticheat::Update(Player* pPlayer, uint32 diff, std::stringstream& reason)
 {
@@ -144,14 +136,13 @@ uint32 MovementAnticheat::Finalize(Player* pPlayer, std::stringstream& reason)
     // Log data
     if (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_LOG_DATA) && pPlayer && pPlayer->IsInWorld())
     {
-        sLog.Player(m_session, LOG_ANTICHEAT, "Movement", LOG_LVL_BASIC, "DesyncMs %d DesyncDist %f Cheats %s",
-            m_clientDesync, m_overspeedDistance, reason.rdbuf()->in_avail() ? reason.str().c_str() : "");
+        sLog.Player(m_session, LOG_ANTICHEAT, "Movement", LOG_LVL_BASIC, "DesyncMs %d DesyncDist %f Cheats %s", m_clientDesync, m_overspeedDistance, reason.rdbuf()->in_avail() ? reason.str().c_str() : "");
     }
 
     if ((result & (CHEAT_ACTION_KICK | CHEAT_ACTION_BAN_ACCOUNT | CHEAT_ACTION_BAN_IP_ACCOUNT)) && !m_packetLog.empty())
     {
         AddMessageToPacketLog("End of packet log. Penalty: " + std::to_string(result) + ", Detected cheats: " + reason.str());
-        std::string fileName = "movement_log_" +  m_session->GetUsername() + "_" + std::to_string(time(nullptr)) + ".pkt";
+        std::string fileName = "movement_log_" + m_session->GetUsername() + "_" + std::to_string(time(nullptr)) + ".pkt";
         SniffFile packetDump(fileName.c_str());
         std::lock_guard<std::mutex> guard(m_packetLogMutex);
         packetDump.WriteToFile(m_packetLog);
@@ -170,8 +161,7 @@ void MovementAnticheat::AddCheats(uint32 cheats, uint32 count)
     if (!cheats)
         return;
 
-    if (sWorld.getConfig(CONFIG_UINT32_AC_MOVEMENT_PACKET_LOG_SIZE) ||
-       (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_NOTIFY_CHEATERS) && m_session->GetPlayer()))
+    if (sWorld.getConfig(CONFIG_UINT32_AC_MOVEMENT_PACKET_LOG_SIZE) || (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_NOTIFY_CHEATERS) && m_session->GetPlayer()))
     {
         std::string cheatNames;
         for (uint32 i = 0; i < CHEATS_COUNT; ++i)
@@ -211,7 +201,7 @@ uint32 MovementAnticheat::ComputeCheatAction(std::stringstream& reason)
     uint32 action = CHEAT_ACTION_NONE;
 
     auto AddPenaltyForCheat = [&action, &reason, this](bool total, CheatType cheatType, eConfigBoolValues enabledConfig, eConfigUInt32Values thresholdConfig, eConfigUInt32Values penaltyConfig)
-    { 
+    {
         if (sWorld.getConfig(enabledConfig))
         {
             ASSERT(cheatType < CHEATS_COUNT);
@@ -274,18 +264,18 @@ uint32 MovementAnticheat::ComputeCheatAction(std::stringstream& reason)
             eConfigUInt32Values minTurnsConfig;
             switch (m_turnType)
             {
-                case TURN_MOUSE:
-                    minTurnsConfig = CONFIG_UINT32_AC_MOVEMENT_CHEAT_BOTTING_MIN_TURNS_MOUSE;
-                    break;
-                case TURN_KEYBOARD:
-                    minTurnsConfig = CONFIG_UINT32_AC_MOVEMENT_CHEAT_BOTTING_MIN_TURNS_KEYBOARD;
-                    break;
-                case TURN_ABNORMAL:
-                    minTurnsConfig = CONFIG_UINT32_AC_MOVEMENT_CHEAT_BOTTING_MIN_TURNS_ABNORMAL;
-                    break;
-                default:
-                    minTurnsConfig = CONFIG_UINT32_VALUE_COUNT;
-                    break;
+            case TURN_MOUSE:
+                minTurnsConfig = CONFIG_UINT32_AC_MOVEMENT_CHEAT_BOTTING_MIN_TURNS_MOUSE;
+                break;
+            case TURN_KEYBOARD:
+                minTurnsConfig = CONFIG_UINT32_AC_MOVEMENT_CHEAT_BOTTING_MIN_TURNS_KEYBOARD;
+                break;
+            case TURN_ABNORMAL:
+                minTurnsConfig = CONFIG_UINT32_AC_MOVEMENT_CHEAT_BOTTING_MIN_TURNS_ABNORMAL;
+                break;
+            default:
+                minTurnsConfig = CONFIG_UINT32_VALUE_COUNT;
+                break;
             }
             if (minTurnsConfig != CONFIG_UINT32_VALUE_COUNT)
                 AddPenaltyForCheat(true, CHEAT_TYPE_BOTTING, CONFIG_BOOL_AC_MOVEMENT_CHEAT_BOTTING_ENABLED, minTurnsConfig, CONFIG_UINT32_AC_MOVEMENT_CHEAT_BOTTING_PENALTY);
@@ -307,91 +297,91 @@ bool MovementAnticheat::IsLoggedOpcode(uint16 opcode)
 {
     switch (opcode)
     {
-        case CMSG_WORLD_TELEPORT:
-        case CMSG_TELEPORT_TO_UNIT:
-        case CMSG_REPOP_REQUEST:
-        case CMSG_RESURRECT_RESPONSE:
-        case CMSG_RECLAIM_CORPSE:
-        case MSG_MOVE_START_FORWARD:
-        case MSG_MOVE_START_BACKWARD:
-        case MSG_MOVE_STOP:
-        case MSG_MOVE_START_STRAFE_LEFT:
-        case MSG_MOVE_START_STRAFE_RIGHT:
-        case MSG_MOVE_STOP_STRAFE:
-        case MSG_MOVE_JUMP:
-        case MSG_MOVE_START_TURN_LEFT:
-        case MSG_MOVE_START_TURN_RIGHT:
-        case MSG_MOVE_STOP_TURN:
-        case MSG_MOVE_START_PITCH_UP:
-        case MSG_MOVE_START_PITCH_DOWN:
-        case MSG_MOVE_STOP_PITCH:
-        case MSG_MOVE_SET_RUN_MODE:
-        case MSG_MOVE_SET_WALK_MODE:
-        case MSG_MOVE_TOGGLE_LOGGING:
-        case MSG_MOVE_TELEPORT:
-        case MSG_MOVE_TELEPORT_CHEAT:
-        case MSG_MOVE_TELEPORT_ACK:
-        case MSG_MOVE_TOGGLE_FALL_LOGGING:
-        case MSG_MOVE_FALL_LAND:
-        case MSG_MOVE_START_SWIM:
-        case MSG_MOVE_STOP_SWIM:
-        case MSG_MOVE_SET_RUN_SPEED_CHEAT:
-        case MSG_MOVE_SET_RUN_SPEED:
-        case MSG_MOVE_SET_RUN_BACK_SPEED_CHEAT:
-        case MSG_MOVE_SET_RUN_BACK_SPEED:
-        case MSG_MOVE_SET_WALK_SPEED_CHEAT:
-        case MSG_MOVE_SET_WALK_SPEED:
-        case MSG_MOVE_SET_SWIM_SPEED_CHEAT:
-        case MSG_MOVE_SET_SWIM_SPEED:
-        case MSG_MOVE_SET_SWIM_BACK_SPEED_CHEAT:
-        case MSG_MOVE_SET_SWIM_BACK_SPEED:
-        case MSG_MOVE_SET_ALL_SPEED_CHEAT:
-        case MSG_MOVE_SET_TURN_RATE_CHEAT:
-        case MSG_MOVE_SET_TURN_RATE:
-        case MSG_MOVE_TOGGLE_COLLISION_CHEAT:
-        case MSG_MOVE_SET_FACING:
-        case MSG_MOVE_SET_PITCH:
-        case MSG_MOVE_WORLDPORT_ACK:
-        case SMSG_MOVE_WATER_WALK:
-        case SMSG_MOVE_LAND_WALK:
-        case MSG_MOVE_SET_RAW_POSITION_ACK:
-        case CMSG_MOVE_SET_RAW_POSITION:
-        case CMSG_FORCE_RUN_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_SWIM_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_MOVE_ROOT_ACK:
-        case CMSG_FORCE_MOVE_UNROOT_ACK:
-        case MSG_MOVE_ROOT:
-        case MSG_MOVE_UNROOT:
-        case MSG_MOVE_HEARTBEAT:
-        case SMSG_MOVE_KNOCK_BACK:
-        case CMSG_MOVE_KNOCK_BACK_ACK:
-        case MSG_MOVE_KNOCK_BACK:
-        case SMSG_MOVE_FEATHER_FALL:
-        case SMSG_MOVE_NORMAL_FALL:
-        case SMSG_MOVE_SET_HOVER:
-        case SMSG_MOVE_UNSET_HOVER:
-        case CMSG_MOVE_HOVER_ACK:
-        case MSG_MOVE_HOVER:
-        case MSG_MOVE_TOGGLE_GRAVITY_CHEAT:
-        case MSG_MOVE_FEATHER_FALL:
-        case MSG_MOVE_WATER_WALK:
-        case CMSG_MOVE_SPLINE_DONE:
-        case CMSG_MOVE_FALL_RESET:
-        case CMSG_MOVE_TIME_SKIPPED:
-        case CMSG_MOVE_FEATHER_FALL_ACK:
-        case CMSG_MOVE_WATER_WALK_ACK:
-        case CMSG_SET_ACTIVE_MOVER:
-        case CMSG_MOVE_NOT_ACTIVE_MOVER:
-        case CMSG_MOVE_START_SWIM_CHEAT:
-        case CMSG_MOVE_STOP_SWIM_CHEAT:
-        case CMSG_FORCE_WALK_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK:
-        case CMSG_FORCE_TURN_RATE_CHANGE_ACK:
+    case CMSG_WORLD_TELEPORT:
+    case CMSG_TELEPORT_TO_UNIT:
+    case CMSG_REPOP_REQUEST:
+    case CMSG_RESURRECT_RESPONSE:
+    case CMSG_RECLAIM_CORPSE:
+    case MSG_MOVE_START_FORWARD:
+    case MSG_MOVE_START_BACKWARD:
+    case MSG_MOVE_STOP:
+    case MSG_MOVE_START_STRAFE_LEFT:
+    case MSG_MOVE_START_STRAFE_RIGHT:
+    case MSG_MOVE_STOP_STRAFE:
+    case MSG_MOVE_JUMP:
+    case MSG_MOVE_START_TURN_LEFT:
+    case MSG_MOVE_START_TURN_RIGHT:
+    case MSG_MOVE_STOP_TURN:
+    case MSG_MOVE_START_PITCH_UP:
+    case MSG_MOVE_START_PITCH_DOWN:
+    case MSG_MOVE_STOP_PITCH:
+    case MSG_MOVE_SET_RUN_MODE:
+    case MSG_MOVE_SET_WALK_MODE:
+    case MSG_MOVE_TOGGLE_LOGGING:
+    case MSG_MOVE_TELEPORT:
+    case MSG_MOVE_TELEPORT_CHEAT:
+    case MSG_MOVE_TELEPORT_ACK:
+    case MSG_MOVE_TOGGLE_FALL_LOGGING:
+    case MSG_MOVE_FALL_LAND:
+    case MSG_MOVE_START_SWIM:
+    case MSG_MOVE_STOP_SWIM:
+    case MSG_MOVE_SET_RUN_SPEED_CHEAT:
+    case MSG_MOVE_SET_RUN_SPEED:
+    case MSG_MOVE_SET_RUN_BACK_SPEED_CHEAT:
+    case MSG_MOVE_SET_RUN_BACK_SPEED:
+    case MSG_MOVE_SET_WALK_SPEED_CHEAT:
+    case MSG_MOVE_SET_WALK_SPEED:
+    case MSG_MOVE_SET_SWIM_SPEED_CHEAT:
+    case MSG_MOVE_SET_SWIM_SPEED:
+    case MSG_MOVE_SET_SWIM_BACK_SPEED_CHEAT:
+    case MSG_MOVE_SET_SWIM_BACK_SPEED:
+    case MSG_MOVE_SET_ALL_SPEED_CHEAT:
+    case MSG_MOVE_SET_TURN_RATE_CHEAT:
+    case MSG_MOVE_SET_TURN_RATE:
+    case MSG_MOVE_TOGGLE_COLLISION_CHEAT:
+    case MSG_MOVE_SET_FACING:
+    case MSG_MOVE_SET_PITCH:
+    case MSG_MOVE_WORLDPORT_ACK:
+    case SMSG_MOVE_WATER_WALK:
+    case SMSG_MOVE_LAND_WALK:
+    case MSG_MOVE_SET_RAW_POSITION_ACK:
+    case CMSG_MOVE_SET_RAW_POSITION:
+    case CMSG_FORCE_RUN_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_SWIM_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_MOVE_ROOT_ACK:
+    case CMSG_FORCE_MOVE_UNROOT_ACK:
+    case MSG_MOVE_ROOT:
+    case MSG_MOVE_UNROOT:
+    case MSG_MOVE_HEARTBEAT:
+    case SMSG_MOVE_KNOCK_BACK:
+    case CMSG_MOVE_KNOCK_BACK_ACK:
+    case MSG_MOVE_KNOCK_BACK:
+    case SMSG_MOVE_FEATHER_FALL:
+    case SMSG_MOVE_NORMAL_FALL:
+    case SMSG_MOVE_SET_HOVER:
+    case SMSG_MOVE_UNSET_HOVER:
+    case CMSG_MOVE_HOVER_ACK:
+    case MSG_MOVE_HOVER:
+    case MSG_MOVE_TOGGLE_GRAVITY_CHEAT:
+    case MSG_MOVE_FEATHER_FALL:
+    case MSG_MOVE_WATER_WALK:
+    case CMSG_MOVE_SPLINE_DONE:
+    case CMSG_MOVE_FALL_RESET:
+    case CMSG_MOVE_TIME_SKIPPED:
+    case CMSG_MOVE_FEATHER_FALL_ACK:
+    case CMSG_MOVE_WATER_WALK_ACK:
+    case CMSG_SET_ACTIVE_MOVER:
+    case CMSG_MOVE_NOT_ACTIVE_MOVER:
+    case CMSG_MOVE_START_SWIM_CHEAT:
+    case CMSG_MOVE_STOP_SWIM_CHEAT:
+    case CMSG_FORCE_WALK_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK:
+    case CMSG_FORCE_TURN_RATE_CHANGE_ACK:
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
-        case MSG_MOVE_TIME_SKIPPED:
+    case MSG_MOVE_TIME_SKIPPED:
 #endif
-            return true;
+        return true;
     }
     return false;
 }
@@ -424,9 +414,9 @@ void MovementAnticheat::Init()
     m_cheatOccuranceTick.fill(0);
     m_cheatOccuranceTotal.fill(0);
 
-    m_overspeedDistance  = 0.f;
+    m_overspeedDistance = 0.f;
     m_maxOverspeedDistance = 0.f;
-    m_clientDesync    = 0;
+    m_clientDesync = 0;
     m_maxClientDesync = 0;
 
     m_jumpCount = 0;
@@ -472,14 +462,10 @@ void MovementAnticheat::OnKnockBack(Player* pPlayer, float speedxy, float speedz
 
 void MovementAnticheat::OnUnreachable(Unit* attacker)
 {
-    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) ||
-        !sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_UNREACHABLE_ENABLED) ||
-        (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
+    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) || !sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_UNREACHABLE_ENABLED) || (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
         return;
 
-    if (IsInKnockBack() ||
-        (attacker->GetCharmerOrOwnerGuid() == me->GetObjectGuid()) ||
-        (me->GetTransport()))
+    if (IsInKnockBack() || (attacker->GetCharmerOrOwnerGuid() == me->GetObjectGuid()) || (me->GetTransport()))
         return;
 
     float waterLevel = (me->GetTerrain()->GetWaterLevel(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()) + 5.0f);
@@ -493,23 +479,19 @@ void MovementAnticheat::OnUnreachable(Unit* attacker)
 
 void MovementAnticheat::OnExplore(AreaEntry const* pArea)
 {
-    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) ||
-        (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
+    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) || (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
         return;
 
     if (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_EXPLORE_ENABLED))
         AddCheats(1 << CHEAT_TYPE_EXPLORE);
 
-    if (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_EXPLORE_HIGH_LEVEL_ENABLED) &&
-        (static_cast<int32>(me->GetLevel() + 10) < pArea->AreaLevel))
+    if (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_EXPLORE_HIGH_LEVEL_ENABLED) && (static_cast<int32>(me->GetLevel() + 10) < pArea->AreaLevel))
         AddCheats(1 << CHEAT_TYPE_EXPLORE_HIGH_LEVEL);
 }
 
 void MovementAnticheat::OnWrongAckData()
 {
-    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) ||
-        !sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_WRONG_ACK_DATA_ENABLED) ||
-        (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
+    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) || !sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_WRONG_ACK_DATA_ENABLED) || (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
         return;
 
     AddCheats(1 << CHEAT_TYPE_WRONG_ACK_DATA);
@@ -517,9 +499,7 @@ void MovementAnticheat::OnWrongAckData()
 
 void MovementAnticheat::OnFailedToAckChange()
 {
-    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) ||
-        !sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_PENDING_ACK_DELAY_ENABLED) ||
-        (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
+    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) || !sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_PENDING_ACK_DELAY_ENABLED) || (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
         return;
 
     AddCheats(1 << CHEAT_TYPE_PENDING_ACK_DELAY);
@@ -540,77 +520,58 @@ UnitMoveType MovementAnticheat::GetMoveTypeForMovementInfo(MovementInfo const& m
 
 bool ShouldRejectMovement(uint32 cheatFlags)
 {
-    if ((cheatFlags & (1 << CHEAT_TYPE_OVERSPEED_JUMP)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_OVERSPEED_JUMP_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_OVERSPEED_JUMP)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_OVERSPEED_JUMP_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_JUMP_SPEED_CHANGE)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_JUMP_SPEED_CHANGE_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_JUMP_SPEED_CHANGE)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_JUMP_SPEED_CHANGE_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_MULTI_JUMP)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_MULTI_JUMP_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_MULTI_JUMP)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_MULTI_JUMP_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_WALL_CLIMB)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_WALL_CLIMB_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_WALL_CLIMB)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_WALL_CLIMB_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_FLY_HACK_SWIM)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_FLY_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_FLY_HACK_SWIM)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_FLY_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_TELEPORT)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_TELEPORT_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_TELEPORT)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_TELEPORT_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_TELEPORT_TRANSPORT)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_TELE_TO_TRANSPORT_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_TELEPORT_TRANSPORT)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_TELE_TO_TRANSPORT_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_FAKE_TRANSPORT)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_FAKE_TRANSPORT_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_FAKE_TRANSPORT)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_FAKE_TRANSPORT_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_WATER_WALK)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_WATER_WALK_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_WATER_WALK)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_WATER_WALK_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_SLOW_FALL)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_SLOW_FALL_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_SLOW_FALL)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_SLOW_FALL_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_HOVER)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_HOVER_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_HOVER)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_HOVER_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_FIXED_Z)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_FIXED_Z_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_FIXED_Z)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_FIXED_Z_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_ROOT_MOVE)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_ROOT_MOVE_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_ROOT_MOVE)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_ROOT_MOVE_REJECT))
         return true;
 
-    if ((cheatFlags & (1 << CHEAT_TYPE_SELF_ROOT)) &&
-        sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_SELF_ROOT_REJECT))
+    if ((cheatFlags & (1 << CHEAT_TYPE_SELF_ROOT)) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_SELF_ROOT_REJECT))
         return true;
 
     return false;
 }
 
-void MovementAnticheat::OnDeath()
-{
-    m_deathTime = WorldTimer::getMSTime();
-}
+void MovementAnticheat::OnDeath() { m_deathTime = WorldTimer::getMSTime(); }
 
 uint32 MovementAnticheat::HandlePositionTests(Player* pPlayer, MovementInfo& movementInfo, uint16 opcode)
 {
-    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) ||
-        (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)) ||
-        !pPlayer->movespline->Finalized())
+    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) || (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)) || !pPlayer->movespline->Finalized())
         return 0;
-    
+
     if (pPlayer != me)
         InitNewPlayer(pPlayer);
 
@@ -626,11 +587,7 @@ uint32 MovementAnticheat::HandlePositionTests(Player* pPlayer, MovementInfo& mov
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
     // Not allowed to change jump speed while jumping
-    if ((movementInfo.moveFlags & (MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR)) &&
-        (GetLastMovementInfo().moveFlags & (MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR)) &&
-        (movementInfo.jump.xyspeed > GetLastMovementInfo().jump.xyspeed + 0.0001f) &&
-        (GetLastMovementInfo().jump.xyspeed > 0.0001f) &&
-        (!IsInKnockBack()))
+    if ((movementInfo.moveFlags & (MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR)) && (GetLastMovementInfo().moveFlags & (MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR)) && (movementInfo.jump.xyspeed > GetLastMovementInfo().jump.xyspeed + 0.0001f) && (GetLastMovementInfo().jump.xyspeed > 0.0001f) && (!IsInKnockBack()))
         APPEND_CHEAT(CHEAT_TYPE_JUMP_SPEED_CHANGE);
 #endif
 
@@ -665,8 +622,7 @@ uint32 MovementAnticheat::HandlePositionTests(Player* pPlayer, MovementInfo& mov
     if (CheckNoFallTime(movementInfo, opcode))
         APPEND_CHEAT(CHEAT_TYPE_NO_FALL_TIME);
 
-    if (opcode == CMSG_MOVE_FALL_RESET &&
-        CheckFallReset(movementInfo))
+    if (opcode == CMSG_MOVE_FALL_RESET && CheckFallReset(movementInfo))
         APPEND_CHEAT(CHEAT_TYPE_BAD_FALL_RESET);
 
     if (CheckFallStop(movementInfo, opcode))
@@ -682,8 +638,7 @@ uint32 MovementAnticheat::HandlePositionTests(Player* pPlayer, MovementInfo& mov
             cheatFlags |= flags;
     }
 
-    if (IsFallEndOpcode(opcode) || 
-        movementInfo.HasMovementFlag(MOVEFLAG_ROOT))
+    if (IsFallEndOpcode(opcode) || movementInfo.HasMovementFlag(MOVEFLAG_ROOT))
         m_knockBack = false;
 
     CheckBotting(opcode, movementInfo);
@@ -697,10 +652,9 @@ uint32 MovementAnticheat::HandlePositionTests(Player* pPlayer, MovementInfo& mov
         {
             me->m_movementInfo.moveFlags = movementInfo.moveFlags;
             me->m_movementInfo.CorrectData();
-        }     
-        
-        if (HAS_CHEAT(CHEAT_TYPE_OVERSPEED_JUMP) &&
-            sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_OVERSPEED_JUMP_REJECT))
+        }
+
+        if (HAS_CHEAT(CHEAT_TYPE_OVERSPEED_JUMP) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_OVERSPEED_JUMP_REJECT))
         {
             UnitMoveType moveType = GetMoveTypeForMovementInfo(GetLastMovementInfo());
             float speedRate = me->GetSpeed(moveType) / baseMoveSpeed[moveType];
@@ -713,8 +667,7 @@ uint32 MovementAnticheat::HandlePositionTests(Player* pPlayer, MovementInfo& mov
             ResetJumpCounters();
         me->SendHeartBeat(true);
 
-        if (HAS_CHEAT(CHEAT_TYPE_FAKE_TRANSPORT) &&
-            sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_FAKE_TRANSPORT_REJECT))
+        if (HAS_CHEAT(CHEAT_TYPE_FAKE_TRANSPORT) && sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_FAKE_TRANSPORT_REJECT))
         {
             // Force logout player to sync transport positions.
             m_session->LogoutRequest(time(nullptr) - 20);
@@ -730,10 +683,9 @@ uint32 MovementAnticheat::HandlePositionTests(Player* pPlayer, MovementInfo& mov
 
 uint32 MovementAnticheat::HandleFlagTests(Player* pPlayer, MovementInfo& movementInfo, uint16 opcode)
 {
-    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) ||
-        (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
+    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_ENABLED) || (sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_PLAYERS_ONLY) && (m_session->GetSecurity() != SEC_PLAYER)))
         return 0;
-    
+
     if (me != pPlayer)
         InitNewPlayer(pPlayer);
 
@@ -744,21 +696,14 @@ uint32 MovementAnticheat::HandleFlagTests(Player* pPlayer, MovementInfo& movemen
 #define APPEND_CHEAT(t) cheatFlags |= (1 << t)
 
     // Client is rooted, but there is no root server side.
-    if ((currentMoveFlags & MOVEFLAG_ROOT) &&
-        !(GetLastMovementInfo().moveFlags & MOVEFLAG_ROOT) &&
-        !me->HasPendingMovementChange(ROOT) &&
-        !me->HasUnitState(UNIT_STATE_ROOT | UNIT_STATE_PENDING_ROOT | UNIT_STATE_STUNNED | UNIT_STATE_PENDING_STUNNED | UNIT_STATE_ROOT_ON_LANDING) &&
-        (opcode != CMSG_FORCE_MOVE_ROOT_ACK))
+    if ((currentMoveFlags & MOVEFLAG_ROOT) && !(GetLastMovementInfo().moveFlags & MOVEFLAG_ROOT) && !me->HasPendingMovementChange(ROOT) && !me->HasUnitState(UNIT_STATE_ROOT | UNIT_STATE_PENDING_ROOT | UNIT_STATE_STUNNED | UNIT_STATE_PENDING_STUNNED | UNIT_STATE_ROOT_ON_LANDING) && (opcode != CMSG_FORCE_MOVE_ROOT_ACK))
     {
         APPEND_CHEAT(CHEAT_TYPE_SELF_ROOT);
         removeMoveFlags |= MOVEFLAG_ROOT;
     }
 
     // Moving while rooted. We do not apply root flag until ack, so should be no false positives.
-    if ((currentMoveFlags & MOVEFLAG_MASK_MOVING) &&
-        ((currentMoveFlags & MOVEFLAG_ROOT) || (GetLastMovementInfo().moveFlags & MOVEFLAG_ROOT)) &&
-        !me->HasPendingMovementChange(ROOT) &&
-        (opcode != CMSG_FORCE_MOVE_UNROOT_ACK))
+    if ((currentMoveFlags & MOVEFLAG_MASK_MOVING) && ((currentMoveFlags & MOVEFLAG_ROOT) || (GetLastMovementInfo().moveFlags & MOVEFLAG_ROOT)) && !me->HasPendingMovementChange(ROOT) && (opcode != CMSG_FORCE_MOVE_UNROOT_ACK))
     {
         APPEND_CHEAT(CHEAT_TYPE_ROOT_MOVE);
         removeMoveFlags |= MOVEFLAG_MASK_MOVING;
@@ -766,56 +711,38 @@ uint32 MovementAnticheat::HandleFlagTests(Player* pPlayer, MovementInfo& movemen
     }
 
     // This flag is only for creatures.
-    if ((currentMoveFlags & MOVEFLAG_FIXED_Z) &&
-        !me->HasCheatOption(PLAYER_CHEAT_FIXED_Z))
+    if ((currentMoveFlags & MOVEFLAG_FIXED_Z) && !me->HasCheatOption(PLAYER_CHEAT_FIXED_Z))
     {
         APPEND_CHEAT(CHEAT_TYPE_FIXED_Z);
         removeMoveFlags |= MOVEFLAG_FIXED_Z;
     }
 
     // This flag is only for creatures.
-    if ((currentMoveFlags & MOVEFLAG_LEVITATING) &&
-        !me->HasCheatOption(PLAYER_CHEAT_FLY))
+    if ((currentMoveFlags & MOVEFLAG_LEVITATING) && !me->HasCheatOption(PLAYER_CHEAT_FLY))
     {
         APPEND_CHEAT(CHEAT_TYPE_FLY_HACK_SWIM);
         removeMoveFlags |= MOVEFLAG_LEVITATING;
     }
 
-    if ((currentMoveFlags & MOVEFLAG_SWIMMING) &&
-        (currentMoveFlags & MOVEFLAG_FLYING) &&
-        !me->IsTaxiFlying() &&
-        !me->HasCheatOption(PLAYER_CHEAT_FLY))
+    if ((currentMoveFlags & MOVEFLAG_SWIMMING) && (currentMoveFlags & MOVEFLAG_FLYING) && !me->IsTaxiFlying() && !me->HasCheatOption(PLAYER_CHEAT_FLY))
     {
         APPEND_CHEAT(CHEAT_TYPE_FLY_HACK_SWIM);
         removeMoveFlags |= MOVEFLAG_SWIMMING | MOVEFLAG_FLYING;
     }
 
-    if ((currentMoveFlags & MOVEFLAG_WATERWALKING) &&
-        !(GetLastMovementInfo().moveFlags & MOVEFLAG_WATERWALKING) &&
-        !me->HasAuraType(SPELL_AURA_WATER_WALK) &&
-        !me->HasAuraType(SPELL_AURA_GHOST) &&
-        !me->HasPendingMovementChange(WATER_WALK) &&
-        (opcode != CMSG_MOVE_WATER_WALK_ACK))
+    if ((currentMoveFlags & MOVEFLAG_WATERWALKING) && !(GetLastMovementInfo().moveFlags & MOVEFLAG_WATERWALKING) && !me->HasAuraType(SPELL_AURA_WATER_WALK) && !me->HasAuraType(SPELL_AURA_GHOST) && !me->HasPendingMovementChange(WATER_WALK) && (opcode != CMSG_MOVE_WATER_WALK_ACK))
     {
         APPEND_CHEAT(CHEAT_TYPE_WATER_WALK);
         removeMoveFlags |= MOVEFLAG_WATERWALKING;
     }
 
-    if ((currentMoveFlags & MOVEFLAG_SAFE_FALL) &&
-        !(GetLastMovementInfo().moveFlags & MOVEFLAG_SAFE_FALL) &&
-        !me->HasAuraType(SPELL_AURA_FEATHER_FALL) &&
-        !me->HasPendingMovementChange(FEATHER_FALL) &&
-        (opcode != CMSG_MOVE_FEATHER_FALL_ACK))
+    if ((currentMoveFlags & MOVEFLAG_SAFE_FALL) && !(GetLastMovementInfo().moveFlags & MOVEFLAG_SAFE_FALL) && !me->HasAuraType(SPELL_AURA_FEATHER_FALL) && !me->HasPendingMovementChange(FEATHER_FALL) && (opcode != CMSG_MOVE_FEATHER_FALL_ACK))
     {
         APPEND_CHEAT(CHEAT_TYPE_SLOW_FALL);
         removeMoveFlags |= MOVEFLAG_SAFE_FALL;
     }
 
-    if ((currentMoveFlags & MOVEFLAG_HOVER) &&
-        !(GetLastMovementInfo().moveFlags & MOVEFLAG_HOVER) &&
-        !me->HasAuraType(SPELL_AURA_HOVER) &&
-        !me->HasPendingMovementChange(SET_HOVER) &&
-        (opcode != CMSG_MOVE_HOVER_ACK))
+    if ((currentMoveFlags & MOVEFLAG_HOVER) && !(GetLastMovementInfo().moveFlags & MOVEFLAG_HOVER) && !me->HasAuraType(SPELL_AURA_HOVER) && !me->HasPendingMovementChange(SET_HOVER) && (opcode != CMSG_MOVE_HOVER_ACK))
     {
         APPEND_CHEAT(CHEAT_TYPE_HOVER);
         removeMoveFlags |= MOVEFLAG_HOVER;
@@ -833,9 +760,7 @@ uint32 MovementAnticheat::HandleFlagTests(Player* pPlayer, MovementInfo& movemen
 
         AddCheats(cheatFlags);
 
-        if (ShouldRejectMovement(cheatFlags) &&
-            me->movespline->Finalized() &&
-            !me->IsBeingTeleported())
+        if (ShouldRejectMovement(cheatFlags) && me->movespline->Finalized() && !me->IsBeingTeleported())
         {
             me->RemoveUnitMovementFlag(removeMoveFlags);
             me->ResolvePendingMovementChanges(true, true);
@@ -857,8 +782,7 @@ bool MovementAnticheat::HandleSplineDone(Player* pPlayer, MovementInfo const& mo
     if (splineId == m_lastSplineId)
     {
         AddMessageToPacketLog("HandleSplineDone: spline id == last spline id == " + std::to_string(splineId));
-        sLog.Player(m_session, LOG_ANTICHEAT, "Movement", LOG_LVL_MINIMAL, "HandleSplineDone: Player sent spline done opcode for spline id %u twice",
-            splineId);
+        sLog.Player(m_session, LOG_ANTICHEAT, "Movement", LOG_LVL_MINIMAL, "HandleSplineDone: Player sent spline done opcode for spline id %u twice", splineId);
         return false;
     }
 
@@ -868,8 +792,7 @@ bool MovementAnticheat::HandleSplineDone(Player* pPlayer, MovementInfo const& mo
     if (distance > 10.0f)
     {
         AddMessageToPacketLog("HandleSplineDone: distance to spline destination is " + std::to_string(distance));
-        sLog.Player(m_session, LOG_ANTICHEAT, "Movement", LOG_LVL_MINIMAL, "HandleSplineDone: Player sent spline done opcode with position that is %g yards away from destination",
-            distance);
+        sLog.Player(m_session, LOG_ANTICHEAT, "Movement", LOG_LVL_MINIMAL, "HandleSplineDone: Player sent spline done opcode with position that is %g yards away from destination", distance);
         return false;
     }
 
@@ -894,8 +817,7 @@ bool MovementAnticheat::CheckNoFallTime(MovementInfo const& movementInfo, uint16
         return false;
     }
 
-    if (!GetLastMovementInfo().WasSentBySession(m_session->GetGUID()) ||
-        !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR))
+    if (!GetLastMovementInfo().WasSentBySession(m_session->GetGUID()) || !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR))
     {
         m_jumpFlagCount = 0;
         m_jumpFlagTime = 0;
@@ -909,9 +831,7 @@ bool MovementAnticheat::CheckNoFallTime(MovementInfo const& movementInfo, uint16
             m_jumpFlagTime = movementInfo.ctime;
     }
 
-    if (!movementInfo.fallTime &&
-        m_jumpFlagCount >= JUMP_FLAG_THRESHOLD &&
-       (m_jumpFlagTime + MIN_FALLING_TIME) < movementInfo.ctime)
+    if (!movementInfo.fallTime && m_jumpFlagCount >= JUMP_FLAG_THRESHOLD && (m_jumpFlagTime + MIN_FALLING_TIME) < movementInfo.ctime)
     {
         m_jumpFlagCount = 0;
         m_jumpFlagTime = 0;
@@ -941,7 +861,7 @@ bool MovementAnticheat::CheckFallReset(MovementInfo const& movementInfo) const
         if (!GetLastMovementInfo().HasMovementFlag(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR))
             return true;
     }
-    
+
     return movementInfo.fallTime != 0 || movementInfo.jump.zspeed != 0.0f;
 }
 
@@ -965,8 +885,7 @@ bool MovementAnticheat::CheckFallStop(MovementInfo const& movementInfo, uint16 o
     if (movementInfo.HasMovementFlag(MOVEFLAG_ROOT))
         return false;
 
-    if (!movementInfo.HasMovementFlag(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR) &&
-        GetLastMovementInfo().HasMovementFlag(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR))
+    if (!movementInfo.HasMovementFlag(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR) && GetLastMovementInfo().HasMovementFlag(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR))
         return true;
 
     return false;
@@ -993,11 +912,10 @@ bool MovementAnticheat::CheckMoveStart(MovementInfo const& movementInfo, uint16 
     }
     else
     {
-        if (movementInfo.HasMovementFlag(MOVEFLAG_FORWARD) &&
-           !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_FORWARD))
+        if (movementInfo.HasMovementFlag(MOVEFLAG_FORWARD) && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_FORWARD))
             return true;
     }
-    
+
     if (opcode == MSG_MOVE_START_BACKWARD)
     {
         if (!movementInfo.HasMovementFlag(MOVEFLAG_BACKWARD))
@@ -1005,8 +923,7 @@ bool MovementAnticheat::CheckMoveStart(MovementInfo const& movementInfo, uint16 
     }
     else
     {
-        if (movementInfo.HasMovementFlag(MOVEFLAG_BACKWARD) &&
-           !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_BACKWARD))
+        if (movementInfo.HasMovementFlag(MOVEFLAG_BACKWARD) && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_BACKWARD))
             return true;
     }
 
@@ -1017,8 +934,7 @@ bool MovementAnticheat::CheckMoveStart(MovementInfo const& movementInfo, uint16 
     }
     else
     {
-        if (movementInfo.HasMovementFlag(MOVEFLAG_PITCH_DOWN) &&
-           !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_PITCH_DOWN))
+        if (movementInfo.HasMovementFlag(MOVEFLAG_PITCH_DOWN) && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_PITCH_DOWN))
             return true;
     }
 
@@ -1029,8 +945,7 @@ bool MovementAnticheat::CheckMoveStart(MovementInfo const& movementInfo, uint16 
     }
     else
     {
-        if (movementInfo.HasMovementFlag(MOVEFLAG_PITCH_UP) &&
-           !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_PITCH_UP))
+        if (movementInfo.HasMovementFlag(MOVEFLAG_PITCH_UP) && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_PITCH_UP))
             return true;
     }
 
@@ -1041,8 +956,7 @@ bool MovementAnticheat::CheckMoveStart(MovementInfo const& movementInfo, uint16 
     }
     else
     {
-        if (movementInfo.HasMovementFlag(MOVEFLAG_STRAFE_LEFT) &&
-           !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_STRAFE_LEFT))
+        if (movementInfo.HasMovementFlag(MOVEFLAG_STRAFE_LEFT) && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_STRAFE_LEFT))
             return true;
     }
 
@@ -1053,8 +967,7 @@ bool MovementAnticheat::CheckMoveStart(MovementInfo const& movementInfo, uint16 
     }
     else
     {
-        if (movementInfo.HasMovementFlag(MOVEFLAG_STRAFE_RIGHT) &&
-           !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_STRAFE_RIGHT))
+        if (movementInfo.HasMovementFlag(MOVEFLAG_STRAFE_RIGHT) && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_STRAFE_RIGHT))
             return true;
     }
 
@@ -1065,10 +978,8 @@ bool MovementAnticheat::CheckMoveStart(MovementInfo const& movementInfo, uint16 
     }
     else
     {
-        
-        if (movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING) &&
-           !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_SWIMMING) &&
-           !me->HasCheatOption(PLAYER_CHEAT_FLY))
+
+        if (movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING) && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_SWIMMING) && !me->HasCheatOption(PLAYER_CHEAT_FLY))
             return true;
     }
 
@@ -1079,8 +990,7 @@ bool MovementAnticheat::CheckMoveStart(MovementInfo const& movementInfo, uint16 
     }
     else
     {
-        if (movementInfo.HasMovementFlag(MOVEFLAG_TURN_LEFT) &&
-           !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_TURN_LEFT))
+        if (movementInfo.HasMovementFlag(MOVEFLAG_TURN_LEFT) && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_TURN_LEFT))
             return true;
     }
 
@@ -1091,8 +1001,7 @@ bool MovementAnticheat::CheckMoveStart(MovementInfo const& movementInfo, uint16 
     }
     else
     {
-        if (movementInfo.HasMovementFlag(MOVEFLAG_TURN_RIGHT) &&
-           !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_TURN_RIGHT))
+        if (movementInfo.HasMovementFlag(MOVEFLAG_TURN_RIGHT) && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_TURN_RIGHT))
             return true;
     }
 
@@ -1129,15 +1038,15 @@ bool MovementAnticheat::CheckMultiJump(uint16 opcode)
 
     switch (opcode)
     {
-        case MSG_MOVE_JUMP:
+    case MSG_MOVE_JUMP:
         {
             m_jumpCount++;
             if (m_jumpCount > 1)
                 return true;
             break;
         }
-        case MSG_MOVE_FALL_LAND:
-        case MSG_MOVE_START_SWIM:
+    case MSG_MOVE_FALL_LAND:
+    case MSG_MOVE_START_SWIM:
         {
             m_jumpCount = 0;
             break;
@@ -1153,11 +1062,7 @@ bool MovementAnticheat::CheckMultiJump(uint16 opcode)
 bool MovementAnticheat::CheckWallClimb(MovementInfo const& movementInfo, uint16 opcode) const
 {
     // Not currently handled cases.
-    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_WALL_CLIMB_ENABLED) ||
-       (GetLastMovementInfo().moveFlags & NO_WALL_CLIMB_CHECK_MOVE_FLAGS) ||
-       (movementInfo.moveFlags & NO_WALL_CLIMB_CHECK_MOVE_FLAGS) ||
-       (me->HasFlag(UNIT_FIELD_FLAGS, NO_WALL_CLIMB_CHECK_UNIT_FLAGS)) ||
-       IsInKnockBack() || me->IsTaxiFlying() || !GetLastMovementInfo().ctime)
+    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_WALL_CLIMB_ENABLED) || (GetLastMovementInfo().moveFlags & NO_WALL_CLIMB_CHECK_MOVE_FLAGS) || (movementInfo.moveFlags & NO_WALL_CLIMB_CHECK_MOVE_FLAGS) || (me->HasFlag(UNIT_FIELD_FLAGS, NO_WALL_CLIMB_CHECK_UNIT_FLAGS)) || IsInKnockBack() || me->IsTaxiFlying() || !GetLastMovementInfo().ctime)
         return false;
 
     float const deltaXY = GetDistance2D(GetLastMovementInfo().pos, movementInfo.pos);
@@ -1198,9 +1103,9 @@ bool MovementAnticheat::CheckForbiddenArea(MovementInfo const& movementInfo) con
     if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_FORBIDDEN_AREA_ENABLED))
         return false;
 
-    switch(me->GetMapId())
+    switch (me->GetMapId())
     {
-        case MAP_ALTERAC_VALLEY: // Alterac Valley
+    case MAP_ALTERAC_VALLEY: // Alterac Valley
         {
             if (BattleGround* bg = me->GetBattleGround())
             {
@@ -1215,7 +1120,7 @@ bool MovementAnticheat::CheckForbiddenArea(MovementInfo const& movementInfo) con
             }
             break;
         }
-        case MAP_WARSONG_GULCH: // Warsong Gulch
+    case MAP_WARSONG_GULCH: // Warsong Gulch
         {
             // Only way to get this high is with engineering items malfunction.
             if (!(movementInfo.moveFlags & (MOVEFLAG_FALLINGFAR | MOVEFLAG_JUMPING)) && movementInfo.pos.z > 380.0f)
@@ -1234,7 +1139,7 @@ bool MovementAnticheat::CheckForbiddenArea(MovementInfo const& movementInfo) con
             }
             break;
         }
-        case MAP_ARATHI_BASIN: // Arathi Basin
+    case MAP_ARATHI_BASIN: // Arathi Basin
         {
             if (BattleGround* bg = me->GetBattleGround())
             {
@@ -1256,12 +1161,7 @@ bool MovementAnticheat::CheckForbiddenArea(MovementInfo const& movementInfo) con
 
 uint32 MovementAnticheat::CheckSpeedHack(MovementInfo const& movementInfo, uint16 opcode)
 {
-    if ((opcode == CMSG_MOVE_KNOCK_BACK_ACK) ||
-        (opcode == CMSG_MOVE_SPLINE_DONE) ||
-        IsInKnockBack() ||
-        !GetLastMovementInfo().ctime ||
-        me->IsTaxiFlying() || 
-        me->IsBeingTeleported())
+    if ((opcode == CMSG_MOVE_KNOCK_BACK_ACK) || (opcode == CMSG_MOVE_SPLINE_DONE) || IsInKnockBack() || !GetLastMovementInfo().ctime || me->IsTaxiFlying() || me->IsBeingTeleported())
         return 0;
 
     uint32 cheatFlags = 0x0;
@@ -1296,8 +1196,7 @@ uint32 MovementAnticheat::CheckSpeedHack(MovementInfo const& movementInfo, uint1
                 m_overspeedDistance += sqrt(realDistance2D_sq) - sqrt(allowedDY + allowedDX);
         }
         // Simple calculation for transports
-        else if (!movementInfo.t_guid.IsEmpty() && (movementInfo.moveFlags & MOVEFLAG_ONTRANSPORT) &&
-                 !GetLastMovementInfo().t_guid.IsEmpty() && (GetLastMovementInfo().moveFlags & MOVEFLAG_ONTRANSPORT))
+        else if (!movementInfo.t_guid.IsEmpty() && (movementInfo.moveFlags & MOVEFLAG_ONTRANSPORT) && !GetLastMovementInfo().t_guid.IsEmpty() && (GetLastMovementInfo().moveFlags & MOVEFLAG_ONTRANSPORT))
         {
             float const distanceTraveled = GetDistance2D(GetLastMovementInfo().t_pos, movementInfo.t_pos);
             float const timeFactor = float(1 * IN_MILLISECONDS) / float(std::max(1, clientTimeDiff));
@@ -1326,8 +1225,7 @@ bool MovementAnticheat::CheckFakeTransport(MovementInfo const& movementInfo)
         return false;
 
     // Do not allow bypassing anticheat by pretending to be on a transport.
-    if (movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT) &&
-        GetLastMovementInfo().ctime && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_ONTRANSPORT))
+    if (movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT) && GetLastMovementInfo().ctime && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_ONTRANSPORT))
     {
         GameObject* pTransport = me->GetMap()->GetGameObject(movementInfo.t_guid);
 
@@ -1343,8 +1241,7 @@ bool MovementAnticheat::CheckTeleportToTransport(MovementInfo const& movementInf
         return false;
 
     // To transport tele hack detection
-    if (movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT) &&
-        GetLastMovementInfo().ctime && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_ONTRANSPORT))
+    if (movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT) && GetLastMovementInfo().ctime && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_ONTRANSPORT))
     {
         float dist2d = (movementInfo.pos.x - GetLastMovementInfo().pos.x) * (movementInfo.pos.x - GetLastMovementInfo().pos.x);
         dist2d += (movementInfo.pos.y - GetLastMovementInfo().pos.y) * (movementInfo.pos.y - GetLastMovementInfo().pos.y);
@@ -1398,14 +1295,14 @@ void MovementAnticheat::CheckBotting(uint16 opcode, MovementInfo const& movement
     bool turning;
     switch (opcode)
     {
-        case MSG_MOVE_START_STRAFE_LEFT:
-        case MSG_MOVE_START_STRAFE_RIGHT:
+    case MSG_MOVE_START_STRAFE_LEFT:
+    case MSG_MOVE_START_STRAFE_RIGHT:
         {
             // bots dont strafe
             ResetBottingStats();
             return;
         }
-        case MSG_MOVE_JUMP:
+    case MSG_MOVE_JUMP:
         {
             // bots dont jump backwards or use it to interrupt casting
             if (movementInfo.HasMovementFlag(MOVEFLAG_BACKWARD) || me->IsNonMeleeSpellCasted())
@@ -1416,7 +1313,7 @@ void MovementAnticheat::CheckBotting(uint16 opcode, MovementInfo const& movement
             turning = false;
             break;
         }
-        case MSG_MOVE_SET_FACING:
+    case MSG_MOVE_SET_FACING:
         {
             if (m_turnType != TURN_MOUSE && m_cheatOccuranceTotal[CHEAT_TYPE_BOTTING])
             {
@@ -1426,8 +1323,8 @@ void MovementAnticheat::CheckBotting(uint16 opcode, MovementInfo const& movement
             turning = true;
             break;
         }
-        case MSG_MOVE_START_TURN_LEFT:
-        case MSG_MOVE_START_TURN_RIGHT:
+    case MSG_MOVE_START_TURN_LEFT:
+    case MSG_MOVE_START_TURN_RIGHT:
         {
             if (m_turnType != TURN_KEYBOARD && m_cheatOccuranceTotal[CHEAT_TYPE_BOTTING])
             {
@@ -1437,8 +1334,8 @@ void MovementAnticheat::CheckBotting(uint16 opcode, MovementInfo const& movement
             turning = true;
             break;
         }
-        case MSG_MOVE_START_FORWARD:
-        case MSG_MOVE_START_BACKWARD:
+    case MSG_MOVE_START_FORWARD:
+    case MSG_MOVE_START_BACKWARD:
         {
             if (std::abs(GetLastMovementInfo().pos.o - movementInfo.pos.o) < 0.1f)
             {
@@ -1455,7 +1352,7 @@ void MovementAnticheat::CheckBotting(uint16 opcode, MovementInfo const& movement
             turning = true;
             break;
         }
-        default:
+    default:
         {
             turning = false;
             break;
@@ -1477,14 +1374,13 @@ void MovementAnticheat::CheckBotting(uint16 opcode, MovementInfo const& movement
         // we store turns count here
         m_cheatOccuranceTotal[CHEAT_TYPE_BOTTING]++;
     }
-    
+
     m_movementPacketsCount++;
 }
 
 bool MovementAnticheat::CheckTeleport(MovementInfo const& movementInfo) const
 {
-    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_TELEPORT_ENABLED) ||
-        me->IsLaunched() || me->IsTaxiFlying() || me->IsBeingTeleported())
+    if (!sWorld.getConfig(CONFIG_BOOL_AC_MOVEMENT_CHEAT_TELEPORT_ENABLED) || me->IsLaunched() || me->IsTaxiFlying() || me->IsBeingTeleported())
         return false;
 
     if (!IsTeleportAllowed3D(movementInfo))
@@ -1492,27 +1388,19 @@ bool MovementAnticheat::CheckTeleport(MovementInfo const& movementInfo) const
 
     // check moving in given axis without appropriate move flags
     // during fall collision with cliffs can change xy so skip that case
-    if (GetLastMovementInfo().ctime &&
-       !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_MASK_XZ | MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR) &&
-       !movementInfo.HasMovementFlag(MOVEFLAG_MASK_XZ | MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR) &&
-        GetLastMovementInfo().HasMovementFlag(MOVEFLAG_ONTRANSPORT) == movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT))
+    if (GetLastMovementInfo().ctime && !GetLastMovementInfo().HasMovementFlag(MOVEFLAG_MASK_XZ | MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR) && !movementInfo.HasMovementFlag(MOVEFLAG_MASK_XZ | MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR) && GetLastMovementInfo().HasMovementFlag(MOVEFLAG_ONTRANSPORT) == movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT))
     {
-        float const distance2d = movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT) ?
-            GetDistance2D(GetLastMovementInfo().t_pos, movementInfo.t_pos) :
-            GetDistance2D(GetLastMovementInfo().pos, movementInfo.pos);
-        
+        float const distance2d = movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT) ? GetDistance2D(GetLastMovementInfo().t_pos, movementInfo.t_pos) : GetDistance2D(GetLastMovementInfo().pos, movementInfo.pos);
+
         if (distance2d > 1.0f)
             return true;
 
         // swimming flag only included in check because of 1.14
         // vanilla clients do not have a descend/ascend flag
-        if (!GetLastMovementInfo().HasMovementFlag(MOVEFLAG_SWIMMING) &&
-            !movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING))
+        if (!GetLastMovementInfo().HasMovementFlag(MOVEFLAG_SWIMMING) && !movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING))
         {
-            float const distanceZ = movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT) ?
-                std::abs(GetLastMovementInfo().t_pos.z - movementInfo.t_pos.z) :
-                std::abs(GetLastMovementInfo().pos.z - movementInfo.pos.z);
-            
+            float const distanceZ = movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT) ? std::abs(GetLastMovementInfo().t_pos.z - movementInfo.t_pos.z) : std::abs(GetLastMovementInfo().pos.z - movementInfo.pos.z);
+
             if (distanceZ > 2.0f)
                 return true;
         }
@@ -1525,11 +1413,11 @@ bool MovementAnticheat::IsInTransportArea() const
 {
     // Undercity Lift
     if ((me->GetCachedZoneId() == 1497 && me->GetCachedAreaId() == 1497) ||
-    // Deeprun Tram
+        // Deeprun Tram
         (me->GetCachedZoneId() == 2257) ||
-    // Thousand Needles Lift
+        // Thousand Needles Lift
         (me->GetCachedZoneId() == 400 && me->GetCachedAreaId() == 485))
-    return true;
+        return true;
 
     return false;
 }

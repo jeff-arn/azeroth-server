@@ -12,7 +12,8 @@ void printUsage(char const* thisExecutableName)
     -s run                      run as service
     -s install                  install service
     -s uninstall                uninstall service
-)END", thisExecutableName);
+)END",
+           thisExecutableName);
 #else
     printf(R"END(Usage: %s [<options>]
     -v, --version               print version and exist
@@ -20,7 +21,8 @@ void printUsage(char const* thisExecutableName)
   Running as daemon functions:
     -s run                      run as daemon
     -s stop                     stop daemon
-)END", thisExecutableName);
+)END",
+           thisExecutableName);
 #endif
 }
 
@@ -30,11 +32,7 @@ nonstd::expected<ServerStartupArguments, int /* exit value */> ParseServerStartu
     argv++; // skip the first argument, since it's just the executable name
     argc--;
 
-    ServerStartupArguments args
-    {
-        ServiceDaemonAction::NotSet,
-        ""
-    };
+    ServerStartupArguments args{ServiceDaemonAction::NotSet, ""};
 
     while (argc > 0)
     {

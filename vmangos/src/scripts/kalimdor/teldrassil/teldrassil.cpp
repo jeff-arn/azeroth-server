@@ -33,21 +33,18 @@ EndContentData */
 
 enum MistData
 {
-    SAY_AT_HOME       = 1330,
-    EMOTE_AT_HOME     = 1340,
-    QUEST_MIST        = 938,
-    NPC_ARYNIA        = 3519,
+    SAY_AT_HOME = 1330,
+    EMOTE_AT_HOME = 1340,
+    QUEST_MIST = 938,
+    NPC_ARYNIA = 3519,
     FACTION_DARNASSUS = 79
 };
 
 struct npc_mistAI : public FollowerAI
 {
-    npc_mistAI(Creature* pCreature) : FollowerAI(pCreature)
-    {
-        Reset();
-    }
+    npc_mistAI(Creature* pCreature) : FollowerAI(pCreature) { Reset(); }
 
-    void Reset() override { }
+    void Reset() override {}
 
     void JustRespawned() override
     {
@@ -55,7 +52,7 @@ struct npc_mistAI : public FollowerAI
         FollowerAI::JustRespawned();
     }
 
-    void MoveInLineOfSight(Unit *pWho) override
+    void MoveInLineOfSight(Unit* pWho) override
     {
         FollowerAI::MoveInLineOfSight(pWho);
 
@@ -79,11 +76,11 @@ struct npc_mistAI : public FollowerAI
                 pPlayer->GroupEventHappens(QUEST_MIST, m_creature);
         }
 
-        //The follow is over (and for later development, run off to the woods before really end)
+        // The follow is over (and for later development, run off to the woods before really end)
         SetFollowComplete();
     }
 
-    //call not needed here, no known abilities
+    // call not needed here, no known abilities
     /*void UpdateFollowerAI(uint32 const uiDiff)
     {
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
@@ -93,10 +90,7 @@ struct npc_mistAI : public FollowerAI
     }*/
 };
 
-CreatureAI* GetAI_npc_mist(Creature* pCreature)
-{
-    return new npc_mistAI(pCreature);
-}
+CreatureAI* GetAI_npc_mist(Creature* pCreature) { return new npc_mistAI(pCreature); }
 
 bool QuestAccept_npc_mist(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
 {
@@ -107,13 +101,13 @@ bool QuestAccept_npc_mist(Player* pPlayer, Creature* pCreature, Quest const* pQu
             pCreature->SetFactionTemporary(FACTION_DARNASSUS, TEMPFACTION_RESTORE_RESPAWN);
             pCreature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
             pMistAI->StartFollow(pPlayer, FACTION_DARNASSUS, pQuest);
-        } 
+        }
     }
 
     return true;
 }
 
-//Alita
+// Alita
 enum TreshalaFallowbrookData
 {
     QUEST_MORTALITY_WANES = 1142
@@ -127,7 +121,7 @@ bool QuestComplete_npc_treshala_fallowbrook(Player* pPlayer, Creature* pQuestGiv
     {
         pQuestGiver->HandleEmoteCommand(EMOTE_ONESHOT_CRY);
     }
-    return false;//return false meaning let DB take over (probably)(nothing in db anyway)
+    return false; // return false meaning let DB take over (probably)(nothing in db anyway)
 }
 
 void AddSC_teldrassil()

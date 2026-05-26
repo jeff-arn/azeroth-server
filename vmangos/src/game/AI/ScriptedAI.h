@@ -7,12 +7,12 @@
 
 #include "BasicAI.h"
 
-#define CAST_AI(a,b)    (dynamic_cast<a*>(b))
+#define CAST_AI(a, b) (dynamic_cast<a*>(b))
 
 enum SCEquip
 {
     EQUIP_NO_CHANGE = -1,
-    EQUIP_UNEQUIP   = 0
+    EQUIP_UNEQUIP = 0
 };
 
 struct ScriptedAI : BasicAI
@@ -21,7 +21,7 @@ struct ScriptedAI : BasicAI
     ~ScriptedAI() override {}
 
     //*************
-    //CreatureAI Functions
+    // CreatureAI Functions
     //*************
 
     // Called for reaction at enter to combat if not in combat yet (enemy can be nullptr)
@@ -41,7 +41,7 @@ struct ScriptedAI : BasicAI
     //*************
 
     //*************
-    //Pure virtual functions
+    // Pure virtual functions
     //*************
 
     // Called at creature reset either by death or evade
@@ -54,7 +54,7 @@ struct ScriptedAI : BasicAI
     virtual void Aggro(Unit*);
 
     //*************
-    //AI Helper Functions
+    // AI Helper Functions
     //*************
 
     // Start movement toward victim
@@ -113,11 +113,11 @@ struct ScriptedAI : BasicAI
     void DoTeleportAll(float fX, float fY, float fZ, float fO);
     Creature* me;
 
-    private:
-        uint32 m_uiEvadeCheckCooldown;
+private:
+    uint32 m_uiEvadeCheckCooldown;
 
-        bool m_bEvadeOutOfHomeArea;
-        uint32 m_uiHomeArea;
+    bool m_bEvadeOutOfHomeArea;
+    uint32 m_uiHomeArea;
 };
 
 struct Scripted_NoMovementAI : ScriptedAI

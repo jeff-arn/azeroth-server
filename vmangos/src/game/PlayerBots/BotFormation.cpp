@@ -15,17 +15,17 @@
  */
 
 #include "BotFormation.h"
-#include "Player.h"
-#include "Group.h"
-#include "Map.h"
+#include <algorithm>
+#include <cmath>
 #include "Cell.h"
 #include "CellImpl.h"
+#include "CombatBotBaseAI.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
-#include "CombatBotBaseAI.h"
+#include "Group.h"
+#include "Map.h"
 #include "PartyBotAI.h"
-#include <cmath>
-#include <algorithm>
+#include "Player.h"
 
 // ============================================================
 // Utility
@@ -72,10 +72,7 @@ static bool HasHostilesNearPoint(Player* bot, Map* map, float x, float y, float 
 // BreadcrumbTrail
 // ============================================================
 
-uint32 BreadcrumbTrail::RingIndex(uint32 stepsBack) const
-{
-    return (m_head + MAX_CRUMBS - 1 - stepsBack) % MAX_CRUMBS;
-}
+uint32 BreadcrumbTrail::RingIndex(uint32 stepsBack) const { return (m_head + MAX_CRUMBS - 1 - stepsBack) % MAX_CRUMBS; }
 
 void BreadcrumbTrail::RecordPoint(float x, float y, float z, float o, uint32 now)
 {
@@ -92,7 +89,7 @@ void BreadcrumbTrail::RecordPoint(float x, float y, float z, float o, uint32 now
             return;
     }
 
-    m_points[m_head] = { x, y, z, o, now };
+    m_points[m_head] = {x, y, z, o, now};
     m_head = (m_head + 1) % MAX_CRUMBS;
     if (m_count < MAX_CRUMBS)
         m_count++;
@@ -234,36 +231,30 @@ void FormationState::AssignSlots(Group* pGroup)
 
         switch (role)
         {
-            case ROLE_TANK:
-                slot.trailDistBehind = BotFormationDefaults::TANK_TRAIL_DIST;
-                slot.lateralOffset = 0.0f;
-                break;
-            case ROLE_MELEE_DPS:
-                slot.trailDistBehind = BotFormationDefaults::MELEE_TRAIL_DIST;
-                slot.lateralOffset = (meleeCount % 2 == 0)
-                    ? BotFormationDefaults::MELEE_LATERAL
-                    : -BotFormationDefaults::MELEE_LATERAL;
-                meleeCount++;
-                break;
-            case ROLE_RANGE_DPS:
-                slot.trailDistBehind = BotFormationDefaults::RANGED_TRAIL_DIST;
-                slot.lateralOffset = (rangedCount % 2 == 0)
-                    ? BotFormationDefaults::RANGED_LATERAL
-                    : -BotFormationDefaults::RANGED_LATERAL;
-                rangedCount++;
-                break;
-            case ROLE_HEALER:
-                slot.trailDistBehind = BotFormationDefaults::HEALER_TRAIL_DIST;
-                slot.lateralOffset = 0.0f;
-                break;
-            default:
-                // ROLE_INVALID — treat as melee DPS
-                slot.trailDistBehind = BotFormationDefaults::MELEE_TRAIL_DIST;
-                slot.lateralOffset = (meleeCount % 2 == 0)
-                    ? BotFormationDefaults::MELEE_LATERAL
-                    : -BotFormationDefaults::MELEE_LATERAL;
-                meleeCount++;
-                break;
+        case ROLE_TANK:
+            slot.trailDistBehind = BotFormationDefaults::TANK_TRAIL_DIST;
+            slot.lateralOffset = 0.0f;
+            break;
+        case ROLE_MELEE_DPS:
+            slot.trailDistBehind = BotFormationDefaults::MELEE_TRAIL_DIST;
+            slot.lateralOffset = (meleeCount % 2 == 0) ? BotFormationDefaults::MELEE_LATERAL : -BotFormationDefaults::MELEE_LATERAL;
+            meleeCount++;
+            break;
+        case ROLE_RANGE_DPS:
+            slot.trailDistBehind = BotFormationDefaults::RANGED_TRAIL_DIST;
+            slot.lateralOffset = (rangedCount % 2 == 0) ? BotFormationDefaults::RANGED_LATERAL : -BotFormationDefaults::RANGED_LATERAL;
+            rangedCount++;
+            break;
+        case ROLE_HEALER:
+            slot.trailDistBehind = BotFormationDefaults::HEALER_TRAIL_DIST;
+            slot.lateralOffset = 0.0f;
+            break;
+        default:
+            // ROLE_INVALID — treat as melee DPS
+            slot.trailDistBehind = BotFormationDefaults::MELEE_TRAIL_DIST;
+            slot.lateralOffset = (meleeCount % 2 == 0) ? BotFormationDefaults::MELEE_LATERAL : -BotFormationDefaults::MELEE_LATERAL;
+            meleeCount++;
+            break;
         }
 
         slots.push_back(slot);
@@ -288,8 +279,7 @@ void FormationState::AssignSlots(Group* pGroup)
     }
 }
 
-bool FormationState::CalculateSlotPosition(uint32 slotIndex, Map* map, Player* bot,
-                                           float& outX, float& outY, float& outZ) const
+bool FormationState::CalculateSlotPosition(uint32 slotIndex, Map* map, Player* bot, float& outX, float& outY, float& outZ) const
 {
     if (slotIndex >= slots.size() || trail.IsEmpty())
         return false;
@@ -346,8 +336,7 @@ bool FormationState::CalculateSlotPosition(uint32 slotIndex, Map* map, Player* b
 
     // 6. Navmesh validate: can we walk from trail center to the candidate?
     float testX = candX, testY = candY, testZ = candZ;
-    if (!map->GetWalkHitPosition(nullptr, basePoint.x, basePoint.y, basePoint.z,
-                                 testX, testY, testZ))
+    if (!map->GetWalkHitPosition(nullptr, basePoint.x, basePoint.y, basePoint.z, testX, testY, testZ))
     {
         // Navmesh says no — stay at trail center.
         return true;
@@ -359,8 +348,7 @@ bool FormationState::CalculateSlotPosition(uint32 slotIndex, Map* map, Player* b
         return true; // Corridor too narrow — collapse to trail center.
 
     // 7. Aggro safety check: are there hostiles near the candidate position?
-    if (bot && HasHostilesNearPoint(bot, map, testX, testY, testZ,
-                                    BotFormationDefaults::SLOT_HOSTILE_SCAN))
+    if (bot && HasHostilesNearPoint(bot, map, testX, testY, testZ, BotFormationDefaults::SLOT_HOSTILE_SCAN))
     {
         // Mobs nearby — collapse to trail center to avoid pulls.
         return true;
@@ -373,15 +361,13 @@ bool FormationState::CalculateSlotPosition(uint32 slotIndex, Map* map, Player* b
     return true;
 }
 
-bool FormationState::CalculateFleePoint(Player* bot, Map* map,
-                                        float& outX, float& outY, float& outZ) const
+bool FormationState::CalculateFleePoint(Player* bot, Map* map, float& outX, float& outY, float& outZ) const
 {
     if (!bot || !map || trail.Size() < 2)
         return false;
 
     // 1. Find bot's nearest trail point.
-    uint32 nearestIdx = trail.FindNearestIndex(
-        bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
+    uint32 nearestIdx = trail.FindNearestIndex(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
 
     // 2. Walk backward along the trail in steps, looking for a safe point.
     float searchDist = BotFormationDefaults::FLEE_MIN_DIST;
@@ -394,14 +380,11 @@ bool FormationState::CalculateFleePoint(Player* bot, Map* map,
             return false;
 
         // 3. Check for hostiles near candidate.
-        if (!HasHostilesNearPoint(bot, map, candidate.x, candidate.y, candidate.z,
-                                  BotFormationDefaults::FLEE_HOSTILE_SCAN))
+        if (!HasHostilesNearPoint(bot, map, candidate.x, candidate.y, candidate.z, BotFormationDefaults::FLEE_HOSTILE_SCAN))
         {
             // 4. Navmesh validate.
             float testX = candidate.x, testY = candidate.y, testZ = candidate.z;
-            if (map->GetWalkHitPosition(nullptr,
-                                        bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
-                                        testX, testY, testZ))
+            if (map->GetWalkHitPosition(nullptr, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), testX, testY, testZ))
             {
                 outX = testX;
                 outY = testY;
@@ -439,10 +422,7 @@ FormationState* BotFormationMgr::GetFormation(ObjectGuid leaderGuid)
     return &fs;
 }
 
-void BotFormationMgr::RemoveFormation(ObjectGuid leaderGuid)
-{
-    m_formations.erase(leaderGuid.GetRawValue());
-}
+void BotFormationMgr::RemoveFormation(ObjectGuid leaderGuid) { m_formations.erase(leaderGuid.GetRawValue()); }
 
 void BotFormationMgr::UpdateTrail(ObjectGuid leaderGuid, Player* pLeader, uint32 now)
 {
@@ -453,10 +433,5 @@ void BotFormationMgr::UpdateTrail(ObjectGuid leaderGuid, Player* pLeader, uint32
     if (!fs)
         return;
 
-    fs->trail.RecordPoint(
-        pLeader->GetPositionX(),
-        pLeader->GetPositionY(),
-        pLeader->GetPositionZ(),
-        pLeader->GetOrientation(),
-        now);
+    fs->trail.RecordPoint(pLeader->GetPositionX(), pLeader->GetPositionY(), pLeader->GetPositionZ(), pLeader->GetOrientation(), now);
 }

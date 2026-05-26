@@ -19,13 +19,13 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Common.h"
-#include "World.h"
-#include "ObjectAccessor.h"
-#include "GridNotifiers.h"
 #include "CellImpl.h"
+#include "Common.h"
+#include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
+#include "ObjectAccessor.h"
 #include "SpellMgr.h"
+#include "World.h"
 
 DynamicObject::DynamicObject() : WorldObject(), m_spellId(0), m_effIndex(EFFECT_INDEX_0), m_aliveDuration(0), m_radius(0), m_positive(false), m_channeled(false)
 {
@@ -150,7 +150,7 @@ Unit* DynamicObject::GetUnitCaster() const
 
     if (pCaster->IsUnit())
         return static_cast<Unit*>(pCaster);
-    
+
     if (GameObject* pGo = pCaster->ToGameObject())
         return pGo->GetOwner();
 
@@ -158,15 +158,9 @@ Unit* DynamicObject::GetUnitCaster() const
     return nullptr;
 }
 
-Player* DynamicObject::GetAffectingPlayer() const
-{
-    return ::ToPlayer(GetUnitCaster());
-}
+Player* DynamicObject::GetAffectingPlayer() const { return ::ToPlayer(GetUnitCaster()); }
 
-uint32 DynamicObject::GetFactionTemplateId() const
-{
-    return GetCaster()->GetFactionTemplateId();
-}
+uint32 DynamicObject::GetFactionTemplateId() const { return GetCaster()->GetFactionTemplateId(); }
 
 void DynamicObject::Update(uint32 update_diff, uint32 p_time)
 {
@@ -208,11 +202,11 @@ void DynamicObject::Update(uint32 update_diff, uint32 p_time)
         // Hackfix pour Piege explosif. Ne doit s'activer qu'une fois.
         switch (m_spellId)
         {
-            case 13812: // rang 1
-            case 14314: // rang 2
-            case 14315: // rang 3
-                m_radius = 0.0f;
-                break;
+        case 13812: // rang 1
+        case 14314: // rang 2
+        case 14315: // rang 3
+            m_radius = 0.0f;
+            break;
         }
     }
 
@@ -229,15 +223,9 @@ void DynamicObject::Delete()
     AddObjectToRemoveList();
 }
 
-void DynamicObject::AddAffected(Unit* unit)
-{
-    m_affected[unit->GetObjectGuid()] = 0;
-}
+void DynamicObject::AddAffected(Unit* unit) { m_affected[unit->GetObjectGuid()] = 0; }
 
-void DynamicObject::RemoveAffected(Unit* unit)
-{
-    m_affected.erase(unit->GetObjectGuid());
-}
+void DynamicObject::RemoveAffected(Unit* unit) { m_affected.erase(unit->GetObjectGuid()); }
 
 void DynamicObject::Delay(int32 delaytime)
 {

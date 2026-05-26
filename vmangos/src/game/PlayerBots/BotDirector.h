@@ -5,15 +5,15 @@
 #include "Policies/Singleton.h"
 #include "Timer.h"
 
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 enum BotDirectorZoneType : uint8
 {
-    ZONE_TYPE_CAPITAL   = 0,
-    ZONE_TYPE_FRIENDLY  = 1,
+    ZONE_TYPE_CAPITAL = 0,
+    ZONE_TYPE_FRIENDLY = 1,
     ZONE_TYPE_CONTESTED = 2,
-    ZONE_TYPE_UNKNOWN   = 3,
+    ZONE_TYPE_UNKNOWN = 3,
 };
 
 struct BotDirectorZoneInfo

@@ -50,23 +50,23 @@
 
 enum UpdateFields5875
 {
-    FIELD_GAMEOBJECT_FLAGS           = 9,
-    FIELD_GAMEOBJECT_DYN_FLAGS       = 19,
-    FIELD_ITEM_FIELD_FLAGS           = 21,
-    FIELD_CORPSE_FIELD_FLAGS         = 35,
+    FIELD_GAMEOBJECT_FLAGS = 9,
+    FIELD_GAMEOBJECT_DYN_FLAGS = 19,
+    FIELD_ITEM_FIELD_FLAGS = 21,
+    FIELD_CORPSE_FIELD_FLAGS = 35,
     FIELD_CORPSE_FIELD_DYNAMIC_FLAGS = 36,
-    FIELD_UNIT_FIELD_FLAGS           = 46,
-    FIELD_UNIT_DYNAMIC_FLAGS         = 143,
-    FIELD_UNIT_NPC_FLAGS             = 147,
-    FIELD_UNIT_FIELD_RESISTANCES     = 155,
-    FIELD_UNIT_FIELD_RESISTANCES_01  = 156,
-    FIELD_UNIT_FIELD_RESISTANCES_02  = 157,
-    FIELD_UNIT_FIELD_RESISTANCES_03  = 158,
-    FIELD_UNIT_FIELD_RESISTANCES_04  = 159,
-    FIELD_UNIT_FIELD_RESISTANCES_05  = 160,
-    FIELD_UNIT_FIELD_RESISTANCES_06  = 161,
-    FIELD_UNIT_FIELD_ATTACK_POWER    = 165,
-    FIELD_PLAYER_FLAGS               = 190,
+    FIELD_UNIT_FIELD_FLAGS = 46,
+    FIELD_UNIT_DYNAMIC_FLAGS = 143,
+    FIELD_UNIT_NPC_FLAGS = 147,
+    FIELD_UNIT_FIELD_RESISTANCES = 155,
+    FIELD_UNIT_FIELD_RESISTANCES_01 = 156,
+    FIELD_UNIT_FIELD_RESISTANCES_02 = 157,
+    FIELD_UNIT_FIELD_RESISTANCES_03 = 158,
+    FIELD_UNIT_FIELD_RESISTANCES_04 = 159,
+    FIELD_UNIT_FIELD_RESISTANCES_05 = 160,
+    FIELD_UNIT_FIELD_RESISTANCES_06 = 161,
+    FIELD_UNIT_FIELD_ATTACK_POWER = 165,
+    FIELD_PLAYER_FLAGS = 190,
 };
 
 // We use exact index of update fields in some script commands,
@@ -75,34 +75,34 @@ inline uint32 GetIndexOfUpdateFieldForCurrentBuild(uint32 db_index)
 {
     switch (db_index)
     {
-        case FIELD_GAMEOBJECT_FLAGS:
-            return GAMEOBJECT_FLAGS;
-        case FIELD_GAMEOBJECT_DYN_FLAGS:
-            return GAMEOBJECT_DYN_FLAGS;
-        case FIELD_UNIT_FIELD_FLAGS:
-            return UNIT_FIELD_FLAGS;
-        case FIELD_UNIT_DYNAMIC_FLAGS:
-            return UNIT_DYNAMIC_FLAGS;
-        case FIELD_UNIT_NPC_FLAGS:
-            return UNIT_NPC_FLAGS;
-        case FIELD_UNIT_FIELD_RESISTANCES:
-            return UNIT_FIELD_RESISTANCES;
-        case FIELD_UNIT_FIELD_RESISTANCES_01:
-            return UNIT_FIELD_RESISTANCES+1;
-        case FIELD_UNIT_FIELD_RESISTANCES_02:
-            return UNIT_FIELD_RESISTANCES+2;
-        case FIELD_UNIT_FIELD_RESISTANCES_03:
-            return UNIT_FIELD_RESISTANCES+3;
-        case FIELD_UNIT_FIELD_RESISTANCES_04:
-            return UNIT_FIELD_RESISTANCES+4;
-        case FIELD_UNIT_FIELD_RESISTANCES_05:
-            return UNIT_FIELD_RESISTANCES+5;
-        case FIELD_UNIT_FIELD_RESISTANCES_06:
-            return UNIT_FIELD_RESISTANCES+6;
-        case FIELD_UNIT_FIELD_ATTACK_POWER:
-            return UNIT_FIELD_ATTACK_POWER;
-        case FIELD_PLAYER_FLAGS:
-            return PLAYER_FLAGS;
+    case FIELD_GAMEOBJECT_FLAGS:
+        return GAMEOBJECT_FLAGS;
+    case FIELD_GAMEOBJECT_DYN_FLAGS:
+        return GAMEOBJECT_DYN_FLAGS;
+    case FIELD_UNIT_FIELD_FLAGS:
+        return UNIT_FIELD_FLAGS;
+    case FIELD_UNIT_DYNAMIC_FLAGS:
+        return UNIT_DYNAMIC_FLAGS;
+    case FIELD_UNIT_NPC_FLAGS:
+        return UNIT_NPC_FLAGS;
+    case FIELD_UNIT_FIELD_RESISTANCES:
+        return UNIT_FIELD_RESISTANCES;
+    case FIELD_UNIT_FIELD_RESISTANCES_01:
+        return UNIT_FIELD_RESISTANCES + 1;
+    case FIELD_UNIT_FIELD_RESISTANCES_02:
+        return UNIT_FIELD_RESISTANCES + 2;
+    case FIELD_UNIT_FIELD_RESISTANCES_03:
+        return UNIT_FIELD_RESISTANCES + 3;
+    case FIELD_UNIT_FIELD_RESISTANCES_04:
+        return UNIT_FIELD_RESISTANCES + 4;
+    case FIELD_UNIT_FIELD_RESISTANCES_05:
+        return UNIT_FIELD_RESISTANCES + 5;
+    case FIELD_UNIT_FIELD_RESISTANCES_06:
+        return UNIT_FIELD_RESISTANCES + 6;
+    case FIELD_UNIT_FIELD_ATTACK_POWER:
+        return UNIT_FIELD_ATTACK_POWER;
+    case FIELD_PLAYER_FLAGS:
+        return PLAYER_FLAGS;
     }
 
     return db_index;
@@ -110,34 +110,33 @@ inline uint32 GetIndexOfUpdateFieldForCurrentBuild(uint32 db_index)
 
 enum UpdateFieldValueTypes
 {
-    UF_TYPE_NONE      = 0,
-    UF_TYPE_INT       = 1,
+    UF_TYPE_NONE = 0,
+    UF_TYPE_INT = 1,
     UF_TYPE_TWO_SHORT = 2,
-    UF_TYPE_FLOAT     = 3,
-    UF_TYPE_GUID      = 4,
-    UF_TYPE_BYTES     = 5,
-    UF_TYPE_BYTES2    = 6
+    UF_TYPE_FLOAT = 3,
+    UF_TYPE_GUID = 4,
+    UF_TYPE_BYTES = 5,
+    UF_TYPE_BYTES2 = 6
 };
 
 enum UpdateFieldFlags : uint16
 {
-    UF_FLAG_NONE         = 0x000,
-    UF_FLAG_PUBLIC       = 0x001,
-    UF_FLAG_PRIVATE      = 0x002,
-    UF_FLAG_OWNER_ONLY   = 0x004,
-    UF_FLAG_UNK1         = 0x008,
-    UF_FLAG_UNK2         = 0x010,
+    UF_FLAG_NONE = 0x000,
+    UF_FLAG_PUBLIC = 0x001,
+    UF_FLAG_PRIVATE = 0x002,
+    UF_FLAG_OWNER_ONLY = 0x004,
+    UF_FLAG_UNK1 = 0x008,
+    UF_FLAG_UNK2 = 0x010,
     UF_FLAG_SPECIAL_INFO = 0x020,
-    UF_FLAG_GROUP_ONLY   = 0x040,
-    UF_FLAG_UNK5         = 0x080,
-    UF_FLAG_DYNAMIC      = 0x100,
+    UF_FLAG_GROUP_ONLY = 0x040,
+    UF_FLAG_UNK5 = 0x080,
+    UF_FLAG_DYNAMIC = 0x100,
 };
 
 struct UpdateFieldData
 {
     UpdateFieldData() = default;
-    UpdateFieldData(uint8 objectTypeMask_, char const* name_, uint16 offset_, uint16 size_, UpdateFieldValueTypes valueType_, uint16 flags_) :
-        objectTypeMask(objectTypeMask_), name(name_), offset(offset_), size(size_), valueType(valueType_), flags(flags_) {}
+    UpdateFieldData(uint8 objectTypeMask_, char const* name_, uint16 offset_, uint16 size_, UpdateFieldValueTypes valueType_, uint16 flags_) : objectTypeMask(objectTypeMask_), name(name_), offset(offset_), size(size_), valueType(valueType_), flags(flags_) {}
     uint8 objectTypeMask = 0;
     char const* name = "";
     uint16 offset = 0;
@@ -151,6 +150,6 @@ namespace UpdateFields
     uint16 const* GetUpdateFieldFlagsArray(uint8 objectTypeId);
     UpdateFieldData const* GetUpdateFieldDataByName(char const* name);
     UpdateFieldData const* GetUpdateFieldDataByTypeMaskAndOffset(uint8 objectTypeMask, uint16 offset);
-};
+}; // namespace UpdateFields
 
 #endif

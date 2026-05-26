@@ -26,25 +26,25 @@ EndScriptData */
 
 enum
 {
-    GO_EGG                      = 179985,
+    GO_EGG = 179985,
 
     // the spider
-    NPC_SPAWN_OF_MARLI          = 15041,
+    NPC_SPAWN_OF_MARLI = 15041,
 
-    SAY_TRANSFORM               = 10443,
-    SAY_SPIDER_SPAWN            = 10448,
-    SAY_DEATH                   = 10459,
+    SAY_TRANSFORM = 10443,
+    SAY_SPIDER_SPAWN = 10448,
+    SAY_DEATH = 10459,
 
-    SPELL_CHARGE                = 22911,
-    SPELL_ENVELOPINGWEBS        = 24110,
-    SPELL_POISONVOLLEY          = 24099,
-    SPELL_SPIDER_FORM           = 24084,
-    SPELL_DRAIN_LIFE            = 24300,
-    SPELL_CORROSIVE_POISON      = 24111,
-    SPELL_TRANSFORM_BACK        = 24085,
-    SPELL_TRASH                 = 3391,
-    SPELL_HATCH                 = 24083,                    //visual
-    SPELL_AGGRANDIR             = 24109,
+    SPELL_CHARGE = 22911,
+    SPELL_ENVELOPINGWEBS = 24110,
+    SPELL_POISONVOLLEY = 24099,
+    SPELL_SPIDER_FORM = 24084,
+    SPELL_DRAIN_LIFE = 24300,
+    SPELL_CORROSIVE_POISON = 24111,
+    SPELL_TRANSFORM_BACK = 24085,
+    SPELL_TRASH = 3391,
+    SPELL_HATCH = 24083, // visual
+    SPELL_AGGRANDIR = 24109,
 };
 
 struct boss_marliAI : public ScriptedAI
@@ -109,7 +109,7 @@ struct boss_marliAI : public ScriptedAI
         }
 
         // World of Warcraft Client Patch 1.8.0 (2005-10-11)
-        // - High Priestess Mar'li will now despawn her summoned spiders when 
+        // - High Priestess Mar'li will now despawn her summoned spiders when
         //   she returns from combat.
         if (sWorld.GetWowPatch() >= WOW_PATCH_108)
         {
@@ -137,9 +137,9 @@ struct boss_marliAI : public ScriptedAI
             DoScriptText(SAY_SPIDER_SPAWN, m_creature);
             DoCastSpellIfCan(m_creature, SPELL_HATCH);
 
-            for (uint8 i = 0; i < 4 ; ++i)
+            for (uint8 i = 0; i < 4; ++i)
             {
-                if (GameObject *pEgg = SelectNextEgg())
+                if (GameObject* pEgg = SelectNextEgg())
                 {
                     pEgg->SetGoState(GO_STATE_ACTIVE);
                     m_creature->SummonCreature(NPC_SPAWN_OF_MARLI, pEgg->GetPositionX(), pEgg->GetPositionY(), pEgg->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 15000);
@@ -232,7 +232,7 @@ struct boss_marliAI : public ScriptedAI
                 uint32 uiInvocCount = urand(1, 4);
                 for (uint8 i = 0; i < uiInvocCount; ++i)
                 {
-                    if (GameObject *pEgg = SelectNextEgg())
+                    if (GameObject* pEgg = SelectNextEgg())
                     {
                         pEgg->SetGoState(GO_STATE_ACTIVE);
                         m_creature->SummonCreature(NPC_SPAWN_OF_MARLI, pEgg->GetPositionX(), pEgg->GetPositionY(), pEgg->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 15000);
@@ -252,7 +252,6 @@ struct boss_marliAI : public ScriptedAI
             }
             else
                 m_uiAggrandir_Timer -= uiDiff;
-
         }
         // Araignee
         else
@@ -269,7 +268,7 @@ struct boss_marliAI : public ScriptedAI
 
             if (m_bHasWebbed && m_uiCharge_Timer < uiDiff)
             {
-                //Shouldn't be random target but highestaggro not Webbed player
+                // Shouldn't be random target but highestaggro not Webbed player
                 if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0))
                 {
                     DoCastSpellIfCan(pTarget, SPELL_CHARGE);
@@ -360,10 +359,7 @@ struct boss_marliAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_marli(Creature* pCreature)
-{
-    return new boss_marliAI(pCreature);
-}
+CreatureAI* GetAI_boss_marli(Creature* pCreature) { return new boss_marliAI(pCreature); }
 
 void AddSC_boss_marli()
 {

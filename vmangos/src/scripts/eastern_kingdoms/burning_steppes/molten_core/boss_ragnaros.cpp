@@ -26,66 +26,45 @@ EndScriptData */
     so just created a dummy visual creature to spawn in his place
 */
 
-#include "scriptPCH.h"
 #include "molten_core.h"
+#include "scriptPCH.h"
 
 enum
 {
-    SAY_REINFORCEMENTS1       = 8572,
-    SAY_REINFORCEMENTS2       = 8573,
-    SAY_HAND                  = 9426,
-    SAY_WRATH                 = 9427,
-    SAY_KILL                  = 7626,
-    SAY_MAGMABURST            = -1409018, // NO SNIFF DATA IN BROADCAST_TEXT FOR THIS ENTRY - wiki confirms it exists though?
-    SAY_ARRIVAL5_RAG          = 7685,
+    SAY_REINFORCEMENTS1 = 8572,
+    SAY_REINFORCEMENTS2 = 8573,
+    SAY_HAND = 9426,
+    SAY_WRATH = 9427,
+    SAY_KILL = 7626,
+    SAY_MAGMABURST = -1409018, // NO SNIFF DATA IN BROADCAST_TEXT FOR THIS ENTRY - wiki confirms it exists though?
+    SAY_ARRIVAL5_RAG = 7685,
 
     SPELL_ELEMENTAL_FIRE_KILL = 19773, // Kill Majordomo
     SPELL_ELEMENTAL_FIRE_AURA = 20563, // Aura: trigger Elemental Fire (20564) on every hit
-    SPELL_MELT_WEAPON_AURA    = 21387, // Aura: trigger Melt Weapon (21388) on melee damage taken
-    SPELL_WRATH_OF_RAGNAROS   = 20566, // PBAOE Knockback
-    SPELL_MAGMA_BLAST         = 20565, // Ranged attack when no one in melee range
-    SPELL_MIGHT_OF_RAGNAROS   = 21154, // Summon Flame of Ragnaros trigger to deal Knockback
-    SPELL_INTENSE_HEAT        = 21155, // Knockback cast by Might of Ragnaros triggers
-    SPELL_LAVASHIELD          = 21857, // Son of Flame mana drain aura -- this is applied in creature_template_addon
+    SPELL_MELT_WEAPON_AURA = 21387, // Aura: trigger Melt Weapon (21388) on melee damage taken
+    SPELL_WRATH_OF_RAGNAROS = 20566, // PBAOE Knockback
+    SPELL_MAGMA_BLAST = 20565, // Ranged attack when no one in melee range
+    SPELL_MIGHT_OF_RAGNAROS = 21154, // Summon Flame of Ragnaros trigger to deal Knockback
+    SPELL_INTENSE_HEAT = 21155, // Knockback cast by Might of Ragnaros triggers
+    SPELL_LAVASHIELD = 21857, // Son of Flame mana drain aura -- this is applied in creature_template_addon
 
-    SPELL_SUBMERGE_VISUAL     = 20567,
-    SPELL_SUBMERGE_EFFECT     = 21859,
-    SPELL_EMERGE_VISUAL       = 20568,
+    SPELL_SUBMERGE_VISUAL = 20567,
+    SPELL_SUBMERGE_EFFECT = 21859,
+    SPELL_EMERGE_VISUAL = 20568,
 
-    NPC_FLAME_OF_RAGNAROS     = 13148,
-    NPC_SON_OF_FLAME          = 12143,
+    NPC_FLAME_OF_RAGNAROS = 13148,
+    NPC_SON_OF_FLAME = 12143,
 
-    GO_LAVA_BURST             = 178088,
+    GO_LAVA_BURST = 178088,
 
-    MAX_ADDS_IN_SUBMERGE      = 8
+    MAX_ADDS_IN_SUBMERGE = 8
 };
 
 // Lava Burst locations
-float PositionOfLavaBursts[9][3]=
-{
-    {812.0f, -821.0f, -232.0f},
-    {832.0f, -798.0f, -232.0f},
-    {820.0f, -745.0f, -232.0f},
-    {865.0f, -807.0f, -232.0f},
-    {894.0f, -792.0f, -232.0f},
-    {874.0f, -839.0f, -232.0f},
-    {862.0f, -869.0f, -232.0f}, 
-    {827.0f, -873.0f, -231.3f},
-    {760.0f, -827.0f, -232.0f}
-};
+float PositionOfLavaBursts[9][3] = {{812.0f, -821.0f, -232.0f}, {832.0f, -798.0f, -232.0f}, {820.0f, -745.0f, -232.0f}, {865.0f, -807.0f, -232.0f}, {894.0f, -792.0f, -232.0f}, {874.0f, -839.0f, -232.0f}, {862.0f, -869.0f, -232.0f}, {827.0f, -873.0f, -231.3f}, {760.0f, -827.0f, -232.0f}};
 
 // Sons of Ragnaros spawn positions
-Position const PositionOfAdds[8] =
-{
-    { 811.448f, -814.058f, -233.177f, 0.0f },
-    { 819.699f, -894.288f, -231.258f, 1.28281f },
-    { 825.412f, -869.328f, -231.759f, 1.24253f },
-    { 842.542f, -797.822f, -233.340f, 0.0f },
-    { 866.345f, -891.080f, -231.449f, 2.01042f },
-    { 870.668f, -821.862f, -232.938f, 0.0f },
-    { 871.282f, -858.217f, -231.855f, 2.46003f },
-    { 887.501f, -791.383f, -231.108f, 3.54988f }
-};
+Position const PositionOfAdds[8] = {{811.448f, -814.058f, -233.177f, 0.0f}, {819.699f, -894.288f, -231.258f, 1.28281f}, {825.412f, -869.328f, -231.759f, 1.24253f}, {842.542f, -797.822f, -233.340f, 0.0f}, {866.345f, -891.080f, -231.449f, 2.01042f}, {870.668f, -821.862f, -232.938f, 0.0f}, {871.282f, -858.217f, -231.855f, 2.46003f}, {887.501f, -791.383f, -231.108f, 3.54988f}};
 
 class ThreatListCopier : public ThreatListProcesser
 {
@@ -135,25 +114,25 @@ struct boss_ragnarosAI : ScriptedAI
 
     void Reset() override
     {
-        m_uiMagmaBlastTimer         = 2000;
-        m_uiWrathOfRagnarosTimer    = urand(25000, 30000);
-        m_uiMightOfRagnarosTimer    = urand(10000, 15000);
-        m_uiRestoreTargetTimer      = 0;
-        m_uiLavaBurstTimer          = urand(10000, 15000);
+        m_uiMagmaBlastTimer = 2000;
+        m_uiWrathOfRagnarosTimer = urand(25000, 30000);
+        m_uiMightOfRagnarosTimer = urand(10000, 15000);
+        m_uiRestoreTargetTimer = 0;
+        m_uiLavaBurstTimer = urand(10000, 15000);
         m_uiLavaBurstSecondaryTimer = 0;
-        m_uiLavaBurstTertiaryTimer  = 0;
+        m_uiLavaBurstTertiaryTimer = 0;
 
-        m_uiSubmergeTimer           = 3*MINUTE*IN_MILLISECONDS;   // P1
-        m_uiAttackTimer             = 1.5*MINUTE*IN_MILLISECONDS; // P2
-        m_uiEmergeStateTimer        = 0;
-        m_uiEnterCombatTimer        = 0;
+        m_uiSubmergeTimer = 3 * MINUTE * IN_MILLISECONDS; // P1
+        m_uiAttackTimer = 1.5 * MINUTE * IN_MILLISECONDS; // P2
+        m_uiEmergeStateTimer = 0;
+        m_uiEnterCombatTimer = 0;
 
-        HasYelledMagmaBlast         = false;
-        HasSubmergedOnce            = false;
-        IsBanished                  = false;
-        Explosion                   = false;
-        HasYelledAggro              = false;
-        m_bInMelee                  = false;
+        HasYelledMagmaBlast = false;
+        HasSubmergedOnce = false;
+        IsBanished = false;
+        Explosion = false;
+        HasYelledAggro = false;
+        m_bInMelee = false;
 
         HasAura = true;
 
@@ -172,7 +151,7 @@ struct boss_ragnarosAI : ScriptedAI
             m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
         }
         m_creature->SetInCombatWithZone();
-        DoCastSpellIfCan(m_creature, SPELL_MELT_WEAPON_AURA, CF_TRIGGERED | CF_AURA_NOT_PRESENT);        
+        DoCastSpellIfCan(m_creature, SPELL_MELT_WEAPON_AURA, CF_TRIGGERED | CF_AURA_NOT_PRESENT);
         DoCastSpellIfCan(m_creature, SPELL_ELEMENTAL_FIRE_AURA, CF_TRIGGERED | CF_AURA_NOT_PRESENT);
     }
 
@@ -202,9 +181,7 @@ struct boss_ragnarosAI : ScriptedAI
         for (const auto& position : PositionOfAdds)
         {
             ThreatListCopier* dataCopier = new ThreatListCopier(m_creature);
-            if (Creature* pSonOfFlame = m_creature->SummonCreature(NPC_SON_OF_FLAME, 
-                position.x, position.y, position.z, position.o,
-                TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10000))
+            if (Creature* pSonOfFlame = m_creature->SummonCreature(NPC_SON_OF_FLAME, position.x, position.y, position.z, position.o, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10000))
             {
                 m_creature->ProcessThreatList(dataCopier);
                 if (Unit* randomTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
@@ -224,24 +201,24 @@ struct boss_ragnarosAI : ScriptedAI
         if (m_uiLavaBurstTimer < diff)
         {
             DoLavaBurst();
-            m_uiLavaBurstTimer = urand (15000, 20000);
-            m_uiLavaBurstSecondaryTimer = urand (2000, 4000);
+            m_uiLavaBurstTimer = urand(15000, 20000);
+            m_uiLavaBurstSecondaryTimer = urand(2000, 4000);
         }
         else
             m_uiLavaBurstTimer -= diff;
-            
+
         if (m_uiLavaBurstSecondaryTimer)
         {
             if (m_uiLavaBurstSecondaryTimer < diff)
             {
                 DoLavaBurst();
                 m_uiLavaBurstSecondaryTimer = 0;
-                m_uiLavaBurstTertiaryTimer = urand (2000, 4000);
+                m_uiLavaBurstTertiaryTimer = urand(2000, 4000);
             }
             else
                 m_uiLavaBurstSecondaryTimer -= diff;
         }
-        
+
         if (m_uiLavaBurstTertiaryTimer)
         {
             if (m_uiLavaBurstTertiaryTimer < diff)
@@ -257,12 +234,9 @@ struct boss_ragnarosAI : ScriptedAI
     void DoLavaBurst() const
     {
         uint8 m_uiLavaBurstPoint = urand(0, 8);
-        if (GameObject* pGo = m_creature->SummonGameObject(GO_LAVA_BURST, 
-            PositionOfLavaBursts[m_uiLavaBurstPoint][0], 
-            PositionOfLavaBursts[m_uiLavaBurstPoint][1], 
-            PositionOfLavaBursts[m_uiLavaBurstPoint][2], frand(0, M_PI_F), 0, 0, 0, 0, 0))
+        if (GameObject* pGo = m_creature->SummonGameObject(GO_LAVA_BURST, PositionOfLavaBursts[m_uiLavaBurstPoint][0], PositionOfLavaBursts[m_uiLavaBurstPoint][1], PositionOfLavaBursts[m_uiLavaBurstPoint][2], frand(0, M_PI_F), 0, 0, 0, 0, 0))
         {
-            pGo->Use(m_creature);            
+            pGo->Use(m_creature);
         }
     }
 
@@ -387,7 +361,7 @@ struct boss_ragnarosAI : ScriptedAI
         {
             if (m_uiRestoreTargetTimer <= diff)
             {
-                if (Unit *pTarget = m_creature->GetVictim())
+                if (Unit* pTarget = m_creature->GetVictim())
                 {
                     m_creature->SetTargetGuid(pTarget->GetObjectGuid());
                     m_creature->SetFacingToObject(pTarget);
@@ -411,8 +385,8 @@ struct boss_ragnarosAI : ScriptedAI
 
                     HasSubmergedOnce = true;
                     IsBanished = true;
-                    m_uiSubmergeTimer = 3 * MINUTE*IN_MILLISECONDS;
-                    m_uiAttackTimer = 1.5*MINUTE*IN_MILLISECONDS;
+                    m_uiSubmergeTimer = 3 * MINUTE * IN_MILLISECONDS;
+                    m_uiAttackTimer = 1.5 * MINUTE * IN_MILLISECONDS;
                     return;
                 }
             }
@@ -454,7 +428,7 @@ struct boss_ragnarosAI : ScriptedAI
                     if (DoCastSpellIfCan(pTarget, SPELL_MIGHT_OF_RAGNAROS) == CAST_OK)
                     {
                         m_creature->SetInFront(pTarget);
-                        m_creature->SetTargetGuid(pTarget->GetObjectGuid());  // Ragnaros faces targets he casts Might of Ragnaros on
+                        m_creature->SetTargetGuid(pTarget->GetObjectGuid()); // Ragnaros faces targets he casts Might of Ragnaros on
                         m_uiMightOfRagnarosTimer = urand(9000, 14000);
                         m_uiRestoreTargetTimer = 800;
                         if (urand(0, 1))
@@ -489,7 +463,7 @@ struct boss_ragnarosAI : ScriptedAI
 
                 // at first we try to select player, then pet
                 Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, nullptr, SELECT_FLAG_PLAYER_NOT_GM);
-                
+
                 if (!target)
                     target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, nullptr, SELECT_FLAG_PET);
 
@@ -512,8 +486,7 @@ struct boss_ragnarosAI : ScriptedAI
     {
         // at first we check for the current player-type target
         Unit* pMainTarget = m_creature->GetVictim();
-        if (pMainTarget && pMainTarget->IsPlayer() && !pMainTarget->ToPlayer()->IsGameMaster() && 
-            m_creature->CanReachWithMeleeAutoAttack(pMainTarget) && m_creature->IsWithinLOSInMap(pMainTarget))
+        if (pMainTarget && pMainTarget->IsPlayer() && !pMainTarget->ToPlayer()->IsGameMaster() && m_creature->CanReachWithMeleeAutoAttack(pMainTarget) && m_creature->IsWithinLOSInMap(pMainTarget))
         {
             m_bInMelee = true;
 
@@ -527,8 +500,7 @@ struct boss_ragnarosAI : ScriptedAI
         }
 
         // at second we look for any melee player-type target (if current target is not reachable)
-        if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0, nullptr, 
-            SELECT_FLAG_PLAYER_NOT_GM | SELECT_FLAG_IN_LOS | SELECT_FLAG_IN_MELEE_RANGE))
+        if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0, nullptr, SELECT_FLAG_PLAYER_NOT_GM | SELECT_FLAG_IN_LOS | SELECT_FLAG_IN_MELEE_RANGE))
         {
             m_bInMelee = true;
 
@@ -549,10 +521,9 @@ struct boss_ragnarosAI : ScriptedAI
 
         // reaching this point means there are no more reachable player-type targets in melee range
         m_bInMelee = false;
-        
+
         // at third we take any melee pet target just to punch in the face
-        if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0, nullptr,
-            SELECT_FLAG_PET | SELECT_FLAG_IN_LOS | SELECT_FLAG_IN_MELEE_RANGE))
+        if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0, nullptr, SELECT_FLAG_PET | SELECT_FLAG_IN_LOS | SELECT_FLAG_IN_MELEE_RANGE))
         {
             // erase current target's threat as soon as we switch the target now
             m_creature->GetThreatManager().modifyThreatPercent(m_creature->GetVictim(), -100);
@@ -570,8 +541,7 @@ struct boss_ragnarosAI : ScriptedAI
         }
 
         // at fourth we take anything to wipe it out and log (whatever, just in case)
-        if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0, nullptr,
-            SELECT_FLAG_NOT_PLAYER | SELECT_FLAG_IN_LOS | SELECT_FLAG_IN_MELEE_RANGE))
+        if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0, nullptr, SELECT_FLAG_NOT_PLAYER | SELECT_FLAG_IN_LOS | SELECT_FLAG_IN_MELEE_RANGE))
         {
             // erase current target's threat as soon as we switch the target now
             m_creature->GetThreatManager().modifyThreatPercent(m_creature->GetVictim(), -100);
@@ -585,18 +555,15 @@ struct boss_ragnarosAI : ScriptedAI
                 m_creature->ResetAttackTimer();
             }
 
-            //sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "[MoltenCore.Ragnaros] Target type #4 reached with name <%s> and entry <%u>.", pTarget->GetName(), pTarget->GetEntry());
+            // sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "[MoltenCore.Ragnaros] Target type #4 reached with name <%s> and entry <%u>.", pTarget->GetName(), pTarget->GetEntry());
         }
 
         // nothing in melee at all
-        //sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "[MoltenCore.Ragnaros] CheckForMelee hits the end. Nothing in melee.");
+        // sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "[MoltenCore.Ragnaros] CheckForMelee hits the end. Nothing in melee.");
     }
 };
 
-CreatureAI* GetAI_boss_ragnaros(Creature* pCreature)
-{
-    return new boss_ragnarosAI(pCreature);
-}
+CreatureAI* GetAI_boss_ragnaros(Creature* pCreature) { return new boss_ragnarosAI(pCreature); }
 
 void AddSC_boss_ragnaros()
 {
@@ -605,5 +572,4 @@ void AddSC_boss_ragnaros()
     newscript->Name = "boss_ragnaros";
     newscript->GetAI = &GetAI_boss_ragnaros;
     newscript->RegisterSelf();
-
 }

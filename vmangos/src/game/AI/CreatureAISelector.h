@@ -30,5 +30,5 @@ namespace FactorySelector
 {
     CreatureAI* selectAI(Creature*);
     MovementGenerator* selectMovementGenerator(Creature*);
-}
+} // namespace FactorySelector
 #endif

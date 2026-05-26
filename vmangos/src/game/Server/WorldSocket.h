@@ -23,11 +23,11 @@
 #ifndef MANGOS_GAME_SERVER_WORLDSOCKET_H
 #define MANGOS_GAME_SERVER_WORLDSOCKET_H
 
-#include "IO/Networking/AsyncSocket.h"
 #include "Auth/AuthCrypt.h"
+#include "IO/Networking/AsyncSocket.h"
+#include "IO/Timer/TimerHandle.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "IO/Timer/TimerHandle.h"
 
 class WorldSocketMgr;
 
@@ -42,17 +42,17 @@ private:
         Fail,
     };
 
-#if defined( __GNUC__ )
+#if defined(__GNUC__)
 #pragma pack(1)
 #else
-#pragma pack(push,1)
+#pragma pack(push, 1)
 #endif
     struct ClientPktHeader
     {
         uint16 size;
         uint32 cmd;
     };
-#if defined( __GNUC__ )
+#if defined(__GNUC__)
 #pragma pack()
 #else
 #pragma pack(pop)
@@ -74,7 +74,7 @@ private:
     uint32 const m_authSeed;
 
     /// Session key used to authenticate the client (value from db `account` table)
-    //BigNumber m_authSessionKey;
+    // BigNumber m_authSessionKey;
 
     /// Starting the recv loop
     void Start();
@@ -116,10 +116,7 @@ public:
 
     void SendPacket(WorldPacket packet);
 
-    void FinalizeSession()
-    {
-        m_Session = nullptr;
-    }
+    void FinalizeSession() { m_Session = nullptr; }
 
     // ----- Exposing `m_socket` features -----
     inline std::string const& GetRemoteIpString() const { return m_remoteIpAddressStringAfterProxy; }

@@ -23,17 +23,14 @@ EndScriptData */
 
 #include "scriptPCH.h"
 
-#define SPELL_WHIRLWIND             15589
-#define SPELL_MORTALSTRIKE          15708
-#define SPELL_BLOODLUST             21049
+#define SPELL_WHIRLWIND 15589
+#define SPELL_MORTALSTRIKE 15708
+#define SPELL_BLOODLUST 21049
 
 
 struct boss_gorosh_the_dervishAI : public ScriptedAI
 {
-    boss_gorosh_the_dervishAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_gorosh_the_dervishAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 WhirlWind_Timer;
     uint32 MortalStrike_Timer;
@@ -48,27 +45,29 @@ struct boss_gorosh_the_dervishAI : public ScriptedAI
 
     void UpdateAI(uint32 const diff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //WhirlWind_Timer
+        // WhirlWind_Timer
         if (WhirlWind_Timer < diff)
         {
             DoCastSpellIfCan(m_creature, SPELL_WHIRLWIND);
             WhirlWind_Timer = 15000;
         }
-        else WhirlWind_Timer -= diff;
+        else
+            WhirlWind_Timer -= diff;
 
-        //MortalStrike_Timer
+        // MortalStrike_Timer
         if (MortalStrike_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MORTALSTRIKE);
             MortalStrike_Timer = 15000;
         }
-        else MortalStrike_Timer -= diff;
+        else
+            MortalStrike_Timer -= diff;
 
-        //Bloodlust_Timer
+        // Bloodlust_Timer
         if (m_creature->GetHealthPercent() < 51.0f)
         {
             if (Bloodlust_Timer < diff)
@@ -76,17 +75,15 @@ struct boss_gorosh_the_dervishAI : public ScriptedAI
                 DoCastSpellIfCan(m_creature, SPELL_BLOODLUST);
                 Bloodlust_Timer = 45000;
             }
-            else Bloodlust_Timer -= diff;
+            else
+                Bloodlust_Timer -= diff;
         }
 
 
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_gorosh_the_dervish(Creature* pCreature)
-{
-    return new boss_gorosh_the_dervishAI(pCreature);
-}
+CreatureAI* GetAI_boss_gorosh_the_dervish(Creature* pCreature) { return new boss_gorosh_the_dervishAI(pCreature); }
 
 void AddSC_boss_gorosh_the_dervish()
 {

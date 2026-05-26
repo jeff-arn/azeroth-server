@@ -22,306 +22,415 @@
 #ifndef CREATUREAIIMPL_H
 #define CREATUREAIIMPL_H
 
-#include "CreatureAI.h"
 #include "Common.h"
+#include "CreatureAI.h"
 #include "Util.h"
 
-template<class REAL_AI>
-inline CreatureAI*
-CreatureAIFactory<REAL_AI>::Create(void *data) const
+template <class REAL_AI>
+inline CreatureAI* CreatureAIFactory<REAL_AI>::Create(void* data) const
 {
-    Creature* creature = reinterpret_cast<Creature* >(data);
+    Creature* creature = reinterpret_cast<Creature*>(data);
     return (new REAL_AI(creature));
 }
 
 
 // TrinityCore
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2)
 {
-    return (urand(0,1)) ? v1 : v2;
+    return (urand(0, 1)) ? v1 : v2;
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3)
 {
-    switch (urand(0,2))
+    switch (urand(0, 2))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4)
 {
-    switch (urand(0,3))
+    switch (urand(0, 3))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5)
 {
-    switch (urand(0,4))
+    switch (urand(0, 4))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6)
 {
-    switch (urand(0,5))
+    switch (urand(0, 5))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7)
 {
-    switch (urand(0,6))
+    switch (urand(0, 6))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8)
 {
-    switch (urand(0,7))
+    switch (urand(0, 7))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
-        case 7: return v8;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
+    case 7:
+        return v8;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8,
-              T const& v9)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8, T const& v9)
 {
-    switch (urand(0,8))
+    switch (urand(0, 8))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
-        case 7: return v8;
-        case 8: return v9;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
+    case 7:
+        return v8;
+    case 8:
+        return v9;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8,
-              T const& v9, T const& v10)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8, T const& v9, T const& v10)
 {
-    switch (urand(0,9))
+    switch (urand(0, 9))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
-        case 7: return v8;
-        case 8: return v9;
-        case 9: return v10;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
+    case 7:
+        return v8;
+    case 8:
+        return v9;
+    case 9:
+        return v10;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8,
-              T const& v9, T const& v10, T const& v11)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8, T const& v9, T const& v10, T const& v11)
 {
-    switch (urand(0,10))
+    switch (urand(0, 10))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
-        case 7: return v8;
-        case 8: return v9;
-        case 9: return v10;
-        case 10: return v11;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
+    case 7:
+        return v8;
+    case 8:
+        return v9;
+    case 9:
+        return v10;
+    case 10:
+        return v11;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8,
-              T const& v9, T const& v10, T const& v11, T const& v12)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8, T const& v9, T const& v10, T const& v11, T const& v12)
 {
-    switch (urand(0,11))
+    switch (urand(0, 11))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
-        case 7: return v8;
-        case 8: return v9;
-        case 9: return v10;
-        case 10: return v11;
-        case 11: return v12;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
+    case 7:
+        return v8;
+    case 8:
+        return v9;
+    case 9:
+        return v10;
+    case 10:
+        return v11;
+    case 11:
+        return v12;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8,
-              T const& v9, T const& v10, T const& v11, T const& v12, T const& v13)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8, T const& v9, T const& v10, T const& v11, T const& v12, T const& v13)
 {
-    switch (urand(0,12))
+    switch (urand(0, 12))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
-        case 7: return v8;
-        case 8: return v9;
-        case 9: return v10;
-        case 10: return v11;
-        case 11: return v12;
-        case 12: return v13;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
+    case 7:
+        return v8;
+    case 8:
+        return v9;
+    case 9:
+        return v10;
+    case 10:
+        return v11;
+    case 11:
+        return v12;
+    case 12:
+        return v13;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8,
-              T const& v9, T const& v10, T const& v11, T const& v12, T const& v13, T const& v14)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8, T const& v9, T const& v10, T const& v11, T const& v12, T const& v13, T const& v14)
 {
-    switch (urand(0,13))
+    switch (urand(0, 13))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
-        case 7: return v8;
-        case 8: return v9;
-        case 9: return v10;
-        case 10: return v11;
-        case 11: return v12;
-        case 12: return v13;
-        case 13: return v14;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
+    case 7:
+        return v8;
+    case 8:
+        return v9;
+    case 9:
+        return v10;
+    case 10:
+        return v11;
+    case 11:
+        return v12;
+    case 12:
+        return v13;
+    case 13:
+        return v14;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8,
-              T const& v9, T const& v10, T const& v11, T const& v12, T const& v13, T const& v14, T const& v15)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8, T const& v9, T const& v10, T const& v11, T const& v12, T const& v13, T const& v14, T const& v15)
 {
-    switch (urand(0,14))
+    switch (urand(0, 14))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
-        case 7: return v8;
-        case 8: return v9;
-        case 9: return v10;
-        case 10: return v11;
-        case 11: return v12;
-        case 12: return v13;
-        case 13: return v14;
-        case 14: return v15;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
+    case 7:
+        return v8;
+    case 8:
+        return v9;
+    case 9:
+        return v10;
+    case 10:
+        return v11;
+    case 11:
+        return v12;
+    case 12:
+        return v13;
+    case 13:
+        return v14;
+    case 14:
+        return v15;
     }
 }
 
-template<class T>
-inline
-T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8,
-              T const& v9, T const& v10, T const& v11, T const& v12, T const& v13, T const& v14, T const& v15, T const& v16)
+template <class T>
+inline T const& RAND(T const& v1, T const& v2, T const& v3, T const& v4, T const& v5, T const& v6, T const& v7, T const& v8, T const& v9, T const& v10, T const& v11, T const& v12, T const& v13, T const& v14, T const& v15, T const& v16)
 {
-    switch (urand(0,15))
+    switch (urand(0, 15))
     {
-        default:
-        case 0: return v1;
-        case 1: return v2;
-        case 2: return v3;
-        case 3: return v4;
-        case 4: return v5;
-        case 5: return v6;
-        case 6: return v7;
-        case 7: return v8;
-        case 8: return v9;
-        case 9: return v10;
-        case 10: return v11;
-        case 11: return v12;
-        case 12: return v13;
-        case 13: return v14;
-        case 14: return v15;
-        case 15: return v16;
+    default:
+    case 0:
+        return v1;
+    case 1:
+        return v2;
+    case 2:
+        return v3;
+    case 3:
+        return v4;
+    case 4:
+        return v5;
+    case 5:
+        return v6;
+    case 6:
+        return v7;
+    case 7:
+        return v8;
+    case 8:
+        return v9;
+    case 9:
+        return v10;
+    case 10:
+        return v11;
+    case 11:
+        return v12;
+    case 12:
+        return v13;
+    case 13:
+        return v14;
+    case 14:
+        return v15;
+    case 15:
+        return v16;
     }
 }
 

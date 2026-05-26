@@ -22,8 +22,8 @@
 #ifndef MANGOS_CREATURE_EAI_H
 #define MANGOS_CREATURE_EAI_H
 
-#include "Common.h"
 #include "BasicAI.h"
+#include "Common.h"
 #include "ScriptMgr.h"
 
 class Unit;
@@ -31,68 +31,68 @@ class Creature;
 class Player;
 class WorldObject;
 
-#define EVENT_UPDATE_TIME               500
-#define MAX_ACTIONS                     3
-#define MAX_PHASE                       32
+#define EVENT_UPDATE_TIME 500
+#define MAX_ACTIONS 3
+#define MAX_PHASE 32
 
 enum EventAI_Type
 {
-    EVENT_T_TIMER_IN_COMBAT         = 0,                    // InitialMin, InitialMax, RepeatMin, RepeatMax
-    EVENT_T_TIMER_OOC               = 1,                    // InitialMin, InitialMax, RepeatMin, RepeatMax
-    EVENT_T_HP                      = 2,                    // HPMax%, HPMin%, RepeatMin, RepeatMax
-    EVENT_T_MANA                    = 3,                    // ManaMax%,ManaMin% RepeatMin, RepeatMax
-    EVENT_T_AGGRO                   = 4,                    // NONE
-    EVENT_T_KILL                    = 5,                    // RepeatMin, RepeatMax, PlayerOnly
-    EVENT_T_DEATH                   = 6,                    // NONE
-    EVENT_T_EVADE                   = 7,                    // NONE
-    EVENT_T_HIT_BY_SPELL            = 8,                    // SpellID, School, RepeatMin, RepeatMax
-    EVENT_T_RANGE                   = 9,                    // MinDist, MaxDist, RepeatMin, RepeatMax
-    EVENT_T_OOC_LOS                 = 10,                   // Reaction, MaxRnage, RepeatMin, RepeatMax
-    EVENT_T_SPAWNED                 = 11,                   // NONE
-    EVENT_T_TARGET_HP               = 12,                   // HPMax%, HPMin%, RepeatMin, RepeatMax
-    EVENT_T_TARGET_CASTING          = 13,                   // RepeatMin, RepeatMax
-    EVENT_T_FRIENDLY_HP             = 14,                   // HPDeficit, Radius, RepeatMin, RepeatMax
-    EVENT_T_FRIENDLY_IS_CC          = 15,                   // DispelType, Radius, RepeatMin, RepeatMax
-    EVENT_T_FRIENDLY_MISSING_BUFF   = 16,                   // SpellId, Radius, RepeatMin, RepeatMax
-    EVENT_T_SUMMONED_UNIT           = 17,                   // CreatureId, RepeatMin, RepeatMax
-    EVENT_T_TARGET_MANA             = 18,                   // ManaMax%, ManaMin%, RepeatMin, RepeatMax
-    EVENT_T_QUEST_ACCEPT            = 19,                   // QuestID
-    EVENT_T_QUEST_COMPLETE          = 20,                   //
-    EVENT_T_REACHED_HOME            = 21,                   // NONE
-    EVENT_T_RECEIVE_EMOTE           = 22,                   // EmoteId, Condition, CondValue1, CondValue2
-    EVENT_T_AURA                    = 23,                   // Param1 = SpellID, Param2 = Number of time stacked, Param3/4 Repeat Min/Max
-    EVENT_T_TARGET_AURA             = 24,                   // Param1 = SpellID, Param2 = Number of time stacked, Param3/4 Repeat Min/Max
-    EVENT_T_SUMMONED_JUST_DIED      = 25,                   // CreatureId, RepeatMin, RepeatMax
-    EVENT_T_SUMMONED_JUST_DESPAWN   = 26,                   // CreatureId, RepeatMin, RepeatMax
-    EVENT_T_MISSING_AURA            = 27,                   // Param1 = SpellID, Param2 = Number of time stacked expected, Param3/4 Repeat Min/Max
-    EVENT_T_TARGET_MISSING_AURA     = 28,                   // Param1 = SpellID, Param2 = Number of time stacked expected, Param3/4 Repeat Min/Max
-    EVENT_T_MOVEMENT_INFORM         = 29,                   // Param1 = motion type, Param2 = point ID, RepeatMin, RepeatMax
-    EVENT_T_LEAVE_COMBAT            = 30,                   // NONE
-    EVENT_T_SCRIPT                  = 31,                   // Param1 = EventID, Param2 = Data
-    EVENT_T_GROUP_MEMBER_DIED       = 32,                   // Param1 = CreatureId, Param2 = IsLeader
-    EVENT_T_VICTIM_ROOTED           = 33,                   // RepeatMin, RepeatMax
-    EVENT_T_HIT_BY_AURA             = 34,                   // AuraType, Unused, RepeatMin, RepeatMax
-    EVENT_T_STEALTH_ALERT           = 35,                   // RepeatMin, RepeatMax
-    EVENT_T_SPELL_HIT_TARGET        = 36,                   // SpellID, School, RepeatMin, RepeatMax
+    EVENT_T_TIMER_IN_COMBAT = 0, // InitialMin, InitialMax, RepeatMin, RepeatMax
+    EVENT_T_TIMER_OOC = 1, // InitialMin, InitialMax, RepeatMin, RepeatMax
+    EVENT_T_HP = 2, // HPMax%, HPMin%, RepeatMin, RepeatMax
+    EVENT_T_MANA = 3, // ManaMax%,ManaMin% RepeatMin, RepeatMax
+    EVENT_T_AGGRO = 4, // NONE
+    EVENT_T_KILL = 5, // RepeatMin, RepeatMax, PlayerOnly
+    EVENT_T_DEATH = 6, // NONE
+    EVENT_T_EVADE = 7, // NONE
+    EVENT_T_HIT_BY_SPELL = 8, // SpellID, School, RepeatMin, RepeatMax
+    EVENT_T_RANGE = 9, // MinDist, MaxDist, RepeatMin, RepeatMax
+    EVENT_T_OOC_LOS = 10, // Reaction, MaxRnage, RepeatMin, RepeatMax
+    EVENT_T_SPAWNED = 11, // NONE
+    EVENT_T_TARGET_HP = 12, // HPMax%, HPMin%, RepeatMin, RepeatMax
+    EVENT_T_TARGET_CASTING = 13, // RepeatMin, RepeatMax
+    EVENT_T_FRIENDLY_HP = 14, // HPDeficit, Radius, RepeatMin, RepeatMax
+    EVENT_T_FRIENDLY_IS_CC = 15, // DispelType, Radius, RepeatMin, RepeatMax
+    EVENT_T_FRIENDLY_MISSING_BUFF = 16, // SpellId, Radius, RepeatMin, RepeatMax
+    EVENT_T_SUMMONED_UNIT = 17, // CreatureId, RepeatMin, RepeatMax
+    EVENT_T_TARGET_MANA = 18, // ManaMax%, ManaMin%, RepeatMin, RepeatMax
+    EVENT_T_QUEST_ACCEPT = 19, // QuestID
+    EVENT_T_QUEST_COMPLETE = 20, //
+    EVENT_T_REACHED_HOME = 21, // NONE
+    EVENT_T_RECEIVE_EMOTE = 22, // EmoteId, Condition, CondValue1, CondValue2
+    EVENT_T_AURA = 23, // Param1 = SpellID, Param2 = Number of time stacked, Param3/4 Repeat Min/Max
+    EVENT_T_TARGET_AURA = 24, // Param1 = SpellID, Param2 = Number of time stacked, Param3/4 Repeat Min/Max
+    EVENT_T_SUMMONED_JUST_DIED = 25, // CreatureId, RepeatMin, RepeatMax
+    EVENT_T_SUMMONED_JUST_DESPAWN = 26, // CreatureId, RepeatMin, RepeatMax
+    EVENT_T_MISSING_AURA = 27, // Param1 = SpellID, Param2 = Number of time stacked expected, Param3/4 Repeat Min/Max
+    EVENT_T_TARGET_MISSING_AURA = 28, // Param1 = SpellID, Param2 = Number of time stacked expected, Param3/4 Repeat Min/Max
+    EVENT_T_MOVEMENT_INFORM = 29, // Param1 = motion type, Param2 = point ID, RepeatMin, RepeatMax
+    EVENT_T_LEAVE_COMBAT = 30, // NONE
+    EVENT_T_SCRIPT = 31, // Param1 = EventID, Param2 = Data
+    EVENT_T_GROUP_MEMBER_DIED = 32, // Param1 = CreatureId, Param2 = IsLeader
+    EVENT_T_VICTIM_ROOTED = 33, // RepeatMin, RepeatMax
+    EVENT_T_HIT_BY_AURA = 34, // AuraType, Unused, RepeatMin, RepeatMax
+    EVENT_T_STEALTH_ALERT = 35, // RepeatMin, RepeatMax
+    EVENT_T_SPELL_HIT_TARGET = 36, // SpellID, School, RepeatMin, RepeatMax
 
     EVENT_T_END,
 };
 
 enum EventFlags
 {
-    EFLAG_REPEATABLE            = 0x01,                     //Event repeats
-    EFLAG_RANDOM_ACTION         = 0x02,                     //Event only execute one from existed actions instead each action.
-    EFLAG_NOT_CASTING           = 0x04,                     //Event will not occur while creature is casting a spell
-    EFLAG_CHECK_RESULT          = 0x08,                     //Event will not go on cooldown if script actions fail
-    EFLAG_DEBUG_ONLY            = 0x10,                     //Event only occurs in debug build
+    EFLAG_REPEATABLE = 0x01, // Event repeats
+    EFLAG_RANDOM_ACTION = 0x02, // Event only execute one from existed actions instead each action.
+    EFLAG_NOT_CASTING = 0x04, // Event will not occur while creature is casting a spell
+    EFLAG_CHECK_RESULT = 0x08, // Event will not go on cooldown if script actions fail
+    EFLAG_DEBUG_ONLY = 0x10, // Event only occurs in debug build
     // uint8 field
 };
 
 enum UnitInLosReaction
 {
-    ULR_ANY             = 0,
-    ULR_HOSTILE         = 1,
-    ULR_NON_HOSTILE     = 2
+    ULR_ANY = 0,
+    ULR_HOSTILE = 1,
+    ULR_NON_HOSTILE = 2
 };
 
 struct CreatureEventAI_Event
@@ -107,7 +107,7 @@ struct CreatureEventAI_Event
 
     EventAI_Type event_type : 16;
     uint8 event_chance : 8;
-    uint8 event_flags  : 8;
+    uint8 event_flags : 8;
 
     union
     {
@@ -143,7 +143,7 @@ struct CreatureEventAI_Event
         struct
         {
             uint32 spellId;
-            uint32 schoolMask;                              // -1 (==0xffffffff) is ok value for full mask, or must be more limited mask like (0 < 1) = 1 for normal/physical school
+            uint32 schoolMask; // -1 (==0xffffffff) is ok value for full mask, or must be more limited mask like (0 < 1) = 1 for normal/physical school
             uint32 repeatMin;
             uint32 repeatMax;
         } hit_by_spell;
@@ -180,7 +180,7 @@ struct CreatureEventAI_Event
         // EVENT_T_FRIENDLY_IS_CC                           = 15
         struct
         {
-            uint32 dispelType;                              // unused ?
+            uint32 dispelType; // unused ?
             uint32 radius;
             uint32 repeatMin;
             uint32 repeatMax;
@@ -194,8 +194,8 @@ struct CreatureEventAI_Event
             uint32 repeatMax;
         } friendly_buff;
         // EVENT_T_SUMMONED_UNIT                            = 17
-        //EVENT_T_SUMMONED_JUST_DIED                        = 25
-        //EVENT_T_SUMMONED_JUST_DESPAWN                     = 26
+        // EVENT_T_SUMMONED_JUST_DIED                        = 25
+        // EVENT_T_SUMMONED_JUST_DESPAWN                     = 26
         struct
         {
             uint32 creatureId;
@@ -277,9 +277,9 @@ struct CreatureEventAI_Event
     ScriptMap* action[MAX_ACTIONS];
 };
 
-//Event_Map
+// Event_Map
 typedef std::vector<CreatureEventAI_Event> CreatureEventAI_Event_Vec;
-typedef std::unordered_map<uint32, CreatureEventAI_Event_Vec > CreatureEventAI_Event_Map;
+typedef std::unordered_map<uint32, CreatureEventAI_Event_Vec> CreatureEventAI_Event_Map;
 
 struct CreatureEventAIHolder
 {
@@ -295,54 +295,51 @@ struct CreatureEventAIHolder
 
 class CreatureEventAI : public BasicAI
 {
-    public:
-        explicit CreatureEventAI(Creature* c);
-        ~CreatureEventAI()
-        {
-            m_CreatureEventAIList.clear();
-        }
+public:
+    explicit CreatureEventAI(Creature* c);
+    ~CreatureEventAI() { m_CreatureEventAIList.clear(); }
 
-        void GetAIInformation(ChatHandler& reader) override;
+    void GetAIInformation(ChatHandler& reader) override;
 
-        void JustRespawned() override;
-        void Reset();
-        void JustReachedHome() override;
-        void EnterCombat(Unit* enemy) override;
-        void EnterEvadeMode() override;
-        void OnCombatStop() override;
-        void JustDied(Unit* killer) override;
-        void KilledUnit(Unit* victim) override;
-        void JustSummoned(Creature* pUnit) override;
-        void MoveInLineOfSight(Unit* who) override;
-        void SpellHit(SpellCaster* pCaster, SpellEntry const* pSpellEntry) override;
-        void SpellHitTarget(Unit* pTarget, SpellEntry const* pSpellEntry) override;
-        void MovementInform(uint32 type, uint32 id) override;
-        void UpdateAI(uint32 const diff) override;
-        void ReceiveEmote(Player* pPlayer, uint32 text_emote) override;
-        void GroupMemberJustDied(Creature* unit, bool isLeader) override;
-        void SummonedCreatureJustDied(Creature* unit) override;
-        void SummonedCreatureDespawn(Creature* unit) override;
-        void OnScriptEventHappened(uint32 uiEvent, uint32 uiData, WorldObject* pInvoker) override;
-        void OnMoveInStealth(Unit* who) override;
+    void JustRespawned() override;
+    void Reset();
+    void JustReachedHome() override;
+    void EnterCombat(Unit* enemy) override;
+    void EnterEvadeMode() override;
+    void OnCombatStop() override;
+    void JustDied(Unit* killer) override;
+    void KilledUnit(Unit* victim) override;
+    void JustSummoned(Creature* pUnit) override;
+    void MoveInLineOfSight(Unit* who) override;
+    void SpellHit(SpellCaster* pCaster, SpellEntry const* pSpellEntry) override;
+    void SpellHitTarget(Unit* pTarget, SpellEntry const* pSpellEntry) override;
+    void MovementInform(uint32 type, uint32 id) override;
+    void UpdateAI(uint32 const diff) override;
+    void ReceiveEmote(Player* pPlayer, uint32 text_emote) override;
+    void GroupMemberJustDied(Creature* unit, bool isLeader) override;
+    void SummonedCreatureJustDied(Creature* unit) override;
+    void SummonedCreatureDespawn(Creature* unit) override;
+    void OnScriptEventHappened(uint32 uiEvent, uint32 uiData, WorldObject* pInvoker) override;
+    void OnMoveInStealth(Unit* who) override;
 
-        static int Permissible(Creature const*);
+    static int Permissible(Creature const*);
 
-        bool ProcessEvent(CreatureEventAIHolder& pHolder, SpellCaster* pActionInvoker = nullptr);
-        bool ProcessAction(ScriptMap* action, uint32 EventId, SpellCaster* pActionInvoker);
+    bool ProcessEvent(CreatureEventAIHolder& pHolder, SpellCaster* pActionInvoker = nullptr);
+    bool ProcessAction(ScriptMap* action, uint32 EventId, SpellCaster* pActionInvoker);
 
-        uint8  m_Phase;                                     // Current phase, max 32 phases
+    uint8 m_Phase; // Current phase, max 32 phases
 
-    protected:
-        uint32 m_EventUpdateTime;                           //Time between event updates
-        uint32 m_EventDiff;                                 //Time between the last event call
-        bool   m_bEmptyList;
+protected:
+    uint32 m_EventUpdateTime; // Time between event updates
+    uint32 m_EventDiff; // Time between the last event call
+    bool m_bEmptyList;
 
-        //Variables used by Events themselves
-        typedef std::vector<CreatureEventAIHolder> CreatureEventAIList;
-        CreatureEventAIList m_CreatureEventAIList;          //Holder for events (stores enabled, time, and eventid)
+    // Variables used by Events themselves
+    typedef std::vector<CreatureEventAIHolder> CreatureEventAIList;
+    CreatureEventAIList m_CreatureEventAIList; // Holder for events (stores enabled, time, and eventid)
 
-        void UpdateEventsOn_UpdateAI(uint32 const diff, bool Combat);
-        void UpdateEventsOn_MoveInLineOfSight(Unit* pWho);
+    void UpdateEventsOn_UpdateAI(uint32 const diff, bool Combat);
+    void UpdateEventsOn_MoveInLineOfSight(Unit* pWho);
 };
 
 #endif

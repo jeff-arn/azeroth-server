@@ -10,7 +10,8 @@ constexpr int MAX_ERROR_TEXT_LENGTH = 255;
 thread_local char g_threadLocalStorage[MAX_ERROR_TEXT_LENGTH];
 
 // The buffer is thread_local, don't free it
-char const* SystemErrorToCString(int nativeSystemErrorCode) {
+char const* SystemErrorToCString(int nativeSystemErrorCode)
+{
 #if defined(WIN32)
     if (!FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_MAX_WIDTH_MASK, nullptr, nativeSystemErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), g_threadLocalStorage, MAX_ERROR_TEXT_LENGTH, nullptr))
         return "<Unable to generate error text>";
@@ -27,6 +28,4 @@ char const* SystemErrorToCString(int nativeSystemErrorCode) {
 #endif
 }
 
-std::string SystemErrorToString(int nativeSystemErrorCode) {
-    return '(' + std::to_string(nativeSystemErrorCode) + ") " + SystemErrorToCString(nativeSystemErrorCode);
-}
+std::string SystemErrorToString(int nativeSystemErrorCode) { return '(' + std::to_string(nativeSystemErrorCode) + ") " + SystemErrorToCString(nativeSystemErrorCode); }

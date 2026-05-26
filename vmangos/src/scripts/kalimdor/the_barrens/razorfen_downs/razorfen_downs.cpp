@@ -25,8 +25,8 @@ npc_belnistrasz
 go_gong
 EndContentData */
 
-#include "scriptPCH.h"
 #include "razorfen_downs.h"
+#include "scriptPCH.h"
 
 /*###
 # npc_belnistrasz
@@ -36,14 +36,14 @@ enum
 {
     QUEST_EXTINGUISHING_THE_IDOL = 3525,
 
-    SAY_BELNISTRASZ_READY     = 4493,
+    SAY_BELNISTRASZ_READY = 4493,
     SAY_BELNISTRASZ_START_RIT = 4501,
-    SAY_BELNISTRASZ_AGGRO_1   = 9008,
-    SAY_BELNISTRASZ_AGGRO_2   = 9007,
-    SAY_BELNISTRASZ_3_MIN     = 4504,
-    SAY_BELNISTRASZ_2_MIN     = 4505,
-    SAY_BELNISTRASZ_1_MIN     = 4506,
-    SAY_BELNISTRASZ_FINISH    = 4507,
+    SAY_BELNISTRASZ_AGGRO_1 = 9008,
+    SAY_BELNISTRASZ_AGGRO_2 = 9007,
+    SAY_BELNISTRASZ_3_MIN = 4504,
+    SAY_BELNISTRASZ_2_MIN = 4505,
+    SAY_BELNISTRASZ_1_MIN = 4506,
+    SAY_BELNISTRASZ_FINISH = 4507,
 
     NPC_IDOL_ROOM_SPAWNER = 8611,
     NPC_WITHERED_BATTLE_BOAR = 7333,
@@ -61,17 +61,12 @@ enum
     SPELL_IDOL_SHUTDOWN = 12774,
 
     // summon spells only exist in 1.x
-    //SPELL_SUMMON_1 = 12694, // NPC_WITHERED_BATTLE_BOAR
-    //SPELL_SUMMON_2 = 14802, // NPC_DEATHS_HEAD_GEOMANCER
-    //SPELL_SUMMON_3 = 14801, // NPC_WITHERED_QUILGUARD
+    // SPELL_SUMMON_1 = 12694, // NPC_WITHERED_BATTLE_BOAR
+    // SPELL_SUMMON_2 = 14802, // NPC_DEATHS_HEAD_GEOMANCER
+    // SPELL_SUMMON_3 = 14801, // NPC_WITHERED_QUILGUARD
 };
 
-static float m_fSpawnerCoord[3][4] =
-{
-    {2582.79f, 954.392f, 52.4821f, 3.78736f},
-    {2569.42f, 956.380f, 52.2732f, 5.42797f},
-    {2570.62f, 942.393f, 53.7433f, 0.71558f}
-};
+static float m_fSpawnerCoord[3][4] = {{2582.79f, 954.392f, 52.4821f, 3.78736f}, {2569.42f, 956.380f, 52.2732f, 5.42797f}, {2570.62f, 942.393f, 53.7433f, 0.71558f}};
 
 struct npc_belnistraszAI : public npc_escortAI
 {
@@ -144,25 +139,22 @@ struct npc_belnistraszAI : public npc_escortAI
             pSummoner->GetClosePoint(fX, fY, fZ, 0.0f, 2.0f, angle);
             switch (i)
             {
-                case 0:
-                case 1:
-                    uiEntry = NPC_WITHERED_BATTLE_BOAR;
-                    break;
-                case 2:
-                    uiEntry = NPC_WITHERED_QUILGUARD;
-                    break;
-                case 3:
-                    uiEntry = NPC_DEATHS_HEAD_GEOMANCER;
-                    break;
+            case 0:
+            case 1:
+                uiEntry = NPC_WITHERED_BATTLE_BOAR;
+                break;
+            case 2:
+                uiEntry = NPC_WITHERED_QUILGUARD;
+                break;
+            case 3:
+                uiEntry = NPC_DEATHS_HEAD_GEOMANCER;
+                break;
             }
             pSummoner->SummonCreature(uiEntry, fX, fY, fZ, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 60000);
         }
     }
 
-    void JustSummoned(Creature* pSummoned) override
-    {
-        SpawnerSummon(pSummoned);
-    }
+    void JustSummoned(Creature* pSummoned) override { SpawnerSummon(pSummoned); }
 
     void DoSummonRandom()
     {
@@ -187,49 +179,49 @@ struct npc_belnistraszAI : public npc_escortAI
             {
                 switch (m_uiRitualPhase)
                 {
-                    case 0:
-                        SetCombatMovement(false);
-                        DoCastSpellIfCan(m_creature, SPELL_IDOL_SHUTDOWN);
-                        m_uiRitualTimer = 1000;
-                        break;
-                    case 1:
-                        DoSummonRandom();
-                        m_uiRitualTimer = 39000;
-                        break;
-                    case 2:
-                        DoSummonRandom();
-                        m_uiRitualTimer = 20000;
-                        break;
-                    case 3:
-                        DoScriptText(SAY_BELNISTRASZ_3_MIN, m_creature, m_creature);
-                        m_uiRitualTimer = 20000;
-                        break;
-                    case 4:
-                        DoSummonRandom();
-                        m_uiRitualTimer = 40000;
-                        break;
-                    case 5:
-                        DoSummonRandom();
-                        DoScriptText(SAY_BELNISTRASZ_2_MIN, m_creature, m_creature);
-                        m_uiRitualTimer = 40000;
-                        break;
-                    case 6:
-                        DoSummonRandom();
-                        m_uiRitualTimer = 20000;
-                        break;
-                    case 7:
-                        DoScriptText(SAY_BELNISTRASZ_1_MIN, m_creature, m_creature);
-                        m_uiRitualTimer = 40000;
-                        break;
-                    case 8:
-                        DoSummonRandom();
-                        m_uiRitualTimer = 20000;
-                        break;
-                    case 9:
-                        DoScriptText(SAY_BELNISTRASZ_FINISH, m_creature, m_creature);
-                        m_uiRitualTimer = 3000;
-                        break;
-                    case 10:
+                case 0:
+                    SetCombatMovement(false);
+                    DoCastSpellIfCan(m_creature, SPELL_IDOL_SHUTDOWN);
+                    m_uiRitualTimer = 1000;
+                    break;
+                case 1:
+                    DoSummonRandom();
+                    m_uiRitualTimer = 39000;
+                    break;
+                case 2:
+                    DoSummonRandom();
+                    m_uiRitualTimer = 20000;
+                    break;
+                case 3:
+                    DoScriptText(SAY_BELNISTRASZ_3_MIN, m_creature, m_creature);
+                    m_uiRitualTimer = 20000;
+                    break;
+                case 4:
+                    DoSummonRandom();
+                    m_uiRitualTimer = 40000;
+                    break;
+                case 5:
+                    DoSummonRandom();
+                    DoScriptText(SAY_BELNISTRASZ_2_MIN, m_creature, m_creature);
+                    m_uiRitualTimer = 40000;
+                    break;
+                case 6:
+                    DoSummonRandom();
+                    m_uiRitualTimer = 20000;
+                    break;
+                case 7:
+                    DoScriptText(SAY_BELNISTRASZ_1_MIN, m_creature, m_creature);
+                    m_uiRitualTimer = 40000;
+                    break;
+                case 8:
+                    DoSummonRandom();
+                    m_uiRitualTimer = 20000;
+                    break;
+                case 9:
+                    DoScriptText(SAY_BELNISTRASZ_FINISH, m_creature, m_creature);
+                    m_uiRitualTimer = 3000;
+                    break;
+                case 10:
                     {
                         if (Player* pPlayer = GetPlayerForEscort())
                         {
@@ -276,13 +268,9 @@ struct npc_belnistraszAI : public npc_escortAI
         if (!HasEscortState(STATE_ESCORT_PAUSED))
             DoMeleeAttackIfReady();
     }
-
 };
 
-CreatureAI* GetAI_npc_belnistrasz(Creature* pCreature)
-{
-    return new npc_belnistraszAI(pCreature);
-}
+CreatureAI* GetAI_npc_belnistrasz(Creature* pCreature) { return new npc_belnistraszAI(pCreature); }
 
 bool QuestAccept_npc_belnistrasz(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
 {
@@ -304,7 +292,7 @@ bool QuestAccept_npc_belnistrasz(Player* pPlayer, Creature* pCreature, Quest con
 
 bool GOHello_go_gong(Player* pPlayer, GameObject* pGO)
 {
-    //basic support, not blizzlike data is missing...
+    // basic support, not blizzlike data is missing...
     if (ScriptedInstance* pInstance = (ScriptedInstance*)pGO->GetInstanceData())
     {
         pInstance->SetData(DATA_GONG_WAVES, pInstance->GetData(DATA_GONG_WAVES) + 1);

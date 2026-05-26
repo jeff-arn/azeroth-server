@@ -38,26 +38,26 @@ EndContentData */
 
 enum
 {
-    SPELL_FOOLS_PLIGHT              = 23504,
-        
-    SPELL_DEMONIC_FRENZY            = 23257,
-    SPELL_DEMONIC_DOOM              = 23298,
-    SPELL_STINGING_TRAUMA           = 23299,
-    
-    EMOTE_POISON                    = 9786,
+    SPELL_FOOLS_PLIGHT = 23504,
 
-    NPC_ARTORIUS_THE_AMIABLE        = 14531,
-    NPC_ARTORIUS_THE_DOOMBRINGER    = 14535,
-    NPC_THE_CLEANER                 = 14503,
-    
-    QUEST_STAVE_OF_THE_ANCIENTS     = 7636
+    SPELL_DEMONIC_FRENZY = 23257,
+    SPELL_DEMONIC_DOOM = 23298,
+    SPELL_STINGING_TRAUMA = 23299,
+
+    EMOTE_POISON = 9786,
+
+    NPC_ARTORIUS_THE_AMIABLE = 14531,
+    NPC_ARTORIUS_THE_DOOMBRINGER = 14535,
+    NPC_THE_CLEANER = 14503,
+
+    QUEST_STAVE_OF_THE_ANCIENTS = 7636
 };
 
 struct npc_artoriusAI : public ScriptedAI
 {
     npc_artoriusAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_bTransform      = false;
+        m_bTransform = false;
         m_uiDespawn_Timer = 0;
         Reset();
     }
@@ -71,36 +71,36 @@ struct npc_artoriusAI : public ScriptedAI
     uint32 m_uiDemonic_Frenzy_Timer;
     uint32 m_uiDespawn_Timer;
 
-    void Reset() override 
+    void Reset() override
     {
         switch (m_creature->GetEntry())
         {
-            case NPC_ARTORIUS_THE_AMIABLE:
-                m_creature->SetRespawnDelay(35*MINUTE);
-                m_creature->SetRespawnTime(35*MINUTE);
-                m_creature->SetHomePosition(7909.71f, -4598.67f, 710.008f, 0.606013f);
-                m_creature->NearTeleportTo(7909.71f, -4598.67f, 710.008f, 0.606013f);
-                if (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() != WAYPOINT_MOTION_TYPE) 
-                { 
-                    m_creature->SetDefaultMovementType(WAYPOINT_MOTION_TYPE); 
-                    m_creature->GetMotionMaster()->Initialize(); 
-                }
-            
-                m_creature->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+        case NPC_ARTORIUS_THE_AMIABLE:
+            m_creature->SetRespawnDelay(35 * MINUTE);
+            m_creature->SetRespawnTime(35 * MINUTE);
+            m_creature->SetHomePosition(7909.71f, -4598.67f, 710.008f, 0.606013f);
+            m_creature->NearTeleportTo(7909.71f, -4598.67f, 710.008f, 0.606013f);
+            if (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() != WAYPOINT_MOTION_TYPE)
+            {
+                m_creature->SetDefaultMovementType(WAYPOINT_MOTION_TYPE);
+                m_creature->GetMotionMaster()->Initialize();
+            }
 
-                m_uiTransform_Timer      = 10000;
-                m_uiTransformEmote_Timer = 5000;
-                m_bTransform             = false;
-                m_uiDespawn_Timer        = 0;
-                break;
-            case NPC_ARTORIUS_THE_DOOMBRINGER:
-                 if (!m_uiDespawn_Timer)
-                    m_uiDespawn_Timer = 20*MINUTE*IN_MILLISECONDS;
+            m_creature->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
 
-                m_hunterGuid.Clear();
-                m_uiDemonic_Doom_Timer   = 7500;
-                m_uiDemonic_Frenzy_Timer = urand(5000, 8000);
-                break;
+            m_uiTransform_Timer = 10000;
+            m_uiTransformEmote_Timer = 5000;
+            m_bTransform = false;
+            m_uiDespawn_Timer = 0;
+            break;
+        case NPC_ARTORIUS_THE_DOOMBRINGER:
+            if (!m_uiDespawn_Timer)
+                m_uiDespawn_Timer = 20 * MINUTE * IN_MILLISECONDS;
+
+            m_hunterGuid.Clear();
+            m_uiDemonic_Doom_Timer = 7500;
+            m_uiDemonic_Frenzy_Timer = urand(5000, 8000);
+            break;
         }
     }
 
@@ -113,33 +113,33 @@ struct npc_artoriusAI : public ScriptedAI
         m_creature->GetMotionMaster()->Initialize();
         Reset();
     }
-    
+
     void BeginEvent(ObjectGuid playerGuid)
     {
         m_hunterGuid = playerGuid;
         m_creature->GetMotionMaster()->Clear(false);
         m_creature->GetMotionMaster()->MoveIdle();
         m_creature->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
-        m_bTransform = true;        
+        m_bTransform = true;
     }
 
     /** Artorius the Doombringer */
-    void Aggro(Unit* pWho) override 
+    void Aggro(Unit* pWho) override
     {
-        if (pWho->GetClass() == CLASS_HUNTER && (m_hunterGuid.IsEmpty() || m_hunterGuid == pWho->GetObjectGuid())/*&& pWho->GetQuestStatus(QUEST_STAVE_OF_THE_ANCIENTS) == QUEST_STATUS_INCOMPLETE*/)
+        if (pWho->GetClass() == CLASS_HUNTER && (m_hunterGuid.IsEmpty() || m_hunterGuid == pWho->GetObjectGuid()) /*&& pWho->GetQuestStatus(QUEST_STAVE_OF_THE_ANCIENTS) == QUEST_STATUS_INCOMPLETE*/)
         {
             m_hunterGuid = pWho->GetObjectGuid();
         }
         else
             DemonDespawn();
-    }    
-    
+    }
+
     void JustDied(Unit* /*pKiller*/) override
     {
         m_creature->SetHomePosition(7909.71f, -4598.67f, 710.008f, 0.606013f);
 
         // DRSS
-        uint32 m_respawn_delay_Timer = 3*HOUR;
+        uint32 m_respawn_delay_Timer = 3 * HOUR;
         if (sWorld.GetActiveSessionCount() > BLIZZLIKE_REALM_POPULATION)
             m_respawn_delay_Timer *= float(BLIZZLIKE_REALM_POPULATION) / float(sWorld.GetActiveSessionCount());
 
@@ -147,21 +147,21 @@ struct npc_artoriusAI : public ScriptedAI
         m_creature->SetRespawnTime(m_respawn_delay_Timer);
         m_creature->SaveRespawnTime();
     }
-    
+
     void DemonDespawn(bool triggered = true)
     {
         m_creature->SetHomePosition(7909.71f, -4598.67f, 710.008f, 0.606013f);
-        m_creature->SetRespawnDelay(15*MINUTE);
-        m_creature->SetRespawnTime(15*MINUTE);
+        m_creature->SetRespawnDelay(15 * MINUTE);
+        m_creature->SetRespawnTime(15 * MINUTE);
         m_creature->SaveRespawnTime();
-        
+
         if (triggered)
         {
-            Creature* pCleaner = m_creature->SummonCreature(NPC_THE_CLEANER, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetAngle(m_creature), TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 20*MINUTE*IN_MILLISECONDS);
+            Creature* pCleaner = m_creature->SummonCreature(NPC_THE_CLEANER, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetAngle(m_creature), TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 20 * MINUTE * IN_MILLISECONDS);
             if (pCleaner)
             {
                 ThreatList const& tList = m_creature->GetThreatManager().getThreatList();
-                
+
                 for (const auto itr : tList)
                 {
                     if (Unit* pUnit = itr->getTarget())
@@ -176,13 +176,13 @@ struct npc_artoriusAI : public ScriptedAI
                 }
             }
         }
-        
+
         m_creature->ForcedDespawn();
     }
-    
+
     void SpellHit(SpellCaster*, SpellEntry const* pSpell) override
     {
-        if (pSpell->Id == 13555 || pSpell->Id == 25295)             // Serpent Sting (Rank 8 or Rank 9)
+        if (pSpell->Id == 13555 || pSpell->Id == 25295) // Serpent Sting (Rank 8 or Rank 9)
         {
             if (DoCastSpellIfCan(m_creature, SPELL_STINGING_TRAUMA, CF_TRIGGERED) == CAST_OK)
                 DoScriptText(EMOTE_POISON, m_creature);
@@ -225,7 +225,7 @@ struct npc_artoriusAI : public ScriptedAI
             else
                 m_uiDespawn_Timer -= uiDiff;
         }
-    
+
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
@@ -238,7 +238,7 @@ struct npc_artoriusAI : public ScriptedAI
                 m_uiDemonic_Frenzy_Timer = urand(15000, 20000);
         }
         else
-            m_uiDemonic_Frenzy_Timer -= uiDiff;    
+            m_uiDemonic_Frenzy_Timer -= uiDiff;
 
         if (m_uiDemonic_Doom_Timer < uiDiff)
         {
@@ -261,10 +261,7 @@ struct npc_artoriusAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_artorius(Creature* pCreature)
-{
-    return new npc_artoriusAI(pCreature);
-}
+CreatureAI* GetAI_npc_artorius(Creature* pCreature) { return new npc_artoriusAI(pCreature); }
 
 /*######
 ## npc_umi_yeti
@@ -272,23 +269,16 @@ CreatureAI* GetAI_npc_artorius(Creature* pCreature)
 
 enum
 {
-    SPELL_UNSUMMON_YETI         = 17163
+    SPELL_UNSUMMON_YETI = 17163
 };
 
 struct npc_umi_yetiAI : public ScriptedAI
 {
-    npc_umi_yetiAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    npc_umi_yetiAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
-    void Reset() override
-    {
-    }
+    void Reset() override {}
 
-    void MoveInLineOfSight(Unit *) override
-    {
-    }
+    void MoveInLineOfSight(Unit*) override {}
 
     void SpellHit(SpellCaster*, SpellEntry const* pSpell) override
     {
@@ -299,15 +289,10 @@ struct npc_umi_yetiAI : public ScriptedAI
         }
     }
 
-    void UpdateAI(uint32 const uiDiff) override
-    {
-    }
+    void UpdateAI(uint32 const uiDiff) override {}
 };
 
-CreatureAI* GetAI_npc_umi_yeti(Creature* pCreature)
-{
-    return new npc_umi_yetiAI(pCreature);
-}
+CreatureAI* GetAI_npc_umi_yeti(Creature* pCreature) { return new npc_umi_yetiAI(pCreature); }
 
 void AddSC_winterspring()
 {
@@ -317,7 +302,7 @@ void AddSC_winterspring()
     newscript->Name = "npc_artorius";
     newscript->GetAI = &GetAI_npc_artorius;
     newscript->RegisterSelf();
-    
+
     newscript = new Script;
     newscript->Name = "npc_umi_yeti";
     newscript->GetAI = &GetAI_npc_umi_yeti;

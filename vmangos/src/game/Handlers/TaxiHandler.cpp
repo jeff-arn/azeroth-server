@@ -21,14 +21,14 @@
 
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
-#include "WorldPacket.h"
-#include "WorldSession.h"
-#include "Opcodes.h"
 #include "Log.h"
 #include "ObjectMgr.h"
-#include "Player.h"
+#include "Opcodes.h"
 #include "Path.h"
+#include "Player.h"
 #include "WaypointMovementGenerator.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 void WorldSession::HandleTaxiNodeStatusQueryOpcode(WorldPacket& recv_data)
 {
@@ -125,7 +125,7 @@ bool WorldSession::SendLearnNewTaxiNode(Creature* unit)
     uint32 curloc = sObjectMgr.GetNearestTaxiNode(unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ(), unit->GetMapId(), GetPlayer()->GetTeam());
 
     if (curloc == 0)
-        return true;                                        // `true` send to avoid WorldSession::SendTaxiMenu call with one more curlock seartch with same false result.
+        return true; // `true` send to avoid WorldSession::SendTaxiMenu call with one more curlock seartch with same false result.
 
     if (GetPlayer()->m_taxi.SetTaximaskNode(curloc))
     {

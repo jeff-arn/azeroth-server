@@ -1,15 +1,15 @@
 #include "BotServiceMgr.h"
-#include "Policies/SingletonImp.h"
-#include "Player.h"
-#include "Item.h"
-#include "ObjectAccessor.h"
-#include "World.h"
 #include "Chat/Chat.h"
+#include "Config/Config.h"
+#include "Item.h"
+#include "Log.h"
+#include "ObjectAccessor.h"
+#include "Player.h"
+#include "Policies/SingletonImp.h"
 #include "Spell.h"
 #include "TradeData.h"
-#include "Config/Config.h"
-#include "Log.h"
 #include "Util.h"
+#include "World.h"
 
 INSTANTIATE_SINGLETON_1(BotServiceMgr);
 
@@ -24,19 +24,7 @@ struct PortalDestination
 };
 
 static const PortalDestination PORTAL_DESTINATIONS[] = {
-    { "stormwind", PORTAL_SPELL_STORMWIND,    0 },
-    { "sw",        PORTAL_SPELL_STORMWIND,    0 },
-    { "storm",     PORTAL_SPELL_STORMWIND,    0 },
-    { "ironforge", PORTAL_SPELL_IRONFORGE,    0 },
-    { "if",        PORTAL_SPELL_IRONFORGE,    0 },
-    { "darnassus", PORTAL_SPELL_DARNASSUS,    0 },
-    { "darn",      PORTAL_SPELL_DARNASSUS,    0 },
-    { "orgrimmar", 0, PORTAL_SPELL_ORGRIMMAR    },
-    { "org",       0, PORTAL_SPELL_ORGRIMMAR    },
-    { "undercity", 0, PORTAL_SPELL_UNDERCITY    },
-    { "uc",        0, PORTAL_SPELL_UNDERCITY    },
-    { "thunder",   0, PORTAL_SPELL_THUNDERBLUFF },
-    { "tb",        0, PORTAL_SPELL_THUNDERBLUFF },
+    {"stormwind", PORTAL_SPELL_STORMWIND, 0}, {"sw", PORTAL_SPELL_STORMWIND, 0}, {"storm", PORTAL_SPELL_STORMWIND, 0}, {"ironforge", PORTAL_SPELL_IRONFORGE, 0}, {"if", PORTAL_SPELL_IRONFORGE, 0}, {"darnassus", PORTAL_SPELL_DARNASSUS, 0}, {"darn", PORTAL_SPELL_DARNASSUS, 0}, {"orgrimmar", 0, PORTAL_SPELL_ORGRIMMAR}, {"org", 0, PORTAL_SPELL_ORGRIMMAR}, {"undercity", 0, PORTAL_SPELL_UNDERCITY}, {"uc", 0, PORTAL_SPELL_UNDERCITY}, {"thunder", 0, PORTAL_SPELL_THUNDERBLUFF}, {"tb", 0, PORTAL_SPELL_THUNDERBLUFF},
 };
 static const uint32 PORTAL_DEST_COUNT = sizeof(PORTAL_DESTINATIONS) / sizeof(PORTAL_DESTINATIONS[0]);
 
@@ -45,27 +33,27 @@ static const uint32 PORTAL_DEST_COUNT = sizeof(PORTAL_DESTINATIONS) / sizeof(POR
 // ============================================================================
 static const EnchantDefinition ENCHANT_LIST[] = {
     // Common (trainer-learned) — 0-1g tip
-    { 13890, "minor speed",     "Minor Speed (boots)",        ENCHANT_TIP_COMMON,   false },
-    { 13945, "greater stamina", "Greater Stamina (bracers)",  ENCHANT_TIP_COMMON,   false },
-    { 20025, "greater stats",   "Greater Stats (chest)",      ENCHANT_TIP_COMMON,   false },
+    {13890, "minor speed", "Minor Speed (boots)", ENCHANT_TIP_COMMON, false},
+    {13945, "greater stamina", "Greater Stamina (bracers)", ENCHANT_TIP_COMMON, false},
+    {20025, "greater stats", "Greater Stats (chest)", ENCHANT_TIP_COMMON, false},
     // Mid-tier (rep/uncommon) — 2-5g tip
-    { 20012, "greater agility", "Greater Agility (gloves)",   ENCHANT_TIP_MIDTIER,  false },
-    { 20011, "superior stamina","Superior Stamina (bracers)", ENCHANT_TIP_MIDTIER,  false },
-    { 20014, "greater resistance","Greater Resistance (cloak)",ENCHANT_TIP_MIDTIER, false },
-    { 20017, "greater stamina shield","Greater Stamina (shield)",ENCHANT_TIP_MIDTIER,false },
+    {20012, "greater agility", "Greater Agility (gloves)", ENCHANT_TIP_MIDTIER, false},
+    {20011, "superior stamina", "Superior Stamina (bracers)", ENCHANT_TIP_MIDTIER, false},
+    {20014, "greater resistance", "Greater Resistance (cloak)", ENCHANT_TIP_MIDTIER, false},
+    {20017, "greater stamina shield", "Greater Stamina (shield)", ENCHANT_TIP_MIDTIER, false},
     // Rare (world drop) — 5-10g tip
-    { 20034, "crusader",        "Crusader (weapon)",          ENCHANT_TIP_RARE,     true  },
-    { 23800, "agility weapon",  "Agility (weapon)",           ENCHANT_TIP_RARE,     true  },
+    {20034, "crusader", "Crusader (weapon)", ENCHANT_TIP_RARE, true},
+    {23800, "agility weapon", "Agility (weapon)", ENCHANT_TIP_RARE, true},
     // Ultra-rare — 10-20g tip
-    { 22749, "spell power",     "Spell Power (weapon)",       ENCHANT_TIP_ULTRARARE,true  },
-    { 22750, "healing power",   "Healing Power (weapon)",     ENCHANT_TIP_ULTRARARE,true  },
-    { 23802, "healing bracer",  "Healing Power (bracers)",    ENCHANT_TIP_ULTRARARE,true  },
+    {22749, "spell power", "Spell Power (weapon)", ENCHANT_TIP_ULTRARARE, true},
+    {22750, "healing power", "Healing Power (weapon)", ENCHANT_TIP_ULTRARARE, true},
+    {23802, "healing bracer", "Healing Power (bracers)", ENCHANT_TIP_ULTRARARE, true},
 };
 static const uint32 ENCHANT_LIST_COUNT = sizeof(ENCHANT_LIST) / sizeof(ENCHANT_LIST[0]);
 
 // Transmute spell IDs.
 static const uint32 SPELL_TRANSMUTE_ARCANITE = 17187;
-static const uint32 SPELL_MOONCLOTH          = 18560;
+static const uint32 SPELL_MOONCLOTH = 18560;
 
 // ============================================================================
 // Response message pools.
@@ -73,8 +61,10 @@ static const uint32 SPELL_MOONCLOTH          = 18560;
 
 // --- Portal responses ---
 static const char* PORTAL_ASK_DESTINATION[] = {
-    "where do you need a port?", "sure, which city?",
-    "where to?", "got ports, where do you need?",
+    "where do you need a port?",
+    "sure, which city?",
+    "where to?",
+    "got ports, where do you need?",
 };
 static const uint32 PORTAL_ASK_DEST_COUNT = 4;
 
@@ -94,20 +84,21 @@ static const char* PORTAL_WRONG_FACTION[] = {
 };
 
 static const char* SERVICE_THANKS[] = {
-    "np, safe travels", "enjoy, cya", "anytime!", "gl out there",
-    "np!", "sure thing", "anytime, cya",
+    "np, safe travels", "enjoy, cya", "anytime!", "gl out there", "np!", "sure thing", "anytime, cya",
 };
 static const uint32 SERVICE_THANKS_COUNT = 7;
 
 static const char* SERVICE_LOW_TIP[] = {
-    "gonna need a bit more for that", "need a bit more gold",
+    "gonna need a bit more for that",
+    "need a bit more gold",
     "tip's a bit low for that one",
 };
 static const uint32 SERVICE_LOW_TIP_COUNT = 3;
 
 // --- Enchant responses ---
 static const char* ENCHANT_ASK_WHICH[] = {
-    "what enchant do you need?", "which enchant?",
+    "what enchant do you need?",
+    "which enchant?",
     "I can do most enchants, what do you need?",
 };
 static const uint32 ENCHANT_ASK_WHICH_COUNT = 3;
@@ -179,21 +170,7 @@ extern const uint32 TRADE_PORTALS_HORDE_COUNT = sizeof(TRADE_MESSAGES_PORTALS_HO
 // ============================================================================
 
 const BotServiceMgr::WtbItemDef BotServiceMgr::s_wtbItems[] = {
-    { 13463, "lotus",           "[Black Lotus]",          5  },
-    { 12363, "arcane crystal",  "[Arcane Crystal]",       5  },
-    { 12811, "righteous orb",   "[Righteous Orb]",        5  },
-    { 14344, "large brilliant", "[Large Brilliant Shard]", 5 },
-    { 4625,  "firebloom",       "[Firebloom]",            20 },
-    { 13467, "icecap",          "[Icecap]",               20 },
-    { 8838,  "sungrass",        "[Sungrass]",             20 },
-    { 13468, "black lotus",     "[Black Lotus]",          5  },
-    { 7076,  "essence of earth","[Essence of Earth]",     5  },
-    { 7078,  "essence of fire", "[Essence of Fire]",      5  },
-    { 7080,  "essence of water","[Essence of Water]",     5  },
-    { 7082,  "essence of air",  "[Essence of Air]",       5  },
-    { 12359, "thorium bar",     "[Thorium Bar]",          20 },
-    { 12655, "mooncloth",       "[Mooncloth]",            5  },
-    { 12360, "arcanite bar",    "[Arcanite Bar]",         3  },
+    {13463, "lotus", "[Black Lotus]", 5}, {12363, "arcane crystal", "[Arcane Crystal]", 5}, {12811, "righteous orb", "[Righteous Orb]", 5}, {14344, "large brilliant", "[Large Brilliant Shard]", 5}, {4625, "firebloom", "[Firebloom]", 20}, {13467, "icecap", "[Icecap]", 20}, {8838, "sungrass", "[Sungrass]", 20}, {13468, "black lotus", "[Black Lotus]", 5}, {7076, "essence of earth", "[Essence of Earth]", 5}, {7078, "essence of fire", "[Essence of Fire]", 5}, {7080, "essence of water", "[Essence of Water]", 5}, {7082, "essence of air", "[Essence of Air]", 5}, {12359, "thorium bar", "[Thorium Bar]", 20}, {12655, "mooncloth", "[Mooncloth]", 5}, {12360, "arcanite bar", "[Arcanite Bar]", 3},
 };
 const uint32 BotServiceMgr::s_wtbItemCount = sizeof(s_wtbItems) / sizeof(s_wtbItems[0]);
 
@@ -201,21 +178,19 @@ const uint32 BotServiceMgr::s_wtbItemCount = sizeof(s_wtbItems) / sizeof(s_wtbIt
 // Implementation
 // ============================================================================
 
-BotServiceMgr::BotServiceMgr()
-    : m_cleanupTimer(30000)
-    , m_buyBudgetPerDay(2000000)  // 200g in copper
-    , m_enabled(false)
-    , m_loaded(false)
+BotServiceMgr::BotServiceMgr() :
+    m_cleanupTimer(30000), m_buyBudgetPerDay(2000000) // 200g in copper
+    ,
+    m_enabled(false), m_loaded(false)
 {
 }
 
 void BotServiceMgr::Load()
 {
     m_enabled = sConfig.GetBoolDefault("BotService.Enable", true);
-    m_buyBudgetPerDay = sConfig.GetIntDefault("BotService.Buy.BudgetPerDay", 200) * 10000;  // gold -> copper
+    m_buyBudgetPerDay = sConfig.GetIntDefault("BotService.Buy.BudgetPerDay", 200) * 10000; // gold -> copper
     m_loaded = true;
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotServiceMgr: Loaded. Enabled: %s, Buy budget: %ug/day",
-        m_enabled ? "yes" : "no", m_buyBudgetPerDay / 10000);
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotServiceMgr: Loaded. Enabled: %s, Buy budget: %ug/day", m_enabled ? "yes" : "no", m_buyBudgetPerDay / 10000);
 }
 
 void BotServiceMgr::Update(uint32 diff)
@@ -235,8 +210,7 @@ void BotServiceMgr::Update(uint32 diff)
 // Whisper-driven service flow — routes to appropriate service handler.
 // ============================================================================
 
-bool BotServiceMgr::HandleServiceWhisper(Player* bot, ObjectGuid playerGuid,
-                                          const std::string& message)
+bool BotServiceMgr::HandleServiceWhisper(Player* bot, ObjectGuid playerGuid, const std::string& message)
 {
     if (!m_enabled || !bot)
         return false;
@@ -306,8 +280,7 @@ bool BotServiceMgr::HandleServiceWhisper(Player* bot, ObjectGuid playerGuid,
     // === New request detection ===
 
     // Portal (mage only).
-    if (IsMageBot(bot) &&
-        (lower.find("portal") != std::string::npos || lower.find("port") != std::string::npos))
+    if (IsMageBot(bot) && (lower.find("portal") != std::string::npos || lower.find("port") != std::string::npos))
     {
         uint32 spellId = ResolvePortalSpell(bot, lower);
         BotServiceRequest req;
@@ -335,8 +308,7 @@ bool BotServiceMgr::HandleServiceWhisper(Player* bot, ObjectGuid playerGuid,
     }
 
     // Enchanting (any bot can potentially be an enchanter — we check class later).
-    if (IsEnchanterBot(bot) &&
-        (lower.find("enchant") != std::string::npos || lower.find("chant") != std::string::npos))
+    if (IsEnchanterBot(bot) && (lower.find("enchant") != std::string::npos || lower.find("chant") != std::string::npos))
     {
         // Check if they specified an enchant in the same message.
         EnchantDefinition const* enchant = ResolveEnchant(lower);
@@ -369,8 +341,7 @@ bool BotServiceMgr::HandleServiceWhisper(Player* bot, ObjectGuid playerGuid,
     }
 
     // Transmute (alchemist only).
-    if (IsAlchemistBot(bot) &&
-        (lower.find("transmute") != std::string::npos || lower.find("arcanite") != std::string::npos))
+    if (IsAlchemistBot(bot) && (lower.find("transmute") != std::string::npos || lower.find("arcanite") != std::string::npos))
     {
         BotServiceRequest req;
         req.playerGuid = playerGuid;
@@ -389,8 +360,7 @@ bool BotServiceMgr::HandleServiceWhisper(Player* bot, ObjectGuid playerGuid,
     }
 
     // Mooncloth (tailor only).
-    if (IsTailorBot(bot) &&
-        (lower.find("mooncloth") != std::string::npos))
+    if (IsTailorBot(bot) && (lower.find("mooncloth") != std::string::npos))
     {
         BotServiceRequest req;
         req.playerGuid = playerGuid;
@@ -465,8 +435,7 @@ void BotServiceMgr::OnTradeWindowOpen(Player* bot, Player* player)
         if (botTrade)
         {
             botTrade->ForceSpell(req->spellId);
-            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL,
-                "BotService: %s sets enchant spell %u on trade", bot->GetName(), req->spellId);
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotService: %s sets enchant spell %u on trade", bot->GetName(), req->spellId);
         }
     }
 }
@@ -492,7 +461,7 @@ void BotServiceMgr::OnTradeCompleted(Player* bot, Player* player, uint32 goldRec
         auto budgetIt = m_buyBudgets.find(bot->GetGUIDLow());
         if (budgetIt != m_buyBudgets.end())
         {
-            uint32 cost = goldReceived;  // goldReceived is actually what the BOT paid (from bot's trade side)
+            uint32 cost = goldReceived; // goldReceived is actually what the BOT paid (from bot's trade side)
             if (cost <= budgetIt->second.remainingCopper)
                 budgetIt->second.remainingCopper -= cost;
             else
@@ -501,9 +470,7 @@ void BotServiceMgr::OnTradeCompleted(Player* bot, Player* player, uint32 goldRec
 
         BotWhisper(bot, player->GetObjectGuid(), "thanks, pleasure doing business");
 
-        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-            "BotService: %s bought items from %s for %u copper",
-            bot->GetName(), player->GetName(), goldReceived);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotService: %s bought items from %s for %u copper", bot->GetName(), player->GetName(), goldReceived);
 
         m_requests.erase(it);
         return;
@@ -513,17 +480,25 @@ void BotServiceMgr::OnTradeCompleted(Player* bot, Player* player, uint32 goldRec
     uint32 minTip = 0;
     switch (req.serviceType)
     {
-        case BOT_SERVICE_PORTAL:    minTip = BotServiceRequest::PORTAL_TIP_MIN; break;
-        case BOT_SERVICE_ENCHANT:   minTip = GetEnchantTipMin(ENCHANT_TIP_COMMON); break;
-        case BOT_SERVICE_TRANSMUTE: minTip = BotServiceRequest::TRANSMUTE_TIP_MIN; break;
-        case BOT_SERVICE_MOONCLOTH: minTip = BotServiceRequest::MOONCLOTH_TIP_MIN; break;
-        default: break;
+    case BOT_SERVICE_PORTAL:
+        minTip = BotServiceRequest::PORTAL_TIP_MIN;
+        break;
+    case BOT_SERVICE_ENCHANT:
+        minTip = GetEnchantTipMin(ENCHANT_TIP_COMMON);
+        break;
+    case BOT_SERVICE_TRANSMUTE:
+        minTip = BotServiceRequest::TRANSMUTE_TIP_MIN;
+        break;
+    case BOT_SERVICE_MOONCLOTH:
+        minTip = BotServiceRequest::MOONCLOTH_TIP_MIN;
+        break;
+    default:
+        break;
     }
 
     if (goldReceived < minTip)
     {
-        BotWhisper(bot, player->GetObjectGuid(),
-            SERVICE_LOW_TIP[urand(0, SERVICE_LOW_TIP_COUNT - 1)]);
+        BotWhisper(bot, player->GetObjectGuid(), SERVICE_LOW_TIP[urand(0, SERVICE_LOW_TIP_COUNT - 1)]);
         req.state = SERVICE_STATE_WAITING_FOR_TRADE;
         req.lastUpdate = time(nullptr);
         return;
@@ -532,24 +507,23 @@ void BotServiceMgr::OnTradeCompleted(Player* bot, Player* player, uint32 goldRec
     // Deliver the service.
     switch (req.serviceType)
     {
-        case BOT_SERVICE_PORTAL:
-            DeliverPortal(bot, player, req.spellId);
-            break;
-        case BOT_SERVICE_ENCHANT:
-            DeliverEnchant(bot, player, req.spellId);
-            break;
-        case BOT_SERVICE_TRANSMUTE:
-            DeliverTransmute(bot, player);
-            break;
-        case BOT_SERVICE_MOONCLOTH:
-            DeliverMooncloth(bot, player);
-            break;
-        default:
-            break;
+    case BOT_SERVICE_PORTAL:
+        DeliverPortal(bot, player, req.spellId);
+        break;
+    case BOT_SERVICE_ENCHANT:
+        DeliverEnchant(bot, player, req.spellId);
+        break;
+    case BOT_SERVICE_TRANSMUTE:
+        DeliverTransmute(bot, player);
+        break;
+    case BOT_SERVICE_MOONCLOTH:
+        DeliverMooncloth(bot, player);
+        break;
+    default:
+        break;
     }
 
-    BotWhisper(bot, player->GetObjectGuid(),
-        SERVICE_THANKS[urand(0, SERVICE_THANKS_COUNT - 1)]);
+    BotWhisper(bot, player->GetObjectGuid(), SERVICE_THANKS[urand(0, SERVICE_THANKS_COUNT - 1)]);
 
     m_requests.erase(it);
 }
@@ -580,9 +554,12 @@ bool BotServiceMgr::BotKnowsEnchant(Player* bot, EnchantDefinition const* enchan
     uint32 seed = bot->GetGUIDLow() + enchant->spellId;
     switch (enchant->tipTier)
     {
-        case ENCHANT_TIP_RARE:     return (seed % 100) < 90;
-        case ENCHANT_TIP_ULTRARARE:return (seed % 100) < 70;
-        default: return true;
+    case ENCHANT_TIP_RARE:
+        return (seed % 100) < 90;
+    case ENCHANT_TIP_ULTRARARE:
+        return (seed % 100) < 70;
+    default:
+        return true;
     }
 }
 
@@ -590,10 +567,14 @@ uint32 BotServiceMgr::GetEnchantTipMin(EnchantTipTier tier) const
 {
     switch (tier)
     {
-        case ENCHANT_TIP_COMMON:    return 0;       // free is ok
-        case ENCHANT_TIP_MIDTIER:   return 20000;   // 2g
-        case ENCHANT_TIP_RARE:      return 50000;   // 5g
-        case ENCHANT_TIP_ULTRARARE: return 100000;  // 10g
+    case ENCHANT_TIP_COMMON:
+        return 0; // free is ok
+    case ENCHANT_TIP_MIDTIER:
+        return 20000; // 2g
+    case ENCHANT_TIP_RARE:
+        return 50000; // 5g
+    case ENCHANT_TIP_ULTRARARE:
+        return 100000; // 10g
     }
     return 0;
 }
@@ -630,9 +611,7 @@ void BotServiceMgr::DeliverEnchant(Player* bot, Player* player, uint32 spellId)
     weapon->SetEnchantment(PERM_ENCHANTMENT_SLOT, enchantId, 0, 0, bot->GetObjectGuid());
     player->ApplyEnchantment(weapon, PERM_ENCHANTMENT_SLOT, true);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-        "BotService: %s enchanted %s's weapon with enchant %u (spell %u)",
-        bot->GetName(), player->GetName(), enchantId, spellId);
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotService: %s enchanted %s's weapon with enchant %u (spell %u)", bot->GetName(), player->GetName(), enchantId, spellId);
 }
 
 // ============================================================================
@@ -647,18 +626,14 @@ void BotServiceMgr::DeliverEnchant(Player* bot, Player* player, uint32 spellId)
 
 void BotServiceMgr::DeliverTransmute(Player* bot, Player* player)
 {
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-        "BotService: %s performs Arcanite transmute for %s",
-        bot->GetName(), player->GetName());
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotService: %s performs Arcanite transmute for %s", bot->GetName(), player->GetName());
     // Future: verify mats (1 Thorium Bar + 1 Arcane Crystal), craft Arcanite Bar,
     // trade product back to player. For now the trade itself handles the exchange.
 }
 
 void BotServiceMgr::DeliverMooncloth(Player* bot, Player* player)
 {
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-        "BotService: %s crafts Mooncloth for %s",
-        bot->GetName(), player->GetName());
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotService: %s crafts Mooncloth for %s", bot->GetName(), player->GetName());
     // Future: verify mats (2 Felcloth), craft Mooncloth, trade back.
 }
 
@@ -673,10 +648,8 @@ uint32 BotServiceMgr::ResolvePortalSpell(Player* bot, const std::string& message
     {
         if (message.find(PORTAL_DESTINATIONS[i].keyword) != std::string::npos)
         {
-            uint32 spellId = isAlliance
-                ? PORTAL_DESTINATIONS[i].allianceSpell
-                : PORTAL_DESTINATIONS[i].hordeSpell;
-            return spellId;  // 0 if wrong faction
+            uint32 spellId = isAlliance ? PORTAL_DESTINATIONS[i].allianceSpell : PORTAL_DESTINATIONS[i].hordeSpell;
+            return spellId; // 0 if wrong faction
         }
     }
     return 0;
@@ -697,8 +670,7 @@ void BotServiceMgr::DeliverPortal(Player* bot, Player* player, uint32 spellId)
     // Use triggered=true to bypass spell-known checks (CrowdBots don't learn spells)
     bot->CastSpell(bot, spellEntry, true);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotService: %s casts Portal (spell %u) for %s",
-        bot->GetName(), spellId, player->GetName());
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "BotService: %s casts Portal (spell %u) for %s", bot->GetName(), spellId, player->GetName());
 }
 
 // ============================================================================
@@ -764,23 +736,20 @@ void BotServiceMgr::BotWhisper(Player* bot, ObjectGuid targetGuid, const char* m
         return;
 
     WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, message,
-        LANG_UNIVERSAL, bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, message, LANG_UNIVERSAL, bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
     target->GetSession()->SendPacket(&data);
 
-    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotService: %s whispers to %s: %s",
-        bot->GetName(), target->GetName(), message);
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotService: %s whispers to %s: %s", bot->GetName(), target->GetName(), message);
 }
 
 void BotServiceMgr::CleanupExpiredRequests()
 {
     time_t now = time(nullptr);
-    for (auto it = m_requests.begin(); it != m_requests.end(); )
+    for (auto it = m_requests.begin(); it != m_requests.end();)
     {
         if (now - it->second.lastUpdate > BotServiceRequest::TIMEOUT_SECS)
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotService: Expired request (type %u) cleaned up",
-                it->second.serviceType);
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BotService: Expired request (type %u) cleaned up", it->second.serviceType);
             it = m_requests.erase(it);
         }
         else
@@ -788,14 +757,9 @@ void BotServiceMgr::CleanupExpiredRequests()
     }
 }
 
-BotServiceMgr::RequestKey BotServiceMgr::MakeKey(ObjectGuid botGuid, ObjectGuid playerGuid)
-{
-    return (static_cast<uint64>(botGuid.GetCounter()) << 32) |
-            static_cast<uint64>(playerGuid.GetCounter());
-}
+BotServiceMgr::RequestKey BotServiceMgr::MakeKey(ObjectGuid botGuid, ObjectGuid playerGuid) { return (static_cast<uint64>(botGuid.GetCounter()) << 32) | static_cast<uint64>(playerGuid.GetCounter()); }
 
-void BotServiceMgr::CreateProactiveRequest(Player* bot, ObjectGuid playerGuid,
-                                            BotServiceType type, const std::string& tradeChatMsg)
+void BotServiceMgr::CreateProactiveRequest(Player* bot, ObjectGuid playerGuid, BotServiceType type, const std::string& tradeChatMsg)
 {
     if (!bot)
         return;
@@ -818,7 +782,8 @@ void BotServiceMgr::CreateProactiveRequest(Player* bot, ObjectGuid playerGuid,
     if (type == BOT_SERVICE_PORTAL && !tradeChatMsg.empty())
     {
         std::string lower = tradeChatMsg;
-        for (auto& c : lower) c = static_cast<char>(tolower(c));
+        for (auto& c : lower)
+            c = static_cast<char>(tolower(c));
 
         uint32 spellId = ResolvePortalSpell(bot, lower);
         if (spellId)
@@ -835,7 +800,8 @@ void BotServiceMgr::CreateProactiveRequest(Player* bot, ObjectGuid playerGuid,
     if (type == BOT_SERVICE_ENCHANT && !tradeChatMsg.empty())
     {
         std::string lower = tradeChatMsg;
-        for (auto& c : lower) c = static_cast<char>(tolower(c));
+        for (auto& c : lower)
+            c = static_cast<char>(tolower(c));
 
         EnchantDefinition const* enchant = ResolveEnchant(lower);
         if (enchant && BotKnowsEnchant(bot, enchant))
@@ -851,13 +817,13 @@ void BotServiceMgr::CreateProactiveRequest(Player* bot, ObjectGuid playerGuid,
     // Transmute and mooncloth go straight to WAITING_FOR_TRADE.
     switch (type)
     {
-        case BOT_SERVICE_PORTAL:
-        case BOT_SERVICE_ENCHANT:
-            req.state = SERVICE_STATE_ASKED_DESTINATION;
-            break;
-        default:
-            req.state = SERVICE_STATE_WAITING_FOR_TRADE;
-            break;
+    case BOT_SERVICE_PORTAL:
+    case BOT_SERVICE_ENCHANT:
+        req.state = SERVICE_STATE_ASKED_DESTINATION;
+        break;
+    default:
+        req.state = SERVICE_STATE_WAITING_FOR_TRADE;
+        break;
     }
 
     m_requests[key] = req;
@@ -877,7 +843,7 @@ bool BotServiceMgr::HasActiveRequest(ObjectGuid playerGuid) const
 void BotServiceMgr::ClearRequestsForPlayer(ObjectGuid playerGuid)
 {
     uint32 playerCounter = playerGuid.GetCounter();
-    for (auto it = m_requests.begin(); it != m_requests.end(); )
+    for (auto it = m_requests.begin(); it != m_requests.end();)
     {
         if (it->second.playerGuid.GetCounter() == playerCounter)
             it = m_requests.erase(it);
@@ -922,7 +888,7 @@ void BotServiceMgr::ResetBudgetIfNeeded(uint32 botGuid)
     auto it = m_buyBudgets.find(botGuid);
     if (it == m_buyBudgets.end())
     {
-        m_buyBudgets[botGuid] = { m_buyBudgetPerDay, now };
+        m_buyBudgets[botGuid] = {m_buyBudgetPerDay, now};
         return;
     }
 
@@ -982,11 +948,9 @@ bool BotServiceMgr::HandleBuyWhisper(Player* bot, ObjectGuid playerGuid, const s
 
     char priceMsg[256];
     if (silver > 0)
-        snprintf(priceMsg, sizeof(priceMsg), "I'll buy %s for %ug %us each, trade me",
-            item->displayName, gold, silver);
+        snprintf(priceMsg, sizeof(priceMsg), "I'll buy %s for %ug %us each, trade me", item->displayName, gold, silver);
     else
-        snprintf(priceMsg, sizeof(priceMsg), "I'll buy %s for %ug each, trade me",
-            item->displayName, gold);
+        snprintf(priceMsg, sizeof(priceMsg), "I'll buy %s for %ug each, trade me", item->displayName, gold);
 
     BotWhisper(bot, playerGuid, priceMsg);
     return true;

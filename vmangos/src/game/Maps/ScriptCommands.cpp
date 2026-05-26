@@ -1,40 +1,37 @@
 /*
-* Copyright (C) 2017-2018 LightsHope <https://github.com/lightshope>
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * Copyright (C) 2017-2018 LightsHope <https://github.com/lightshope>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
-#include "Map.h"
-#include "ScriptMgr.h"
-#include "GridSearchers.h"
-#include "InstanceData.h"
-#include "CreatureEventAI.h"
 #include "CreatureAIImpl.h"
-#include "NullCreatureAI.h"
-#include "GameEventMgr.h"
-#include "ObjectMgr.h"
-#include "Group.h"
+#include "CreatureEventAI.h"
 #include "CreatureGroups.h"
+#include "GameEventMgr.h"
+#include "GridSearchers.h"
+#include "Group.h"
+#include "InstanceData.h"
+#include "Map.h"
+#include "NullCreatureAI.h"
+#include "ObjectMgr.h"
+#include "ScriptMgr.h"
 
 // Script commands should return false by default.
 // If they return true the rest of the script is aborted.
 
-inline bool ShouldAbortScript(ScriptInfo const& script)
-{
-    return (script.raw.data[4] & SF_GENERAL_ABORT_ON_FAILURE) != 0;
-}
+inline bool ShouldAbortScript(ScriptInfo const& script) { return (script.raw.data[4] & SF_GENERAL_ABORT_ON_FAILURE) != 0; }
 
 // SCRIPT_COMMAND_TALK (0)
 bool Map::ScriptCommand_Talk(ScriptInfo const& script, WorldObject* source, WorldObject* target)
@@ -81,7 +78,8 @@ bool Map::ScriptCommand_Emote(ScriptInfo const& script, WorldObject* source, Wor
     }
 
     uint32 emoteCount = 1;
-    for (; emoteCount < MAX_EMOTE_ID && script.emote.emoteId[emoteCount]; ++emoteCount);
+    for (; emoteCount < MAX_EMOTE_ID && script.emote.emoteId[emoteCount]; ++emoteCount)
+        ;
     uint32 const emoteId = script.emote.emoteId[urand(0, emoteCount - 1)];
 
     // This is a targeted emote.
@@ -108,9 +106,9 @@ bool Map::ScriptCommand_Emote(ScriptInfo const& script, WorldObject* source, Wor
         pCreatureSource->PauseOutOfCombatMovement(8 * IN_MILLISECONDS);
         pCreatureSource->AddCreatureState(CSTATE_TARGETED_EMOTE);
 
-        TargetedEmoteEvent *pEmoteEvent = new TargetedEmoteEvent(*pCreatureSource, pTarget->GetObjectGuid(), emoteId);
+        TargetedEmoteEvent* pEmoteEvent = new TargetedEmoteEvent(*pCreatureSource, pTarget->GetObjectGuid(), emoteId);
         pCreatureSource->m_Events.AddEvent(pEmoteEvent, pCreatureSource->m_Events.CalculateTime(2000));
-        TargetedEmoteCleanupEvent *pCleanupEvent = new TargetedEmoteCleanupEvent(*pCreatureSource, pCreatureSource->GetOrientation());
+        TargetedEmoteCleanupEvent* pCleanupEvent = new TargetedEmoteCleanupEvent(*pCreatureSource, pCreatureSource->GetOrientation());
         pCreatureSource->m_Events.AddEvent(pCleanupEvent, pCreatureSource->m_Events.CalculateTime(6000));
     }
     else
@@ -130,8 +128,7 @@ bool Map::ScriptCommand_FieldSet(ScriptInfo const& script, WorldObject* source, 
 
     if (script.setField.fieldId <= OBJECT_FIELD_ENTRY || script.setField.fieldId >= source->GetValuesCount())
     {
-        sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_FIELD_SET (script id %u) call for wrong field %u (max count: %u) in object (TypeId: %u).",
-            script.id, script.setField.fieldId, source->GetValuesCount(), source->GetTypeId());
+        sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_FIELD_SET (script id %u) call for wrong field %u (max count: %u) in object (TypeId: %u).", script.id, script.setField.fieldId, source->GetValuesCount(), source->GetTypeId());
         return ShouldAbortScript(script);
     }
 
@@ -160,7 +157,7 @@ bool Map::ScriptCommand_MoveTo(ScriptInfo const& script, WorldObject* source, Wo
 
     switch (script.moveTo.coordinatesType)
     {
-        case SO_MOVETO_COORDINATES_RELATIVE_TO_TARGET:
+    case SO_MOVETO_COORDINATES_RELATIVE_TO_TARGET:
         {
             if (WorldObject* pTarget = target)
             {
@@ -176,7 +173,7 @@ bool Map::ScriptCommand_MoveTo(ScriptInfo const& script, WorldObject* source, Wo
             }
             break;
         }
-        case SO_MOVETO_COORDINATES_DISTANCE_FROM_TARGET:
+    case SO_MOVETO_COORDINATES_DISTANCE_FROM_TARGET:
         {
             if (WorldObject* pTarget = target)
             {
@@ -192,7 +189,7 @@ bool Map::ScriptCommand_MoveTo(ScriptInfo const& script, WorldObject* source, Wo
             }
             break;
         }
-        case SO_MOVETO_COORDINATES_RANDOM_POINT:
+    case SO_MOVETO_COORDINATES_RANDOM_POINT:
         {
             pSource->GetRandomPoint(x, y, z, script.o, x, y, z);
             break;
@@ -229,8 +226,7 @@ bool Map::ScriptCommand_ModifyFlags(ScriptInfo const& script, WorldObject* sourc
 
     if (script.modFlags.fieldId <= OBJECT_FIELD_ENTRY || script.modFlags.fieldId >= source->GetValuesCount())
     {
-        sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_MODIFY_FLAGS (script id %u) call for wrong field %u (max count: %u) in object (TypeId: %u).",
-            script.id, script.modFlags.fieldId, source->GetValuesCount(), source->GetTypeId());
+        sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_MODIFY_FLAGS (script id %u) call for wrong field %u (max count: %u) in object (TypeId: %u).", script.id, script.modFlags.fieldId, source->GetValuesCount(), source->GetTypeId());
         return ShouldAbortScript(script);
     }
 
@@ -380,18 +376,17 @@ bool Map::ScriptCommand_RespawnGameObject(ScriptInfo const& script, WorldObject*
 
     int32 time_to_despawn = script.respawnGo.despawnDelay < 5 ? 5 : script.respawnGo.despawnDelay;
 
-    if (pGo->GetGoType() == GAMEOBJECT_TYPE_FISHINGNODE ||
-        pGo->GetGoType() == GAMEOBJECT_TYPE_DOOR)
+    if (pGo->GetGoType() == GAMEOBJECT_TYPE_FISHINGNODE || pGo->GetGoType() == GAMEOBJECT_TYPE_DOOR)
     {
         sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_RESPAWN_GAMEOBJECT (script id %u) can not be used with gameobject of type %u (guid: %u).", script.id, uint32(pGo->GetGoType()), script.respawnGo.goGuid);
         return ShouldAbortScript(script);
     }
 
     if (pGo->isSpawned())
-        return ShouldAbortScript(script);          //gameobject already spawned
+        return ShouldAbortScript(script); // gameobject already spawned
 
     pGo->SetLootState(GO_READY);
-    pGo->SetRespawnTime(time_to_despawn);        //despawn object in ? seconds
+    pGo->SetRespawnTime(time_to_despawn); // despawn object in ? seconds
 
     Add(pGo);
 
@@ -481,7 +476,7 @@ bool Map::ScriptCommand_OpenDoor(ScriptInfo const& script, WorldObject* source, 
     if (guidlow)
     {
         GameObjectData const* goData = sObjectMgr.GetGOData(guidlow);
-        if (!goData)                                // checked at load
+        if (!goData) // checked at load
             return ShouldAbortScript(script);
 
         pDoor = GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, goData->id, guidlow));
@@ -504,7 +499,7 @@ bool Map::ScriptCommand_OpenDoor(ScriptInfo const& script, WorldObject* source, 
     }
 
     if (pDoor->GetGoState() != GO_STATE_READY)
-        return ShouldAbortScript(script);         //door already  open
+        return ShouldAbortScript(script); // door already  open
 
     int32 time_to_close = script.openDoor.resetDelay < 3 ? 3 : script.openDoor.resetDelay; // Ustaag <Nostalrius> : duree minimale de reset fixee a 3 sec au lieu de 15
 
@@ -525,7 +520,7 @@ bool Map::ScriptCommand_CloseDoor(ScriptInfo const& script, WorldObject* source,
     if (guidlow)
     {
         GameObjectData const* goData = sObjectMgr.GetGOData(guidlow);
-        if (!goData)                                // checked at load
+        if (!goData) // checked at load
             return ShouldAbortScript(script);
 
         pDoor = GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, goData->id, guidlow));
@@ -547,7 +542,7 @@ bool Map::ScriptCommand_CloseDoor(ScriptInfo const& script, WorldObject* source,
     }
 
     if (pDoor->GetGoState() == GO_STATE_READY)
-        return ShouldAbortScript(script);         //door already closed
+        return ShouldAbortScript(script); // door already closed
 
     int32 time_to_open = script.closeDoor.resetDelay < 3 ? 3 : script.closeDoor.resetDelay; // Ustaag <Nostalrius> : duree minimale de reset fixee a 3 sec au lieu de 15
 
@@ -758,67 +753,67 @@ bool Map::ScriptCommand_SetMovementType(ScriptInfo const& script, WorldObject* s
 
     switch (script.movement.movementType)
     {
-        case IDLE_MOTION_TYPE:
-            if (pSource->IsMoving())
-                pSource->StopMoving();
-            if (script.movement.clear)
-                pSource->GetMotionMaster()->Clear(false, true);
-            pSource->GetMotionMaster()->MoveIdle();
+    case IDLE_MOTION_TYPE:
+        if (pSource->IsMoving())
+            pSource->StopMoving();
+        if (script.movement.clear)
+            pSource->GetMotionMaster()->Clear(false, true);
+        pSource->GetMotionMaster()->MoveIdle();
+        break;
+    case RANDOM_MOTION_TYPE:
+        if (script.movement.clear)
+            pSource->GetMotionMaster()->Clear(false, true);
+        pSource->GetMotionMaster()->MoveRandom(script.movement.boolParam, script.x);
+        break;
+    case WAYPOINT_MOTION_TYPE:
+        if (script.movement.clear)
+            pSource->GetMotionMaster()->Clear(false, true);
+        pSource->GetMotionMaster()->MoveWaypoint(script.movement.intParam, 0, 0, 0, 0, script.movement.boolParam);
+        break;
+    case CONFUSED_MOTION_TYPE:
+        pSource->GetMotionMaster()->MoveConfused();
+        break;
+    case CHASE_MOTION_TYPE:
+        if (script.movement.boolParam) // chase victim
+        {
+            if (Unit* pVictim = pSource->GetVictim())
+                pSource->GetMotionMaster()->MoveChase(pVictim, script.x, script.o);
             break;
-        case RANDOM_MOTION_TYPE:
-            if (script.movement.clear)
-                pSource->GetMotionMaster()->Clear(false, true);
-            pSource->GetMotionMaster()->MoveRandom(script.movement.boolParam, script.x);
+        }
+        else if (pTarget)
+            pSource->GetMotionMaster()->MoveChase(pTarget, script.x, script.o);
+        break;
+    case HOME_MOTION_TYPE:
+        pSource->GetMotionMaster()->MoveTargetedHome();
+        break;
+    case FLEEING_MOTION_TYPE:
+        if (script.movement.boolParam) // flee from victim
+        {
+            if (Unit* pVictim = pSource->GetVictim())
+                pSource->GetMotionMaster()->MoveFleeing(pVictim, script.movement.intParam);
             break;
-        case WAYPOINT_MOTION_TYPE:
-            if (script.movement.clear)
-                pSource->GetMotionMaster()->Clear(false, true);
-            pSource->GetMotionMaster()->MoveWaypoint(script.movement.intParam, 0, 0, 0, 0, script.movement.boolParam);
-            break;
-        case CONFUSED_MOTION_TYPE:
-            pSource->GetMotionMaster()->MoveConfused();
-            break;
-        case CHASE_MOTION_TYPE:
-            if (script.movement.boolParam) // chase victim
-            {
-                if (Unit* pVictim = pSource->GetVictim())
-                    pSource->GetMotionMaster()->MoveChase(pVictim, script.x, script.o);
-                break;
-            }
-            else if (pTarget)
-                pSource->GetMotionMaster()->MoveChase(pTarget, script.x, script.o);
-            break;
-        case HOME_MOTION_TYPE:
-            pSource->GetMotionMaster()->MoveTargetedHome();
-            break;
-        case FLEEING_MOTION_TYPE:
-            if (script.movement.boolParam) // flee from victim
-            {
-                if (Unit* pVictim = pSource->GetVictim())
-                    pSource->GetMotionMaster()->MoveFleeing(pVictim, script.movement.intParam);
-                break;
-            }
-            else if (pTarget)
-                pSource->GetMotionMaster()->MoveFleeing(pTarget, script.movement.intParam);
-            break;
-        case DISTRACT_MOTION_TYPE:
-            pSource->GetMotionMaster()->MoveDistract(script.movement.intParam);
-            break;
-        case FOLLOW_MOTION_TYPE:
-            if (pTarget)
-                pSource->GetMotionMaster()->MoveFollow(pTarget, script.x, script.o < 0 ? frand(0, 2 * M_PI_F) : script.o);
-            break;
-        case CHARGE_MOTION_TYPE:
-            if (pTarget)
-                pSource->GetMotionMaster()->MoveCharge(pTarget, script.movement.intParam, script.movement.boolParam);
-            break;
-        case DISTANCING_MOTION_TYPE:
-            if (pTarget && (!script.movement.intParam || (script.movement.intParam <= pSource->GetPowerPercent(POWER_MANA))))
-                pSource->MoveAwayFromTarget(pTarget, script.x);
-            break;
-        default:
-            sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_MOVEMENT (script id %u) call for an invalid motion type (MotionType: %u), skipping.", script.id, script.movement.movementType);
-            return ShouldAbortScript(script);
+        }
+        else if (pTarget)
+            pSource->GetMotionMaster()->MoveFleeing(pTarget, script.movement.intParam);
+        break;
+    case DISTRACT_MOTION_TYPE:
+        pSource->GetMotionMaster()->MoveDistract(script.movement.intParam);
+        break;
+    case FOLLOW_MOTION_TYPE:
+        if (pTarget)
+            pSource->GetMotionMaster()->MoveFollow(pTarget, script.x, script.o < 0 ? frand(0, 2 * M_PI_F) : script.o);
+        break;
+    case CHARGE_MOTION_TYPE:
+        if (pTarget)
+            pSource->GetMotionMaster()->MoveCharge(pTarget, script.movement.intParam, script.movement.boolParam);
+        break;
+    case DISTANCING_MOTION_TYPE:
+        if (pTarget && (!script.movement.intParam || (script.movement.intParam <= pSource->GetPowerPercent(POWER_MANA))))
+            pSource->MoveAwayFromTarget(pTarget, script.x);
+        break;
+    default:
+        sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_MOVEMENT (script id %u) call for an invalid motion type (MotionType: %u), skipping.", script.id, script.movement.movementType);
+        return ShouldAbortScript(script);
     }
 
     return false;
@@ -1096,7 +1091,7 @@ bool Map::ScriptCommand_TerminateCondition(ScriptInfo const& script, WorldObject
     WorldObject* pTarget = target;
 
     bool terminateResult = IsConditionSatisfied(script.terminateCond.conditionId, pTarget, this, pSource, CONDITION_FROM_DBSCRIPTS);
-    
+
     if (script.terminateCond.flags & SF_TERMINATECONDITION_WHEN_FALSE)
         terminateResult = !terminateResult;
 
@@ -1143,17 +1138,17 @@ bool Map::ScriptCommand_SetHomePosition(ScriptInfo const& script, WorldObject* s
 
     switch (script.setHome.mode)
     {
-        case SO_SETHOME_PROVIDED_POSITION:
+    case SO_SETHOME_PROVIDED_POSITION:
         {
             pSource->SetHomePosition(script.x, script.y, script.z, script.o);
             break;
         }
-        case SO_SETHOME_CURRENT_POSITION:
+    case SO_SETHOME_CURRENT_POSITION:
         {
             pSource->SaveHomePosition();
             break;
         }
-        case SO_SETHOME_DEFAULT_POSITION:
+    case SO_SETHOME_DEFAULT_POSITION:
         {
             pSource->ResetHomePosition();
             break;
@@ -1179,7 +1174,7 @@ bool Map::ScriptCommand_TurnTo(ScriptInfo const& script, WorldObject* source, Wo
 
     switch (script.turnTo.facingLogic)
     {
-        case SO_TURNTO_FACE_TARGET:
+    case SO_TURNTO_FACE_TARGET:
         {
             if (WorldObject* pTarget = target)
                 pSource->SetFacingToObject(pTarget);
@@ -1190,7 +1185,7 @@ bool Map::ScriptCommand_TurnTo(ScriptInfo const& script, WorldObject* source, Wo
             }
             break;
         }
-        case SO_TURNTO_PROVIDED_ORIENTATION:
+    case SO_TURNTO_PROVIDED_ORIENTATION:
         {
             pSource->SetFacingTo(script.o);
             break;
@@ -1220,7 +1215,7 @@ bool Map::ScriptCommand_MeetingStone(ScriptInfo const& script, WorldObject* sour
 bool Map::ScriptCommand_SetData(ScriptInfo const& script, WorldObject* source, WorldObject* target)
 {
     InstanceData* pInst = GetInstanceData();
-    
+
     if (!pInst)
     {
         sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_SET_INST_DATA (script id %u) call for map without an instance script, skipping.", script.id);
@@ -1230,12 +1225,12 @@ bool Map::ScriptCommand_SetData(ScriptInfo const& script, WorldObject* source, W
     uint32 uiData = script.setData.data;
     switch (script.setData.type)
     {
-        case SO_INSTDATA_INCREMENT:
+    case SO_INSTDATA_INCREMENT:
         {
-            uiData+= pInst->GetData(script.setData.field);
+            uiData += pInst->GetData(script.setData.field);
             break;
         }
-        case SO_INSTDATA_DECREMENT:
+    case SO_INSTDATA_DECREMENT:
         {
             uint32 uiOldData = pInst->GetData(script.setData.field);
             uiData = (uiData < uiOldData) ? (uiOldData - uiData) : 0;
@@ -1251,7 +1246,7 @@ bool Map::ScriptCommand_SetData(ScriptInfo const& script, WorldObject* source, W
 bool Map::ScriptCommand_SetData64(ScriptInfo const& script, WorldObject* source, WorldObject* target)
 {
     InstanceData* pInst = GetInstanceData();
-    
+
     if (!pInst)
     {
         sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_SET_INST_DATA64 (script id %u) call for map without an instance script, skipping.", script.id);
@@ -1260,12 +1255,12 @@ bool Map::ScriptCommand_SetData64(ScriptInfo const& script, WorldObject* source,
 
     switch (script.setData64.type)
     {
-        case SO_INSTDATA64_RAW:
+    case SO_INSTDATA64_RAW:
         {
             pInst->SetData64(script.setData64.field, script.setData64.data);
             break;
         }
-        case SO_INSTDATA64_SOURCE_GUID:
+    case SO_INSTDATA64_SOURCE_GUID:
         {
             if (source)
                 pInst->SetData64(script.setData64.field, source->GetGUID());
@@ -1420,12 +1415,12 @@ bool Map::ScriptCommand_SetPhase(ScriptInfo const& script, WorldObject* source, 
 
     switch (script.setPhase.mode)
     {
-        case SO_SETPHASE_INCREMENT:
+    case SO_SETPHASE_INCREMENT:
         {
-            uiPhase+= pAI->m_Phase;
+            uiPhase += pAI->m_Phase;
             break;
         }
-        case SO_SETPHASE_DECREMENT:
+    case SO_SETPHASE_DECREMENT:
         {
             uint32 uiOldPhase = pAI->m_Phase;
             uiPhase = (uiPhase < uiOldPhase) ? (uiOldPhase - uiPhase) : 0;
@@ -1545,7 +1540,7 @@ bool Map::ScriptCommand_DealDamage(ScriptInfo const& script, WorldObject* source
     if (!pTarget->IsAlive())
         return ShouldAbortScript(script);
 
-    uint32 damage = script.dealDamage.isPercent ? pTarget->GetMaxHealth()*(script.dealDamage.damage / 100.0f) : script.dealDamage.damage;
+    uint32 damage = script.dealDamage.isPercent ? pTarget->GetMaxHealth() * (script.dealDamage.damage / 100.0f) : script.dealDamage.damage;
     pSource->DealDamage(pTarget, damage, nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
 
     return false;
@@ -1616,10 +1611,7 @@ bool Map::ScriptCommand_Invincibility(ScriptInfo const& script, WorldObject* sou
         return ShouldAbortScript(script);
     }
 
-    uint32 hp = script.invincibility.isPercent ?
-                pSource->GetMaxHealth() * script.invincibility.health / 100
-                :
-                script.invincibility.health;
+    uint32 hp = script.invincibility.isPercent ? pSource->GetMaxHealth() * script.invincibility.health / 100 : script.invincibility.health;
     pSource->SetInvincibilityHpThreshold(hp);
 
     return false;
@@ -1694,7 +1686,7 @@ bool Map::ScriptCommand_RemoveGuardians(ScriptInfo const& script, WorldObject* s
         sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "SCRIPT_COMMAND_REMOVE_GUARDIANS (script id %u) call for a nullptr or non-unit source (TypeId: %u), skipping.", script.id, source ? source->GetTypeId() : 0);
         return ShouldAbortScript(script);
     }
-    
+
     if (script.removeGuardian.creatureId)
     {
         pSource->RemoveGuardiansWithEntry(script.removeGuardian.creatureId);
@@ -1717,7 +1709,7 @@ bool Map::ScriptCommand_AddSpellCooldown(ScriptInfo const& script, WorldObject* 
     }
 
     if (SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(script.addCooldown.spellId))
-    pSource->AddCooldown(*pSpellEntry, nullptr, false, script.addCooldown.cooldown * IN_MILLISECONDS);
+        pSource->AddCooldown(*pSpellEntry, nullptr, false, script.addCooldown.cooldown * IN_MILLISECONDS);
     if (Player* pPlayer = pSource->ToPlayer())
         pPlayer->SendSpellCooldown(script.addCooldown.spellId, script.addCooldown.cooldown * IN_MILLISECONDS, pPlayer->GetObjectGuid());
 
@@ -1839,7 +1831,7 @@ bool Map::ScriptCommand_RemoveMapEventTarget(ScriptInfo const& script, WorldObje
 
     switch (script.removeMapEventTarget.targets)
     {
-        case SO_REMOVETARGET_SELF:
+    case SO_REMOVETARGET_SELF:
         {
             if (!source)
                 return ShouldAbortScript(script);
@@ -1854,8 +1846,8 @@ bool Map::ScriptCommand_RemoveMapEventTarget(ScriptInfo const& script, WorldObje
             }
             break;
         }
-        case SO_REMOVETARGET_ONE_FIT_CONDITION:
-        case SO_REMOVETARGET_ALL_FIT_CONDITION:
+    case SO_REMOVETARGET_ONE_FIT_CONDITION:
+    case SO_REMOVETARGET_ALL_FIT_CONDITION:
         {
             if (!script.removeMapEventTarget.conditionId)
             {
@@ -1875,12 +1867,12 @@ bool Map::ScriptCommand_RemoveMapEventTarget(ScriptInfo const& script, WorldObje
                         continue;
                     }
                 }
-                
+
                 ++itr;
             }
             break;
         }
-        case SO_REMOVETARGET_ALL_TARGETS:
+    case SO_REMOVETARGET_ALL_TARGETS:
         {
             pEvent->m_vTargets.clear();
             break;
@@ -1903,17 +1895,17 @@ bool Map::ScriptCommand_SetMapEventData(ScriptInfo const& script, WorldObject* s
 
     switch (script.setMapEventData.type)
     {
-        case SO_MAPEVENTDATA_RAW:
+    case SO_MAPEVENTDATA_RAW:
         {
             pEvent->SetData(script.setMapEventData.index, script.setMapEventData.data);
             break;
         }
-        case SO_MAPEVENTDATA_INCREMENT:
+    case SO_MAPEVENTDATA_INCREMENT:
         {
             pEvent->IncrementData(script.setMapEventData.index, script.setMapEventData.data);
             break;
         }
-        case SO_MAPEVENTDATA_DECREMENT:
+    case SO_MAPEVENTDATA_DECREMENT:
         {
             pEvent->DecrementData(script.setMapEventData.index, script.setMapEventData.data);
             break;
@@ -1936,17 +1928,17 @@ bool Map::ScriptCommand_SendMapEvent(ScriptInfo const& script, WorldObject* sour
 
     switch (script.sendMapEvent.targets)
     {
-        case SO_SENDMAPEVENT_MAIN_TARGETS_ONLY:
+    case SO_SENDMAPEVENT_MAIN_TARGETS_ONLY:
         {
             pEvent->SendEventToMainTargets(script.sendMapEvent.data);
             break;
         }
-        case SO_SENDMAPEVENT_EXTRA_TARGETS_ONLY:
+    case SO_SENDMAPEVENT_EXTRA_TARGETS_ONLY:
         {
             pEvent->SendEventToAdditionalTargets(script.sendMapEvent.data);
             break;
         }
-        case SO_SENDMAPEVENT_ALL_TARGETS:
+    case SO_SENDMAPEVENT_ALL_TARGETS:
         {
             pEvent->SendEventToAllTargets(script.sendMapEvent.data);
             break;
@@ -2001,25 +1993,25 @@ bool Map::ScriptCommand_StartScriptForAll(ScriptInfo const& script, WorldObject*
 
         switch (script.startScriptForAll.objectType)
         {
-            case SO_STARTFORALL_GAMEOBJECTS:
+        case SO_STARTFORALL_GAMEOBJECTS:
             {
                 if (!pWorldObject->IsGameObject())
                     continue;
                 break;
             }
-            case SO_STARTFORALL_UNITS:
+        case SO_STARTFORALL_UNITS:
             {
                 if (!pWorldObject->IsUnit())
                     continue;
                 break;
             }
-            case SO_STARTFORALL_CREATURES:
+        case SO_STARTFORALL_CREATURES:
             {
                 if (!pWorldObject->IsCreature())
                     continue;
                 break;
             }
-            case SO_STARTFORALL_PLAYERS:
+        case SO_STARTFORALL_PLAYERS:
             {
                 if (!pWorldObject->IsPlayer())
                     continue;
@@ -2030,7 +2022,7 @@ bool Map::ScriptCommand_StartScriptForAll(ScriptInfo const& script, WorldObject*
         if (!script.startScriptForAll.objectEntry || (pWorldObject->GetEntry() == script.startScriptForAll.objectEntry))
             ScriptsStart(sGenericScripts, script.startScriptForAll.scriptId, pWorldObject->GetObjectGuid(), target ? target->GetObjectGuid() : ObjectGuid());
     }
-    
+
     return false;
 }
 
@@ -2146,7 +2138,7 @@ bool Map::ScriptCommand_CombatStop(ScriptInfo const& script, WorldObject* source
     {
         pSource->CombatStop(true);
         pSource->DeleteThreatList();
-    }  
+    }
 
     return false;
 }
@@ -2311,11 +2303,11 @@ bool Map::ScriptCommand_DespawnGameObject(ScriptInfo const& script, WorldObject*
     }
 
     if (!pGo->isSpawned())
-        return ShouldAbortScript(script);          // gameobject already despawned
+        return ShouldAbortScript(script); // gameobject already despawned
 
     pGo->SetLootState(GO_JUST_DEACTIVATED);
     if (script.despawnGo.respawnDelay)
-        pGo->SetRespawnDelay(script.despawnGo.respawnDelay);        // respawn object in ? seconds
+        pGo->SetRespawnDelay(script.despawnGo.respawnDelay); // respawn object in ? seconds
 
     return false;
 }
@@ -2511,7 +2503,7 @@ bool Map::ScriptCommand_LoadCreatureSpawn(ScriptInfo const& script, WorldObject*
         if (!LoadCreatureSpawn(script.loadCreature.dbGuid))
             return ShouldAbortScript(script);
     }
-       
+
     return false;
 }
 

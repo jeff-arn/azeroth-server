@@ -1,12 +1,12 @@
-#include "Database/DatabaseEnv.h"
-#include "Log.h"
-#include "Policies/SingletonImp.h"
-#include "Item.h"
-#include "AuctionHouseMgr.h"
-#include "ObjectMgr.h"
 #include "AuctionHouseBotMgr.h"
-#include "Config/Config.h"
+#include "AuctionHouseMgr.h"
 #include "Chat.h"
+#include "Config/Config.h"
+#include "Database/DatabaseEnv.h"
+#include "Item.h"
+#include "Log.h"
+#include "ObjectMgr.h"
+#include "Policies/SingletonImp.h"
 #include "Util.h"
 
 #include <algorithm>
@@ -14,9 +14,7 @@
 
 INSTANTIATE_SINGLETON_1(AuctionHouseBotMgr);
 
-static const char* AHBOT_CATEGORY_NAMES[] = {
-    "trade_goods", "crafting", "consumables", "recipes", "equipment", "leveling"
-};
+static const char* AHBOT_CATEGORY_NAMES[] = {"trade_goods", "crafting", "consumables", "recipes", "equipment", "leveling"};
 
 static AHBotCategory ParseCategory(const std::string& str)
 {
@@ -27,14 +25,7 @@ static AHBotCategory ParseCategory(const std::string& str)
 }
 
 // Pool of lore-appropriate seller names for fake AH characters.
-static const char* SELLER_NAMES[] = {
-    "Grimjaw", "Thornweave", "Silkfingers", "Copperbell", "Ironhide",
-    "Dustwalker", "Ashgrip", "Stonebrew", "Goldleaf", "Moonpetal",
-    "Flamestitch", "Frostpick", "Brighthammer", "Shadowloom", "Steelclaw",
-    "Embershank", "Mistweaver", "Oakbarrel", "Windsorrow", "Duskmantle",
-    "Boulderback", "Sunthread", "Ravenforge", "Deepmine", "Wildroot",
-    "Silversting", "Coalhand", "Mossgrip", "Starforge", "Rustblade"
-};
+static const char* SELLER_NAMES[] = {"Grimjaw", "Thornweave", "Silkfingers", "Copperbell", "Ironhide", "Dustwalker", "Ashgrip", "Stonebrew", "Goldleaf", "Moonpetal", "Flamestitch", "Frostpick", "Brighthammer", "Shadowloom", "Steelclaw", "Embershank", "Mistweaver", "Oakbarrel", "Windsorrow", "Duskmantle", "Boulderback", "Sunthread", "Ravenforge", "Deepmine", "Wildroot", "Silversting", "Coalhand", "Mossgrip", "Starforge", "Rustblade"};
 static const uint32 SELLER_NAME_COUNT = sizeof(SELLER_NAMES) / sizeof(SELLER_NAMES[0]);
 
 AuctionHouseBotMgr::~AuctionHouseBotMgr()
@@ -62,9 +53,8 @@ void AuctionHouseBotMgr::Load()
         m_config.reset();
 
     // Load items from DB.
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query(
-        "SELECT `item`, `min_stack`, `max_stack`, `bid`, `buyout`, `weight`, `category`, `price_variance_pct` "
-        "FROM `auctionhousebot`"));
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `item`, `min_stack`, `max_stack`, `bid`, `buyout`, `weight`, `category`, `price_variance_pct` "
+                                                            "FROM `auctionhousebot`"));
 
     if (!result)
     {
@@ -83,13 +73,13 @@ void AuctionHouseBotMgr::Load()
         bar.step();
         Field* fields = result->Fetch();
         AuctionHouseBotEntry e;
-        e.item            = fields[0].GetUInt32();
-        e.minStack        = fields[1].GetUInt32();
-        e.maxStack        = fields[2].GetUInt32();
-        e.bid             = fields[3].GetUInt32();
-        e.buyout          = fields[4].GetUInt32();
-        e.weight          = fields[5].GetFloat();
-        e.category        = ParseCategory(fields[6].GetCppString());
+        e.item = fields[0].GetUInt32();
+        e.minStack = fields[1].GetUInt32();
+        e.maxStack = fields[2].GetUInt32();
+        e.bid = fields[3].GetUInt32();
+        e.buyout = fields[4].GetUInt32();
+        e.weight = fields[5].GetFloat();
+        e.category = ParseCategory(fields[6].GetCppString());
         e.priceVariancePct = fields[7].GetUInt8();
 
         if (e.maxStack < e.minStack)
@@ -105,27 +95,27 @@ void AuctionHouseBotMgr::Load()
 
     // Load config.
     m_config = std::make_unique<AuctionHouseBotConfig>();
-    m_config->enable              = sConfig.GetBoolDefault("AHBot.Enable", false);
-    m_config->ahfid               = sConfig.GetIntDefault("AHBot.ah.fid", 120);
-    m_config->itemcount           = sConfig.GetIntDefault("AHBot.itemcount", 200);
+    m_config->enable = sConfig.GetBoolDefault("AHBot.Enable", false);
+    m_config->ahfid = sConfig.GetIntDefault("AHBot.ah.fid", 120);
+    m_config->itemcount = sConfig.GetIntDefault("AHBot.itemcount", 200);
     m_config->refreshIntervalSecs = sConfig.GetIntDefault("AHBot.RefreshInterval", 259200);
-    m_config->sellerAccountId     = sConfig.GetIntDefault("AHBot.SellerAccountId", 99);
-    m_config->sellerCount         = sConfig.GetIntDefault("AHBot.SellerCount", 12);
+    m_config->sellerAccountId = sConfig.GetIntDefault("AHBot.SellerAccountId", 99);
+    m_config->sellerCount = sConfig.GetIntDefault("AHBot.SellerCount", 12);
 
     m_config->quotaMin[AHBOT_CAT_TRADE_GOODS] = sConfig.GetIntDefault("AHBot.Quota.TradeGoods.Min", 35);
     m_config->quotaMax[AHBOT_CAT_TRADE_GOODS] = sConfig.GetIntDefault("AHBot.Quota.TradeGoods.Max", 40);
-    m_config->quotaMin[AHBOT_CAT_CRAFTING]    = sConfig.GetIntDefault("AHBot.Quota.Crafting.Min", 15);
-    m_config->quotaMax[AHBOT_CAT_CRAFTING]    = sConfig.GetIntDefault("AHBot.Quota.Crafting.Max", 20);
+    m_config->quotaMin[AHBOT_CAT_CRAFTING] = sConfig.GetIntDefault("AHBot.Quota.Crafting.Min", 15);
+    m_config->quotaMax[AHBOT_CAT_CRAFTING] = sConfig.GetIntDefault("AHBot.Quota.Crafting.Max", 20);
     m_config->quotaMin[AHBOT_CAT_CONSUMABLES] = sConfig.GetIntDefault("AHBot.Quota.Consumables.Min", 20);
     m_config->quotaMax[AHBOT_CAT_CONSUMABLES] = sConfig.GetIntDefault("AHBot.Quota.Consumables.Max", 25);
-    m_config->quotaMin[AHBOT_CAT_RECIPES]     = sConfig.GetIntDefault("AHBot.Quota.Recipes.Min", 3);
-    m_config->quotaMax[AHBOT_CAT_RECIPES]     = sConfig.GetIntDefault("AHBot.Quota.Recipes.Max", 5);
-    m_config->quotaMin[AHBOT_CAT_EQUIPMENT]   = sConfig.GetIntDefault("AHBot.Quota.Equipment.Min", 5);
-    m_config->quotaMax[AHBOT_CAT_EQUIPMENT]   = sConfig.GetIntDefault("AHBot.Quota.Equipment.Max", 10);
-    m_config->quotaMin[AHBOT_CAT_LEVELING]    = sConfig.GetIntDefault("AHBot.Quota.Leveling.Min", 10);
-    m_config->quotaMax[AHBOT_CAT_LEVELING]    = sConfig.GetIntDefault("AHBot.Quota.Leveling.Max", 15);
+    m_config->quotaMin[AHBOT_CAT_RECIPES] = sConfig.GetIntDefault("AHBot.Quota.Recipes.Min", 3);
+    m_config->quotaMax[AHBOT_CAT_RECIPES] = sConfig.GetIntDefault("AHBot.Quota.Recipes.Max", 5);
+    m_config->quotaMin[AHBOT_CAT_EQUIPMENT] = sConfig.GetIntDefault("AHBot.Quota.Equipment.Min", 5);
+    m_config->quotaMax[AHBOT_CAT_EQUIPMENT] = sConfig.GetIntDefault("AHBot.Quota.Equipment.Max", 10);
+    m_config->quotaMin[AHBOT_CAT_LEVELING] = sConfig.GetIntDefault("AHBot.Quota.Leveling.Min", 10);
+    m_config->quotaMax[AHBOT_CAT_LEVELING] = sConfig.GetIntDefault("AHBot.Quota.Leveling.Max", 15);
 
-    m_buyerIntervalSecs  = sConfig.GetIntDefault("AHBot.Buyer.IntervalSecs", 1800);
+    m_buyerIntervalSecs = sConfig.GetIntDefault("AHBot.Buyer.IntervalSecs", 1800);
     m_buyerBudgetPerCycle = sConfig.GetIntDefault("AHBot.Buyer.BudgetPerCycle", 500000);
 
     m_auctionHouseEntry = sAuctionMgr.GetAuctionHouseEntry(m_config->ahfid);
@@ -139,8 +129,7 @@ void AuctionHouseBotMgr::Load()
     LoadSellerIdentities();
 
     // Load last refresh time from DB.
-    std::unique_ptr<QueryResult> stateResult(WorldDatabase.Query(
-        "SELECT `value` FROM `auctionhousebot_state` WHERE `key_name` = 'last_refresh_time'"));
+    std::unique_ptr<QueryResult> stateResult(WorldDatabase.Query("SELECT `value` FROM `auctionhousebot_state` WHERE `key_name` = 'last_refresh_time'"));
     if (stateResult)
         m_lastRefreshTime = static_cast<time_t>(stateResult->Fetch()[0].GetUInt64());
     else
@@ -171,11 +160,7 @@ void AuctionHouseBotMgr::BuildCategoryPools()
 
     for (uint8 i = 0; i < AHBOT_CAT_COUNT; ++i)
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-            "AHBot: Category '%s' has %u items, total weight %.1f",
-            AHBOT_CATEGORY_NAMES[i],
-            (uint32)m_categoryItems[i].size(),
-            m_categoryTotalWeight[i]);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "AHBot: Category '%s' has %u items, total weight %.1f", AHBOT_CATEGORY_NAMES[i], (uint32)m_categoryItems[i].size(), m_categoryTotalWeight[i]);
     }
 }
 
@@ -187,9 +172,7 @@ void AuctionHouseBotMgr::LoadSellerIdentities()
     uint32 targetCount = m_config->sellerCount;
 
     // Query existing seller characters for this account.
-    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
-        "SELECT `guid`, `name` FROM `characters` WHERE `account` = %u AND `guid` >= 900001 AND `guid` <= 900100",
-        accountId));
+    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT `guid`, `name` FROM `characters` WHERE `account` = %u AND `guid` >= 900001 AND `guid` <= 900100", accountId));
 
     if (result)
     {
@@ -237,14 +220,12 @@ void AuctionHouseBotMgr::CreateSellerIdentities()
         const char* name = SELLER_NAMES[i];
 
         // Check if name is already taken.
-        std::unique_ptr<QueryResult> nameCheck(CharacterDatabase.PQuery(
-            "SELECT `guid` FROM `characters` WHERE `name` = '%s'", name));
+        std::unique_ptr<QueryResult> nameCheck(CharacterDatabase.PQuery("SELECT `guid` FROM `characters` WHERE `name` = '%s'", name));
         if (nameCheck)
             continue;
 
         // Check if guid is already used.
-        std::unique_ptr<QueryResult> guidCheck(CharacterDatabase.PQuery(
-            "SELECT `guid` FROM `characters` WHERE `guid` = %u", guid));
+        std::unique_ptr<QueryResult> guidCheck(CharacterDatabase.PQuery("SELECT `guid` FROM `characters` WHERE `guid` = %u", guid));
         if (guidCheck)
         {
             // Already exists, should have been loaded above.
@@ -252,11 +233,10 @@ void AuctionHouseBotMgr::CreateSellerIdentities()
         }
 
         // Create a minimal character row. Race 1 = Human, Class 1 = Warrior, level 60.
-        CharacterDatabase.PExecute(
-            "INSERT INTO `characters` (`guid`, `account`, `name`, `race`, `class`, `gender`, `level`, "
-            "`zone`, `map`, `position_x`, `position_y`, `position_z`, `orientation`) "
-            "VALUES (%u, %u, '%s', 1, 1, 0, 60, 0, 0, 0, 0, 0, 0)",
-            guid, accountId, name);
+        CharacterDatabase.PExecute("INSERT INTO `characters` (`guid`, `account`, `name`, `race`, `class`, `gender`, `level`, "
+                                   "`zone`, `map`, `position_x`, `position_y`, `position_z`, `orientation`) "
+                                   "VALUES (%u, %u, '%s', 1, 1, 0, 60, 0, 0, 0, 0, 0, 0)",
+                                   guid, accountId, name);
 
         AHBotSellerIdentity seller;
         seller.characterGuid = guid;
@@ -293,9 +273,7 @@ void AuctionHouseBotMgr::Update(bool force /* = false */)
     }
 
     time_t now = time(nullptr);
-    bool needsRefresh = force ||
-        (m_lastRefreshTime == 0) ||
-        (static_cast<uint32>(now - m_lastRefreshTime) >= m_config->refreshIntervalSecs);
+    bool needsRefresh = force || (m_lastRefreshTime == 0) || (static_cast<uint32>(now - m_lastRefreshTime) >= m_config->refreshIntervalSecs);
 
     if (needsRefresh)
     {
@@ -304,9 +282,7 @@ void AuctionHouseBotMgr::Update(bool force /* = false */)
         PopulateAuctions(auctionHouse);
 
         m_lastRefreshTime = now;
-        WorldDatabase.PExecute(
-            "UPDATE `auctionhousebot_state` SET `value` = " UI64FMTD " WHERE `key_name` = 'last_refresh_time'",
-            static_cast<uint64>(m_lastRefreshTime));
+        WorldDatabase.PExecute("UPDATE `auctionhousebot_state` SET `value` = " UI64FMTD " WHERE `key_name` = 'last_refresh_time'", static_cast<uint64>(m_lastRefreshTime));
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "AHBot: Refresh complete. AH now has %u listings.", auctionHouse->GetCount());
     }
@@ -317,8 +293,7 @@ void AuctionHouseBotMgr::Update(bool force /* = false */)
         if (currentCount < m_config->itemcount * 80 / 100) // Restock if below 80% of target.
         {
             uint32 toAdd = m_config->itemcount - currentCount;
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "AHBot: Restocking %u items (current: %u, target: %u).",
-                toAdd, currentCount, m_config->itemcount);
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "AHBot: Restocking %u items (current: %u, target: %u).", toAdd, currentCount, m_config->itemcount);
             PopulateAuctions(auctionHouse);
         }
     }
@@ -447,41 +422,47 @@ uint32 AuctionHouseBotMgr::RollStackSize(AuctionHouseBotEntry const& e, AHBotSel
 
     switch (sellerType)
     {
-        case AHBOT_SELLER_CASUAL:
+    case AHBOT_SELLER_CASUAL:
         {
             // Casual: small stacks (1-2 units above min, or min itself).
             uint32 maxForCasual = std::min(e.maxStack, e.minStack + 2u);
             return urand(e.minStack, maxForCasual);
         }
-        case AHBOT_SELLER_DEDICATED:
+    case AHBOT_SELLER_DEDICATED:
         {
             // Dedicated: large stacks near max.
             uint32 minForDedicated = (e.maxStack > 2) ? (e.maxStack - 2) : e.minStack;
             return urand(minForDedicated, e.maxStack);
         }
-        default:
-            return urand(e.minStack, e.maxStack);
+    default:
+        return urand(e.minStack, e.maxStack);
     }
 }
 
-void AuctionHouseBotMgr::ApplyPriceJitter(uint32& bid, uint32& buyout,
-    AuctionHouseBotEntry const& e, uint32 stackSize, AHBotSellerType sellerType) const
+void AuctionHouseBotMgr::ApplyPriceJitter(uint32& bid, uint32& buyout, AuctionHouseBotEntry const& e, uint32 stackSize, AHBotSellerType sellerType) const
 {
     // Seller type price modifier.
     float sellerMod = 0.0f;
     switch (sellerType)
     {
-        case AHBOT_SELLER_CASUAL:      sellerMod = 0.05f;  break;  // +5%
-        case AHBOT_SELLER_DEDICATED:   sellerMod = -0.07f; break;  // -7%
-        case AHBOT_SELLER_CRAFTER:     sellerMod = 0.15f;  break;  // +15%
-        case AHBOT_SELLER_OPPORTUNIST: sellerMod = 0.25f;  break;  // +25%
-        default: break;
+    case AHBOT_SELLER_CASUAL:
+        sellerMod = 0.05f;
+        break; // +5%
+    case AHBOT_SELLER_DEDICATED:
+        sellerMod = -0.07f;
+        break; // -7%
+    case AHBOT_SELLER_CRAFTER:
+        sellerMod = 0.15f;
+        break; // +15%
+    case AHBOT_SELLER_OPPORTUNIST:
+        sellerMod = 0.25f;
+        break; // +25%
+    default:
+        break;
     }
 
     // Random jitter within the item's variance percentage.
-    float jitter = frand(
-        -static_cast<float>(e.priceVariancePct),
-         static_cast<float>(e.priceVariancePct)) / 100.0f;
+    float jitter = frand(-static_cast<float>(e.priceVariancePct), static_cast<float>(e.priceVariancePct)) / 100.0f;
 
     float priceMod = 1.0f + sellerMod + jitter;
     if (priceMod < 0.5f)
@@ -505,9 +486,12 @@ void AuctionHouseBotMgr::ApplyPriceJitter(uint32& bid, uint32& buyout,
 AHBotSellerType AuctionHouseBotMgr::RollSellerType() const
 {
     uint32 roll = urand(1, 100);
-    if (roll <= 40) return AHBOT_SELLER_CASUAL;
-    if (roll <= 65) return AHBOT_SELLER_DEDICATED;
-    if (roll <= 85) return AHBOT_SELLER_CRAFTER;
+    if (roll <= 40)
+        return AHBOT_SELLER_CASUAL;
+    if (roll <= 65)
+        return AHBOT_SELLER_DEDICATED;
+    if (roll <= 85)
+        return AHBOT_SELLER_CRAFTER;
     return AHBOT_SELLER_OPPORTUNIST;
 }
 
@@ -534,9 +518,7 @@ uint32 AuctionHouseBotMgr::ComputeCategoryTarget(AHBotCategory cat) const
     return m_config->itemcount * pct / 100;
 }
 
-void AuctionHouseBotMgr::AddItem(AuctionHouseBotEntry const& e,
-    uint32 stackSize, uint32 bidPrice, uint32 buyoutPrice,
-    AHBotSellerIdentity const& seller, AuctionHouseObject* ah)
+void AuctionHouseBotMgr::AddItem(AuctionHouseBotEntry const& e, uint32 stackSize, uint32 bidPrice, uint32 buyoutPrice, AHBotSellerIdentity const& seller, AuctionHouseObject* ah)
 {
     ASSERT(m_auctionHouseEntry);
 
@@ -565,20 +547,20 @@ void AuctionHouseBotMgr::AddItem(AuctionHouseBotEntry const& e,
 
     uint32 dep = sAuctionMgr.GetAuctionDeposit(m_auctionHouseEntry, etime, item);
 
-    AuctionEntry* auctionEntry       = new AuctionEntry;
-    auctionEntry->Id                 = sObjectMgr.GenerateAuctionID();
-    auctionEntry->auctionHouseEntry  = m_auctionHouseEntry;
-    auctionEntry->itemGuidLow        = item->GetGUIDLow();
-    auctionEntry->itemTemplate       = item->GetEntry();
-    auctionEntry->owner              = seller.characterGuid;
-    auctionEntry->ownerAccount       = m_config->sellerAccountId;
-    auctionEntry->startbid           = bidPrice;
-    auctionEntry->buyout             = buyoutPrice;
-    auctionEntry->bidder             = 0;
-    auctionEntry->bid                = 0;
-    auctionEntry->deposit            = dep;
-    auctionEntry->depositTime        = time(nullptr);
-    auctionEntry->expireTime         = static_cast<time_t>(etime) + time(nullptr);
+    AuctionEntry* auctionEntry = new AuctionEntry;
+    auctionEntry->Id = sObjectMgr.GenerateAuctionID();
+    auctionEntry->auctionHouseEntry = m_auctionHouseEntry;
+    auctionEntry->itemGuidLow = item->GetGUIDLow();
+    auctionEntry->itemTemplate = item->GetEntry();
+    auctionEntry->owner = seller.characterGuid;
+    auctionEntry->ownerAccount = m_config->sellerAccountId;
+    auctionEntry->startbid = bidPrice;
+    auctionEntry->buyout = buyoutPrice;
+    auctionEntry->bidder = 0;
+    auctionEntry->bid = 0;
+    auctionEntry->deposit = dep;
+    auctionEntry->depositTime = time(nullptr);
+    auctionEntry->expireTime = static_cast<time_t>(etime) + time(nullptr);
 
     item->SaveToDB();
 
@@ -645,14 +627,14 @@ void AuctionHouseBotMgr::UpdateBotBuyers(AuctionHouseObject* ah)
         uint32 stackSize = item->GetCount();
         uint32 fairBuyout = GetFairBuyoutForItem(entry->itemTemplate, stackSize);
         if (fairBuyout == 0)
-            continue;  // Unknown item — don't buy.
+            continue; // Unknown item — don't buy.
 
         float prob = GetPurchaseProbability(entry->buyout, fairBuyout);
         if (prob <= 0.0f)
             continue;
 
         // Roll the dice.
-        float roll = static_cast<float>(urand(0, 10000)) / 100.0f;  // 0.00 - 100.00
+        float roll = static_cast<float>(urand(0, 10000)) / 100.0f; // 0.00 - 100.00
         if (roll > prob)
             continue;
 
@@ -692,12 +674,7 @@ void AuctionHouseBotMgr::UpdateBotBuyers(AuctionHouseObject* ah)
 
     if (purchaseCount > 0)
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL,
-            "AHBot Buyer: Purchased %u player auctions (budget used: %ug %us %uc).",
-            purchaseCount,
-            (m_buyerBudgetPerCycle - budgetRemaining) / 10000,
-            ((m_buyerBudgetPerCycle - budgetRemaining) % 10000) / 100,
-            (m_buyerBudgetPerCycle - budgetRemaining) % 100);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "AHBot Buyer: Purchased %u player auctions (budget used: %ug %us %uc).", purchaseCount, (m_buyerBudgetPerCycle - budgetRemaining) / 10000, ((m_buyerBudgetPerCycle - budgetRemaining) % 10000) / 100, (m_buyerBudgetPerCycle - budgetRemaining) % 100);
     }
 }
 
@@ -713,7 +690,7 @@ uint32 AuctionHouseBotMgr::GetFairBuyoutForItem(uint32 itemId, uint32 stackSize)
             return perUnit * stackSize;
         }
     }
-    return 0;  // Unknown item.
+    return 0; // Unknown item.
 }
 
 float AuctionHouseBotMgr::GetPurchaseProbability(uint32 listingBuyout, uint32 fairBuyout) const
@@ -724,13 +701,19 @@ float AuctionHouseBotMgr::GetPurchaseProbability(uint32 listingBuyout, uint32 fa
     float ratio = static_cast<float>(listingBuyout) / static_cast<float>(fairBuyout);
 
     // Price at or below fair market value — very likely to buy.
-    if (ratio <= 0.8f)  return 95.0f;   // bargain
-    if (ratio <= 1.0f)  return 80.0f;   // at market
-    if (ratio <= 1.2f)  return 50.0f;   // slightly over
-    if (ratio <= 1.5f)  return 20.0f;   // overpriced
-    if (ratio <= 2.0f)  return 5.0f;    // significantly overpriced
-    if (ratio <= 5.0f)  return 1.0f;    // absurd
-    return 0.0f;                         // Peacebloom for 1000g — never
+    if (ratio <= 0.8f)
+        return 95.0f; // bargain
+    if (ratio <= 1.0f)
+        return 80.0f; // at market
+    if (ratio <= 1.2f)
+        return 50.0f; // slightly over
+    if (ratio <= 1.5f)
+        return 20.0f; // overpriced
+    if (ratio <= 2.0f)
+        return 5.0f; // significantly overpriced
+    if (ratio <= 5.0f)
+        return 1.0f; // absurd
+    return 0.0f; // Peacebloom for 1000g — never
 }
 
 bool AuctionHouseBotMgr::IsBotOwned(uint32 ownerGuid) const

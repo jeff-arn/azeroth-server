@@ -23,11 +23,11 @@
 #ifndef MANGOS_GAME_SERVER_WORLDSOCKETMGR_H
 #define MANGOS_GAME_SERVER_WORLDSOCKETMGR_H
 
-#include <vector>
 #include <memory>
-#include "Policies/Singleton.h"
+#include <vector>
 #include "IO/Context/IoContext.h"
 #include "IO/Networking/AsyncSocketAcceptor.h"
+#include "Policies/Singleton.h"
 
 class WorldSocket;
 
@@ -60,4 +60,4 @@ private:
 
 #define sWorldSocketMgr MaNGOS::Singleton<WorldSocketMgr>::Instance()
 
-#endif //MANGOS_GAME_SERVER_WORLDSOCKETMGR_H
+#endif // MANGOS_GAME_SERVER_WORLDSOCKETMGR_H

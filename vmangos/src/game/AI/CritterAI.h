@@ -21,18 +21,19 @@
 
 class CritterAI : public CreatureAI
 {
-    public:
-        explicit CritterAI(Creature* c) : CreatureAI(c) {}
-        static int Permissible(Creature const*);
+public:
+    explicit CritterAI(Creature* c) : CreatureAI(c) {}
+    static int Permissible(Creature const*);
 
-        void MoveInLineOfSight(Unit*) override {};
-        void AttackStart(Unit*) override {};
+    void MoveInLineOfSight(Unit*) override {};
+    void AttackStart(Unit*) override {};
 
-        void DamageTaken(Unit*, uint32&) override;
-        void SpellHit(SpellCaster*, SpellEntry const*) override;
-        void UpdateAI(uint32 const) override;
-    private:
-        uint32 m_uiCombatTimer = 0;
+    void DamageTaken(Unit*, uint32&) override;
+    void SpellHit(SpellCaster*, SpellEntry const*) override;
+    void UpdateAI(uint32 const) override;
+
+private:
+    uint32 m_uiCombatTimer = 0;
 };
 
 #endif

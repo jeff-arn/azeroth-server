@@ -1,9 +1,9 @@
 #include "./DNS.h"
 #include "./Internal.h"
-#include "Log.h"
 #include "Errors.h"
-#include "Util.h"
 #include "IO/SystemErrorToString.h"
+#include "Log.h"
+#include "Util.h"
 
 #if defined(WIN32)
 #include <WinSock2.h>
@@ -14,8 +14,8 @@
 #endif
 
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 #endif
 
 std::string IO::Networking::DNS::GetOwnHostname()
@@ -39,25 +39,27 @@ std::vector<IO::Networking::IpAddress> IO::Networking::DNS::ResolveDomainAll(std
     {
         IpAddress const& ip = maybeIp.value();
         MANGOS_ASSERT(ip.GetType() == type);
-        return { ip }; // The "domain" can be directly parsed as an IP
+        return {ip}; // The "domain" can be directly parsed as an IP
     }
 
     // try to resolve the domain
     addrinfo hints = {};
-    hints.ai_family = type == IpAddress::Type::IPv4 ? AF_INET :  AF_INET6;
+    hints.ai_family = type == IpAddress::Type::IPv4 ? AF_INET : AF_INET6;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
     addrinfo* dnsResult = nullptr;
     if (::getaddrinfo(domainName.c_str(), nullptr, &hints, &dnsResult) != 0)
     {
-        sLog.Out(LogType::LOG_NETWORK, LOG_LVL_ERROR, "IO ERROR: ::getaddrinfo(...): %s", SystemErrorToString(
+        sLog.Out(LogType::LOG_NETWORK, LOG_LVL_ERROR, "IO ERROR: ::getaddrinfo(...): %s",
+                 SystemErrorToString(
 #if defined(WIN32)
-        ::WSAGetLastError()
+                     ::WSAGetLastError()
 #else
-        errno
+                     errno
 #endif
-        ).c_str());
+                         )
+                     .c_str());
         return {}; // error occurred, empty return
     }
 
@@ -74,9 +76,9 @@ std::vector<IO::Networking::IpAddress> IO::Networking::DNS::ResolveDomainAll(std
         else if (ptr->ai_family == AF_INET6)
         {
             // TODO: Add inet_ntop for IPv6
-            //sockaddr_in6* sockaddr_ipv6 = reinterpret_cast<sockaddr_in6*>(ptr->ai_addr);
-            //IpAddress ip = IO::Networking::Internal::inet_ntop(&(sockaddr_ipv6->sin_addr));
-            //list.emplace_back(ip);
+            // sockaddr_in6* sockaddr_ipv6 = reinterpret_cast<sockaddr_in6*>(ptr->ai_addr);
+            // IpAddress ip = IO::Networking::Internal::inet_ntop(&(sockaddr_ipv6->sin_addr));
+            // list.emplace_back(ip);
         }
         else
         {
@@ -97,10 +99,10 @@ nonstd::optional<IO::Networking::IpAddress> IO::Networking::DNS::ResolveDomainSi
 
     switch (strategy)
     {
-        case SelectionStrategy::First:
-            return allIps.front();
-        case SelectionStrategy::Random:
-            return allIps[urand(0, allIps.size() - 1)];
+    case SelectionStrategy::First:
+        return allIps.front();
+    case SelectionStrategy::Random:
+        return allIps[urand(0, allIps.size() - 1)];
     }
 
     MANGOS_ASSERT(false);

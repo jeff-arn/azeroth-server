@@ -27,13 +27,7 @@
 // avoid the using namespace here cuz
 // its a .h file afterall
 
-template
-<
-typename T,
-class ThreadingModel,
-class CreatePolicy,
-class LifeTimePolicy
->
+template <typename T, class ThreadingModel, class CreatePolicy, class LifeTimePolicy>
 T& MaNGOS::Singleton<T, ThreadingModel, CreatePolicy, LifeTimePolicy>::Instance()
 {
     if (!si_instance)
@@ -57,13 +51,7 @@ T& MaNGOS::Singleton<T, ThreadingModel, CreatePolicy, LifeTimePolicy>::Instance(
     return *si_instance;
 }
 
-template
-<
-typename T,
-class ThreadingModel,
-class CreatePolicy,
-class LifeTimePolicy
->
+template <typename T, class ThreadingModel, class CreatePolicy, class LifeTimePolicy>
 void MaNGOS::Singleton<T, ThreadingModel, CreatePolicy, LifeTimePolicy>::DestroySingleton()
 {
     CreatePolicy::Destroy(si_instance);
@@ -71,17 +59,16 @@ void MaNGOS::Singleton<T, ThreadingModel, CreatePolicy, LifeTimePolicy>::Destroy
     si_destroyed = true;
 }
 
-#define INSTANTIATE_SINGLETON_4(TYPE, THREADINGMODEL, CREATIONPOLICY, OBJECTLIFETIME) \
-    template <> TYPE* MaNGOS::Singleton<TYPE, THREADINGMODEL, CREATIONPOLICY, OBJECTLIFETIME >::si_instance = 0; \
-    template <> bool MaNGOS::Singleton<TYPE, THREADINGMODEL, CREATIONPOLICY, OBJECTLIFETIME >::si_destroyed = false; \
-    template class MaNGOS::Singleton<TYPE, THREADINGMODEL, CREATIONPOLICY, OBJECTLIFETIME >;
+#define INSTANTIATE_SINGLETON_4(TYPE, THREADINGMODEL, CREATIONPOLICY, OBJECTLIFETIME)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 \
+    template <>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       \
+    TYPE* MaNGOS::Singleton<TYPE, THREADINGMODEL, CREATIONPOLICY, OBJECTLIFETIME>::si_instance = 0;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   \
+    template <>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       \
+    bool MaNGOS::Singleton<TYPE, THREADINGMODEL, CREATIONPOLICY, OBJECTLIFETIME>::si_destroyed = false;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+    template class MaNGOS::Singleton<TYPE, THREADINGMODEL, CREATIONPOLICY, OBJECTLIFETIME>;
 
-#define INSTANTIATE_SINGLETON_3(TYPE, THREADINGMODEL, CREATIONPOLICY) \
-    INSTANTIATE_SINGLETON_4(TYPE, THREADINGMODEL, CREATIONPOLICY, MaNGOS::ObjectLifeTime<TYPE>)
-#define INSTANTIATE_SINGLETON_2(TYPE, THREADINGMODEL) \
-    INSTANTIATE_SINGLETON_3(TYPE, THREADINGMODEL, MaNGOS::OperatorNew<TYPE>)
-#define INSTANTIATE_SINGLETON_1(TYPE) \
-    INSTANTIATE_SINGLETON_2(TYPE, MaNGOS::SingleThreaded<TYPE>)
+#define INSTANTIATE_SINGLETON_3(TYPE, THREADINGMODEL, CREATIONPOLICY) INSTANTIATE_SINGLETON_4(TYPE, THREADINGMODEL, CREATIONPOLICY, MaNGOS::ObjectLifeTime<TYPE>)
+#define INSTANTIATE_SINGLETON_2(TYPE, THREADINGMODEL) INSTANTIATE_SINGLETON_3(TYPE, THREADINGMODEL, MaNGOS::OperatorNew<TYPE>)
+#define INSTANTIATE_SINGLETON_1(TYPE) INSTANTIATE_SINGLETON_2(TYPE, MaNGOS::SingleThreaded<TYPE>)
 
 
 #endif

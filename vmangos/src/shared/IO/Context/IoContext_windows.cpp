@@ -1,6 +1,6 @@
+#include <Windows.h>
 #include "IoContext.h"
 #include "Log.h"
-#include <Windows.h>
 
 std::unique_ptr<IO::IoContext> IO::IoContext::CreateIoContext()
 {
@@ -15,9 +15,7 @@ std::unique_ptr<IO::IoContext> IO::IoContext::CreateIoContext()
     return std::unique_ptr<IoContext>(new IoContext(completionPort));
 }
 
-IO::IoContext::IoContext(HANDLE completionPort) : m_isRunning(true), m_completionPort(completionPort), m_runningThreadsCount(0)
-{
-}
+IO::IoContext::IoContext(HANDLE completionPort) : m_isRunning(true), m_completionPort(completionPort), m_runningThreadsCount(0) {}
 
 IO::IoContext::~IoContext()
 {
@@ -38,7 +36,7 @@ void IO::IoContext::RunUntilShutdown()
     m_runningThreadsCount++;
     while (m_isRunning)
     {
-        bool isOkay = ::GetQueuedCompletionStatus(m_completionPort, &bytesWritten, &completionKey, reinterpret_cast<LPOVERLAPPED *>(&task), maxWait);
+        bool isOkay = ::GetQueuedCompletionStatus(m_completionPort, &bytesWritten, &completionKey, reinterpret_cast<LPOVERLAPPED*>(&task), maxWait);
 
         if (task)
         {
@@ -57,10 +55,7 @@ void IO::IoContext::RunUntilShutdown()
     m_runningThreadsCount--;
 }
 
-bool IO::IoContext::IsRunning() const
-{
-    return m_isRunning;
-}
+bool IO::IoContext::IsRunning() const { return m_isRunning; }
 
 void IO::IoContext::Shutdown()
 {
@@ -94,7 +89,4 @@ void IO::IoContext::PostOperationForImmediateInvocation(IO::AsyncIoOperation* ta
     }
 }
 
-HANDLE IO::IoContext::GetWindowsCompletionPort() const
-{
-    return m_completionPort;
-}
+HANDLE IO::IoContext::GetWindowsCompletionPort() const { return m_completionPort; }

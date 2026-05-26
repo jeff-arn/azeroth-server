@@ -1,19 +1,22 @@
 #ifndef MANGOS_NO_DELETER_H
 #define MANGOS_NO_DELETER_H
 
-namespace MaNGOS { namespace Memory
+namespace MaNGOS
 {
-    /// A non deleter implementation that can be used in std::shared_ptr
-    /// \warning Using this will result in a memory leak, if not managed otherwise!
-    /// \example std::shared_ptr<uint8_t> mySharedPtr = std::shared_ptr<uint8_t>(new uint8_t[1024], MaNGOS::Memory::no_deleter<uint8_t>());
-    template<typename T>
-    struct no_deleter
+    namespace Memory
     {
-        void operator()(T const*)
+        /// A non deleter implementation that can be used in std::shared_ptr
+        /// \warning Using this will result in a memory leak, if not managed otherwise!
+        /// \example std::shared_ptr<uint8_t> mySharedPtr = std::shared_ptr<uint8_t>(new uint8_t[1024], MaNGOS::Memory::no_deleter<uint8_t>());
+        template <typename T>
+        struct no_deleter
         {
-            // Ignore. No call to `delete`
-        }
-    };
-}} // namespace MaNGOS::Memory
+            void operator()(T const*)
+            {
+                // Ignore. No call to `delete`
+            }
+        };
+    } // namespace Memory
+} // namespace MaNGOS
 
-#endif //MANGOS_NO_DELETER_H
+#endif // MANGOS_NO_DELETER_H

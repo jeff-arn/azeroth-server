@@ -10,20 +10,22 @@
 
 std::unique_ptr<std::thread> IO::Multithreading::CreateThreadPtr(std::string const& name, std::function<void()> entryFunction)
 {
-    return std::make_unique<std::thread>([name, entryFunction = std::move(entryFunction)]()
-    {
-       IO::Multithreading::RenameCurrentThread(name);
-       entryFunction();
-    });
+    return std::make_unique<std::thread>(
+        [name, entryFunction = std::move(entryFunction)]()
+        {
+            IO::Multithreading::RenameCurrentThread(name);
+            entryFunction();
+        });
 }
 
 std::thread IO::Multithreading::CreateThread(std::string const& name, std::function<void()> entryFunction)
 {
-    return std::thread([name, entryFunction = std::move(entryFunction)]()
-    {
-        IO::Multithreading::RenameCurrentThread(name);
-        entryFunction();
-    });
+    return std::thread(
+        [name, entryFunction = std::move(entryFunction)]()
+        {
+            IO::Multithreading::RenameCurrentThread(name);
+            entryFunction();
+        });
 }
 
 void IO::Multithreading::RenameCurrentThread(std::string const& name)
@@ -32,14 +34,14 @@ void IO::Multithreading::RenameCurrentThread(std::string const& name)
     // Windows part taken from https://stackoverflow.com/a/23899379
     // SetThreadDescription is only supported on >= Win10, that's why we are using this approach
 
-    const DWORD MS_VC_EXCEPTION=0x406D1388;
-#pragma pack(push,8)
+    const DWORD MS_VC_EXCEPTION = 0x406D1388;
+#pragma pack(push, 8)
     typedef struct tagTHREADNAME_INFO
     {
-        DWORD dwType;       // Must be 0x1000.
-        LPCSTR szName;      // Pointer to name (in user addr space).
-        DWORD dwThreadID;   // Thread ID (-1=caller thread).
-        DWORD dwFlags;      // Reserved for future use, must be zero.
+        DWORD dwType; // Must be 0x1000.
+        LPCSTR szName; // Pointer to name (in user addr space).
+        DWORD dwThreadID; // Thread ID (-1=caller thread).
+        DWORD dwFlags; // Reserved for future use, must be zero.
     } THREADNAME_INFO;
 #pragma pack(pop)
 
@@ -51,9 +53,9 @@ void IO::Multithreading::RenameCurrentThread(std::string const& name)
 
     __try
     {
-        RaiseException( MS_VC_EXCEPTION, 0, sizeof(info)/sizeof(ULONG_PTR), (ULONG_PTR*)&info );
+        RaiseException(MS_VC_EXCEPTION, 0, sizeof(info) / sizeof(ULONG_PTR), (ULONG_PTR*)&info);
     }
-    __except(EXCEPTION_EXECUTE_HANDLER)
+    __except (EXCEPTION_EXECUTE_HANDLER)
     {
     }
 #elif defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -61,7 +63,7 @@ void IO::Multithreading::RenameCurrentThread(std::string const& name)
 #elif defined(__APPLE__)
     ::pthread_setname_np(name.c_str());
 #else
-    // It's not too serisous if we cant rename a thread
-    #warning "IO::Multithreading::_renameThisThread not supported on your platform"
+// It's not too serisous if we cant rename a thread
+#warning "IO::Multithreading::_renameThisThread not supported on your platform"
 #endif
 }

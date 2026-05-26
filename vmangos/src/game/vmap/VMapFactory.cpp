@@ -73,7 +73,7 @@ namespace VMAP
     IVMapManager* VMapFactory::createOrGetVMapManager()
     {
         if (!gVMapManager)
-            gVMapManager = new VMapManager2();              // should be taken from config ... Please change if you like :-)
+            gVMapManager = new VMapManager2(); // should be taken from config ... Please change if you like :-)
         return gVMapManager;
     }
 
@@ -85,4 +85,4 @@ namespace VMAP
 
         gVMapManager = nullptr;
     }
-}
+} // namespace VMAP

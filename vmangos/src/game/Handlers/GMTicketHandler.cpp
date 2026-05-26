@@ -19,15 +19,15 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Common.h"
-#include "Language.h"
-#include "WorldPacket.h"
-#include "Log.h"
-#include "GMTicketMgr.h"
-#include "Player.h"
 #include "Chat.h"
-#include "World.h"
+#include "Common.h"
+#include "GMTicketMgr.h"
+#include "Language.h"
+#include "Log.h"
 #include "Opcodes.h"
+#include "Player.h"
+#include "World.h"
+#include "WorldPacket.h"
 
 void WorldSession::HandleGMTicketGetTicketOpcode(WorldPacket& /*recv_data*/)
 {
@@ -113,7 +113,7 @@ void WorldSession::HandleGMTicketCreateOpcode(WorldPacket& recvData)
         std::string ticketText;
         std::string reservedForFutureUse;
 
-        recvData >> ticketType >> mapId >> x >> y >> z;                        // last check 2.4.3
+        recvData >> ticketType >> mapId >> x >> y >> z; // last check 2.4.3
         recvData >> ticketText;
         recvData >> reservedForFutureUse;
 

@@ -20,14 +20,14 @@
  */
 
 #include "TotemAI.h"
-#include "Totem.h"
 #include "Creature.h"
 #include "DBCStores.h"
 #include "SpellMgr.h"
+#include "Totem.h"
 
+#include "CellImpl.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
-#include "CellImpl.h"
 
 int TotemAI::Permissible(Creature const* creature)
 {
@@ -45,7 +45,7 @@ TotemAI::TotemAI(Creature* pCreature) : CreatureAI(pCreature)
     {
         m_spellId = pTotem->GetSpell();
         m_totemType = pTotem->GetTotemType();
-    }  
+    }
     else
     {
         m_spellId = m_creature->GetCreatureInfo()->spells[0];
@@ -59,7 +59,6 @@ TotemAI::TotemAI(Creature* pCreature) : CreatureAI(pCreature)
             if (totemSpell && totemSpell->IsSpellAppliesAura())
                 pCreature->CastSpell(pCreature, totemSpell, true);
         }
-            
     }
 }
 
@@ -89,8 +88,7 @@ void TotemAI::UpdateAI(uint32 const /*diff*/)
         victim = owner->GetAttackerForHelper();
 
     // Search for another target if current is invalid.
-    if (!victim || !m_creature->IsWithinDistInMap(victim, max_range) ||
-            !m_creature->IsValidAttackTarget(victim) || !victim->IsVisibleForOrDetect(m_creature, m_creature, false))
+    if (!victim || !m_creature->IsWithinDistInMap(victim, max_range) || !m_creature->IsValidAttackTarget(victim) || !victim->IsVisibleForOrDetect(m_creature, m_creature, false))
     {
         victim = nullptr;
 
@@ -103,7 +101,7 @@ void TotemAI::UpdateAI(uint32 const /*diff*/)
     {
         m_victimGuid = victim->GetObjectGuid();
 
-        m_creature->SetInFront(victim);                      // client change orientation by self
+        m_creature->SetInFront(victim); // client change orientation by self
         m_creature->CastSpell(victim, m_spellId, false);
     }
     else

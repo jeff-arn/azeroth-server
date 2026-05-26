@@ -1,34 +1,34 @@
 /*
-* Copyright (C) 2005-2011 MaNGOS <http://getmangos.com/>
-* Copyright (C) 2009-2011 MaNGOSZero <https://github.com/mangos/zero>
-* Copyright (C) 2011-2016 Nostalrius <https://nostalrius.org>
-* Copyright (C) 2016-2017 Elysium Project <https://github.com/elysium-project>
-* Copyright (C) 2017 Light's Hope <https://github.com/LightsHope>
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * Copyright (C) 2005-2011 MaNGOS <http://getmangos.com/>
+ * Copyright (C) 2009-2011 MaNGOSZero <https://github.com/mangos/zero>
+ * Copyright (C) 2011-2016 Nostalrius <https://nostalrius.org>
+ * Copyright (C) 2016-2017 Elysium Project <https://github.com/elysium-project>
+ * Copyright (C) 2017 Light's Hope <https://github.com/LightsHope>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 #ifndef _ASYNC_COMMAND_INCLUDED
 #define _ASYNC_COMMAND_INCLUDED
 
 #include "Common.h"
-#include "SharedDefines.h"
-#include "ObjectGuid.h"
-#include "Database/DatabaseEnv.h"
 #include "Database/Database.h"
+#include "Database/DatabaseEnv.h"
 #include "Database/SqlOperations.h"
+#include "ObjectGuid.h"
+#include "SharedDefines.h"
 
 enum
 {
@@ -87,17 +87,17 @@ class PInfoHandler
 public:
     static void HandlePInfoCommand(WorldSession* session, Player* target, ObjectGuid& target_guid, std::string& name);
     static void HandlePlayerLookupResult(std::unique_ptr<QueryResult> result, PInfoData* data);
-    static void HandleDataAfterPlayerLookup(PInfoData *data);
+    static void HandleDataAfterPlayerLookup(PInfoData* data);
     static void HandleDelayedMoneyQuery(std::unique_ptr<QueryResult>, SqlQueryHolder* holder, PInfoData* data);
     // Not thread safe. Must be handled in unsafe callback
     static void HandleAccountInfoResult(std::unique_ptr<QueryResult> result, PInfoData* data);
-    static void HandleResponse(WorldSession* session, PInfoData *data);
+    static void HandleResponse(WorldSession* session, PInfoData* data);
 };
 
 class PlayerSearchHandler
 {
 public:
-    static void HandlePlayerAccountSearchResult(std::unique_ptr<QueryResult>, SqlQueryHolder *holder, int);
+    static void HandlePlayerAccountSearchResult(std::unique_ptr<QueryResult>, SqlQueryHolder* holder, int);
     static void HandlePlayerCharacterLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit);
     static void ShowPlayerListHelper(std::unique_ptr<QueryResult> result, ChatHandler& chatHandler, uint32& count, uint32 limit, bool title);
 };
@@ -121,8 +121,7 @@ typedef std::map<uint32, std::pair<uint32, std::string>> PlayerSearchAccountMap;
 class PlayerSearchQueryHolder : public SqlQueryHolder
 {
 public:
-    PlayerSearchQueryHolder(uint32 accountId, uint32 limit)
-        : SqlQueryHolder(), m_accountId(accountId), m_limit(limit) {}
+    PlayerSearchQueryHolder(uint32 accountId, uint32 limit) : SqlQueryHolder(), m_accountId(accountId), m_limit(limit) {}
 
     uint32 GetLimit() const { return m_limit; }
     uint32 GetAccountId() const { return m_accountId; }
@@ -139,9 +138,7 @@ private:
 class PlayerAccountSearchDisplayTask
 {
 public:
-
-    PlayerAccountSearchDisplayTask(PlayerSearchQueryHolder* queryHolder)
-        : holder(queryHolder) {}
+    PlayerAccountSearchDisplayTask(PlayerSearchQueryHolder* queryHolder) : holder(queryHolder) {}
 
     void operator()();
 
@@ -153,10 +150,9 @@ private:
 class PlayerCharacterLookupDisplayTask
 {
 public:
-    PlayerCharacterLookupDisplayTask(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit)
-        : unsafeResult(std::make_shared<std::unique_ptr<QueryResult>>(std::move(result))), accountId(accountId), limit(limit) {}
+    PlayerCharacterLookupDisplayTask(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit) : unsafeResult(std::make_shared<std::unique_ptr<QueryResult>>(std::move(result))), accountId(accountId), limit(limit) {}
 
-    void operator ()();
+    void operator()();
 
 private:
     // Somehow this class is not moveable when cased to a std::function<void()> (See usage of this function)
@@ -169,10 +165,9 @@ private:
 class AccountSearchDisplayTask
 {
 public:
-    AccountSearchDisplayTask(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit)
-        : unsafeResult(std::make_shared<std::unique_ptr<QueryResult>>(std::move(result))), accountId(accountId), limit(limit) {}
+    AccountSearchDisplayTask(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit) : unsafeResult(std::make_shared<std::unique_ptr<QueryResult>>(std::move(result))), accountId(accountId), limit(limit) {}
 
-    void operator ()();
+    void operator()();
 
 private:
     // Somehow this class is not moveable when cased to a std::function<void()> (See usage of this function)

@@ -1,13 +1,13 @@
 #ifndef MANGOS_COMBAT_BOT_BASE_H
 #define MANGOS_COMBAT_BOT_BASE_H
 
+#include "Player.h"
 #include "PlayerBotAI.h"
 #include "SpellEntry.h"
-#include "Player.h"
 
 struct HealSpellCompare
 {
-    bool operator() (SpellEntry const* const lhs, SpellEntry const* const rhs) const
+    bool operator()(SpellEntry const* const lhs, SpellEntry const* const rhs) const
     {
         uint32 spell1dmg = 0;
         uint32 spell2dmg = 0;
@@ -16,18 +16,18 @@ struct HealSpellCompare
         {
             switch (lhs->Effect[i])
             {
-                case SPELL_EFFECT_HEAL:
-                    spell1dmg += lhs->EffectBasePoints[i];
-                    break;
+            case SPELL_EFFECT_HEAL:
+                spell1dmg += lhs->EffectBasePoints[i];
+                break;
             }
         }
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; i++)
         {
             switch (rhs->Effect[i])
             {
-                case SPELL_EFFECT_HEAL:
-                    spell2dmg += rhs->EffectBasePoints[i];
-                    break;
+            case SPELL_EFFECT_HEAL:
+                spell2dmg += rhs->EffectBasePoints[i];
+                break;
             }
         }
 
@@ -37,7 +37,7 @@ struct HealSpellCompare
 
 struct HealAuraCompare
 {
-    bool operator() (SpellEntry const* const lhs, SpellEntry const* const rhs) const
+    bool operator()(SpellEntry const* const lhs, SpellEntry const* const rhs) const
     {
         uint32 spell1dmg = 0;
         uint32 spell2dmg = 0;
@@ -46,24 +46,24 @@ struct HealAuraCompare
         {
             switch (lhs->Effect[i])
             {
-                case SPELL_EFFECT_APPLY_AURA:
-                case SPELL_EFFECT_PERSISTENT_AREA_AURA:
-                case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
-                    if (lhs->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL)
-                        spell1dmg += lhs->EffectBasePoints[i];
-                    break;
+            case SPELL_EFFECT_APPLY_AURA:
+            case SPELL_EFFECT_PERSISTENT_AREA_AURA:
+            case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
+                if (lhs->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL)
+                    spell1dmg += lhs->EffectBasePoints[i];
+                break;
             }
         }
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; i++)
         {
             switch (rhs->Effect[i])
             {
-                case SPELL_EFFECT_APPLY_AURA:
-                case SPELL_EFFECT_PERSISTENT_AREA_AURA:
-                case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
-                    if (rhs->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL)
-                        spell2dmg += rhs->EffectBasePoints[i];
-                    break;
+            case SPELL_EFFECT_APPLY_AURA:
+            case SPELL_EFFECT_PERSISTENT_AREA_AURA:
+            case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
+                if (rhs->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL)
+                    spell2dmg += rhs->EffectBasePoints[i];
+                break;
             }
         }
 
@@ -74,7 +74,6 @@ struct HealAuraCompare
 class CombatBotBaseAI : public PlayerBotAI
 {
 public:
-
     CombatBotBaseAI() : PlayerBotAI(nullptr)
     {
         for (auto& ptr : m_spells.raw.spells)
@@ -100,7 +99,7 @@ public:
     void EquipRandomGearInEmptySlots();
     void AutoEquipGear(uint32 option);
     void LearnRandomTalents();
-    
+
     uint8 GetAttackersInRangeCount(float range) const;
     Unit* SelectAttackerDifferentFrom(Unit const* pExcept) const;
     Unit* SelectHealTarget(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f) const;
@@ -168,13 +167,13 @@ public:
     {
         switch (playerClass)
         {
-            case CLASS_WARRIOR:
-            case CLASS_PALADIN:
-            case CLASS_ROGUE:
-            case CLASS_HUNTER:
-            case CLASS_SHAMAN:
-            case CLASS_DRUID:
-                return true;
+        case CLASS_WARRIOR:
+        case CLASS_PALADIN:
+        case CLASS_ROGUE:
+        case CLASS_HUNTER:
+        case CLASS_SHAMAN:
+        case CLASS_DRUID:
+            return true;
         }
         return false;
     }
@@ -182,13 +181,13 @@ public:
     {
         switch (playerClass)
         {
-            case CLASS_HUNTER:
-            case CLASS_PRIEST:
-            case CLASS_SHAMAN:
-            case CLASS_MAGE:
-            case CLASS_WARLOCK:
-            case CLASS_DRUID:
-                return true;
+        case CLASS_HUNTER:
+        case CLASS_PRIEST:
+        case CLASS_SHAMAN:
+        case CLASS_MAGE:
+        case CLASS_WARLOCK:
+        case CLASS_DRUID:
+            return true;
         }
         return false;
     }
@@ -196,12 +195,12 @@ public:
     {
         switch (playerClass)
         {
-            case CLASS_WARRIOR:
-            case CLASS_PALADIN:
-            case CLASS_ROGUE:
-            case CLASS_SHAMAN:
-            case CLASS_DRUID:
-                return true;
+        case CLASS_WARRIOR:
+        case CLASS_PALADIN:
+        case CLASS_ROGUE:
+        case CLASS_SHAMAN:
+        case CLASS_DRUID:
+            return true;
         }
         return false;
     }
@@ -209,11 +208,11 @@ public:
     {
         switch (playerClass)
         {
-            case CLASS_WARRIOR:
-            case CLASS_PALADIN:
-            case CLASS_ROGUE:
-            case CLASS_SHAMAN:
-                return true;
+        case CLASS_WARRIOR:
+        case CLASS_PALADIN:
+        case CLASS_ROGUE:
+        case CLASS_SHAMAN:
+            return true;
         }
         return false;
     }
@@ -221,10 +220,10 @@ public:
     {
         switch (playerClass)
         {
-            case CLASS_WARRIOR:
-            case CLASS_PALADIN:
-            case CLASS_SHAMAN:
-                return true;
+        case CLASS_WARRIOR:
+        case CLASS_PALADIN:
+        case CLASS_SHAMAN:
+            return true;
         }
         return false;
     }
@@ -232,10 +231,10 @@ public:
     {
         switch (playerClass)
         {
-            case CLASS_WARRIOR:
-            case CLASS_PALADIN:
-            case CLASS_DRUID:
-                return true;
+        case CLASS_WARRIOR:
+        case CLASS_PALADIN:
+        case CLASS_DRUID:
+            return true;
         }
         return false;
     }
@@ -243,11 +242,11 @@ public:
     {
         switch (playerClass)
         {
-            case CLASS_PALADIN:
-            case CLASS_PRIEST:
-            case CLASS_SHAMAN:
-            case CLASS_DRUID:
-                return true;
+        case CLASS_PALADIN:
+        case CLASS_PRIEST:
+        case CLASS_SHAMAN:
+        case CLASS_DRUID:
+            return true;
         }
         return false;
     }
@@ -255,9 +254,9 @@ public:
     {
         switch (playerClass)
         {
-            case CLASS_ROGUE:
-            case CLASS_DRUID:
-                return true;
+        case CLASS_ROGUE:
+        case CLASS_DRUID:
+            return true;
         }
         return false;
     }
@@ -266,18 +265,18 @@ public:
     {
         switch (me->GetClass())
         {
-            case CLASS_PALADIN:
-                return m_spells.paladin.pHammerOfJustice;
-            case CLASS_MAGE:
-                return m_spells.mage.pPolymorph;
-            case CLASS_PRIEST:
-                return m_spells.priest.pShackleUndead;
-            case CLASS_WARLOCK:
-                return m_spells.warlock.pBanish;
-            case CLASS_ROGUE:
-                return m_spells.rogue.pBlind;
-            case CLASS_DRUID:
-                return m_spells.druid.pHibernate;
+        case CLASS_PALADIN:
+            return m_spells.paladin.pHammerOfJustice;
+        case CLASS_MAGE:
+            return m_spells.mage.pPolymorph;
+        case CLASS_PRIEST:
+            return m_spells.priest.pShackleUndead;
+        case CLASS_WARLOCK:
+            return m_spells.warlock.pBanish;
+        case CLASS_ROGUE:
+            return m_spells.rogue.pBlind;
+        case CLASS_DRUID:
+            return m_spells.druid.pHibernate;
         }
         return nullptr;
     }

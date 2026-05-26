@@ -14,27 +14,27 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
- /*
-  *
-  * This code was written by namreeb (legal@namreeb.org) and is released with
-  * permission as part of vmangos (https://github.com/vmangos/core)
-  *
-  */
+/*
+ *
+ * This code was written by namreeb (legal@namreeb.org) and is released with
+ * permission as part of vmangos (https://github.com/vmangos/core)
+ *
+ */
 
 #include "WardenModuleMgr.hpp"
 #include "WardenModule.hpp"
 
+#include "Log.h"
 #include "Platform/Define.h"
 #include "Policies/SingletonImp.h"
 #include "Util.h"
 #include "World.h"
-#include "Log.h"
 
 #include "IO/Filesystem/FileSystem.h"
 
-#include <vector>
-#include <string>
 #include <fstream>
+#include <string>
+#include <vector>
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_5_1
 
@@ -46,7 +46,7 @@ std::vector<std::string> GetModuleNames(std::string const& moduleDir)
     std::vector<std::string> result = IO::Filesystem::GetAllFilesInFolder(moduleDir, IO::Filesystem::OutputFilePath::FullFilePath);
 
     // Remove all elements that don't end with ".bin"
-    std::function<bool(std::string const& filePath)> MustEndWithBin = [](const std::string &s) { return s.size() < 4 || s.substr(s.size() - 4) != ".bin"; };
+    std::function<bool(std::string const& filePath)> MustEndWithBin = [](const std::string& s) { return s.size() < 4 || s.substr(s.size() - 4) != ".bin"; };
     result.erase(std::remove_if(result.begin(), result.end(), MustEndWithBin), result.end());
 
     return result;

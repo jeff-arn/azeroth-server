@@ -31,8 +31,8 @@
 // Heartbeat thread for the World
 class WorldRunnable
 {
-    public:
-        void operator()();
+public:
+    void operator()();
 };
 #endif
 // @}

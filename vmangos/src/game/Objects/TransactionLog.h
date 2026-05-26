@@ -22,10 +22,7 @@
 struct TransactionPart
 {
     static int const MAX_TRANSACTION_ITEMS = 6;
-    TransactionPart()
-    {
-        memset(this, 0, sizeof(TransactionPart));
-    }
+    TransactionPart() { memset(this, 0, sizeof(TransactionPart)); }
     uint32 lowGuid;
     uint32 money;
     uint32 spell;

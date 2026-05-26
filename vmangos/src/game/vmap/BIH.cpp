@@ -28,7 +28,7 @@ void BIH::buildHierarchy(std::vector<uint32>& tempTree, buildData& dat, BuildSta
     // tempTree.add(0);
 
     // seed bbox
-    AABound gridBox = { bounds.low(), bounds.high() };
+    AABound gridBox = {bounds.low(), bounds.high()};
     AABound nodeBox = gridBox;
     // seed subdivide function
     subdivide(0, dat.numPrims - 1, tempTree, dat, gridBox, nodeBox, 0, 1, stats);
@@ -302,11 +302,11 @@ void BIH::BuildStats::printStats()
     printf("  * Nodes:          %d\n", numNodes);
     printf("  * Leaves:         %d\n", numLeaves);
     printf("  * Objects: min    %d\n", minObjects);
-    printf("             avg    %.2f\n", (float) sumObjects / numLeaves);
-    printf("           avg(n>0) %.2f\n", (float) sumObjects / (numLeaves - numLeavesN[0]));
+    printf("             avg    %.2f\n", (float)sumObjects / numLeaves);
+    printf("           avg(n>0) %.2f\n", (float)sumObjects / (numLeaves - numLeavesN[0]));
     printf("             max    %d\n", maxObjects);
     printf("  * Depth:   min    %d\n", minDepth);
-    printf("             avg    %.2f\n", (float) sumDepth / numLeaves);
+    printf("             avg    %.2f\n", (float)sumDepth / numLeaves);
     printf("             max    %d\n", maxDepth);
     printf("  * Leaves w/: N=0  %3d%%\n", 100 * numLeavesN[0] / numLeaves);
     printf("               N=1  %3d%%\n", 100 * numLeavesN[1] / numLeaves);

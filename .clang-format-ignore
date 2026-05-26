@@ -1,0 +1,5 @@
+# Vendored third-party single-header libraries. Maintained upstream;
+# update by re-vendoring, not by clang-format.
+vmangos/src/shared/json.hpp
+vmangos/src/shared/nonstd/expected.hpp
+vmangos/src/shared/nonstd/optional.hpp

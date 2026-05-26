@@ -25,9 +25,9 @@ EndScriptData */
 npc_blastmaster_emi_shortfuse
 EndContentData */
 
-#include "scriptPCH.h"
-#include "CreatureGroups.h"
 #include "gnomeregan.h"
+#include "CreatureGroups.h"
+#include "scriptPCH.h"
 
 /*######
 ## npc_blastmaster_emi_shortfuse
@@ -35,48 +35,48 @@ EndContentData */
 
 enum
 {
-    SAY_START                   = 4050,
-    SAY_INTRO_1                 = 4051,
-    SAY_INTRO_2                 = 4052,
-    SAY_INTRO_3                 = 4129,
-    SAY_INTRO_4                 = 4130,
-    SAY_LOOK_1                  = 4131,
-    SAY_HEAR_1                  = 4132,
-    SAY_AGGRO_1                 = 5161,
-    SAY_CHARGE_1                = 4133,
-    SAY_CHARGE_2                = 4134,
-    SAY_BLOW_1_10               = 4135,
-    SAY_BLOW_1_5                = 4136,
-    SAY_BLOW_1                  = 4137,
-    SAY_FINISH_1                = 4206,
-    SAY_LOOK_2                  = 4207,
-    SAY_HEAR_2                  = 4208,
-    SAY_CHARGE_3                = 4209,
-    SAY_CHARGE_4                = 4325,
-    SAY_BLOW_2_10               = 4326,
-    SAY_BLOW_2_5                = 4327,
-    SAY_BLOW_SOON               = 4329,
-    SAY_BLOW_2                  = 4137,
-    SAY_FINISH_2                = 4446,
+    SAY_START = 4050,
+    SAY_INTRO_1 = 4051,
+    SAY_INTRO_2 = 4052,
+    SAY_INTRO_3 = 4129,
+    SAY_INTRO_4 = 4130,
+    SAY_LOOK_1 = 4131,
+    SAY_HEAR_1 = 4132,
+    SAY_AGGRO_1 = 5161,
+    SAY_CHARGE_1 = 4133,
+    SAY_CHARGE_2 = 4134,
+    SAY_BLOW_1_10 = 4135,
+    SAY_BLOW_1_5 = 4136,
+    SAY_BLOW_1 = 4137,
+    SAY_FINISH_1 = 4206,
+    SAY_LOOK_2 = 4207,
+    SAY_HEAR_2 = 4208,
+    SAY_CHARGE_3 = 4209,
+    SAY_CHARGE_4 = 4325,
+    SAY_BLOW_2_10 = 4326,
+    SAY_BLOW_2_5 = 4327,
+    SAY_BLOW_SOON = 4329,
+    SAY_BLOW_2 = 4137,
+    SAY_FINISH_2 = 4446,
 
-    SAY_AGGRO_2                 = 5164,
+    SAY_AGGRO_2 = 5164,
 
-    SAY_GRUBBIS_SPAWN           = 4328,
+    SAY_GRUBBIS_SPAWN = 4328,
 
-    GOSSIP_ITEM_START           = 4084,
+    GOSSIP_ITEM_START = 4084,
 
-    SPELL_EXPLOSION_NORTH       = 12158,
-    SPELL_EXPLOSION_SOUTH       = 12159,
-    SPELL_FIREWORKS_RED         = 11542,
+    SPELL_EXPLOSION_NORTH = 12158,
+    SPELL_EXPLOSION_SOUTH = 12159,
+    SPELL_FIREWORKS_RED = 11542,
 
-    //GO_EXPLOSIVE_CHARGE         = 144065, //A USE
+    // GO_EXPLOSIVE_CHARGE         = 144065, //A USE
 
-    MAX_SUMMON_POSITIONS        = 33,
+    MAX_SUMMON_POSITIONS = 33,
 
-    NPC_GRUBBIS                 = 7361,
-    NPC_CHOMPER                 = 6215,
-    NPC_CAVERNDEEP_BURROWER     = 6206,
-    NPC_CAVERNDEEP_AMBUSHER     = 6207
+    NPC_GRUBBIS = 7361,
+    NPC_CHOMPER = 6215,
+    NPC_CAVERNDEEP_BURROWER = 6206,
+    NPC_CAVERNDEEP_AMBUSHER = 6207
 };
 
 struct sSummonInformation
@@ -85,8 +85,7 @@ struct sSummonInformation
     float fX, fY, fZ, fO;
 };
 
-static const sSummonInformation asSummonInfo[MAX_SUMMON_POSITIONS] =
-{
+static const sSummonInformation asSummonInfo[MAX_SUMMON_POSITIONS] = {
     // Entries must be sorted by pack
     // First Cave-In
     {1, NPC_CAVERNDEEP_AMBUSHER, -566.8114f, -111.7036f, -151.1891f, 5.986479f},
@@ -125,8 +124,7 @@ static const sSummonInformation asSummonInfo[MAX_SUMMON_POSITIONS] =
 
     // Grubbis and add
     {7, NPC_GRUBBIS, -476.3761f, -108.1901f, -145.7763f, 1.919862f},
-    {7, NPC_CHOMPER, -473.1326f, -103.0901f, -146.1155f, 2.042035f}
-};
+    {7, NPC_CHOMPER, -473.1326f, -103.0901f, -146.1155f, 2.042035f}};
 
 struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
 {
@@ -149,7 +147,7 @@ struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
 
     void Reset() override
     {
-        m_bDidAggroText = false;                            // Used for 'defend' text, is triggered when the npc is attacked
+        m_bDidAggroText = false; // Used for 'defend' text, is triggered when the npc is attacked
 
         if (!HasEscortState(STATE_ESCORT_ESCORTING))
         {
@@ -178,8 +176,8 @@ struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
     {
         switch (pSummoned->GetEntry())
         {
-            case NPC_CAVERNDEEP_BURROWER:
-            case NPC_CAVERNDEEP_AMBUSHER:
+        case NPC_CAVERNDEEP_BURROWER:
+        case NPC_CAVERNDEEP_AMBUSHER:
             {
                 if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(m_uiPhase > 20 ? GO_CAVE_IN_NORTH : GO_CAVE_IN_SOUTH)))
                 {
@@ -189,9 +187,9 @@ struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
                 }
                 break;
             }
-            case NPC_CHOMPER: //chomper must be invoqued after grubbis
-                pSummoned->JoinCreatureGroup(pSummoned->FindNearestCreature(NPC_GRUBBIS, 10, true), 3, ((pSummoned->GetAngle(m_creature) - m_creature->GetOrientation()) + 2 * M_PI_F), (OPTION_FORMATION_MOVE | OPTION_AGGRO_TOGETHER));
-                break;
+        case NPC_CHOMPER: // chomper must be invoqued after grubbis
+            pSummoned->JoinCreatureGroup(pSummoned->FindNearestCreature(NPC_GRUBBIS, 10, true), 3, ((pSummoned->GetAngle(m_creature) - m_creature->GetOrientation()) + 2 * M_PI_F), (OPTION_FORMATION_MOVE | OPTION_AGGRO_TOGETHER));
+            break;
         }
         m_luiSummonedMobGUIDs.push_back(pSummoned->GetObjectGuid());
     }
@@ -207,10 +205,7 @@ struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
         m_luiSummonedMobGUIDs.remove(pSummoned->GetObjectGuid());
     }
 
-    bool IsPreparingExplosiveCharge()
-    {
-        return m_uiPhase == 11 || m_uiPhase == 13 || m_uiPhase == 26 || m_uiPhase == 28;
-    }
+    bool IsPreparingExplosiveCharge() { return m_uiPhase == 11 || m_uiPhase == 13 || m_uiPhase == 26 || m_uiPhase == 28; }
 
     void MoveInLineOfSight(Unit* pWho) override
     {
@@ -249,9 +244,9 @@ struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
 
         m_pInstance->SetData(TYPE_GRUBBIS, FAIL);
 
-        if (m_bSouthernCaveInOpened)                        // close southern cave-in door
+        if (m_bSouthernCaveInOpened) // close southern cave-in door
             m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_SOUTH));
-        if (m_bNorthernCaveInOpened)                        // close northern cave-in door
+        if (m_bNorthernCaveInOpened) // close northern cave-in door
             m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_NORTH));
 
         for (const auto& guid : m_luiSummonedMobGUIDs)
@@ -277,27 +272,27 @@ struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 10:
-                // Open Southern Cave-In
-                if (m_pInstance && !m_bSouthernCaveInOpened)
-                {
-                    //m_pInstance->DoUseDoorOrButton(GO_CAVE_IN_SOUTH);
-                    m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_SOUTH));
-                    m_bSouthernCaveInOpened = true;
-                }
-                break;
-            case 12:
-                DoScriptText(SAY_CHARGE_1, m_creature);
-                break;
-            case 16:
-                DoScriptText(SAY_CHARGE_3, m_creature);
-                // Open Northern Cave-In
-                if (m_pInstance && !m_bNorthernCaveInOpened)
-                {
-                    m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_NORTH));
-                    m_bNorthernCaveInOpened = true;
-                }
-                break;
+        case 10:
+            // Open Southern Cave-In
+            if (m_pInstance && !m_bSouthernCaveInOpened)
+            {
+                // m_pInstance->DoUseDoorOrButton(GO_CAVE_IN_SOUTH);
+                m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_SOUTH));
+                m_bSouthernCaveInOpened = true;
+            }
+            break;
+        case 12:
+            DoScriptText(SAY_CHARGE_1, m_creature);
+            break;
+        case 16:
+            DoScriptText(SAY_CHARGE_3, m_creature);
+            // Open Northern Cave-In
+            if (m_pInstance && !m_bNorthernCaveInOpened)
+            {
+                m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_NORTH));
+                m_bNorthernCaveInOpened = true;
+            }
+            break;
         }
     }
 
@@ -305,42 +300,42 @@ struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 4:
-                m_uiPhaseTimer = 1000;
-                break;
-            case 9:
-                m_uiPhaseTimer = 2000;
-                break;
-            case 11:
-                m_creature->HandleEmote(EMOTE_STATE_USESTANDING);
-                m_uiPhaseTimer = 15000;
-                break;
-            case 13:
-                m_creature->HandleEmote(EMOTE_STATE_USESTANDING);
-                m_uiPhaseTimer = 10000;
-                break;
-            case 15:
-                SetEscortPaused(true);
-                if (m_pInstance)
-                {
-                    if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_SOUTH)))
-                        m_creature->SetFacingToObject(pDoor);
-                }
-                DoScriptText(SAY_BLOW_1_10, m_creature);
-                m_uiPhaseTimer = 5000;
-                break;
-            case 16:
-                m_creature->HandleEmote(EMOTE_STATE_USESTANDING);
-                m_uiPhaseTimer = 15000;
-                break;
-            case 17:
-                m_creature->HandleEmote(EMOTE_STATE_USESTANDING);
-                m_uiPhaseTimer = 10000;
-                break;
-            case 19:
-                m_uiPhaseTimer = 2000;
-                SetEscortPaused(true);                      // And keep paused from now on!
-                break;
+        case 4:
+            m_uiPhaseTimer = 1000;
+            break;
+        case 9:
+            m_uiPhaseTimer = 2000;
+            break;
+        case 11:
+            m_creature->HandleEmote(EMOTE_STATE_USESTANDING);
+            m_uiPhaseTimer = 15000;
+            break;
+        case 13:
+            m_creature->HandleEmote(EMOTE_STATE_USESTANDING);
+            m_uiPhaseTimer = 10000;
+            break;
+        case 15:
+            SetEscortPaused(true);
+            if (m_pInstance)
+            {
+                if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_SOUTH)))
+                    m_creature->SetFacingToObject(pDoor);
+            }
+            DoScriptText(SAY_BLOW_1_10, m_creature);
+            m_uiPhaseTimer = 5000;
+            break;
+        case 16:
+            m_creature->HandleEmote(EMOTE_STATE_USESTANDING);
+            m_uiPhaseTimer = 15000;
+            break;
+        case 17:
+            m_creature->HandleEmote(EMOTE_STATE_USESTANDING);
+            m_uiPhaseTimer = 10000;
+            break;
+        case 19:
+            m_uiPhaseTimer = 2000;
+            SetEscortPaused(true); // And keep paused from now on!
+            break;
         }
     }
 
@@ -353,248 +348,248 @@ struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
             {
                 switch (m_uiPhase)
                 {
-                    case 1:
-                        DoScriptText(SAY_START, m_creature);
-                        m_creature->SetFactionTemporary(FACTION_ESCORT_N_NEUTRAL_PASSIVE, TEMPFACTION_RESTORE_RESPAWN);
-                        m_creature->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
-                        m_creature->SetUInt32Value(UNIT_DYNAMIC_FLAGS, 0);
-                        m_uiPhaseTimer = 5000;
-                        break;
-                    case 2:
-                        DoScriptText(SAY_INTRO_1, m_creature);
-                        m_uiPhaseTimer = 3500;              // 6s delay, but 2500ms for escortstarting
-                        break;
-                    case 3:
-                        Start(false, m_playerGuid, nullptr, false, false);
-                        m_uiPhaseTimer = 0;
-                        break;
+                case 1:
+                    DoScriptText(SAY_START, m_creature);
+                    m_creature->SetFactionTemporary(FACTION_ESCORT_N_NEUTRAL_PASSIVE, TEMPFACTION_RESTORE_RESPAWN);
+                    m_creature->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
+                    m_creature->SetUInt32Value(UNIT_DYNAMIC_FLAGS, 0);
+                    m_uiPhaseTimer = 5000;
+                    break;
+                case 2:
+                    DoScriptText(SAY_INTRO_1, m_creature);
+                    m_uiPhaseTimer = 3500; // 6s delay, but 2500ms for escortstarting
+                    break;
+                case 3:
+                    Start(false, m_playerGuid, nullptr, false, false);
+                    m_uiPhaseTimer = 0;
+                    break;
 
-                    case 4:                                 // Shortly after reached WP 4
-                        DoScriptText(SAY_INTRO_2, m_creature);
-                        m_uiPhaseTimer = 0;
-                        break;
+                case 4: // Shortly after reached WP 4
+                    DoScriptText(SAY_INTRO_2, m_creature);
+                    m_uiPhaseTimer = 0;
+                    break;
 
-                    case 5:                                 // Shortly after reached WP 9
-                        DoScriptText(SAY_INTRO_3, m_creature);
-                        m_uiPhaseTimer = 6000;
-                        break;
-                    case 6:
-                        DoScriptText(SAY_INTRO_4, m_creature);
-                        m_uiPhaseTimer = 9000;
-                        break;
-                    case 7:
-                        if (m_pInstance)
+                case 5: // Shortly after reached WP 9
+                    DoScriptText(SAY_INTRO_3, m_creature);
+                    m_uiPhaseTimer = 6000;
+                    break;
+                case 6:
+                    DoScriptText(SAY_INTRO_4, m_creature);
+                    m_uiPhaseTimer = 9000;
+                    break;
+                case 7:
+                    if (m_pInstance)
+                    {
+                        if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_SOUTH)))
+                            m_creature->SetFacingToObject(pDoor);
+                    }
+                    m_uiPhaseTimer = 2000;
+                    break;
+                case 8:
+                    DoScriptText(SAY_LOOK_1, m_creature);
+                    m_uiPhaseTimer = 5000;
+                    break;
+                case 9:
+                    DoScriptText(SAY_HEAR_1, m_creature);
+                    m_uiPhaseTimer = 2000;
+                    break;
+                case 10: // Shortly shortly before starting WP 11
+                    DoSummonPack(1);
+                    m_uiPhaseTimer = 0;
+                    break;
+
+                case 11: // 15s after reached WP 11
+                    DoSummonPack(2);
+
+                    // Summon first explosive charge //BCP trop tard ?
+                    if (m_pInstance)
+                        m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_1);
+                    // TEST
+                    // m_creature->SummonGameObject(GO_EXPLOSIVE_CHARGE, -535.2656, -105.9493, -156, 0.717935, 0, 0, 0, 0, 600);//coords?//o: 0.717935
+                    // m_creature->SummonGameObject(GO_EXPLOSIVE_CHARGE, -542.357, -98.06, -155.8473, 5.578764, 0, 0, 0, 0, 600);//coords?//o: 5.578764
+                    //  Remove EMOTE_STATE_USESTANDING state-emote
+                    m_creature->HandleEmote(EMOTE_ONESHOT_NONE);
+
+                    m_uiPhaseTimer = 1;
+                    break;
+                case 12: // Empty Phase, used to store information about set charge
+                    m_uiPhaseTimer = 0;
+                    break;
+
+                case 13: // 10s after reached WP 13
+                    DoSummonPack(3);
+
+                    // Summon second explosive charge //trop tard?
+                    if (m_pInstance)
+                        m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_2);
+                    // Remove EMOTE_STATE_USESTANDING state-emote
+                    m_creature->HandleEmote(EMOTE_ONESHOT_NONE);
+
+                    m_uiPhaseTimer = 11000;
+                    break;
+                case 14: // Empty Phase, used to store information about set charge
+                    m_uiPhaseTimer = 1;
+                    break;
+                case 15: // shortly before starting WP 14
+                    if (Player* pPlayer = m_creature->GetMap()->GetPlayer(m_playerGuid))
+                        m_creature->SetFacingToObject(pPlayer);
+                    DoScriptText(SAY_CHARGE_2, m_creature);
+                    m_uiPhaseTimer = 0;
+                    break;
+
+                case 16: // 5s after reaching WP 15
+                    DoScriptText(SAY_BLOW_1_5, m_creature);
+                    m_uiPhaseTimer = 5000;
+                    break;
+                case 17:
+                    DoScriptText(SAY_BLOW_1, m_creature);
+                    m_uiPhaseTimer = 1000;
+                    break;
+                case 18:
+                    DoCastSpellIfCan(m_creature, SPELL_EXPLOSION_SOUTH);
+                    m_uiPhaseTimer = 500;
+                    break;
+                case 19:
+                    // Close southern cave-in and let charges explode
+                    if (m_pInstance)
+                    {
+                        m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_SOUTH));
+                        m_bSouthernCaveInOpened = false;
+                        m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_USE);
+                    }
+                    m_uiPhaseTimer = 5000;
+                    break;
+                case 20:
+                    m_creature->HandleEmote(EMOTE_ONESHOT_CHEER);
+                    m_uiPhaseTimer = 6000;
+                    break;
+                case 21:
+                    DoScriptText(SAY_FINISH_1, m_creature);
+                    m_uiPhaseTimer = 6000;
+                    break;
+                case 22:
+                    DoScriptText(SAY_LOOK_2, m_creature);
+                    m_uiPhaseTimer = 3000;
+                    break;
+                case 23:
+                    if (m_pInstance)
+                    {
+                        if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_NORTH)))
+                            m_creature->SetFacingToObject(pDoor);
+                    }
+                    m_uiPhaseTimer = 3000;
+                    break;
+                case 24:
+                    DoScriptText(SAY_HEAR_2, m_creature);
+                    m_uiPhaseTimer = 8000;
+                    break;
+                case 25: // shortly before starting WP 16
+                    SetEscortPaused(false);
+                    DoSummonPack(4);
+                    m_uiPhaseTimer = 0;
+                    break;
+
+                case 26: // 15s after reaching WP 16
+                    DoSummonPack(5);
+
+                    // Summon third explosive charge
+                    if (m_pInstance)
+                        m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_3);
+                    // Remove EMOTE_STATE_USESTANDING state-emote
+                    m_creature->HandleEmote(EMOTE_ONESHOT_NONE);
+
+                    m_uiPhaseTimer = 1;
+                    break;
+                case 27: // Empty Phase, used to store information about set charge
+                    m_uiPhaseTimer = 0;
+                    break;
+
+                case 28: // 10s after reaching WP 17
+                    DoSummonPack(6);
+
+                    // Summon forth explosive charge
+                    if (m_pInstance)
+                        m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_4);
+                    // Remove EMOTE_STATE_USESTANDING state-emote
+                    m_creature->HandleEmote(EMOTE_ONESHOT_NONE);
+
+                    m_uiPhaseTimer = 10000;
+                    break;
+                case 29: // Empty Phase, used to store information about set charge
+                    m_uiPhaseTimer = 1;
+                    break;
+                case 30: // shortly before starting WP 18
+                    DoScriptText(SAY_CHARGE_4, m_creature);
+                    m_uiPhaseTimer = 0;
+                    break;
+
+                case 31: // shortly after reaching WP 19
+                    if (m_pInstance)
+                    {
+                        if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_NORTH)))
+                            m_creature->SetFacingToObject(pDoor);
+                    }
+                    DoScriptText(SAY_BLOW_2_10, m_creature);
+                    m_uiPhaseTimer = 5000;
+                    break;
+                case 32:
+                    DoScriptText(SAY_BLOW_2_5, m_creature);
+                    m_uiPhaseTimer = 1000;
+                    break;
+                case 33:
+                    DoSummonPack(7); // Summon Grubbis and add
+                    m_uiPhaseTimer = 1000;
+                    break;
+                case 34:
+                    if (m_pInstance)
+                    {
+                        if (Creature* grubbis = m_creature->FindNearestCreature(NPC_GRUBBIS, 100.0f))
                         {
-                            if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_SOUTH)))
-                                m_creature->SetFacingToObject(pDoor);
+                            DoScriptText(SAY_GRUBBIS_SPAWN, grubbis);
                         }
-                        m_uiPhaseTimer = 2000;
-                        break;
-                    case 8:
-                        DoScriptText(SAY_LOOK_1, m_creature);
-                        m_uiPhaseTimer = 5000;
-                        break;
-                    case 9:
-                        DoScriptText(SAY_HEAR_1, m_creature);
-                        m_uiPhaseTimer = 2000;
-                        break;
-                    case 10:                                // Shortly shortly before starting WP 11
-                        DoSummonPack(1);
-                        m_uiPhaseTimer = 0;
-                        break;
-
-                    case 11:                                // 15s after reached WP 11
-                        DoSummonPack(2);
-
-                        // Summon first explosive charge //BCP trop tard ?
-                        if (m_pInstance)
-                            m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_1);
-                        //TEST
-                        //m_creature->SummonGameObject(GO_EXPLOSIVE_CHARGE, -535.2656, -105.9493, -156, 0.717935, 0, 0, 0, 0, 600);//coords?//o: 0.717935
-                        //m_creature->SummonGameObject(GO_EXPLOSIVE_CHARGE, -542.357, -98.06, -155.8473, 5.578764, 0, 0, 0, 0, 600);//coords?//o: 5.578764
-                        // Remove EMOTE_STATE_USESTANDING state-emote
-                        m_creature->HandleEmote(EMOTE_ONESHOT_NONE);
-
-                        m_uiPhaseTimer = 1;
-                        break;
-                    case 12:                                // Empty Phase, used to store information about set charge
-                        m_uiPhaseTimer = 0;
-                        break;
-
-                    case 13:                                // 10s after reached WP 13
-                        DoSummonPack(3);
-
-                        // Summon second explosive charge //trop tard?
-                        if (m_pInstance)
-                            m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_2);
-                        // Remove EMOTE_STATE_USESTANDING state-emote
-                        m_creature->HandleEmote(EMOTE_ONESHOT_NONE);
-
-                        m_uiPhaseTimer = 11000;
-                        break;
-                    case 14:                                // Empty Phase, used to store information about set charge
-                        m_uiPhaseTimer = 1;
-                        break;
-                    case 15:                                // shortly before starting WP 14
-                        if (Player* pPlayer = m_creature->GetMap()->GetPlayer(m_playerGuid))
-                            m_creature->SetFacingToObject(pPlayer);
-                        DoScriptText(SAY_CHARGE_2, m_creature);
-                        m_uiPhaseTimer = 0;
-                        break;
-
-                    case 16:                                // 5s after reaching WP 15
-                        DoScriptText(SAY_BLOW_1_5, m_creature);
-                        m_uiPhaseTimer = 5000;
-                        break;
-                    case 17:
-                        DoScriptText(SAY_BLOW_1, m_creature);
-                        m_uiPhaseTimer = 1000;
-                        break;
-                    case 18:
-                        DoCastSpellIfCan(m_creature, SPELL_EXPLOSION_SOUTH);
-                        m_uiPhaseTimer = 500;
-                        break;
-                    case 19:
-                        // Close southern cave-in and let charges explode
-                        if (m_pInstance)
-                        {
-                            m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_SOUTH));
-                            m_bSouthernCaveInOpened = false;
-                            m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_USE);
-                        }
-                        m_uiPhaseTimer = 5000;
-                        break;
-                    case 20:
-                        m_creature->HandleEmote(EMOTE_ONESHOT_CHEER);
-                        m_uiPhaseTimer = 6000;
-                        break;
-                    case 21:
-                        DoScriptText(SAY_FINISH_1, m_creature);
-                        m_uiPhaseTimer = 6000;
-                        break;
-                    case 22:
-                        DoScriptText(SAY_LOOK_2, m_creature);
-                        m_uiPhaseTimer = 3000;
-                        break;
-                    case 23:
-                        if (m_pInstance)
-                        {
-                            if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_NORTH)))
-                                m_creature->SetFacingToObject(pDoor);
-                        }
-                        m_uiPhaseTimer = 3000;
-                        break;
-                    case 24:
-                        DoScriptText(SAY_HEAR_2, m_creature);
-                        m_uiPhaseTimer = 8000;
-                        break;
-                    case 25:                                // shortly before starting WP 16
-                        SetEscortPaused(false);
-                        DoSummonPack(4);
-                        m_uiPhaseTimer = 0;
-                        break;
-
-                    case 26:                                // 15s after reaching WP 16
-                        DoSummonPack(5);
-
-                        // Summon third explosive charge
-                        if (m_pInstance)
-                            m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_3);
-                        // Remove EMOTE_STATE_USESTANDING state-emote
-                        m_creature->HandleEmote(EMOTE_ONESHOT_NONE);
-
-                        m_uiPhaseTimer = 1;
-                        break;
-                    case 27:                                // Empty Phase, used to store information about set charge
-                        m_uiPhaseTimer = 0;
-                        break;
-
-                    case 28:                                // 10s after reaching WP 17
-                        DoSummonPack(6);
-
-                        // Summon forth explosive charge
-                        if (m_pInstance)
-                            m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_4);
-                        // Remove EMOTE_STATE_USESTANDING state-emote
-                        m_creature->HandleEmote(EMOTE_ONESHOT_NONE);
-
-                        m_uiPhaseTimer = 10000;
-                        break;
-                    case 29:                                // Empty Phase, used to store information about set charge
-                        m_uiPhaseTimer = 1;
-                        break;
-                    case 30:                                // shortly before starting WP 18
-                        DoScriptText(SAY_CHARGE_4, m_creature);
-                        m_uiPhaseTimer = 0;
-                        break;
-
-                    case 31:                                // shortly after reaching WP 19
-                        if (m_pInstance)
-                        {
-                            if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_NORTH)))
-                                m_creature->SetFacingToObject(pDoor);
-                        }
-                        DoScriptText(SAY_BLOW_2_10, m_creature);
-                        m_uiPhaseTimer = 5000;
-                        break;
-                    case 32:
-                        DoScriptText(SAY_BLOW_2_5, m_creature);
-                        m_uiPhaseTimer = 1000;
-                        break;
-                    case 33:
-                        DoSummonPack(7);                    // Summon Grubbis and add
-                        m_uiPhaseTimer = 1000;
-                        break;
-                    case 34:
-                        if (m_pInstance)
-                        {
-                            if (Creature* grubbis = m_creature->FindNearestCreature(NPC_GRUBBIS, 100.0f))
-                            {
-                                DoScriptText(SAY_GRUBBIS_SPAWN, grubbis);
-                            }
-                        }
-                        m_uiPhaseTimer = 0;
-                        break;
-                    case 35:                                // 1 sek after Death of Grubbis
-                        if (m_pInstance)
-                        {
-                            if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_NORTH)))
-                                m_creature->SetFacingToObject(pDoor);
-                        }
-                        m_creature->HandleEmote(EMOTE_ONESHOT_CHEER);
-                        m_uiPhaseTimer = 5000;
-                        break;
-                    case 36:
-                        DoScriptText(SAY_BLOW_SOON, m_creature);
-                        m_uiPhaseTimer = 5000;
-                        break;
-                    case 37:
-                        DoScriptText(SAY_BLOW_2, m_creature);
-                        m_uiPhaseTimer = 2000;
-                        break;
-                    case 38:
-                        m_creature->HandleEmote(EMOTE_ONESHOT_POINT);
-                        m_uiPhaseTimer = 1000;
-                        break;
-                    case 39:
-                        DoCastSpellIfCan(m_creature, SPELL_EXPLOSION_NORTH);
-                        m_uiPhaseTimer = 500;
-                        break;
-                    case 40:
-                        // Close northern cave-in and let charges explode
-                        if (m_pInstance)
-                        {
-                            m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_NORTH));
-                            m_bNorthernCaveInOpened = false;
-                            m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_USE);
-                        }
-                        m_uiPhaseTimer = 8000;
-                        break;
-                    case 41:
-                        DoCastSpellIfCan(m_creature, SPELL_FIREWORKS_RED);
-                        DoScriptText(SAY_FINISH_2, m_creature);
-                        m_uiPhaseTimer = 0;
-                        break;
+                    }
+                    m_uiPhaseTimer = 0;
+                    break;
+                case 35: // 1 sek after Death of Grubbis
+                    if (m_pInstance)
+                    {
+                        if (GameObject* pDoor = m_creature->GetMap()->GetGameObject(m_pInstance->GetData64(GO_CAVE_IN_NORTH)))
+                            m_creature->SetFacingToObject(pDoor);
+                    }
+                    m_creature->HandleEmote(EMOTE_ONESHOT_CHEER);
+                    m_uiPhaseTimer = 5000;
+                    break;
+                case 36:
+                    DoScriptText(SAY_BLOW_SOON, m_creature);
+                    m_uiPhaseTimer = 5000;
+                    break;
+                case 37:
+                    DoScriptText(SAY_BLOW_2, m_creature);
+                    m_uiPhaseTimer = 2000;
+                    break;
+                case 38:
+                    m_creature->HandleEmote(EMOTE_ONESHOT_POINT);
+                    m_uiPhaseTimer = 1000;
+                    break;
+                case 39:
+                    DoCastSpellIfCan(m_creature, SPELL_EXPLOSION_NORTH);
+                    m_uiPhaseTimer = 500;
+                    break;
+                case 40:
+                    // Close northern cave-in and let charges explode
+                    if (m_pInstance)
+                    {
+                        m_pInstance->DoUseDoorOrButton(m_pInstance->GetData64(GO_CAVE_IN_NORTH));
+                        m_bNorthernCaveInOpened = false;
+                        m_pInstance->SetData(TYPE_EXPLOSIVE_CHARGE, DATA_EXPLOSIVE_CHARGE_USE);
+                    }
+                    m_uiPhaseTimer = 8000;
+                    break;
+                case 41:
+                    DoCastSpellIfCan(m_creature, SPELL_FIREWORKS_RED);
+                    DoScriptText(SAY_FINISH_2, m_creature);
+                    m_uiPhaseTimer = 0;
+                    break;
                 }
                 ++m_uiPhase;
             }
@@ -609,10 +604,7 @@ struct npc_blastmaster_emi_shortfuseAI : public npc_escortAI
     }
 };
 
-CreatureAI* GetAI_npc_blastmaster_emi_shortfuse(Creature* pCreature)
-{
-    return new npc_blastmaster_emi_shortfuseAI(pCreature);
-}
+CreatureAI* GetAI_npc_blastmaster_emi_shortfuse(Creature* pCreature) { return new npc_blastmaster_emi_shortfuseAI(pCreature); }
 
 bool GossipHello_npc_blastmaster_emi_shortfuse(Player* pPlayer, Creature* pCreature)
 {
@@ -651,23 +643,22 @@ bool GossipSelect_npc_blastmaster_emi_shortfuse(Player* pPlayer, Creature* pCrea
 
 enum
 {
-    QUEST_A_FINE_MESS           = 2904,
-    TRIGGER_GNOME_EXIT          = 324,                      // Add scriptlib support for it, atm simply use hardcoded values
+    QUEST_A_FINE_MESS = 2904,
+    TRIGGER_GNOME_EXIT = 324, // Add scriptlib support for it, atm simply use hardcoded values
 
-    SPELL_EXPLOSION             = 27745, //spell de Clank.
+    SPELL_EXPLOSION = 27745, // spell de Clank.
 
-    SAY_KERNOBEE_START          = 3881,
-    SAY_BOMB_START              = 3927,
-    SAY_BOMB_SEE_END            = 3949,
-    SAY_KERNOBEE_SEE_END        = 3948,
-    SAY_KERNOBEE_END            = 3929,
+    SAY_KERNOBEE_START = 3881,
+    SAY_BOMB_START = 3927,
+    SAY_BOMB_SEE_END = 3949,
+    SAY_KERNOBEE_SEE_END = 3948,
+    SAY_KERNOBEE_END = 3929,
 };
 
-static float const aKernobeePositions[3][3] =
-{
-    { -390.82f, 42.34f, -154.795f},                          // I can see the end!
-    { -330.92f, -3.03f, -152.85f},                          // End position
-    { -297.32f, -7.32f, -152.85f}                           // Walk out of the door
+static float const aKernobeePositions[3][3] = {
+    {-390.82f, 42.34f, -154.795f}, // I can see the end!
+    {-330.92f, -3.03f, -152.85f}, // End position
+    {-297.32f, -7.32f, -152.85f} // Walk out of the door
 };
 
 struct npc_kernobeeAI : public FollowerAI
@@ -694,17 +685,17 @@ struct npc_kernobeeAI : public FollowerAI
 
     void UpdateFollowerAI(uint32 const uiDiff) override
     {
-        FollowerAI::UpdateFollowerAI(uiDiff);               // Do combat handling
-        if (nextStep == 5) //HasFollowState(STATE_FOLLOW_COMPLETE)
+        FollowerAI::UpdateFollowerAI(uiDiff); // Do combat handling
+        if (nextStep == 5) // HasFollowState(STATE_FOLLOW_COMPLETE)
         {
             if (m_nextStepTimer < uiDiff)
             {
                 if (Creature* creature = m_creature->GetMap()->GetCreature(bombGuid))
                 {
                     creature->CastSpell(creature, SPELL_EXPLOSION, true);
-                    //creature->ForcedDespawn();
-                    //creature->DisappearAndDie();
-                    //m_creature->DisappearAndDie();
+                    // creature->ForcedDespawn();
+                    // creature->DisappearAndDie();
+                    // m_creature->DisappearAndDie();
                     nextStep = 6;
                     m_nextStepTimer = 200;
                 }
@@ -712,7 +703,7 @@ struct npc_kernobeeAI : public FollowerAI
             else
                 m_nextStepTimer -= uiDiff;
         }
-        else if (nextStep == 6) //HasFollowState(STATE_FOLLOW_COMPLETE)
+        else if (nextStep == 6) // HasFollowState(STATE_FOLLOW_COMPLETE)
         {
             if (m_nextStepTimer < uiDiff)
             {
@@ -734,9 +725,9 @@ struct npc_kernobeeAI : public FollowerAI
         {
             if (m_nextStepTimer < uiDiff)
             {
-                if (m_creature->FindNearestCreature(NPC_ALARM_A_BOMB_2600, 10.0f)) //détecter la bombe a proximité.
+                if (m_creature->FindNearestCreature(NPC_ALARM_A_BOMB_2600, 10.0f)) // détecter la bombe a proximité.
                 {
-                    m_creature->SetWalk(true);//speed influences speed of follower
+                    m_creature->SetWalk(true); // speed influences speed of follower
                     SetFollowPaused(false);
                     m_nextStepTimer = 5 * MINUTE * IN_MILLISECONDS;
                     nextStep = 2;
@@ -754,7 +745,7 @@ struct npc_kernobeeAI : public FollowerAI
                 if (Creature* creature = m_creature->GetMap()->GetCreature(bombGuid))
                 {
                     creature->CastSpell(creature, SPELL_EXPLOSION, true);
-                    nextStep = 6; //skip to they both die.
+                    nextStep = 6; // skip to they both die.
                     m_nextStepTimer = 200;
                 }
             }
@@ -769,7 +760,7 @@ struct npc_kernobeeAI : public FollowerAI
                 {
                     if (bomb->IsWithinDist3d(aKernobeePositions[0][0], aKernobeePositions[0][1], aKernobeePositions[0][2], 2 * INTERACTION_DISTANCE))
                     {
-                        //explosionTimerStarted=true;
+                        // explosionTimerStarted=true;
                         nextStep = 3;
                         m_nextStepTimer = 20000;
                         DoScriptText(SAY_BOMB_SEE_END, bomb);
@@ -794,8 +785,8 @@ struct npc_kernobeeAI : public FollowerAI
                     SetFollowComplete(true);
                     if (Player* pPlayer = GetLeaderForFollower())
                         pPlayer->GroupEventHappens(QUEST_A_FINE_MESS, m_creature);
-                    //m_creature->GetMotionMaster()->MovePoint(1, aKernobeePositions[2][0], aKernobeePositions[2][1], aKernobeePositions[2][2], false);
-                    //m_creature->ForcedDespawn(3000);
+                    // m_creature->GetMotionMaster()->MovePoint(1, aKernobeePositions[2][0], aKernobeePositions[2][1], aKernobeePositions[2][2], false);
+                    // m_creature->ForcedDespawn(3000);
                 }
             }
             m_uiCheckEndposTimer = 200;
@@ -854,13 +845,13 @@ struct npc_kernobeeAI : public FollowerAI
         DoScriptText(SAY_KERNOBEE_START, m_creature);
         m_creature->SetStandState(UNIT_STAND_STATE_STAND);
         m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
-        StartFollow(pPlayer, 0/*FACTION_ESCORT_N_FRIEND_PASSIVE*/, pQuest);
+        StartFollow(pPlayer, 0 /*FACTION_ESCORT_N_FRIEND_PASSIVE*/, pQuest);
         if (bombGuid = ((instance_gnomeregan*)m_creature->GetInstanceData())->GetData64(NPC_ALARM_A_BOMB_2600))
         {
             if (Creature* bomb = m_creature->GetMap()->GetCreature(bombGuid))
             {
                 SetFollowPaused(true);
-                //bomb->SetWalk(false);
+                // bomb->SetWalk(false);
                 m_creature->SetWalk(false);
                 bomb->GetMotionMaster()->MoveFollow(m_creature, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
                 DoScriptText(SAY_BOMB_START, bomb);
@@ -870,10 +861,7 @@ struct npc_kernobeeAI : public FollowerAI
     }
 };
 
-CreatureAI* GetAI_npc_kernobee(Creature* pCreature)
-{
-    return new npc_kernobeeAI(pCreature);
-}
+CreatureAI* GetAI_npc_kernobee(Creature* pCreature) { return new npc_kernobeeAI(pCreature); }
 
 bool QuestAccept_npc_kernobee(Player* pPlayer, Creature* pCreature, Quest const* pQuest)
 {
@@ -890,10 +878,7 @@ struct GnomereganCollectingFalloutScript : public SpellScript
 {
     uint32 chosenEffect = 0;
 
-    void OnInit(Spell* /*spell*/) final
-    {
-        chosenEffect = urand(EFFECT_INDEX_0, EFFECT_INDEX_1);
-    }
+    void OnInit(Spell* /*spell*/) final { chosenEffect = urand(EFFECT_INDEX_0, EFFECT_INDEX_1); }
 
     bool OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const final
     {
@@ -902,10 +887,7 @@ struct GnomereganCollectingFalloutScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_GnomereganCollectingFallout(SpellEntry const*)
-{
-    return new GnomereganCollectingFalloutScript();
-}
+SpellScript* GetScript_GnomereganCollectingFallout(SpellEntry const*) { return new GnomereganCollectingFalloutScript(); }
 
 void AddSC_gnomeregan()
 {

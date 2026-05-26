@@ -31,7 +31,7 @@ struct InstanceCreatureKlls
 {
     uint32 mapId;
     uint32 creatureEntry;
-    std::map<uint32, uint32> killsBySpells; 
+    std::map<uint32, uint32> killsBySpells;
 };
 
 struct InstanceWipes
@@ -60,16 +60,15 @@ public:
 private:
     void Save(uint32 mapId, uint32 creatureEntry, uint32 spellId, uint32 count);
     void Save(uint32 mapId, uint32 creatureEntry, uint32 count);
-    
-    std::map<std::pair<uint32,uint32>,InstanceWipes>        m_instanceWipes;
-    std::map<std::pair<uint32,uint32>,InstanceCreatureKlls> m_instanceCreatureKills;
+
+    std::map<std::pair<uint32, uint32>, InstanceWipes> m_instanceWipes;
+    std::map<std::pair<uint32, uint32>, InstanceCreatureKlls> m_instanceCreatureKills;
     std::map<uint32, uint32> m_instanceCustomCounters;
-    
+
     std::mutex m_wipesMutex;
     std::mutex m_creatureKillsMutex;
     std::mutex m_customCountersMutex;
 };
-
 
 
 #define sInstanceStatistics MaNGOS::Singleton<InstanceStatisticsMgr>::Instance()

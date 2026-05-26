@@ -20,22 +20,22 @@
  */
 
 #include "Common.h"
-#include "WorldPacket.h"
-#include "WorldSession.h"
 #include "Log.h"
 #include "Opcodes.h"
-#include "UpdateData.h"
 #include "Player.h"
+#include "UpdateData.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 void WorldSession::HandleDuelAcceptedOpcode(WorldPacket& recvPacket)
 {
     ObjectGuid guid;
     recvPacket >> guid;
 
-    if (!GetPlayer()->m_duel)                                 // ignore accept from duel-sender
+    if (!GetPlayer()->m_duel) // ignore accept from duel-sender
         return;
 
-    Player* pl       = GetPlayer();
+    Player* pl = GetPlayer();
     Player* plTarget = pl->m_duel->opponent;
 
     if (pl == pl->m_duel->initiator || !plTarget || !plTarget->m_duel || pl == plTarget || pl->m_duel->startTime != 0 || plTarget->m_duel->startTime != 0)
@@ -63,7 +63,7 @@ void WorldSession::HandleDuelCancelledOpcode(WorldPacket& recvPacket)
         if (pPlayer->m_duel->opponent)
             pPlayer->m_duel->opponent->CombatStopWithPets(true);
 
-        pPlayer->CastSpell(GetPlayer(), 7267, true);    // beg
+        pPlayer->CastSpell(GetPlayer(), 7267, true); // beg
         pPlayer->DuelComplete(DUEL_WON);
         return;
     }

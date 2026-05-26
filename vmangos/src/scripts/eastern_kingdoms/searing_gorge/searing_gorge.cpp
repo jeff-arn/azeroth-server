@@ -25,8 +25,8 @@ EndScriptData */
 npc_zamael_lunthistle
 EndContentData */
 
-#include "scriptPCH.h"
 #include "Group.h"
+#include "scriptPCH.h"
 
 /*######
 ## Quest 3566
@@ -34,24 +34,24 @@ EndContentData */
 
 enum ObsidionData
 {
-    QUEST_RISE_OBSIDION     = 3566,
+    QUEST_RISE_OBSIDION = 3566,
 
-    SAY_DORIUS1             = 4393,
-    SAY_DORIUS2             = 4394,
-    SAY_DORIUS3             = 4395,
-    SAY_DORIUS4             = 4396,
-    SAY_DORIUS5             = 4397,
-    SAY_DORIUS6             = 4398,
-    EMOTE_DORIUS7           = 4399,
-    SAY_LATHORIC1           = 4391,
-    SAY_LATHORIC2           = 4392,
+    SAY_DORIUS1 = 4393,
+    SAY_DORIUS2 = 4394,
+    SAY_DORIUS3 = 4395,
+    SAY_DORIUS4 = 4396,
+    SAY_DORIUS5 = 4397,
+    SAY_DORIUS6 = 4398,
+    EMOTE_DORIUS7 = 4399,
+    SAY_LATHORIC1 = 4391,
+    SAY_LATHORIC2 = 4392,
 
-    NPC_DORIUS              = 8421,
-    NPC_LATHORIC_THE_BLACK  = 8391,
-    NPC_OBSIDION            = 8400,
+    NPC_DORIUS = 8421,
+    NPC_LATHORIC_THE_BLACK = 8391,
+    NPC_OBSIDION = 8400,
 
-    SPELL_GROUND_SMASH      = 12734,
-    SPELL_KNOCK_AWAY        = 10101
+    SPELL_GROUND_SMASH = 12734,
+    SPELL_KNOCK_AWAY = 10101
 };
 
 struct npc_obsidionAI : public ScriptedAI
@@ -104,10 +104,7 @@ struct npc_obsidionAI : public ScriptedAI
             Reset();
     }
 
-    void JustRespawned() override
-    {
-        Reset();
-    }
+    void JustRespawned() override { Reset(); }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -119,7 +116,7 @@ struct npc_obsidionAI : public ScriptedAI
         {
             if (m_nextText == SAY_LATHORIC1)
             {
-               if (Creature* dorius = m_creature->GetMap()->GetCreature(m_Dorius))
+                if (Creature* dorius = m_creature->GetMap()->GetCreature(m_Dorius))
                     if (dorius->GetEntry() != NPC_LATHORIC_THE_BLACK)
                         dorius->UpdateEntry(NPC_LATHORIC_THE_BLACK);
             }
@@ -134,7 +131,7 @@ struct npc_obsidionAI : public ScriptedAI
                     if (m_nextText > SAY_DORIUS6)
                         m_nextText = SAY_LATHORIC1;
                     if (m_nextText == SAY_DORIUS1)
-                        m_nextText += 10; 
+                        m_nextText += 10;
                     m_uiTalkTimer = 6000;
                 }
                 else
@@ -221,10 +218,7 @@ bool QuestAccept_npc_dying_archaeologist(Player* pPlayer, Creature* pCreature, Q
     return false;
 }
 
-CreatureAI* GetAI_npc_dorius(Creature* pCreature)
-{
-    return new npc_obsidionAI(pCreature);
-}
+CreatureAI* GetAI_npc_dorius(Creature* pCreature) { return new npc_obsidionAI(pCreature); }
 
 void AddSC_searing_gorge()
 {

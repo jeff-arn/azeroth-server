@@ -18,10 +18,10 @@
 #ifndef _TICKETMGR_H
 #define _TICKETMGR_H
 
-#include "SharedDefines.h"
-#include "ObjectGuid.h"
-#include <string>
 #include <memory>
+#include <string>
+#include "ObjectGuid.h"
+#include "SharedDefines.h"
 
 class Player;
 class ChatHandler;
@@ -34,23 +34,23 @@ class WorldSession;
 enum GMTicketSystemStatus
 {
     GMTICKET_QUEUE_STATUS_DISABLED = 0,
-    GMTICKET_QUEUE_STATUS_ENABLED  = 1
+    GMTICKET_QUEUE_STATUS_ENABLED = 1
 };
 
 enum GMTicketStatus
 {
-    GMTICKET_STATUS_HASTEXT                      = 0x06,
-    GMTICKET_STATUS_DEFAULT                      = 0x0A
+    GMTICKET_STATUS_HASTEXT = 0x06,
+    GMTICKET_STATUS_DEFAULT = 0x0A
 };
 
 enum GMTicketResponse
 {
-    GMTICKET_RESPONSE_ALREADY_EXIST               = 1,
-    GMTICKET_RESPONSE_CREATE_SUCCESS              = 2,
-    GMTICKET_RESPONSE_CREATE_ERROR                = 3,
-    GMTICKET_RESPONSE_UPDATE_SUCCESS              = 4,
-    GMTICKET_RESPONSE_UPDATE_ERROR                = 5,
-    GMTICKET_RESPONSE_TICKET_DELETED              = 9
+    GMTICKET_RESPONSE_ALREADY_EXIST = 1,
+    GMTICKET_RESPONSE_CREATE_SUCCESS = 2,
+    GMTICKET_RESPONSE_CREATE_ERROR = 3,
+    GMTICKET_RESPONSE_UPDATE_SUCCESS = 4,
+    GMTICKET_RESPONSE_UPDATE_ERROR = 5,
+    GMTICKET_RESPONSE_TICKET_DELETED = 9
 };
 
 // from Blizzard LUA:
@@ -60,17 +60,17 @@ enum GMTicketResponse
 // 3 is a custom value and should never actually be sent
 enum GMTicketEscalationStatus
 {
-    TICKET_UNASSIGNED                             = 0,
-    TICKET_ASSIGNED                               = 1,
-    TICKET_IN_ESCALATION_QUEUE                    = 2,
-    TICKET_ESCALATED_ASSIGNED                     = 3
+    TICKET_UNASSIGNED = 0,
+    TICKET_ASSIGNED = 1,
+    TICKET_IN_ESCALATION_QUEUE = 2,
+    TICKET_ESCALATED_ASSIGNED = 3
 };
 
 // from blizzard lua
 enum GMTicketOpenedByGMStatus
 {
-    GMTICKET_OPENEDBYGM_STATUS_NOT_OPENED = 0,      // ticket has never been opened by a gm
-    GMTICKET_OPENEDBYGM_STATUS_OPENED     = 1       // ticket has been opened by a gm
+    GMTICKET_OPENEDBYGM_STATUS_NOT_OPENED = 0, // ticket has never been opened by a gm
+    GMTICKET_OPENEDBYGM_STATUS_OPENED = 1 // ticket has been opened by a gm
 };
 
 enum LagReportType
@@ -152,6 +152,7 @@ public:
 
     void SetNeededSecurityLevel(uint8 sec) { m_securityNeeded = sec; }
     uint8 GetNeededSecurityLevel() const { return m_securityNeeded; }
+
 private:
     uint32 m_id = 0;
     ObjectGuid m_playerGuid;
@@ -268,7 +269,7 @@ public:
 protected:
     GmTicketList _ticketList;
 
-    bool   _status;
+    bool _status;
     uint32 _lastTicketId;
     uint32 _lastSurveyId;
     uint32 _openTicketCount;

@@ -24,30 +24,28 @@
 
 class Creature;
 
-template < class T >
+template <class T>
 class CyclicMovementGenerator;
 
 template <>
-class CyclicMovementGenerator<Creature>
-: public MovementGeneratorMedium< Creature, CyclicMovementGenerator<Creature> >
+class CyclicMovementGenerator<Creature> : public MovementGeneratorMedium<Creature, CyclicMovementGenerator<Creature>>
 {
-    public:
+public:
+    CyclicMovementGenerator(Creature&) : i_path(nullptr), m_PathOrigin(PATH_NO_PATH) {}
+    ~CyclicMovementGenerator() { i_path = nullptr; }
 
-        CyclicMovementGenerator(Creature &) : i_path(nullptr), m_PathOrigin(PATH_NO_PATH) { }
-        ~CyclicMovementGenerator() { i_path = nullptr; }
+    void InitializeWaypointPath(Creature& creature, WaypointPathOrigin wpSource, uint32 overwriteGuid, uint32 overwriteEntry);
+    void Initialize(Creature&);
+    void Finalize(Creature&);
+    void Interrupt(Creature&);
+    void Reset(Creature&);
+    bool Update(Creature&, uint32 const&);
+    MovementGeneratorType GetMovementGeneratorType() const { return CYCLIC_MOTION_TYPE; }
 
-        void InitializeWaypointPath(Creature& creature, WaypointPathOrigin wpSource, uint32 overwriteGuid, uint32 overwriteEntry);
-        void Initialize(Creature &);
-        void Finalize(Creature &);
-        void Interrupt(Creature &);
-        void Reset(Creature &);
-        bool Update(Creature &, uint32 const&);
-        MovementGeneratorType GetMovementGeneratorType() const { return CYCLIC_MOTION_TYPE; }
-
-    private:
-        void LoadPath(uint32 guid, uint32 entry, WaypointPathOrigin wpOrigin);
-        void _setTargetLocation(Creature &);
-        WaypointPath const* i_path;
-        WaypointPathOrigin m_PathOrigin;
+private:
+    void LoadPath(uint32 guid, uint32 entry, WaypointPathOrigin wpOrigin);
+    void _setTargetLocation(Creature&);
+    WaypointPath const* i_path;
+    WaypointPathOrigin m_PathOrigin;
 };
 #endif

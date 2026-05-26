@@ -14,9 +14,9 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
-#include "molten_core.h"
 #include "Utilities/EventMap.h"
+#include "molten_core.h"
+#include "scriptPCH.h"
 
 enum Golemagg : uint32
 {
@@ -26,14 +26,14 @@ enum Golemagg : uint32
     // SPELL_DOUBLE_ATTACK       = 18943,
 
     // Spells
-    SPELL_PYROBLAST      = 20228,
-    SPELL_EARTHQUAKE     = 19798,
+    SPELL_PYROBLAST = 20228,
+    SPELL_EARTHQUAKE = 19798,
     SPELL_GOLEMAGG_TRUST = 20553,
-    SPELL_ATTRACK_RAGER  = 20544,
+    SPELL_ATTRACK_RAGER = 20544,
 
     // Events
-    EVENT_PYROBLAST      = 1,
-    EVENT_EARTHQUAKE     = 2,
+    EVENT_PYROBLAST = 1,
+    EVENT_EARTHQUAKE = 2,
     EVENT_GOLEMAGG_TRUST = 3
 };
 
@@ -163,7 +163,7 @@ struct boss_golemaggAI : public ScriptedAI
 
     void ScheduleCombatEvents()
     {
-        m_CombatEvents.ScheduleEvent(EVENT_PYROBLAST,      Seconds(7));
+        m_CombatEvents.ScheduleEvent(EVENT_PYROBLAST, Seconds(7));
         m_CombatEvents.ScheduleEvent(EVENT_GOLEMAGG_TRUST, Seconds(10));
     }
 
@@ -173,7 +173,7 @@ struct boss_golemaggAI : public ScriptedAI
         {
             switch (eventId)
             {
-                case EVENT_PYROBLAST:
+            case EVENT_PYROBLAST:
                 {
                     // Golemagg Pyroblasts a random player,
                     // dealing Fire damage and leaving an additional Fire DOT on them.
@@ -190,7 +190,7 @@ struct boss_golemaggAI : public ScriptedAI
                     m_CombatEvents.Repeat(Seconds(1));
                     return;
                 }
-                case EVENT_EARTHQUAKE:
+            case EVENT_EARTHQUAKE:
                 {
                     if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_EARTHQUAKE) == CAST_OK)
                     {
@@ -202,7 +202,7 @@ struct boss_golemaggAI : public ScriptedAI
                     m_CombatEvents.Repeat(Seconds(1));
                     return;
                 }
-                case EVENT_GOLEMAGG_TRUST:
+            case EVENT_GOLEMAGG_TRUST:
                 {
                     if (DoCastSpellIfCan(m_creature, SPELL_GOLEMAGG_TRUST) == CAST_OK)
                     {
@@ -218,24 +218,21 @@ struct boss_golemaggAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_golemagg(Creature* pCreature)
-{
-    return new boss_golemaggAI(pCreature);
-}
+CreatureAI* GetAI_boss_golemagg(Creature* pCreature) { return new boss_golemaggAI(pCreature); }
 
 enum CoreRager : uint32
 {
     // Spells
     // SPELL_TRASH    = 3391, // Custom?
-    SPELL_MANGLE      = 19820,
-    SPELL_FULL_HEAL   = 17683,
+    SPELL_MANGLE = 19820,
+    SPELL_FULL_HEAL = 17683,
 
     // Texts
-    EMOTE_LOWHP       = 7865,
+    EMOTE_LOWHP = 7865,
 
     // Events
-    EVENT_MANGLE      = 1,
-    EVENT_TRASH       = 2,
+    EVENT_MANGLE = 1,
+    EVENT_TRASH = 2,
     EVENT_CHECK_LEASH = 3
 };
 
@@ -250,15 +247,9 @@ struct mob_core_ragerAI : public ScriptedAI
     EventMap m_CombatEvents;
     ScriptedInstance* m_pInstance;
 
-    void Reset() override
-    {
-        m_CombatEvents.Reset();
-    }
+    void Reset() override { m_CombatEvents.Reset(); }
 
-    void Aggro(Unit*) override
-    {
-        ScheduleCombatEvents();
-    }
+    void Aggro(Unit*) override { ScheduleCombatEvents(); }
 
     void DamageTaken(Unit*, uint32& uiDamage) override
     {
@@ -300,7 +291,7 @@ struct mob_core_ragerAI : public ScriptedAI
     void ScheduleCombatEvents()
     {
         // m_CombatEvents.ScheduleEvent(EVENT_TRASH,    Seconds(1));
-        m_CombatEvents.ScheduleEvent(EVENT_MANGLE,      Seconds(7));
+        m_CombatEvents.ScheduleEvent(EVENT_MANGLE, Seconds(7));
         m_CombatEvents.ScheduleEvent(EVENT_CHECK_LEASH, Seconds(3));
     }
 
@@ -310,19 +301,19 @@ struct mob_core_ragerAI : public ScriptedAI
         {
             switch (eventId)
             {
-                /*
-                case EVENT_TRASH:
+            /*
+            case EVENT_TRASH:
+            {
+                if (!m_creature->HasAura(SPELL_TRASH))
                 {
-                    if (!m_creature->HasAura(SPELL_TRASH))
-                    {
-                        m_creature->CastSpell(m_creature, SPELL_TRASH, true);
-                    }
-
-                    m_CombatEvents.Repeat(Seconds(urand(1, 10)));
-                    return;
+                    m_creature->CastSpell(m_creature, SPELL_TRASH, true);
                 }
-                */
-                case EVENT_MANGLE:
+
+                m_CombatEvents.Repeat(Seconds(urand(1, 10)));
+                return;
+            }
+            */
+            case EVENT_MANGLE:
                 {
                     if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MANGLE) == CAST_OK)
                     {
@@ -334,7 +325,7 @@ struct mob_core_ragerAI : public ScriptedAI
                     m_CombatEvents.Repeat(Seconds(1));
                     return;
                 }
-                case EVENT_CHECK_LEASH:
+            case EVENT_CHECK_LEASH:
                 {
                     if (Creature* pGolemagg = m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_GOLEMAGG)))
                     {
@@ -355,10 +346,7 @@ struct mob_core_ragerAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_mob_core_rager(Creature* pCreature)
-{
-    return new mob_core_ragerAI(pCreature);
-}
+CreatureAI* GetAI_mob_core_rager(Creature* pCreature) { return new mob_core_ragerAI(pCreature); }
 
 // 20556 - Golemagg's Trust
 struct GolemaggsTrustScript : public AuraScript
@@ -389,10 +377,7 @@ struct GolemaggsTrustScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_GolemaggsTrust(SpellEntry const*)
-{
-    return new GolemaggsTrustScript();
-}
+AuraScript* GetScript_GolemaggsTrust(SpellEntry const*) { return new GolemaggsTrustScript(); }
 
 void AddSC_boss_golemagg()
 {

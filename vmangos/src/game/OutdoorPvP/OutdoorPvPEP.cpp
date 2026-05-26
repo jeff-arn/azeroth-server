@@ -16,20 +16,19 @@
  */
 
 #include "OutdoorPvP/OutdoorPvPEP.h"
-#include "WorldPacket.h"
-#include "Player.h"
-#include "GameObject.h"
-#include "ObjectMgr.h"
-#include "ZoneScriptMgr.h"
-#include "Language.h"
-#include "World.h"
-#include "WaypointManager.h"
 #include "CreatureGroups.h"
+#include "GameObject.h"
+#include "Language.h"
+#include "ObjectMgr.h"
+#include "Player.h"
+#include "WaypointManager.h"
+#include "World.h"
+#include "WorldPacket.h"
+#include "ZoneScriptMgr.h"
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_11_2
 
-OPvPCapturePointEP_EWT::OPvPCapturePointEP_EWT(OutdoorPvP* pvp)
-    : OPvPCapturePoint(pvp), m_TowerState(TOWERSTATE_NEUTRAL)
+OPvPCapturePointEP_EWT::OPvPCapturePointEP_EWT(OutdoorPvP* pvp) : OPvPCapturePoint(pvp), m_TowerState(TOWERSTATE_NEUTRAL)
 {
     SetCapturePointData(EP_CapturePoints[EASTWALL_TOWER].entry, EP_CapturePoints[EASTWALL_TOWER].map, EP_CapturePoints[EASTWALL_TOWER].x, EP_CapturePoints[EASTWALL_TOWER].y, EP_CapturePoints[EASTWALL_TOWER].z, EP_CapturePoints[EASTWALL_TOWER].o, EP_CapturePoints[EASTWALL_TOWER].rot0, EP_CapturePoints[EASTWALL_TOWER].rot1, EP_CapturePoints[EASTWALL_TOWER].rot2, EP_CapturePoints[EASTWALL_TOWER].rot3);
     AddObject(EASTWALL_TOWER_BANNER_1, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].entry, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].map, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].x, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].y, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].z, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].o, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].rot0, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].rot1, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].rot2, EP_TowerFlags[EASTWALL_TOWER_BANNER_1].rot3);
@@ -54,7 +53,7 @@ void OPvPCapturePointEP_EWT::ChangeState()
 
     switch (m_state)
     {
-        case OBJECTIVESTATE_ALLIANCE:
+    case OBJECTIVESTATE_ALLIANCE:
         {
             m_TowerState = TOWERSTATE_ALLIANCE;
             PlaySound(SOUND_PVPVICTORYALLIANCE);
@@ -62,7 +61,7 @@ void OPvPCapturePointEP_EWT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_HORDE:
+    case OBJECTIVESTATE_HORDE:
         {
             m_TowerState = TOWERSTATE_HORDE;
             PlaySound(SOUND_PVPVICTORYHORDE);
@@ -70,7 +69,7 @@ void OPvPCapturePointEP_EWT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_ALLIANCE_PROGRESSING:
+    case OBJECTIVESTATE_ALLIANCE_PROGRESSING:
         {
             UpdateBannerArt(ARTKIT_ALLIANCE, ANIMATION_ALLIANCE);
 
@@ -93,7 +92,7 @@ void OPvPCapturePointEP_EWT::ChangeState()
             }
             break;
         }
-        case OBJECTIVESTATE_HORDE_PROGRESSING:
+    case OBJECTIVESTATE_HORDE_PROGRESSING:
         {
             UpdateBannerArt(ARTKIT_HORDE, ANIMATION_HORDE);
 
@@ -116,7 +115,7 @@ void OPvPCapturePointEP_EWT::ChangeState()
             }
             break;
         }
-        case OBJECTIVESTATE_NEUTRAL:
+    case OBJECTIVESTATE_NEUTRAL:
         {
             m_TowerState = TOWERSTATE_NEUTRAL;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
@@ -124,7 +123,7 @@ void OPvPCapturePointEP_EWT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_ALLIANCE_CONTESTED:
+    case OBJECTIVESTATE_ALLIANCE_CONTESTED:
         {
             m_TowerState = TOWERSTATE_ALLIANCE_CONTESTED;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
@@ -132,7 +131,7 @@ void OPvPCapturePointEP_EWT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_HORDE_CONTESTED:
+    case OBJECTIVESTATE_HORDE_CONTESTED:
         {
             m_TowerState = TOWERSTATE_HORDE_CONTESTED;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
@@ -150,10 +149,7 @@ void OPvPCapturePointEP_EWT::ChangeState()
     UpdateTowerState();
 }
 
-void OPvPCapturePointEP_EWT::SendChangePhase()
-{
-    SendUpdateWorldState(WS_UI_TOWER_SLIDER_POSITION, m_valuePct);
-}
+void OPvPCapturePointEP_EWT::SendChangePhase() { SendUpdateWorldState(WS_UI_TOWER_SLIDER_POSITION, m_valuePct); }
 
 uint32 OPvPCapturePointEP_EWT::FillInitialWorldStates(WorldPacket& data)
 {
@@ -226,10 +222,7 @@ bool OPvPCapturePointEP_EWT::HandlePlayerEnter(Player* pPlayer)
     return false;
 }
 
-void OPvPCapturePointEP_EWT::HandlePlayerLeave(Player* pPlayer)
-{
-    OPvPCapturePoint::HandlePlayerLeave(pPlayer);
-}
+void OPvPCapturePointEP_EWT::HandlePlayerLeave(Player* pPlayer) { OPvPCapturePoint::HandlePlayerLeave(pPlayer); }
 
 void OPvPCapturePointEP_EWT::RemoveSquad()
 {
@@ -241,28 +234,28 @@ void OPvPCapturePointEP_EWT::RemoveSquad()
 
 void OPvPCapturePointEP_EWT::SummonSquadAtEastWallTower(uint32 team)
 {
-    const creature_type * ct = nullptr;
+    const creature_type* ct = nullptr;
     if (team == ALLIANCE)
         ct = EP_EWT_Summons_A;
     else
         ct = EP_EWT_Summons_H;
-    
+
     for (uint8 i = 0; i < EP_SummonsNum; ++i)
     {
         DelCreature(i);
-    
+
         bool asActiveObject = false;
         switch (ct[i].entry)
         {
-            case NPC_LORDAERON_COMMANDER:
-            case NPC_LORDAERON_SOLDIER:
-            case NPC_LORDAERON_VETERAN:
-            case NPC_LORDAERON_FIGHTER:
-                asActiveObject = true;
+        case NPC_LORDAERON_COMMANDER:
+        case NPC_LORDAERON_SOLDIER:
+        case NPC_LORDAERON_VETERAN:
+        case NPC_LORDAERON_FIGHTER:
+            asActiveObject = true;
         }
-    
+
         AddCreature(i, ct[i].entry, ct[i].teamval, ct[i].map, ct[i].x, ct[i].y, ct[i].z, ct[i].o, 0, asActiveObject);
-    
+
         if (ct[i].entry == NPC_LORDAERON_SOLDIER || ct[i].entry == NPC_LORDAERON_FIGHTER)
         {
             if (Creature* pCreature = m_PvP->GetCreature(m_Creatures[i]))
@@ -274,8 +267,7 @@ void OPvPCapturePointEP_EWT::SummonSquadAtEastWallTower(uint32 team)
     }
 }
 
-OPvPCapturePointEP_NPT::OPvPCapturePointEP_NPT(OutdoorPvP *pvp)
-    : OPvPCapturePoint(pvp), m_TowerState(TOWERSTATE_NEUTRAL)
+OPvPCapturePointEP_NPT::OPvPCapturePointEP_NPT(OutdoorPvP* pvp) : OPvPCapturePoint(pvp), m_TowerState(TOWERSTATE_NEUTRAL)
 {
     SetCapturePointData(EP_CapturePoints[NORTHPASS_TOWER].entry, EP_CapturePoints[NORTHPASS_TOWER].map, EP_CapturePoints[NORTHPASS_TOWER].x, EP_CapturePoints[NORTHPASS_TOWER].y, EP_CapturePoints[NORTHPASS_TOWER].z, EP_CapturePoints[NORTHPASS_TOWER].o, EP_CapturePoints[NORTHPASS_TOWER].rot0, EP_CapturePoints[NORTHPASS_TOWER].rot1, EP_CapturePoints[NORTHPASS_TOWER].rot2, EP_CapturePoints[NORTHPASS_TOWER].rot3);
     AddObject(NORTHPASS_TOWER_BANNER_1, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].entry, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].map, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].x, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].y, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].z, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].o, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].rot0, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].rot1, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].rot2, EP_TowerFlags[NORTHPASS_TOWER_BANNER_1].rot3);
@@ -302,7 +294,7 @@ void OPvPCapturePointEP_NPT::ChangeState()
 
     switch (m_state)
     {
-        case OBJECTIVESTATE_ALLIANCE:
+    case OBJECTIVESTATE_ALLIANCE:
         {
             m_TowerState = TOWERSTATE_ALLIANCE;
             PlaySound(SOUND_PVPVICTORYALLIANCE);
@@ -311,7 +303,7 @@ void OPvPCapturePointEP_NPT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_HORDE:
+    case OBJECTIVESTATE_HORDE:
         {
             m_TowerState = TOWERSTATE_HORDE;
             PlaySound(SOUND_PVPVICTORYHORDE);
@@ -320,7 +312,7 @@ void OPvPCapturePointEP_NPT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_ALLIANCE_PROGRESSING:
+    case OBJECTIVESTATE_ALLIANCE_PROGRESSING:
         {
             UpdateBannerArt(ARTKIT_ALLIANCE, ANIMATION_ALLIANCE);
             SummonCuringShrine(ALLIANCE);
@@ -343,7 +335,7 @@ void OPvPCapturePointEP_NPT::ChangeState()
             }
             break;
         }
-        case OBJECTIVESTATE_HORDE_PROGRESSING:
+    case OBJECTIVESTATE_HORDE_PROGRESSING:
         {
             UpdateBannerArt(ARTKIT_HORDE, ANIMATION_HORDE);
             SummonCuringShrine(HORDE);
@@ -366,21 +358,21 @@ void OPvPCapturePointEP_NPT::ChangeState()
             }
             break;
         }
-        case OBJECTIVESTATE_NEUTRAL:
+    case OBJECTIVESTATE_NEUTRAL:
         {
             m_TowerState = TOWERSTATE_NEUTRAL;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
 
             break;
         }
-        case OBJECTIVESTATE_ALLIANCE_CONTESTED:
+    case OBJECTIVESTATE_ALLIANCE_CONTESTED:
         {
             m_TowerState = TOWERSTATE_ALLIANCE_CONTESTED;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
 
             break;
         }
-        case OBJECTIVESTATE_HORDE_CONTESTED:
+    case OBJECTIVESTATE_HORDE_CONTESTED:
         {
             m_TowerState = TOWERSTATE_HORDE_CONTESTED;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
@@ -397,10 +389,7 @@ void OPvPCapturePointEP_NPT::ChangeState()
     UpdateTowerState();
 }
 
-void OPvPCapturePointEP_NPT::SendChangePhase()
-{
-    SendUpdateWorldState(WS_UI_TOWER_SLIDER_POSITION, m_valuePct);
-}
+void OPvPCapturePointEP_NPT::SendChangePhase() { SendUpdateWorldState(WS_UI_TOWER_SLIDER_POSITION, m_valuePct); }
 
 uint32 OPvPCapturePointEP_NPT::FillInitialWorldStates(WorldPacket& data)
 {
@@ -473,10 +462,7 @@ bool OPvPCapturePointEP_NPT::HandlePlayerEnter(Player* pPlayer)
     return false;
 }
 
-void OPvPCapturePointEP_NPT::HandlePlayerLeave(Player* pPlayer)
-{
-    OPvPCapturePoint::HandlePlayerLeave(pPlayer);
-}
+void OPvPCapturePointEP_NPT::HandlePlayerLeave(Player* pPlayer) { OPvPCapturePoint::HandlePlayerLeave(pPlayer); }
 
 void OPvPCapturePointEP_NPT::SummonCuringShrine(uint32 team)
 {
@@ -488,8 +474,7 @@ void OPvPCapturePointEP_NPT::SummonCuringShrine(uint32 team)
     }
 }
 
-OPvPCapturePointEP_CGT::OPvPCapturePointEP_CGT(OutdoorPvP *pvp)
-    : OPvPCapturePoint(pvp), m_TowerState(TOWERSTATE_NEUTRAL)
+OPvPCapturePointEP_CGT::OPvPCapturePointEP_CGT(OutdoorPvP* pvp) : OPvPCapturePoint(pvp), m_TowerState(TOWERSTATE_NEUTRAL)
 {
     UnLinkGraveYard();
     SetCapturePointData(EP_CapturePoints[CROWN_GUARD_TOWER].entry, EP_CapturePoints[CROWN_GUARD_TOWER].map, EP_CapturePoints[CROWN_GUARD_TOWER].x, EP_CapturePoints[CROWN_GUARD_TOWER].y, EP_CapturePoints[CROWN_GUARD_TOWER].z, EP_CapturePoints[CROWN_GUARD_TOWER].o, EP_CapturePoints[CROWN_GUARD_TOWER].rot0, EP_CapturePoints[CROWN_GUARD_TOWER].rot1, EP_CapturePoints[CROWN_GUARD_TOWER].rot2, EP_CapturePoints[CROWN_GUARD_TOWER].rot3);
@@ -517,7 +502,7 @@ void OPvPCapturePointEP_CGT::ChangeState()
 
     switch (m_state)
     {
-        case OBJECTIVESTATE_ALLIANCE:
+    case OBJECTIVESTATE_ALLIANCE:
         {
             m_TowerState = TOWERSTATE_ALLIANCE;
             PlaySound(SOUND_PVPVICTORYALLIANCE);
@@ -527,7 +512,7 @@ void OPvPCapturePointEP_CGT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_HORDE:
+    case OBJECTIVESTATE_HORDE:
         {
             m_TowerState = TOWERSTATE_HORDE;
             PlaySound(SOUND_PVPVICTORYHORDE);
@@ -537,7 +522,7 @@ void OPvPCapturePointEP_CGT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_ALLIANCE_PROGRESSING:
+    case OBJECTIVESTATE_ALLIANCE_PROGRESSING:
         {
             SummonBannerAura(ALLIANCE);
             LinkGraveYard(ALLIANCE);
@@ -562,7 +547,7 @@ void OPvPCapturePointEP_CGT::ChangeState()
             }
             break;
         }
-        case OBJECTIVESTATE_HORDE_PROGRESSING:
+    case OBJECTIVESTATE_HORDE_PROGRESSING:
         {
             SummonBannerAura(HORDE);
             LinkGraveYard(HORDE);
@@ -587,21 +572,21 @@ void OPvPCapturePointEP_CGT::ChangeState()
             }
             break;
         }
-        case OBJECTIVESTATE_NEUTRAL:
+    case OBJECTIVESTATE_NEUTRAL:
         {
             m_TowerState = TOWERSTATE_NEUTRAL;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
 
             break;
         }
-        case OBJECTIVESTATE_ALLIANCE_CONTESTED:
+    case OBJECTIVESTATE_ALLIANCE_CONTESTED:
         {
             m_TowerState = TOWERSTATE_ALLIANCE_CONTESTED;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
 
             break;
         }
-        case OBJECTIVESTATE_HORDE_CONTESTED:
+    case OBJECTIVESTATE_HORDE_CONTESTED:
         {
             m_TowerState = TOWERSTATE_HORDE_CONTESTED;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
@@ -618,10 +603,7 @@ void OPvPCapturePointEP_CGT::ChangeState()
     UpdateTowerState();
 }
 
-void OPvPCapturePointEP_CGT::SendChangePhase()
-{
-    SendUpdateWorldState(WS_UI_TOWER_SLIDER_POSITION, m_valuePct);
-}
+void OPvPCapturePointEP_CGT::SendChangePhase() { SendUpdateWorldState(WS_UI_TOWER_SLIDER_POSITION, m_valuePct); }
 
 uint32 OPvPCapturePointEP_CGT::FillInitialWorldStates(WorldPacket& data)
 {
@@ -694,10 +676,7 @@ bool OPvPCapturePointEP_CGT::HandlePlayerEnter(Player* pPlayer)
     return false;
 }
 
-void OPvPCapturePointEP_CGT::HandlePlayerLeave(Player* pPlayer)
-{
-    OPvPCapturePoint::HandlePlayerLeave(pPlayer);
-}
+void OPvPCapturePointEP_CGT::HandlePlayerLeave(Player* pPlayer) { OPvPCapturePoint::HandlePlayerLeave(pPlayer); }
 
 void OPvPCapturePointEP_CGT::LinkGraveYard(Team team)
 {
@@ -715,16 +694,13 @@ void OPvPCapturePointEP_CGT::UnLinkGraveYard()
     sObjectMgr.RemoveGraveYardLink(EP_GraveYardId, TFV_area, HORDE, false);
 }
 
-void OPvPCapturePointEP_CGT::SummonBannerAura(uint32 team)
-{
-    AddObject(CROWN_GUARD_TOWER_BANNER_AURA, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].entry, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].map, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].x, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].y, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].z, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].o, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].rot0, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].rot1, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].rot2, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].rot3);
-}
+void OPvPCapturePointEP_CGT::SummonBannerAura(uint32 team) { AddObject(CROWN_GUARD_TOWER_BANNER_AURA, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].entry, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].map, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].x, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].y, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].z, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].o, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].rot0, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].rot1, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].rot2, EP_CGT_BannerAuraGraveYard[team == ALLIANCE ? 1 : 0].rot3); }
 
 void OPvPCapturePointEP_CGT::SummonSpiritOfVictory(uint32 team)
 {
     DelCreature(CROWN_GUARD_TOWER_SPIRITOFVICTORY); // The only Creature to delete here.
     AddCreature(CROWN_GUARD_TOWER_SPIRITOFVICTORY, EP_CGT_SpiritOfVictory.entry, team, EP_CGT_SpiritOfVictory.map, EP_CGT_SpiritOfVictory.x, EP_CGT_SpiritOfVictory.y, EP_CGT_SpiritOfVictory.z, EP_CGT_SpiritOfVictory.o, 0, true);
-    
+
     if (Creature* pCreature = m_PvP->GetCreature(m_Creatures[CROWN_GUARD_TOWER_SPIRITOFVICTORY]))
     {
         pCreature->RemoveAllAuras();
@@ -734,8 +710,7 @@ void OPvPCapturePointEP_CGT::SummonSpiritOfVictory(uint32 team)
     }
 }
 
-OPvPCapturePointEP_PWT::OPvPCapturePointEP_PWT(OutdoorPvP *pvp)
-    : OPvPCapturePoint(pvp), m_TowerState(TOWERSTATE_NEUTRAL)
+OPvPCapturePointEP_PWT::OPvPCapturePointEP_PWT(OutdoorPvP* pvp) : OPvPCapturePoint(pvp), m_TowerState(TOWERSTATE_NEUTRAL)
 {
     SetCapturePointData(EP_CapturePoints[PLAGUEWOOD_TOWER].entry, EP_CapturePoints[PLAGUEWOOD_TOWER].map, EP_CapturePoints[PLAGUEWOOD_TOWER].x, EP_CapturePoints[PLAGUEWOOD_TOWER].y, EP_CapturePoints[PLAGUEWOOD_TOWER].z, EP_CapturePoints[PLAGUEWOOD_TOWER].o, EP_CapturePoints[PLAGUEWOOD_TOWER].rot0, EP_CapturePoints[PLAGUEWOOD_TOWER].rot1, EP_CapturePoints[PLAGUEWOOD_TOWER].rot2, EP_CapturePoints[PLAGUEWOOD_TOWER].rot3);
     AddObject(PLAGUEWOOD_TOWER_BANNER_1, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].entry, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].map, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].x, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].y, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].z, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].o, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].rot0, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].rot1, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].rot2, EP_TowerFlags[PLAGUEWOOD_TOWER_BANNER_1].rot3);
@@ -761,7 +736,7 @@ void OPvPCapturePointEP_PWT::ChangeState()
 
     switch (m_state)
     {
-        case OBJECTIVESTATE_ALLIANCE:
+    case OBJECTIVESTATE_ALLIANCE:
         {
             m_TowerState = TOWERSTATE_ALLIANCE;
             PlaySound(SOUND_PVPVICTORYALLIANCE);
@@ -770,7 +745,7 @@ void OPvPCapturePointEP_PWT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_HORDE:
+    case OBJECTIVESTATE_HORDE:
         {
             m_TowerState = TOWERSTATE_HORDE;
             PlaySound(SOUND_PVPVICTORYHORDE);
@@ -779,7 +754,7 @@ void OPvPCapturePointEP_PWT::ChangeState()
 
             break;
         }
-        case OBJECTIVESTATE_ALLIANCE_PROGRESSING:
+    case OBJECTIVESTATE_ALLIANCE_PROGRESSING:
         {
             UpdateBannerArt(ARTKIT_ALLIANCE, ANIMATION_ALLIANCE);
             SummonFlightMaster(ALLIANCE);
@@ -805,7 +780,7 @@ void OPvPCapturePointEP_PWT::ChangeState()
             }
             break;
         }
-        case OBJECTIVESTATE_HORDE_PROGRESSING:
+    case OBJECTIVESTATE_HORDE_PROGRESSING:
         {
             UpdateBannerArt(ARTKIT_HORDE, ANIMATION_HORDE);
             SummonFlightMaster(HORDE);
@@ -831,21 +806,21 @@ void OPvPCapturePointEP_PWT::ChangeState()
             }
             break;
         }
-        case OBJECTIVESTATE_NEUTRAL:
+    case OBJECTIVESTATE_NEUTRAL:
         {
             m_TowerState = TOWERSTATE_NEUTRAL;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
 
             break;
         }
-        case OBJECTIVESTATE_ALLIANCE_CONTESTED:
+    case OBJECTIVESTATE_ALLIANCE_CONTESTED:
         {
             m_TowerState = TOWERSTATE_ALLIANCE_CONTESTED;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
 
             break;
         }
-        case OBJECTIVESTATE_HORDE_CONTESTED:
+    case OBJECTIVESTATE_HORDE_CONTESTED:
         {
             m_TowerState = TOWERSTATE_HORDE_CONTESTED;
             UpdateBannerArt(ARTKIT_NEUTRAL, ANIMATION_NEUTRAL);
@@ -857,10 +832,7 @@ void OPvPCapturePointEP_PWT::ChangeState()
     UpdateTowerState();
 }
 
-void OPvPCapturePointEP_PWT::SendChangePhase()
-{
-    SendUpdateWorldState(WS_UI_TOWER_SLIDER_POSITION, m_valuePct);
-}
+void OPvPCapturePointEP_PWT::SendChangePhase() { SendUpdateWorldState(WS_UI_TOWER_SLIDER_POSITION, m_valuePct); }
 
 uint32 OPvPCapturePointEP_PWT::FillInitialWorldStates(WorldPacket& data)
 {
@@ -933,15 +905,12 @@ bool OPvPCapturePointEP_PWT::HandlePlayerEnter(Player* pPlayer)
     return false;
 }
 
-void OPvPCapturePointEP_PWT::HandlePlayerLeave(Player* pPlayer)
-{
-    OPvPCapturePoint::HandlePlayerLeave(pPlayer);
-}
+void OPvPCapturePointEP_PWT::HandlePlayerLeave(Player* pPlayer) { OPvPCapturePoint::HandlePlayerLeave(pPlayer); }
 
 void OPvPCapturePointEP_PWT::SummonFlightMaster(uint32 team)
 {
     AddCreature(PLAGUEWOOD_TOWER_FLIGHTMASTER, EP_PWT_FlightMaster.entry, team, EP_PWT_FlightMaster.map, EP_PWT_FlightMaster.x, EP_PWT_FlightMaster.y, EP_PWT_FlightMaster.z, EP_PWT_FlightMaster.o);
-    
+
     if (Creature* pCreature = m_PvP->GetCreature(m_Creatures[PLAGUEWOOD_TOWER_FLIGHTMASTER]))
     {
         pCreature->SetFactionTemplateId(team == ALLIANCE ? 774 : 775);
@@ -1110,24 +1079,11 @@ void OutdoorPvPEP::SendRemoveWorldStates(Player* pPlayer)
 class OutdoorPvP_eastern_plaguelands : public ZoneScript_Script
 {
 public:
-
-    OutdoorPvP_eastern_plaguelands()
-        : ZoneScript_Script()
-    {
-    }
-    uint32 GetMapId() const
-    {
-        return 0;
-    }
-    ZoneScript* GetZoneScript() const override
-    {
-        return new OutdoorPvPEP();
-    }
+    OutdoorPvP_eastern_plaguelands() : ZoneScript_Script() {}
+    uint32 GetMapId() const { return 0; }
+    ZoneScript* GetZoneScript() const override { return new OutdoorPvPEP(); }
 };
 
-void AddSC_outdoorpvp_ep()
-{
-    sZoneScriptMgr.AddScript(new OutdoorPvP_eastern_plaguelands());
-}
+void AddSC_outdoorpvp_ep() { sZoneScriptMgr.AddScript(new OutdoorPvP_eastern_plaguelands()); }
 
 #endif

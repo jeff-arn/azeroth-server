@@ -23,19 +23,16 @@ EndScriptData */
 
 #include "scriptPCH.h"
 
-#define SPELL_FROSTBOLT         21369
-#define SPELL_ICEARMOR          18100                       //This is actually a buff he gives himself
-#define SPELL_FREEZE            18763
-#define SPELL_FEAR              26070
-#define SPELL_CHILLNOVA         18099
-#define SPELL_FROSTVOLLEY       8398
+#define SPELL_FROSTBOLT 21369
+#define SPELL_ICEARMOR 18100 // This is actually a buff he gives himself
+#define SPELL_FREEZE 18763
+#define SPELL_FEAR 26070
+#define SPELL_CHILLNOVA 18099
+#define SPELL_FROSTVOLLEY 8398
 
 struct boss_rasfrostAI : public ScriptedAI
 {
-    boss_rasfrostAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_rasfrostAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 IceArmor_Timer;
     uint32 Frostbolt_Timer;
@@ -61,64 +58,68 @@ struct boss_rasfrostAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //IceArmor_Timer
+        // IceArmor_Timer
         if (IceArmor_Timer < diff)
         {
             DoCastSpellIfCan(m_creature, SPELL_ICEARMOR);
             IceArmor_Timer = 180000;
         }
-        else IceArmor_Timer -= diff;
+        else
+            IceArmor_Timer -= diff;
 
-        //Frostbolt_Timer
+        // Frostbolt_Timer
         if (Frostbolt_Timer < diff)
         {
             Unit* target = nullptr;
             target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0);
-            if (target) DoCastSpellIfCan(target, SPELL_FROSTBOLT);
+            if (target)
+                DoCastSpellIfCan(target, SPELL_FROSTBOLT);
 
             Frostbolt_Timer = 8000;
         }
-        else Frostbolt_Timer -= diff;
+        else
+            Frostbolt_Timer -= diff;
 
-        //Freeze_Timer
+        // Freeze_Timer
         if (Freeze_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FREEZE);
             Freeze_Timer = 24000;
         }
-        else Freeze_Timer -= diff;
+        else
+            Freeze_Timer -= diff;
 
-        //Fear_Timer
+        // Fear_Timer
         if (Fear_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FEAR);
             Fear_Timer = 30000;
         }
-        else Fear_Timer -= diff;
+        else
+            Fear_Timer -= diff;
 
-        //ChillNova_Timer
+        // ChillNova_Timer
         if (ChillNova_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CHILLNOVA);
             ChillNova_Timer = 14000;
         }
-        else ChillNova_Timer -= diff;
+        else
+            ChillNova_Timer -= diff;
 
-        //FrostVolley_Timer
+        // FrostVolley_Timer
         if (FrostVolley_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FROSTVOLLEY);
             FrostVolley_Timer = 15000;
         }
-        else FrostVolley_Timer -= diff;
+        else
+            FrostVolley_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_rasfrost(Creature* pCreature)
-{
-    return new boss_rasfrostAI(pCreature);
-}
+CreatureAI* GetAI_boss_rasfrost(Creature* pCreature) { return new boss_rasfrostAI(pCreature); }
 
 void AddSC_boss_rasfrost()
 {

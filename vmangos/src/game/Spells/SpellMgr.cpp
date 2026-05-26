@@ -20,21 +20,19 @@
  */
 
 #include "SpellMgr.h"
-#include "ObjectMgr.h"
-#include "SpellAuraDefines.h"
-#include "ProgressBar.h"
-#include "DBCStores.h"
-#include "World.h"
-#include "Spell.h"
-#include "ScriptMgr.h"
-#include "Unit.h"
 #include "BattleGround.h"
+#include "DBCStores.h"
+#include "ObjectMgr.h"
+#include "ProgressBar.h"
+#include "ScriptMgr.h"
+#include "Spell.h"
+#include "SpellAuraDefines.h"
+#include "Unit.h"
+#include "World.h"
 
 using namespace Spells;
 
-SpellMgr::SpellMgr()
-{
-}
+SpellMgr::SpellMgr() {}
 
 SpellMgr& SpellMgr::Instance()
 {
@@ -44,7 +42,7 @@ SpellMgr& SpellMgr::Instance()
 
 void SpellMgr::LoadSpellTargetPositions()
 {
-    mSpellTargetPositions.clear();                                // need for reload case
+    mSpellTargetPositions.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -73,11 +71,11 @@ void SpellMgr::LoadSpellTargetPositions()
 
         SpellTargetPosition st;
 
-        st.mapId       = fields[1].GetUInt32();
-        st.x           = fields[2].GetFloat();
-        st.y           = fields[3].GetFloat();
-        st.z           = fields[4].GetFloat();
-        st.o           = fields[5].GetFloat();
+        st.mapId = fields[1].GetUInt32();
+        st.x = fields[2].GetFloat();
+        st.y = fields[3].GetFloat();
+        st.z = fields[4].GetFloat();
+        st.o = fields[5].GetFloat();
 
         MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(st.mapId);
         if (!mapEntry)
@@ -116,7 +114,6 @@ void SpellMgr::LoadSpellTargetPositions()
 
         mSpellTargetPositions[Spell_ID] = st;
         ++count;
-
     }
     while (result->NextRow());
 
@@ -127,8 +124,8 @@ void SpellMgr::LoadSpellTargetPositions()
 template <typename EntryType, typename WorkerType, typename StorageType>
 struct SpellRankHelper
 {
-    SpellRankHelper(SpellMgr &_mgr, StorageType &_storage): mgr(_mgr), worker(_storage), customRank(0) {}
-    void RecordRank(EntryType &entry, uint32 spell_id)
+    SpellRankHelper(SpellMgr& _mgr, StorageType& _storage) : mgr(_mgr), worker(_storage), customRank(0) {}
+    void RecordRank(EntryType& entry, uint32 spell_id)
     {
         SpellEntry const* spell = sSpellMgr.GetSpellEntry(spell_id);
         if (!spell)
@@ -176,7 +173,7 @@ struct SpellRankHelper
     std::set<uint32> firstRankSpells;
     std::set<uint32> firstRankSpellsWithCustomRanks;
 
-    SpellMgr &mgr;
+    SpellMgr& mgr;
     WorkerType worker;
     uint32 customRank;
 };
@@ -226,10 +223,7 @@ struct DoSpellProcEvent
         }
     }
 
-    char const* TableName()
-    {
-        return "spell_proc_event";
-    }
+    char const* TableName() { return "spell_proc_event"; }
     bool IsValidCustomRank(SpellProcEventEntry const& spe, uint32 entry, uint32 first_id)
     {
         // let have independent data in table for spells with ppm rates (exist rank dependent ppm rate spells)
@@ -276,8 +270,7 @@ struct DoSpellProcEvent
         }
 
         // totally redundant record
-        if (!spe.schoolMask && !spe.procFlags &&
-                !spe.procEx && !spe.ppmRate && !spe.customChance && !spe.cooldown)
+        if (!spe.schoolMask && !spe.procFlags && !spe.procEx && !spe.ppmRate && !spe.customChance && !spe.cooldown)
         {
             bool empty = spe.spellFamilyName == 0;
             for (uint64 i : spe.spellFamilyMask)
@@ -298,14 +291,8 @@ struct DoSpellProcEvent
             ++count;
     }
 
-    bool HasEntry(uint32 spellId)
-    {
-        return spe_map.count(spellId) > 0;
-    }
-    bool SetStateToEntry(uint32 spellId)
-    {
-        return (state = spe_map.find(spellId)) != spe_map.end();
-    }
+    bool HasEntry(uint32 spellId) { return spe_map.count(spellId) > 0; }
+    bool SetStateToEntry(uint32 spellId) { return (state = spe_map.find(spellId)) != spe_map.end(); }
     SpellProcEventMap& spe_map;
     SpellProcEventMap::const_iterator state;
 
@@ -315,7 +302,7 @@ struct DoSpellProcEvent
 
 void SpellMgr::LoadSpellProcEvents()
 {
-    mSpellProcEventMap.clear();                             // need for reload case
+    mSpellProcEventMap.clear(); // need for reload case
 
     //                                                                0        1             2                  3                   4                   5                   6            7         8          9               10
     std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `SchoolMask`, `SpellFamilyName`, `SpellFamilyMask0`, `SpellFamilyMask1`, `SpellFamilyMask2`, `procFlags`, `procEx`, `ppmRate`, `CustomChance`, `Cooldown` FROM `spell_proc_event` WHERE %u BETWEEN `build_min` AND `build_max`", SUPPORTED_CLIENT_BUILD));
@@ -341,36 +328,32 @@ void SpellMgr::LoadSpellProcEvents()
 
         SpellProcEventEntry spe;
 
-        spe.schoolMask      = fields[1].GetUInt32();
+        spe.schoolMask = fields[1].GetUInt32();
         spe.spellFamilyName = fields[2].GetUInt32();
 
         for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
             spe.spellFamilyMask[i] = fields[3 + i].GetUInt64();
 
-        spe.procFlags       = fields[6].GetUInt32();
-        spe.procEx          = fields[7].GetUInt32();
-        spe.ppmRate         = fields[8].GetFloat();
-        spe.customChance    = fields[9].GetFloat();
-        spe.cooldown        = fields[10].GetUInt32();
+        spe.procFlags = fields[6].GetUInt32();
+        spe.procEx = fields[7].GetUInt32();
+        spe.ppmRate = fields[8].GetFloat();
+        spe.customChance = fields[9].GetFloat();
+        spe.cooldown = fields[10].GetUInt32();
 
         rankHelper.RecordRank(spe, entry);
-
     }
     while (result->NextRow());
 
     rankHelper.FillHigherRanks();
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u extra spell proc event conditions +%u custom proc (inc. +%u custom ranks)",  rankHelper.worker.count, rankHelper.worker.customProc, rankHelper.customRank);
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u extra spell proc event conditions +%u custom proc (inc. +%u custom ranks)", rankHelper.worker.count, rankHelper.worker.customProc, rankHelper.customRank);
 }
 
 struct DoSpellProcItemEnchant
 {
     DoSpellProcItemEnchant(SpellProcItemEnchantMap& _procMap, float _ppm) : procMap(_procMap), ppm(_ppm) {}
-    void operator()(uint32 spell_id)
-    {
-        procMap[spell_id] = ppm;
-    }
+    void operator()(uint32 spell_id) { procMap[spell_id] = ppm; }
 
     SpellProcItemEnchantMap& procMap;
     float ppm;
@@ -378,7 +361,7 @@ struct DoSpellProcItemEnchant
 
 void SpellMgr::LoadSpellProcItemEnchant()
 {
-    mSpellProcItemEnchantMap.clear();                       // need for reload case
+    mSpellProcItemEnchantMap.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -455,7 +438,7 @@ bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellPr
     if (EventProcFlag & (PROC_FLAG_HEARTBEAT | PROC_FLAG_KILL | PROC_FLAG_ON_TRAP_ACTIVATION))
         return true;
 
-    if (spellProcEvent)     // Exist event data
+    if (spellProcEvent) // Exist event data
     {
         // For melee triggers
         if (procSpell == nullptr)
@@ -493,10 +476,7 @@ bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellPr
         if (procEvent_procEx & PROC_EX_EX_TRIGGER_ALWAYS)
             return true;
         // Exist req for PROC_EX_NO_PERIODIC
-        if ((procEvent_procEx & PROC_EX_NO_PERIODIC) &&
-            ((procFlags & (PROC_FLAG_DEAL_HARMFUL_PERIODIC | PROC_FLAG_TAKE_HARMFUL_PERIODIC))
-            ||
-            (procSpell && procSpell->IsSpellAppliesPeriodicAura())))
+        if ((procEvent_procEx & PROC_EX_NO_PERIODIC) && ((procFlags & (PROC_FLAG_DEAL_HARMFUL_PERIODIC | PROC_FLAG_TAKE_HARMFUL_PERIODIC)) || (procSpell && procSpell->IsSpellAppliesPeriodicAura())))
             return false;
         // Check Extra Requirement like (hit/crit/miss/resist/parry/dodge/block/immune/reflect/absorb and other)
         if (procEvent_procEx & procExtra)
@@ -507,7 +487,7 @@ bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellPr
 
 void SpellMgr::LoadSpellGroups()
 {
-    mSpellSpellGroup.clear();                                  // need for reload case
+    mSpellSpellGroup.clear(); // need for reload case
     mSpellGroupSpell.clear();
 
     uint32 count = 0;
@@ -536,7 +516,6 @@ void SpellMgr::LoadSpellGroups()
 
         groups.insert(std::set<uint32>::value_type(group_id));
         mSpellGroupSpell.insert(SpellGroupSpellMap::value_type((SpellGroup)group_id, spell_id));
-
     }
     while (result->NextRow());
 
@@ -589,7 +568,7 @@ void SpellMgr::LoadSpellGroups()
 
 void SpellMgr::LoadSpellGroupStackRules()
 {
-    mSpellGroupStack.clear();                                  // need for reload case
+    mSpellGroupStack.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -720,7 +699,7 @@ bool SpellMgr::ListLessPowerfulSpells(uint32 spellId, std::vector<uint32>& list)
 
 void SpellMgr::LoadSpellElixirs()
 {
-    mSpellElixirs.clear();                                  // need for reload case
+    mSpellElixirs.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -786,10 +765,7 @@ struct DoSpellThreat
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u listed in `spell_threat` as custom rank has same data as Rank 1, so redundant", spell_id);
         }
     }
-    char const* TableName()
-    {
-        return "spell_threat";
-    }
+    char const* TableName() { return "spell_threat"; }
     bool IsValidCustomRank(SpellThreatEntry const& ste, uint32 entry, uint32 first_id)
     {
         if (!ste.threat)
@@ -809,20 +785,13 @@ struct DoSpellThreat
         if (ste.threat || ste.ap_bonus != 0.f)
         {
             uint32 const* targetA = spell->EffectImplicitTargetA;
-            if ((targetA[EFFECT_INDEX_1] && targetA[EFFECT_INDEX_1] != targetA[EFFECT_INDEX_0]) ||
-                    (targetA[EFFECT_INDEX_2] && targetA[EFFECT_INDEX_2] != targetA[EFFECT_INDEX_0]))
+            if ((targetA[EFFECT_INDEX_1] && targetA[EFFECT_INDEX_1] != targetA[EFFECT_INDEX_0]) || (targetA[EFFECT_INDEX_2] && targetA[EFFECT_INDEX_2] != targetA[EFFECT_INDEX_0]))
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u listed in `spell_threat` has effects with different targets, threat may be assigned incorrectly", spell->Id);
         }
         ++count;
     }
-    bool HasEntry(uint32 spellId)
-    {
-        return threatMap.count(spellId) > 0;
-    }
-    bool SetStateToEntry(uint32 spellId)
-    {
-        return (state = threatMap.find(spellId)) != threatMap.end();
-    }
+    bool HasEntry(uint32 spellId) { return threatMap.count(spellId) > 0; }
+    bool SetStateToEntry(uint32 spellId) { return (state = threatMap.find(spellId)) != threatMap.end(); }
 
     SpellThreatMap& threatMap;
     SpellThreatMap::const_iterator state;
@@ -831,7 +800,7 @@ struct DoSpellThreat
 
 void SpellMgr::LoadSpellThreats()
 {
-    mSpellThreatMap.clear();                                // need for reload case
+    mSpellThreatMap.clear(); // need for reload case
 
     //                                                                0        1         2             3
     std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `Threat`, `multiplier`, `ap_bonus` FROM `spell_threat` WHERE %u BETWEEN `build_min` AND `build_max`", SUPPORTED_CLIENT_BUILD));
@@ -862,7 +831,6 @@ void SpellMgr::LoadSpellThreats()
         ste.ap_bonus = fields[3].GetFloat();
 
         rankHelper.RecordRank(ste, entry);
-
     }
     while (result->NextRow());
 
@@ -875,24 +843,15 @@ void SpellMgr::LoadSpellThreats()
 bool SpellMgr::IsRankSpellDueToSpell(SpellEntry const* spellInfo_1, uint32 spellId_2) const
 {
     SpellEntry const* spellInfo_2 = sSpellMgr.GetSpellEntry(spellId_2);
-    if (!spellInfo_1 || !spellInfo_2) return false;
-    if (spellInfo_1->Id == spellId_2) return false;
+    if (!spellInfo_1 || !spellInfo_2)
+        return false;
+    if (spellInfo_1->Id == spellId_2)
+        return false;
     // Nostalrius : Check generique.
-    if (spellInfo_1->SpellFamilyName == spellInfo_2->SpellFamilyName &&
-        spellInfo_1->SpellFamilyFlags == spellInfo_2->SpellFamilyFlags &&
-        spellInfo_1->SpellIconID == spellInfo_2->SpellIconID &&
-        spellInfo_1->SpellVisual == spellInfo_2->SpellVisual &&
-        spellInfo_1->SpellFamilyName != SPELLFAMILY_GENERIC &&
-        spellInfo_1->Effect[0] == spellInfo_2->Effect[0] &&
-        spellInfo_1->EffectApplyAuraName[0] == spellInfo_2->EffectApplyAuraName[0] &&
-        spellInfo_1->SpellIconID > 1 &&
-        (spellInfo_1->EffectApplyAuraName[0] != SPELL_AURA_ADD_FLAT_MODIFIER ||
-         spellInfo_1->EffectMiscValue[0] == spellInfo_2->EffectMiscValue[0]))
+    if (spellInfo_1->SpellFamilyName == spellInfo_2->SpellFamilyName && spellInfo_1->SpellFamilyFlags == spellInfo_2->SpellFamilyFlags && spellInfo_1->SpellIconID == spellInfo_2->SpellIconID && spellInfo_1->SpellVisual == spellInfo_2->SpellVisual && spellInfo_1->SpellFamilyName != SPELLFAMILY_GENERIC && spellInfo_1->Effect[0] == spellInfo_2->Effect[0] && spellInfo_1->EffectApplyAuraName[0] == spellInfo_2->EffectApplyAuraName[0] && spellInfo_1->SpellIconID > 1 && (spellInfo_1->EffectApplyAuraName[0] != SPELL_AURA_ADD_FLAT_MODIFIER || spellInfo_1->EffectMiscValue[0] == spellInfo_2->EffectMiscValue[0]))
     {
         // Same modifier but it affects different spells
-        if (spellInfo_1->EffectApplyAuraName[0] == SPELL_AURA_ADD_FLAT_MODIFIER &&
-            spellInfo_1->EffectItemType[0] != 0 && spellInfo_2->EffectItemType[0] != 0 &&
-            !(spellInfo_1->EffectItemType[0] & spellInfo_2->EffectItemType[0]))
+        if (spellInfo_1->EffectApplyAuraName[0] == SPELL_AURA_ADD_FLAT_MODIFIER && spellInfo_1->EffectItemType[0] != 0 && spellInfo_2->EffectItemType[0] != 0 && !(spellInfo_1->EffectItemType[0] & spellInfo_2->EffectItemType[0]))
         {
             return GetFirstSpellInChain(spellInfo_1->Id) == GetFirstSpellInChain(spellId_2);
         }
@@ -932,337 +891,305 @@ bool SpellMgr::IsNoStackSpellDueToSpell(uint32 spellId_1, uint32 spellId_2) cons
     // Specific spell family spells
     switch (spellInfo_1->SpellFamilyName)
     {
-        case SPELLFAMILY_GENERIC:
-            switch (spellInfo_2->SpellFamilyName)
+    case SPELLFAMILY_GENERIC:
+        switch (spellInfo_2->SpellFamilyName)
+        {
+        case SPELLFAMILY_GENERIC: // same family case
             {
-                case SPELLFAMILY_GENERIC:                   // same family case
-                {
-                    // Thunderfury
-                    if ((spellInfo_1->Id == 21992 && spellInfo_2->Id == 27648) ||
-                            (spellInfo_2->Id == 21992 && spellInfo_1->Id == 27648))
-                        return false;
+                // Thunderfury
+                if ((spellInfo_1->Id == 21992 && spellInfo_2->Id == 27648) || (spellInfo_2->Id == 21992 && spellInfo_1->Id == 27648))
+                    return false;
 
-                    // Atiesh aura stacking with Moonkin Aura
-                    if (spellInfo_1->SpellIconID == 46 && spellInfo_2->SpellIconID == 46)
-                        return false;
+                // Atiesh aura stacking with Moonkin Aura
+                if (spellInfo_1->SpellIconID == 46 && spellInfo_2->SpellIconID == 46)
+                    return false;
 
-                    // Soulstone Resurrection and Twisting Nether (resurrector)
-                    if (spellInfo_1->SpellIconID == 92 && spellInfo_2->SpellIconID == 92 && (
-                                (spellInfo_1->SpellVisual == 99 && spellInfo_2->SpellVisual == 0) ||
-                                (spellInfo_2->SpellVisual == 99 && spellInfo_1->SpellVisual == 0)))
-                        return false;
+                // Soulstone Resurrection and Twisting Nether (resurrector)
+                if (spellInfo_1->SpellIconID == 92 && spellInfo_2->SpellIconID == 92 && ((spellInfo_1->SpellVisual == 99 && spellInfo_2->SpellVisual == 0) || (spellInfo_2->SpellVisual == 99 && spellInfo_1->SpellVisual == 0)))
+                    return false;
 
-                    // Heart of the Wild and (Primal Instinct (Idol of Terror) triggering spell or Agility)
-                    if (spellInfo_1->SpellIconID == 240 && spellInfo_2->SpellIconID == 240 && (
-                                (spellInfo_1->SpellVisual == 0 && spellInfo_2->SpellVisual == 78) ||
-                                (spellInfo_2->SpellVisual == 0 && spellInfo_1->SpellVisual == 78)))
-                        return false;
+                // Heart of the Wild and (Primal Instinct (Idol of Terror) triggering spell or Agility)
+                if (spellInfo_1->SpellIconID == 240 && spellInfo_2->SpellIconID == 240 && ((spellInfo_1->SpellVisual == 0 && spellInfo_2->SpellVisual == 78) || (spellInfo_2->SpellVisual == 0 && spellInfo_1->SpellVisual == 78)))
+                    return false;
 
-                    // Personalized Weather (thunder effect should overwrite rainy aura)
-                    if (spellInfo_1->SpellIconID == 2606 && spellInfo_2->SpellIconID == 2606)
-                        return false;
+                // Personalized Weather (thunder effect should overwrite rainy aura)
+                if (spellInfo_1->SpellIconID == 2606 && spellInfo_2->SpellIconID == 2606)
+                    return false;
 
-                    // Brood Affliction: Bronze
-                    if ((spellInfo_1->Id == 23170 && spellInfo_2->Id == 23171) ||
-                            (spellInfo_2->Id == 23170 && spellInfo_1->Id == 23171))
-                        return false;
+                // Brood Affliction: Bronze
+                if ((spellInfo_1->Id == 23170 && spellInfo_2->Id == 23171) || (spellInfo_2->Id == 23170 && spellInfo_1->Id == 23171))
+                    return false;
 
-                    // Regular and Night Elf Ghost
-                    if ((spellInfo_1->Id == 8326 && spellInfo_2->Id == 20584) ||
-                            (spellInfo_2->Id == 8326 && spellInfo_1->Id == 20584))
-                        return false;
+                // Regular and Night Elf Ghost
+                if ((spellInfo_1->Id == 8326 && spellInfo_2->Id == 20584) || (spellInfo_2->Id == 8326 && spellInfo_1->Id == 20584))
+                    return false;
 
                     // World of Warcraft Client Patch 1.7.0 (2005-09-13)
                     // - Demon Armor - The armor increase will now stack together with
                     //   Scrolls of Protection.
 #if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_6_1
-                    if ((spellInfo_1->SpellVisual == 130 && spellInfo_1->SpellIconID == 89 &&
-                        spellInfo_2->SpellVisual == 196 && spellInfo_2->SpellIconID == 276) ||
-                        (spellInfo_2->SpellVisual == 130 && spellInfo_2->SpellIconID == 89 &&
-                        spellInfo_1->SpellVisual == 196 && spellInfo_1->SpellIconID == 276))
-                        return true;
+                if ((spellInfo_1->SpellVisual == 130 && spellInfo_1->SpellIconID == 89 && spellInfo_2->SpellVisual == 196 && spellInfo_2->SpellIconID == 276) || (spellInfo_2->SpellVisual == 130 && spellInfo_2->SpellIconID == 89 && spellInfo_1->SpellVisual == 196 && spellInfo_1->SpellIconID == 276))
+                    return true;
 #endif
 
-                    break;
-                }
-                case SPELLFAMILY_MAGE:
-                    // Arcane Intellect and Insight
-                    if (spellInfo_2->SpellIconID == 125 && spellInfo_1->Id == 18820)
-                        return false;
-                    break;
-                case SPELLFAMILY_WARRIOR:
-                {
-                    // Scroll of Protection and Defensive Stance (multi-family check)
-                    if (spellInfo_1->SpellIconID == 276 && spellInfo_1->SpellVisual == 196 && spellInfo_2->Id == 71)
-                        return false;
-
-                    // Improved Hamstring -> Hamstring (multi-family check)
-                    if ((spellInfo_2->SpellFamilyFlags & uint64(0x2)) && spellInfo_1->Id == 23694)
-                        return false;
-                    break;
-                }
-                case SPELLFAMILY_DRUID:
-                {
-                    // Scroll of Stamina and Leader of the Pack (multi-family check)
-                    if (spellInfo_1->SpellIconID == 312 && spellInfo_1->SpellVisual == 216 && spellInfo_2->Id == 24932)
-                        return false;
-                    break;
-                }
-                case SPELLFAMILY_ROGUE:
-                {
-                    // Garrote-Silence -> Garrote (multi-family check)
-                    if (spellInfo_1->SpellIconID == 498 && spellInfo_1->SpellVisual == 0 && spellInfo_2->SpellIconID == 498)
-                        return false;
-
-                    break;
-                }
-                case SPELLFAMILY_HUNTER:
-                {
-                    // Concussive Shot and Imp. Concussive Shot (multi-family check)
-                    if (spellInfo_1->Id == 19410 && spellInfo_2->Id == 5116)
-                        return false;
-
-                    // Improved Wing Clip -> Wing Clip (multi-family check)
-                    if ((spellInfo_2->SpellFamilyFlags & uint64(0x40)) && spellInfo_1->Id == 19229)
-                        return false;
-                    break;
-                }
-                case SPELLFAMILY_PALADIN:
-                {
-                    // Unstable Currents and other -> *Sanctity Aura (multi-family check)
-                    if (spellInfo_2->SpellIconID == 502 && spellInfo_1->SpellIconID == 502 && spellInfo_1->SpellVisual == 969)
-                        return false;
-                    break;
-                }
+                break;
             }
-            break;
         case SPELLFAMILY_MAGE:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_MAGE)
-            {
-                // Explosion pyrotechnique / boule de feu
-                if ((spellInfo_1->SpellIconID == 184 && spellInfo_2->SpellIconID == 185) ||
-                        (spellInfo_2->SpellIconID == 184 && spellInfo_1->SpellIconID == 185))
-                    return false;
-
-                // Blizzard & Chilled (and some other stacked with blizzard spells
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x80)) && (spellInfo_2->SpellFamilyFlags & uint64(0x100000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x80)) && (spellInfo_1->SpellFamilyFlags & uint64(0x100000))))
-                    return false;
-
-                // Blink & Improved Blink
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x0000000000010000)) && (spellInfo_2->SpellVisual == 72 && spellInfo_2->SpellIconID == 1499)) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x0000000000010000)) && (spellInfo_1->SpellVisual == 72 && spellInfo_1->SpellIconID == 1499)))
-                    return false;
-
-                // Fireball & Pyroblast (Dots)
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x1)) && (spellInfo_2->SpellFamilyFlags & uint64(0x400000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x1)) && (spellInfo_1->SpellFamilyFlags & uint64(0x400000))))
-                    return false;
-
-                // Arcane Missiles
-                if (spellInfo_1->IsFitToFamilyMask(1 << CF_MAGE_ARCANE_MISSILES_CHANNEL) && spellInfo_2->IsFitToFamilyMask(1 << CF_MAGE_ARCANE_MISSILES_CHANNEL))
-                    return false;
-            }
-            // Detect Invisibility and Mana Shield (multi-family check)
-            if (spellInfo_2->Id == 132 && spellInfo_1->SpellIconID == 209 && spellInfo_1->SpellVisual == 968)
-                return false;
-
-            // Combustion and Fire Protection Aura (multi-family check)
-            if (spellInfo_1->Id == 11129 && spellInfo_2->SpellIconID == 33 && spellInfo_2->SpellVisual == 321)
-                return false;
-
             // Arcane Intellect and Insight
-            if (spellInfo_1->SpellIconID == 125 && spellInfo_2->Id == 18820)
-                return false;
-
-            break;
-        case SPELLFAMILY_WARLOCK:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_WARLOCK)
-            {
-                // Siphon Life and Drain Life
-                if ((spellInfo_1->SpellIconID == 152 && spellInfo_2->SpellIconID == 546) ||
-                        (spellInfo_2->SpellIconID == 152 && spellInfo_1->SpellIconID == 546))
-                    return false;
-
-                // Corruption and (Curse of Agony or Curse of Doom)
-                if ((spellInfo_1->SpellIconID == 313 && (spellInfo_2->SpellIconID == 544  || spellInfo_2->SpellIconID == 91)) ||
-                        (spellInfo_2->SpellIconID == 313 && (spellInfo_1->SpellIconID == 544  || spellInfo_1->SpellIconID == 91)))
-                    return false;
-            }
-            // Detect Invisibility and Mana Shield (multi-family check)
-            if (spellInfo_1->Id == 132 && spellInfo_2->SpellIconID == 209 && spellInfo_2->SpellVisual == 968)
+            if (spellInfo_2->SpellIconID == 125 && spellInfo_1->Id == 18820)
                 return false;
             break;
         case SPELLFAMILY_WARRIOR:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_WARRIOR)
             {
-                // Rend and Deep Wound
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x20)) && (spellInfo_2->SpellFamilyFlags & uint64(0x1000000000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x20)) && (spellInfo_1->SpellFamilyFlags & uint64(0x1000000000))))
+                // Scroll of Protection and Defensive Stance (multi-family check)
+                if (spellInfo_1->SpellIconID == 276 && spellInfo_1->SpellVisual == 196 && spellInfo_2->Id == 71)
                     return false;
 
-                // Battle Shout and Rampage
-                if ((spellInfo_1->SpellIconID == 456 && spellInfo_2->SpellIconID == 2006) ||
-                        (spellInfo_2->SpellIconID == 456 && spellInfo_1->SpellIconID == 2006))
+                // Improved Hamstring -> Hamstring (multi-family check)
+                if ((spellInfo_2->SpellFamilyFlags & uint64(0x2)) && spellInfo_1->Id == 23694)
                     return false;
-
-                // Cri demoralisant et cri de guerre
-                if ((spellInfo_2->SpellVisual == 246 && spellInfo_1->SpellVisual == 210) || (spellInfo_1->SpellVisual == 246 && spellInfo_2->SpellVisual == 210))
-                    return false;
+                break;
             }
-
-            // Hamstring -> Improved Hamstring (multi-family check)
-            if ((spellInfo_1->SpellFamilyFlags & uint64(0x2)) && spellInfo_2->Id == 23694)
-                return false;
-
-            // Defensive Stance and Scroll of Protection (multi-family check)
-            if (spellInfo_1->Id == 71 && spellInfo_2->SpellIconID == 276 && spellInfo_2->SpellVisual == 196)
-                return false;
-
-            // Bloodlust and Bloodthirst (multi-family check)
-            if (spellInfo_2->Id == 2825 && spellInfo_1->SpellIconID == 38 && spellInfo_1->SpellVisual == 0)
-                return false;
-
-            break;
-        case SPELLFAMILY_PRIEST:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_PRIEST)
-            {
-                //Greater Heal Renew (8/8 transcendence) (and Renew.)
-                if (spellId_1==22009 || spellId_2==22009)
-                    return false;
-
-                // Shadow Vulnerability / Devouring Plague
-                if (spellInfo_1->SpellIconID == spellInfo_2->SpellIconID /* == 9 */ &&
-                        ((spellInfo_1->Id == 15258 &&  spellInfo_2->SpellFamilyFlags == 0x2000000) ||
-                         (spellInfo_2->Id == 15258 &&  spellInfo_1->SpellFamilyFlags == 0x2000000)))
-                    return false;
-
-                //Devouring Plague and Shadow Vulnerability
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x2000000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x800000000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x2000000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x800000000))))
-                    return false;
-
-                //StarShards and Shadow Word: Pain
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x200000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x8000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x200000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x8000))))
-                    return false;
-            }
-            break;
         case SPELLFAMILY_DRUID:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_DRUID)
             {
-                // Cat Form and Feline Swiftness Passive* (1.x specific conflict)
-                if (spellInfo_1->SpellIconID == 493 && spellInfo_2->SpellIconID == 493)
+                // Scroll of Stamina and Leader of the Pack (multi-family check)
+                if (spellInfo_1->SpellIconID == 312 && spellInfo_1->SpellVisual == 216 && spellInfo_2->Id == 24932)
                     return false;
-
-                //Omen of Clarity and Blood Frenzy
-                if (((spellInfo_1->SpellFamilyFlags == uint64(0x0) && spellInfo_1->SpellIconID == 108) && (spellInfo_2->SpellFamilyFlags & uint64(0x20000000000000))) ||
-                        ((spellInfo_2->SpellFamilyFlags == uint64(0x0) && spellInfo_2->SpellIconID == 108) && (spellInfo_1->SpellFamilyFlags & uint64(0x20000000000000))))
-                    return false;
+                break;
             }
-
-            // Leader of the Pack and Scroll of Stamina (multi-family check)
-            if (spellInfo_1->Id == 24932 && spellInfo_2->SpellIconID == 312 && spellInfo_2->SpellVisual == 216)
-                return false;
-
-            break;
         case SPELLFAMILY_ROGUE:
-            // Garrote -> Garrote-Silence (multi-family check)
-            if (spellInfo_1->SpellIconID == 498 && spellInfo_2->SpellIconID == 498 && spellInfo_2->SpellVisual == 0)
-                return false;
-            break;
+            {
+                // Garrote-Silence -> Garrote (multi-family check)
+                if (spellInfo_1->SpellIconID == 498 && spellInfo_1->SpellVisual == 0 && spellInfo_2->SpellIconID == 498)
+                    return false;
+
+                break;
+            }
         case SPELLFAMILY_HUNTER:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_HUNTER)
             {
-                // Rapid Fire & Quick Shots
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x20)) && (spellInfo_2->SpellFamilyFlags & uint64(0x20000000000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x20)) && (spellInfo_1->SpellFamilyFlags & uint64(0x20000000000))))
+                // Concussive Shot and Imp. Concussive Shot (multi-family check)
+                if (spellInfo_1->Id == 19410 && spellInfo_2->Id == 5116)
                     return false;
 
-                // Serpent Sting & (Immolation/Explosive Trap Effect)
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x4)) && (spellInfo_2->SpellFamilyFlags & uint64(0x00000004000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x4)) && (spellInfo_1->SpellFamilyFlags & uint64(0x00000004000))))
+                // Improved Wing Clip -> Wing Clip (multi-family check)
+                if ((spellInfo_2->SpellFamilyFlags & uint64(0x40)) && spellInfo_1->Id == 19229)
                     return false;
-
-                // Wyvern Sting DoT & Immolation Trap Effect - using family flags
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x10000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x4))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x10000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x4))))
-                    return false;
-
-                // Bestial Wrath
-                if (spellInfo_1->SpellIconID == 1680 && spellInfo_2->SpellIconID == 1680)
-                    return false;
+                break;
             }
-
-            // Wing Clip -> Improved Wing Clip (multi-family check)
-            if ((spellInfo_1->SpellFamilyFlags & uint64(0x40)) && spellInfo_2->Id == 19229)
-                return false;
-
-            // Concussive Shot and Imp. Concussive Shot (multi-family check)
-            if (spellInfo_2->Id == 19410 && spellInfo_1->Id == 5116)
-                return false;
-            break;
         case SPELLFAMILY_PALADIN:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_PALADIN)
             {
-                // Paladin Seals
-                if (spellInfo_1->IsSealSpell() && spellInfo_2->IsSealSpell())
-                    return true;
-                // Concentration Aura and Improved Concentration Aura and Aura Mastery
-                if ((spellInfo_1->SpellIconID == 1487) && (spellInfo_2->SpellIconID == 1487))
+                // Unstable Currents and other -> *Sanctity Aura (multi-family check)
+                if (spellInfo_2->SpellIconID == 502 && spellInfo_1->SpellIconID == 502 && spellInfo_1->SpellVisual == 969)
                     return false;
+                break;
             }
-
-            // Combustion and Fire Protection Aura (multi-family check)
-            if (spellInfo_2->Id == 11129 && spellInfo_1->SpellIconID == 33 && spellInfo_1->SpellVisual == 321)
+        }
+        break;
+    case SPELLFAMILY_MAGE:
+        if (spellInfo_2->SpellFamilyName == SPELLFAMILY_MAGE)
+        {
+            // Explosion pyrotechnique / boule de feu
+            if ((spellInfo_1->SpellIconID == 184 && spellInfo_2->SpellIconID == 185) || (spellInfo_2->SpellIconID == 184 && spellInfo_1->SpellIconID == 185))
                 return false;
 
-            // *Sanctity Aura -> Unstable Currents and other (multi-family check)
-            if (spellInfo_1->SpellIconID == 502 && spellInfo_2->SpellFamilyName == SPELLFAMILY_GENERIC && spellInfo_2->SpellIconID == 502 && spellInfo_2->SpellVisual == 969)
+            // Blizzard & Chilled (and some other stacked with blizzard spells
+            if (((spellInfo_1->SpellFamilyFlags & uint64(0x80)) && (spellInfo_2->SpellFamilyFlags & uint64(0x100000))) || ((spellInfo_2->SpellFamilyFlags & uint64(0x80)) && (spellInfo_1->SpellFamilyFlags & uint64(0x100000))))
                 return false;
 
-            // *Seal of Command and Band of Eternal Champion (multi-family check)
-            if (spellInfo_1->SpellIconID == 561 && spellInfo_1->SpellVisual == 7992 && spellId_2 == 35081)
+            // Blink & Improved Blink
+            if (((spellInfo_1->SpellFamilyFlags & uint64(0x0000000000010000)) && (spellInfo_2->SpellVisual == 72 && spellInfo_2->SpellIconID == 1499)) || ((spellInfo_2->SpellFamilyFlags & uint64(0x0000000000010000)) && (spellInfo_1->SpellVisual == 72 && spellInfo_1->SpellIconID == 1499)))
                 return false;
-            break;
-        case SPELLFAMILY_SHAMAN:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_SHAMAN)
-            {
-                // Windfury weapon
-                if (spellInfo_1->SpellIconID == 220 && spellInfo_2->SpellIconID == 220 &&
-                        !spellInfo_1->IsFitToFamilyMask(spellInfo_2->SpellFamilyFlags))
-                    return false;
-            }
-            // Bloodlust and Bloodthirst (multi-family check)
-            if (spellInfo_1->Id == 2825 && spellInfo_2->SpellIconID == 38 && spellInfo_2->SpellVisual == 0)
+
+            // Fireball & Pyroblast (Dots)
+            if (((spellInfo_1->SpellFamilyFlags & uint64(0x1)) && (spellInfo_2->SpellFamilyFlags & uint64(0x400000))) || ((spellInfo_2->SpellFamilyFlags & uint64(0x1)) && (spellInfo_1->SpellFamilyFlags & uint64(0x400000))))
                 return false;
-            break;
-        default:
-            break;
+
+            // Arcane Missiles
+            if (spellInfo_1->IsFitToFamilyMask(1 << CF_MAGE_ARCANE_MISSILES_CHANNEL) && spellInfo_2->IsFitToFamilyMask(1 << CF_MAGE_ARCANE_MISSILES_CHANNEL))
+                return false;
+        }
+        // Detect Invisibility and Mana Shield (multi-family check)
+        if (spellInfo_2->Id == 132 && spellInfo_1->SpellIconID == 209 && spellInfo_1->SpellVisual == 968)
+            return false;
+
+        // Combustion and Fire Protection Aura (multi-family check)
+        if (spellInfo_1->Id == 11129 && spellInfo_2->SpellIconID == 33 && spellInfo_2->SpellVisual == 321)
+            return false;
+
+        // Arcane Intellect and Insight
+        if (spellInfo_1->SpellIconID == 125 && spellInfo_2->Id == 18820)
+            return false;
+
+        break;
+    case SPELLFAMILY_WARLOCK:
+        if (spellInfo_2->SpellFamilyName == SPELLFAMILY_WARLOCK)
+        {
+            // Siphon Life and Drain Life
+            if ((spellInfo_1->SpellIconID == 152 && spellInfo_2->SpellIconID == 546) || (spellInfo_2->SpellIconID == 152 && spellInfo_1->SpellIconID == 546))
+                return false;
+
+            // Corruption and (Curse of Agony or Curse of Doom)
+            if ((spellInfo_1->SpellIconID == 313 && (spellInfo_2->SpellIconID == 544 || spellInfo_2->SpellIconID == 91)) || (spellInfo_2->SpellIconID == 313 && (spellInfo_1->SpellIconID == 544 || spellInfo_1->SpellIconID == 91)))
+                return false;
+        }
+        // Detect Invisibility and Mana Shield (multi-family check)
+        if (spellInfo_1->Id == 132 && spellInfo_2->SpellIconID == 209 && spellInfo_2->SpellVisual == 968)
+            return false;
+        break;
+    case SPELLFAMILY_WARRIOR:
+        if (spellInfo_2->SpellFamilyName == SPELLFAMILY_WARRIOR)
+        {
+            // Rend and Deep Wound
+            if (((spellInfo_1->SpellFamilyFlags & uint64(0x20)) && (spellInfo_2->SpellFamilyFlags & uint64(0x1000000000))) || ((spellInfo_2->SpellFamilyFlags & uint64(0x20)) && (spellInfo_1->SpellFamilyFlags & uint64(0x1000000000))))
+                return false;
+
+            // Battle Shout and Rampage
+            if ((spellInfo_1->SpellIconID == 456 && spellInfo_2->SpellIconID == 2006) || (spellInfo_2->SpellIconID == 456 && spellInfo_1->SpellIconID == 2006))
+                return false;
+
+            // Cri demoralisant et cri de guerre
+            if ((spellInfo_2->SpellVisual == 246 && spellInfo_1->SpellVisual == 210) || (spellInfo_1->SpellVisual == 246 && spellInfo_2->SpellVisual == 210))
+                return false;
+        }
+
+        // Hamstring -> Improved Hamstring (multi-family check)
+        if ((spellInfo_1->SpellFamilyFlags & uint64(0x2)) && spellInfo_2->Id == 23694)
+            return false;
+
+        // Defensive Stance and Scroll of Protection (multi-family check)
+        if (spellInfo_1->Id == 71 && spellInfo_2->SpellIconID == 276 && spellInfo_2->SpellVisual == 196)
+            return false;
+
+        // Bloodlust and Bloodthirst (multi-family check)
+        if (spellInfo_2->Id == 2825 && spellInfo_1->SpellIconID == 38 && spellInfo_1->SpellVisual == 0)
+            return false;
+
+        break;
+    case SPELLFAMILY_PRIEST:
+        if (spellInfo_2->SpellFamilyName == SPELLFAMILY_PRIEST)
+        {
+            // Greater Heal Renew (8/8 transcendence) (and Renew.)
+            if (spellId_1 == 22009 || spellId_2 == 22009)
+                return false;
+
+            // Shadow Vulnerability / Devouring Plague
+            if (spellInfo_1->SpellIconID == spellInfo_2->SpellIconID /* == 9 */ && ((spellInfo_1->Id == 15258 && spellInfo_2->SpellFamilyFlags == 0x2000000) || (spellInfo_2->Id == 15258 && spellInfo_1->SpellFamilyFlags == 0x2000000)))
+                return false;
+
+            // Devouring Plague and Shadow Vulnerability
+            if (((spellInfo_1->SpellFamilyFlags & uint64(0x2000000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x800000000))) || ((spellInfo_2->SpellFamilyFlags & uint64(0x2000000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x800000000))))
+                return false;
+
+            // StarShards and Shadow Word: Pain
+            if (((spellInfo_1->SpellFamilyFlags & uint64(0x200000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x8000))) || ((spellInfo_2->SpellFamilyFlags & uint64(0x200000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x8000))))
+                return false;
+        }
+        break;
+    case SPELLFAMILY_DRUID:
+        if (spellInfo_2->SpellFamilyName == SPELLFAMILY_DRUID)
+        {
+            // Cat Form and Feline Swiftness Passive* (1.x specific conflict)
+            if (spellInfo_1->SpellIconID == 493 && spellInfo_2->SpellIconID == 493)
+                return false;
+
+            // Omen of Clarity and Blood Frenzy
+            if (((spellInfo_1->SpellFamilyFlags == uint64(0x0) && spellInfo_1->SpellIconID == 108) && (spellInfo_2->SpellFamilyFlags & uint64(0x20000000000000))) || ((spellInfo_2->SpellFamilyFlags == uint64(0x0) && spellInfo_2->SpellIconID == 108) && (spellInfo_1->SpellFamilyFlags & uint64(0x20000000000000))))
+                return false;
+        }
+
+        // Leader of the Pack and Scroll of Stamina (multi-family check)
+        if (spellInfo_1->Id == 24932 && spellInfo_2->SpellIconID == 312 && spellInfo_2->SpellVisual == 216)
+            return false;
+
+        break;
+    case SPELLFAMILY_ROGUE:
+        // Garrote -> Garrote-Silence (multi-family check)
+        if (spellInfo_1->SpellIconID == 498 && spellInfo_2->SpellIconID == 498 && spellInfo_2->SpellVisual == 0)
+            return false;
+        break;
+    case SPELLFAMILY_HUNTER:
+        if (spellInfo_2->SpellFamilyName == SPELLFAMILY_HUNTER)
+        {
+            // Rapid Fire & Quick Shots
+            if (((spellInfo_1->SpellFamilyFlags & uint64(0x20)) && (spellInfo_2->SpellFamilyFlags & uint64(0x20000000000))) || ((spellInfo_2->SpellFamilyFlags & uint64(0x20)) && (spellInfo_1->SpellFamilyFlags & uint64(0x20000000000))))
+                return false;
+
+            // Serpent Sting & (Immolation/Explosive Trap Effect)
+            if (((spellInfo_1->SpellFamilyFlags & uint64(0x4)) && (spellInfo_2->SpellFamilyFlags & uint64(0x00000004000))) || ((spellInfo_2->SpellFamilyFlags & uint64(0x4)) && (spellInfo_1->SpellFamilyFlags & uint64(0x00000004000))))
+                return false;
+
+            // Wyvern Sting DoT & Immolation Trap Effect - using family flags
+            if (((spellInfo_1->SpellFamilyFlags & uint64(0x10000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x4))) || ((spellInfo_2->SpellFamilyFlags & uint64(0x10000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x4))))
+                return false;
+
+            // Bestial Wrath
+            if (spellInfo_1->SpellIconID == 1680 && spellInfo_2->SpellIconID == 1680)
+                return false;
+        }
+
+        // Wing Clip -> Improved Wing Clip (multi-family check)
+        if ((spellInfo_1->SpellFamilyFlags & uint64(0x40)) && spellInfo_2->Id == 19229)
+            return false;
+
+        // Concussive Shot and Imp. Concussive Shot (multi-family check)
+        if (spellInfo_2->Id == 19410 && spellInfo_1->Id == 5116)
+            return false;
+        break;
+    case SPELLFAMILY_PALADIN:
+        if (spellInfo_2->SpellFamilyName == SPELLFAMILY_PALADIN)
+        {
+            // Paladin Seals
+            if (spellInfo_1->IsSealSpell() && spellInfo_2->IsSealSpell())
+                return true;
+            // Concentration Aura and Improved Concentration Aura and Aura Mastery
+            if ((spellInfo_1->SpellIconID == 1487) && (spellInfo_2->SpellIconID == 1487))
+                return false;
+        }
+
+        // Combustion and Fire Protection Aura (multi-family check)
+        if (spellInfo_2->Id == 11129 && spellInfo_1->SpellIconID == 33 && spellInfo_1->SpellVisual == 321)
+            return false;
+
+        // *Sanctity Aura -> Unstable Currents and other (multi-family check)
+        if (spellInfo_1->SpellIconID == 502 && spellInfo_2->SpellFamilyName == SPELLFAMILY_GENERIC && spellInfo_2->SpellIconID == 502 && spellInfo_2->SpellVisual == 969)
+            return false;
+
+        // *Seal of Command and Band of Eternal Champion (multi-family check)
+        if (spellInfo_1->SpellIconID == 561 && spellInfo_1->SpellVisual == 7992 && spellId_2 == 35081)
+            return false;
+        break;
+    case SPELLFAMILY_SHAMAN:
+        if (spellInfo_2->SpellFamilyName == SPELLFAMILY_SHAMAN)
+        {
+            // Windfury weapon
+            if (spellInfo_1->SpellIconID == 220 && spellInfo_2->SpellIconID == 220 && !spellInfo_1->IsFitToFamilyMask(spellInfo_2->SpellFamilyFlags))
+                return false;
+        }
+        // Bloodlust and Bloodthirst (multi-family check)
+        if (spellInfo_1->Id == 2825 && spellInfo_2->SpellIconID == 38 && spellInfo_2->SpellVisual == 0)
+            return false;
+        break;
+    default:
+        break;
     }
 
     // more generic checks
-    if (spellInfo_1->SpellIconID == spellInfo_2->SpellIconID &&
-            spellInfo_1->SpellIconID != 0 && spellInfo_1->SpellIconID != 1 && // SpellIconID 1 stacks with everything ...
-            spellInfo_1->SpellFamilyName == spellInfo_2->SpellFamilyName &&
-            spellInfo_1->SpellVisual == spellInfo_2->SpellVisual &&
-            // Exception :
-            spellInfo_1->SpellIconID != 516 && // Improved Sprint
-            // World of Warcraft Client Patch 1.8.0 (2005-10-11)
-            // - Sayge's buffs at the Darkmoon Faire are now exclusive to one another.
+    if (spellInfo_1->SpellIconID == spellInfo_2->SpellIconID && spellInfo_1->SpellIconID != 0 && spellInfo_1->SpellIconID != 1 && // SpellIconID 1 stacks with everything ...
+        spellInfo_1->SpellFamilyName == spellInfo_2->SpellFamilyName && spellInfo_1->SpellVisual == spellInfo_2->SpellVisual &&
+        // Exception :
+        spellInfo_1->SpellIconID != 516 && // Improved Sprint
+    // World of Warcraft Client Patch 1.8.0 (2005-10-11)
+    // - Sayge's buffs at the Darkmoon Faire are now exclusive to one another.
 #if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_7_1
-            !(spellInfo_1->SpellIconID == 1595 && spellInfo_1->SpellVisual == 7042 && spellInfo_2->SpellIconID == 1595 && spellInfo_2->SpellVisual == 7042) &&
+        !(spellInfo_1->SpellIconID == 1595 && spellInfo_1->SpellVisual == 7042 && spellInfo_2->SpellIconID == 1595 && spellInfo_2->SpellVisual == 7042) &&
 #endif
-            spellInfo_1->IsPositiveSpell() == spellInfo_2->IsPositiveSpell() // judgement does not remove the enemy seal in a pala-pala duel
-       )
+        spellInfo_1->IsPositiveSpell() == spellInfo_2->IsPositiveSpell() // judgement does not remove the enemy seal in a pala-pala duel
+    )
     {
         bool isModifier = false;
         for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
         {
-            if (spellInfo_1->EffectApplyAuraName[i] == SPELL_AURA_ADD_FLAT_MODIFIER ||
-                    spellInfo_1->EffectApplyAuraName[i] == SPELL_AURA_ADD_PCT_MODIFIER  ||
-                    spellInfo_2->EffectApplyAuraName[i] == SPELL_AURA_ADD_FLAT_MODIFIER ||
-                    spellInfo_2->EffectApplyAuraName[i] == SPELL_AURA_ADD_PCT_MODIFIER)
+            if (spellInfo_1->EffectApplyAuraName[i] == SPELL_AURA_ADD_FLAT_MODIFIER || spellInfo_1->EffectApplyAuraName[i] == SPELL_AURA_ADD_PCT_MODIFIER || spellInfo_2->EffectApplyAuraName[i] == SPELL_AURA_ADD_FLAT_MODIFIER || spellInfo_2->EffectApplyAuraName[i] == SPELL_AURA_ADD_PCT_MODIFIER)
                 isModifier = true;
         }
 
@@ -1297,10 +1224,7 @@ bool SpellMgr::IsNoStackSpellDueToSpell(uint32 spellId_1, uint32 spellId_2) cons
     bool dummy_only = true;
     for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
     {
-        if (spellInfo_1->Effect[i] != spellInfo_2->Effect[i] ||
-                spellInfo_1->EffectItemType[i] != spellInfo_2->EffectItemType[i] ||
-                spellInfo_1->EffectMiscValue[i] != spellInfo_2->EffectMiscValue[i] ||
-                spellInfo_1->EffectApplyAuraName[i] != spellInfo_2->EffectApplyAuraName[i])
+        if (spellInfo_1->Effect[i] != spellInfo_2->Effect[i] || spellInfo_1->EffectItemType[i] != spellInfo_2->EffectItemType[i] || spellInfo_1->EffectMiscValue[i] != spellInfo_2->EffectMiscValue[i] || spellInfo_1->EffectApplyAuraName[i] != spellInfo_2->EffectApplyAuraName[i])
             return false;
 
         // ignore dummy only spells
@@ -1356,10 +1280,7 @@ bool SpellMgr::IsPrimaryProfessionSpell(uint32 spellId)
     return IsPrimaryProfessionSkill(skill);
 }
 
-bool SpellMgr::IsPrimaryProfessionFirstRankSpell(uint32 spellId) const
-{
-    return IsPrimaryProfessionSpell(spellId) && GetSpellRank(spellId) == 1;
-}
+bool SpellMgr::IsPrimaryProfessionFirstRankSpell(uint32 spellId) const { return IsPrimaryProfessionSpell(spellId) && GetSpellRank(spellId) == 1; }
 
 bool SpellMgr::IsSkillBonusSpell(uint32 spellId) const
 {
@@ -1392,11 +1313,7 @@ SpellEntry const* SpellMgr::SelectAuraRankForLevel(SpellEntry const* spellInfo, 
     for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
     {
         // for simple aura in check apply to any non caster based targets, in rank search mode to any explicit targets
-        if (((spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AURA &&
-                (IsExplicitPositiveTarget(spellInfo->EffectImplicitTargetA[i]) ||
-                 IsAreaEffectPossitiveTarget(SpellTarget(spellInfo->EffectImplicitTargetA[i])))) ||
-                spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AREA_AURA_PARTY) &&
-                spellInfo->IsPositiveEffect(SpellEffectIndex(i)))
+        if (((spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AURA && (IsExplicitPositiveTarget(spellInfo->EffectImplicitTargetA[i]) || IsAreaEffectPossitiveTarget(SpellTarget(spellInfo->EffectImplicitTargetA[i])))) || spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AREA_AURA_PARTY) && spellInfo->IsPositiveEffect(SpellEffectIndex(i)))
         {
             needRankSelection = true;
             break;
@@ -1441,10 +1358,10 @@ static void LoadSpellChains_AbilityHelper(SpellChainMap& chainMap, AbilitySpellP
     if (prev_chain_itr != chainMap.end())
     {
         SpellChainNode node;
-        node.prev  = prev_id;
+        node.prev = prev_id;
         node.first = prev_chain_itr->second.first;
-        node.rank  = prev_chain_itr->second.rank + 1;
-        node.req   = 0;
+        node.rank = prev_chain_itr->second.rank + 1;
+        node.req = 0;
         chainMap[spell_id] = node;
         return;
     }
@@ -1454,17 +1371,17 @@ static void LoadSpellChains_AbilityHelper(SpellChainMap& chainMap, AbilitySpellP
     if (prev_itr == prevRanks.end())
     {
         SpellChainNode prev_node;
-        prev_node.prev  = 0;
+        prev_node.prev = 0;
         prev_node.first = prev_id;
-        prev_node.rank  = 1;
-        prev_node.req   = 0;
+        prev_node.rank = 1;
+        prev_node.req = 0;
         chainMap[prev_id] = prev_node;
 
         SpellChainNode node;
-        node.prev  = prev_id;
+        node.prev = prev_id;
         node.first = prev_id;
-        node.rank  = 2;
-        node.req   = 0;
+        node.rank = 2;
+        node.req = 0;
         chainMap[spell_id] = node;
         return;
     }
@@ -1484,17 +1401,17 @@ static void LoadSpellChains_AbilityHelper(SpellChainMap& chainMap, AbilitySpellP
         return;
 
     SpellChainNode node;
-    node.prev  = prev_id;
+    node.prev = prev_id;
     node.first = prev_chain_itr->second.first;
-    node.rank  = prev_chain_itr->second.rank + 1;
-    node.req   = 0;
+    node.rank = prev_chain_itr->second.rank + 1;
+    node.req = 0;
     chainMap[spell_id] = node;
 }
 
 void SpellMgr::LoadSpellChains()
 {
-    mSpellChains.clear();                                   // need for reload case
-    mSpellChainsNext.clear();                               // need for reload case
+    mSpellChains.clear(); // need for reload case
+    mSpellChainsNext.clear(); // need for reload case
 
     // load known data for talents
     for (uint32 i = 0; i < sTalentStore.GetNumRows(); ++i)
@@ -1515,15 +1432,15 @@ void SpellMgr::LoadSpellChains()
 
             if (!sSpellMgr.GetSpellEntry(spell_id))
             {
-                //sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u not exist as spell",spell_id);
+                // sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u not exist as spell",spell_id);
                 continue;
             }
 
             SpellChainNode node;
-            node.prev  = (j > 0) ? talentInfo->RankID[j - 1] : 0;
+            node.prev = (j > 0) ? talentInfo->RankID[j - 1] : 0;
             node.first = talentInfo->RankID[0];
-            node.rank  = j + 1;
-            node.req   = 0;
+            node.rank = j + 1;
+            node.req = 0;
 
             mSpellChains[spell_id] = node;
         }
@@ -1539,14 +1456,14 @@ void SpellMgr::LoadSpellChains()
 
             // some forward spells not exist and can be ignored (some outdated data)
             SpellEntry const* spell_entry = sSpellMgr.GetSpellEntry(spell_id);
-            if (!spell_entry)                                   // no cases
+            if (!spell_entry) // no cases
                 continue;
 
             // ignore spell without forwards (non ranked or missing info in skill abilities)
             uint32 forward_id = ab_itr.second->forward_spellid;
 
             // by some strange reason < 3.x clients not have forward spell for 2366
-            if (spell_id == 2366)                           // Herb Gathering, Apprentice
+            if (spell_id == 2366) // Herb Gathering, Apprentice
                 forward_id = 2368;
 
             // Seal of Righteousness (20154) make double in spellbook
@@ -1587,10 +1504,10 @@ void SpellMgr::LoadSpellChains()
             if (prev_chain_itr != mSpellChains.end())
             {
                 SpellChainNode node;
-                node.prev  = spell_id;
+                node.prev = spell_id;
                 node.first = prev_chain_itr->second.first;
-                node.rank  = prev_chain_itr->second.rank + 1;
-                node.req   = 0;
+                node.rank = prev_chain_itr->second.rank + 1;
+                node.req = 0;
 
                 mSpellChains[forward_id] = node;
                 continue;
@@ -1603,7 +1520,7 @@ void SpellMgr::LoadSpellChains()
         while (!prevRanks.empty())
         {
             uint32 spell_id = prevRanks.begin()->first;
-            uint32 prev_id  = prevRanks.begin()->second;
+            uint32 prev_id = prevRanks.begin()->second;
             prevRanks.erase(prevRanks.begin());
 
             LoadSpellChains_AbilityHelper(mSpellChains, prevRanks, spell_id, prev_id);
@@ -1636,10 +1553,10 @@ void SpellMgr::LoadSpellChains()
         uint32 spell_id = fields[0].GetUInt32();
 
         SpellChainNode node;
-        node.prev  = fields[1].GetUInt32();
+        node.prev = fields[1].GetUInt32();
         node.first = fields[2].GetUInt32();
-        node.rank  = fields[3].GetUInt8();
-        node.req   = fields[4].GetUInt32();
+        node.rank = fields[3].GetUInt8();
+        node.req = fields[4].GetUInt32();
 
         if (!sSpellMgr.GetSpellEntry(spell_id))
         {
@@ -1652,22 +1569,19 @@ void SpellMgr::LoadSpellChains()
         {
             if (chain_itr->second.rank != node.rank)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` expected rank %u by DBC data.",
-                                spell_id, node.prev, node.first, node.rank, node.req, chain_itr->second.rank);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` expected rank %u by DBC data.", spell_id, node.prev, node.first, node.rank, node.req, chain_itr->second.rank);
                 continue;
             }
 
             if (chain_itr->second.prev != node.prev)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` expected prev %u by DBC data.",
-                                spell_id, node.prev, node.first, node.rank, node.req, chain_itr->second.prev);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` expected prev %u by DBC data.", spell_id, node.prev, node.first, node.rank, node.req, chain_itr->second.prev);
                 continue;
             }
 
             if (chain_itr->second.first != node.first)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` expected first %u by DBC data.",
-                                spell_id, node.prev, node.first, node.rank, node.req, chain_itr->second.first);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` expected first %u by DBC data.", spell_id, node.prev, node.first, node.rank, node.req, chain_itr->second.first);
                 continue;
             }
 
@@ -1680,39 +1594,32 @@ void SpellMgr::LoadSpellChains()
             }
 
             // in other case redundant
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) already added (talent or spell ability with forward) and non need in `spell_chain`",
-                            spell_id, node.prev, node.first, node.rank, node.req);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) already added (talent or spell ability with forward) and non need in `spell_chain`", spell_id, node.prev, node.first, node.rank, node.req);
             continue;
         }
 
         if (node.prev != 0 && !sSpellMgr.GetSpellEntry(node.prev))
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has nonexistent previous rank spell.",
-                            spell_id, node.prev, node.first, node.rank, node.req);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has nonexistent previous rank spell.", spell_id, node.prev, node.first, node.rank, node.req);
             continue;
         }
 
         if (!sSpellMgr.GetSpellEntry(node.first))
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not existing first rank spell.",
-                            spell_id, node.prev, node.first, node.rank, node.req);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not existing first rank spell.", spell_id, node.prev, node.first, node.rank, node.req);
             continue;
         }
 
         // check basic spell chain data integrity (note: rank can be equal 0 or 1 for first/single spell)
-        if ((spell_id == node.first) != (node.rank <= 1) ||
-                (spell_id == node.first) != (node.prev == 0) ||
-                (node.rank <= 1) != (node.prev == 0))
+        if ((spell_id == node.first) != (node.rank <= 1) || (spell_id == node.first) != (node.prev == 0) || (node.rank <= 1) != (node.prev == 0))
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not compatible chain data.",
-                            spell_id, node.prev, node.first, node.rank, node.req);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not compatible chain data.", spell_id, node.prev, node.first, node.rank, node.req);
             continue;
         }
 
         if (node.req != 0 && !sSpellMgr.GetSpellEntry(node.req))
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not existing required spell.",
-                            spell_id, node.prev, node.first, node.rank, node.req);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not existing required spell.", spell_id, node.prev, node.first, node.rank, node.req);
             continue;
         }
 
@@ -1721,8 +1628,7 @@ void SpellMgr::LoadSpellChains()
         {
             if (node.rank != pos->rank + 1)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has wrong rank.",
-                                spell_id, node.prev, node.first, node.rank, node.req);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has wrong rank.", spell_id, node.prev, node.first, node.rank, node.req);
                 continue;
             }
 
@@ -1730,22 +1636,19 @@ void SpellMgr::LoadSpellChains()
             {
                 if (node.first != talentEntry->RankID[0])
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has wrong first rank spell.",
-                                    spell_id, node.prev, node.first, node.rank, node.req);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has wrong first rank spell.", spell_id, node.prev, node.first, node.rank, node.req);
                     continue;
                 }
 
                 if (node.rank > 1 && node.prev != talentEntry->RankID[node.rank - 1 - 1])
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has wrong prev rank spell.",
-                                    spell_id, node.prev, node.first, node.rank, node.req);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has wrong prev rank spell.", spell_id, node.prev, node.first, node.rank, node.req);
                     continue;
                 }
 
                 if (node.req != talentEntry->DependsOnSpell)
                 {
-                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has wrong required spell.",
-                                    spell_id, node.prev, node.first, node.rank, node.req);
+                    sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Talent %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has wrong required spell.", spell_id, node.prev, node.first, node.rank, node.req);
                     continue;
                 }
             }
@@ -1765,20 +1668,15 @@ void SpellMgr::LoadSpellChains()
             SpellChainMap::const_iterator i_prev = mSpellChains.find(itr.second.prev);
             if (i_prev == mSpellChains.end())
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not found previous rank spell in table.",
-                                itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not found previous rank spell in table.", itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req);
             }
             else if (i_prev->second.first != itr.second.first)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has different first spell in chain compared to previous rank spell (prev: %u, first: %u, rank: %d, req: %u).",
-                                itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req,
-                                i_prev->second.prev, i_prev->second.first, i_prev->second.rank, i_prev->second.req);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has different first spell in chain compared to previous rank spell (prev: %u, first: %u, rank: %d, req: %u).", itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req, i_prev->second.prev, i_prev->second.first, i_prev->second.rank, i_prev->second.req);
             }
             else if (i_prev->second.rank + 1 != itr.second.rank)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has different rank compared to previous rank spell (prev: %u, first: %u, rank: %d, req: %u).",
-                                itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req,
-                                i_prev->second.prev, i_prev->second.first, i_prev->second.rank, i_prev->second.req);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has different rank compared to previous rank spell (prev: %u, first: %u, rank: %d, req: %u).", itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req, i_prev->second.prev, i_prev->second.first, i_prev->second.rank, i_prev->second.req);
             }
         }
 
@@ -1787,20 +1685,15 @@ void SpellMgr::LoadSpellChains()
             SpellChainMap::const_iterator i_req = mSpellChains.find(itr.second.req);
             if (i_req == mSpellChains.end())
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not found required rank spell in table.",
-                                itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has not found required rank spell in table.", itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req);
             }
             else if (i_req->second.first == itr.second.first)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has required rank spell from same spell chain (prev: %u, first: %u, rank: %d, req: %u).",
-                                itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req,
-                                i_req->second.prev, i_req->second.first, i_req->second.rank, i_req->second.req);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has required rank spell from same spell chain (prev: %u, first: %u, rank: %d, req: %u).", itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req, i_req->second.prev, i_req->second.first, i_req->second.rank, i_req->second.req);
             }
             else if (i_req->second.req)
             {
-                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has required rank spell with required spell (prev: %u, first: %u, rank: %d, req: %u).",
-                                itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req,
-                                i_req->second.prev, i_req->second.first, i_req->second.rank, i_req->second.req);
+                sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has required rank spell with required spell (prev: %u, first: %u, rank: %d, req: %u).", itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req, i_req->second.prev, i_req->second.first, i_req->second.rank, i_req->second.req);
             }
         }
     }
@@ -1827,8 +1720,7 @@ void SpellMgr::LoadSpellChains()
 
         if (mSpellChainsNext.find(itr.first) == mSpellChainsNext.end())
         {
-            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has single rank data, so redundant.",
-                            itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req);
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` has single rank data, so redundant.", itr.first, itr.second.prev, itr.second.first, itr.second.rank, itr.second.req);
         }
     }
 
@@ -1838,7 +1730,7 @@ void SpellMgr::LoadSpellChains()
 
 void SpellMgr::LoadSpellLearnSkills()
 {
-    mSpellLearnSkills.clear();                              // need for reload case
+    mSpellLearnSkills.clear(); // need for reload case
 
     // search auto-learned skills and add its to map also for use in unlearn spells/talents
     uint32 dbc_count = 0;
@@ -1856,8 +1748,8 @@ void SpellMgr::LoadSpellLearnSkills()
             if (entry->Effect[i] == SPELL_EFFECT_SKILL)
             {
                 SpellLearnSkillNode dbc_node;
-                dbc_node.skill    = entry->EffectMiscValue[i];
-                dbc_node.step     = entry->CalculateSimpleValue(SpellEffectIndex(i));
+                dbc_node.skill = entry->EffectMiscValue[i];
+                dbc_node.step = entry->CalculateSimpleValue(SpellEffectIndex(i));
                 if (dbc_node.skill != SKILL_RIDING)
                     dbc_node.value = 1;
                 else
@@ -1877,7 +1769,7 @@ void SpellMgr::LoadSpellLearnSkills()
 
 void SpellMgr::LoadSpellEnchantCharges()
 {
-    mSpellEnchantChargesMap.clear();                              // need for reload case
+    mSpellEnchantChargesMap.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -1916,7 +1808,8 @@ void SpellMgr::LoadSpellEnchantCharges()
         mSpellEnchantChargesMap[entry] = charges;
 
         ++count;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u spell enchant charges", count);
@@ -1924,7 +1817,7 @@ void SpellMgr::LoadSpellEnchantCharges()
 
 void SpellMgr::LoadSpellLearnSpells()
 {
-    mSpellLearnSpells.clear();                              // need for reload case
+    mSpellLearnSpells.clear(); // need for reload case
 
     //                                                                0        1          2
     std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT `entry`, `SpellID`, `Active` FROM `spell_learn_spell` WHERE (`build_min` <= %u) && (`build_max` >= %u)", SUPPORTED_CLIENT_BUILD, SUPPORTED_CLIENT_BUILD));
@@ -1947,11 +1840,11 @@ void SpellMgr::LoadSpellLearnSpells()
         bar.step();
         Field* fields = result->Fetch();
 
-        uint32 spell_id    = fields[0].GetUInt32();
+        uint32 spell_id = fields[0].GetUInt32();
 
         SpellLearnSpellNode node;
-        node.spell      = fields[1].GetUInt32();
-        node.active     = fields[2].GetBool();
+        node.spell = fields[1].GetUInt32();
+        node.active = fields[2].GetBool();
         node.autoLearned = false;
 
         if (!sSpellMgr.GetSpellEntry(spell_id))
@@ -1992,8 +1885,8 @@ void SpellMgr::LoadSpellLearnSpells()
             if (entry->Effect[i] == SPELL_EFFECT_LEARN_SPELL)
             {
                 SpellLearnSpellNode dbc_node;
-                dbc_node.spell       = entry->EffectTriggerSpell[i];
-                dbc_node.active      = true;                // all dbc based learned spells is active (show in spell book or hide by client itself)
+                dbc_node.spell = entry->EffectTriggerSpell[i];
+                dbc_node.active = true; // all dbc based learned spells is active (show in spell book or hide by client itself)
 
                 // ignore learning nonexistent spells (broken/outdated/or generic learning spell 483
                 if (!sSpellMgr.GetSpellEntry(dbc_node.spell))
@@ -2011,14 +1904,13 @@ void SpellMgr::LoadSpellLearnSpells()
                 {
                     if (itr->second.spell == dbc_node.spell)
                     {
-                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u auto-learn spell %u in spell.dbc then the record in `spell_learn_spell` is redundant, please fix DB.",
-                                        spell, dbc_node.spell);
+                        sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u auto-learn spell %u in spell.dbc then the record in `spell_learn_spell` is redundant, please fix DB.", spell, dbc_node.spell);
                         found = true;
                         break;
                     }
                 }
 
-                if (!found)                                 // add new spell-spell pair if not found
+                if (!found) // add new spell-spell pair if not found
                 {
                     mSpellLearnSpells.insert(SpellLearnSpellMap::value_type(spell, dbc_node));
                     ++dbc_count;
@@ -2050,7 +1942,7 @@ void SpellMgr::LoadSpellScriptTarget()
         while (result->NextRow());
     }
 
-    mSpellScriptTarget.clear();                             // need for reload case
+    mSpellScriptTarget.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -2074,11 +1966,11 @@ void SpellMgr::LoadSpellScriptTarget()
         Field* fields = result->Fetch();
         bar.step();
 
-        uint32 spellId     = fields[0].GetUInt32();
-        uint32 type        = fields[1].GetUInt32();
+        uint32 spellId = fields[0].GetUInt32();
+        uint32 type = fields[1].GetUInt32();
         uint32 targetEntry = fields[2].GetUInt32();
         uint32 conditionId = fields[3].GetUInt32();
-        uint32 effectMask  = fields[4].GetUInt32();
+        uint32 effectMask = fields[4].GetUInt32();
 
         SpellEntry const* spellProto = sSpellMgr.GetSpellEntry(spellId);
 
@@ -2101,22 +1993,8 @@ void SpellMgr::LoadSpellScriptTarget()
         bool targetfound = false;
         for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
         {
-            if (spellProto->EffectImplicitTargetA[i] == TARGET_UNIT_SCRIPT_NEAR_CASTER ||
-                spellProto->EffectImplicitTargetB[i] == TARGET_UNIT_SCRIPT_NEAR_CASTER ||
-                spellProto->EffectImplicitTargetA[i] == TARGET_LOCATION_SCRIPT_NEAR_CASTER ||
-                spellProto->EffectImplicitTargetB[i] == TARGET_LOCATION_SCRIPT_NEAR_CASTER ||
-                spellProto->EffectImplicitTargetA[i] == TARGET_GAMEOBJECT_SCRIPT_NEAR_CASTER ||
-                spellProto->EffectImplicitTargetB[i] == TARGET_GAMEOBJECT_SCRIPT_NEAR_CASTER ||
-                spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_UNITS_SCRIPT_AOE_AT_SRC_LOC ||
-                spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_UNITS_SCRIPT_AOE_AT_SRC_LOC ||
-                spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_UNITS_SCRIPT_AOE_AT_DEST_LOC ||
-                spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_UNITS_SCRIPT_AOE_AT_DEST_LOC ||
-                spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_GAMEOBJECTS_SCRIPT_AOE_AT_SRC_LOC ||
-                spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_GAMEOBJECTS_SCRIPT_AOE_AT_SRC_LOC ||
-                spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_GAMEOBJECTS_SCRIPT_AOE_AT_DEST_LOC ||
-                spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_GAMEOBJECTS_SCRIPT_AOE_AT_DEST_LOC ||
-                spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_UNITS_SCRIPT_IN_CONE_60 ||
-                spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_UNITS_SCRIPT_IN_CONE_60)
+            if (spellProto->EffectImplicitTargetA[i] == TARGET_UNIT_SCRIPT_NEAR_CASTER || spellProto->EffectImplicitTargetB[i] == TARGET_UNIT_SCRIPT_NEAR_CASTER || spellProto->EffectImplicitTargetA[i] == TARGET_LOCATION_SCRIPT_NEAR_CASTER || spellProto->EffectImplicitTargetB[i] == TARGET_LOCATION_SCRIPT_NEAR_CASTER || spellProto->EffectImplicitTargetA[i] == TARGET_GAMEOBJECT_SCRIPT_NEAR_CASTER || spellProto->EffectImplicitTargetB[i] == TARGET_GAMEOBJECT_SCRIPT_NEAR_CASTER || spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_UNITS_SCRIPT_AOE_AT_SRC_LOC || spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_UNITS_SCRIPT_AOE_AT_SRC_LOC || spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_UNITS_SCRIPT_AOE_AT_DEST_LOC || spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_UNITS_SCRIPT_AOE_AT_DEST_LOC || spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_GAMEOBJECTS_SCRIPT_AOE_AT_SRC_LOC || spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_GAMEOBJECTS_SCRIPT_AOE_AT_SRC_LOC ||
+                spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_GAMEOBJECTS_SCRIPT_AOE_AT_DEST_LOC || spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_GAMEOBJECTS_SCRIPT_AOE_AT_DEST_LOC || spellProto->EffectImplicitTargetA[i] == TARGET_ENUM_UNITS_SCRIPT_IN_CONE_60 || spellProto->EffectImplicitTargetB[i] == TARGET_ENUM_UNITS_SCRIPT_IN_CONE_60)
             {
                 targetfound = true;
                 break;
@@ -2138,7 +2016,7 @@ void SpellMgr::LoadSpellScriptTarget()
         // Checks by target type
         switch (type)
         {
-            case SPELL_TARGET_TYPE_GAMEOBJECT:
+        case SPELL_TARGET_TYPE_GAMEOBJECT:
             {
                 if (!targetEntry)
                     break;
@@ -2151,12 +2029,12 @@ void SpellMgr::LoadSpellScriptTarget()
                 }
                 break;
             }
-            case SPELL_TARGET_TYPE_PLAYER:
+        case SPELL_TARGET_TYPE_PLAYER:
             {
                 // nothing to check
                 break;
             }
-            default:
+        default:
             {
                 if (!targetEntry)
                 {
@@ -2210,7 +2088,7 @@ void SpellMgr::LoadSpellScriptTarget()
 
 void SpellMgr::LoadSpellPetAuras()
 {
-    mSpellPetAuraMap.clear();                                  // need for reload case
+    mSpellPetAuraMap.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -2253,9 +2131,7 @@ void SpellMgr::LoadSpellPetAuras()
             }
             uint8 i = 0;
             for (; i < MAX_EFFECT_INDEX; ++i)
-                if ((spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AURA &&
-                        spellInfo->EffectApplyAuraName[i] == SPELL_AURA_DUMMY) ||
-                        spellInfo->Effect[i] == SPELL_EFFECT_DUMMY)
+                if ((spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AURA && spellInfo->EffectApplyAuraName[i] == SPELL_AURA_DUMMY) || spellInfo->Effect[i] == SPELL_EFFECT_DUMMY)
                     break;
 
             if (i == MAX_EFFECT_INDEX)
@@ -2297,11 +2173,11 @@ bool SpellMgr::IsSpellValid(SpellEntry const* spellInfo, Player* pl, bool msg)
     {
         switch (spellInfo->Effect[i])
         {
-            case 0:
-                continue;
+        case 0:
+            continue;
 
-            // craft spell for crafting nonexistent item (break client recipes list show)
-            case SPELL_EFFECT_CREATE_ITEM:
+        // craft spell for crafting nonexistent item (break client recipes list show)
+        case SPELL_EFFECT_CREATE_ITEM:
             {
                 if (!sObjectMgr.GetItemPrototype(spellInfo->EffectItemType[i]))
                 {
@@ -2318,7 +2194,7 @@ bool SpellMgr::IsSpellValid(SpellEntry const* spellInfo, Player* pl, bool msg)
                 need_check_reagents = true;
                 break;
             }
-            case SPELL_EFFECT_LEARN_SPELL:
+        case SPELL_EFFECT_LEARN_SPELL:
             {
                 SpellEntry const* spellInfo2 = sSpellMgr.GetSpellEntry(spellInfo->EffectTriggerSpell[i]);
                 if (!IsSpellValid(spellInfo2, pl, msg))
@@ -2360,7 +2236,7 @@ bool SpellMgr::IsSpellValid(SpellEntry const* spellInfo, Player* pl, bool msg)
 
 void SpellMgr::LoadSpellCones()
 {
-    mSpellCones.clear();                              // need for reload case
+    mSpellCones.clear(); // need for reload case
 
     uint32 count = 0;
 
@@ -2407,7 +2283,8 @@ void SpellMgr::LoadSpellCones()
         mSpellCones[entry] = angle;
 
         ++count;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u spell cones", count);
@@ -2415,7 +2292,7 @@ void SpellMgr::LoadSpellCones()
 
 void SpellMgr::LoadSpellAreas()
 {
-    mSpellAreaMap.clear();                                  // need for reload case
+    mSpellAreaMap.clear(); // need for reload case
     mSpellAreaForQuestMap.clear();
     mSpellAreaForActiveQuestMap.clear();
     mSpellAreaForQuestEndMap.clear();
@@ -2447,15 +2324,15 @@ void SpellMgr::LoadSpellAreas()
 
         uint32 spell = fields[0].GetUInt32();
         SpellArea spellArea;
-        spellArea.spellId             = spell;
-        spellArea.areaId              = fields[1].GetUInt32();
-        spellArea.questStart          = fields[2].GetUInt32();
+        spellArea.spellId = spell;
+        spellArea.areaId = fields[1].GetUInt32();
+        spellArea.questStart = fields[2].GetUInt32();
         spellArea.questStartCanActive = fields[3].GetBool();
-        spellArea.questEnd            = fields[4].GetUInt32();
-        spellArea.auraSpell           = fields[5].GetInt32();
-        spellArea.raceMask            = fields[6].GetUInt32();
-        spellArea.gender              = Gender(fields[7].GetUInt8());
-        spellArea.autocast            = fields[8].GetBool();
+        spellArea.questEnd = fields[4].GetUInt32();
+        spellArea.auraSpell = fields[5].GetInt32();
+        spellArea.raceMask = fields[6].GetUInt32();
+        spellArea.gender = Gender(fields[7].GetUInt8());
+        spellArea.autocast = fields[8].GetBool();
 
         if (!sSpellMgr.GetSpellEntry(spell))
         {
@@ -2492,7 +2369,6 @@ void SpellMgr::LoadSpellAreas()
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Spell %u listed in `spell_area` already listed with similar requirements.", spell);
                 continue;
             }
-
         }
 
         if (spellArea.areaId && !AreaEntry::GetById(spellArea.areaId))
@@ -2536,10 +2412,10 @@ void SpellMgr::LoadSpellAreas()
             {
                 switch (spellInfo->EffectApplyAuraName[i])
                 {
-                    case SPELL_AURA_DUMMY:
-                    case SPELL_AURA_GHOST:
-                        validSpellEffect = true;
-                        break;
+                case SPELL_AURA_DUMMY:
+                case SPELL_AURA_GHOST:
+                    validSpellEffect = true;
+                    break;
                 }
             }
 
@@ -2648,32 +2524,31 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const* spell
 
     switch (spellInfo->Id)
     {
-        // Alterac Valley
-        case 22564:                                         // Recall (Alliance)
-        case 22563:                                         // Recall (Horde)
-        case 23538:                                         // Battle Standard (Horde)
-        case 23539:                                         // Battle Standard (Alliance)
+    // Alterac Valley
+    case 22564: // Recall (Alliance)
+    case 22563: // Recall (Horde)
+    case 23538: // Battle Standard (Horde)
+    case 23539: // Battle Standard (Alliance)
         {
             if (!player)
                 return SPELL_FAILED_REQUIRES_AREA;
 
             BattleGround* bg = player->GetBattleGround();
 
-            return player->GetMapId() == MAP_ALTERAC_VALLEY && bg
-                   && bg->GetStatus() != STATUS_WAIT_JOIN ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
+            return player->GetMapId() == MAP_ALTERAC_VALLEY && bg && bg->GetStatus() != STATUS_WAIT_JOIN ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
         }
-        // Warsong Gulch
-        case 23333:                                         // Warsong Flag
-        case 23335:                                         // Silverwing Flag
-            return player && player->GetMapId() == MAP_WARSONG_GULCH && player->InBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
+    // Warsong Gulch
+    case 23333: // Warsong Flag
+    case 23335: // Silverwing Flag
+        return player && player->GetMapId() == MAP_WARSONG_GULCH && player->InBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_5_1
-        case 2584:                                          // Waiting to Resurrect
+    case 2584: // Waiting to Resurrect
         {
             return player && player->InBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_ONLY_BATTLEGROUNDS;
         }
-        case 22011:                                         // Spirit Heal Channel
-        case 22012:                                         // Spirit Heal
-        case 24171:                                         // Resurrection Impact Visual
+    case 22011: // Spirit Heal Channel
+    case 22012: // Spirit Heal
+    case 24171: // Resurrection Impact Visual
         {
             MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(mapId);
             if (!mapEntry)
@@ -2716,10 +2591,10 @@ uint32 SpellMgr::GetRequiredAreaForSpell(uint32 spellId)
     // Not defined in database.
     switch (spellId)
     {
-        // Warsong Gulch
-        case 23333: // Warsong Flag
-        case 23335: // Silverwing Flag
-            return 3277;
+    // Warsong Gulch
+    case 23333: // Warsong Flag
+    case 23335: // Silverwing Flag
+        return 3277;
     }
 
     return 0;
@@ -2819,17 +2694,17 @@ void SpellMgr::CheckUsedSpells(char const* table)
 
         bar.step();
 
-        uint32 spell       = fields[0].GetUInt32();
-        int32  family      = fields[1].GetInt32();
-        uint64 familyMask  = fields[2].GetUInt64();
-        int32  spellIcon   = fields[3].GetInt32();
-        int32  spellVisual = fields[4].GetInt32();
-        int32  category    = fields[5].GetInt32();
-        int32  effectType  = fields[6].GetInt32();
-        int32  auraType    = fields[7].GetInt32();
-        int32  effectIdx   = fields[8].GetInt32();
-        std::string name   = fields[9].GetCppString();
-        std::string code   = fields[10].GetCppString();
+        uint32 spell = fields[0].GetUInt32();
+        int32 family = fields[1].GetInt32();
+        uint64 familyMask = fields[2].GetUInt64();
+        int32 spellIcon = fields[3].GetInt32();
+        int32 spellVisual = fields[4].GetInt32();
+        int32 category = fields[5].GetInt32();
+        int32 effectType = fields[6].GetInt32();
+        int32 auraType = fields[7].GetInt32();
+        int32 effectIdx = fields[8].GetInt32();
+        std::string name = fields[9].GetCppString();
+        std::string code = fields[10].GetCppString();
 
         // checks of correctness requirements itself
 
@@ -2903,11 +2778,9 @@ void SpellMgr::CheckUsedSpells(char const* table)
                 {
                     if (spellEntry->SpellFamilyFlags)
                     {
-                        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Spell %u '%s' not fit to (" UI64FMTD ") but used in %s.",
-                                      spell, name.c_str(), familyMask, code.c_str());
+                        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Spell %u '%s' not fit to (" UI64FMTD ") but used in %s.", spell, name.c_str(), familyMask, code.c_str());
                         continue;
                     }
-
                 }
                 else
                 {
@@ -2916,7 +2789,6 @@ void SpellMgr::CheckUsedSpells(char const* table)
                         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Spell %u '%s' not fit to (" I64FMT ") but used in %s.", spell, name.c_str(), familyMask, code.c_str());
                         continue;
                     }
-
                 }
             }
 
@@ -2951,7 +2823,6 @@ void SpellMgr::CheckUsedSpells(char const* table)
                     sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Spell %u '%s' aura%d <> %u but used in %s.", spell, name.c_str(), effectIdx + 1, auraType, code.c_str());
                     continue;
                 }
-
             }
             else
             {
@@ -3029,15 +2900,12 @@ void SpellMgr::CheckUsedSpells(char const* table)
             if (!found)
             {
                 if (effectIdx >= 0)
-                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Spells '%s' not found for family %i (" I64FMT ") icon(%i) visual(%i) category(%i) effect%d(%i) aura%d(%i) but used in %s",
-                                  name.c_str(), family, familyMask, spellIcon, spellVisual, category, effectIdx + 1, effectType, effectIdx + 1, auraType, code.c_str());
+                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Spells '%s' not found for family %i (" I64FMT ") icon(%i) visual(%i) category(%i) effect%d(%i) aura%d(%i) but used in %s", name.c_str(), family, familyMask, spellIcon, spellVisual, category, effectIdx + 1, effectType, effectIdx + 1, auraType, code.c_str());
                 else
-                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Spells '%s' not found for family %i (" I64FMT ") icon(%i) visual(%i) category(%i) effect(%i) aura(%i) but used in %s",
-                                  name.c_str(), family, familyMask, spellIcon, spellVisual, category, effectType, auraType, code.c_str());
+                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Spells '%s' not found for family %i (" I64FMT ") icon(%i) visual(%i) category(%i) effect(%i) aura(%i) but used in %s", name.c_str(), family, familyMask, spellIcon, spellVisual, category, effectType, auraType, code.c_str());
                 continue;
             }
         }
-
     }
     while (result->NextRow());
 
@@ -3112,7 +2980,8 @@ void SpellMgr::LoadExistingSpellIds()
             fields = result->Fetch();
             uint32 id = fields[0].GetUInt32();
             mExistingSpellsSet.insert(id);
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 }
 
@@ -3138,33 +3007,33 @@ namespace SpellInternal
         {
             switch (spellInfo->Effect[i])
             {
-                case SPELL_EFFECT_SCHOOL_DAMAGE:
-                case SPELL_EFFECT_POWER_DRAIN:
-                case SPELL_EFFECT_HEALTH_LEECH:
-                case SPELL_EFFECT_ENVIRONMENTAL_DAMAGE:
-                case SPELL_EFFECT_POWER_BURN:
-                case SPELL_EFFECT_HEAL:
-                    direct = true;
-                    break;
-                case SPELL_EFFECT_APPLY_AURA:
-                    switch (spellInfo->EffectApplyAuraName[i])
-                    {
-                        case SPELL_AURA_PERIODIC_DAMAGE:
-                        case SPELL_AURA_PERIODIC_HEAL:
-                        case SPELL_AURA_PERIODIC_ENERGIZE:
-                        case SPELL_AURA_OBS_MOD_HEALTH:
-                        case SPELL_AURA_PERIODIC_LEECH:
-                        case SPELL_AURA_PERIODIC_HEALTH_FUNNEL:
-                        case SPELL_AURA_PERIODIC_MANA_LEECH:
-                        case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
-                        case SPELL_AURA_POWER_BURN_MANA:
-                        case SPELL_AURA_PERIODIC_TRIGGER_SPELL:
-                            periodic = true;
-                        default:
-                            break;
-                    }
+            case SPELL_EFFECT_SCHOOL_DAMAGE:
+            case SPELL_EFFECT_POWER_DRAIN:
+            case SPELL_EFFECT_HEALTH_LEECH:
+            case SPELL_EFFECT_ENVIRONMENTAL_DAMAGE:
+            case SPELL_EFFECT_POWER_BURN:
+            case SPELL_EFFECT_HEAL:
+                direct = true;
+                break;
+            case SPELL_EFFECT_APPLY_AURA:
+                switch (spellInfo->EffectApplyAuraName[i])
+                {
+                case SPELL_AURA_PERIODIC_DAMAGE:
+                case SPELL_AURA_PERIODIC_HEAL:
+                case SPELL_AURA_PERIODIC_ENERGIZE:
+                case SPELL_AURA_OBS_MOD_HEALTH:
+                case SPELL_AURA_PERIODIC_LEECH:
+                case SPELL_AURA_PERIODIC_HEALTH_FUNNEL:
+                case SPELL_AURA_PERIODIC_MANA_LEECH:
+                case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
+                case SPELL_AURA_POWER_BURN_MANA:
+                case SPELL_AURA_PERIODIC_TRIGGER_SPELL:
+                    periodic = true;
                 default:
                     break;
+                }
+            default:
+                break;
             }
         }
         return periodic && !direct;
@@ -3188,8 +3057,7 @@ namespace SpellInternal
         // Holy Light/Flash of Light
         if (spellInfo->SpellFamilyName == SPELLFAMILY_PALADIN)
         {
-            if (spellInfo->IsFitToFamilyMask<CF_PALADIN_FLASH_OF_LIGHT2>() ||
-                spellInfo->IsFitToFamilyMask<CF_PALADIN_HOLY_LIGHT2>())
+            if (spellInfo->IsFitToFamilyMask<CF_PALADIN_FLASH_OF_LIGHT2>() || spellInfo->IsFitToFamilyMask<CF_PALADIN_HOLY_LIGHT2>())
                 return true;
         }
 
@@ -3197,19 +3065,19 @@ namespace SpellInternal
         {
             switch (spellInfo->Effect[i])
             {
-                case SPELL_EFFECT_HEAL:
-                case SPELL_EFFECT_HEAL_MAX_HEALTH:
-                    return true;
-                case SPELL_EFFECT_APPLY_AURA:
-                case SPELL_EFFECT_APPLY_AREA_AURA_FRIEND:
-                case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
-                case SPELL_EFFECT_APPLY_AREA_AURA_RAID:
-                case SPELL_EFFECT_APPLY_AREA_AURA_PET:
+            case SPELL_EFFECT_HEAL:
+            case SPELL_EFFECT_HEAL_MAX_HEALTH:
+                return true;
+            case SPELL_EFFECT_APPLY_AURA:
+            case SPELL_EFFECT_APPLY_AREA_AURA_FRIEND:
+            case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
+            case SPELL_EFFECT_APPLY_AREA_AURA_RAID:
+            case SPELL_EFFECT_APPLY_AREA_AURA_PET:
                 {
                     switch (spellInfo->EffectApplyAuraName[i])
                     {
-                        case SPELL_AURA_PERIODIC_HEAL:
-                            return true;
+                    case SPELL_AURA_PERIODIC_HEAL:
+                        return true;
                     }
                     break;
                 }
@@ -3248,16 +3116,7 @@ namespace SpellInternal
         return true;
     }
 
-    bool IsAreaOfEffectSpell(SpellEntry const* spellInfo)
-    {
-        return
-            IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetA[EFFECT_INDEX_0])) ||
-            IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetB[EFFECT_INDEX_0])) ||
-            IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetA[EFFECT_INDEX_1])) ||
-            IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetB[EFFECT_INDEX_1])) ||
-            IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetA[EFFECT_INDEX_2])) ||
-            IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetB[EFFECT_INDEX_2]));
-    }
+    bool IsAreaOfEffectSpell(SpellEntry const* spellInfo) { return IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetA[EFFECT_INDEX_0])) || IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetB[EFFECT_INDEX_0])) || IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetA[EFFECT_INDEX_1])) || IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetB[EFFECT_INDEX_1])) || IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetA[EFFECT_INDEX_2])) || IsAreaEffectTarget(SpellTarget(spellInfo->EffectImplicitTargetB[EFFECT_INDEX_2])); }
 
     bool HasAreaAuraEffect(SpellEntry const* spellInfo)
     {
@@ -3277,17 +3136,9 @@ namespace SpellInternal
         return false;
     }
 
-    bool IsCharmSpell(SpellEntry const* spellInfo)
-    {
-        return spellInfo->HasAura(SPELL_AURA_MOD_CHARM) || spellInfo->HasAura(SPELL_AURA_MOD_POSSESS);
-    }
+    bool IsCharmSpell(SpellEntry const* spellInfo) { return spellInfo->HasAura(SPELL_AURA_MOD_CHARM) || spellInfo->HasAura(SPELL_AURA_MOD_POSSESS); }
 
-    bool IsReflectableSpell(SpellEntry const* spellInfo)
-    {
-        return spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MAGIC && !spellInfo->HasAttribute(SPELL_ATTR_IS_ABILITY)
-            && !spellInfo->HasAttribute(SPELL_ATTR_EX_NO_REFLECTION) && !spellInfo->HasAttribute(SPELL_ATTR_NO_IMMUNITIES)
-            && !spellInfo->HasAttribute(SPELL_ATTR_PASSIVE) && !spellInfo->IsPositiveSpell();
-    }
+    bool IsReflectableSpell(SpellEntry const* spellInfo) { return spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MAGIC && !spellInfo->HasAttribute(SPELL_ATTR_IS_ABILITY) && !spellInfo->HasAttribute(SPELL_ATTR_EX_NO_REFLECTION) && !spellInfo->HasAttribute(SPELL_ATTR_NO_IMMUNITIES) && !spellInfo->HasAttribute(SPELL_ATTR_PASSIVE) && !spellInfo->IsPositiveSpell(); }
 
     bool IsSpellWithDelayableEffects(SpellEntry const* spellInfo)
     {
@@ -3340,36 +3191,36 @@ namespace SpellInternal
 
             switch (spellInfo->Effect[eff])
             {
-                case SPELL_EFFECT_INTERRUPT_CAST:
+            case SPELL_EFFECT_INTERRUPT_CAST:
+                foundNoDamageAura = true;
+                break;
+            case SPELL_EFFECT_APPLY_AURA:
+                switch (spellInfo->EffectApplyAuraName[eff])
+                {
+                case SPELL_AURA_MOD_DECREASE_SPEED:
+                case SPELL_AURA_MOD_FEAR:
+                case SPELL_AURA_MOD_STUN:
+                case SPELL_AURA_MOD_PACIFY:
+                case SPELL_AURA_MOD_ROOT:
+                case SPELL_AURA_MOD_SILENCE:
+                case SPELL_AURA_MOD_DISARM:
+                case SPELL_AURA_MOD_RESISTANCE:
+                case SPELL_AURA_MOD_DAMAGE_TAKEN:
                     foundNoDamageAura = true;
                     break;
-                case SPELL_EFFECT_APPLY_AURA:
-                    switch (spellInfo->EffectApplyAuraName[eff])
-                    {
-                        case SPELL_AURA_MOD_DECREASE_SPEED:
-                        case SPELL_AURA_MOD_FEAR:
-                        case SPELL_AURA_MOD_STUN:
-                        case SPELL_AURA_MOD_PACIFY:
-                        case SPELL_AURA_MOD_ROOT:
-                        case SPELL_AURA_MOD_SILENCE:
-                        case SPELL_AURA_MOD_DISARM:
-                        case SPELL_AURA_MOD_RESISTANCE:
-                        case SPELL_AURA_MOD_DAMAGE_TAKEN:
-                            foundNoDamageAura = true;
-                            break;
-                    }
-                    break;
-                case SPELL_EFFECT_KNOCK_BACK:
-                    foundNoDamageAura = true;
-                    break;
+                }
+                break;
+            case SPELL_EFFECT_KNOCK_BACK:
+                foundNoDamageAura = true;
+                break;
             }
         }
         isBinary = foundNoDamageAura;
 
-        if (spellInfo->Id == 26143)    // SPELL_MIND_FLAY (C'Thuns Eye Tentacles)
+        if (spellInfo->Id == 26143) // SPELL_MIND_FLAY (C'Thuns Eye Tentacles)
             isBinary = true;
         else if (spellInfo->Id == 26478)
-            isBinary = true;           // SPELL_GROUND_RUPTURE_NATURE (C'thuns Giant tentacles ground rupture)
+            isBinary = true; // SPELL_GROUND_RUPTURE_NATURE (C'thuns Giant tentacles ground rupture)
 
         return isBinary;
     }
@@ -3399,11 +3250,11 @@ namespace SpellInternal
         {
             switch (i)
             {
-                case SPELL_AURA_MOD_FEAR:
-                case SPELL_AURA_MOD_ROOT:
-                case SPELL_AURA_MOD_PACIFY_SILENCE:
-                case SPELL_AURA_MOD_CONFUSE:
-                    return false;
+            case SPELL_AURA_MOD_FEAR:
+            case SPELL_AURA_MOD_ROOT:
+            case SPELL_AURA_MOD_PACIFY_SILENCE:
+            case SPELL_AURA_MOD_CONFUSE:
+                return false;
             }
         }
 
@@ -3419,9 +3270,9 @@ namespace SpellInternal
 
         switch (spellInfo->GetDiminishingReturnsGroup(false))
         {
-            case DIMINISHING_NONE:
-            case DIMINISHING_LIMITONLY:
-                return false;
+        case DIMINISHING_NONE:
+        case DIMINISHING_LIMITONLY:
+            return false;
         }
         return true;
     }
@@ -3454,7 +3305,7 @@ namespace SpellInternal
 
         return targetMask;
     }
-}
+} // namespace SpellInternal
 
 void SpellMgr::AssignInternalSpellFlags()
 {
@@ -3521,26 +3372,26 @@ void SpellMgr::AssignInternalSpellFlags()
 #if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_9_4
 enum OldProcFlags
 {
-    OLD_PROC_FLAG_DONE_MELEE_HIT      = 0x00000001,   // New value - 20
-    OLD_PROC_FLAG_TAKEN_MELEE_HIT     = 0x00000002,   // New value - 40
-    OLD_PROC_FLAG_KILL                = 0x00000004,   // New value - 2
-    OLD_PROC_FLAG_HEARTBEAT           = 0x00000008,   // New value - 1
-    OLD_PROC_FLAG_DODGE               = 0x00000010,   // New value - 40
-    OLD_PROC_FLAG_PARRY               = 0x00000020,   // New value - 40
-    OLD_PROC_FLAG_BLOCK               = 0x00000040,   // New value - 40
-    OLD_PROC_FLAG_ON_SWING            = 0x00000080,   // New value - 4
-    OLD_PROC_FLAG_MAGIC_SPELL_CAST    = 0x00000100,   // New value - 81920
-    OLD_PROC_FLAG_TAKEN_NON_MELEE_HIT = 0x00000400,   // New value - 139904
-    OLD_PROC_FLAG_TAKEN_HIT           = 0x00000800,   // New value - 139936
-    OLD_PROC_FLAG_DONE_MELEE_CRIT     = 0x00001000,   // New value - 4
-    OLD_PROC_FLAG_TAKEN_MELEE_CRIT    = 0x00002000,   // New value - 8
-    OLD_PROC_FLAG_DONE_ANY_NOT_SWING  = 0x00004000,   // New value - 87376
-    OLD_PROC_FLAG_TAKEN_ANY_DAMAGE    = 0x00008000,   // New value - 1048576
-    OLD_PROC_FLAG_DONE_SPELL_CRIT     = 0x00010000,   // New value - 87376
-    OLD_PROC_FLAG_DONE_SPELL_HIT      = 0x00020000,   // New value - 87376
-    OLD_PROC_FLAG_TAKEN_RANGED_CRIT   = 0x00040000,   // New value - 139936
-    OLD_PROC_FLAG_DONE_RANGED_HIT     = 0x00080000,   // New value - 320
-    OLD_PROC_FLAG_TAKEN_RANGED_HIT    = 0x00100000,   // New value - 640
+    OLD_PROC_FLAG_DONE_MELEE_HIT = 0x00000001, // New value - 20
+    OLD_PROC_FLAG_TAKEN_MELEE_HIT = 0x00000002, // New value - 40
+    OLD_PROC_FLAG_KILL = 0x00000004, // New value - 2
+    OLD_PROC_FLAG_HEARTBEAT = 0x00000008, // New value - 1
+    OLD_PROC_FLAG_DODGE = 0x00000010, // New value - 40
+    OLD_PROC_FLAG_PARRY = 0x00000020, // New value - 40
+    OLD_PROC_FLAG_BLOCK = 0x00000040, // New value - 40
+    OLD_PROC_FLAG_ON_SWING = 0x00000080, // New value - 4
+    OLD_PROC_FLAG_MAGIC_SPELL_CAST = 0x00000100, // New value - 81920
+    OLD_PROC_FLAG_TAKEN_NON_MELEE_HIT = 0x00000400, // New value - 139904
+    OLD_PROC_FLAG_TAKEN_HIT = 0x00000800, // New value - 139936
+    OLD_PROC_FLAG_DONE_MELEE_CRIT = 0x00001000, // New value - 4
+    OLD_PROC_FLAG_TAKEN_MELEE_CRIT = 0x00002000, // New value - 8
+    OLD_PROC_FLAG_DONE_ANY_NOT_SWING = 0x00004000, // New value - 87376
+    OLD_PROC_FLAG_TAKEN_ANY_DAMAGE = 0x00008000, // New value - 1048576
+    OLD_PROC_FLAG_DONE_SPELL_CRIT = 0x00010000, // New value - 87376
+    OLD_PROC_FLAG_DONE_SPELL_HIT = 0x00020000, // New value - 87376
+    OLD_PROC_FLAG_TAKEN_RANGED_CRIT = 0x00040000, // New value - 139936
+    OLD_PROC_FLAG_DONE_RANGED_HIT = 0x00080000, // New value - 320
+    OLD_PROC_FLAG_TAKEN_RANGED_HIT = 0x00100000, // New value - 640
 };
 
 uint32 ReplaceOldSpellProcFlags(uint32 oldFlags)
@@ -3642,8 +3493,8 @@ uint32 ReplaceOldSpellProcFlags(uint32 oldFlags)
 
     if (oldFlags & OLD_PROC_FLAG_DONE_SPELL_HIT)
     {
-        //newFlags |= PROC_FLAG_DEAL_MELEE_ABILITY;
-        //newFlags |= PROC_FLAG_DEAL_RANGED_ATTACK;
+        // newFlags |= PROC_FLAG_DEAL_MELEE_ABILITY;
+        // newFlags |= PROC_FLAG_DEAL_RANGED_ATTACK;
         newFlags |= PROC_FLAG_DEAL_RANGED_ABILITY;
         newFlags |= PROC_FLAG_DEAL_HELPFUL_ABILITY;
         newFlags |= PROC_FLAG_DEAL_HARMFUL_ABILITY;
@@ -3718,7 +3569,8 @@ void SpellMgr::LoadSpells()
         bar.step();
         fields = result->Fetch();
         LoadSpell(fields);
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
 #if SUPPORTED_CLIENT_BUILD == CLIENT_BUILD_1_12_1
     // Load localized texts (currently we only have 1.12 locales).
@@ -3761,8 +3613,8 @@ void SpellMgr::LoadSpells()
             mSpellEntryMap[spellId]->ToolTip[5] = fields[23].GetCppString();
             mSpellEntryMap[spellId]->ToolTip[6] = fields[24].GetCppString();
             */
-
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 #endif
 
@@ -3780,7 +3632,7 @@ void SpellMgr::LoadSpell(Field* fields)
     spell->Id = spellId;
     spell->School = fields[2].GetUInt32();
     spell->Category = fields[3].GetUInt32();
-    //spell->castUI = fields[4].GetUInt32(); not used
+    // spell->castUI = fields[4].GetUInt32(); not used
     spell->Dispel = fields[5].GetUInt32();
     spell->Mechanic = fields[6].GetUInt32();
     spell->Attributes = fields[7].GetUInt32();
@@ -3815,7 +3667,7 @@ void SpellMgr::LoadSpell(Field* fields)
     spell->manaPerSecondPerLevel = fields[36].GetUInt32();
     spell->rangeIndex = fields[37].GetUInt32();
     spell->speed = fields[38].GetFloat();
-    //spell->modalNextSpell = fields[39].GetUInt32(); not used
+    // spell->modalNextSpell = fields[39].GetUInt32(); not used
     spell->StackAmount = fields[40].GetUInt32();
     spell->Totem[0] = fields[41].GetUInt32();
     spell->Totem[1] = fields[42].GetUInt32();
@@ -3896,12 +3748,12 @@ void SpellMgr::LoadSpell(Field* fields)
     spell->EffectPointsPerComboPoint[1] = fields[117].GetFloat();
     spell->EffectPointsPerComboPoint[2] = fields[118].GetFloat();
     spell->SpellVisual = fields[119].GetUInt32();
-    //spell->SpellVisual2 = fields[120].GetUInt32(); not used
+    // spell->SpellVisual2 = fields[120].GetUInt32(); not used
     spell->SpellIconID = fields[121].GetUInt32();
     spell->activeIconID = fields[122].GetUInt32();
     spell->spellPriority = fields[123].GetUInt32();
     spell->SpellName[0] = fields[124].GetCppString();
-    //spell->SpellNameFlag = fields[125].GetUInt32(); not used
+    // spell->SpellNameFlag = fields[125].GetUInt32(); not used
     spell->Rank[0] = fields[126].GetCppString();
     /* not used
     spell->RankFlags = fields[127].GetUInt32();
@@ -3920,13 +3772,13 @@ void SpellMgr::LoadSpell(Field* fields)
     spell->MaxAffectedTargets = fields[139].GetUInt32();
     spell->DmgClass = fields[140].GetUInt32();
     spell->PreventionType = fields[141].GetUInt32();
-    //spell->StanceBarOrder = fields[142].GetInt32();
+    // spell->StanceBarOrder = fields[142].GetInt32();
     spell->DmgMultiplier[0] = fields[143].GetFloat();
     spell->DmgMultiplier[1] = fields[144].GetFloat();
     spell->DmgMultiplier[2] = fields[145].GetFloat();
-    //spell->MinFactionId = fields[146].GetUInt32();
-    //spell->MinReputation = fields[147].GetUInt32();
-    //spell->RequiredAuraVision = fields[148].GetUInt32();
+    // spell->MinFactionId = fields[146].GetUInt32();
+    // spell->MinReputation = fields[147].GetUInt32();
+    // spell->RequiredAuraVision = fields[148].GetUInt32();
     spell->Custom = fields[149].GetUInt32();
     spell->ScriptId = sScriptMgr.GetScriptId(fields[150].GetString());
 
@@ -3971,25 +3823,25 @@ void SpellMgr::LoadSpell(Field* fields)
             {
                 // Before 1.11, the spell data specifies TO what percent the speed is reduced, not BY what percent.
             case SPELL_AURA_MOD_DECREASE_SPEED:
-            {
-                spell->EffectBasePoints[i] = -(100 - spell->EffectBasePoints[i]);
-                break;
-            }
+                {
+                    spell->EffectBasePoints[i] = -(100 - spell->EffectBasePoints[i]);
+                    break;
+                }
 
 #if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_8_4
             // Before 1.9, the creature family is not a mask.
             case SPELL_AURA_MOD_DAMAGE_DONE_CREATURE:
-            {
-                spell->EffectMiscValue[i] = 1 << (spell->EffectMiscValue[i] - 1);
-                break;
-            }
+                {
+                    spell->EffectMiscValue[i] = 1 << (spell->EffectMiscValue[i] - 1);
+                    break;
+                }
             // Before 1.9, value 0 means all schools.
             case SPELL_AURA_MOD_THREAT:
-            {
-                if (spell->EffectMiscValue[i] == 0)
-                    spell->EffectMiscValue[i] = 127;
-                break;
-            }
+                {
+                    if (spell->EffectMiscValue[i] == 0)
+                        spell->EffectMiscValue[i] = 127;
+                    break;
+                }
             // Before 1.9, the school is not a mask.
             case SPELL_AURA_MOD_DAMAGE_DONE:
             case SPELL_AURA_MOD_DAMAGE_TAKEN:
@@ -4014,15 +3866,15 @@ void SpellMgr::LoadSpell(Field* fields)
             case SPELL_AURA_MOD_BASE_RESISTANCE_PCT:
             case SPELL_AURA_MOD_RESISTANCE_EXCLUSIVE:
             case SPELL_AURA_SPLIT_DAMAGE_FLAT:
-            {
-                if (spell->EffectMiscValue[i] == -2)
-                    spell->EffectMiscValue[i] = 127; // all schools
-                else if (spell->EffectMiscValue[i] == -1)
-                    spell->EffectMiscValue[i] = 126; // all magic schools
-                else
-                    spell->EffectMiscValue[i] = 1 << spell->EffectMiscValue[i];
-                break;
-            }
+                {
+                    if (spell->EffectMiscValue[i] == -2)
+                        spell->EffectMiscValue[i] = 127; // all schools
+                    else if (spell->EffectMiscValue[i] == -1)
+                        spell->EffectMiscValue[i] = 126; // all magic schools
+                    else
+                        spell->EffectMiscValue[i] = 1 << spell->EffectMiscValue[i];
+                    break;
+                }
 #endif
             }
         }

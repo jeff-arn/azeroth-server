@@ -1,4 +1,4 @@
-/* 
+/*
 AQ40 - Fankriss the Unyielding
 Reference: http://forum.nostalrius.org/viewtopic.php?f=51&t=35154#p246406
 
@@ -10,22 +10,22 @@ Stryg comments:
 #include "temple_of_ahnqiraj.h"
 
 #include <algorithm>
-#include <utility>
-#include <vector>
 #include <chrono>
 #include <random>
+#include <utility>
+#include <vector>
 
 enum
 {
-    SPELL_MORTAL_WOUND      = 25646,
-    SPELL_ENTANGLE_1        = 720,
-    SPELL_ENTANGLE_2        = 731,
-    SPELL_ENTANGLE_3        = 1121,
-    //SPELL_SUMMON_WORM_1     = 518,
-    //SPELL_SUMMON_WORM_2     = 25831,
-    //SPELL_SUMMON_WORM_3     = 25832,
-    SPELL_SPAWN_ENRAGE      = 26662,
-    NPC_SPAWN_FANKRISS      = 15630,
+    SPELL_MORTAL_WOUND = 25646,
+    SPELL_ENTANGLE_1 = 720,
+    SPELL_ENTANGLE_2 = 731,
+    SPELL_ENTANGLE_3 = 1121,
+    // SPELL_SUMMON_WORM_1     = 518,
+    // SPELL_SUMMON_WORM_2     = 25831,
+    // SPELL_SUMMON_WORM_3     = 25832,
+    SPELL_SPAWN_ENRAGE = 26662,
+    NPC_SPAWN_FANKRISS = 15630,
 };
 
 struct SpawnLocation
@@ -33,27 +33,21 @@ struct SpawnLocation
     float m_fX, m_fY, m_fZ;
 };
 
-static constexpr SpawnLocation aSummonWormLocs[3] =
-{
-    { -8076.53f, 1120.37f, -88.50f },
-    { -8150.18f, 1146.97f, -87.45f },
-    { -8023.31f, 1242.42f, -83.47f },
+static constexpr SpawnLocation aSummonWormLocs[3] = {
+    {-8076.53f, 1120.37f, -88.50f},
+    {-8150.18f, 1146.97f, -87.45f},
+    {-8023.31f, 1242.42f, -83.47f},
 };
-static constexpr SpawnLocation hatchlingLocations[3] = 
-{
-    {-8043.01f, 1254.20f, -84.19f},
-    {-8003.00f, 1222.90f, -82.10f},
-    {-8022.68f, 1150.08f, -89.33f}
-};
-static constexpr float  PULL_DISTANCE           = 80.0f;
-static constexpr SpawnLocation pullCenter       = {-8074.88f, 1193.64f, -92.11f};
-static constexpr uint32 aIndex[3]               = { 0, 1, 2 };
-//static constexpr uint32 aEntangleSpells[3]      = { SPELL_ENTANGLE_1, SPELL_ENTANGLE_2, SPELL_ENTANGLE_3 };
-static constexpr size_t MAX_HATCHLINGS          = 20;   // Max hatchlings alive at any one time
-static constexpr size_t MAX_HATCHLINGS_PER_WEB  = 4;    // Max amount of hatchlings that can spawn at the same time, on one web. Its at least 4, might be 5.
+static constexpr SpawnLocation hatchlingLocations[3] = {{-8043.01f, 1254.20f, -84.19f}, {-8003.00f, 1222.90f, -82.10f}, {-8022.68f, 1150.08f, -89.33f}};
+static constexpr float PULL_DISTANCE = 80.0f;
+static constexpr SpawnLocation pullCenter = {-8074.88f, 1193.64f, -92.11f};
+static constexpr uint32 aIndex[3] = {0, 1, 2};
+// static constexpr uint32 aEntangleSpells[3]      = { SPELL_ENTANGLE_1, SPELL_ENTANGLE_2, SPELL_ENTANGLE_3 };
+static constexpr size_t MAX_HATCHLINGS = 20; // Max hatchlings alive at any one time
+static constexpr size_t MAX_HATCHLINGS_PER_WEB = 4; // Max amount of hatchlings that can spawn at the same time, on one web. Its at least 4, might be 5.
 static constexpr uint32 HATCHLINGS_ATTACK_DELAY = 2500; // ~2.5sec in curse killvideo.
-static constexpr uint32 WORM_ENRAGE_BASE_TIMER  = 15000;
-static constexpr uint32 WORM_ENRAGE_ADDITION    = 5000;
+static constexpr uint32 WORM_ENRAGE_BASE_TIMER = 15000;
+static constexpr uint32 WORM_ENRAGE_ADDITION = 5000;
 
 // if defined, 2-MAX_HATCHLINGS_PER_WEB hatchlings are spawned in all 3 locations each time a player is ported,
 // otherwise 2-MAX_HATCHLINGS_PER_WEB hatchlings will only spawn on the single location the player was ported to.
@@ -61,21 +55,21 @@ static constexpr uint32 WORM_ENRAGE_ADDITION    = 5000;
 
 /*
 
-ALWAYS_HATCHLINGS_IN_3_LOCATIONS  when defined will spawn 2-MAX_HATCHLINGS_PER_WEB hatchlings in all 3 locations whenever one player is teleported. 
-                                  If its not defined 2-MAX_HATCHLINGS_PER_WEB  hatchlings only spawn in the location of the teleported player. 
-                                  In curse video it clearly looks like hatchlings spawn in all 3 locations, while in later videos they only spawn 
+ALWAYS_HATCHLINGS_IN_3_LOCATIONS  when defined will spawn 2-MAX_HATCHLINGS_PER_WEB hatchlings in all 3 locations whenever one player is teleported.
+                                  If its not defined 2-MAX_HATCHLINGS_PER_WEB  hatchlings only spawn in the location of the teleported player.
+                                  In curse video it clearly looks like hatchlings spawn in all 3 locations, while in later videos they only spawn
                                   in the location of a teleported player.
-                                  
+
 MAX_HATCHLINGS                    defines how many hatchlings can be alive at the same time. I'm sure it was capped on retail, but not on the amount.
 
 MAX_HATCHLINGS_PER_WEB            defines how many hatchlings can spawn spawn in one web location. Currently 4, possible it should be 5, but I have not seen it.
 
-HATCHLINGS_ATTACK_DELAY           defines how long after hatchlings spawn until they go in combat with zone and attack the closest target. 
+HATCHLINGS_ATTACK_DELAY           defines how long after hatchlings spawn until they go in combat with zone and attack the closest target.
                                   If the hatchling is already in combat when HATCHLINGS_ATTACK_DELAY runs out, they will not force themself on the closest target.
 
-    If we want to force players periodically aoe down hatchlings instead of just offtanking them we can set this MAX_HATCHLINGS  
-    to a high value so it's not tankable. This will however require us to adjust down the frequency of players being teleported, 
-    OR not define ALWAYS_HATCHLINGS_IN_3_LOCATIONS. If we increase MAX_HATCHLINGS  to an amount that is not offtankable, 
+    If we want to force players periodically aoe down hatchlings instead of just offtanking them we can set this MAX_HATCHLINGS
+    to a high value so it's not tankable. This will however require us to adjust down the frequency of players being teleported,
+    OR not define ALWAYS_HATCHLINGS_IN_3_LOCATIONS. If we increase MAX_HATCHLINGS  to an amount that is not offtankable,
     the current configuration will most likely overrun the raid.
 */
 std::vector<uint32> vIndex(aIndex, aIndex + 3);
@@ -86,15 +80,12 @@ struct creature_spawn_fankrissAI : public ScriptedAI
     uint32 enrageTimer;
     creature_spawn_fankrissAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        
+
         m_pInstance = (ScriptedInstance*)pCreature->GetInstanceData();
         Reset();
     }
 
-    void Reset() override
-    {
-        enrageTimer = 10000;
-    }
+    void Reset() override { enrageTimer = 10000; }
 
     void UpdateAI(uint32 const diff) override
     {
@@ -111,7 +102,7 @@ struct creature_spawn_fankrissAI : public ScriptedAI
                 m_creature->CastSpell(m_creature, SPELL_SPAWN_ENRAGE, true);
             enrageTimer = std::numeric_limits<uint32>::max();
         }
-        else 
+        else
         {
             enrageTimer -= diff;
         }
@@ -177,15 +168,14 @@ struct creature_vekniss_hatchlingAI : public ScriptedAI
                 {
                     if (m_creature->GetDistance(pTarget) > 200)
                     {
-                        return; //avoid running after people far off in the instance somewhere
+                        return; // avoid running after people far off in the instance somewhere
                     }
                     m_creature->GetThreatManager().addThreat(pTarget, 1);
                     AttackStart(pTarget);
-
                 }
             }
         }
-        else if(!hasEngaged)
+        else if (!hasEngaged)
         {
             engageTimer -= diff;
             return;
@@ -197,14 +187,11 @@ struct creature_vekniss_hatchlingAI : public ScriptedAI
         }
         DoMeleeAttackIfReady();
     }
-
 };
 
 struct boss_fankrissAI : public ScriptedAI
 {
-    boss_fankrissAI(Creature* pCreature) : 
-        ScriptedAI(pCreature),
-        worms(3)
+    boss_fankrissAI(Creature* pCreature) : ScriptedAI(pCreature), worms(3)
     {
         m_pInstance = (ScriptedInstance*)pCreature->GetInstanceData();
         Reset();
@@ -229,38 +216,35 @@ struct boss_fankrissAI : public ScriptedAI
 
     struct HatchlingBatch
     {
-        HatchlingBatch(GuidList& list) :
-            hatchlings(std::move(list))
-        {}
+        HatchlingBatch(GuidList& list) : hatchlings(std::move(list)) {}
         uint32 attackTimer;
         bool hasAttacked;
         GuidList hatchlings;
     };
     std::vector<HatchlingBatch> hatchlingVec;
     uint32 aliveHatchlings;
-    std::vector < std::pair<uint32, SpawnLocation>> entangleSpells =
-    {
+    std::vector<std::pair<uint32, SpawnLocation>> entangleSpells = {
         std::make_pair(SPELL_ENTANGLE_1, hatchlingLocations[0]),
         std::make_pair(SPELL_ENTANGLE_2, hatchlingLocations[1]),
         std::make_pair(SPELL_ENTANGLE_3, hatchlingLocations[2]),
     };
-    
-    std::pair<uint32,bool> entangleTimers[3]; // timer and bool==true meaning the timer is ready for re-initialization
+
+    std::pair<uint32, bool> entangleTimers[3]; // timer and bool==true meaning the timer is ready for re-initialization
 
     void Reset() override
     {
-        m_uiMortalWoundTimer    = urand(4000, 8000);
+        m_uiMortalWoundTimer = urand(4000, 8000);
 
-        worms[0].shouldSpawn    = true;
-        worms[0].haveSpawned    = false;
-        worms[0].spawnTimer     = urand(20000, 30000);
-        worms[0].enrageTimer    = WORM_ENRAGE_BASE_TIMER;
-        worms[1].shouldSpawn    = false;
-        worms[2].shouldSpawn    = false;
+        worms[0].shouldSpawn = true;
+        worms[0].haveSpawned = false;
+        worms[0].spawnTimer = urand(20000, 30000);
+        worms[0].enrageTimer = WORM_ENRAGE_BASE_TIMER;
+        worms[1].shouldSpawn = false;
+        worms[2].shouldSpawn = false;
         numWormsLastWave = 1;
 
-        m_uiEvadeCheckTimer     = 2500;
-        
+        m_uiEvadeCheckTimer = 2500;
+
         // Delaying first webs by 8 seconds, such that they cannot happen
         // until, at the earliest, 10 seconds after the pull.
         ReinitializeWebTimers(8000);
@@ -330,11 +314,11 @@ struct boss_fankrissAI : public ScriptedAI
     {
         auto seed = std::chrono::system_clock::now().time_since_epoch().count();
         std::shuffle(entangleSpells.begin(), entangleSpells.end(), std::default_random_engine(seed));
-        // it's possible the longest cooldown should be able to reach more than the 
+        // it's possible the longest cooldown should be able to reach more than the
         // 45 seconds max that it is here. Old nost code was 45sec. Cmangos use 75sec.
         // Should it also be possible that two players are webbed at the same time?
         // If not, we need shorter rand intervals and no overlap between the 3 webs.
-        entangleTimers[0] = std::make_pair(urand(2000  + add, 18000 + add), false);
+        entangleTimers[0] = std::make_pair(urand(2000 + add, 18000 + add), false);
         entangleTimers[1] = std::make_pair(urand(15000 + add, 28000 + add), false);
         entangleTimers[2] = std::make_pair(urand(25000 + add, 45000 + add), false);
         entangleRotationTimer = 45000 + add;
@@ -350,8 +334,7 @@ struct boss_fankrissAI : public ScriptedAI
 
     void SummonHatchling(GuidList& batch, SpawnLocation loc)
     {
-        if (Creature* hatchling = m_creature->SummonCreature(NPC_VEKNISS_HATCHLING, loc.m_fX, loc.m_fY, loc.m_fZ, 0.0f,
-            TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 65000))
+        if (Creature* hatchling = m_creature->SummonCreature(NPC_VEKNISS_HATCHLING, loc.m_fX, loc.m_fY, loc.m_fZ, 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 65000))
         {
             batch.push_back(hatchling->GetObjectGuid());
         }
@@ -363,7 +346,8 @@ struct boss_fankrissAI : public ScriptedAI
         for (size_t i = 0; i < 3; i++)
         {
             bool& webCast = entangleTimers[i].second;
-            if (webCast) continue;
+            if (webCast)
+                continue;
 
             uint32& t = entangleTimers[i].first;
             if (t < uiDiff)
@@ -376,7 +360,8 @@ struct boss_fankrissAI : public ScriptedAI
                     }
                 }
             }
-            else {
+            else
+            {
                 t -= uiDiff;
             }
 
@@ -437,13 +422,13 @@ struct boss_fankrissAI : public ScriptedAI
     {
         if (!m_creature->IsInCombat())
         {
-            Map::PlayerList const &PlayerList = m_creature->GetMap()->GetPlayers();
+            Map::PlayerList const& PlayerList = m_creature->GetMap()->GetPlayers();
             for (const auto& itr : PlayerList)
             {
                 Player* pPlayer = itr.getSource();
                 if (pPlayer && pPlayer->IsAlive() && !pPlayer->IsGameMaster())
                 {
-                    // cheap way of quickly disgarding the check most of the time. No point 
+                    // cheap way of quickly disgarding the check most of the time. No point
                     // where he can be pulled should be higher than this point (he is at roughly -100)
                     if (pPlayer->GetPositionZ() > -70.0f)
                         continue;
@@ -456,7 +441,7 @@ struct boss_fankrissAI : public ScriptedAI
                 }
             }
         }
-        
+
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             return;
@@ -473,7 +458,7 @@ struct boss_fankrissAI : public ScriptedAI
             m_uiMortalWoundTimer -= uiDiff;
 
         bool allWormsSpawned = true;
-        for(size_t i = 0; i < worms.size(); i++)
+        for (size_t i = 0; i < worms.size(); i++)
         {
             Worm& w = worms[i];
             if (w.shouldSpawn && !w.haveSpawned)
@@ -491,33 +476,33 @@ struct boss_fankrissAI : public ScriptedAI
             }
         }
 
-        if (allWormsSpawned) 
+        if (allWormsSpawned)
         {
             auto seed = std::chrono::system_clock::now().time_since_epoch().count();
             std::shuffle(vIndex.begin(), vIndex.end(), std::default_random_engine(seed));
             uint32 spawnCount = urand(1, 3);
-            for (size_t i = 0; i < 3; i++) 
+            for (size_t i = 0; i < 3; i++)
             {
                 Worm& w = worms[i];
                 w.haveSpawned = false;
                 w.shouldSpawn = i < spawnCount;
                 if (w.shouldSpawn)
                 {
-                    w.enrageTimer = WORM_ENRAGE_BASE_TIMER + WORM_ENRAGE_ADDITION*i; // 15sec for first, 20 for second and 25 sec for last.
+                    w.enrageTimer = WORM_ENRAGE_BASE_TIMER + WORM_ENRAGE_ADDITION * i; // 15sec for first, 20 for second and 25 sec for last.
                     /*  How long after each wave has fully spawned will next wave start spawning. (minTime,maxTime)
                         1x snake in prev wave = (18, 23)
                         2x snake in prev wave = (25  30)
                         3x snake in prev wave = (32  37)
                     */
                     if (i == 0)
-                        w.spawnTimer = 18000 + ((numWormsLastWave-1)*7000) + urand(0, 5000);
+                        w.spawnTimer = 18000 + ((numWormsLastWave - 1) * 7000) + urand(0, 5000);
                     else
-                        w.spawnTimer = worms[i-1].spawnTimer + urand(4000, 8000); // Each snake in a wave comes 4-8s after the previous one
+                        w.spawnTimer = worms[i - 1].spawnTimer + urand(4000, 8000); // Each snake in a wave comes 4-8s after the previous one
                 }
             }
             numWormsLastWave = spawnCount;
         }
-      
+
         HandleHatchlings(uiDiff);
 
         DoMeleeAttackIfReady();
@@ -534,20 +519,11 @@ struct boss_fankrissAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_fankriss(Creature* pCreature)
-{
-    return new boss_fankrissAI(pCreature);
-}
+CreatureAI* GetAI_boss_fankriss(Creature* pCreature) { return new boss_fankrissAI(pCreature); }
 
-CreatureAI* GetAI_creature_spawn_fankriss(Creature* pCreature)
-{
-    return new creature_spawn_fankrissAI(pCreature);
-}
+CreatureAI* GetAI_creature_spawn_fankriss(Creature* pCreature) { return new creature_spawn_fankrissAI(pCreature); }
 
-CreatureAI* GetAI_creature_vekniss_hatchling(Creature* pCreature)
-{
-    return new creature_vekniss_hatchlingAI(pCreature);
-}
+CreatureAI* GetAI_creature_vekniss_hatchling(Creature* pCreature) { return new creature_vekniss_hatchlingAI(pCreature); }
 
 void AddSC_boss_fankriss()
 {
@@ -568,6 +544,4 @@ void AddSC_boss_fankriss()
     pNewScript->Name = "creature_vekniss_hatchling";
     pNewScript->GetAI = &GetAI_creature_vekniss_hatchling;
     pNewScript->RegisterSelf();
-
-    
 }

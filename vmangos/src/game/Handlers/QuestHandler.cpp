@@ -20,18 +20,18 @@
  */
 
 #include "Common.h"
+#include "GossipDef.h"
+#include "Group.h"
 #include "Log.h"
+#include "ObjectAccessor.h"
+#include "ObjectMgr.h"
+#include "Opcodes.h"
+#include "Player.h"
+#include "QuestDef.h"
+#include "ScriptMgr.h"
+#include "World.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "Opcodes.h"
-#include "World.h"
-#include "ObjectMgr.h"
-#include "Player.h"
-#include "GossipDef.h"
-#include "QuestDef.h"
-#include "ObjectAccessor.h"
-#include "ScriptMgr.h"
-#include "Group.h"
 
 void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPacket& recv_data)
 {
@@ -48,11 +48,11 @@ void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPacket& recv_data)
 
     switch (questgiver->GetTypeId())
     {
-        case TYPEID_UNIT:
+    case TYPEID_UNIT:
         {
             Creature* cr_questgiver = (Creature*)questgiver;
 
-            if (!cr_questgiver->IsHostileTo(_player))       // not show quest status to enemies
+            if (!cr_questgiver->IsHostileTo(_player)) // not show quest status to enemies
             {
                 dialogStatus = sScriptMgr.GetDialogStatus(_player, cr_questgiver);
 
@@ -61,7 +61,7 @@ void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPacket& recv_data)
             }
             break;
         }
-        case TYPEID_GAMEOBJECT:
+    case TYPEID_GAMEOBJECT:
         {
             GameObject* go_questgiver = (GameObject*)questgiver;
             dialogStatus = sScriptMgr.GetDialogStatus(_player, go_questgiver);
@@ -69,12 +69,12 @@ void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPacket& recv_data)
                 dialogStatus = GetDialogStatus(_player, go_questgiver, DIALOG_STATUS_NONE);
             break;
         }
-        default:
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "QuestGiver called for unexpected type %u", questgiver->GetTypeId());
-            break;
+    default:
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "QuestGiver called for unexpected type %u", questgiver->GetTypeId());
+        break;
     }
 
-    //inform client about status of quest
+    // inform client about status of quest
     _player->PlayerTalkClass->SendQuestGiverStatus(dialogStatus, guid);
 }
 
@@ -118,10 +118,7 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPacket& recv_data)
     Object* pObject = _player->GetObjectByTypeMask(guid, TYPEMASK_CREATURE_GAMEOBJECT_PLAYER_OR_ITEM);
 
     // no or incorrect quest giver
-    if (!pObject
-            || (pObject->GetTypeId() != TYPEID_PLAYER && !pObject->HasQuest(quest))
-            || (pObject->GetTypeId() == TYPEID_PLAYER && !((Player*)pObject)->CanShareQuest(quest))
-       )
+    if (!pObject || (pObject->GetTypeId() != TYPEID_PLAYER && !pObject->HasQuest(quest)) || (pObject->GetTypeId() == TYPEID_PLAYER && !((Player*)pObject)->CanShareQuest(quest)))
     {
         _player->PlayerTalkClass->CloseGossip();
         _player->ClearQuestShareInfo();
@@ -177,7 +174,7 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPacket& recv_data)
 
         if (_player->CanAddQuest(qInfo, true))
         {
-            _player->AddQuest(qInfo, pObject);              // pObject (if it item) can be destroyed at call
+            _player->AddQuest(qInfo, pObject); // pObject (if it item) can be destroyed at call
 
             if (qInfo->HasQuestFlag(QUEST_FLAGS_PARTY_ACCEPT))
             {
@@ -187,14 +184,14 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPacket& recv_data)
                     {
                         Player* pPlayer = itr->getSource();
 
-                        if (!pPlayer || pPlayer == _player || !pPlayer->IsInMap(_player))     // not self and in same map
+                        if (!pPlayer || pPlayer == _player || !pPlayer->IsInMap(_player)) // not self and in same map
                             continue;
 
                         if (pPlayer->CanTakeQuest(qInfo, true))
                         {
                             pPlayer->SetQuestShareInfo(_player->GetObjectGuid(), qInfo->GetQuestId());
 
-                            //need confirmation that any gossip window will close
+                            // need confirmation that any gossip window will close
                             pPlayer->PlayerTalkClass->CloseGossip();
 
                             _player->SendQuestConfirmAccept(qInfo, pPlayer);
@@ -252,7 +249,7 @@ void WorldSession::HandleQuestQueryOpcode(WorldPacket& recv_data)
     size_t detailsLen = pQuest->GetDetails().length();
     char const* Objectives = pQuest->GetObjectives().c_str();
     size_t objectivesLen = pQuest->GetObjectives().length();
-    char const*  EndText = pQuest->GetEndText().c_str();
+    char const* EndText = pQuest->GetEndText().c_str();
     size_t endTextLen = pQuest->GetEndText().length();
     char const* ObjectiveText[QUEST_OBJECTIVES_COUNT];
     size_t objectiveTextLen[QUEST_OBJECTIVES_COUNT];
@@ -268,7 +265,7 @@ void WorldSession::HandleQuestQueryOpcode(WorldPacket& recv_data)
     {
         if (QuestLocale const* ql = sObjectMgr.GetQuestLocale(pQuest->GetQuestId()))
         {
-            if (ql->Title.size() >(size_t)loc_idx && !ql->Title[loc_idx].empty())
+            if (ql->Title.size() > (size_t)loc_idx && !ql->Title[loc_idx].empty())
             {
                 Title = ql->Title[loc_idx].c_str();
                 titleLen = ql->Title[loc_idx].length();
@@ -291,7 +288,7 @@ void WorldSession::HandleQuestQueryOpcode(WorldPacket& recv_data)
 
             for (int i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
             {
-                if (ql->ObjectiveText[i].size() >(size_t)loc_idx && !ql->ObjectiveText[i][loc_idx].empty())
+                if (ql->ObjectiveText[i].size() > (size_t)loc_idx && !ql->ObjectiveText[i][loc_idx].empty())
                 {
                     ObjectiveText[i] = ql->ObjectiveText[i][loc_idx].c_str();
                     objectiveTextLen[i] = ql->ObjectiveText[i][loc_idx].length();
@@ -300,8 +297,7 @@ void WorldSession::HandleQuestQueryOpcode(WorldPacket& recv_data)
         }
     }
 
-    constexpr size_t questTemplateFixedSize =
-        sizeof(uint32) + // Id
+    constexpr size_t questTemplateFixedSize = sizeof(uint32) + // Id
         sizeof(uint32) + // Method
         sizeof(uint32) + // Level
         sizeof(int32) + // ZoneOrSort
@@ -338,34 +334,34 @@ void WorldSession::HandleQuestQueryOpcode(WorldPacket& recv_data)
 
     WorldPacket data(SMSG_QUEST_QUERY_RESPONSE, questTemplateFixedSize + titleLen + detailsLen + objectivesLen + endTextLen + objectiveTextLen[0] + objectiveTextLen[1] + objectiveTextLen[2] + objectiveTextLen[3]);
 
-    data << uint32(pQuest->GetQuestId());                   // quest id
-    data << uint32(pQuest->GetQuestMethod());               // Accepted values: 0, 1 or 2. 0==IsAutoComplete() (skip objectives/details)
-    data << uint32(pQuest->GetQuestLevel());                // may be 0, static data, in other cases must be used dynamic level: Player::GetQuestLevelForPlayer
-    data << int32(pQuest->GetZoneOrSort());                 // zone or sort to display in quest log
+    data << uint32(pQuest->GetQuestId()); // quest id
+    data << uint32(pQuest->GetQuestMethod()); // Accepted values: 0, 1 or 2. 0==IsAutoComplete() (skip objectives/details)
+    data << uint32(pQuest->GetQuestLevel()); // may be 0, static data, in other cases must be used dynamic level: Player::GetQuestLevelForPlayer
+    data << int32(pQuest->GetZoneOrSort()); // zone or sort to display in quest log
 
     data << uint32(pQuest->GetType());
     //[-ZERO] data << uint32(pQuest->GetSuggestedPlayers());
 
-    data << uint32(pQuest->GetRepObjectiveFaction());       // shown in quest log as part of quest objective
-    data << uint32(pQuest->GetRepObjectiveValue());         // shown in quest log as part of quest objective
+    data << uint32(pQuest->GetRepObjectiveFaction()); // shown in quest log as part of quest objective
+    data << uint32(pQuest->GetRepObjectiveValue()); // shown in quest log as part of quest objective
 
-    data << uint32(0);                                      // RequiredOpositeRepFaction
-    data << uint32(0);                                      // RequiredOpositeRepValue, required faction value with another (oposite) faction (objective)
+    data << uint32(0); // RequiredOpositeRepFaction
+    data << uint32(0); // RequiredOpositeRepValue, required faction value with another (oposite) faction (objective)
 
-    data << uint32(pQuest->GetNextQuestInChain());          // client will request this quest from NPC, if not 0
+    data << uint32(pQuest->GetNextQuestInChain()); // client will request this quest from NPC, if not 0
 
     if (pQuest->HasQuestFlag(QUEST_FLAGS_HIDDEN_REWARDS))
-        data << uint32(0);                                  // Hide money rewarded
+        data << uint32(0); // Hide money rewarded
     else
         data << uint32(pQuest->GetRewOrReqMoney());
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
-    data << uint32(pQuest->GetRewMoneyMaxLevel());          // used in XP calculation at client
+    data << uint32(pQuest->GetRewMoneyMaxLevel()); // used in XP calculation at client
 #endif
-    data << uint32(pQuest->GetRewSpell());                  // reward spell, this spell will display (icon) (casted if RewSpellCast==0)
+    data << uint32(pQuest->GetRewSpell()); // reward spell, this spell will display (icon) (casted if RewSpellCast==0)
 
-    data << uint32(pQuest->GetSrcItemId());                 // source item id
-    data << uint32(pQuest->GetQuestFlags());                // quest flags
+    data << uint32(pQuest->GetSrcItemId()); // source item id
+    data << uint32(pQuest->GetQuestFlags()); // quest flags
 
     int iI;
 
@@ -501,10 +497,7 @@ void WorldSession::HandleQuestgiverRequestRewardOpcode(WorldPacket& recv_data)
         _player->PlayerTalkClass->SendQuestGiverOfferReward(pQuest, guid, true);
 }
 
-void WorldSession::HandleQuestgiverCancel(WorldPacket& /*recv_data*/)
-{
-    _player->PlayerTalkClass->CloseGossip();
-}
+void WorldSession::HandleQuestgiverCancel(WorldPacket& /*recv_data*/) { _player->PlayerTalkClass->CloseGossip(); }
 
 void WorldSession::HandleQuestLogSwapQuest(WorldPacket& recv_data)
 {
@@ -573,7 +566,7 @@ void WorldSession::HandleQuestConfirmAccept(WorldPacket& recv_data)
             return;
 
         if (_player->CanAddQuest(pQuest, true))
-            _player->AddQuest(pQuest, nullptr);                // nullptr, this prevent DB script from duplicate running
+            _player->AddQuest(pQuest, nullptr); // nullptr, this prevent DB script from duplicate running
 
         _player->ClearQuestShareInfo();
     }
@@ -599,9 +592,7 @@ void WorldSession::HandleQuestgiverCompleteQuest(WorldPacket& recv_data)
     }
 }
 
-void WorldSession::HandleQuestgiverQuestAutoLaunch(WorldPacket& /*recvPacket*/)
-{
-}
+void WorldSession::HandleQuestgiverQuestAutoLaunch(WorldPacket& /*recvPacket*/) {}
 
 void WorldSession::HandlePushQuestToParty(WorldPacket& recvPacket)
 {
@@ -616,7 +607,7 @@ void WorldSession::HandlePushQuestToParty(WorldPacket& recvPacket)
             {
                 Player* pPlayer = itr->getSource();
 
-                if (!pPlayer || pPlayer == _player)         // skip self
+                if (!pPlayer || pPlayer == _player) // skip self
                     continue;
 
                 _player->SendPushToPartyResponse(pPlayer, QUEST_PARTY_MSG_SHARING_QUEST);
@@ -678,7 +669,7 @@ void WorldSession::HandleQuestPushResult(WorldPacket& recvPacket)
     {
         WorldPacket data(MSG_QUEST_PUSH_RESULT, (8 + 1));
         data << _player->GetObjectGuid();
-        data << uint8(msg);                             // enum QuestShareMessages
+        data << uint8(msg); // enum QuestShareMessages
         pPlayer->GetSession()->SendPacket(&data);
     }
 
@@ -686,36 +677,36 @@ void WorldSession::HandleQuestPushResult(WorldPacket& recvPacket)
 }
 
 /**
-* What - if any - kind of explanation mark or question-mark should a quest-giver display for a player
-* @param pPlayer - for whom
-* @param questgiver - from whom
-* @param defstatus - initial set status (usually it will be called with DIALOG_STATUS_NONE) - must not be DIALOG_STATUS_UNDEFINED
-*/
+ * What - if any - kind of explanation mark or question-mark should a quest-giver display for a player
+ * @param pPlayer - for whom
+ * @param questgiver - from whom
+ * @param defstatus - initial set status (usually it will be called with DIALOG_STATUS_NONE) - must not be DIALOG_STATUS_UNDEFINED
+ */
 uint32 WorldSession::GetDialogStatus(Player* pPlayer, Object* questgiver, uint32 defstatus)
 {
     uint32 dialogStatus = defstatus;
 
-    QuestRelationsMapBounds rbounds;                        // QuestRelations (quest-giver)
-    QuestRelationsMapBounds irbounds;                       // InvolvedRelations (quest-finisher)
+    QuestRelationsMapBounds rbounds; // QuestRelations (quest-giver)
+    QuestRelationsMapBounds irbounds; // InvolvedRelations (quest-finisher)
 
     switch (questgiver->GetTypeId())
     {
-        case TYPEID_UNIT:
+    case TYPEID_UNIT:
         {
             rbounds = sObjectMgr.GetCreatureQuestRelationsMapBounds(questgiver->GetEntry());
             irbounds = sObjectMgr.GetCreatureQuestInvolvedRelationsMapBounds(questgiver->GetEntry());
             break;
         }
-        case TYPEID_GAMEOBJECT:
+    case TYPEID_GAMEOBJECT:
         {
             rbounds = sObjectMgr.GetGOQuestRelationsMapBounds(questgiver->GetEntry());
             irbounds = sObjectMgr.GetGOQuestInvolvedRelationsMapBounds(questgiver->GetEntry());
             break;
         }
-        default:
-            //it's impossible, but check ^)
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Warning: GetDialogStatus called for unexpected type %u", questgiver->GetTypeId());
-            return DIALOG_STATUS_NONE;
+    default:
+        // it's impossible, but check ^)
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Warning: GetDialogStatus called for unexpected type %u", questgiver->GetTypeId());
+        return DIALOG_STATUS_NONE;
     }
 
     // Check markings for quest-finisher
@@ -730,8 +721,7 @@ uint32 WorldSession::GetDialogStatus(Player* pPlayer, Object* questgiver, uint32
 
         QuestStatus status = pPlayer->GetQuestStatus(quest_id);
 
-        if ((status == QUEST_STATUS_COMPLETE && !pPlayer->GetQuestRewardStatus(quest_id)) ||
-                (pQuest->IsAutoComplete() && pPlayer->CanTakeQuest(pQuest, false)))
+        if ((status == QUEST_STATUS_COMPLETE && !pPlayer->GetQuestRewardStatus(quest_id)) || (pQuest->IsAutoComplete() && pPlayer->CanTakeQuest(pQuest, false)))
         {
             if (pQuest->IsAutoComplete() && pQuest->IsRepeatable())
                 dialogStatusNew = DIALOG_STATUS_REWARD_REP;

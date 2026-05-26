@@ -26,41 +26,42 @@
 
 class TemporarySummon : public Creature
 {
-    public:
-        explicit TemporarySummon(ObjectGuid summoner = ObjectGuid());
-        ~TemporarySummon() override;
+public:
+    explicit TemporarySummon(ObjectGuid summoner = ObjectGuid());
+    ~TemporarySummon() override;
 
-        void Update(uint32 update_diff, uint32 time) override;
-        void Summon(TempSummonType type, uint32 lifetime, CreatureAiSetter pFuncAiSetter = nullptr);
-        void UnSummon(uint32 delayDespawnTime = 0);
-        void CleanupsBeforeDelete() override;
-        void SaveToDB() override;
-        ObjectGuid const& GetSummonerGuid() const { return m_summoner ; }
-        Unit* GetSummoner() const;
-        TempSummonType GetDespawnType() const { return m_type; }
-    private:
-        TempSummonType m_type;
-        uint32 m_timer;
-        uint32 m_lifetime;
-        ObjectGuid m_summoner;
-        bool m_justDied = false;
-        bool m_unSummonInformed;
-        void InformSummonerOfDespawn();
+    void Update(uint32 update_diff, uint32 time) override;
+    void Summon(TempSummonType type, uint32 lifetime, CreatureAiSetter pFuncAiSetter = nullptr);
+    void UnSummon(uint32 delayDespawnTime = 0);
+    void CleanupsBeforeDelete() override;
+    void SaveToDB() override;
+    ObjectGuid const& GetSummonerGuid() const { return m_summoner; }
+    Unit* GetSummoner() const;
+    TempSummonType GetDespawnType() const { return m_type; }
+
+private:
+    TempSummonType m_type;
+    uint32 m_timer;
+    uint32 m_lifetime;
+    ObjectGuid m_summoner;
+    bool m_justDied = false;
+    bool m_unSummonInformed;
+    void InformSummonerOfDespawn();
 };
 
 class TemporarySummonWaypoint : public TemporarySummon
 {
-    public:
-        explicit TemporarySummonWaypoint(ObjectGuid summoner, uint32 waypoint_id, int32 path_id, uint32 pathOrigin);
+public:
+    explicit TemporarySummonWaypoint(ObjectGuid summoner, uint32 waypoint_id, int32 path_id, uint32 pathOrigin);
 
-        uint32 GetWaypointId() const { return m_waypoint_id; }
-        int32 GetPathId() const { return m_path_id; }
-        uint32 GetPathOrigin() const { return m_pathOrigin; }
+    uint32 GetWaypointId() const { return m_waypoint_id; }
+    int32 GetPathId() const { return m_path_id; }
+    uint32 GetPathOrigin() const { return m_pathOrigin; }
 
-    private:
-        uint32 m_waypoint_id;
-        int32 m_path_id;
-        uint32 m_pathOrigin;
+private:
+    uint32 m_waypoint_id;
+    int32 m_path_id;
+    uint32 m_pathOrigin;
 };
 
 #endif

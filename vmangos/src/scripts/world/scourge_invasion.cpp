@@ -14,17 +14,14 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "scourge_invasion.h"
 #include "CreatureGroups.h"
 #include "Utilities/EventMap.h"
+#include "scriptPCH.h"
 
 inline uint32 GetCampType(Creature* pUnit) { return pUnit->HasAura(SPELL_CAMP_TYPE_GHOST_SKELETON) || pUnit->HasAura(SPELL_CAMP_TYPE_GHOST_GHOUL) || pUnit->HasAura(SPELL_CAMP_TYPE_GHOUL_SKELETON); };
 
-inline bool IsGuardOrBoss(Unit* pUnit) {
-    return pUnit->GetEntry() == NPC_ROYAL_DREADGUARD || pUnit->GetEntry() == NPC_STORMWIND_ROYAL_GUARD || pUnit->GetEntry() == NPC_UNDERCITY_ELITE_GUARDIAN || pUnit->GetEntry() == NPC_UNDERCITY_GUARDIAN || pUnit->GetEntry() == NPC_DEATHGUARD_ELITE ||
-        pUnit->GetEntry() == NPC_STORMWIND_CITY_GUARD || pUnit->GetEntry() == NPC_HIGHLORD_BOLVAR_FORDRAGON || pUnit->GetEntry() == NPC_LADY_SYLVANAS_WINDRUNNER || pUnit->GetEntry() == NPC_VARIMATHRAS;
-}
+inline bool IsGuardOrBoss(Unit* pUnit) { return pUnit->GetEntry() == NPC_ROYAL_DREADGUARD || pUnit->GetEntry() == NPC_STORMWIND_ROYAL_GUARD || pUnit->GetEntry() == NPC_UNDERCITY_ELITE_GUARDIAN || pUnit->GetEntry() == NPC_UNDERCITY_GUARDIAN || pUnit->GetEntry() == NPC_DEATHGUARD_ELITE || pUnit->GetEntry() == NPC_STORMWIND_CITY_GUARD || pUnit->GetEntry() == NPC_HIGHLORD_BOLVAR_FORDRAGON || pUnit->GetEntry() == NPC_LADY_SYLVANAS_WINDRUNNER || pUnit->GetEntry() == NPC_VARIMATHRAS; }
 
 Unit* SelectRandomFlameshockerSpawnTarget(Creature* pUnit, Unit* except, float radius)
 {
@@ -70,60 +67,60 @@ void ChangeZoneEventStatus(Creature* pMouth, bool on)
 
     switch (pMouth->GetZoneId())
     {
-        case ZONEID_WINTERSPRING:
-            if (on)
-            {
-                if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_WINTERSPRING))
-                    sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_WINTERSPRING, true);
-            }
-            else
-                sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_WINTERSPRING, true);
-            break;
-        case ZONEID_TANARIS:
-            if (on)
-            {
-                if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_TANARIS))
-                    sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_TANARIS, true);
-            }
-            else
-                sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_TANARIS, true);
-            break;
-        case ZONEID_AZSHARA:
-            if (on)
-            {
-                if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_AZSHARA))
-                    sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_AZSHARA, true);
-            }
-            else
-                sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_AZSHARA, true);
-            break;
-        case ZONEID_BLASTED_LANDS:
-            if (on)
-            {
-                if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_BLASTED_LANDS))
-                    sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_BLASTED_LANDS, true);
-            }
-            else
-                sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_BLASTED_LANDS, true);
-            break;
-        case ZONEID_EASTERN_PLAGUELANDS:
-            if (on)
-            {
-                if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_EASTERN_PLAGUELANDS))
-                    sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_EASTERN_PLAGUELANDS, true);
-            }
-            else
-                sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_EASTERN_PLAGUELANDS, true);
-            break;
-        case ZONEID_BURNING_STEPPES:
-            if (on)
-            {
-                if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_BURNING_STEPPES))
-                    sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_BURNING_STEPPES, true);
-            }
-            else
-                sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_BURNING_STEPPES, true);
-            break;
+    case ZONEID_WINTERSPRING:
+        if (on)
+        {
+            if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_WINTERSPRING))
+                sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_WINTERSPRING, true);
+        }
+        else
+            sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_WINTERSPRING, true);
+        break;
+    case ZONEID_TANARIS:
+        if (on)
+        {
+            if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_TANARIS))
+                sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_TANARIS, true);
+        }
+        else
+            sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_TANARIS, true);
+        break;
+    case ZONEID_AZSHARA:
+        if (on)
+        {
+            if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_AZSHARA))
+                sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_AZSHARA, true);
+        }
+        else
+            sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_AZSHARA, true);
+        break;
+    case ZONEID_BLASTED_LANDS:
+        if (on)
+        {
+            if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_BLASTED_LANDS))
+                sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_BLASTED_LANDS, true);
+        }
+        else
+            sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_BLASTED_LANDS, true);
+        break;
+    case ZONEID_EASTERN_PLAGUELANDS:
+        if (on)
+        {
+            if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_EASTERN_PLAGUELANDS))
+                sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_EASTERN_PLAGUELANDS, true);
+        }
+        else
+            sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_EASTERN_PLAGUELANDS, true);
+        break;
+    case ZONEID_BURNING_STEPPES:
+        if (on)
+        {
+            if (!sGameEventMgr.IsActiveEvent(GAME_EVENT_SCOURGE_INVASION_BURNING_STEPPES))
+                sGameEventMgr.StartEvent(GAME_EVENT_SCOURGE_INVASION_BURNING_STEPPES, true);
+        }
+        else
+            sGameEventMgr.StopEvent(GAME_EVENT_SCOURGE_INVASION_BURNING_STEPPES, true);
+        break;
     }
 }
 
@@ -133,12 +130,12 @@ void DespawnEventDoodads(Creature* pShard)
         return;
 
     std::list<GameObject*> doodadList;
-    GetGameObjectListWithEntryInGrid(doodadList, pShard, { GOBJ_SUMMON_CIRCLE, GOBJ_UNDEAD_FIRE, GOBJ_UNDEAD_FIRE_AURA, GOBJ_SKULLPILE_01, GOBJ_SKULLPILE_02, GOBJ_SKULLPILE_03, GOBJ_SKULLPILE_04, GOBJ_SUMMONER_SHIELD }, 60.0f);
+    GetGameObjectListWithEntryInGrid(doodadList, pShard, {GOBJ_SUMMON_CIRCLE, GOBJ_UNDEAD_FIRE, GOBJ_UNDEAD_FIRE_AURA, GOBJ_SKULLPILE_01, GOBJ_SKULLPILE_02, GOBJ_SKULLPILE_03, GOBJ_SKULLPILE_04, GOBJ_SUMMONER_SHIELD}, 60.0f);
     for (const auto pDoodad : doodadList)
         pDoodad->RemoveFromWorld();
 
     std::list<Creature*> finderList;
-    GetCreatureListWithEntryInGrid(finderList, pShard, { NPC_SCOURGE_INVASION_MINION_FINDER }, 60.0f);
+    GetCreatureListWithEntryInGrid(finderList, pShard, {NPC_SCOURGE_INVASION_MINION_FINDER}, 60.0f);
     for (const auto pFinder : finderList)
         pFinder->RemoveFromWorld();
 }
@@ -149,7 +146,7 @@ void DespawnNecropolis(Unit* pDespawner)
         return;
 
     std::list<GameObject*> necropolisList;
-    GetGameObjectListWithEntryInGrid(necropolisList, pDespawner, { GOBJ_NECROPOLIS_TINY, GOBJ_NECROPOLIS_SMALL, GOBJ_NECROPOLIS_MEDIUM, GOBJ_NECROPOLIS_BIG, GOBJ_NECROPOLIS_HUGE }, ATTACK_DISTANCE);
+    GetGameObjectListWithEntryInGrid(necropolisList, pDespawner, {GOBJ_NECROPOLIS_TINY, GOBJ_NECROPOLIS_SMALL, GOBJ_NECROPOLIS_MEDIUM, GOBJ_NECROPOLIS_BIG, GOBJ_NECROPOLIS_HUGE}, ATTACK_DISTANCE);
     for (const auto pNecropolis : necropolisList)
         pNecropolis->Despawn();
 }
@@ -160,7 +157,7 @@ void SummonCultists(Unit* pShard)
         return;
 
     std::list<GameObject*> summonerShieldList;
-    GetGameObjectListWithEntryInGrid(summonerShieldList, pShard, { GOBJ_SUMMONER_SHIELD }, INSPECT_DISTANCE);
+    GetGameObjectListWithEntryInGrid(summonerShieldList, pShard, {GOBJ_SUMMONER_SHIELD}, INSPECT_DISTANCE);
     for (const auto pSummonerShield : summonerShieldList)
         pSummonerShield->Despawn();
 
@@ -186,7 +183,7 @@ void DespawnCultists(Unit* pDespawner)
         return;
 
     std::list<Creature*> cultistList;
-    GetCreatureListWithEntryInGrid(cultistList, pDespawner, { NPC_CULTIST_ENGINEER }, INSPECT_DISTANCE);
+    GetCreatureListWithEntryInGrid(cultistList, pDespawner, {NPC_CULTIST_ENGINEER}, INSPECT_DISTANCE);
     for (const auto pCultist : cultistList)
         if (pCultist)
             pCultist->ForcedDespawn();
@@ -198,7 +195,7 @@ void DespawnShadowsOfDoom(Unit* pDespawner)
         return;
 
     std::list<Creature*> shadowList;
-    GetCreatureListWithEntryInGrid(shadowList, pDespawner, { NPC_SHADOW_OF_DOOM }, 200.0f);
+    GetCreatureListWithEntryInGrid(shadowList, pDespawner, {NPC_SHADOW_OF_DOOM}, 200.0f);
     for (const auto pShadow : shadowList)
         if (pShadow && pShadow->IsAlive() && !pShadow->IsInCombat())
             pShadow->ForcedDespawn();
@@ -211,7 +208,7 @@ uint32 HasMinion(Creature* pSummoner, float range)
 
     uint32 minionCounter = 0;
     std::list<Creature*> minionList;
-    GetCreatureListWithEntryInGrid(minionList, pSummoner, { NPC_SKELETAL_SHOCKTROOPER, NPC_GHOUL_BERSERKER, NPC_SPECTRAL_SOLDIER, NPC_LUMBERING_HORROR, NPC_BONE_WITCH, NPC_SPIRIT_OF_THE_DAMNED }, ATTACK_DISTANCE);
+    GetCreatureListWithEntryInGrid(minionList, pSummoner, {NPC_SKELETAL_SHOCKTROOPER, NPC_GHOUL_BERSERKER, NPC_SPECTRAL_SOLDIER, NPC_LUMBERING_HORROR, NPC_BONE_WITCH, NPC_SPIRIT_OF_THE_DAMNED}, ATTACK_DISTANCE);
     for (const auto pMinion : minionList)
         if (pMinion && pMinion->IsAlive())
             minionCounter++;
@@ -225,7 +222,7 @@ bool UncommonMinionspawner(Creature* pSummoner) // Rare Minion Spawner.
         return false;
 
     std::list<Creature*> uncommonMinionList;
-    GetCreatureListWithEntryInGrid(uncommonMinionList, pSummoner, { NPC_LUMBERING_HORROR, NPC_BONE_WITCH, NPC_SPIRIT_OF_THE_DAMNED }, 100.0f);
+    GetCreatureListWithEntryInGrid(uncommonMinionList, pSummoner, {NPC_LUMBERING_HORROR, NPC_BONE_WITCH, NPC_SPIRIT_OF_THE_DAMNED}, 100.0f);
     for (const auto pMinion : uncommonMinionList)
         if (pMinion)
             return false; // Already a rare found (dead or alive).
@@ -245,7 +242,7 @@ uint32 GetFindersAmount(Creature* pShard)
 {
     uint32 finderCounter = 0;
     std::list<Creature*> finderList;
-    GetCreatureListWithEntryInGrid(finderList, pShard, { NPC_SCOURGE_INVASION_MINION_FINDER }, 60.0f);
+    GetCreatureListWithEntryInGrid(finderList, pShard, {NPC_SCOURGE_INVASION_MINION_FINDER}, 60.0f);
     for (const auto pFinder : finderList)
         if (pFinder)
             finderCounter++;
@@ -259,16 +256,10 @@ Circle
 class GoCircle : public GameObjectAI
 {
 public:
-    GoCircle(GameObject* pGameObject) : GameObjectAI(pGameObject)
-    {
-        me->CastSpell(me, SPELL_CREATE_CRYSTAL, true);
-    }
+    GoCircle(GameObject* pGameObject) : GameObjectAI(pGameObject) { me->CastSpell(me, SPELL_CREATE_CRYSTAL, true); }
 };
 
-GameObjectAI* GetAI_GoCircle(GameObject* pGameObject)
-{
-    return new GoCircle(pGameObject);
-}
+GameObjectAI* GetAI_GoCircle(GameObject* pGameObject) { return new GoCircle(pGameObject); }
 
 /*
 Necropolis
@@ -283,10 +274,7 @@ public:
     }
 };
 
-GameObjectAI* GetAI_GoNecropolis(GameObject* go)
-{
-    return new GoNecropolis(go);
-}
+GameObjectAI* GetAI_GoNecropolis(GameObject* go) { return new GoNecropolis(go); }
 
 /*
 Mouth of Kel'Thuzad
@@ -307,14 +295,14 @@ struct MouthAI : public ScriptedAI
     {
         switch (uiEvent)
         {
-            case EVENT_MOUTH_OF_KELTHUZAD_ZONE_START:
+        case EVENT_MOUTH_OF_KELTHUZAD_ZONE_START:
             {
                 ChangeZoneEventStatus(m_creature, true);
                 m_creature->GetMap()->SetWeather(m_creature->GetZoneId(), WEATHER_TYPE_STORM, 0.25f, true);
                 DoScriptText(PickRandomValue(BCT_MOUTH_OF_KELTHUZAD_ZONE_ATTACK_START_1, BCT_MOUTH_OF_KELTHUZAD_ZONE_ATTACK_START_2), m_creature, nullptr, CHAT_TYPE_ZONE_YELL);
                 break;
             }
-            case EVENT_MOUTH_OF_KELTHUZAD_ZONE_STOP:
+        case EVENT_MOUTH_OF_KELTHUZAD_ZONE_STOP:
             {
                 DoScriptText(PickRandomValue(BCT_MOUTH_OF_KELTHUZAD_ZONE_ATTACK_ENDS_1, BCT_MOUTH_OF_KELTHUZAD_ZONE_ATTACK_ENDS_2, BCT_MOUTH_OF_KELTHUZAD_ZONE_ATTACK_ENDS_3), m_creature, nullptr, CHAT_TYPE_ZONE_YELL);
                 ChangeZoneEventStatus(m_creature, false);
@@ -333,19 +321,16 @@ struct MouthAI : public ScriptedAI
         {
             switch (Events)
             {
-                case EVENT_MOUTH_OF_KELTHUZAD_YELL:
-                    DoScriptText(PickRandomValue(BCT_MOUTH_OF_KELTHUZAD_RANDOM_1, BCT_MOUTH_OF_KELTHUZAD_RANDOM_2, BCT_MOUTH_OF_KELTHUZAD_RANDOM_3, BCT_MOUTH_OF_KELTHUZAD_RANDOM_4), m_creature, nullptr, CHAT_TYPE_ZONE_YELL);
-                    m_events.ScheduleEvent(EVENT_MOUTH_OF_KELTHUZAD_YELL, urand((IN_MILLISECONDS * 150), (IN_MILLISECONDS * HOUR)));
-                    break;
+            case EVENT_MOUTH_OF_KELTHUZAD_YELL:
+                DoScriptText(PickRandomValue(BCT_MOUTH_OF_KELTHUZAD_RANDOM_1, BCT_MOUTH_OF_KELTHUZAD_RANDOM_2, BCT_MOUTH_OF_KELTHUZAD_RANDOM_3, BCT_MOUTH_OF_KELTHUZAD_RANDOM_4), m_creature, nullptr, CHAT_TYPE_ZONE_YELL);
+                m_events.ScheduleEvent(EVENT_MOUTH_OF_KELTHUZAD_YELL, urand((IN_MILLISECONDS * 150), (IN_MILLISECONDS * HOUR)));
+                break;
             }
         }
     }
 };
 
-CreatureAI* GetAI_Mouth(Creature* pCreature)
-{
-    return new MouthAI(pCreature);
-}
+CreatureAI* GetAI_Mouth(Creature* pCreature) { return new MouthAI(pCreature); }
 
 /*
 Necropolis
@@ -372,20 +357,14 @@ struct NecropolisAI : public ScriptedAI
     void UpdateAI(uint32 const uiDiff) override {}
 };
 
-CreatureAI* GetAI_Necropolis(Creature* pCreature)
-{
-    return new NecropolisAI(pCreature);
-}
+CreatureAI* GetAI_Necropolis(Creature* pCreature) { return new NecropolisAI(pCreature); }
 
 /*
 Necropolis Health
 */
 struct NecropolisHealthAI : public ScriptedAI
 {
-    NecropolisHealthAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        m_creature->SetVisibilityModifier(3000.0f);
-    }
+    NecropolisHealthAI(Creature* pCreature) : ScriptedAI(pCreature) { m_creature->SetVisibilityModifier(3000.0f); }
 
     int m_zapped = 0; // 3 = death.
 
@@ -413,24 +392,24 @@ struct NecropolisHealthAI : public ScriptedAI
 
         switch (m_creature->GetZoneId())
         {
-            case ZONEID_TANARIS:
-                TEMP_SI_ATTACK_ZONE = VARIABLE_SI_TANARIS_REMAINING;
-                break;
-            case ZONEID_BLASTED_LANDS:
-                TEMP_SI_ATTACK_ZONE = VARIABLE_SI_BLASTED_LANDS_REMAINING;
-                break;
-            case ZONEID_EASTERN_PLAGUELANDS:
-                TEMP_SI_ATTACK_ZONE = VARIABLE_SI_EASTERN_PLAGUELANDS_REMAINING;
-                break;
-            case ZONEID_BURNING_STEPPES:
-                TEMP_SI_ATTACK_ZONE = VARIABLE_SI_BURNING_STEPPES_REMAINING;
-                break;
-            case ZONEID_WINTERSPRING:
-                TEMP_SI_ATTACK_ZONE = VARIABLE_SI_WINTERSPRING_REMAINING;
-                break;
-            case ZONEID_AZSHARA:
-                TEMP_SI_ATTACK_ZONE = VARIABLE_SI_AZSHARA_REMAINING;
-                break;
+        case ZONEID_TANARIS:
+            TEMP_SI_ATTACK_ZONE = VARIABLE_SI_TANARIS_REMAINING;
+            break;
+        case ZONEID_BLASTED_LANDS:
+            TEMP_SI_ATTACK_ZONE = VARIABLE_SI_BLASTED_LANDS_REMAINING;
+            break;
+        case ZONEID_EASTERN_PLAGUELANDS:
+            TEMP_SI_ATTACK_ZONE = VARIABLE_SI_EASTERN_PLAGUELANDS_REMAINING;
+            break;
+        case ZONEID_BURNING_STEPPES:
+            TEMP_SI_ATTACK_ZONE = VARIABLE_SI_BURNING_STEPPES_REMAINING;
+            break;
+        case ZONEID_WINTERSPRING:
+            TEMP_SI_ATTACK_ZONE = VARIABLE_SI_WINTERSPRING_REMAINING;
+            break;
+        case ZONEID_AZSHARA:
+            TEMP_SI_ATTACK_ZONE = VARIABLE_SI_AZSHARA_REMAINING;
+            break;
         }
 
         int numb = sObjectMgr.GetSavedVariable(TEMP_SI_ATTACK_ZONE);
@@ -452,10 +431,7 @@ struct NecropolisHealthAI : public ScriptedAI
     void UpdateAI(uint32 const uiDiff) override {}
 };
 
-CreatureAI* GetAI_NecropolisHealth(Creature* pCreature)
-{
-    return new NecropolisHealthAI(pCreature);
-}
+CreatureAI* GetAI_NecropolisHealth(Creature* pCreature) { return new NecropolisHealthAI(pCreature); }
 
 /*
 Necropolis Proxy
@@ -475,16 +451,16 @@ struct NecropolisProxyAI : public ScriptedAI
     {
         switch (spell->Id)
         {
-            case SPELL_COMMUNIQUE_NECROPOLIS_TO_PROXIES:
-                m_creature->CastSpell(m_creature, SPELL_COMMUNIQUE_PROXY_TO_RELAY, true);
-                break;
-            case SPELL_COMMUNIQUE_RELAY_TO_PROXY:
-                m_creature->CastSpell(m_creature, SPELL_COMMUNIQUE_PROXY_TO_NECROPOLIS, true);
-                break;
-            case SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH:
-                if (Creature* pHealth = m_creature->FindNearestCreature(NPC_NECROPOLIS_HEALTH, 200.0f))
-                    m_creature->CastSpell(pHealth, SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH, true);
-                break;
+        case SPELL_COMMUNIQUE_NECROPOLIS_TO_PROXIES:
+            m_creature->CastSpell(m_creature, SPELL_COMMUNIQUE_PROXY_TO_RELAY, true);
+            break;
+        case SPELL_COMMUNIQUE_RELAY_TO_PROXY:
+            m_creature->CastSpell(m_creature, SPELL_COMMUNIQUE_PROXY_TO_NECROPOLIS, true);
+            break;
+        case SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH:
+            if (Creature* pHealth = m_creature->FindNearestCreature(NPC_NECROPOLIS_HEALTH, 200.0f))
+                m_creature->CastSpell(pHealth, SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH, true);
+            break;
         }
     }
 
@@ -498,10 +474,7 @@ struct NecropolisProxyAI : public ScriptedAI
     void UpdateAI(uint32 const uiDiff) override {}
 };
 
-CreatureAI* GetAI_NecropolisProxy(Creature* pCreature)
-{
-    return new NecropolisProxyAI(pCreature);
-}
+CreatureAI* GetAI_NecropolisProxy(Creature* pCreature) { return new NecropolisProxyAI(pCreature); }
 
 /*
 Necropolis Relay
@@ -521,16 +494,16 @@ struct NecropolisRelayAI : public ScriptedAI
     {
         switch (spell->Id)
         {
-            case SPELL_COMMUNIQUE_PROXY_TO_RELAY:
-                m_creature->CastSpell(m_creature, SPELL_COMMUNIQUE_RELAY_TO_CAMP, true);
-                break;
-            case SPELL_COMMUNIQUE_CAMP_TO_RELAY:
-                m_creature->CastSpell(m_creature, SPELL_COMMUNIQUE_RELAY_TO_PROXY, true);
-                break;
-            case SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH:
-                if (Creature* pProxy = m_creature->FindNearestCreature(NPC_NECROPOLIS_PROXY, 200.0f))
-                    m_creature->CastSpell(pProxy, SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH, true);
-                break;
+        case SPELL_COMMUNIQUE_PROXY_TO_RELAY:
+            m_creature->CastSpell(m_creature, SPELL_COMMUNIQUE_RELAY_TO_CAMP, true);
+            break;
+        case SPELL_COMMUNIQUE_CAMP_TO_RELAY:
+            m_creature->CastSpell(m_creature, SPELL_COMMUNIQUE_RELAY_TO_PROXY, true);
+            break;
+        case SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH:
+            if (Creature* pProxy = m_creature->FindNearestCreature(NPC_NECROPOLIS_PROXY, 200.0f))
+                m_creature->CastSpell(pProxy, SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH, true);
+            break;
         }
     }
 
@@ -544,10 +517,7 @@ struct NecropolisRelayAI : public ScriptedAI
     void UpdateAI(uint32 const uiDiff) override {}
 };
 
-CreatureAI* GetAI_NecropolisRelay(Creature* pCreature)
-{
-    return new NecropolisRelayAI(pCreature);
-}
+CreatureAI* GetAI_NecropolisRelay(Creature* pCreature) { return new NecropolisRelayAI(pCreature); }
 
 /*
 Necrotic Shard
@@ -565,15 +535,15 @@ struct NecroticShard : public ScriptedAI
         m_creature->SetVisibilityModifier(3000.0f);
         if (m_creature->GetEntry() == NPC_DAMAGED_NECROTIC_SHARD)
         {
-            m_finders = GetFindersAmount(m_creature);                       // Count all finders to limit Minions spawns.
+            m_finders = GetFindersAmount(m_creature); // Count all finders to limit Minions spawns.
             m_events.ScheduleEvent(EVENT_SHARD_MINION_SPAWNER_BUTTRESS, 0); // Spawn Cultists every 60 minutes.
-            m_events.ScheduleEvent(EVENT_SHARD_MINION_SPAWNER_SMALL, 0);    // Spawn Minions every 5 seconds.
+            m_events.ScheduleEvent(EVENT_SHARD_MINION_SPAWNER_SMALL, 0); // Spawn Minions every 5 seconds.
         }
         else
         {
             // Just in case.
             std::list<Creature*> shardList;
-            GetCreatureListWithEntryInGrid(shardList, m_creature, { NPC_NECROTIC_SHARD, NPC_DAMAGED_NECROTIC_SHARD }, CONTACT_DISTANCE);
+            GetCreatureListWithEntryInGrid(shardList, m_creature, {NPC_NECROTIC_SHARD, NPC_DAMAGED_NECROTIC_SHARD}, CONTACT_DISTANCE);
             for (const auto pShard : shardList)
                 pShard->RemoveFromWorld();
         }
@@ -585,33 +555,33 @@ struct NecroticShard : public ScriptedAI
     {
         switch (spell->Id)
         {
-            case SPELL_ZAP_CRYSTAL_CORPSE:
+        case SPELL_ZAP_CRYSTAL_CORPSE:
             {
                 m_creature->DealDamage(m_creature, (m_creature->GetMaxHealth() / 4), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
                 break;
             }
-            case SPELL_COMMUNIQUE_RELAY_TO_CAMP:
+        case SPELL_COMMUNIQUE_RELAY_TO_CAMP:
             {
                 m_creature->CastSpell(m_creature, SPELL_CAMP_RECEIVES_COMMUNIQUE, true);
                 break;
             }
-            case SPELL_CHOOSE_CAMP_TYPE:
+        case SPELL_CHOOSE_CAMP_TYPE:
             {
                 m_camptype = PickRandomValue(SPELL_CAMP_TYPE_GHOUL_SKELETON, SPELL_CAMP_TYPE_GHOST_GHOUL, SPELL_CAMP_TYPE_GHOST_SKELETON);
                 m_creature->CastSpell(m_creature, m_camptype, true);
                 break;
             }
-            case SPELL_CAMP_RECEIVES_COMMUNIQUE:
+        case SPELL_CAMP_RECEIVES_COMMUNIQUE:
             {
                 if (!GetCampType(m_creature) && m_creature->GetEntry() == NPC_NECROTIC_SHARD)
                 {
                     m_finders = GetFindersAmount(m_creature);
                     m_creature->CastSpell(m_creature, SPELL_CHOOSE_CAMP_TYPE, true);
-                    m_events.ScheduleEvent(EVENT_SHARD_MINION_SPAWNER_SMALL, 0);    // Spawn Minions every 5 seconds.
+                    m_events.ScheduleEvent(EVENT_SHARD_MINION_SPAWNER_SMALL, 0); // Spawn Minions every 5 seconds.
                 }
                 break;
             }
-            case SPELL_FIND_CAMP_TYPE:
+        case SPELL_FIND_CAMP_TYPE:
             {
                 // Don't spawn more Minions than finders.
                 if (m_finders < HasMinion(m_creature, 60.0f))
@@ -646,38 +616,35 @@ struct NecroticShard : public ScriptedAI
     }
 
     // No healing possible.
-    void HealedBy(Unit* pHealer, uint32& uiHealedAmount) override
-    {
-        uiHealedAmount = 0;
-    }
+    void HealedBy(Unit* pHealer, uint32& uiHealedAmount) override { uiHealedAmount = 0; }
 
     void JustDied(Unit* pKiller) override
     {
         switch (m_creature->GetEntry())
         {
-            case NPC_NECROTIC_SHARD:
-                if (Creature* pShard = m_creature->SummonCreature(NPC_DAMAGED_NECROTIC_SHARD, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetOrientation()))
-                {
-                    // Get the camp type from the Necrotic Shard.
-                    if (m_camptype)
-                        pShard->CastSpell(pShard, m_camptype, true);
-                    else
-                        pShard->CastSpell(pShard, SPELL_CHOOSE_CAMP_TYPE, true);
+        case NPC_NECROTIC_SHARD:
+            if (Creature* pShard = m_creature->SummonCreature(NPC_DAMAGED_NECROTIC_SHARD, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetOrientation()))
+            {
+                // Get the camp type from the Necrotic Shard.
+                if (m_camptype)
+                    pShard->CastSpell(pShard, m_camptype, true);
+                else
+                    pShard->CastSpell(pShard, SPELL_CHOOSE_CAMP_TYPE, true);
 
-                    m_creature->RemoveFromWorld();
-                }
-                break;
-            case NPC_DAMAGED_NECROTIC_SHARD:
-                // Buff Players.
-                m_creature->CastSpell(m_creature, SPELL_SOUL_REVIVAL, true);
-                // Sending the Death Bolt.
-                if (Creature* pRelay = m_creature->FindNearestCreature(NPC_NECROPOLIS_RELAY, 200.0f))
-                    m_creature->CastSpell(pRelay, SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH, true);
-                // Despawn remaining Cultists (should never happen).
-                DespawnCultists(m_creature);
-                // Remove Objects from the event around the Shard (Yes this is Blizzlike).
-                DespawnEventDoodads(m_creature);
-                break;
+                m_creature->RemoveFromWorld();
+            }
+            break;
+        case NPC_DAMAGED_NECROTIC_SHARD:
+            // Buff Players.
+            m_creature->CastSpell(m_creature, SPELL_SOUL_REVIVAL, true);
+            // Sending the Death Bolt.
+            if (Creature* pRelay = m_creature->FindNearestCreature(NPC_NECROPOLIS_RELAY, 200.0f))
+                m_creature->CastSpell(pRelay, SPELL_COMMUNIQUE_CAMP_TO_RELAY_DEATH, true);
+            // Despawn remaining Cultists (should never happen).
+            DespawnCultists(m_creature);
+            // Remove Objects from the event around the Shard (Yes this is Blizzlike).
+            DespawnEventDoodads(m_creature);
+            break;
         }
     }
 
@@ -689,7 +656,7 @@ struct NecroticShard : public ScriptedAI
         {
             switch (Events)
             {
-                case EVENT_SHARD_MINION_SPAWNER_SMALL:
+            case EVENT_SHARD_MINION_SPAWNER_SMALL:
                 {
                     /*
                     This is a placeholder for SPELL_MINION_SPAWNER_SMALL [27887] which also activates unknown, not sniffable objects, which possibly checks whether a minion is in his range
@@ -700,7 +667,7 @@ struct NecroticShard : public ScriptedAI
                     int finderAmount = urand(1, 3); // Up to 3 spawns.
 
                     std::list<Creature*> finderList;
-                    GetCreatureListWithEntryInGrid(finderList, m_creature, { NPC_SCOURGE_INVASION_MINION_FINDER }, 60.0f);
+                    GetCreatureListWithEntryInGrid(finderList, m_creature, {NPC_SCOURGE_INVASION_MINION_FINDER}, 60.0f);
                     if (finderList.empty())
                         return;
 
@@ -735,7 +702,7 @@ struct NecroticShard : public ScriptedAI
                     m_events.ScheduleEvent(EVENT_SHARD_MINION_SPAWNER_SMALL, 5000);
                     break;
                 }
-                case EVENT_SHARD_MINION_SPAWNER_BUTTRESS:
+            case EVENT_SHARD_MINION_SPAWNER_BUTTRESS:
                 {
                     /*
                     This is a placeholder for SPELL_MINION_SPAWNER_BUTTRESS [27888] which also activates unknown, not sniffable gamebjects
@@ -756,10 +723,7 @@ struct NecroticShard : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_necroticShard(Creature* pCreature)
-{
-    return new NecroticShard(pCreature);
-}
+CreatureAI* GetAI_necroticShard(Creature* pCreature) { return new NecroticShard(pCreature); }
 
 /*
 Minion Spawner
@@ -785,21 +749,21 @@ struct MinionspawnerAI : public ScriptedAI
         {
             switch (Events)
             {
-                case EVENT_SPAWNER_SUMMON_MINION:
+            case EVENT_SPAWNER_SUMMON_MINION:
                 {
                     uint32 Entry = NPC_GHOUL_BERSERKER; // just in case.
 
                     switch (m_creature->GetEntry())
                     {
-                        case NPC_SCOURGE_INVASION_MINION_SPAWNER_GHOST_GHOUL:
-                            Entry = UncommonMinionspawner(m_creature) ? PickRandomValue(NPC_SPIRIT_OF_THE_DAMNED, NPC_LUMBERING_HORROR) : PickRandomValue(NPC_SPECTRAL_SOLDIER, NPC_GHOUL_BERSERKER);
-                            break;
-                        case NPC_SCOURGE_INVASION_MINION_SPAWNER_GHOST_SKELETON:
-                            Entry = UncommonMinionspawner(m_creature) ? PickRandomValue(NPC_SPIRIT_OF_THE_DAMNED, NPC_BONE_WITCH) : PickRandomValue(NPC_SPECTRAL_SOLDIER, NPC_SKELETAL_SHOCKTROOPER);
-                            break;
-                        case NPC_SCOURGE_INVASION_MINION_SPAWNER_GHOUL_SKELETON:
-                            Entry = UncommonMinionspawner(m_creature) ? PickRandomValue(NPC_LUMBERING_HORROR, NPC_BONE_WITCH) : PickRandomValue(NPC_GHOUL_BERSERKER, NPC_SKELETAL_SHOCKTROOPER);
-                            break;
+                    case NPC_SCOURGE_INVASION_MINION_SPAWNER_GHOST_GHOUL:
+                        Entry = UncommonMinionspawner(m_creature) ? PickRandomValue(NPC_SPIRIT_OF_THE_DAMNED, NPC_LUMBERING_HORROR) : PickRandomValue(NPC_SPECTRAL_SOLDIER, NPC_GHOUL_BERSERKER);
+                        break;
+                    case NPC_SCOURGE_INVASION_MINION_SPAWNER_GHOST_SKELETON:
+                        Entry = UncommonMinionspawner(m_creature) ? PickRandomValue(NPC_SPIRIT_OF_THE_DAMNED, NPC_BONE_WITCH) : PickRandomValue(NPC_SPECTRAL_SOLDIER, NPC_SKELETAL_SHOCKTROOPER);
+                        break;
+                    case NPC_SCOURGE_INVASION_MINION_SPAWNER_GHOUL_SKELETON:
+                        Entry = UncommonMinionspawner(m_creature) ? PickRandomValue(NPC_LUMBERING_HORROR, NPC_BONE_WITCH) : PickRandomValue(NPC_GHOUL_BERSERKER, NPC_SKELETAL_SHOCKTROOPER);
+                        break;
                     }
                     if (Creature* pMinion = m_creature->SummonCreature(Entry, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetOrientation(), TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, IN_MILLISECONDS * HOUR, true, 2000))
                     {
@@ -813,20 +777,14 @@ struct MinionspawnerAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_Minionspawner(Creature* pCreature)
-{
-    return new MinionspawnerAI(pCreature);
-}
+CreatureAI* GetAI_Minionspawner(Creature* pCreature) { return new MinionspawnerAI(pCreature); }
 
 /*
 npc_cultist_engineer
 */
 struct npc_cultist_engineer : public ScriptedAI
 {
-    npc_cultist_engineer(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        m_events.Reset();
-    }
+    npc_cultist_engineer(Creature* pCreature) : ScriptedAI(pCreature) { m_events.Reset(); }
 
     EventMap m_events;
 
@@ -853,7 +811,7 @@ struct npc_cultist_engineer : public ScriptedAI
         {
             switch (Events)
             {
-                case EVENT_CULTIST_CHANNELING:
+            case EVENT_CULTIST_CHANNELING:
                 {
                     if (Creature* pShard = m_creature->FindNearestCreature(NPC_DAMAGED_NECROTIC_SHARD, 15.0f))
                     {
@@ -896,10 +854,7 @@ struct npc_cultist_engineer : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_cultist_engineer(Creature* pCreature)
-{
-    return new npc_cultist_engineer(pCreature);
-}
+CreatureAI* GetAI_npc_cultist_engineer(Creature* pCreature) { return new npc_cultist_engineer(pCreature); }
 
 /*
 npc_minion
@@ -919,13 +874,13 @@ struct ScourgeMinion : public ScriptedAI
     {
         switch (m_creature->GetEntry())
         {
-            case NPC_SHADOW_OF_DOOM:
-                m_events.ScheduleEvent(EVENT_DOOM_MINDFLAY, 2000);
-                m_events.ScheduleEvent(EVENT_DOOM_FEAR, 2000);
-                break;
-            case NPC_FLAMESHOCKER:
-                m_events.ScheduleEvent(EVENT_MINION_FLAMESHOCKERS_TOUCH, 2000);
-                break;
+        case NPC_SHADOW_OF_DOOM:
+            m_events.ScheduleEvent(EVENT_DOOM_MINDFLAY, 2000);
+            m_events.ScheduleEvent(EVENT_DOOM_FEAR, 2000);
+            break;
+        case NPC_FLAMESHOCKER:
+            m_events.ScheduleEvent(EVENT_MINION_FLAMESHOCKERS_TOUCH, 2000);
+            break;
         }
     }
 
@@ -949,12 +904,12 @@ struct ScourgeMinion : public ScriptedAI
     {
         switch (m_creature->GetEntry())
         {
-            case NPC_SHADOW_OF_DOOM:
-                m_creature->CastSpell(m_creature, SPELL_ZAP_CRYSTAL_CORPSE, true);
-                break;
-            case NPC_FLAMESHOCKER:
-                m_creature->CastSpell(m_creature, SPELL_FLAMESHOCKERS_REVENGE, true);
-                break;
+        case NPC_SHADOW_OF_DOOM:
+            m_creature->CastSpell(m_creature, SPELL_ZAP_CRYSTAL_CORPSE, true);
+            break;
+        case NPC_FLAMESHOCKER:
+            m_creature->CastSpell(m_creature, SPELL_FLAMESHOCKERS_REVENGE, true);
+            break;
         }
     }
 
@@ -962,9 +917,9 @@ struct ScourgeMinion : public ScriptedAI
     {
         switch (spell->Id)
         {
-            case SPELL_SPIRIT_SPAWN_OUT:
-                m_creature->DespawnOrUnsummon(3000);
-                break;
+        case SPELL_SPIRIT_SPAWN_OUT:
+            m_creature->DespawnOrUnsummon(3000);
+            break;
         }
     }
 
@@ -986,7 +941,7 @@ struct ScourgeMinion : public ScriptedAI
         {
             switch (Events)
             {
-                case EVENT_DOOM_START_ATTACK:
+            case EVENT_DOOM_START_ATTACK:
                 {
                     m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
 
@@ -1002,28 +957,28 @@ struct ScourgeMinion : public ScriptedAI
                             }
                         }
                     }
-                    
+
                     break;
                 }
-                case EVENT_DOOM_MINDFLAY:
+            case EVENT_DOOM_MINDFLAY:
                 {
                     DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MINDFLAY);
                     m_events.ScheduleEvent(EVENT_DOOM_MINDFLAY, urand(6500, 13000));
                     break;
                 }
-                case EVENT_DOOM_FEAR:
+            case EVENT_DOOM_FEAR:
                 {
                     DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FEAR);
                     m_events.ScheduleEvent(EVENT_DOOM_FEAR, 14500);
                     break;
                 }
-                case EVENT_MINION_FLAMESHOCKERS_TOUCH:
+            case EVENT_MINION_FLAMESHOCKERS_TOUCH:
                 {
                     DoCastSpellIfCan(m_creature->GetVictim(), PickRandomValue(SPELL_FLAMESHOCKERS_TOUCH, SPELL_FLAMESHOCKERS_TOUCH2), CF_TRIGGERED);
                     m_events.ScheduleEvent(EVENT_MINION_FLAMESHOCKERS_TOUCH, urand(30000, 45000));
                     break;
                 }
-                case EVENT_MINION_FLAMESHOCKERS_DESPAWN:
+            case EVENT_MINION_FLAMESHOCKERS_DESPAWN:
                 {
                     if (!m_creature->IsInCombat())
                         m_creature->CastSpell(m_creature, SPELL_DESPAWNER_SELF, true);
@@ -1045,10 +1000,7 @@ struct ScourgeMinion : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_ScourgeMinion(Creature* pCreature)
-{
-    return new ScourgeMinion(pCreature);
-}
+CreatureAI* GetAI_ScourgeMinion(Creature* pCreature) { return new ScourgeMinion(pCreature); }
 
 /*
 Argent Emissary
@@ -1058,19 +1010,19 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
 {
     switch (action)
     {
-        case GOSSIP_ACTION_INFO_DEF + 1:
+    case GOSSIP_ACTION_INFO_DEF + 1:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 5);
             pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_AWNSER_0, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 2:
+    case GOSSIP_ACTION_INFO_DEF + 2:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 5);
             pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_AWNSER_1, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 3:
+    case GOSSIP_ACTION_INFO_DEF + 3:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION_2_SUB_OPTION_4, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 10);
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION_2_SUB_OPTION_2, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 8);
@@ -1083,7 +1035,7 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
             pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_AWNSER_2, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 4:
+    case GOSSIP_ACTION_INFO_DEF + 4:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 5);
 
@@ -1096,7 +1048,7 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
                 pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_AWBSER_3_2, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 5:
+    case GOSSIP_ACTION_INFO_DEF + 5:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION_0, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION_1, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 2);
@@ -1107,7 +1059,7 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
             pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_GOSSIP, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 6:
+    case GOSSIP_ACTION_INFO_DEF + 6:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 3);
             if (sObjectMgr.GetSavedVariable(VARIABLE_SI_WINTERSPRING_REMAINING) > 0)
@@ -1116,7 +1068,7 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
                 pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_FREE_OF_SCOURGE, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 7:
+    case GOSSIP_ACTION_INFO_DEF + 7:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 3);
             if (sObjectMgr.GetSavedVariable(VARIABLE_SI_TANARIS_REMAINING) > 0)
@@ -1125,7 +1077,7 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
                 pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_FREE_OF_SCOURGE, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 8:
+    case GOSSIP_ACTION_INFO_DEF + 8:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 3);
             if (sObjectMgr.GetSavedVariable(VARIABLE_SI_BLASTED_LANDS_REMAINING) > 0)
@@ -1134,7 +1086,7 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
                 pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_FREE_OF_SCOURGE, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 9:
+    case GOSSIP_ACTION_INFO_DEF + 9:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 3);
             if (sObjectMgr.GetSavedVariable(VARIABLE_SI_BURNING_STEPPES_REMAINING) > 0)
@@ -1143,7 +1095,7 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
                 pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_FREE_OF_SCOURGE, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 10:
+    case GOSSIP_ACTION_INFO_DEF + 10:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 3);
             if (sObjectMgr.GetSavedVariable(VARIABLE_SI_AZSHARA_REMAINING) > 0)
@@ -1152,7 +1104,7 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
                 pPlayer->SEND_GOSSIP_MENU(BCT_ARGENT_EMISSARY_FREE_OF_SCOURGE, pCreature->GetGUID());
             break;
         }
-        case GOSSIP_ACTION_INFO_DEF + 11:
+    case GOSSIP_ACTION_INFO_DEF + 11:
         {
             pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, BCT_ARGENT_EMISSARY_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 3);
             if (sObjectMgr.GetSavedVariable(VARIABLE_SI_EASTERN_PLAGUELANDS_REMAINING) > 0)
@@ -1162,7 +1114,7 @@ bool GossipSelect_npc_argent_emissary(Player* pPlayer, Creature* pCreature, uint
             break;
         }
     }
-    //pPlayer->CLOSE_GOSSIP_MENU();
+    // pPlayer->CLOSE_GOSSIP_MENU();
     return true;
 }
 
@@ -1218,7 +1170,7 @@ struct PallidHorrorAI : public ScriptedAI
                     pFlameshocker->CastSpell(pFlameshocker, SPELL_MINION_SPAWN_IN, true);
                     m_flameshockers.insert(pFlameshocker->GetObjectGuid());
                 }
-            }   
+            }
         }
         m_events.Reset();
         m_creature->SetCorpseDelay(10); // Corpse despawns 10 seconds after a crystal spawns.
@@ -1227,10 +1179,7 @@ struct PallidHorrorAI : public ScriptedAI
         m_events.ScheduleEvent(EVENT_PALLID_SUMMON_FLAMESHOCKER, 5000);
     }
 
-    void Reset() override
-    {
-        m_creature->AddAura(SPELL_AURA_OF_FEAR);
-    }
+    void Reset() override { m_creature->AddAura(SPELL_AURA_OF_FEAR); }
 
     void MoveInLineOfSight(Unit* pWho) override
     {
@@ -1298,24 +1247,23 @@ struct PallidHorrorAI : public ScriptedAI
         {
             switch (Events)
             {
-                case EVENT_PALLID_RANDOM_YELL:
+            case EVENT_PALLID_RANDOM_YELL:
                 {
-                    DoScriptText(PickRandomValue(BCT_PALLID_HORROR_YELL1, BCT_PALLID_HORROR_YELL2, BCT_PALLID_HORROR_YELL3, BCT_PALLID_HORROR_YELL4,
-                        BCT_PALLID_HORROR_YELL5, BCT_PALLID_HORROR_YELL6, BCT_PALLID_HORROR_YELL7, BCT_PALLID_HORROR_YELL8), m_creature, nullptr, CHAT_TYPE_ZONE_YELL);
+                    DoScriptText(PickRandomValue(BCT_PALLID_HORROR_YELL1, BCT_PALLID_HORROR_YELL2, BCT_PALLID_HORROR_YELL3, BCT_PALLID_HORROR_YELL4, BCT_PALLID_HORROR_YELL5, BCT_PALLID_HORROR_YELL6, BCT_PALLID_HORROR_YELL7, BCT_PALLID_HORROR_YELL8), m_creature, nullptr, CHAT_TYPE_ZONE_YELL);
                     m_events.ScheduleEvent(EVENT_PALLID_RANDOM_YELL, urand(IN_MILLISECONDS * 65, IN_MILLISECONDS * 300));
                     break;
                 }
-                case EVENT_PALLID_SPELL_DAMAGE_VS_GUARDS:
+            case EVENT_PALLID_SPELL_DAMAGE_VS_GUARDS:
                 {
-                    DoCastSpellIfCan(m_creature->GetVictim(), SPELL_DAMAGE_VS_GUARDS,  CF_TRIGGERED);
+                    DoCastSpellIfCan(m_creature->GetVictim(), SPELL_DAMAGE_VS_GUARDS, CF_TRIGGERED);
                     m_events.ScheduleEvent(EVENT_PALLID_SPELL_DAMAGE_VS_GUARDS, urand(11000, 81000));
                     break;
                 }
-                case EVENT_PALLID_SUMMON_FLAMESHOCKER:
+            case EVENT_PALLID_SUMMON_FLAMESHOCKER:
                 {
                     if (m_flameshockers.size() < 30)
                     {
-                        if (Unit* pTarget = SelectRandomFlameshockerSpawnTarget(m_creature, (Unit*) nullptr, DEFAULT_VISIBILITY_BG))
+                        if (Unit* pTarget = SelectRandomFlameshockerSpawnTarget(m_creature, (Unit*)nullptr, DEFAULT_VISIBILITY_BG))
                         {
                             float x, y, z;
                             pTarget->GetNearPoint(pTarget, x, y, z, 5.0f, 5.0f, 0.0f);
@@ -1340,10 +1288,7 @@ struct PallidHorrorAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_PallidHorrorAI(Creature* pCreature)
-{
-    return new PallidHorrorAI(pCreature);
-}
+CreatureAI* GetAI_PallidHorrorAI(Creature* pCreature) { return new PallidHorrorAI(pCreature); }
 
 void AddSC_scourge_invasion()
 {

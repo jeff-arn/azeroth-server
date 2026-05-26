@@ -16,21 +16,16 @@
 
 #include "BasicAI.h"
 #include "Creature.h"
-#include "Map.h"
 #include "GuardMgr.h"
+#include "Map.h"
 
-BasicAI::BasicAI(Creature* c) : CreatureAI(c), m_bCanSummonGuards(c->CanSummonGuards())
-{}
+BasicAI::BasicAI(Creature* c) : CreatureAI(c), m_bCanSummonGuards(c->CanSummonGuards()) {}
 
-int BasicAI::Permissible(Creature const* creature)
-{
-    return PERMIT_BASE_NORMAL;
-}
+int BasicAI::Permissible(Creature const* creature) { return PERMIT_BASE_NORMAL; }
 
 bool BasicAI::IsProximityAggroAllowedFor(Unit* pTarget) const
 {
-    if (m_creature->HasStaticFlag(CREATURE_STATIC_FLAG_ONLY_ATTACK_PVP_ENABLING) &&
-        !pTarget->IsPvP() && pTarget->IsCharmerOrOwnerPlayerOrPlayerItself())
+    if (m_creature->HasStaticFlag(CREATURE_STATIC_FLAG_ONLY_ATTACK_PVP_ENABLING) && !pTarget->IsPvP() && pTarget->IsCharmerOrOwnerPlayerOrPlayerItself())
         return false;
 
     if (!m_creature->GetVictim())
@@ -63,9 +58,7 @@ void BasicAI::MoveInLineOfSight(Unit* pWho)
 
     float const maxDistance = canInitiateAttack ? m_creature->GetAttackDistance(pWho) : m_creature->GetDetectionRange();
 
-    if (m_creature->IsWithinDistInMap(pWho, maxDistance, true, SizeFactor::None) &&
-        pWho->IsTargetableBy(m_creature) && m_creature->IsHostileTo(pWho) &&
-        m_creature->IsWithinLOSInMap(pWho) && pWho->IsInAccessablePlaceFor(m_creature))
+    if (m_creature->IsWithinDistInMap(pWho, maxDistance, true, SizeFactor::None) && pWho->IsTargetableBy(m_creature) && m_creature->IsHostileTo(pWho) && m_creature->IsWithinLOSInMap(pWho) && pWho->IsInAccessablePlaceFor(m_creature))
     {
         if (canInitiateAttack)
             m_creature->EnterCombatWithTarget(pWho);
@@ -99,7 +92,4 @@ void BasicAI::UpdateAI(uint32 const uiDiff)
     DoMeleeAttackIfReady();
 }
 
-void BasicAI::SummonGuard(Unit* pEnemy)
-{
-    m_bCanSummonGuards = !sGuardMgr.SummonGuard(m_creature, pEnemy);
-}
+void BasicAI::SummonGuard(Unit* pEnemy) { m_bCanSummonGuards = !sGuardMgr.SummonGuard(m_creature, pEnemy); }

@@ -25,26 +25,20 @@ EndScriptData */
 
 enum
 {
-    SAY_AGGRO                       = 2655, // Release the hounds!
-    SPELL_SUMMONSCARLETHOUND        = 17164,
-    SPELL_BLOODLUST                 = 6742
+    SAY_AGGRO = 2655, // Release the hounds!
+    SPELL_SUMMONSCARLETHOUND = 17164,
+    SPELL_BLOODLUST = 6742
 };
 
 struct boss_houndmaster_lokseyAI : public ScriptedAI
 {
-    boss_houndmaster_lokseyAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_houndmaster_lokseyAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 BloodLust_Timer;
 
-    void Reset() override
-    {
-        BloodLust_Timer = 20000;
-    }
+    void Reset() override { BloodLust_Timer = 20000; }
 
-    void Aggro(Unit *who) override
+    void Aggro(Unit* who) override
     {
         DoScriptText(SAY_AGGRO, m_creature);
         DoCastSpellIfCan(m_creature, SPELL_SUMMONSCARLETHOUND);
@@ -60,16 +54,14 @@ struct boss_houndmaster_lokseyAI : public ScriptedAI
             DoCastSpellIfCan(m_creature, SPELL_BLOODLUST);
             BloodLust_Timer = 20000;
         }
-        else BloodLust_Timer -= diff;
+        else
+            BloodLust_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_boss_houndmaster_loksey(Creature* pCreature)
-{
-    return new boss_houndmaster_lokseyAI(pCreature);
-}
+CreatureAI* GetAI_boss_houndmaster_loksey(Creature* pCreature) { return new boss_houndmaster_lokseyAI(pCreature); }
 
 void AddSC_boss_houndmaster_loksey()
 {

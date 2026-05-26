@@ -19,10 +19,10 @@
 #ifndef _MOVE_MAP_SHARED_DEFINES_H
 #define _MOVE_MAP_SHARED_DEFINES_H
 
-#include "Platform/Define.h"
 #include "../recastnavigation/Detour/Include/DetourNavMesh.h"
+#include "Platform/Define.h"
 
-#define MMAP_MAGIC 0x4d4d4150   // 'MMAP'
+#define MMAP_MAGIC 0x4d4d4150 // 'MMAP'
 #define MMAP_VERSION 6
 
 struct MmapTileHeader
@@ -33,22 +33,21 @@ struct MmapTileHeader
     uint32 size;
     uint32 usesLiquids;
 
-    MmapTileHeader() : mmapMagic(MMAP_MAGIC), dtVersion(DT_NAVMESH_VERSION),
-                       mmapVersion(MMAP_VERSION), size(0), usesLiquids(0) {}
+    MmapTileHeader() : mmapMagic(MMAP_MAGIC), dtVersion(DT_NAVMESH_VERSION), mmapVersion(MMAP_VERSION), size(0), usesLiquids(0) {}
 };
 
 enum NavTerrain
 {
-    NAV_EMPTY        = 0x00,
-    NAV_GROUND       = 0x01,
-    NAV_MAGMA        = 0x02,
-    NAV_SLIME        = 0x04,
-    NAV_WATER        = 0x08,
+    NAV_EMPTY = 0x00,
+    NAV_GROUND = 0x01,
+    NAV_MAGMA = 0x02,
+    NAV_SLIME = 0x04,
+    NAV_WATER = 0x08,
     NAV_STEEP_SLOPES = 0x10, // Slopes above player climb angle
-    NAV_UNUSED2      = 0x20,
-    NAV_UNUSED3      = 0x40,
-    NAV_UNUSED4      = 0x80
+    NAV_UNUSED2 = 0x20,
+    NAV_UNUSED3 = 0x40,
+    NAV_UNUSED4 = 0x80
     // we only have 8 bits
 };
 
-#endif  // _MOVE_MAP_SHARED_DEFINES_H
+#endif // _MOVE_MAP_SHARED_DEFINES_H

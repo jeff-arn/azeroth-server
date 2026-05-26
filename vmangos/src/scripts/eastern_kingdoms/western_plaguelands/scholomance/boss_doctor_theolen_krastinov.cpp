@@ -21,24 +21,21 @@ SDComment:
 SDCategory: Scholomance
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "scholomance.h"
+#include "scriptPCH.h"
 
 enum
 {
-    EMOTE_GENERIC_FRENZY_KILL   = 7797,
+    EMOTE_GENERIC_FRENZY_KILL = 7797,
 
-    SPELL_REND                  = 16509,
-    SPELL_BACKHAND              = 18103,
-    SPELL_FRENZY                = 8269
+    SPELL_REND = 16509,
+    SPELL_BACKHAND = 18103,
+    SPELL_FRENZY = 8269
 };
 
 struct boss_theolenkrastinovAI : public ScriptedAI
 {
-    boss_theolenkrastinovAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_theolenkrastinovAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiRend_Timer;
     uint32 m_uiBackhand_Timer;
@@ -51,7 +48,7 @@ struct boss_theolenkrastinovAI : public ScriptedAI
         m_uiFrenzy_Timer = 1000;
     }
 
-    void JustDied(Unit *killer) override
+    void JustDied(Unit* killer) override
     {
         if (ScriptedInstance* pInstance = (ScriptedInstance*)m_creature->GetInstanceData())
             pInstance->SetData(TYPE_THEOLEN, DONE);
@@ -62,7 +59,7 @@ struct boss_theolenkrastinovAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //Rend_Timer
+        // Rend_Timer
         if (m_uiRend_Timer < uiDiff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_REND);
@@ -71,7 +68,7 @@ struct boss_theolenkrastinovAI : public ScriptedAI
         else
             m_uiRend_Timer -= uiDiff;
 
-        //m_uiBackhand_Timer
+        // m_uiBackhand_Timer
         if (m_uiBackhand_Timer < uiDiff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BACKHAND);
@@ -81,7 +78,7 @@ struct boss_theolenkrastinovAI : public ScriptedAI
         else
             m_uiBackhand_Timer -= uiDiff;
 
-        //Frenzy_Timer
+        // Frenzy_Timer
         if (m_creature->GetHealthPercent() < 26.0f)
         {
             if (m_uiFrenzy_Timer < uiDiff)
@@ -100,10 +97,7 @@ struct boss_theolenkrastinovAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_theolenkrastinov(Creature* pCreature)
-{
-    return new boss_theolenkrastinovAI(pCreature);
-}
+CreatureAI* GetAI_boss_theolenkrastinov(Creature* pCreature) { return new boss_theolenkrastinovAI(pCreature); }
 
 void AddSC_boss_theolenkrastinov()
 {

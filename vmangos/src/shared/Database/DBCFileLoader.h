@@ -21,93 +21,92 @@
 
 #ifndef DBC_FILE_LOADER_H
 #define DBC_FILE_LOADER_H
+#include <cassert>
 #include "Platform/Define.h"
 #include "Utilities/ByteConverter.h"
-#include <cassert>
 
 enum FieldFormat
 {
-    FT_NA = 'x',                                            // ignore/ default, 4 byte size, in Source String means field is ignored, in Dest String means field is filled with default value
-    FT_NA_BYTE = 'X',                                       // ignore/ default, 1 byte size, see above
-    FT_NA_FLOAT = 'F',                                      // ignore/ default,  float size, see above
-    FT_NA_POINTER = 'p',                                    // fill default value into dest, pointer size, Use this only with static data (otherwise mem-leak)
-    FT_STRING = 's',                                        // char*
-    FT_FLOAT = 'f',                                         // float
-    FT_INT = 'i',                                           // uint32
-    FT_BYTE = 'b',                                          // uint8
-    FT_SORT = 'd',                                          // sorted by this field, field is not included
-    FT_IND = 'n',                                           // the same,but parsed to data
-    FT_LOGIC = 'l',                                         // Logical (boolean)
-    FT_64BITINT = 'L'                                       // uint64
+    FT_NA = 'x', // ignore/ default, 4 byte size, in Source String means field is ignored, in Dest String means field is filled with default value
+    FT_NA_BYTE = 'X', // ignore/ default, 1 byte size, see above
+    FT_NA_FLOAT = 'F', // ignore/ default,  float size, see above
+    FT_NA_POINTER = 'p', // fill default value into dest, pointer size, Use this only with static data (otherwise mem-leak)
+    FT_STRING = 's', // char*
+    FT_FLOAT = 'f', // float
+    FT_INT = 'i', // uint32
+    FT_BYTE = 'b', // uint8
+    FT_SORT = 'd', // sorted by this field, field is not included
+    FT_IND = 'n', // the same,but parsed to data
+    FT_LOGIC = 'l', // Logical (boolean)
+    FT_64BITINT = 'L' // uint64
 };
 
 class DBCFileLoader
 {
+public:
+    DBCFileLoader();
+    ~DBCFileLoader();
+
+    bool Load(char const* filename, char const* fmt);
+
+    class Record
+    {
     public:
-        DBCFileLoader();
-        ~DBCFileLoader();
-
-        bool Load(char const* filename, char const* fmt);
-
-        class Record
+        float getFloat(size_t field) const
         {
-            public:
-                float getFloat(size_t field) const
-                {
-                    assert(field < file.fieldCount);
-                    float val = *reinterpret_cast<float*>(offset+file.GetOffset(field));
-                    EndianConvert(val);
-                    return val;
-                }
-                uint32 getUInt(size_t field) const
-                {
-                    assert(field < file.fieldCount);
-                    uint32 val = *reinterpret_cast<uint32*>(offset+file.GetOffset(field));
-                    EndianConvert(val);
-                    return val;
-                }
-                uint8 getUInt8(size_t field) const
-                {
-                    assert(field < file.fieldCount);
-                    return *reinterpret_cast<uint8*>(offset+file.GetOffset(field));
-                }
+            assert(field < file.fieldCount);
+            float val = *reinterpret_cast<float*>(offset + file.GetOffset(field));
+            EndianConvert(val);
+            return val;
+        }
+        uint32 getUInt(size_t field) const
+        {
+            assert(field < file.fieldCount);
+            uint32 val = *reinterpret_cast<uint32*>(offset + file.GetOffset(field));
+            EndianConvert(val);
+            return val;
+        }
+        uint8 getUInt8(size_t field) const
+        {
+            assert(field < file.fieldCount);
+            return *reinterpret_cast<uint8*>(offset + file.GetOffset(field));
+        }
 
-                char const* getString(size_t field) const
-                {
-                    assert(field < file.fieldCount);
-                    size_t stringOffset = getUInt(field);
-                    assert(stringOffset < file.stringSize);
-                    return reinterpret_cast<char*>(file.stringTable + stringOffset);
-                }
+        char const* getString(size_t field) const
+        {
+            assert(field < file.fieldCount);
+            size_t stringOffset = getUInt(field);
+            assert(stringOffset < file.stringSize);
+            return reinterpret_cast<char*>(file.stringTable + stringOffset);
+        }
 
-            private:
-                Record(DBCFileLoader& file_, unsigned char* offset_): offset(offset_), file(file_) {}
-                unsigned char* offset;
-                DBCFileLoader& file;
-
-                friend class DBCFileLoader;
-
-        };
-
-        // Get record by id
-        Record getRecord(size_t id);
-        // Get begin iterator over records
-
-        uint32 GetNumRows() const { return recordCount;}
-        uint32 GetCols() const { return fieldCount; }
-        uint32 GetOffset(size_t id) const { return (fieldsOffset != nullptr && id < fieldCount) ? fieldsOffset[id] : 0; }
-        bool IsLoaded() {return (data!=nullptr);}
-        char* AutoProduceData(char const* fmt, uint32& count, char**& indexTable);
-        char* AutoProduceStrings(char const* fmt, char* dataTable);
-        static uint32 GetFormatRecordSize(char const* format, int32* index_pos = nullptr);
     private:
+        Record(DBCFileLoader& file_, unsigned char* offset_) : offset(offset_), file(file_) {}
+        unsigned char* offset;
+        DBCFileLoader& file;
 
-        uint32 recordSize;
-        uint32 recordCount;
-        uint32 fieldCount;
-        uint32 stringSize;
-        uint32* fieldsOffset;
-        unsigned char* data;
-        unsigned char* stringTable;
+        friend class DBCFileLoader;
+    };
+
+    // Get record by id
+    Record getRecord(size_t id);
+    // Get begin iterator over records
+
+    uint32 GetNumRows() const { return recordCount; }
+    uint32 GetCols() const { return fieldCount; }
+    uint32 GetOffset(size_t id) const { return (fieldsOffset != nullptr && id < fieldCount) ? fieldsOffset[id] : 0; }
+    bool IsLoaded() { return (data != nullptr); }
+    char* AutoProduceData(char const* fmt, uint32& count, char**& indexTable);
+    char* AutoProduceStrings(char const* fmt, char* dataTable);
+    static uint32 GetFormatRecordSize(char const* format, int32* index_pos = nullptr);
+
+private:
+    uint32 recordSize;
+    uint32 recordCount;
+    uint32 fieldCount;
+    uint32 stringSize;
+    uint32* fieldsOffset;
+    unsigned char* data;
+    unsigned char* stringTable;
 };
 #endif

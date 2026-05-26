@@ -18,20 +18,18 @@
 #define _SPELLMODIFIER_H
 
 #include "Common.h"
-#include "SpellDefines.h"
 #include "DBCEnums.h"
+#include "SpellDefines.h"
 
 class Aura;
 class SpellEntry;
 
- // Spell modifier (used to modify other spells)
+// Spell modifier (used to modify other spells)
 struct SpellModifier
 {
     SpellModifier() : op(MAX_SPELLMOD), type(SPELLMOD_TYPE_NONE), charges(0), value(0), mask(0), spellId(0), ownerAura(nullptr) {}
 
-    SpellModifier(SpellModOp _op, SpellModType _type, int32 _value, uint32 _spellId, uint64 _mask, int16 _charges = 0)
-        : op(_op), type(_type), charges(_charges), value(_value), mask(_mask), spellId(_spellId), ownerAura(nullptr)
-    {}
+    SpellModifier(SpellModOp _op, SpellModType _type, int32 _value, uint32 _spellId, uint64 _mask, int16 _charges = 0) : op(_op), type(_type), charges(_charges), value(_value), mask(_mask), spellId(_spellId), ownerAura(nullptr) {}
 
     SpellModifier(SpellModOp _op, SpellModType _type, int32 _value, SpellEntry const* spellEntry, SpellEffectIndex eff, int16 _charges = 0);
 
@@ -39,7 +37,7 @@ struct SpellModifier
 
     bool IsAffectedOnSpell(SpellEntry const* spell) const;
 
-    SpellModOp   op : 8;
+    SpellModOp op : 8;
     SpellModType type : 8;
     int16 charges : 16; // 0 = infinite
     int32 value;

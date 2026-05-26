@@ -20,13 +20,13 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "WorldSocket.h"
 #include "WorldSocketMgr.h"
+#include "IO/Multithreading/CreateThread.h"
+#include "IO/Networking/AsyncSocketAcceptor.h"
 #include "Log.h"
 #include "Policies/SingletonImp.h"
-#include "IO/Networking/AsyncSocketAcceptor.h"
-#include "IO/Multithreading/CreateThread.h"
 #include "ProxyProtocol/ProxyV2Reader.h"
+#include "WorldSocket.h"
 
 INSTANTIATE_SINGLETON_1(WorldSocketMgr);
 
@@ -42,10 +42,7 @@ bool WorldSocketMgr::StartWorldNetworking(IO::IoContext* ioCtx, WorldSocketMgrOp
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Failed to start WorldSocket network");
         return false;
     }
-    m_listener->AutoAcceptSocketsUntilClose([this](IO::Networking::SocketDescriptor socketDescriptor)
-    {
-        this->OnNewClientConnected(std::move(socketDescriptor));
-    });
+    m_listener->AutoAcceptSocketsUntilClose([this](IO::Networking::SocketDescriptor socketDescriptor) { this->OnNewClientConnected(std::move(socketDescriptor)); });
 
     return true;
 }
@@ -95,17 +92,18 @@ void WorldSocketMgr::OnNewClientConnected(IO::Networking::SocketDescriptor socke
     if (!m_settings.trustedProxyIps.empty() && std::find(m_settings.trustedProxyIps.begin(), m_settings.trustedProxyIps.end(), socketIp) != m_settings.trustedProxyIps.end())
     {
         // parse proxy header
-        ProxyProtocol::ReadProxyV2Handshake(&(worldSocket->m_socket), [worldSocket](nonstd::expected<IO::Networking::IpAddress, IO::NetworkError> const& maybeIp)
-        {
-            if (!maybeIp.has_value())
-            {
-                sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "[%s] Failed to parse proxy header. Error: %s", worldSocket->m_socket.GetRemoteIpString().c_str(), maybeIp.error().ToString().c_str());
-                return; // implicit close()
-            }
-            worldSocket->m_remoteIpAddressStringAfterProxy = maybeIp.value().ToString();
-            sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] Connection accepted (proxy ip: %s)", worldSocket->GetRemoteIpString().c_str(), worldSocket->m_socket.GetRemoteIpString().c_str());
-            worldSocket->Start();
-        });
+        ProxyProtocol::ReadProxyV2Handshake(&(worldSocket->m_socket),
+                                            [worldSocket](nonstd::expected<IO::Networking::IpAddress, IO::NetworkError> const& maybeIp)
+                                            {
+                                                if (!maybeIp.has_value())
+                                                {
+                                                    sLog.Out(LOG_NETWORK, LOG_LVL_ERROR, "[%s] Failed to parse proxy header. Error: %s", worldSocket->m_socket.GetRemoteIpString().c_str(), maybeIp.error().ToString().c_str());
+                                                    return; // implicit close()
+                                                }
+                                                worldSocket->m_remoteIpAddressStringAfterProxy = maybeIp.value().ToString();
+                                                sLog.Out(LOG_NETWORK, LOG_LVL_BASIC, "[%s] Connection accepted (proxy ip: %s)", worldSocket->GetRemoteIpString().c_str(), worldSocket->m_socket.GetRemoteIpString().c_str());
+                                                worldSocket->Start();
+                                            });
     }
     else
     {

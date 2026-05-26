@@ -4,10 +4,13 @@
 #include <string>
 #include "./IpAddress.h"
 
-namespace IO { namespace Networking
+namespace IO
 {
-    /// Checks whenever the same (IPv4) Address is in the same subnet as the other one
-    bool IsInSameSubnet(IpAddress const& ipAddressInQuestion, IpAddress const& subnetIpAddress, uint8_t subnetMaskInCidrNotation);
-}} // namespace IO::Networking
+    namespace Networking
+    {
+        /// Checks whenever the same (IPv4) Address is in the same subnet as the other one
+        bool IsInSameSubnet(IpAddress const& ipAddressInQuestion, IpAddress const& subnetIpAddress, uint8_t subnetMaskInCidrNotation);
+    } // namespace Networking
+} // namespace IO
 
-#endif //MANGOS_IO_NETWORKING_UTILS_H
+#endif // MANGOS_IO_NETWORKING_UTILS_H

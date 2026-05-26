@@ -14,59 +14,59 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
-#include "naxxramas.h"
 #include "AI/PlayerAI.h"
+#include "naxxramas.h"
+#include "scriptPCH.h"
 
 enum KelthuzadData
 {
-    SAY_SUMMON_MINIONS                  = 12999,         // start of phase 1
+    SAY_SUMMON_MINIONS = 12999, // start of phase 1
 
-    SAY_AGGRO1                          = 12995,         // pray for mercy
-    SAY_AGGRO2                          = 12996,         // Scream your dying breath!
-    SAY_AGGRO3                          = 12997,         // The end is upon you!
+    SAY_AGGRO1 = 12995, // pray for mercy
+    SAY_AGGRO2 = 12996, // Scream your dying breath!
+    SAY_AGGRO3 = 12997, // The end is upon you!
 
-    SAY_SLAY1                           = 13021,
-    EMOTE_SLAY                          = 13022,
+    SAY_SLAY1 = 13021,
+    EMOTE_SLAY = 13022,
 
-    SAY_DEATH                           = 13019,
+    SAY_DEATH = 13019,
 
-    SAY_CHAIN1                          = 13017,         // Your soul, is bound to me now!
-    SAY_CHAIN2                          = 13018,         // there will be  no escape
-    SAY_FROST_BLAST                     = 13020,         // I will freeze the blood in your veins!
+    SAY_CHAIN1 = 13017, // Your soul, is bound to me now!
+    SAY_CHAIN2 = 13018, // there will be  no escape
+    SAY_FROST_BLAST = 13020, // I will freeze the blood in your veins!
 
-    SAY_REQUEST_AID                     = 12998,         // Master! I require aid! 
-    SAY_ANSWER_REQUEST                  = 12994,         // Very well... warriors of the frozen wastes, rise up! I command you to fight, kill, and die for your master. Let none survive...
+    SAY_REQUEST_AID = 12998, // Master! I require aid!
+    SAY_ANSWER_REQUEST = 12994, // Very well... warriors of the frozen wastes, rise up! I command you to fight, kill, and die for your master. Let none survive...
 
-    SAY_SPECIAL1_MANA_DET               = 13492,         
-    SAY_SPECIAL3_MANA_DET               = -1533107,         // (need find correct bct id!) Enough! I grow tired of these distractions! 
-    SAY_SPECIAL2_DISPELL                = -1533108,         // (need find correct bct id!) Fools, you have spread your powers too thin. Be free, my minions!
+    SAY_SPECIAL1_MANA_DET = 13492,
+    SAY_SPECIAL3_MANA_DET = -1533107, // (need find correct bct id!) Enough! I grow tired of these distractions!
+    SAY_SPECIAL2_DISPELL = -1533108, // (need find correct bct id!) Fools, you have spread your powers too thin. Be free, my minions!
 
-    EMOTE_GUARDIAN                      = -1533134,         // (need find correct bct id!) at each guardian summon, cant see that it's used in vanilla
+    EMOTE_GUARDIAN = -1533134, // (need find correct bct id!) at each guardian summon, cant see that it's used in vanilla
 
-    SPELL_VISUAL_CHANNEL                = 29423,            // channeled throughout phase one
+    SPELL_VISUAL_CHANNEL = 29423, // channeled throughout phase one
 
-    //spells to be casted
-    SPELL_FROST_BOLT                    = 28478,
-    SPELL_FROST_BOLT_NOVA               = 28479,
+    // spells to be casted
+    SPELL_FROST_BOLT = 28478,
+    SPELL_FROST_BOLT_NOVA = 28479,
 
-    SPELL_CHAINS_OF_KELTHUZAD           = 28408,           
-    SPELL_CHAINS_OF_KELTHUZAD_SCALE     = 28409,
-    SPELL_CHAINS_OF_KELTHUZAD_EFFECTS   = 28410,
+    SPELL_CHAINS_OF_KELTHUZAD = 28408,
+    SPELL_CHAINS_OF_KELTHUZAD_SCALE = 28409,
+    SPELL_CHAINS_OF_KELTHUZAD_EFFECTS = 28410,
 
-    SPELL_MANA_DETONATION               = 27819,
-    SPELL_SHADOW_FISSURE                = 27810,
-    SPELL_VOID_BLAST                    = 27812,
-    SPELL_FROST_BLAST                   = 27808,
-    SPELL_BERSERK                       = 28498,
+    SPELL_MANA_DETONATION = 27819,
+    SPELL_SHADOW_FISSURE = 27810,
+    SPELL_VOID_BLAST = 27812,
+    SPELL_FROST_BLAST = 27808,
+    SPELL_BERSERK = 28498,
 
-    SPELL_DISPELL_SHACKLES              = 28471             // not used, doing it "manually"
+    SPELL_DISPELL_SHACKLES = 28471 // not used, doing it "manually"
 };
 
 enum AddSpells
 {
     // Guardian of Icecrown
-    SPELL_BLOOD_TAP = 28470, 
+    SPELL_BLOOD_TAP = 28470,
 
     // Abomination
     SPELL_MORTAL_WOUND = 28467
@@ -97,123 +97,56 @@ enum Events
 };
 
 // the shiny thing in center that despawns after pull
-static constexpr float pullPortal[3] = { 3716.379883f, -5106.779785f, 132.9f };
+static constexpr float pullPortal[3] = {3716.379883f, -5106.779785f, 132.9f};
 
 // Center position of each alcove
 static constexpr uint32 NUM_ALCOVES = 7;
-static constexpr float alcoves[7][2] = 
-{
-    { 3768.40f, -5072.00f},
-    { 3729.30f, -5044.10f},
-    { 3683.00f, -5054.05f},
-    { 3654.15f, -5093.48f},
-    { 3664.55f, -5140.50f},
-    { 3704.00f, -5170.00f},
-    { 3751.95f, -5158.90f} 
-};
+static constexpr float alcoves[7][2] = {{3768.40f, -5072.00f}, {3729.30f, -5044.10f}, {3683.00f, -5054.05f}, {3654.15f, -5093.48f}, {3664.55f, -5140.50f}, {3704.00f, -5170.00f}, {3751.95f, -5158.90f}};
 
 // z-coordinate in the alcoves
-static constexpr float alcoveZ = 143.5f; 
+static constexpr float alcoveZ = 143.5f;
 
 // number of soulweavers total, one in each alcove
 static constexpr uint32 NUM_SOULWEAVER = 7;
 // each soulweaver position
-static constexpr float soulweaverPos[NUM_SOULWEAVER][2] =
-{
-    {3754.95f, -5164.93f},
-    {3701.89f, -5176.95f},
-    {3656.83f, -5145.56f},
-    {3647.53f, -5093.56f},
-    {3678.48f, -5050.46f},
-    {3730.87f, -5035.93f},
-    {3774.78f, -5067.68f},
+static constexpr float soulweaverPos[NUM_SOULWEAVER][2] = {
+    {3754.95f, -5164.93f}, {3701.89f, -5176.95f}, {3656.83f, -5145.56f}, {3647.53f, -5093.56f}, {3678.48f, -5050.46f}, {3730.87f, -5035.93f}, {3774.78f, -5067.68f},
 };
 
 // number of abominations, 3 in each alcove
 static constexpr uint32 NUM_ABOM = 21;
 // each abomination position
-static constexpr float abomPos[NUM_ABOM][2] =
-{
-    {3740.70f, -5160.89f},
-    {3756.42f, -5151.09f},
-    {3748.99f, -5155.72f},
+static constexpr float abomPos[NUM_ABOM][2] = {{3740.70f, -5160.89f}, {3756.42f, -5151.09f}, {3748.99f, -5155.72f},
 
-    {3694.11f, -5163.96f},
-    {3713.90f, -5168.14f},
-    {3704.76f, -5166.21f},
+                                               {3694.11f, -5163.96f}, {3713.90f, -5168.14f}, {3704.76f, -5166.21f},
 
-    {3661.65f, -5132.06f},
-    {3672.37f, -5147.84f},
-    {3666.83f, -5139.67f},
+                                               {3661.65f, -5132.06f}, {3672.37f, -5147.84f}, {3666.83f, -5139.67f},
 
-    {3658.81f, -5086.46f},
-    {3654.80f, -5104.04f},
-    {3656.76f, -5095.47f},
+                                               {3658.81f, -5086.46f}, {3654.80f, -5104.04f}, {3656.76f, -5095.47f},
 
-    {3691.83f, -5052.45f},
-    {3675.15f, -5062.94f},
-    {3683.48f, -5057.71f},
+                                               {3691.83f, -5052.45f}, {3675.15f, -5062.94f}, {3683.48f, -5057.71f},
 
-    {3738.15f, -5050.12f},
-    {3717.76f, -5046.03f},
-    {3728.48f, -5047.99f},
+                                               {3738.15f, -5050.12f}, {3717.76f, -5046.03f}, {3728.48f, -5047.99f},
 
-    {3772.53f, -5083.21f},
-    {3760.03f, -5064.65f},
-    {3765.85f, -5073.22f}
-};
+                                               {3772.53f, -5083.21f}, {3760.03f, -5064.65f}, {3765.85f, -5073.22f}};
 
-// total number of soulweaver and abomination waves 
+// total number of soulweaver and abomination waves
 static constexpr uint32 NUM_UNDEAD_SPAWNS = 14;
 
 // milliseconds since pull for each abomination spawn
-static constexpr uint32 abominationSpawnMs[NUM_UNDEAD_SPAWNS] =
-{
-    44000,
-    72000,
-    100000,
-    130000,
-    153000,
-    176000,
-    193000,
-    212000,
-    232000,
-    252000,
-    268000,
-    285000,
-    300000,
-    318000,
+static constexpr uint32 abominationSpawnMs[NUM_UNDEAD_SPAWNS] = {
+    44000, 72000, 100000, 130000, 153000, 176000, 193000, 212000, 232000, 252000, 268000, 285000, 300000, 318000,
 };
 
 // milliseconds since pull for each soulweaver spawn
-static constexpr uint32 soulweaverSpawnMs[NUM_UNDEAD_SPAWNS] =
-{
-    44000,
-    68000,
-    97000,
-    130000,
-    155000,
-    170000,
-    190000,
-    213000,
-    235000,
-    256000,
-    271000,
-    285000,
-    294000,
-    300000,
+static constexpr uint32 soulweaverSpawnMs[NUM_UNDEAD_SPAWNS] = {
+    44000, 68000, 97000, 130000, 155000, 170000, 190000, 213000, 235000, 256000, 271000, 285000, 294000, 300000,
 };
 
 static constexpr uint32 NUM_WINDOW_PORTALS = 4;
-static constexpr float windowPortals[NUM_WINDOW_PORTALS][2] =
-{
-    {3760.57f, -5173.93f},
-    {3700.14f, -5185.68f},
-    {3732.62f, -5027.67f},
-    {3783.36f, -5062.35f}
-};
+static constexpr float windowPortals[NUM_WINDOW_PORTALS][2] = {{3760.57f, -5173.93f}, {3700.14f, -5185.68f}, {3732.62f, -5027.67f}, {3783.36f, -5062.35f}};
 
-//todo: no idea what the pull range should be
+// todo: no idea what the pull range should be
 static constexpr float ALCOVE_ADD_PULL_RADIUS = 30.0f;
 
 struct kt_p1AddAI : public ScriptedAI
@@ -245,7 +178,7 @@ struct kt_p1AddAI : public ScriptedAI
         if (hasAggroed)
             ScriptedAI::AttackStart(pWho);
         // want to prevent the creature from aggroing unless we explicitly do it through this class
-        else if(m_creature->GetDistance2d(pWho) < ALCOVE_ADD_PULL_RADIUS)
+        else if (m_creature->GetDistance2d(pWho) < ALCOVE_ADD_PULL_RADIUS)
         {
             ActualAttack(pWho);
         }
@@ -257,15 +190,15 @@ struct kt_p1AddAI : public ScriptedAI
         {
             ScriptedAI::MoveInLineOfSight(pWho);
         }
-        else if (m_creature->IsHostileTo(pWho) && m_creature->GetDistance2d(pWho) < ALCOVE_ADD_PULL_RADIUS) //todo: no idea what the pull range should be
+        else if (m_creature->IsHostileTo(pWho) && m_creature->GetDistance2d(pWho) < ALCOVE_ADD_PULL_RADIUS) // todo: no idea what the pull range should be
         {
             ScriptedAI::MoveInLineOfSight(pWho);
         }
     }
 
-    void SpellHit(SpellCaster* pCaster, SpellEntry const*) override 
+    void SpellHit(SpellCaster* pCaster, SpellEntry const*) override
     {
-        if(!hasAggroed)
+        if (!hasAggroed)
         {
             if (Unit* pUnit = pCaster->ToUnit())
                 ActualAttack(pUnit);
@@ -284,9 +217,9 @@ struct boss_kelthuzadAI : public ScriptedAI
 
     instance_naxxramas* m_pInstance;
 
-    std::vector<std::pair<ObjectGuid,int>> guardians;
+    std::vector<std::pair<ObjectGuid, int>> guardians;
     std::vector<ObjectGuid> p1_adds;
-    
+
     int p1Timer;
     bool hasPutInCombat;
     bool p3Started;
@@ -306,7 +239,7 @@ struct boss_kelthuzadAI : public ScriptedAI
         m_creature->SetHealth(m_creature->GetMaxHealth());
         events.Reset();
         // no info on enragetimer in vanilla, but wotlk has a 19min enrage and uses a spell from 1.11 dbc
-        enrageTimer = 1000 * 60 * 19; 
+        enrageTimer = 1000 * 60 * 19;
         numSkeletons = 0;
         numAboms = 0;
         numBanshees = 0;
@@ -321,7 +254,7 @@ struct boss_kelthuzadAI : public ScriptedAI
         hasPutInCombat = false;
 
         m_creature->RemoveAurasDueToSpell(SPELL_VISUAL_CHANNEL);
-        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER|UNIT_FLAG_NOT_SELECTABLE);
+        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_NOT_SELECTABLE);
 
         EvadeAllGuardians();
 
@@ -355,11 +288,11 @@ struct boss_kelthuzadAI : public ScriptedAI
         DoScriptText(SAY_DEATH, m_creature);
         if (m_pInstance)
             m_pInstance->SetData(TYPE_KELTHUZAD, DONE);
-        
+
         EvadeAllGuardians();
     }
 
-    void MoveInLineOfSight(Unit* /*pWho*/) override { }
+    void MoveInLineOfSight(Unit* /*pWho*/) override {}
 
     void AttackStart(Unit* who) override
     {
@@ -381,9 +314,7 @@ struct boss_kelthuzadAI : public ScriptedAI
     {
         std::list<Player*> players;
         me->GetAlivePlayerListInRange(me, players, 75.0f);
-        auto iterator = std::remove_if(players.begin(), players.end(),
-                                       [](Player* player)
-                                      { return player->IsGameMaster(); });
+        auto iterator = std::remove_if(players.begin(), players.end(), [](Player* player) { return player->IsGameMaster(); });
         players.erase(iterator, players.end());
 
         for (auto const& itr : players)
@@ -443,14 +374,14 @@ struct boss_kelthuzadAI : public ScriptedAI
         DoScriptText(SAY_SUMMON_MINIONS, m_creature);
         DoCastAOE(SPELL_VISUAL_CHANNEL);
 
-        events.ScheduleEvent(EVENT_DESPAWN_PORTAL,  Seconds(7));
-        events.ScheduleEvent(EVENT_PUT_IN_COMBAT,   Seconds(20));
+        events.ScheduleEvent(EVENT_DESPAWN_PORTAL, Seconds(7));
+        events.ScheduleEvent(EVENT_PUT_IN_COMBAT, Seconds(20));
         events.ScheduleEvent(EVENT_PHASE_TWO_INTRO, Minutes(5) + Seconds(20));
 
         p1Timer = 320000;
         events.ScheduleEvent(EVENT_SKELETON, Seconds(20));
-        //events.ScheduleEvent(EVENT_SOUL_WEAVER, Seconds(35));
-        //events.ScheduleEvent(EVENT_ABOMINATION, Seconds(43));
+        // events.ScheduleEvent(EVENT_SOUL_WEAVER, Seconds(35));
+        // events.ScheduleEvent(EVENT_ABOMINATION, Seconds(43));
         for (uint32 i : abominationSpawnMs)
             events.ScheduleEvent(EVENT_ABOMINATION, i);
         for (uint32 i : soulweaverSpawnMs)
@@ -469,10 +400,9 @@ struct boss_kelthuzadAI : public ScriptedAI
                 float const x = alcove[0];
                 float const y = alcove[1];
                 float const radius = 14.0f;
-                float thisX = x + std::sin(angle)*relDistance*radius;
-                float thisY = y + std::cos(angle)*relDistance*radius;
-                if (Creature* pCreature = m_creature->SummonCreature(NPC_SOLDIER_FROZEN, thisX, thisY, alcoveZ, frand(0, M_PI_F * 2),
-                    TEMPSUMMON_MANUAL_DESPAWN))
+                float thisX = x + std::sin(angle) * relDistance * radius;
+                float thisY = y + std::cos(angle) * relDistance * radius;
+                if (Creature* pCreature = m_creature->SummonCreature(NPC_SOLDIER_FROZEN, thisX, thisY, alcoveZ, frand(0, M_PI_F * 2), TEMPSUMMON_MANUAL_DESPAWN))
                 {
                     p1_adds.push_back(pCreature->GetObjectGuid());
                     pCreature->SetHomePosition(x, y, alcoveZ, m_creature->GetOrientation());
@@ -482,18 +412,15 @@ struct boss_kelthuzadAI : public ScriptedAI
         }
         for (const auto& position : abomPos)
         {
-            if (Creature* pCreature = m_creature->SummonCreature(NPC_UNSTOPPABLE_ABOM, position[0], position[1], alcoveZ, frand(0, M_PI_F * 2),
-                TEMPSUMMON_MANUAL_DESPAWN))
+            if (Creature* pCreature = m_creature->SummonCreature(NPC_UNSTOPPABLE_ABOM, position[0], position[1], alcoveZ, frand(0, M_PI_F * 2), TEMPSUMMON_MANUAL_DESPAWN))
             {
                 p1_adds.push_back(pCreature->GetObjectGuid());
                 pCreature->SetWanderDistance(5.0f);
             }
-
         }
         for (const auto& position : soulweaverPos)
         {
-            if (Creature* pCreature = m_creature->SummonCreature(NPC_SOUL_WEAVER, position[0], position[1], alcoveZ, frand(0, M_PI_F * 2),
-                TEMPSUMMON_MANUAL_DESPAWN))
+            if (Creature* pCreature = m_creature->SummonCreature(NPC_SOUL_WEAVER, position[0], position[1], alcoveZ, frand(0, M_PI_F * 2), TEMPSUMMON_MANUAL_DESPAWN))
             {
                 p1_adds.push_back(pCreature->GetObjectGuid());
                 pCreature->SetWanderDistance(5.0f);
@@ -528,19 +455,19 @@ struct boss_kelthuzadAI : public ScriptedAI
         {
             switch (eventId)
             {
-                case EVENT_DESPAWN_PORTAL:
-                    if (GameObject* pGO = m_pInstance->GetGameObject(pullPortalGuid))
-                    {
-                        pullPortalGuid = 0;
-                        pGO->Delete();
-                    }
-                    break;
-                case EVENT_PUT_IN_COMBAT:
-                    m_creature->SetInCombatState();
-                    m_creature->SetInCombatWithZone();
-                    hasPutInCombat = true;
-                    break;
-                case EVENT_SKELETON:
+            case EVENT_DESPAWN_PORTAL:
+                if (GameObject* pGO = m_pInstance->GetGameObject(pullPortalGuid))
+                {
+                    pullPortalGuid = 0;
+                    pGO->Delete();
+                }
+                break;
+            case EVENT_PUT_IN_COMBAT:
+                m_creature->SetInCombatState();
+                m_creature->SetInCombatWithZone();
+                hasPutInCombat = true;
+                break;
+            case EVENT_SKELETON:
                 {
                     if (numSkeletons < 120)
                     {
@@ -549,28 +476,28 @@ struct boss_kelthuzadAI : public ScriptedAI
                             uint32 repeat_next = std::max(uint32(3750 - 25 * numSkeletons), uint32(2000));
                             events.Repeat(repeat_next);
                             ++numSkeletons;
-                            //sLog.Out(LOG_SCRIPTS, LOG_LVL_BASIC, "[%d] Spawn SKEL #%d, next in %dms", p1Timer, numSkeletons, repeat_next);
+                            // sLog.Out(LOG_SCRIPTS, LOG_LVL_BASIC, "[%d] Spawn SKEL #%d, next in %dms", p1Timer, numSkeletons, repeat_next);
                         }
                         else
                             events.Repeat(100);
                     }
                     break;
                 }
-                case EVENT_ABOMINATION:
+            case EVENT_ABOMINATION:
                 {
                     SpawnAndSendP1Creature(NPC_UNSTOPPABLE_ABOM);
                     ++numAboms;
-                    //sLog.Out(LOG_SCRIPTS, LOG_LVL_BASIC, "[%d] Spawn ABOM #%d", p1Timer, numAboms);
+                    // sLog.Out(LOG_SCRIPTS, LOG_LVL_BASIC, "[%d] Spawn ABOM #%d", p1Timer, numAboms);
                     break;
                 }
-                case EVENT_SOUL_WEAVER:
+            case EVENT_SOUL_WEAVER:
                 {
                     SpawnAndSendP1Creature(NPC_SOUL_WEAVER);
                     ++numBanshees;
-                    //sLog.Out(LOG_SCRIPTS, LOG_LVL_BASIC, "[%d] Spawn SOUL #%d", p1Timer, numBanshees);
+                    // sLog.Out(LOG_SCRIPTS, LOG_LVL_BASIC, "[%d] Spawn SOUL #%d", p1Timer, numBanshees);
                     break;
                 }
-                case EVENT_PHASE_TWO_INTRO:
+            case EVENT_PHASE_TWO_INTRO:
                 {
                     // ToDo: slightly hard to figure the exact delay between this event (the yell and despawn of adds)
                     // until he engages. Most vanilla timers say 20 seconds, but he always engages earlier than that.
@@ -599,25 +526,25 @@ struct boss_kelthuzadAI : public ScriptedAI
                     DespawnAllIntroCreatures();
                     break;
                 }
-                case EVENT_PHASE_TWO_START:
-                    // engage!
-                    events.Reset();
-                    events.ScheduleEvent(EVENT_FROSTBOLT,        Seconds(10));
-                    events.ScheduleEvent(EVENT_SHADOW_FISSURE,   Seconds(14));
-                    events.ScheduleEvent(EVENT_DETONATE_MANA,    Seconds(20));
-                    events.ScheduleEvent(EVENT_FROSTBOLT_VOLLEY, Seconds(30));
-                    events.ScheduleEvent(EVENT_FROST_BLAST,      Seconds(50));
-                    events.ScheduleEvent(EVENT_CHAINS,           Seconds(60));
-                    m_creature->RemoveAurasDueToSpell(SPELL_VISUAL_CHANNEL);
-                    m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_NOT_SELECTABLE);
-                    m_creature->InterruptNonMeleeSpells(true);
+            case EVENT_PHASE_TWO_START:
+                // engage!
+                events.Reset();
+                events.ScheduleEvent(EVENT_FROSTBOLT, Seconds(10));
+                events.ScheduleEvent(EVENT_SHADOW_FISSURE, Seconds(14));
+                events.ScheduleEvent(EVENT_DETONATE_MANA, Seconds(20));
+                events.ScheduleEvent(EVENT_FROSTBOLT_VOLLEY, Seconds(30));
+                events.ScheduleEvent(EVENT_FROST_BLAST, Seconds(50));
+                events.ScheduleEvent(EVENT_CHAINS, Seconds(60));
+                m_creature->RemoveAurasDueToSpell(SPELL_VISUAL_CHANNEL);
+                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_NOT_SELECTABLE);
+                m_creature->InterruptNonMeleeSpells(true);
 
-                    DoResetThreat();
-                    m_creature->SetInCombatWithZone();
-                    if (Unit* pUnit = m_creature->SelectAttackingTarget(ATTACKING_TARGET_NEAREST, 0))
-                        AttackStart(pUnit);
+                DoResetThreat();
+                m_creature->SetInCombatWithZone();
+                if (Unit* pUnit = m_creature->SelectAttackingTarget(ATTACKING_TARGET_NEAREST, 0))
+                    AttackStart(pUnit);
 
-                    break;
+                break;
             }
         }
     }
@@ -660,10 +587,10 @@ struct boss_kelthuzadAI : public ScriptedAI
         {
             switch (eventId)
             {
-                case EVENT_REQUEST_REPLY:
-                    m_pInstance->DoOrSimulateScriptTextForThisInstance(SAY_ANSWER_REQUEST, NPC_LICH_KING);
-                    break;
-                case EVENT_SUMMON_GUARDIAN:
+            case EVENT_REQUEST_REPLY:
+                m_pInstance->DoOrSimulateScriptTextForThisInstance(SAY_ANSWER_REQUEST, NPC_LICH_KING);
+                break;
+            case EVENT_SUMMON_GUARDIAN:
                 {
                     // Can be seen in videos they spawn with some delay between eachother.
                     // Not found a clear pattern, but a good guess is one spawn every 5 sec until all 5 has spawned.
@@ -690,7 +617,7 @@ struct boss_kelthuzadAI : public ScriptedAI
                     }
                     break;
                 }
-                case EVENT_FROSTBOLT_VOLLEY:
+            case EVENT_FROSTBOLT_VOLLEY:
                 {
                     if (timeSinceLastFrostBlast < 5000)
                     {
@@ -711,7 +638,7 @@ struct boss_kelthuzadAI : public ScriptedAI
                         events.Repeat(Seconds(1));
                     break;
                 }
-                case EVENT_FROST_BLAST:
+            case EVENT_FROST_BLAST:
                 {
                     if (timeSinceLastShadowFissure < 5000)
                     {
@@ -745,13 +672,13 @@ struct boss_kelthuzadAI : public ScriptedAI
                         events.Repeat(Seconds(1));
                     break;
                 }
-                case EVENT_FROSTBOLT:
+            case EVENT_FROSTBOLT:
                 {
                     events.Repeat(Seconds(urand(5, 7))); // todo: this is guesswork
                     DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FROST_BOLT);
                     break;
                 }
-                case EVENT_SHADOW_FISSURE:
+            case EVENT_SHADOW_FISSURE:
                 {
                     if (timeSinceLastFrostBlast < 5000)
                     {
@@ -782,7 +709,7 @@ struct boss_kelthuzadAI : public ScriptedAI
                         events.Repeat(Seconds(1));
                     break;
                 }
-                case EVENT_DETONATE_MANA:
+            case EVENT_DETONATE_MANA:
                 {
                     if (m_creature->IsNonMeleeSpellCasted())
                     {
@@ -790,9 +717,9 @@ struct boss_kelthuzadAI : public ScriptedAI
                         break;
                     }
 
-                    events.Repeat(Seconds(urand(20,25)));
+                    events.Repeat(Seconds(urand(20, 25)));
 
-                    if(Unit* pUnit = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, SPELL_MANA_DETONATION, SELECT_FLAG_POWER_MANA|SELECT_FLAG_PLAYER))
+                    if (Unit* pUnit = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, SPELL_MANA_DETONATION, SELECT_FLAG_POWER_MANA | SELECT_FLAG_PLAYER))
                     {
                         if (DoCastSpellIfCan(pUnit, SPELL_MANA_DETONATION) == CAST_OK)
                         {
@@ -803,9 +730,9 @@ struct boss_kelthuzadAI : public ScriptedAI
                     }
                     break;
                 }
-                case EVENT_CHAINS:
-                    DoChains();
-                    break;
+            case EVENT_CHAINS:
+                DoChains();
+                break;
             }
         }
 
@@ -855,10 +782,7 @@ struct boss_kelthuzadAI : public ScriptedAI
 
 struct mob_abomAI : public kt_p1AddAI
 {
-    mob_abomAI(Creature* pCreature) : kt_p1AddAI(pCreature)
-    {
-        Reset();
-    }
+    mob_abomAI(Creature* pCreature) : kt_p1AddAI(pCreature) { Reset(); }
 
     uint32 mortalWoundTimer;
 
@@ -876,7 +800,7 @@ struct mob_abomAI : public kt_p1AddAI
 
         if (mortalWoundTimer < diff)
         {
-            if(m_creature->GetVictim() && m_creature->CanReachWithMeleeAutoAttack(m_creature->GetVictim()))
+            if (m_creature->GetVictim() && m_creature->CanReachWithMeleeAutoAttack(m_creature->GetVictim()))
                 if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MORTAL_WOUND) == CAST_OK)
                     mortalWoundTimer = 7500;
         }
@@ -889,13 +813,10 @@ struct mob_abomAI : public kt_p1AddAI
 
 struct mob_soldierAI : public kt_p1AddAI
 {
-    mob_soldierAI(Creature* pCreature) : kt_p1AddAI(pCreature)
-    {
-        Reset();
-    }
+    mob_soldierAI(Creature* pCreature) : kt_p1AddAI(pCreature) { Reset(); }
 
     void Reset() override
-    { 
+    {
         m_creature->SetMaxHealth(2000);
         m_creature->SetHealth(2000);
     }
@@ -921,10 +842,7 @@ struct mob_soldierAI : public kt_p1AddAI
 
 struct mob_soulweaverAI : public kt_p1AddAI
 {
-    mob_soulweaverAI(Creature* pCreature) : kt_p1AddAI(pCreature)
-    { 
-        Reset();
-    }
+    mob_soulweaverAI(Creature* pCreature) : kt_p1AddAI(pCreature) { Reset(); }
 
     bool hasHitSomeone;
 
@@ -975,7 +893,7 @@ struct mob_guardian_icecrownAI : public ScriptedAI
     void JustReachedHome() override
     {
         m_creature->DeleteLater();
-    //  m_creature->ForcedDespawn(1);
+        //  m_creature->ForcedDespawn(1);
     }
 
     void DispellShackle(Creature* pC)
@@ -988,15 +906,15 @@ struct mob_guardian_icecrownAI : public ScriptedAI
             pC->RemoveAurasDueToSpell(10955);
     }
 
-    void SpellHit(SpellCaster*, SpellEntry const* spell) override 
+    void SpellHit(SpellCaster*, SpellEntry const* spell) override
     {
         // if hit by any shackle spell we check how many other guardians are shackled.
         // If more than 3, we release everyone.
         switch (spell->Id)
         {
-            case 10955:
-            case 9485:
-            case 9484:
+        case 10955:
+        case 9485:
+        case 9484:
             {
                 std::list<Creature*> guardians;
                 GetCreatureListWithEntryInGrid(guardians, m_creature, NPC_GUARDIAN, 130.0f);
@@ -1034,7 +952,8 @@ struct mob_guardian_icecrownAI : public ScriptedAI
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BLOOD_TAP) == CAST_OK)
                 bloodTapTimer = 15000;
         }
-        else bloodTapTimer -= diff;
+        else
+            bloodTapTimer -= diff;
 
         DoMeleeAttackIfReady();
     }
@@ -1042,10 +961,7 @@ struct mob_guardian_icecrownAI : public ScriptedAI
 
 struct mob_shadow_fissureAI : public ScriptedAI
 {
-    mob_shadow_fissureAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    mob_shadow_fissureAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 timer;
     bool haveCasted;
@@ -1056,9 +972,9 @@ struct mob_shadow_fissureAI : public ScriptedAI
         haveCasted = false;
     }
 
-    void Aggro(Unit*) override { }
-    void AttackStart(Unit*) override { }
-    void MoveInLineOfSight(Unit* pWho) override { }
+    void Aggro(Unit*) override {}
+    void AttackStart(Unit*) override {}
+    void MoveInLineOfSight(Unit* pWho) override {}
 
     void UpdateAI(uint32 const diff) override
     {
@@ -1076,35 +992,17 @@ struct mob_shadow_fissureAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_kelthuzad(Creature* pCreature)
-{
-    return new boss_kelthuzadAI(pCreature);
-}
+CreatureAI* GetAI_boss_kelthuzad(Creature* pCreature) { return new boss_kelthuzadAI(pCreature); }
 
-CreatureAI* GetAI_mob_abom(Creature* pCreature)
-{
-    return new mob_abomAI(pCreature);
-}
+CreatureAI* GetAI_mob_abom(Creature* pCreature) { return new mob_abomAI(pCreature); }
 
-CreatureAI* GetAI_mob_soldier(Creature* pCreature)
-{
-    return new mob_soldierAI(pCreature);
-}
+CreatureAI* GetAI_mob_soldier(Creature* pCreature) { return new mob_soldierAI(pCreature); }
 
-CreatureAI* GetAI_mob_soulweaver(Creature* pCreature)
-{
-    return new mob_soulweaverAI(pCreature);
-}
+CreatureAI* GetAI_mob_soulweaver(Creature* pCreature) { return new mob_soulweaverAI(pCreature); }
 
-CreatureAI* GetAI_mob_guardian_icecrown(Creature* pCreature)
-{
-    return new mob_guardian_icecrownAI(pCreature);
-}
+CreatureAI* GetAI_mob_guardian_icecrown(Creature* pCreature) { return new mob_guardian_icecrownAI(pCreature); }
 
-CreatureAI* GetAI_mob_shadow_fissure(Creature* pCreature)
-{
-    return new mob_shadow_fissureAI(pCreature);
-}
+CreatureAI* GetAI_mob_shadow_fissure(Creature* pCreature) { return new mob_shadow_fissureAI(pCreature); }
 
 void instance_naxxramas::OnKTAreaTrigger(AreaTriggerEntry const* pAT)
 {
@@ -1138,10 +1036,7 @@ struct KelThuzadVoidBlastScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_KelThuzadVoidBlast(SpellEntry const*)
-{
-    return new KelThuzadVoidBlastScript();
-}
+SpellScript* GetScript_KelThuzadVoidBlast(SpellEntry const*) { return new KelThuzadVoidBlastScript(); }
 
 // 28410 - Chains of Kel'Thuzad
 struct ChainsOfKelThuzadAuraScript : public AuraScript
@@ -1164,10 +1059,7 @@ struct ChainsOfKelThuzadAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_ChainsOfKelThuzad(SpellEntry const*)
-{
-    return new ChainsOfKelThuzadAuraScript();
-}
+AuraScript* GetScript_ChainsOfKelThuzad(SpellEntry const*) { return new ChainsOfKelThuzadAuraScript(); }
 
 void AddSC_boss_kelthuzad()
 {

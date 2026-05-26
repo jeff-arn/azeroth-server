@@ -31,11 +31,11 @@ class WorldObject;
 
 enum ObjectUpdateType
 {
-    UPDATETYPE_VALUES               = 0,
-    UPDATETYPE_MOVEMENT             = 1,
-    UPDATETYPE_CREATE_OBJECT        = 2,
+    UPDATETYPE_VALUES = 0,
+    UPDATETYPE_MOVEMENT = 1,
+    UPDATETYPE_CREATE_OBJECT = 2,
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_8_4
-    UPDATETYPE_CREATE_OBJECT2       = 3,
+    UPDATETYPE_CREATE_OBJECT2 = 3,
 #endif
     UPDATETYPE_OUT_OF_RANGE_OBJECTS,
     UPDATETYPE_NEAR_OBJECTS
@@ -44,67 +44,68 @@ enum ObjectUpdateType
 // checked for 1.12.1
 enum ObjectUpdateFlags
 {
-    UPDATEFLAG_NONE             = 0x0000,
-    UPDATEFLAG_SELF             = 0x0001,
-    UPDATEFLAG_TRANSPORT        = 0x0002,
+    UPDATEFLAG_NONE = 0x0000,
+    UPDATEFLAG_SELF = 0x0001,
+    UPDATEFLAG_TRANSPORT = 0x0002,
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_8_4
-    UPDATEFLAG_MELEE_ATTACKING  = 0x0004,
-    UPDATEFLAG_HIGHGUID         = 0x0008,
-    UPDATEFLAG_ALL              = 0x0010,
-    UPDATEFLAG_LIVING           = 0x0020,
-    UPDATEFLAG_HAS_POSITION     = 0x0040
+    UPDATEFLAG_MELEE_ATTACKING = 0x0004,
+    UPDATEFLAG_HIGHGUID = 0x0008,
+    UPDATEFLAG_ALL = 0x0010,
+    UPDATEFLAG_LIVING = 0x0020,
+    UPDATEFLAG_HAS_POSITION = 0x0040
 #endif
 };
 
 class UpdatePacket
 {
-    public:
-        UpdatePacket() : blockCount(0) {}
-        ByteBuffer data;
-        uint32 blockCount;
+public:
+    UpdatePacket() : blockCount(0) {}
+    ByteBuffer data;
+    uint32 blockCount;
 };
 
 class PacketCompressor
 {
-    public:
-        static void Compress(void* dst, uint32* dst_size, void* src, int src_size);
+public:
+    static void Compress(void* dst, uint32* dst_size, void* src, int src_size);
 };
 
 class UpdateData
 {
-    public:
-        UpdateData();
-        ~UpdateData();
+public:
+    UpdateData();
+    ~UpdateData();
 
-        void AddOutOfRangeGUID(ObjectGuidSet& guids);
-        void AddOutOfRangeGUID(ObjectGuid const& guid);
-        ByteBuffer& AddUpdateBlockAndGetBuffer();
-        void Send(WorldSession* session, bool hasTransport = false);
-        bool BuildPacket(WorldPacket* packet, bool hasTransport = false);
-        bool BuildPacket(WorldPacket* packet, UpdatePacket const* updPacket, bool hasTransport = false);
-        bool HasData() { return !m_datas.empty() || !m_outOfRangeGUIDs.empty(); }
-        void Clear();
+    void AddOutOfRangeGUID(ObjectGuidSet& guids);
+    void AddOutOfRangeGUID(ObjectGuid const& guid);
+    ByteBuffer& AddUpdateBlockAndGetBuffer();
+    void Send(WorldSession* session, bool hasTransport = false);
+    bool BuildPacket(WorldPacket* packet, bool hasTransport = false);
+    bool BuildPacket(WorldPacket* packet, UpdatePacket const* updPacket, bool hasTransport = false);
+    bool HasData() { return !m_datas.empty() || !m_outOfRangeGUIDs.empty(); }
+    void Clear();
 
-        ObjectGuidSet const& GetOutOfRangeGUIDs() const { return m_outOfRangeGUIDs; }
+    ObjectGuidSet const& GetOutOfRangeGUIDs() const { return m_outOfRangeGUIDs; }
 
-    protected:
-        ObjectGuidSet m_outOfRangeGUIDs;
-        std::list<UpdatePacket> m_datas;
+protected:
+    ObjectGuidSet m_outOfRangeGUIDs;
+    std::list<UpdatePacket> m_datas;
 };
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_7_1
 class MovementData
 {
-    public:
-        MovementData() : m_buffer(1024) {}
-        ~MovementData() {}
-        bool CanAddPacket(WorldPacket const& data);
-        void AddPacket(WorldPacket const& data);
-        bool BuildPacket(WorldPacket& data);
-        bool HasData() const { return m_buffer.wpos() != 0; }
-        void ClearBuffer() { m_buffer.clear(); }
-    protected:
-        ByteBuffer m_buffer;
+public:
+    MovementData() : m_buffer(1024) {}
+    ~MovementData() {}
+    bool CanAddPacket(WorldPacket const& data);
+    void AddPacket(WorldPacket const& data);
+    bool BuildPacket(WorldPacket& data);
+    bool HasData() const { return m_buffer.wpos() != 0; }
+    void ClearBuffer() { m_buffer.clear(); }
+
+protected:
+    ByteBuffer m_buffer;
 };
 #endif
 

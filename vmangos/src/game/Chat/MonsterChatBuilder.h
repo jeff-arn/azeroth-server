@@ -17,19 +17,18 @@
 #ifndef MONSTER_CHAT_BUILDER_H
 #define MONSTER_CHAT_BUILDER_H
 
-#include "Common.h"
-#include "SharedDefines.h"
-#include "ObjectGuid.h"
 #include "Chat.h"
+#include "Common.h"
+#include "ObjectGuid.h"
 #include "ObjectMgr.h"
+#include "SharedDefines.h"
 
 namespace MaNGOS
 {
     class MonsterChatBuilderFormat
     {
     public:
-        MonsterChatBuilderFormat(WorldObject const& obj, ChatMsg msgtype, int32 textId, Language language, Unit const* target, va_list* vaList = nullptr)
-            : i_source(obj), i_msgtype(msgtype), i_textId(textId), i_language(language), i_target(target), i_vaList(vaList) {}
+        MonsterChatBuilderFormat(WorldObject const& obj, ChatMsg msgtype, int32 textId, Language language, Unit const* target, va_list* vaList = nullptr) : i_source(obj), i_msgtype(msgtype), i_textId(textId), i_language(language), i_target(target), i_vaList(vaList) {}
         void operator()(WorldPacket& data, int32 loc_idx)
         {
             char const* text = i_textId > 0 ? sObjectMgr.GetBroadcastText(i_textId, loc_idx, i_source.GetGender()) : sObjectMgr.GetMangosString(i_textId, loc_idx);
@@ -38,8 +37,7 @@ namespace MaNGOS
             va_copy(argsCpy, *i_vaList);
             vsnprintf(textFinal, 2048, text, argsCpy);
             va_end(argsCpy);
-            ChatHandler::BuildChatPacket(data, i_msgtype, text, i_language, CHAT_TAG_NONE, i_source.GetObjectGuid(), i_source.GetNameForLocaleIdx(loc_idx),
-                i_target ? i_target->GetObjectGuid() : ObjectGuid(), i_target ? i_target->GetNameForLocaleIdx(loc_idx) : "");
+            ChatHandler::BuildChatPacket(data, i_msgtype, text, i_language, CHAT_TAG_NONE, i_source.GetObjectGuid(), i_source.GetNameForLocaleIdx(loc_idx), i_target ? i_target->GetObjectGuid() : ObjectGuid(), i_target ? i_target->GetNameForLocaleIdx(loc_idx) : "");
         }
 
     private:
@@ -54,14 +52,12 @@ namespace MaNGOS
     class MonsterChatBuilder
     {
     public:
-        MonsterChatBuilder(WorldObject const& obj, ChatMsg msgtype, int32 textId, Language language, Unit const* target)
-            : i_source(obj), i_msgtype(msgtype), i_textId(textId), i_language(language), i_target(target) {}
+        MonsterChatBuilder(WorldObject const& obj, ChatMsg msgtype, int32 textId, Language language, Unit const* target) : i_source(obj), i_msgtype(msgtype), i_textId(textId), i_language(language), i_target(target) {}
         void operator()(WorldPacket& data, int32 loc_idx) const
         {
             char const* text = i_textId > 0 ? sObjectMgr.GetBroadcastText(i_textId, loc_idx, i_source.GetGender()) : sObjectMgr.GetMangosString(i_textId, loc_idx);
 
-            ChatHandler::BuildChatPacket(data, i_msgtype, text, i_language, CHAT_TAG_NONE, i_source.GetObjectGuid(), i_source.GetNameForLocaleIdx(loc_idx),
-                i_target ? i_target->GetObjectGuid() : ObjectGuid(), i_target ? i_target->GetNameForLocaleIdx(loc_idx) : "");
+            ChatHandler::BuildChatPacket(data, i_msgtype, text, i_language, CHAT_TAG_NONE, i_source.GetObjectGuid(), i_source.GetNameForLocaleIdx(loc_idx), i_target ? i_target->GetObjectGuid() : ObjectGuid(), i_target ? i_target->GetNameForLocaleIdx(loc_idx) : "");
         }
 
     private:
@@ -75,8 +71,7 @@ namespace MaNGOS
     class StaticMonsterChatBuilder
     {
     public:
-        StaticMonsterChatBuilder(CreatureInfo const* cInfo, ChatMsg msgtype, int32 textId, Language language, Unit const* target, uint32 senderLowGuid = 0)
-            : i_cInfo(cInfo), i_msgtype(msgtype), i_textId(textId), i_language(language), i_target(target)
+        StaticMonsterChatBuilder(CreatureInfo const* cInfo, ChatMsg msgtype, int32 textId, Language language, Unit const* target, uint32 senderLowGuid = 0) : i_cInfo(cInfo), i_msgtype(msgtype), i_textId(textId), i_language(language), i_target(target)
         {
             // 0 lowguid not used in core, but accepted fine in this case by client
             i_senderGuid = i_cInfo->GetObjectGuid(senderLowGuid);
@@ -102,8 +97,7 @@ namespace MaNGOS
             if (!nameForLocale)
                 nameForLocale = i_cInfo->name.c_str();
 
-            ChatHandler::BuildChatPacket(data, i_msgtype, text, i_language, CHAT_TAG_NONE, i_senderGuid, nameForLocale, i_target ? i_target->GetObjectGuid() : ObjectGuid(),
-                i_target ? i_target->GetNameForLocaleIdx(loc_idx) : "");
+            ChatHandler::BuildChatPacket(data, i_msgtype, text, i_language, CHAT_TAG_NONE, i_senderGuid, nameForLocale, i_target ? i_target->GetObjectGuid() : ObjectGuid(), i_target ? i_target->GetNameForLocaleIdx(loc_idx) : "");
         }
 
     private:
@@ -115,6 +109,6 @@ namespace MaNGOS
         Language i_language;
         Unit const* i_target;
     };
-}                                                           // namespace MaNGOS
+} // namespace MaNGOS
 
 #endif

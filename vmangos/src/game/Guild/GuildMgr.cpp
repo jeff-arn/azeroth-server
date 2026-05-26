@@ -17,21 +17,19 @@
  */
 
 #include "GuildMgr.h"
+#include "Database/DatabaseEnv.h"
 #include "Guild.h"
 #include "Log.h"
 #include "ObjectGuid.h"
-#include "Database/DatabaseEnv.h"
+#include "ObjectMgr.h"
+#include "Player.h"
 #include "Policies/SingletonImp.h"
 #include "ProgressBar.h"
 #include "World.h"
-#include "ObjectMgr.h"
-#include "Player.h"
 
 INSTANTIATE_SINGLETON_1(GuildMgr);
 
-GuildMgr::GuildMgr()
-{
-}
+GuildMgr::GuildMgr() {}
 
 GuildMgr::~GuildMgr()
 {
@@ -107,8 +105,8 @@ void GuildMgr::LoadGuilds()
 
     //                                                                     0           1       2              3               4               5               6
     std::unique_ptr<QueryResult> result = CharacterDatabase.Query("SELECT `guild_id`, `name`, `leader_guid`, `emblem_style`, `emblem_color`, `border_style`, `border_color`,"
-                          //   7                8       9       10
-                          "`background_Color`, `info`, `motd`, `create_date` FROM `guild` ORDER BY `guild_id` ASC");
+                                                                  //   7                8       9       10
+                                                                  "`background_Color`, `info`, `motd`, `create_date` FROM `guild` ORDER BY `guild_id` ASC");
 
     if (!result)
     {
@@ -123,30 +121,26 @@ void GuildMgr::LoadGuilds()
 
     // load guild ranks
     //                                                                                 0           1     2       3
-    std::unique_ptr<QueryResult> guildRanksResult   = CharacterDatabase.Query("SELECT `guild_id`, `id`, `name`, `rights` FROM `guild_rank` ORDER BY `guild_id` ASC, `id` ASC");
+    std::unique_ptr<QueryResult> guildRanksResult = CharacterDatabase.Query("SELECT `guild_id`, `id`, `name`, `rights` FROM `guild_rank` ORDER BY `guild_id` ASC, `id` ASC");
 
     // load guild members
     //                                                                                 0                          1       2       3              4
     std::unique_ptr<QueryResult> guildMembersResult = CharacterDatabase.Query("SELECT `guild_id`, `guild_member`.`guid`, `rank`, `player_note`, `officer_note`,"
-                                      //             5                    6                     7                     8                    9                           10
-                                      "`characters`.`name`, `characters`.`level`, `characters`.`class`, `characters`.`zone`, `characters`.`logout_time`, `characters`.`account` "
-                                      "FROM `guild_member` LEFT JOIN `characters` ON `characters`.`guid` = `guild_member`.`guid` ORDER BY `guild_id` ASC");
+                                                                              //             5                    6                     7                     8                    9                           10
+                                                                              "`characters`.`name`, `characters`.`level`, `characters`.`class`, `characters`.`zone`, `characters`.`logout_time`, `characters`.`account` "
+                                                                              "FROM `guild_member` LEFT JOIN `characters` ON `characters`.`guid` = `guild_member`.`guid` ORDER BY `guild_id` ASC");
 
     BarGoLink bar(result->GetRowCount());
 
     do
     {
-        //Field* fields = result->Fetch();
+        // Field* fields = result->Fetch();
 
         bar.step();
         ++count;
 
-        Guild *newGuild = new Guild;
-        if (!newGuild->LoadGuildFromDB(result) ||
-                !newGuild->LoadRanksFromDB(guildRanksResult) ||
-                !newGuild->LoadMembersFromDB(guildMembersResult) ||
-                !newGuild->CheckGuildStructure()
-           )
+        Guild* newGuild = new Guild;
+        if (!newGuild->LoadGuildFromDB(result) || !newGuild->LoadRanksFromDB(guildRanksResult) || !newGuild->LoadMembersFromDB(guildMembersResult) || !newGuild->CheckGuildStructure())
         {
             newGuild->Disband();
             delete newGuild;
@@ -157,8 +151,8 @@ void GuildMgr::LoadGuilds()
     }
     while (result->NextRow());
 
-    //delete unused log_guid records in guild_eventlog table
-    //you can comment these lines if you don't plan to change CONFIG_UINT32_GUILD_EVENT_LOG_COUNT
+    // delete unused log_guid records in guild_eventlog table
+    // you can comment these lines if you don't plan to change CONFIG_UINT32_GUILD_EVENT_LOG_COUNT
     CharacterDatabase.PExecute("DELETE FROM `guild_eventlog` WHERE `log_guid` > '%u'", sWorld.getConfig(CONFIG_UINT32_GUILD_EVENT_LOG_COUNT));
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
@@ -204,7 +198,8 @@ void GuildMgr::LoadPetitions()
         }
 
         m_petitionMap[petition->GetId()] = petition;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     if (petitionSignaturesDbResult)
     {
@@ -230,16 +225,15 @@ void GuildMgr::LoadPetitions()
             if (ownerGuid != petition->GetOwnerGuid())
             {
                 sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "Signatures exist for petition %u with a different owner, updating", petitionId);
-                CharacterDatabase.PExecute("UPDATE `petition_sign` SET `owner_guid` = '%u' WHERE `petition_guid` = '%u'",
-                    petition->GetOwnerGuid().GetCounter(), petition->GetId());
+                CharacterDatabase.PExecute("UPDATE `petition_sign` SET `owner_guid` = '%u' WHERE `petition_guid` = '%u'", petition->GetOwnerGuid().GetCounter(), petition->GetId());
 
                 ownerGuid = petition->GetOwnerGuid();
             }
 
             PetitionSignature* signature = new PetitionSignature(petition, playerGuid, accountId);
             petition->AddSignature(signature);
-
-        } while (petitionSignaturesDbResult->NextRow());
+        }
+        while (petitionSignaturesDbResult->NextRow());
     }
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
@@ -368,8 +362,7 @@ bool Petition::Rename(std::string& newname)
 {
     std::string db_newname = newname;
     CharacterDatabase.escape_string(db_newname);
-    CharacterDatabase.PExecute("UPDATE `petition` SET `name` = '%s' WHERE `petition_guid` = '%u'",
-        db_newname.c_str(), m_id);
+    CharacterDatabase.PExecute("UPDATE `petition` SET `name` = '%s' WHERE `petition_guid` = '%u'", db_newname.c_str(), m_id);
 
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Petition %u renamed to '%s'", m_id, newname.c_str());
 
@@ -382,8 +375,7 @@ void Petition::SaveToDB()
 {
     std::string escaped_name = m_name;
     CharacterDatabase.escape_string(escaped_name);
-    CharacterDatabase.PExecute("INSERT INTO `petition` (`owner_guid`, `petition_guid`, `charter_guid`, `name`) VALUES ('%u', '%u', '%u', '%s')",
-        m_ownerGuid.GetCounter(), m_id, m_charterGuid.GetCounter(), escaped_name.c_str());
+    CharacterDatabase.PExecute("INSERT INTO `petition` (`owner_guid`, `petition_guid`, `charter_guid`, `name`) VALUES ('%u', '%u', '%u', '%s')", m_ownerGuid.GetCounter(), m_id, m_charterGuid.GetCounter(), escaped_name.c_str());
 }
 
 PetitionSignature* Petition::GetSignatureForPlayer(Player* player)
@@ -423,10 +415,7 @@ PetitionSignature* Petition::GetSignatureForPlayerGuid(ObjectGuid const& guid)
     return nullptr;
 }
 
-void Petition::AddSignature(PetitionSignature* signature)
-{
-    m_signatures.push_back(signature);
-}
+void Petition::AddSignature(PetitionSignature* signature) { m_signatures.push_back(signature); }
 
 bool Petition::AddNewSignature(Player* player)
 {
@@ -453,15 +442,6 @@ void Petition::DeleteSignatureByPlayer(ObjectGuid guid)
     }
 }
 
-PetitionSignature::PetitionSignature(Petition* petition, Player* player)
-    : m_petition(petition), m_playerGuid(player->GetObjectGuid()),
-    m_playerAccount(player->GetSession()->GetAccountId())
-{
+PetitionSignature::PetitionSignature(Petition* petition, Player* player) : m_petition(petition), m_playerGuid(player->GetObjectGuid()), m_playerAccount(player->GetSession()->GetAccountId()) {}
 
-}
-
-void PetitionSignature::SaveToDB()
-{
-    CharacterDatabase.PExecute("INSERT INTO `petition_sign` (`owner_guid`, `petition_guid`, `player_guid`, `player_account`) VALUES ('%u', '%u', '%u','%u')",
-        m_petition->GetOwnerGuid().GetCounter(), m_petition->GetId(), m_playerGuid.GetCounter(), m_playerAccount);
-}
+void PetitionSignature::SaveToDB() { CharacterDatabase.PExecute("INSERT INTO `petition_sign` (`owner_guid`, `petition_guid`, `player_guid`, `player_account`) VALUES ('%u', '%u', '%u','%u')", m_petition->GetOwnerGuid().GetCounter(), m_petition->GetId(), m_playerGuid.GetCounter(), m_playerAccount); }

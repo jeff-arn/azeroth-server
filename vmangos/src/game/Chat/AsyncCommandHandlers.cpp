@@ -1,39 +1,39 @@
 /*
-* Copyright (C) 2005-2011 MaNGOS <http://getmangos.com/>
-* Copyright (C) 2009-2011 MaNGOSZero <https://github.com/mangos/zero>
-* Copyright (C) 2011-2016 Nostalrius <https://nostalrius.org>
-* Copyright (C) 2016-2017 Elysium Project <https://github.com/elysium-project>
-* Copyright (C) 2017 Light's Hope <https://github.com/LightsHope>
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * Copyright (C) 2005-2011 MaNGOS <http://getmangos.com/>
+ * Copyright (C) 2009-2011 MaNGOSZero <https://github.com/mangos/zero>
+ * Copyright (C) 2011-2016 Nostalrius <https://nostalrius.org>
+ * Copyright (C) 2016-2017 Elysium Project <https://github.com/elysium-project>
+ * Copyright (C) 2017 Light's Hope <https://github.com/LightsHope>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
-#include "Database/DatabaseEnv.h"
+#include "AsyncCommandHandlers.h"
+#include "AccountMgr.h"
+#include "Anticheat.h"
+#include "Chat.h"
+#include "DBCStores.h"
 #include "Database/Database.h"
+#include "Database/DatabaseEnv.h"
 #include "Database/DatabaseImpl.h"
 #include "Database/SqlOperations.h"
-#include "Language.h"
-#include "Chat.h"
-#include "AccountMgr.h"
-#include "DBCStores.h"
-#include "Util.h"
 #include "Guild.h"
 #include "GuildMgr.h"
+#include "Language.h"
 #include "ObjectGuid.h"
-#include "AsyncCommandHandlers.h"
-#include "Anticheat.h"
+#include "Util.h"
 
 void PInfoHandler::HandlePInfoCommand(WorldSession* session, Player* target, ObjectGuid& target_guid, std::string& name)
 {
@@ -56,8 +56,7 @@ void PInfoHandler::HandlePInfoCommand(WorldSession* session, Player* target, Obj
 
         if (auto const warden = target->GetSession()->GetWarden())
         {
-            warden->GetPlayerInfo(data->m_wardenClock, data->m_wardenFingerprint, data->m_wardenHypervisors,
-                data->m_wardenRenderer, data->m_wardenProxifier);
+            warden->GetPlayerInfo(data->m_wardenClock, data->m_wardenFingerprint, data->m_wardenHypervisors, data->m_wardenRenderer, data->m_wardenProxifier);
             data->m_hasUsedClickToMove = warden->HasUsedClickToMove();
         }
 
@@ -67,13 +66,12 @@ void PInfoHandler::HandlePInfoCommand(WorldSession* session, Player* target, Obj
     {
         data->m_targetGuid = target_guid;
         CharacterDatabase.AsyncPQuery(&PInfoHandler::HandlePlayerLookupResult, data,
-            //       0                    1        2        3          4       5
-            "SELECT `played_time_total`, `level`, `money`, `account`, `race`, `class` FROM `characters` WHERE `guid` = '%u'",
-            target_guid.GetCounter());
+                                      //       0                    1        2        3          4       5
+                                      "SELECT `played_time_total`, `level`, `money`, `account`, `race`, `class` FROM `characters` WHERE `guid` = '%u'", target_guid.GetCounter());
     }
 }
 
-void PInfoHandler::HandlePlayerLookupResult(std::unique_ptr<QueryResult> result, PInfoData *data)
+void PInfoHandler::HandlePlayerLookupResult(std::unique_ptr<QueryResult> result, PInfoData* data)
 {
     if (!result)
     {
@@ -123,9 +121,7 @@ void PInfoHandler::HandleDelayedMoneyQuery(std::unique_ptr<QueryResult>, SqlQuer
     // thread) since we are ready to access the caller's session
     // and print the result once it completes. We also read guild info
     // so this cannot be done in an async task
-    LoginDatabase.AsyncPQueryUnsafe(&PInfoHandler::HandleAccountInfoResult, data,
-        "SELECT `username`, `last_ip`, `last_login`, `locale`, `locked` FROM `account` WHERE `id` = '%u'",
-        data->m_accountId);
+    LoginDatabase.AsyncPQueryUnsafe(&PInfoHandler::HandleAccountInfoResult, data, "SELECT `username`, `last_ip`, `last_login`, `locale`, `locked` FROM `account` WHERE `id` = '%u'", data->m_accountId);
 }
 
 // Not threadsafe, executed in unsafe callback
@@ -193,13 +189,7 @@ void PInfoHandler::HandleResponse(WorldSession* session, PInfoData* data)
 
     std::string nameLink = cHandler.playerLink(data->m_targetName);
 
-    cHandler.PSendSysMessage(LANG_PINFO_ACCOUNT, raceName, className,
-        (data->m_online ? "" : cHandler.GetMangosString(LANG_OFFLINE)),
-        nameLink.c_str(), data->m_targetGuid.GetCounter(), cHandler.playerLink(data->m_username).c_str(),
-        data->m_accountId, sAccountMgr.IsAccountBanned(data->m_accountId) ? ", banned" : "",
-        data->m_security, cHandler.playerLink(data->m_lastIp).c_str(),
-        sAccountMgr.IsIPBanned(data->m_lastIp) ? " [BANIP]" : "", data->m_lastLogin.c_str(),
-        data->m_latency, localeNames[data->m_locale], twoFactorEnabled.c_str());
+    cHandler.PSendSysMessage(LANG_PINFO_ACCOUNT, raceName, className, (data->m_online ? "" : cHandler.GetMangosString(LANG_OFFLINE)), nameLink.c_str(), data->m_targetGuid.GetCounter(), cHandler.playerLink(data->m_username).c_str(), data->m_accountId, sAccountMgr.IsAccountBanned(data->m_accountId) ? ", banned" : "", data->m_security, cHandler.playerLink(data->m_lastIp).c_str(), sAccountMgr.IsIPBanned(data->m_lastIp) ? " [BANIP]" : "", data->m_lastLogin.c_str(), data->m_latency, localeNames[data->m_locale], twoFactorEnabled.c_str());
 
     std::string timeStr = secsToTimeString(data->m_totalPlayedTime, true, true);
     uint32 money = data->m_money;
@@ -237,12 +227,9 @@ void PInfoHandler::HandleResponse(WorldSession* session, PInfoData* data)
 
 // Handles the query result and offloads display to an async task in
 // the world update
-void PlayerSearchHandler::HandlePlayerAccountSearchResult(std::unique_ptr<QueryResult>, SqlQueryHolder* queryHolder, int)
-{
-    sWorld.AddAsyncTask(PlayerAccountSearchDisplayTask((PlayerSearchQueryHolder*)queryHolder));
-}
+void PlayerSearchHandler::HandlePlayerAccountSearchResult(std::unique_ptr<QueryResult>, SqlQueryHolder* queryHolder, int) { sWorld.AddAsyncTask(PlayerAccountSearchDisplayTask((PlayerSearchQueryHolder*)queryHolder)); }
 
-void PlayerAccountSearchDisplayTask::operator ()()
+void PlayerAccountSearchDisplayTask::operator()()
 {
     // NOTE: Do not currently support console access for these commands
     WorldSession* session = sWorld.FindSession(holder->GetAccountId());
@@ -276,7 +263,7 @@ void PlayerAccountSearchDisplayTask::operator ()()
         if (holder->GetAccountInfo(i, accountInfo))
         {
             uint32& acc_id = accountInfo.first;
-            std::string &acc_name = accountInfo.second;
+            std::string& acc_name = accountInfo.second;
 
             AccountTypes security = sAccountMgr.GetSecurity(acc_id);
 
@@ -331,10 +318,7 @@ void PlayerCharacterLookupDisplayTask::operator()()
 }
 
 // Handle the result and create a display task to run in the world update
-void PlayerSearchHandler::HandlePlayerCharacterLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit)
-{
-    sWorld.AddAsyncTask(std::move(PlayerCharacterLookupDisplayTask(std::move(result), accountId, limit)));
-}
+void PlayerSearchHandler::HandlePlayerCharacterLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit) { sWorld.AddAsyncTask(std::move(PlayerCharacterLookupDisplayTask(std::move(result), accountId, limit))); }
 
 void PlayerSearchHandler::ShowPlayerListHelper(std::unique_ptr<QueryResult> result, ChatHandler& chatHandler, uint32& count, uint32 limit, bool title)
 {
@@ -380,17 +364,15 @@ void PlayerSearchHandler::ShowPlayerListHelper(std::unique_ptr<QueryResult> resu
                 chatHandler.PSendSysMessage(LANG_CHARACTERS_LIST_LINE_CHAT, guid, name.c_str(), name.c_str(), race_name, class_name, level);
 
             ++count;
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
     }
 
     if (!chatHandler.GetSession())
         chatHandler.SendSysMessage(LANG_CHARACTERS_LIST_BAR);
 }
 
-void PlayerSearchQueryHolder::AddAccountInfo(uint32 queryIndex, uint32& accId, std::string& accName)
-{
-    m_accounts[queryIndex] = std::pair<uint32, std::string>(accId, accName);
-}
+void PlayerSearchQueryHolder::AddAccountInfo(uint32 queryIndex, uint32& accId, std::string& accName) { m_accounts[queryIndex] = std::pair<uint32, std::string>(accId, accName); }
 
 bool PlayerSearchQueryHolder::GetAccountInfo(uint32 queryIndex, std::pair<uint32, std::string>& pair)
 {
@@ -404,7 +386,7 @@ bool PlayerSearchQueryHolder::GetAccountInfo(uint32 queryIndex, std::pair<uint32
     return true;
 }
 
-void AccountSearchDisplayTask::operator ()()
+void AccountSearchDisplayTask::operator()()
 {
     std::unique_ptr<QueryResult> result;
     result.swap(*unsafeResult); // we are now the owner of this result. The unsafeResult is nullptr.
@@ -427,15 +409,12 @@ void AccountSearchDisplayTask::operator ()()
     AccountSearchHandler::ShowAccountListHelper(std::move(result), cHandler, count, limit, true);
 }
 
-void AccountSearchHandler::HandleAccountLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit)
-{
-    sWorld.AddAsyncTask(std::move(AccountSearchDisplayTask(std::move(result), accountId, limit)));
-}
+void AccountSearchHandler::HandleAccountLookupResult(std::unique_ptr<QueryResult> result, uint32 accountId, uint32 limit) { sWorld.AddAsyncTask(std::move(AccountSearchDisplayTask(std::move(result), accountId, limit))); }
 
 void AccountSearchHandler::ShowAccountListHelper(std::unique_ptr<QueryResult> result, ChatHandler& chatHandler, uint32& count, uint32 limit, bool title)
 {
     // Display the list of account/characters online
-    if (!chatHandler.GetSession() && title)                                // not output header for online case
+    if (!chatHandler.GetSession() && title) // not output header for online case
     {
         chatHandler.SendSysMessage(LANG_ACCOUNT_LIST_BAR);
         chatHandler.SendSysMessage(LANG_ACCOUNT_LIST_HEADER);
@@ -480,20 +459,15 @@ void AccountSearchHandler::ShowAccountListHelper(std::unique_ptr<QueryResult> re
             acc_name = acc_name + " [BANNED]";
 
         if (chatHandler.GetSession())
-            chatHandler.PSendSysMessage(LANG_ACCOUNT_LIST_LINE_CHAT,
-                account, acc_name.c_str(), char_name,
-                chatHandler.playerLink(lastIp).c_str(),
-                security, fields[4].GetUInt32());
+            chatHandler.PSendSysMessage(LANG_ACCOUNT_LIST_LINE_CHAT, account, acc_name.c_str(), char_name, chatHandler.playerLink(lastIp).c_str(), security, fields[4].GetUInt32());
         else
-            chatHandler.PSendSysMessage(LANG_ACCOUNT_LIST_LINE_CONSOLE,
-                account, acc_name.c_str(), char_name,
-                chatHandler.playerLink(lastIp).c_str(),
-                security, fields[4].GetUInt32());
+            chatHandler.PSendSysMessage(LANG_ACCOUNT_LIST_LINE_CONSOLE, account, acc_name.c_str(), char_name, chatHandler.playerLink(lastIp).c_str(), security, fields[4].GetUInt32());
 
         ++count;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
-    if (!chatHandler.GetSession())                                         // not output header for online case
+    if (!chatHandler.GetSession()) // not output header for online case
         chatHandler.SendSysMessage(LANG_ACCOUNT_LIST_BAR);
 }
 

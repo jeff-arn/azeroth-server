@@ -29,14 +29,14 @@ EndScriptData */
 
 enum
 {
-    EMOTE_GENERIC_FRENZY_KILL   = 7797,
-    EMOTE_GENERIC_BERSERK       = 4428,
+    EMOTE_GENERIC_FRENZY_KILL = 7797,
+    EMOTE_GENERIC_BERSERK = 4428,
 
-    SPELL_ACIDSPIT              = 26050,
-    SPELL_FRENZY                = 26051,
-    SPELL_NOXIOUSPOISON         = 26053,
-    SPELL_BERSERK               = 26068,
-    SPELL_WYVERNSTING           = 26180
+    SPELL_ACIDSPIT = 26050,
+    SPELL_FRENZY = 26051,
+    SPELL_NOXIOUSPOISON = 26053,
+    SPELL_BERSERK = 26068,
+    SPELL_WYVERNSTING = 26180
 };
 
 struct boss_huhuranAI : public ScriptedAI
@@ -59,13 +59,10 @@ struct boss_huhuranAI : public ScriptedAI
 
     void MoveInLineOfSight(Unit* pWho) override
     {
-        
-        if (m_creature->CanAttack(pWho)
-            && !m_creature->IsInCombat()
-            && m_creature->IsWithinDistInMap(pWho, 80.0f) 
-            && !pWho->HasAuraType(SPELL_AURA_FEIGN_DEATH))
+
+        if (m_creature->CanAttack(pWho) && !m_creature->IsInCombat() && m_creature->IsWithinDistInMap(pWho, 80.0f) && !pWho->HasAuraType(SPELL_AURA_FEIGN_DEATH))
         {
-            AttackStart(pWho); 
+            AttackStart(pWho);
         }
         ScriptedAI::MoveInLineOfSight(pWho);
     }
@@ -90,22 +87,22 @@ struct boss_huhuranAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiFrenzyTimer        = urand(25000, 35000);
-        m_uiWyvernTimer        = urand(18000, 28000);
-        m_uiSpitTimer          = 8000;
+        m_uiFrenzyTimer = urand(25000, 35000);
+        m_uiWyvernTimer = urand(18000, 28000);
+        m_uiSpitTimer = 8000;
         m_uiNoxiousPoisonTimer = urand(10000, 20000);
-        m_uiBerserkTimer       = 5 * MINUTE * IN_MILLISECONDS;
+        m_uiBerserkTimer = 5 * MINUTE * IN_MILLISECONDS;
 
-        m_bBerserk             = false;
+        m_bBerserk = false;
     }
 
     void UpdateAI(uint32 const uiDiff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //m_uiFrenzyTimer
+        // m_uiFrenzyTimer
         if (m_uiFrenzyTimer < uiDiff && !m_creature->HasAura(SPELL_FRENZY))
         {
             if (DoCastSpellIfCan(m_creature, SPELL_FRENZY) == CAST_OK)
@@ -130,7 +127,7 @@ struct boss_huhuranAI : public ScriptedAI
                 m_uiWyvernTimer -= uiDiff;
         }
 
-        //Spit Timer
+        // Spit Timer
         if (m_uiSpitTimer < uiDiff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_ACIDSPIT) == CAST_OK)
@@ -163,38 +160,23 @@ struct boss_huhuranAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_huhuran(Creature* pCreature)
-{
-    return new boss_huhuranAI(pCreature);
-}
+CreatureAI* GetAI_boss_huhuran(Creature* pCreature) { return new boss_huhuranAI(pCreature); }
 
 // 26180 - Wyvern Sting (AQ40, Princess Huhuran)
 struct HuhuranWyvernStingScript : SpellScript
 {
-    void OnSetTargetMap(Spell* /*spell*/, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& /*unMaxTargets*/, bool& selectClosestTargets) const final
-    {
-        selectClosestTargets = true;
-    }
+    void OnSetTargetMap(Spell* /*spell*/, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& /*unMaxTargets*/, bool& selectClosestTargets) const final { selectClosestTargets = true; }
 };
 
-SpellScript* GetScript_HuhuranWyvernSting(SpellEntry const*)
-{
-    return new HuhuranWyvernStingScript();
-}
+SpellScript* GetScript_HuhuranWyvernSting(SpellEntry const*) { return new HuhuranWyvernStingScript(); }
 
 // 26052 - Poison Bolt Volley (AQ40, Princess Huhuran)
 struct HuhuranPoisonBoltVolleyScript : SpellScript
 {
-    void OnSetTargetMap(Spell* /*spell*/, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& /*unMaxTargets*/, bool& selectClosestTargets) const final
-    {
-        selectClosestTargets = true;
-    }
+    void OnSetTargetMap(Spell* /*spell*/, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& /*unMaxTargets*/, bool& selectClosestTargets) const final { selectClosestTargets = true; }
 };
 
-SpellScript* GetScript_HuhuranPoisonBoltVolley(SpellEntry const*)
-{
-    return new HuhuranPoisonBoltVolleyScript();
-}
+SpellScript* GetScript_HuhuranPoisonBoltVolley(SpellEntry const*) { return new HuhuranPoisonBoltVolleyScript(); }
 
 void AddSC_boss_huhuran()
 {

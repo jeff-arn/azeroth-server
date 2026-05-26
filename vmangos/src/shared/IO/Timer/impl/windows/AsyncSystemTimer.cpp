@@ -3,10 +3,10 @@
 #undef WIN32_LEAN_AND_MEAN
 
 #include "../../AsyncSystemTimer.h"
+#include "Errors.h"
 #include "IO/Multithreading/CreateThread.h"
 #include "Log.h"
 #include "Policies/SingletonImp.h"
-#include "Errors.h"
 
 INSTANTIATE_SINGLETON_1(IO::Timer::AsyncSystemTimer);
 
@@ -17,10 +17,12 @@ IO::Timer::AsyncSystemTimer::AsyncSystemTimer()
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "::CreateTimerQueue() failed: %d", GetLastError());
     MANGOS_ASSERT(m_nativeTimerQueueHandle);
 
-    ScheduleFunctionOnce(std::chrono::seconds(0), []() {
-        // Since we are single threaded, we can rename this Thread, so we know what's up
-        IO::Multithreading::RenameCurrentThread("SystemTimer");
-    });
+    ScheduleFunctionOnce(std::chrono::seconds(0),
+                         []()
+                         {
+                             // Since we are single threaded, we can rename this Thread, so we know what's up
+                             IO::Multithreading::RenameCurrentThread("SystemTimer");
+                         });
 }
 
 void IO::Timer::AsyncSystemTimer::RemoveAllTimersAndStopThread()
@@ -29,9 +31,8 @@ void IO::Timer::AsyncSystemTimer::RemoveAllTimersAndStopThread()
     m_nativeTimerQueueHandle = nullptr;
     if (timerQueueHandle)
     {
-        ::DeleteTimerQueueEx(
-            timerQueueHandle,
-            INVALID_HANDLE_VALUE // MSDN: If this parameter is INVALID_HANDLE_VALUE, the function waits for all callback functions to complete before returning.
+        ::DeleteTimerQueueEx(timerQueueHandle,
+                             INVALID_HANDLE_VALUE // MSDN: If this parameter is INVALID_HANDLE_VALUE, the function waits for all callback functions to complete before returning.
         );
     }
 
@@ -68,14 +69,9 @@ std::shared_ptr<IO::Timer::TimerHandle> IO::Timer::AsyncSystemTimer::_ScheduleFu
     // since we are using an opaque pointer model of the kernel here,
     // we have to allocate unsafe memory which we will free inside the function
     auto handleRawSharedPtr = new std::shared_ptr<TimerHandle>(timerHandle);
-    bool wasOkay = ::CreateTimerQueueTimer(
-            &timerHandle->m_nativeTimerHandle,
-            m_nativeTimerQueueHandle,
-            _timerQueueTimeoutCallback,
-            handleRawSharedPtr,
-            milliseconds,
-            0, // Period = 0: Don't repeat the timer
-            WT_EXECUTEONLYONCE | WT_EXECUTEINTIMERTHREAD); // Only execute in WT_EXECUTEINTIMERTHREAD (single thread), otherwise we would spam spawn new system threads.
+    bool wasOkay = ::CreateTimerQueueTimer(&timerHandle->m_nativeTimerHandle, m_nativeTimerQueueHandle, _timerQueueTimeoutCallback, handleRawSharedPtr, milliseconds,
+                                           0, // Period = 0: Don't repeat the timer
+                                           WT_EXECUTEONLYONCE | WT_EXECUTEINTIMERTHREAD); // Only execute in WT_EXECUTEINTIMERTHREAD (single thread), otherwise we would spam spawn new system threads.
 
     if (!wasOkay)
     {

@@ -15,18 +15,12 @@
  */
 
 #include "TradeData.h"
-#include "TransactionLog.h"
 #include "Player.h"
+#include "TransactionLog.h"
 
-TradeData* TradeData::GetTraderData() const
-{
-    return m_trader->GetTradeData();
-}
+TradeData* TradeData::GetTraderData() const { return m_trader->GetTradeData(); }
 
-Item* TradeData::GetItem(TradeSlots slot) const
-{
-    return m_items[slot] ? m_player->GetItemByGuid(m_items[slot]) : nullptr;
-}
+Item* TradeData::GetItem(TradeSlots slot) const { return m_items[slot] ? m_player->GetItemByGuid(m_items[slot]) : nullptr; }
 
 bool TradeData::HasItem(ObjectGuid item_guid) const
 {
@@ -61,10 +55,7 @@ void TradeData::FillTransactionLog(TransactionPart& log) const
     }
 }
 
-Item* TradeData::GetSpellCastItem() const
-{
-    return m_spellCastItem ?  m_player->GetItemByGuid(m_spellCastItem) : nullptr;
-}
+Item* TradeData::GetSpellCastItem() const { return m_spellCastItem ? m_player->GetItemByGuid(m_spellCastItem) : nullptr; }
 
 void TradeData::SetItem(TradeSlots slot, Item* item)
 {
@@ -101,8 +92,8 @@ void TradeData::SetSpell(uint32 spellId, Item* castItem /*= nullptr*/)
     SetAccepted(false);
     GetTraderData()->SetAccepted(false);
 
-    Update(true);                                           // send spell info to item owner
-    Update(false);                                          // send spell info to caster self
+    Update(true); // send spell info to item owner
+    Update(false); // send spell info to caster self
 }
 
 void TradeData::SetMoney(uint32 money)
@@ -121,9 +112,9 @@ void TradeData::SetMoney(uint32 money)
 void TradeData::Update(bool for_trader /*= true*/)
 {
     if (for_trader)
-        m_trader->GetSession()->SendUpdateTrade(true);      // player state for trader
+        m_trader->GetSession()->SendUpdateTrade(true); // player state for trader
     else
-        m_player->GetSession()->SendUpdateTrade(false);     // player state for player
+        m_player->GetSession()->SendUpdateTrade(false); // player state for player
 }
 
 void TradeData::SetAccepted(bool state, bool crosssend /*= false*/)

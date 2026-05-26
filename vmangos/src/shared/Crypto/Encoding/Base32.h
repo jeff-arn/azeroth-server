@@ -7,10 +7,16 @@
 #include <string>
 #include <vector>
 
-namespace Crypto { namespace Encoding { namespace Base32
+namespace Crypto
 {
-    std::string Encode(std::vector<uint8> const& binary_source_data);
-    nonstd::optional<std::vector<uint8>> Decode(std::string const& base32_source_string, uint32 max_binary_output_size);
-}}} // namespace Crypto::Encoding::Base32
+    namespace Encoding
+    {
+        namespace Base32
+        {
+            std::string Encode(std::vector<uint8> const& binary_source_data);
+            nonstd::optional<std::vector<uint8>> Decode(std::string const& base32_source_string, uint32 max_binary_output_size);
+        } // namespace Base32
+    } // namespace Encoding
+} // namespace Crypto
 
 #endif // _MANGOS_CRYPTO_ENCODING_BASE32_H

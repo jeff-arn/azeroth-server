@@ -25,25 +25,22 @@ EndScriptData */
 
 enum
 {
-    SPELL_FLAMEBREAK       = 16785,
-    //SPELL_IMMOLATE         = 20294,
-    AURA_IMMOLATE          = 15506,
-    SPELL_TERRIFYINGROAR   = 14100,
+    SPELL_FLAMEBREAK = 16785,
+    // SPELL_IMMOLATE         = 20294,
+    AURA_IMMOLATE = 15506,
+    SPELL_TERRIFYINGROAR = 14100,
     SPELL_BERSERKER_CHARGE = 16636,
-    SPELL_FIREBALL         = 16788,
-    SPELL_FIREBLAST        = 14144,
-    SPELL_SUMMON_FINKLE    = 16710,
+    SPELL_FIREBALL = 16788,
+    SPELL_FIREBLAST = 14144,
+    SPELL_SUMMON_FINKLE = 16710,
 };
 
 struct boss_thebeastAI : public ScriptedAI
 {
-    boss_thebeastAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_thebeastAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiFlamebreakTimer;
-    //uint32 m_uiImmolateTimer;
+    // uint32 m_uiImmolateTimer;
     uint32 m_uiTerrifyingRoarTimer;
     uint32 m_uiBeserkerChargeTimer;
     uint32 m_uiFireballTimer;
@@ -51,12 +48,12 @@ struct boss_thebeastAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiFlamebreakTimer     = urand(8000, 12000);
-        //m_uiImmolateTimer       = 3000;
+        m_uiFlamebreakTimer = urand(8000, 12000);
+        // m_uiImmolateTimer       = 3000;
         m_uiTerrifyingRoarTimer = 13000;
         m_uiBeserkerChargeTimer = 0;
-        m_uiFireballTimer       = 10000;
-        m_uiFireBlastTimer      = urand(8000, 11000);
+        m_uiFireballTimer = 10000;
+        m_uiFireBlastTimer = urand(8000, 11000);
     }
 
     void SpellHit(SpellCaster* pCaster, SpellEntry const* pSpell) override
@@ -107,7 +104,8 @@ struct boss_thebeastAI : public ScriptedAI
         if (m_uiBeserkerChargeTimer <= uiDiff)
         {
             Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 1);
-            if (m_uiBeserkerChargeTimer == 0) pTarget = m_creature->GetVictim();
+            if (m_uiBeserkerChargeTimer == 0)
+                pTarget = m_creature->GetVictim();
 
             if (DoCastSpellIfCan(pTarget, SPELL_BERSERKER_CHARGE) == CAST_OK)
                 m_uiBeserkerChargeTimer = urand(15000, 20000);
@@ -141,10 +139,7 @@ struct boss_thebeastAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_thebeast(Creature* pCreature)
-{
-    return new boss_thebeastAI(pCreature);
-}
+CreatureAI* GetAI_boss_thebeast(Creature* pCreature) { return new boss_thebeastAI(pCreature); }
 
 void AddSC_boss_thebeast()
 {

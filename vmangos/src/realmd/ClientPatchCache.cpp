@@ -1,19 +1,16 @@
 #include "./ClientPatchCache.h"
-#include "Policies/SingletonImp.h"
-#include "Log.h"
-#include "Errors.h"
 #include "Config/Config.h"
 #include "Crypto/Hash/HMACSHA1.h"
 #include "Crypto/Hash/MD5.h"
-#include "IO/Filesystem/FileSystem.h"
+#include "Errors.h"
 #include "IO/Filesystem/FileHandle.h"
+#include "IO/Filesystem/FileSystem.h"
+#include "Log.h"
+#include "Policies/SingletonImp.h"
 
 INSTANTIATE_SINGLETON_1(ClientPatchCache);
 
-ClientPatchCache::ClientPatchCache()
-{
-    LoadPatchesInfo();
-}
+ClientPatchCache::ClientPatchCache() { LoadPatchesInfo(); }
 
 void ClientPatchCache::LoadPatchesInfo()
 {
@@ -69,15 +66,17 @@ Crypto::Hash::MD5::Digest ClientPatchCache::CalculateAndCacheHash(std::unique_pt
 
     uint64_t totalRead = 0;
 
-    do { // Read the file chunk by chunk and add insert it into our MD5_Update
+    do
+    { // Read the file chunk by chunk and add insert it into our MD5_Update
         uint64_t actuallyRead = fileHandle->ReadSync(buffer.data(), CHECK_CHUNK_SIZE);
-        md5.UpdateData(buffer.data(), (size_t) actuallyRead);
+        md5.UpdateData(buffer.data(), (size_t)actuallyRead);
 
         totalRead += actuallyRead;
 
         if (actuallyRead < CHECK_CHUNK_SIZE)
             break; // we read less than expected, meaning the file is done
-    } while (true);
+    }
+    while (true);
 
     PatchCacheEntry entry;
     entry.filePath = fileHandle->GetFilePath();

@@ -1,24 +1,24 @@
 /*
-* Copyright (C) 2005 - 2013 MaNGOS <http://www.getmangos.com/>
-*
-* Copyright (C) 2008 - 2013 Trinity <http://www.trinitycore.org/>
-*
-* Copyright (C) 2010 - 2013 ArkCORE <http://www.arkania.net/>
-* Copyright (C) 2006-2007 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
-*
-* This program is free software; you can redistribute it and/or modify it
-* under the terms of the GNU General Public License as published by the
-* Free Software Foundation; either version 2 of the License, or (at your
-* option) any later version.
-*
-* This program is distributed in the hope that it will be useful, but WITHOUT
-* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-* FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
-* more details.
-*
-* You should have received a copy of the GNU General Public License along
-* with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
+ * Copyright (C) 2005 - 2013 MaNGOS <http://www.getmangos.com/>
+ *
+ * Copyright (C) 2008 - 2013 Trinity <http://www.trinitycore.org/>
+ *
+ * Copyright (C) 2010 - 2013 ArkCORE <http://www.arkania.net/>
+ * Copyright (C) 2006-2007 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation; either version 2 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 /* ScriptData
 SDName: boss_archaedas
@@ -35,10 +35,10 @@ EndScriptData */
 
 enum Texts
 {
-    SAY_AGGRO           = 3400,
-    SAY_SUMMON          = 6536,
-    SAY_SUMMON_2        = 6537,
-    SAY_SLAY            = 6215
+    SAY_AGGRO = 3400,
+    SAY_SUMMON = 6536,
+    SAY_SUMMON_2 = 6537,
+    SAY_SLAY = 6215
 };
 
 // Return true to avoid db script attempt
@@ -81,10 +81,7 @@ struct boss_archaedasAI : public ScriptedAI
     float spawnY;
     float spawnZ;
 
-    bool UnitIsOutside(Unit* unit)
-    {
-        return !unit->IsWithinDist2d(spawnX, spawnY, 38.0f);
-    }
+    bool UnitIsOutside(Unit* unit) { return !unit->IsWithinDist2d(spawnX, spawnY, 38.0f); }
 
     void Reset() override
     {
@@ -110,10 +107,7 @@ struct boss_archaedasAI : public ScriptedAI
         }
     }
 
-    void KilledUnit(Unit* /*victim*/) override
-    {
-        DoScriptText(SAY_SLAY, m_creature);
-    }
+    void KilledUnit(Unit* /*victim*/) override { DoScriptText(SAY_SLAY, m_creature); }
 
     // He goes back to his spawn point after reset, stone him after.
     void JustReachedHome() override
@@ -149,7 +143,7 @@ struct boss_archaedasAI : public ScriptedAI
             return; // dont want to continue until we finish the AttackStart method
         }
 
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             return;
@@ -165,7 +159,8 @@ struct boss_archaedasAI : public ScriptedAI
             }
             uiRoomCheck = 500;
         }
-        else uiRoomCheck -= uiDiff;
+        else
+            uiRoomCheck -= uiDiff;
 
         // wake a wall minion
         if (uiWallMinionTimer <= uiDiff)
@@ -173,9 +168,10 @@ struct boss_archaedasAI : public ScriptedAI
             instance->SetData(ULDAMAN_ENCOUNTER_ARCHAEDAS, IN_PROGRESS);
             uiWallMinionTimer = 10000;
         }
-        else uiWallMinionTimer -= uiDiff;
+        else
+            uiWallMinionTimer -= uiDiff;
 
-        //If we are <66 summon the guardians
+        // If we are <66 summon the guardians
         if (!bGuardiansAwake && me->GetHealthPercent() <= 66.0f)
         {
             me->CastSpell(me, SPELL_AWAKEN_EARTHEN_GUARDIAN, false);
@@ -183,7 +179,7 @@ struct boss_archaedasAI : public ScriptedAI
             bGuardiansAwake = true;
         }
 
-        //If we are <33 summon the vault warders
+        // If we are <33 summon the vault warders
         if (!bVaultWardersAwake && me->GetHealthPercent() <= 33.0f)
         {
             // Despawn the furniture
@@ -211,12 +207,13 @@ struct boss_archaedasAI : public ScriptedAI
 
         if (uiTremorTimer <= uiDiff)
         {
-            //Cast
+            // Cast
             DoCast(me->GetVictim(), SPELL_GROUND_TREMOR);
-            //45 seconds until we should cast this agian
+            // 45 seconds until we should cast this agian
             uiTremorTimer = 45000;
         }
-        else uiTremorTimer -= uiDiff;
+        else
+            uiTremorTimer -= uiDiff;
 
         DoMeleeAttackIfReady();
     }
@@ -245,10 +242,7 @@ struct boss_archaedasAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_archaedas(Creature* creature)
-{
-    return new boss_archaedasAI(creature);
-}
+CreatureAI* GetAI_boss_archaedas(Creature* creature) { return new boss_archaedasAI(creature); }
 
 /* ScriptData
 SDName: mob_archaedas_minions
@@ -288,7 +282,7 @@ struct mob_archaedas_minionsAI : public ScriptedAI
 
         m_creature->EnableMoveInLosEvent();
     }
-    
+
     void EnterEvadeMode() override
     {
         Unit* target = me->SelectNearestHostileUnitInAggroRange(true);
@@ -318,8 +312,7 @@ struct mob_archaedas_minionsAI : public ScriptedAI
     void SpellHit(SpellCaster* /*caster*/, SpellEntry const* spell) override
     {
         // time to wake up, start animation
-        if (spell->Id == SPELL_AWAKEN_EARTHEN_DWARF
-            || spell->Id == SPELL_AWAKEN_EARTHEN_GUARDIAN)
+        if (spell->Id == SPELL_AWAKEN_EARTHEN_DWARF || spell->Id == SPELL_AWAKEN_EARTHEN_GUARDIAN)
         {
             bWakeSpellHit = true;
             bWokenUp = true;
@@ -373,8 +366,7 @@ struct mob_archaedas_minionsAI : public ScriptedAI
             return;
         }
 
-        if (bAwake && m_creature->GetEntry() == NPC_EARTHEN_CUSTODIAN 
-            && uiReconstruct_Timer <= uiDiff)
+        if (bAwake && m_creature->GetEntry() == NPC_EARTHEN_CUSTODIAN && uiReconstruct_Timer <= uiDiff)
         {
             if (Unit* archaedas = Unit::GetUnit(*me, instance->GetData64(11)))
             {
@@ -385,32 +377,31 @@ struct mob_archaedas_minionsAI : public ScriptedAI
             }
             uiReconstruct_Timer = 10000;
         }
-        else if (bAwake) uiReconstruct_Timer -= uiDiff;
+        else if (bAwake)
+            uiReconstruct_Timer -= uiDiff;
 
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             return;
         }
-        
+
         if (m_creature->GetEntry() == NPC_VAULT_WARDER && uiTrample_Timer <= uiDiff)
         {
             DoCast(me->GetVictim(), SPELL_TRAMPLE);
             uiTrample_Timer = 10000;
         }
-        else uiTrample_Timer -= uiDiff;
+        else
+            uiTrample_Timer -= uiDiff;
 
         DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_mob_archaedas_minions(Creature* creature)
-{
-    return new mob_archaedas_minionsAI(creature);
-}
+CreatureAI* GetAI_mob_archaedas_minions(Creature* creature) { return new mob_archaedas_minionsAI(creature); }
 
-//This is the actual function called only once during InitScripts()
-//It must define all handled functions that are to be run in this script
+// This is the actual function called only once during InitScripts()
+// It must define all handled functions that are to be run in this script
 void AddSC_boss_archaedas()
 {
     Script* newscript;

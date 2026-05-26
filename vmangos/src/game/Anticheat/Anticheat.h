@@ -1,24 +1,24 @@
 /*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 #ifndef ANTICHEAT_H
 #define ANTICHEAT_H
 
-#include "Common.h"
 #include "AbstractPlayer.h"
+#include "Common.h"
 #include "UnitDefines.h"
 
 enum WardenActions
@@ -31,14 +31,14 @@ enum WardenActions
 
 enum CheatAction
 {
-    CHEAT_ACTION_NONE             = 0x00,
-    CHEAT_ACTION_LOG              = 0x01,
-    CHEAT_ACTION_REPORT_GMS       = 0x02,
+    CHEAT_ACTION_NONE = 0x00,
+    CHEAT_ACTION_LOG = 0x01,
+    CHEAT_ACTION_REPORT_GMS = 0x02,
     CHEAT_ACTION_GLOBAL_ANNOUNNCE = 0x04,
-    CHEAT_ACTION_KICK             = 0x08,
-    CHEAT_ACTION_BAN_ACCOUNT      = 0x10,
-    CHEAT_ACTION_BAN_IP_ACCOUNT   = 0x20,
-    CHEAT_ACTION_MUTE_PUB_CHANS   = 0x40, // Mutes the account from public channels
+    CHEAT_ACTION_KICK = 0x08,
+    CHEAT_ACTION_BAN_ACCOUNT = 0x10,
+    CHEAT_ACTION_BAN_IP_ACCOUNT = 0x20,
+    CHEAT_ACTION_MUTE_PUB_CHANS = 0x40, // Mutes the account from public channels
     CHEAT_MAX_ACTIONS,
 };
 
@@ -73,10 +73,10 @@ public:
     virtual void showMuted(WorldSession* session) {}
 };
 
-#include "WardenAnticheat/Warden.hpp"
-#include "MovementAnticheat/MovementAnticheat.h"
 #include <mutex>
 #include <thread>
+#include "MovementAnticheat/MovementAnticheat.h"
+#include "WardenAnticheat/Warden.hpp"
 
 class AnticheatManager
 {
@@ -84,7 +84,7 @@ public:
     ~AnticheatManager();
     void LoadAnticheatData();
 
-    Warden * CreateWardenFor(WorldSession* client, BigNumber* K);
+    Warden* CreateWardenFor(WorldSession* client, BigNumber* K);
     MovementAnticheat* CreateAnticheatFor(Player* player);
 
     void StartWardenUpdateThread();
@@ -94,7 +94,7 @@ public:
     void RemoveWardenSession(Warden* warden);
 
 private:
-    Warden * CreateWardenForInternal(WorldSession* client, BigNumber* K);
+    Warden* CreateWardenForInternal(WorldSession* client, BigNumber* K);
     void AddWardenSessionInternal(Warden* warden);
     void RemoveWardenSessionInternal(Warden* warden);
     void AddOrRemovePendingSessions();

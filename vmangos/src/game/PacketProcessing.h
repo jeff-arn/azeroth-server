@@ -35,7 +35,7 @@ enum PacketProcessing
      * PACKET_PROCESS_WORLD
      * Thread safe environment for this packet.
      */
-    PACKET_PROCESS_WORLD = 0,                               //packet is not thread-safe - process it in World::UpdateSessions()
+    PACKET_PROCESS_WORLD = 0, // packet is not thread-safe - process it in World::UpdateSessions()
     /*
      * PACKET_PROCESS_MAP
      * Unsafe:
@@ -73,7 +73,7 @@ enum PacketProcessing
      * Never touch the map.
      */
     PACKET_PROCESS_ASYNC,
-    PACKET_PROCESS_MAX_TYPE,                                // no handler for this packet (server side, or not implemented)
+    PACKET_PROCESS_MAX_TYPE, // no handler for this packet (server side, or not implemented)
     /*
      * PACKET_PROCESS_SELF_ITEMS
      * Only affects current player items.
@@ -88,10 +88,10 @@ enum PacketProcessing
      */
     PACKET_PROCESS_SELF_ITEMS = PACKET_PROCESS_MAP,
     /*
-    * PACKET_PROCESS_DB_QUERY
-    * Does not write anything. Can be processed as long as containers are not being reloaded.
-    * Reads static data (usually data from World DB)
-    */
+     * PACKET_PROCESS_DB_QUERY
+     * Does not write anything. Can be processed as long as containers are not being reloaded.
+     * Reads static data (usually data from World DB)
+     */
     PACKET_PROCESS_DB_QUERY = PACKET_PROCESS_ASYNC,
     /*
      * PACKET_PROCESS_CHANNEL

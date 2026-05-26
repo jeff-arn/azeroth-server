@@ -27,21 +27,21 @@ struct WarlockDemonicSacrificeScript : SpellScript
             uint32 spellId;
             switch (entry)
             {
-                case   416:
-                    spellId = 18789;
-                    break;               // imp
-                case   417:
-                    spellId = 18792;
-                    break;               // fellhunter
-                case  1860:
-                    spellId = 18790;
-                    break;               // void
-                case  1863:
-                    spellId = 18791;
-                    break;               // succubus
-                default:
-                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Demonic Sacrifice: Unhandled creature entry (%u) case.", entry);
-                    return true;
+            case 416:
+                spellId = 18789;
+                break; // imp
+            case 417:
+                spellId = 18792;
+                break; // fellhunter
+            case 1860:
+                spellId = 18790;
+                break; // void
+            case 1863:
+                spellId = 18791;
+                break; // succubus
+            default:
+                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Demonic Sacrifice: Unhandled creature entry (%u) case.", entry);
+                return true;
             }
 
             spell->m_casterUnit->CastSpell(spell->m_casterUnit, spellId, true);
@@ -50,10 +50,7 @@ struct WarlockDemonicSacrificeScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarlockDemonicSacrifice(SpellEntry const*)
-{
-    return new WarlockDemonicSacrificeScript();
-}
+SpellScript* GetScript_WarlockDemonicSacrifice(SpellEntry const*) { return new WarlockDemonicSacrificeScript(); }
 
 // 17962, 18930, 18931, 18932 - Conflagrate
 struct WarlockConflagrateScript : SpellScript
@@ -69,8 +66,7 @@ struct WarlockConflagrateScript : SpellScript
         for (const auto periodicDamageAura : auras)
         {
             // Immolate
-            if (periodicDamageAura->GetSpellProto()->IsFitToFamily<SPELLFAMILY_WARLOCK, CF_WARLOCK_IMMOLATE>() &&
-                periodicDamageAura->GetCasterGuid() == spell->m_caster->GetObjectGuid())
+            if (periodicDamageAura->GetSpellProto()->IsFitToFamily<SPELLFAMILY_WARLOCK, CF_WARLOCK_IMMOLATE>() && periodicDamageAura->GetCasterGuid() == spell->m_caster->GetObjectGuid())
             {
                 found = true;
                 break;
@@ -92,8 +88,7 @@ struct WarlockConflagrateScript : SpellScript
             for (const auto i : auras)
             {
                 // Immolate
-                if (i->GetSpellProto()->IsFitToFamily<SPELLFAMILY_WARLOCK, CF_WARLOCK_IMMOLATE>() &&
-                    i->GetCasterGuid() == spell->m_caster->GetObjectGuid())
+                if (i->GetSpellProto()->IsFitToFamily<SPELLFAMILY_WARLOCK, CF_WARLOCK_IMMOLATE>() && i->GetCasterGuid() == spell->m_caster->GetObjectGuid())
                 {
                     spell->GetUnitTarget()->RemoveAurasByCasterSpell(i->GetId(), spell->m_caster->GetObjectGuid());
                     break;
@@ -104,10 +99,7 @@ struct WarlockConflagrateScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarlockConflagrate(SpellEntry const*)
-{
-    return new WarlockConflagrateScript();
-}
+SpellScript* GetScript_WarlockConflagrate(SpellEntry const*) { return new WarlockConflagrateScript(); }
 
 // 1454, 1455, 1456, 11687, 11688, 11689 - Life Tap
 struct WarlockLifeTapScript : SpellScript
@@ -165,10 +157,7 @@ struct WarlockLifeTapScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarlockLifeTap(SpellEntry const*)
-{
-    return new WarlockLifeTapScript();
-}
+SpellScript* GetScript_WarlockLifeTap(SpellEntry const*) { return new WarlockLifeTapScript(); }
 
 // 18280 - Curse of Agony Dummy
 struct WarlockCurseOfAgonyDummyScript : SpellScript
@@ -195,10 +184,7 @@ struct WarlockCurseOfAgonyDummyScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarlockCurseOfAgonyDummy(SpellEntry const*)
-{
-    return new WarlockCurseOfAgonyDummyScript();
-}
+SpellScript* GetScript_WarlockCurseOfAgonyDummy(SpellEntry const*) { return new WarlockCurseOfAgonyDummyScript(); }
 
 // 19505, 19731, 19734, 19736 - Devour Magic
 struct WarlockDevourMagicScript : SpellScript
@@ -210,31 +196,28 @@ struct WarlockDevourMagicScript : SpellScript
             uint32 healSpell;
             switch (spell->m_spellInfo->Id)
             {
-                case 19505:
-                    healSpell = 19658;
-                    break;
-                case 19731:
-                    healSpell = 19732;
-                    break;
-                case 19734:
-                    healSpell = 19733;
-                    break;
-                case 19736:
-                    healSpell = 19735;
-                    break;
-                default:
-                    sLog.Out(LOG_SCRIPTS, LOG_LVL_DEBUG, "Spell for Devour Magic %d not handled in Spell::EffectDispel", spell->m_spellInfo->Id);
-                    return;
+            case 19505:
+                healSpell = 19658;
+                break;
+            case 19731:
+                healSpell = 19732;
+                break;
+            case 19734:
+                healSpell = 19733;
+                break;
+            case 19736:
+                healSpell = 19735;
+                break;
+            default:
+                sLog.Out(LOG_SCRIPTS, LOG_LVL_DEBUG, "Spell for Devour Magic %d not handled in Spell::EffectDispel", spell->m_spellInfo->Id);
+                return;
             }
             spell->m_casterUnit->CastSpell(spell->m_casterUnit, healSpell, true);
         }
     }
 };
 
-SpellScript* GetScript_WarlockDevourMagic(SpellEntry const*)
-{
-    return new WarlockDevourMagicScript();
-}
+SpellScript* GetScript_WarlockDevourMagic(SpellEntry const*) { return new WarlockDevourMagicScript(); }
 
 // 1122, 24670 - Inferno
 struct WarlockInfernoScript : SpellScript
@@ -252,10 +235,7 @@ struct WarlockInfernoScript : SpellScript
     }
 };
 
-SpellScript* GetScript_WarlockInferno(SpellEntry const*)
-{
-    return new WarlockInfernoScript();
-}
+SpellScript* GetScript_WarlockInferno(SpellEntry const*) { return new WarlockInfernoScript(); }
 
 // 5699 - Create Healthstone
 // 6201 - Create Healthstone (Minor)
@@ -289,36 +269,35 @@ struct WarlockCreateHealthstoneScript : SpellScript
             }
         }
 
-        static uint32 const items[5][3] =
-        {
-            { 5512, 19004, 19005 },              // Minor Healthstone
-            { 5511, 19006, 19007 },              // Lesser Healthstone
-            { 5509, 19008, 19009 },              // Healthstone
-            { 5510, 19010, 19011 },              // Greater Healthstone
-            { 9421, 19012, 19013 },              // Major Healthstone
+        static uint32 const items[5][3] = {
+            {5512, 19004, 19005}, // Minor Healthstone
+            {5511, 19006, 19007}, // Lesser Healthstone
+            {5509, 19008, 19009}, // Healthstone
+            {5510, 19010, 19011}, // Greater Healthstone
+            {9421, 19012, 19013}, // Major Healthstone
         };
 
         switch (spellId)
         {
-            case  6201:
-                itemId = items[0][rank];
-                break; // Minor Healthstone
-            case  6202:
-                itemId = items[1][rank];
-                break; // Lesser Healthstone
-            case  5699:
-                itemId = items[2][rank];
-                break; // Healthstone
-            case 11729:
-                itemId = items[3][rank];
-                break; // Greater Healthstone
-            case 11730:
-                itemId = items[4][rank];
-                break; // Major Healthstone
-            default:
-                sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Unknown rank of Create Healthstone with spell id %u.", spellId);
-                itemId = 0;
-                break;
+        case 6201:
+            itemId = items[0][rank];
+            break; // Minor Healthstone
+        case 6202:
+            itemId = items[1][rank];
+            break; // Lesser Healthstone
+        case 5699:
+            itemId = items[2][rank];
+            break; // Healthstone
+        case 11729:
+            itemId = items[3][rank];
+            break; // Greater Healthstone
+        case 11730:
+            itemId = items[4][rank];
+            break; // Major Healthstone
+        default:
+            sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "Unknown rank of Create Healthstone with spell id %u.", spellId);
+            itemId = 0;
+            break;
         }
 
         return itemId;
@@ -356,16 +335,13 @@ struct WarlockCreateHealthstoneScript : SpellScript
         uint32 const itemId = GetItemId(spell->GetUnitTarget(), spell->m_spellInfo->Id);
         if (!itemId)
             return true;
-        
+
         spell->DoCreateItem(effIdx, itemId);
         return true;
     }
 };
 
-SpellScript* GetScript_WarlockCreateHealthstone(SpellEntry const*)
-{
-    return new WarlockCreateHealthstoneScript();
-}
+SpellScript* GetScript_WarlockCreateHealthstone(SpellEntry const*) { return new WarlockCreateHealthstoneScript(); }
 
 // 698 - Ritual of Summoning
 struct WarlockRitualOfSummoningScript : public SpellScript
@@ -400,10 +376,7 @@ struct WarlockRitualOfSummoningScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_WarlockRitualOfSummoning(SpellEntry const*)
-{
-    return new WarlockRitualOfSummoningScript();
-}
+SpellScript* GetScript_WarlockRitualOfSummoning(SpellEntry const*) { return new WarlockRitualOfSummoningScript(); }
 
 // 1010 - Curse of Idiocy
 struct WarlockCurseOfIdiocyAuraScript : public AuraScript
@@ -433,14 +406,14 @@ struct WarlockCurseOfIdiocyAuraScript : public AuraScript
             {
                 switch (i->GetModifier()->m_miscvalue)
                 {
-                    case STAT_INTELLECT:
-                        intelectLoss += i->GetModifier()->m_amount;
-                        break;
-                    case STAT_SPIRIT:
-                        spiritLoss += i->GetModifier()->m_amount;
-                        break;
-                    default:
-                        break;
+                case STAT_INTELLECT:
+                    intelectLoss += i->GetModifier()->m_amount;
+                    break;
+                case STAT_SPIRIT:
+                    spiritLoss += i->GetModifier()->m_amount;
+                    break;
+                default:
+                    break;
                 }
             }
         }
@@ -453,10 +426,7 @@ struct WarlockCurseOfIdiocyAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_WarlockCurseOfIdiocy(SpellEntry const*)
-{
-    return new WarlockCurseOfIdiocyAuraScript();
-}
+AuraScript* GetScript_WarlockCurseOfIdiocy(SpellEntry const*) { return new WarlockCurseOfIdiocyAuraScript(); }
 
 void AddSC_warlock_spell_scripts()
 {

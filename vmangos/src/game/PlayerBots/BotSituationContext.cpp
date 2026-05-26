@@ -1,11 +1,11 @@
 #include "BotSituationContext.h"
-#include "BotFormation.h"
 #include "BotCombatEventBuffer.h"
+#include "BotFormation.h"
 #include "CombatBotBaseAI.h"
+#include "Creature.h"
+#include "Group.h"
 #include "PartyBotAI.h"
 #include "Player.h"
-#include "Group.h"
-#include "Creature.h"
 #include "Spell.h"
 
 void EvaluateSituation(CombatBotBaseAI* ai, SituationContext& ctx)
@@ -135,9 +135,7 @@ void EvaluateSituation(CombatBotBaseAI* ai, SituationContext& ctx)
                     ctx.criticalHealNeeded = true;
 
                 // Check if a healer is available (alive with mana)
-                if (pMember != me &&
-                    CombatBotBaseAI::IsHealerClass(pMember->GetClass()) &&
-                    pMember->GetPowerPercent(POWER_MANA) > 10.0f)
+                if (pMember != me && CombatBotBaseAI::IsHealerClass(pMember->GetClass()) && pMember->GetPowerPercent(POWER_MANA) > 10.0f)
                 {
                     ctx.healerAvailable = true;
                 }
@@ -157,8 +155,7 @@ void EvaluateSituation(CombatBotBaseAI* ai, SituationContext& ctx)
             {
                 for (const auto pAttacker : pMember->GetAttackers())
                 {
-                    if (pAttacker != pTankTarget &&
-                        !pAttacker->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL))
+                    if (pAttacker != pTankTarget && !pAttacker->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL))
                     {
                         ctx.hasLooseAdds = true;
                         break;
@@ -198,8 +195,7 @@ void EvaluateSituation(CombatBotBaseAI* ai, SituationContext& ctx)
         if (fs && !fs->trail.IsEmpty())
         {
             float fx, fy, fz;
-            if (fs->CalculateSlotPosition(partyAI->m_formationSlotIndex, me->GetMap(), me,
-                                          fx, fy, fz))
+            if (fs->CalculateSlotPosition(partyAI->m_formationSlotIndex, me->GetMap(), me, fx, fy, fz))
             {
                 ctx.formationTargetX = fx;
                 ctx.formationTargetY = fy;

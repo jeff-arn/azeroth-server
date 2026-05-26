@@ -24,10 +24,10 @@ EndScriptData */
 #include "scriptPCH.h"
 #include "stratholme.h"
 
-#define SPELL_FROSTBOLT     17503
-#define SPELL_DRAIN_LIFE    17238
-#define SPELL_DRAIN_MANA    17243
-#define SPELL_ICETOMB       16869
+#define SPELL_FROSTBOLT 17503
+#define SPELL_DRAIN_LIFE 17238
+#define SPELL_DRAIN_MANA 17243
+#define SPELL_ICETOMB 16869
 
 struct boss_maleki_the_pallidAI : public ScriptedAI
 {
@@ -66,10 +66,7 @@ struct boss_maleki_the_pallidAI : public ScriptedAI
             m_pInstance->SetData(TYPE_PALLID, DONE);
     }
 
-    inline float GetManaPercent()
-    {
-        return (((float)m_creature->GetPower(POWER_MANA) / (float)m_creature->GetMaxPower(POWER_MANA)) * 100);
-    }
+    inline float GetManaPercent() { return (((float)m_creature->GetPower(POWER_MANA) / (float)m_creature->GetMaxPower(POWER_MANA)) * 100); }
 
     void UpdateAI(uint32 const diff) override
     {
@@ -94,7 +91,7 @@ struct boss_maleki_the_pallidAI : public ScriptedAI
             }
         }
 
-        //Frostbolt
+        // Frostbolt
         if (Frostbolt_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FROSTBOLT) == CAST_OK)
@@ -103,7 +100,7 @@ struct boss_maleki_the_pallidAI : public ScriptedAI
         else
             Frostbolt_Timer -= diff;
 
-        //IceTomb
+        // IceTomb
         if (IceTomb_Timer < diff)
         {
             if (Unit* pTarget = m_creature->GetVictim())
@@ -117,9 +114,10 @@ struct boss_maleki_the_pallidAI : public ScriptedAI
                 }
             }
         }
-        else IceTomb_Timer -= diff;
+        else
+            IceTomb_Timer -= diff;
 
-        //DrainLife/Mana
+        // DrainLife/Mana
         if ((m_creature->GetHealthPercent() < 60.0f) || (GetManaPercent() < 50.0f))
         {
             NeedMoveCloser = true;
@@ -157,10 +155,7 @@ struct boss_maleki_the_pallidAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_maleki_the_pallid(Creature* pCreature)
-{
-    return new boss_maleki_the_pallidAI(pCreature);
-}
+CreatureAI* GetAI_boss_maleki_the_pallid(Creature* pCreature) { return new boss_maleki_the_pallidAI(pCreature); }
 
 void AddSC_boss_maleki_the_pallid()
 {

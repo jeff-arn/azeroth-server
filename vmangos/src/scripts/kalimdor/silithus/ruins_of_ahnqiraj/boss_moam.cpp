@@ -21,23 +21,23 @@ SDComment: fix summon mana fiend in core, find out if there is a mana drain
 SDCategory: Ruins of Ahn'Qiraj
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "ruins_of_ahnqiraj.h"
+#include "scriptPCH.h"
 
 enum
 {
-    EMOTE_AGGRO             =  -1509000,
-    EMOTE_MANA_FULL         =  -1509001,
-    EMOTE_DRAIN             =  -1509028,
+    EMOTE_AGGRO = -1509000,
+    EMOTE_MANA_FULL = -1509001,
+    EMOTE_DRAIN = -1509028,
 
-    SPELL_TRAMPLE           =  15550,
-    SPELL_ARCANEERUPTION    =  25672,
-    SPELL_SUMMON_MANA_FIEND =  25681,                      //25682,25683
-    SPELL_ENERGIZE          =  25685,
-    SPELL_DRAINMANA         =  25676,
+    SPELL_TRAMPLE = 15550,
+    SPELL_ARCANEERUPTION = 25672,
+    SPELL_SUMMON_MANA_FIEND = 25681, // 25682,25683
+    SPELL_ENERGIZE = 25685,
+    SPELL_DRAINMANA = 25676,
 
     // mana fiend
-    NPC_MANA_FIEND          =  15527,
+    NPC_MANA_FIEND = 15527,
 };
 
 struct boss_moamAI : public ScriptedAI
@@ -55,7 +55,7 @@ struct boss_moamAI : public ScriptedAI
     uint32 m_uiTurnBackFromStone_Timer;
     uint32 m_uiArmorValue;
     uint32 m_uiDrainMana_Timer;
-    ObjectGuid m_OGvictim;          // Memorize last target before turning into stone, then take it back.
+    ObjectGuid m_OGvictim; // Memorize last target before turning into stone, then take it back.
     bool m_bIsInCombat;
 
     void Reset() override
@@ -90,7 +90,7 @@ struct boss_moamAI : public ScriptedAI
 
     void JustDied(Unit* pKiller) override
     {
-        if (GameObject *pObsidian = m_creature->SummonGameObject(181069, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, 0, 0, 0, 0, -1, false))
+        if (GameObject* pObsidian = m_creature->SummonGameObject(181069, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, 0, 0, 0, 0, -1, false))
             pObsidian->SetRespawnTime(345600);
 
         if (m_pInstance)
@@ -130,12 +130,11 @@ struct boss_moamAI : public ScriptedAI
         if (m_creature->HasAura(SPELL_ENERGIZE))
         {
             m_uiTurnBackFromStone_Timer -= uiDiff;
-            //m_creature->SetPower(POWER_MANA,0); /** Help to check stone form by setting mana to 0 */
-            if (m_creature->GetPower(POWER_MANA) >= m_creature->GetMaxPower(POWER_MANA) ||
-                    m_uiTurnBackFromStone_Timer == 0)
+            // m_creature->SetPower(POWER_MANA,0); /** Help to check stone form by setting mana to 0 */
+            if (m_creature->GetPower(POWER_MANA) >= m_creature->GetMaxPower(POWER_MANA) || m_uiTurnBackFromStone_Timer == 0)
             {
-                //Check if a victim was memorize, in case of error, take a random one.
-                Unit * victim = m_creature->GetMap()->GetUnit(m_OGvictim);
+                // Check if a victim was memorize, in case of error, take a random one.
+                Unit* victim = m_creature->GetMap()->GetUnit(m_OGvictim);
                 if (victim)
                     m_creature->AI()->AttackStart(victim);
                 else
@@ -168,12 +167,7 @@ struct boss_moamAI : public ScriptedAI
                 for (uint8 i = 0; i < 3; ++i)
                 {
                     // Summon a Mana fiend which will disappear if Moam is reset
-                    m_creature->SummonCreature(NPC_MANA_FIEND,
-                                               m_creature->GetPositionX() + 2,
-                                               m_creature->GetPositionY(),
-                                               m_creature->GetPositionZ(),
-                                               m_creature->GetOrientation(),
-                                               TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10000);
+                    m_creature->SummonCreature(NPC_MANA_FIEND, m_creature->GetPositionX() + 2, m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetOrientation(), TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10000);
                 }
 
                 m_uiSummonManaFiend_Timer = 90000;
@@ -187,7 +181,7 @@ struct boss_moamAI : public ScriptedAI
         else
             m_uiSummonManaFiend_Timer -= uiDiff;
 
-        //m_uiTrample_Timer
+        // m_uiTrample_Timer
         if (m_uiTrample_Timer < uiDiff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_TRAMPLE) == CAST_OK)
@@ -208,10 +202,7 @@ struct boss_moamAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_moam(Creature* pCreature)
-{
-    return new boss_moamAI(pCreature);
-}
+CreatureAI* GetAI_boss_moam(Creature* pCreature) { return new boss_moamAI(pCreature); }
 
 void AddSC_boss_moam()
 {

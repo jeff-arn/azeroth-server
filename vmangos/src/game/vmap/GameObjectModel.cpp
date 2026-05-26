@@ -16,21 +16,20 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "VMapDefinitions.h"
 #include "VMapFactory.h"
 #include "VMapManager2.h"
-#include "VMapDefinitions.h"
 #include "WorldModel.h"
 
-#include "GameObject.h"
-#include "World.h"
-#include "GameObjectModel.h"
 #include "DBCStores.h"
+#include "GameObject.h"
+#include "GameObjectModel.h"
 #include "ModelInstance.h"
+#include "World.h"
 
 struct GameobjectModelData
 {
-    GameobjectModelData(std::string const& name_, G3D::AABox const& box) :
-        name(name_), bound(box) {}
+    GameobjectModelData(std::string const& name_, G3D::AABox const& box) : name(name_), bound(box) {}
 
     std::string name;
     G3D::AABox bound;
@@ -68,9 +67,7 @@ void LoadGameObjectModelList()
     fclose(model_list_file);
 }
 
-GameObjectModel::~GameObjectModel()
-{
-}
+GameObjectModel::~GameObjectModel() {}
 
 bool GameObjectModel::initialize(GameObject const* const pGo, GameObjectDisplayInfoEntry const* pDisplayInfo)
 {
@@ -91,8 +88,7 @@ bool GameObjectModel::initialize(GameObject const* const pGo, GameObjectDisplayI
     if (!iModel)
         return false;
 
-    if (!pGo->GetGOInfo()->CanAlwaysBreakLoS() &&
-        it->second.name.find(".m2") != std::string::npos)
+    if (!pGo->GetGOInfo()->CanAlwaysBreakLoS() && it->second.name.find(".m2") != std::string::npos)
         iModel->setModelFlags(VMAP::MOD_M2);
 
     name = it->second.name;

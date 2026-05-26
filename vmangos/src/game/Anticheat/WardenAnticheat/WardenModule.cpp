@@ -14,24 +14,24 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
- /*
-  *
-  * This code was written by namreeb (legal@namreeb.org) and is released with
-  * permission as part of vmangos (https://github.com/vmangos/core)
-  *
-  */
+/*
+ *
+ * This code was written by namreeb (legal@namreeb.org) and is released with
+ * permission as part of vmangos (https://github.com/vmangos/core)
+ *
+ */
 
 #include "WardenModule.hpp"
 
-#include "Platform/Define.h"
 #include "Crypto/Hash/MD5.h"
+#include "Platform/Define.h"
 
 #include <zlib.h>
 
+#include <exception>
+#include <fstream>
 #include <string>
 #include <vector>
-#include <fstream>
-#include <exception>
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_5_1
 
@@ -97,15 +97,7 @@ WardenModule::WardenModule(std::string const& bin, std::string const& kf, std::s
     {
         for (uint8 i = 0; i <= UINT8_MAX; i++)
         {
-            if (opcodes[0] != i &&
-                opcodes[1] != i &&
-                opcodes[2] != i &&
-                opcodes[3] != i &&
-                opcodes[4] != i &&
-                opcodes[5] != i &&
-                opcodes[6] != i &&
-                opcodes[7] != i &&
-                opcodes[8] != i)
+            if (opcodes[0] != i && opcodes[1] != i && opcodes[2] != i && opcodes[3] != i && opcodes[4] != i && opcodes[5] != i && opcodes[6] != i && opcodes[7] != i && opcodes[8] != i)
             {
                 scanTerminator = i;
                 break;

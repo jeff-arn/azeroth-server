@@ -33,7 +33,7 @@
  * data into base32. This is a macro to allow users to define buffer size at
  * compilation time.
  */
-#define BASE32_LEN(len)  (((len)/5)*8 + ((len) % 5 ? 8 : 0))
+#define BASE32_LEN(len) (((len) / 5) * 8 + ((len) % 5 ? 8 : 0))
 
 /**
  * Returns the length of the output buffer required to decode a base32 string
@@ -41,7 +41,7 @@
  * definition of a base32 string. This is a macro to allow users to define
  * buffer size at compilation time.
  */
-#define UNBASE32_LEN(len)  (((len)/8)*5)
+#define UNBASE32_LEN(len) (((len) / 8) * 5)
 
 /**
  * Encode the data pointed to by plain into base32 and store the
@@ -51,7 +51,7 @@
  * contain characters from the [A-Z2-7=] set. The "len" arguments
  * define how many bytes will be read from the "plain" buffer.
  **/
-void base32_encode(const unsigned char *plain, size_t len, unsigned char *coded);
+void base32_encode(const unsigned char* plain, size_t len, unsigned char* coded);
 
 /**
  * Decode the null terminated string pointed to by coded and write
@@ -62,10 +62,10 @@ void base32_encode(const unsigned char *plain, size_t len, unsigned char *coded)
  * expected due to padding. If an invalid base32 character is found
  * in the coded string, decoding will stop at that point.
  **/
-size_t base32_decode(const unsigned char *coded, unsigned char *plain);
+size_t base32_decode(const unsigned char* coded, unsigned char* plain);
 
-#include <assert.h>  // assert()
-#include <limits.h>  // CHAR_BIT
+#include <assert.h> // assert()
+#include <limits.h> // CHAR_BIT
 
 /**
  * Let this be a sequence of plain data before encoding:
@@ -84,17 +84,14 @@ size_t base32_decode(const unsigned char *coded, unsigned char *plain);
  * systems that don't have exactly 8 bits per (unsigned) char.
  **/
 
-static size_t min(size_t x, size_t y)
-{
-    return x < y ? x : y;
-}
+static size_t min(size_t x, size_t y) { return x < y ? x : y; }
 
 static const unsigned char PADDING_CHAR = '=';
 
 /**
  * Pad the given buffer with len padding characters.
  */
-static void pad(unsigned char *buf, int len)
+static void pad(unsigned char* buf, int len)
 {
     for (int i = 0; i < len; i++)
         buf[i] = PADDING_CHAR;
@@ -107,7 +104,7 @@ static void pad(unsigned char *buf, int len)
 static unsigned char encode_char(unsigned char c)
 {
     static unsigned char base32[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    return base32[c & 0x1F];  // 0001 1111
+    return base32[c & 0x1F]; // 0001 1111
 }
 
 /**
@@ -126,7 +123,7 @@ static int decode_char(unsigned char c)
 
     assert(retval == -1 || ((retval & 0x1F) == retval));
 
-    return  retval;
+    return retval;
 }
 
 /**
@@ -142,7 +139,7 @@ static int decode_char(unsigned char c)
 static int get_octet(int block)
 {
     assert(block >= 0 && block < 8);
-    return (block*5) / 8;
+    return (block * 5) / 8;
 }
 
 /**
@@ -165,7 +162,7 @@ static int get_octet(int block)
 static int get_offset(int block)
 {
     assert(block >= 0 && block < 8);
-    return (8 - 5 - (5*block) % 8);
+    return (8 - 5 - (5 * block) % 8);
 }
 
 /**
@@ -176,15 +173,12 @@ static int get_offset(int block)
 static unsigned char shift_right(unsigned char byte, signed char offset)
 {
     if (offset > 0)
-        return byte >>  offset;
+        return byte >> offset;
     else
         return byte << -offset;
 }
 
-static unsigned char shift_left(unsigned char byte, signed char offset)
-{
-    return shift_right(byte, - offset);
-}
+static unsigned char shift_left(unsigned char byte, signed char offset) { return shift_right(byte, -offset); }
 
 /**
  * Encode a sequence. A sequence is no longer than 5 octets by definition.
@@ -192,47 +186,51 @@ static unsigned char shift_left(unsigned char byte, signed char offset)
  * sequences shorter than 5 octets is supported and padding will be added to the
  * output as per the specification.
  */
-static void encode_sequence(const unsigned char *plain, int len, unsigned char *coded)
+static void encode_sequence(const unsigned char* plain, int len, unsigned char* coded)
 {
-    assert(CHAR_BIT == 8);  // not sure this would work otherwise
+    assert(CHAR_BIT == 8); // not sure this would work otherwise
     assert(len >= 0 && len <= 5);
 
-    for (int block = 0; block < 8; block++) {
-        int octet = get_octet(block);  // figure out which octet this block starts in
-        int junk = get_offset(block);  // how many bits do we drop from this octet?
+    for (int block = 0; block < 8; block++)
+    {
+        int octet = get_octet(block); // figure out which octet this block starts in
+        int junk = get_offset(block); // how many bits do we drop from this octet?
 
-        if (octet >= len) { // we hit the end of the buffer
+        if (octet >= len)
+        { // we hit the end of the buffer
             pad(&coded[block], 8 - block);
             return;
         }
 
-        unsigned char c = shift_right(plain[octet], junk);  // first part
+        unsigned char c = shift_right(plain[octet], junk); // first part
 
-        if (junk < 0  // is there a second part?
-        &&  octet < len - 1)  // is there still something to read?
+        if (junk < 0 // is there a second part?
+            && octet < len - 1) // is there still something to read?
         {
-            c |= shift_right(plain[octet+1], 8 + junk);
+            c |= shift_right(plain[octet + 1], 8 + junk);
         }
         coded[block] = encode_char(c);
     }
 }
 
-void base32_encode(const unsigned char *plain, size_t len, unsigned char *coded)
+void base32_encode(const unsigned char* plain, size_t len, unsigned char* coded)
 {
     // All the hard work is done in encode_sequence(),
     // here we just need to feed it the data sequence by sequence.
-    for (size_t i = 0, j = 0; i < len; i += 5, j += 8) {
+    for (size_t i = 0, j = 0; i < len; i += 5, j += 8)
+    {
         encode_sequence(&plain[i], min(len - i, 5), &coded[j]);
     }
 }
 
-static int decode_sequence(const unsigned char *coded, unsigned char *plain)
+static int decode_sequence(const unsigned char* coded, unsigned char* plain)
 {
     assert(CHAR_BIT == 8);
     assert(coded && plain);
 
     plain[0] = 0;
-    for (int block = 0; block < 8; block++) {
+    for (int block = 0; block < 8; block++)
+    {
         int offset = get_offset(block);
         int octet = get_octet(block);
 
@@ -246,18 +244,20 @@ static int decode_sequence(const unsigned char *coded, unsigned char *plain)
         }
 
         plain[octet] |= shift_left(c, offset);
-        if (offset < 0) {  // does this block overflows to next octet?
+        if (offset < 0)
+        { // does this block overflows to next octet?
             assert(octet < 4);
-            plain[octet+1] = shift_left(c, 8 + offset);
+            plain[octet + 1] = shift_left(c, 8 + offset);
         }
     }
     return 5;
 }
 
-size_t base32_decode(const unsigned char *coded, unsigned char *plain)
+size_t base32_decode(const unsigned char* coded, unsigned char* plain)
 {
     size_t written = 0;
-    for (size_t i = 0, j = 0; ; i += 8, j += 5) {
+    for (size_t i = 0, j = 0;; i += 8, j += 5)
+    {
         int n = decode_sequence(&coded[i], &plain[j]);
         if (n == -1)
             return 0; // <-- vMangos custom change. Completely fail if invalid char was used.

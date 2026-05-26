@@ -22,39 +22,39 @@
 #ifndef _AUCTION_HOUSE_MGR_H
 #define _AUCTION_HOUSE_MGR_H
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 #include "Common.h"
-#include "SharedDefines.h"
-#include "Policies/Singleton.h"
 #include "DBCStructure.h"
+#include "Policies/Singleton.h"
+#include "SharedDefines.h"
 
 class Item;
 class Player;
 class Unit;
 class WorldPacket;
 
-#define MIN_AUCTION_TIME (2*HOUR)
+#define MIN_AUCTION_TIME (2 * HOUR)
 
 enum AuctionError
 {
-    AUCTION_OK                          = 0,                // depends on enum AuctionAction
-    AUCTION_ERR_INVENTORY               = 1,                // depends on enum InventoryChangeResult
-    AUCTION_ERR_DATABASE                = 2,                // ERR_AUCTION_DATABASE_ERROR (default)
-    AUCTION_ERR_NOT_ENOUGH_MONEY        = 3,                // ERR_NOT_ENOUGH_MONEY
-    AUCTION_ERR_ITEM_NOT_FOUND          = 4,                // ERR_ITEM_NOT_FOUND
-    AUCTION_ERR_HIGHER_BID              = 5,                // ERR_AUCTION_HIGHER_BID
-    AUCTION_ERR_BID_INCREMENT           = 7,                // ERR_AUCTION_BID_INCREMENT
-    AUCTION_ERR_BID_OWN                 = 10,               // ERR_AUCTION_BID_OWN
-    AUCTION_ERR_RESTRICTED_ACCOUNT      = 13                // ERR_RESTRICTED_ACCOUNT
+    AUCTION_OK = 0, // depends on enum AuctionAction
+    AUCTION_ERR_INVENTORY = 1, // depends on enum InventoryChangeResult
+    AUCTION_ERR_DATABASE = 2, // ERR_AUCTION_DATABASE_ERROR (default)
+    AUCTION_ERR_NOT_ENOUGH_MONEY = 3, // ERR_NOT_ENOUGH_MONEY
+    AUCTION_ERR_ITEM_NOT_FOUND = 4, // ERR_ITEM_NOT_FOUND
+    AUCTION_ERR_HIGHER_BID = 5, // ERR_AUCTION_HIGHER_BID
+    AUCTION_ERR_BID_INCREMENT = 7, // ERR_AUCTION_BID_INCREMENT
+    AUCTION_ERR_BID_OWN = 10, // ERR_AUCTION_BID_OWN
+    AUCTION_ERR_RESTRICTED_ACCOUNT = 13 // ERR_RESTRICTED_ACCOUNT
 };
 
 enum AuctionAction
 {
-    AUCTION_STARTED     = 0,                                // ERR_AUCTION_STARTED
-    AUCTION_REMOVED     = 1,                                // ERR_AUCTION_REMOVED
-    AUCTION_BID_PLACED  = 2                                 // ERR_AUCTION_BID_PLACED
+    AUCTION_STARTED = 0, // ERR_AUCTION_STARTED
+    AUCTION_REMOVED = 1, // ERR_AUCTION_REMOVED
+    AUCTION_BID_PLACED = 2 // ERR_AUCTION_BID_PLACED
 };
 
 enum AuctionClientQueryType
@@ -71,15 +71,15 @@ struct AuctionEntry
     uint32 itemTemplate;
     uint32 owner;
     uint32 ownerAccount;
-    uint32 startbid;                                        // maybe useless
+    uint32 startbid; // maybe useless
     uint32 bid;
     uint32 buyout;
     std::string lockedIpAddress;
     time_t depositTime;
     time_t expireTime;
     uint32 bidder;
-    uint32 deposit;                                         // deposit can be calculated only when creating auction
-    AuctionHouseEntry const* auctionHouseEntry;             // in AuctionHouse.dbc
+    uint32 deposit; // deposit can be calculated only when creating auction
+    AuctionHouseEntry const* auctionHouseEntry; // in AuctionHouse.dbc
 
     // helpers
     uint32 GetHouseId() const { return auctionHouseEntry->houseId; }
@@ -104,99 +104,98 @@ struct AuctionHouseClientQuery
     std::vector<uint32> outbiddedAuctionIds;
 };
 
-//this class is used as auctionhouse instance
+// this class is used as auctionhouse instance
 class AuctionHouseObject
 {
-    public:
-        AuctionHouseObject() {}
-        ~AuctionHouseObject()
-        {
-            for (const auto& itr : AuctionsMap)
-                delete itr.second;
-        }
+public:
+    AuctionHouseObject() {}
+    ~AuctionHouseObject()
+    {
+        for (const auto& itr : AuctionsMap)
+            delete itr.second;
+    }
 
-        typedef std::map<uint32, AuctionEntry*> AuctionEntryMap;
-        typedef std::multimap<uint32, AuctionEntry*> AuctionMultiMap;
+    typedef std::map<uint32, AuctionEntry*> AuctionEntryMap;
+    typedef std::multimap<uint32, AuctionEntry*> AuctionMultiMap;
 
-        uint32 GetCount() { return AuctionsMap.size(); }
+    uint32 GetCount() { return AuctionsMap.size(); }
 
-        AuctionEntryMap *GetAuctions() { return &AuctionsMap; }
+    AuctionEntryMap* GetAuctions() { return &AuctionsMap; }
 
-        void AddAuction(AuctionEntry* ah);
+    void AddAuction(AuctionEntry* ah);
 
-        AuctionEntry* GetAuction(uint32 id) const
-        {
-            AuctionEntryMap::const_iterator itr = AuctionsMap.find(id);
-            return itr != AuctionsMap.end() ? itr->second : nullptr;
-        }
+    AuctionEntry* GetAuction(uint32 id) const
+    {
+        AuctionEntryMap::const_iterator itr = AuctionsMap.find(id);
+        return itr != AuctionsMap.end() ? itr->second : nullptr;
+    }
 
-        bool RemoveAuction(AuctionEntry* entry);
+    bool RemoveAuction(AuctionEntry* entry);
 
-        void Update();
+    void Update();
 
-        void BuildListBidderItems(WorldPacket& data, Player* player, uint32 listfrom, uint32& count, uint32& totalcount);
-        void BuildListOwnerItems(WorldPacket& data, Player* player, uint32 listfrom, uint32& count, uint32& totalcount);
-        void BuildListAuctionItems(WorldPacket& data, Player* player,
-                AuctionHouseClientQuery const& query,
-            uint32& count, uint32& totalcount);
-        uint32 GetAccountAuctionCount(uint32 accountId) { return AccountAuctionMap.count(accountId); }
-    private:
-        // Map BUYOUT prices to entry for pre-sorted results. We maintain it in
-        // a map rather than build the list on query for performance reasons.
-        // Similarly, maintain a map of account ID -> auction entry
-        AuctionMultiMap OrderedAuctionMap;
-        AuctionMultiMap AccountAuctionMap;
-        AuctionEntryMap AuctionsMap;
+    void BuildListBidderItems(WorldPacket& data, Player* player, uint32 listfrom, uint32& count, uint32& totalcount);
+    void BuildListOwnerItems(WorldPacket& data, Player* player, uint32 listfrom, uint32& count, uint32& totalcount);
+    void BuildListAuctionItems(WorldPacket& data, Player* player, AuctionHouseClientQuery const& query, uint32& count, uint32& totalcount);
+    uint32 GetAccountAuctionCount(uint32 accountId) { return AccountAuctionMap.count(accountId); }
+
+private:
+    // Map BUYOUT prices to entry for pre-sorted results. We maintain it in
+    // a map rather than build the list on query for performance reasons.
+    // Similarly, maintain a map of account ID -> auction entry
+    AuctionMultiMap OrderedAuctionMap;
+    AuctionMultiMap AccountAuctionMap;
+    AuctionEntryMap AuctionsMap;
 };
 
 class AuctionHouseMgr
 {
-    public:
-        AuctionHouseMgr();
-        ~AuctionHouseMgr();
+public:
+    AuctionHouseMgr();
+    ~AuctionHouseMgr();
 
-        typedef std::unordered_map<uint32, Item*> ItemMap;
+    typedef std::unordered_map<uint32, Item*> ItemMap;
 
-        AuctionHouseObject* GetAuctionsMap(AuctionHouseEntry const* house);
+    AuctionHouseObject* GetAuctionsMap(AuctionHouseEntry const* house);
 
-        Item* GetAItem(uint32 id)
+    Item* GetAItem(uint32 id)
+    {
+        ItemMap::const_iterator itr = mAitems.find(id);
+        if (itr != mAitems.end())
         {
-            ItemMap::const_iterator itr = mAitems.find(id);
-            if (itr != mAitems.end())
-            {
-                return itr->second;
-            }
-            return nullptr;
+            return itr->second;
         }
+        return nullptr;
+    }
 
-        //auction messages
-        void SendAuctionWonMail(AuctionEntry* auction);
-        void SendAuctionSuccessfulMail(AuctionEntry* auction);
-        void SendAuctionExpiredMail(AuctionEntry* auction);
-        static uint32 GetAuctionDeposit(AuctionHouseEntry const* entry, uint32 time, Item* pItem);
+    // auction messages
+    void SendAuctionWonMail(AuctionEntry* auction);
+    void SendAuctionSuccessfulMail(AuctionEntry* auction);
+    void SendAuctionExpiredMail(AuctionEntry* auction);
+    static uint32 GetAuctionDeposit(AuctionHouseEntry const* entry, uint32 time, Item* pItem);
 
-        static uint32 GetAuctionHouseId(uint32 factionTemplateId);
-        static uint32 GetAuctionHouseTeam(AuctionHouseEntry const* house);
-        static AuctionHouseEntry const* GetAuctionHouseEntry(Unit* unit);
-        static AuctionHouseEntry const* GetAuctionHouseEntry(uint32 factionId);
+    static uint32 GetAuctionHouseId(uint32 factionTemplateId);
+    static uint32 GetAuctionHouseTeam(AuctionHouseEntry const* house);
+    static AuctionHouseEntry const* GetAuctionHouseEntry(Unit* unit);
+    static AuctionHouseEntry const* GetAuctionHouseEntry(uint32 factionId);
 
-    public:
-        //load first auction items, because of check if item exists, when loading
-        void LoadAuctionItems();
-        void LoadAuctions();
-        void LoadAuctionHouses();
+public:
+    // load first auction items, because of check if item exists, when loading
+    void LoadAuctionItems();
+    void LoadAuctions();
+    void LoadAuctionHouses();
 
-        void AddAItem(Item* it);
-        bool RemoveAItem(uint32 id);
+    void AddAItem(Item* it);
+    bool RemoveAItem(uint32 id);
 
-        void Update();
+    void Update();
 
-    private:
-        AuctionHouseObject* MakeNewAuctionHouseObject();
-        std::unordered_map<uint32, AuctionHouseObject*> m_mAuctionHouses;
-        std::vector<std::unique_ptr<AuctionHouseObject>> m_vRealAuctionHouses;
+private:
+    AuctionHouseObject* MakeNewAuctionHouseObject();
+    std::unordered_map<uint32, AuctionHouseObject*> m_mAuctionHouses;
+    std::vector<std::unique_ptr<AuctionHouseObject>> m_vRealAuctionHouses;
 
-        ItemMap             mAitems;
+    ItemMap mAitems;
 };
 
 #define sAuctionMgr MaNGOS::Singleton<AuctionHouseMgr>::Instance()

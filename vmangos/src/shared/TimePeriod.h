@@ -27,24 +27,18 @@
  */
 class ScopedTimerPeriod final
 {
-    public:
-        using Callback = std::function<void()>;
+public:
+    using Callback = std::function<void()>;
 
-        ScopedTimerPeriod(bool success, Callback cb): success_(success), cb_(std::move(cb)) {}
+    ScopedTimerPeriod(bool success, Callback cb) : success_(success), cb_(std::move(cb)) {}
 
-	    bool success() const
-        {
-            return success_;
-        }
+    bool success() const { return success_; }
 
-        ~ScopedTimerPeriod()
-        {
-            cb_();
-        }
+    ~ScopedTimerPeriod() { cb_(); }
 
-    private:
-        Callback cb_;
-        bool success_;
+private:
+    Callback cb_;
+    bool success_;
 };
 
 ScopedTimerPeriod set_time_period(std::chrono::milliseconds ms);

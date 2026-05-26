@@ -27,17 +27,17 @@
 
 class CreatureEventAIMgr
 {
-    public:
-        CreatureEventAIMgr(){};
-        ~CreatureEventAIMgr(){};
+public:
+    CreatureEventAIMgr() {};
+    ~CreatureEventAIMgr() {};
 
-        void LoadCreatureEventAI_Events();
-        void ClearEventData() { m_CreatureEventAI_Event_Map.clear(); }
+    void LoadCreatureEventAI_Events();
+    void ClearEventData() { m_CreatureEventAI_Event_Map.clear(); }
 
-        CreatureEventAI_Event_Map  const& GetCreatureEventAIMap()       const { return m_CreatureEventAI_Event_Map; }
+    CreatureEventAI_Event_Map const& GetCreatureEventAIMap() const { return m_CreatureEventAI_Event_Map; }
 
-    private:
-        CreatureEventAI_Event_Map  m_CreatureEventAI_Event_Map;
+private:
+    CreatureEventAI_Event_Map m_CreatureEventAI_Event_Map;
 };
 
 #define sEventAIMgr MaNGOS::Singleton<CreatureEventAIMgr>::Instance()

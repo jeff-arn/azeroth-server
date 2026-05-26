@@ -22,52 +22,46 @@
 #ifndef MANGOSSERVER_WORLDPACKET_H
 #define MANGOSSERVER_WORLDPACKET_H
 
-#include "Common.h"
 #include "ByteBuffer.h"
+#include "Common.h"
 
 // Note: m_opcode and size stored in platfom dependent format
 // ignore endianess until send, and converted at receive
 class WorldPacket : public ByteBuffer
 {
-    public:
-                                                            // just container for later use
-        WorldPacket()                                       : ByteBuffer(0), m_opcode(0), m_recvdTime(0)
-        {
-        }
-        explicit WorldPacket(uint16 opcode, size_t res=200) : ByteBuffer(res), m_opcode(opcode), m_recvdTime(0) { }
-                                                            // copy constructor
-        WorldPacket(WorldPacket const& packet)              : ByteBuffer(packet), m_opcode(packet.m_opcode), m_recvdTime(0)
-        {
-        }
+public:
+    // just container for later use
+    WorldPacket() : ByteBuffer(0), m_opcode(0), m_recvdTime(0) {}
+    explicit WorldPacket(uint16 opcode, size_t res = 200) : ByteBuffer(res), m_opcode(opcode), m_recvdTime(0) {}
+    // copy constructor
+    WorldPacket(WorldPacket const& packet) : ByteBuffer(packet), m_opcode(packet.m_opcode), m_recvdTime(0) {}
 
-        // TODO this std::move() is technically illegal when we want to access packet.m_opcode and m_recvdTime. (maybe make a protected .ctor with just a reference but it std::std move(buf._storage))
-        WorldPacket(WorldPacket&& packet) : ByteBuffer(std::move(packet)), m_opcode(packet.m_opcode), m_recvdTime(packet.m_recvdTime)
-        {
-        }
+    // TODO this std::move() is technically illegal when we want to access packet.m_opcode and m_recvdTime. (maybe make a protected .ctor with just a reference but it std::std move(buf._storage))
+    WorldPacket(WorldPacket&& packet) : ByteBuffer(std::move(packet)), m_opcode(packet.m_opcode), m_recvdTime(packet.m_recvdTime) {}
 
-        WorldPacket& operator=(WorldPacket&& rhs)
-        {
-            m_opcode = rhs.m_opcode;
-            m_recvdTime = rhs.m_recvdTime;
-            ByteBuffer::operator=(std::move(rhs));
-            return *this;
-        }
+    WorldPacket& operator=(WorldPacket&& rhs)
+    {
+        m_opcode = rhs.m_opcode;
+        m_recvdTime = rhs.m_recvdTime;
+        ByteBuffer::operator=(std::move(rhs));
+        return *this;
+    }
 
-        void Initialize(uint16 opcode, size_t newres=200)
-        {
-            clear();
-            _storage.reserve(newres);
-            m_opcode = opcode;
-        }
+    void Initialize(uint16 opcode, size_t newres = 200)
+    {
+        clear();
+        _storage.reserve(newres);
+        m_opcode = opcode;
+    }
 
-        uint16 GetOpcode() const { return m_opcode; }
-        void SetOpcode(uint16 opcode) { m_opcode = opcode; }
+    uint16 GetOpcode() const { return m_opcode; }
+    void SetOpcode(uint16 opcode) { m_opcode = opcode; }
 
-        uint32 GetPacketTime() const { return m_recvdTime; }
-        void FillPacketTime(uint32 t) { m_recvdTime = t; }
+    uint32 GetPacketTime() const { return m_recvdTime; }
+    void FillPacketTime(uint32 t) { m_recvdTime = t; }
 
-    protected:
-        uint16 m_opcode;
-        uint32 m_recvdTime;
+protected:
+    uint16 m_opcode;
+    uint32 m_recvdTime;
 };
 #endif

@@ -25,8 +25,8 @@ EndScriptData */
 mob_jadespine_basilisk
 EndContentData */
 
-#include "scriptPCH.h"
 #include "uldaman.h"
+#include "scriptPCH.h"
 
 /*######
  ## go_keystone_chamber
@@ -73,15 +73,12 @@ struct mob_stone_keeperAI : public ScriptedAI
         instance = (ScriptedInstance*)pCreature->GetInstanceData();
         Reset();
     }
-    
+
     ScriptedInstance* instance;
-    
+
     uint32 m_uiTrample_Timer;
 
-    void Reset() override
-    {
-        m_uiTrample_Timer = urand(4000, 9000);
-    }
+    void Reset() override { m_uiTrample_Timer = urand(4000, 9000); }
 
     void EnterEvadeMode() override
     {
@@ -114,16 +111,14 @@ struct mob_stone_keeperAI : public ScriptedAI
                 m_uiTrample_Timer = urand(4000, 10000);
             }
         }
-        else m_uiTrample_Timer -= diff;
+        else
+            m_uiTrample_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_mob_stone_keeper(Creature* pCreature)
-{
-    return new mob_stone_keeperAI(pCreature);
-}
+CreatureAI* GetAI_mob_stone_keeper(Creature* pCreature) { return new mob_stone_keeperAI(pCreature); }
 
 
 /*######
@@ -132,34 +127,28 @@ CreatureAI* GetAI_mob_stone_keeper(Creature* pCreature)
 
 struct mob_jadespine_basiliskAI : public ScriptedAI
 {
-    mob_jadespine_basiliskAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    mob_jadespine_basiliskAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 Cslumber_Timer;
 
-    void Reset() override
-    {
-        Cslumber_Timer = 2000;
-    }
+    void Reset() override { Cslumber_Timer = 2000; }
 
     void UpdateAI(uint32 const diff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             return;
         }
 
-        //Cslumber_Timer
+        // Cslumber_Timer
         if (Cslumber_Timer < diff)
         {
-            //Cast
+            // Cast
             m_creature->CastSpell(m_creature->GetVictim(), SPELL_CRYSTALLINE_SLUMBER, false);
             m_creature->GetThreatManager().modifyThreatPercent(m_creature->GetVictim(), -100);
 
-            //Stop attacking target thats asleep and pick new target
+            // Stop attacking target thats asleep and pick new target
             Cslumber_Timer = 28000;
 
             Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0);
@@ -170,16 +159,14 @@ struct mob_jadespine_basiliskAI : public ScriptedAI
             if (pTarget)
                 AttackStart(pTarget);
         }
-        else Cslumber_Timer -= diff;
+        else
+            Cslumber_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_mob_jadespine_basilisk(Creature* pCreature)
-{
-    return new mob_jadespine_basiliskAI(pCreature);
-}
+CreatureAI* GetAI_mob_jadespine_basilisk(Creature* pCreature) { return new mob_jadespine_basiliskAI(pCreature); }
 
 struct AnnoraAI : public ScriptedAI
 {
@@ -195,13 +182,9 @@ struct AnnoraAI : public ScriptedAI
     uint32 m_uiNbScorpion;
     bool isSpawned;
 
-    void Reset() override
-    {
-    }
+    void Reset() override {}
 
-    void Aggro(Unit* pWho) override
-    {
-    }
+    void Aggro(Unit* pWho) override {}
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -237,24 +220,15 @@ struct AnnoraAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_annora(Creature* pCreature)
-{
-    return new AnnoraAI(pCreature);
-}
+CreatureAI* GetAI_annora(Creature* pCreature) { return new AnnoraAI(pCreature); }
 
 // 10258 - Awaken Vault Warder (Uldaman)
 struct UldamanAwakenVaultWarderScript : SpellScript
 {
-    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final
-    {
-        unMaxTargets = 2;
-    }
+    void OnSetTargetMap(Spell* spell, SpellEffectIndex /*effIdx*/, uint32& /*targetMode*/, float& /*radius*/, uint32& unMaxTargets, bool& /*selectClosestTargets*/) const final { unMaxTargets = 2; }
 };
 
-SpellScript* GetScript_UldamanAwakenVaultWarder(SpellEntry const*)
-{
-    return new UldamanAwakenVaultWarderScript();
-}
+SpellScript* GetScript_UldamanAwakenVaultWarder(SpellEntry const*) { return new UldamanAwakenVaultWarderScript(); }
 
 void AddSC_uldaman()
 {

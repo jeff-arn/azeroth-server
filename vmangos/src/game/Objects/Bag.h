@@ -23,51 +23,50 @@
 #define MANGOS_BAG_H
 
 #include "Common.h"
-#include "ItemPrototype.h"
 #include "Item.h"
+#include "ItemPrototype.h"
 
 // Maximum 36 Slots in 1.12
 // ((CONTAINER_END - CONTAINER_FIELD_SLOT_1)/2)
-#define MAX_BAG_SIZE ((CONTAINER_END - CONTAINER_FIELD_SLOT_1)/2)
+#define MAX_BAG_SIZE ((CONTAINER_END - CONTAINER_FIELD_SLOT_1) / 2)
 
 class Bag : public Item
 {
-    public:
+public:
+    Bag();
+    ~Bag() override;
 
-        Bag();
-        ~Bag() override;
+    void AddToWorld() override;
+    void RemoveFromWorld() override;
 
-        void AddToWorld() override;
-        void RemoveFromWorld() override;
+    bool Create(uint32 guidlow, uint32 itemid, ObjectGuid ownerGuid = ObjectGuid()) override;
 
-        bool Create(uint32 guidlow, uint32 itemid, ObjectGuid ownerGuid = ObjectGuid()) override;
+    void Clear();
+    void StoreItem(uint8 slot, Item* pItem);
+    void RemoveItem(uint8 slot);
 
-        void Clear();
-        void StoreItem(uint8 slot, Item *pItem);
-        void RemoveItem(uint8 slot);
+    Item* GetItemByPos(uint8 slot) const;
+    Item* GetItemByEntry(uint32 item) const;
+    uint32 GetItemCount(uint32 item, Item const* eItem = nullptr) const;
 
-        Item* GetItemByPos(uint8 slot) const;
-        Item* GetItemByEntry(uint32 item) const;
-        uint32 GetItemCount(uint32 item, Item const* eItem = nullptr) const;
+    uint8 GetSlotByItemGUID(ObjectGuid guid) const;
+    bool IsEmpty() const;
+    uint32 GetFreeSlots() const;
+    uint32 GetBagSize() const { return GetUInt32Value(CONTAINER_FIELD_NUM_SLOTS); }
 
-        uint8 GetSlotByItemGUID(ObjectGuid guid) const;
-        bool IsEmpty() const;
-        uint32 GetFreeSlots() const;
-        uint32 GetBagSize() const { return GetUInt32Value(CONTAINER_FIELD_NUM_SLOTS); }
+    // DB operations
+    // overwrite virtual Item::SaveToDB
+    void SaveToDB() override;
+    // overwrite virtual Item::LoadFromDB
+    bool LoadFromDB(uint32 guidLow, ObjectGuid ownerGuid, Field* fields, uint32 entry) override;
+    // overwrite virtual Item::DeleteFromDB
+    void DeleteFromDB() override;
 
-        // DB operations
-        // overwrite virtual Item::SaveToDB
-        void SaveToDB() override;
-        // overwrite virtual Item::LoadFromDB
-        bool LoadFromDB(uint32 guidLow, ObjectGuid ownerGuid, Field* fields, uint32 entry) override;
-        // overwrite virtual Item::DeleteFromDB
-        void DeleteFromDB() override;
+    void BuildCreateUpdateBlockForPlayer(UpdateData& data, Player* target) const override;
 
-        void BuildCreateUpdateBlockForPlayer(UpdateData& data, Player* target) const override;
-    protected:
-
-        // Bag Storage space
-        Item* m_bagslot[MAX_BAG_SIZE];
+protected:
+    // Bag Storage space
+    Item* m_bagslot[MAX_BAG_SIZE];
 };
 
 inline Item* NewItemOrBag(ItemPrototype const* proto)

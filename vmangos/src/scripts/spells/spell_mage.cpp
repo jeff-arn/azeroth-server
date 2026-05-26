@@ -28,7 +28,7 @@ struct MageColdSnapScript : SpellScript
                 return false;
 
             // immediately finishes the cooldown on Frost spells
-            auto cdCheck = [](SpellEntry const & spellEntry) -> bool
+            auto cdCheck = [](SpellEntry const& spellEntry) -> bool
             {
                 if (spellEntry.SpellFamilyName != SPELLFAMILY_MAGE)
                     return false;
@@ -42,21 +42,18 @@ struct MageColdSnapScript : SpellScript
     }
 };
 
-SpellScript* GetScript_MageColdSnap(SpellEntry const*)
-{
-    return new MageColdSnapScript();
-}
+SpellScript* GetScript_MageColdSnap(SpellEntry const*) { return new MageColdSnapScript(); }
 
 // 11119, 11120, 12846, 12847, 12848 - Ignite
 struct MageIgniteScript : public AuraScript
 {
     enum
     {
-        SPELL_DOT           = 12654,
+        SPELL_DOT = 12654,
         SPELL_TALENT_RANK_1 = 11119,
         SPELL_TALENT_RANK_2 = 11120,
         SPELL_TALENT_RANK_3 = 12846,
-        SPELL_TALENT_RANK_4 = 12847, 
+        SPELL_TALENT_RANK_4 = 12847,
         SPELL_TALENT_RANK_5 = 12848,
     };
 
@@ -67,24 +64,24 @@ struct MageIgniteScript : public AuraScript
 
         switch (triggeredByAura->GetSpellProto()->Id)
         {
-            case SPELL_TALENT_RANK_1:
-                basePoints[0] = int32(0.04f * totalDamage);
-                break;
-            case SPELL_TALENT_RANK_2:
-                basePoints[0] = int32(0.08f * totalDamage);
-                break;
-            case SPELL_TALENT_RANK_3:
-                basePoints[0] = int32(0.12f * totalDamage);
-                break;
-            case SPELL_TALENT_RANK_4:
-                basePoints[0] = int32(0.16f * totalDamage);
-                break;
-            case SPELL_TALENT_RANK_5:
-                basePoints[0] = int32(0.20f * totalDamage);
-                break;
-            default:
-                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "MageIgniteScript: non handled spell id: %u", triggeredByAura->GetId());
-                return SPELL_AURA_PROC_FAILED;
+        case SPELL_TALENT_RANK_1:
+            basePoints[0] = int32(0.04f * totalDamage);
+            break;
+        case SPELL_TALENT_RANK_2:
+            basePoints[0] = int32(0.08f * totalDamage);
+            break;
+        case SPELL_TALENT_RANK_3:
+            basePoints[0] = int32(0.12f * totalDamage);
+            break;
+        case SPELL_TALENT_RANK_4:
+            basePoints[0] = int32(0.16f * totalDamage);
+            break;
+        case SPELL_TALENT_RANK_5:
+            basePoints[0] = int32(0.20f * totalDamage);
+            break;
+        default:
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "MageIgniteScript: non handled spell id: %u", triggeredByAura->GetId());
+            return SPELL_AURA_PROC_FAILED;
         }
 
         // Get current Ignite Aura if exist
@@ -92,7 +89,7 @@ struct MageIgniteScript : public AuraScript
 
         if (igniteAura)
         {
-            Modifier *igniteModifier = igniteAura->GetModifier();
+            Modifier* igniteModifier = igniteAura->GetModifier();
             SpellAuraHolder* igniteHolder = igniteAura->GetHolder();
 
             int32 tickDamage = igniteModifier->m_amount;
@@ -128,10 +125,7 @@ struct MageIgniteScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_MageIgnite(SpellEntry const*)
-{
-    return new MageIgniteScript();
-}
+AuraScript* GetScript_MageIgnite(SpellEntry const*) { return new MageIgniteScript(); }
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_10_2
 
@@ -149,7 +143,7 @@ struct MageCombustionProcScript : public AuraScript
         // does not proc if no target is affected (aoe like flamestrike)
         if (!pVictim)
             return SPELL_AURA_PROC_FAILED;
-        
+
         // combustion counter was dispelled or clicked off
         if (!pOwner->HasAura(SPELL_COMBUSTION_CRIT_BUFF))
         {
@@ -163,16 +157,13 @@ struct MageCombustionProcScript : public AuraScript
             pOwner->RemoveAurasDueToSpell(SPELL_COMBUSTION_CRIT_BUFF); // remove Combustion auras
             return SPELL_AURA_PROC_OK; // charge counting (will be removed)
         }
-        
+
         pOwner->CastSpell(pOwner, SPELL_COMBUSTION_CRIT_BUFF, true, nullptr, triggeredByAura);
         return (procEx & PROC_EX_CRITICAL_HIT) ? SPELL_AURA_PROC_OK : SPELL_AURA_PROC_FAILED; // charge update only at crit hits, no hidden cooldowns
     }
 };
 
-AuraScript* GetScript_MageCombustionProc(SpellEntry const*)
-{
-    return new MageCombustionProcScript();
-}
+AuraScript* GetScript_MageCombustionProc(SpellEntry const*) { return new MageCombustionProcScript(); }
 
 // 28682 - Combustion (visible crit buff, triggered by 11129)
 struct MageCombustionBuffScript : public AuraScript
@@ -185,10 +176,7 @@ struct MageCombustionBuffScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_MageCombustionBuff(SpellEntry const*)
-{
-    return new MageCombustionBuffScript();
-}
+AuraScript* GetScript_MageCombustionBuff(SpellEntry const*) { return new MageCombustionBuffScript(); }
 
 #endif
 

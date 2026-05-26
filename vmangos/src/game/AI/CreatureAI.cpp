@@ -20,26 +20,17 @@
  */
 
 #include "CreatureAI.h"
+#include <unordered_set>
 #include "Creature.h"
 #include "DBCStores.h"
-#include "Totem.h"
+#include "Group.h"
 #include "ObjectMgr.h"
 #include "ScriptMgr.h"
-#include "Group.h"
-#include <unordered_set>
+#include "Totem.h"
 
-CreatureAI::CreatureAI(Creature* creature) :
-    m_creature(creature), m_bUseAiAtControl(false),
-    m_bMeleeAttack(!creature->HasStaticFlag(CREATURE_STATIC_FLAG_NO_MELEE)),
-    m_bCombatMovement(!creature->HasStaticFlag(CREATURE_STATIC_FLAG_SESSILE)),
-    m_uiCastingDelay(0), m_uLastAlertTime(0)
-{
-    SetSpellsList(creature->GetCreatureInfo()->spell_list_id);
-}
+CreatureAI::CreatureAI(Creature* creature) : m_creature(creature), m_bUseAiAtControl(false), m_bMeleeAttack(!creature->HasStaticFlag(CREATURE_STATIC_FLAG_NO_MELEE)), m_bCombatMovement(!creature->HasStaticFlag(CREATURE_STATIC_FLAG_SESSILE)), m_uiCastingDelay(0), m_uLastAlertTime(0) { SetSpellsList(creature->GetCreatureInfo()->spell_list_id); }
 
-CreatureAI::~CreatureAI()
-{
-}
+CreatureAI::~CreatureAI() {}
 
 void CreatureAI::JustRespawned()
 {
@@ -73,10 +64,7 @@ void CreatureAI::AttackStart(Unit* pVictim)
     }
 }
 
-SpellCastResult CreatureAI::DoCastSpellIfCan(Unit* pTarget, uint32 uiSpell, uint32 uiCastFlags)
-{
-    return m_creature->TryToCast(pTarget, uiSpell, uiCastFlags, 100);
-}
+SpellCastResult CreatureAI::DoCastSpellIfCan(Unit* pTarget, uint32 uiSpell, uint32 uiCastFlags) { return m_creature->TryToCast(pTarget, uiSpell, uiCastFlags, 100); }
 
 void CreatureAI::SetSpellsList(uint32 entry)
 {
@@ -130,7 +118,7 @@ void CreatureAI::DoSpellsListCasts(uint32 const uiDiff)
             {
                 if (bDontCast || m_creature->IsNonMeleeSpellCasted(false))
                     continue;
-            } 
+            }
 
             // Checked on startup.
             SpellEntry const* pSpellInfo = sSpellMgr.GetSpellEntry(spell.spellId);
@@ -138,10 +126,10 @@ void CreatureAI::DoSpellsListCasts(uint32 const uiDiff)
             Unit* pTarget = ToUnit(GetTargetByType(m_creature, m_creature, m_creature->GetMap(), spell.castTarget, spell.targetParam1, spell.targetParam2, pSpellInfo));
 
             SpellCastResult result = m_creature->TryToCast(pTarget, pSpellInfo, spell.castFlags, spell.probability);
-            
+
             switch (result)
             {
-                case SPELL_CAST_OK:
+            case SPELL_CAST_OK:
                 {
                     bDontCast = !(spell.castFlags & CF_TRIGGERED);
                     spell.cooldown = urand(spell.delayRepeatMin, spell.delayRepeatMax);
@@ -160,13 +148,13 @@ void CreatureAI::DoSpellsListCasts(uint32 const uiDiff)
                         m_creature->GetMap()->ScriptsStart(sCreatureSpellScripts, spell.scriptId, m_creature->GetObjectGuid(), pTarget->GetObjectGuid());
                     break;
                 }
-                case SPELL_FAILED_FLEEING:
-                case SPELL_FAILED_SPELL_IN_PROGRESS:
+            case SPELL_FAILED_FLEEING:
+            case SPELL_FAILED_SPELL_IN_PROGRESS:
                 {
                     // Do nothing so it will try again on next update.
                     break;
                 }
-                case SPELL_FAILED_TRY_AGAIN:
+            case SPELL_FAILED_TRY_AGAIN:
                 {
                     // Chance roll failed, so we reset cooldown.
                     spell.cooldown = urand(spell.delayRepeatMin, spell.delayRepeatMax);
@@ -177,7 +165,7 @@ void CreatureAI::DoSpellsListCasts(uint32 const uiDiff)
                     }
                     break;
                 }
-                default:
+            default:
                 {
                     // other error
                     if (spell.castFlags & CF_MAIN_RANGED_SPELL)
@@ -235,10 +223,7 @@ void CreatureAI::DoCastAOE(uint32 spellId, bool triggered)
     m_creature->CastSpell((Unit*)nullptr, spellId, triggered);
 }
 
-bool CreatureAI::DoMeleeAttackIfReady()
-{
-    return m_bMeleeAttack ? m_creature->UpdateMeleeAttackingState() : false;
-}
+bool CreatureAI::DoMeleeAttackIfReady() { return m_bMeleeAttack ? m_creature->UpdateMeleeAttackingState() : false; }
 
 void CreatureAI::SetMeleeAttack(bool enabled)
 {
@@ -248,12 +233,12 @@ void CreatureAI::SetMeleeAttack(bool enabled)
     m_bMeleeAttack = enabled;
 
     if (Unit* pVictim = m_creature->GetVictim())
-    { 
+    {
         if (enabled)
         {
             m_creature->AddUnitState(UNIT_STATE_MELEE_ATTACKING);
             m_creature->SendMeleeAttackStart(pVictim);
-        } 
+        }
         else
         {
             m_creature->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
@@ -280,7 +265,7 @@ void CreatureAI::SetCombatMovement(bool enabled)
         {
             m_creature->GetMotionMaster()->MovementExpired(false);
             m_creature->GetMotionMaster()->MoveChase(pVictim);
-        }  
+        }
     }
 }
 

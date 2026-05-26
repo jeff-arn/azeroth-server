@@ -22,59 +22,59 @@
 #ifndef _ACCDATA_H
 #define _ACCDATA_H
 
+#include <string>
 #include "Common.h"
 #include "Policies/Singleton.h"
-#include <string>
 
 namespace OldAccountData // 1.8 and earlier
 {
     enum AccountDataType
     {
-        GLOBAL_CONFIG_CACHE             = 0,                    // 0x01 g
-        GLOBAL_BINDINGS_CACHE           = 1,                    // 0x04 g
-        GLOBAL_MACROS_CACHE             = 2,                    // 0x08 g
-        PER_CHARACTER_LAYOUT_CACHE      = 3,                    // 0x10 p
-        PER_CHARACTER_CHAT_CACHE        = 4,                    // 0x20 p
-        NUM_ACCOUNT_DATA_TYPES          = 5
+        GLOBAL_CONFIG_CACHE = 0, // 0x01 g
+        GLOBAL_BINDINGS_CACHE = 1, // 0x04 g
+        GLOBAL_MACROS_CACHE = 2, // 0x08 g
+        PER_CHARACTER_LAYOUT_CACHE = 3, // 0x10 p
+        PER_CHARACTER_CHAT_CACHE = 4, // 0x20 p
+        NUM_ACCOUNT_DATA_TYPES = 5
     };
 
     constexpr uint32 GLOBAL_CACHE_MASK = 0xD;
     constexpr uint32 PER_CHARACTER_CACHE_MASK = 0x30;
-}
+} // namespace OldAccountData
 
 namespace NewAccountData // 1.9 and later
 {
     enum AccountDataType
     {
-        GLOBAL_CONFIG_CACHE             = 0,                    // 0x01 g
-        PER_CHARACTER_CONFIG_CACHE      = 1,                    // 0x02 p
-        GLOBAL_BINDINGS_CACHE           = 2,                    // 0x04 g
-        PER_CHARACTER_BINDINGS_CACHE    = 3,                    // 0x08 p
-        GLOBAL_MACROS_CACHE             = 4,                    // 0x10 g
-        PER_CHARACTER_MACROS_CACHE      = 5,                    // 0x20 p
-        PER_CHARACTER_LAYOUT_CACHE      = 6,                    // 0x40 p
-        PER_CHARACTER_CHAT_CACHE        = 7,                    // 0x80 p
-        NUM_ACCOUNT_DATA_TYPES          = 8
+        GLOBAL_CONFIG_CACHE = 0, // 0x01 g
+        PER_CHARACTER_CONFIG_CACHE = 1, // 0x02 p
+        GLOBAL_BINDINGS_CACHE = 2, // 0x04 g
+        PER_CHARACTER_BINDINGS_CACHE = 3, // 0x08 p
+        GLOBAL_MACROS_CACHE = 4, // 0x10 g
+        PER_CHARACTER_MACROS_CACHE = 5, // 0x20 p
+        PER_CHARACTER_LAYOUT_CACHE = 6, // 0x40 p
+        PER_CHARACTER_CHAT_CACHE = 7, // 0x80 p
+        NUM_ACCOUNT_DATA_TYPES = 8
     };
 
     constexpr uint32 GLOBAL_CACHE_MASK = 0x15;
     constexpr uint32 PER_CHARACTER_CACHE_MASK = 0xEA;
-}
+} // namespace NewAccountData
 
 inline NewAccountData::AccountDataType ConvertOldAccountDataToNew(uint32 index)
 {
     switch (index)
     {
-        case OldAccountData::GLOBAL_CONFIG_CACHE:
-            return NewAccountData::GLOBAL_CONFIG_CACHE;
-        case OldAccountData::GLOBAL_BINDINGS_CACHE:
-            return NewAccountData::GLOBAL_BINDINGS_CACHE;
-        case OldAccountData::GLOBAL_MACROS_CACHE:
-            return NewAccountData::GLOBAL_MACROS_CACHE;
-        case OldAccountData::PER_CHARACTER_LAYOUT_CACHE:
-            return NewAccountData::PER_CHARACTER_LAYOUT_CACHE;
-        case OldAccountData::PER_CHARACTER_CHAT_CACHE:
-            return NewAccountData::PER_CHARACTER_CHAT_CACHE;
+    case OldAccountData::GLOBAL_CONFIG_CACHE:
+        return NewAccountData::GLOBAL_CONFIG_CACHE;
+    case OldAccountData::GLOBAL_BINDINGS_CACHE:
+        return NewAccountData::GLOBAL_BINDINGS_CACHE;
+    case OldAccountData::GLOBAL_MACROS_CACHE:
+        return NewAccountData::GLOBAL_MACROS_CACHE;
+    case OldAccountData::PER_CHARACTER_LAYOUT_CACHE:
+        return NewAccountData::PER_CHARACTER_LAYOUT_CACHE;
+    case OldAccountData::PER_CHARACTER_CHAT_CACHE:
+        return NewAccountData::PER_CHARACTER_CHAT_CACHE;
     }
     return NewAccountData::NUM_ACCOUNT_DATA_TYPES;
 }
@@ -83,16 +83,16 @@ inline OldAccountData::AccountDataType ConvertNewAccountDataToOld(uint32 index)
 {
     switch (index)
     {
-        case NewAccountData::GLOBAL_CONFIG_CACHE:
-            return OldAccountData::GLOBAL_CONFIG_CACHE;
-        case NewAccountData::GLOBAL_BINDINGS_CACHE:
-            return OldAccountData::GLOBAL_BINDINGS_CACHE;
-        case NewAccountData::GLOBAL_MACROS_CACHE:
-            return OldAccountData::GLOBAL_MACROS_CACHE;
-        case NewAccountData::PER_CHARACTER_LAYOUT_CACHE:
-            return OldAccountData::PER_CHARACTER_LAYOUT_CACHE;
-        case NewAccountData::PER_CHARACTER_CHAT_CACHE:
-            return OldAccountData::PER_CHARACTER_CHAT_CACHE;
+    case NewAccountData::GLOBAL_CONFIG_CACHE:
+        return OldAccountData::GLOBAL_CONFIG_CACHE;
+    case NewAccountData::GLOBAL_BINDINGS_CACHE:
+        return OldAccountData::GLOBAL_BINDINGS_CACHE;
+    case NewAccountData::GLOBAL_MACROS_CACHE:
+        return OldAccountData::GLOBAL_MACROS_CACHE;
+    case NewAccountData::PER_CHARACTER_LAYOUT_CACHE:
+        return OldAccountData::PER_CHARACTER_LAYOUT_CACHE;
+    case NewAccountData::PER_CHARACTER_CHAT_CACHE:
+        return OldAccountData::PER_CHARACTER_CHAT_CACHE;
     }
     return OldAccountData::NUM_ACCOUNT_DATA_TYPES;
 }

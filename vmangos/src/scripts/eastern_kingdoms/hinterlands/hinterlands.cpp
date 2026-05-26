@@ -34,19 +34,19 @@ EndContentData */
 
 enum RinjiData
 {
-    SAY_RIN_FREE            = 3787,
-    SAY_RIN_BY_OUTRUNNER    = 3827,
-    SAY_RIN_HELP_1          = 3862,
-    SAY_RIN_HELP_2          = 3861,
-    SAY_RIN_COMPLETE        = 3790,
-    SAY_RIN_PROGRESS_1      = 3817,
-    SAY_RIN_PROGRESS_2      = 3818,
+    SAY_RIN_FREE = 3787,
+    SAY_RIN_BY_OUTRUNNER = 3827,
+    SAY_RIN_HELP_1 = 3862,
+    SAY_RIN_HELP_2 = 3861,
+    SAY_RIN_COMPLETE = 3790,
+    SAY_RIN_PROGRESS_1 = 3817,
+    SAY_RIN_PROGRESS_2 = 3818,
 
-    QUEST_RINJI_TRAPPED     = 2742,
-    NPC_RANGER              = 2694,
-    NPC_OUTRUNNER           = 2691,
-    GO_RINJI_CAGE           = 142036,
-    FACTION_ESCORTEE        = 33,
+    QUEST_RINJI_TRAPPED = 2742,
+    NPC_RANGER = 2694,
+    NPC_OUTRUNNER = 2691,
+    GO_RINJI_CAGE = 142036,
+    FACTION_ESCORTEE = 33,
 };
 
 struct Location
@@ -54,17 +54,9 @@ struct Location
     float m_fX, m_fY, m_fZ;
 };
 
-Location m_afAmbushSpawn[] =
-{
-    {191.29620f, -2839.329346f, 107.388f},
-    {70.972466f, -2848.674805f, 109.459f}
-};
+Location m_afAmbushSpawn[] = {{191.29620f, -2839.329346f, 107.388f}, {70.972466f, -2848.674805f, 109.459f}};
 
-Location m_afAmbushMoveTo[] =
-{
-    {166.63038f, -2824.780273f, 108.153f},
-    {70.886589f,  -2874.335449f, 116.675f}
-};
+Location m_afAmbushMoveTo[] = {{166.63038f, -2824.780273f, 108.153f}, {70.886589f, -2874.335449f, 116.675f}};
 
 struct npc_rinjiAI : public npc_escortAI
 {
@@ -107,7 +99,7 @@ struct npc_rinjiAI : public npc_escortAI
             if (urand(0, 3))
                 return;
 
-            //only if attacked and escorter is not in combat?
+            // only if attacked and escorter is not in combat?
             DoScriptText(urand(0, 1) ? SAY_RIN_HELP_1 : SAY_RIN_HELP_2, m_creature);
         }
     }
@@ -117,15 +109,11 @@ struct npc_rinjiAI : public npc_escortAI
         if (!bFirst)
             m_iSpawnId = 1;
 
-        m_creature->SummonCreature(NPC_RANGER,
-                                   m_afAmbushSpawn[m_iSpawnId].m_fX, m_afAmbushSpawn[m_iSpawnId].m_fY, m_afAmbushSpawn[m_iSpawnId].m_fZ, 0.0f,
-                                   TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 60000);
+        m_creature->SummonCreature(NPC_RANGER, m_afAmbushSpawn[m_iSpawnId].m_fX, m_afAmbushSpawn[m_iSpawnId].m_fY, m_afAmbushSpawn[m_iSpawnId].m_fZ, 0.0f, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 60000);
 
         for (int i = 0; i < 2; ++i)
         {
-            m_creature->SummonCreature(NPC_OUTRUNNER,
-                                       m_afAmbushSpawn[m_iSpawnId].m_fX, m_afAmbushSpawn[m_iSpawnId].m_fY, m_afAmbushSpawn[m_iSpawnId].m_fZ, 0.0f,
-                                       TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 60000);
+            m_creature->SummonCreature(NPC_OUTRUNNER, m_afAmbushSpawn[m_iSpawnId].m_fX, m_afAmbushSpawn[m_iSpawnId].m_fY, m_afAmbushSpawn[m_iSpawnId].m_fZ, 0.0f, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 60000);
         }
     }
 
@@ -144,27 +132,27 @@ struct npc_rinjiAI : public npc_escortAI
 
         switch (uiPointId)
         {
-            case 1:
-                DoScriptText(SAY_RIN_FREE, m_creature, pPlayer);
-                break;
-            case 7:
-                DoSpawnAmbush(true);
-                break;
-            case 13:
-                DoSpawnAmbush(false);
-                break;
-            case 17:
-                DoScriptText(SAY_RIN_COMPLETE, m_creature, pPlayer);
-                pPlayer->GroupEventHappens(QUEST_RINJI_TRAPPED, m_creature);
-                SetRun();
-                m_uiPostEventCount = 1;
-                break;
+        case 1:
+            DoScriptText(SAY_RIN_FREE, m_creature, pPlayer);
+            break;
+        case 7:
+            DoSpawnAmbush(true);
+            break;
+        case 13:
+            DoSpawnAmbush(false);
+            break;
+        case 17:
+            DoScriptText(SAY_RIN_COMPLETE, m_creature, pPlayer);
+            pPlayer->GroupEventHappens(QUEST_RINJI_TRAPPED, m_creature);
+            SetRun();
+            m_uiPostEventCount = 1;
+            break;
         }
     }
 
     void UpdateEscortAI(uint32 const uiDiff) override
     {
-        //Check if we have a current target
+        // Check if we have a current target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             if (HasEscortState(STATE_ESCORT_ESCORTING) && m_uiPostEventCount)
@@ -177,14 +165,14 @@ struct npc_rinjiAI : public npc_escortAI
                     {
                         switch (m_uiPostEventCount)
                         {
-                            case 1:
-                                DoScriptText(SAY_RIN_PROGRESS_1, m_creature, pPlayer);
-                                ++m_uiPostEventCount;
-                                break;
-                            case 2:
-                                DoScriptText(SAY_RIN_PROGRESS_2, m_creature, pPlayer);
-                                m_uiPostEventCount = 0;
-                                break;
+                        case 1:
+                            DoScriptText(SAY_RIN_PROGRESS_1, m_creature, pPlayer);
+                            ++m_uiPostEventCount;
+                            break;
+                        case 2:
+                            DoScriptText(SAY_RIN_PROGRESS_2, m_creature, pPlayer);
+                            m_uiPostEventCount = 0;
+                            break;
                         }
                     }
                     else
@@ -220,10 +208,7 @@ bool QuestAccept_npc_rinji(Player* pPlayer, Creature* pCreature, Quest const* pQ
     return true;
 }
 
-CreatureAI* GetAI_npc_rinji(Creature* pCreature)
-{
-    return new npc_rinjiAI(pCreature);
-}
+CreatureAI* GetAI_npc_rinji(Creature* pCreature) { return new npc_rinjiAI(pCreature); }
 
 /*######
 ## go_lards_picnic_basket
@@ -231,10 +216,10 @@ CreatureAI* GetAI_npc_rinji(Creature* pCreature)
 
 enum LardsPicnicBasketData
 {
-    NPC_KIDNAPPEUR_VILEBRANCH     = 14748
+    NPC_KIDNAPPEUR_VILEBRANCH = 14748
 };
 
-struct go_lards_picnic_basketAI: public GameObjectAI
+struct go_lards_picnic_basketAI : public GameObjectAI
 {
     go_lards_picnic_basketAI(GameObject* pGo) : GameObjectAI(pGo)
     {
@@ -242,7 +227,7 @@ struct go_lards_picnic_basketAI: public GameObjectAI
         state = 0;
     }
     uint32 timer;
-    bool state;//0 = usual, can launch. //1 = in use, cannot launch
+    bool state; // 0 = usual, can launch. //1 = in use, cannot launch
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -259,10 +244,7 @@ struct go_lards_picnic_basketAI: public GameObjectAI
         }
     }
 
-    bool CheckCanStartEvent()
-    {
-        return !state;
-    }
+    bool CheckCanStartEvent() { return !state; }
 
     void SetInUse()
     {
@@ -273,10 +255,7 @@ struct go_lards_picnic_basketAI: public GameObjectAI
     }
 };
 
-GameObjectAI* GetAIgo_lards_picnic_basket(GameObject *pGo)
-{
-    return new go_lards_picnic_basketAI(pGo);
-}
+GameObjectAI* GetAIgo_lards_picnic_basket(GameObject* pGo) { return new go_lards_picnic_basketAI(pGo); }
 
 bool GOHello_go_lards_picnic_basket(Player* pPlayer, GameObject* pGO)
 {

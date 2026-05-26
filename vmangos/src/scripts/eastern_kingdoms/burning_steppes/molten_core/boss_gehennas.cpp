@@ -21,15 +21,15 @@ SDComment: -
 SDCategory: Molten Core
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "molten_core.h"
+#include "scriptPCH.h"
 
 enum
 {
-    SPELL_GEHENNAS_CURSE        = 19716,
-    SPELL_RAIN_OF_FIRE          = 19717,
-    SPELL_SHADOW_BOLT_RANDOM    = 19728,
-    SPELL_SHADOW_BOLT_TARGET    = 19729,
+    SPELL_GEHENNAS_CURSE = 19716,
+    SPELL_RAIN_OF_FIRE = 19717,
+    SPELL_SHADOW_BOLT_RANDOM = 19728,
+    SPELL_SHADOW_BOLT_TARGET = 19729,
 };
 
 struct boss_gehennasAI : public ScriptedAI
@@ -115,10 +115,7 @@ struct boss_gehennasAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_gehennas(Creature* pCreature)
-{
-    return new boss_gehennasAI(pCreature);
-}
+CreatureAI* GetAI_boss_gehennas(Creature* pCreature) { return new boss_gehennasAI(pCreature); }
 
 void AddSC_boss_gehennas()
 {

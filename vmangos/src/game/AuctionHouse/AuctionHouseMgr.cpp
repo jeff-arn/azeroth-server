@@ -20,22 +20,22 @@
  */
 
 #include "AuctionHouseMgr.h"
-#include "Database/DatabaseEnv.h"
-#include "DBCStores.h"
 #include "AccountMgr.h"
-#include "Item.h"
 #include "Bag.h"
+#include "DBCStores.h"
+#include "Database/DatabaseEnv.h"
+#include "Item.h"
 #include "Language.h"
 #include "Log.h"
-#include "ObjectMgr.h"
+#include "Mail.h"
 #include "ObjectGuid.h"
+#include "ObjectMgr.h"
 #include "Player.h"
+#include "Policies/SingletonImp.h"
+#include "TransactionLog.h"
 #include "World.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "Mail.h"
-#include "TransactionLog.h"
-#include "Policies/SingletonImp.h"
 
 INSTANTIATE_SINGLETON_1(AuctionHouseMgr);
 
@@ -45,7 +45,8 @@ bool AuctionHouseObject::RemoveAuction(AuctionEntry* entry)
     auto bounds = OrderedAuctionMap.equal_range(entry->buyout);
     for (AuctionMultiMap::iterator itr = bounds.first; itr != bounds.second; ++itr)
     {
-        if (itr->second->Id == entry->Id) {
+        if (itr->second->Id == entry->Id)
+        {
             OrderedAuctionMap.erase(itr);
             break;
         }
@@ -54,7 +55,8 @@ bool AuctionHouseObject::RemoveAuction(AuctionEntry* entry)
     bounds = AccountAuctionMap.equal_range(entry->ownerAccount);
     for (AuctionMultiMap::iterator itr = bounds.first; itr != bounds.second; ++itr)
     {
-        if (itr->second->Id == entry->Id) {
+        if (itr->second->Id == entry->Id)
+        {
             AccountAuctionMap.erase(itr);
             break;
         }
@@ -76,9 +78,7 @@ void AuctionHouseObject::AddAuction(AuctionEntry* ah)
     AccountAuctionMap.insert(std::pair<uint32, AuctionEntry*>(ah->ownerAccount, ah));
 }
 
-AuctionHouseMgr::AuctionHouseMgr()
-{
-}
+AuctionHouseMgr::AuctionHouseMgr() {}
 
 AuctionHouseMgr::~AuctionHouseMgr()
 {
@@ -86,7 +86,7 @@ AuctionHouseMgr::~AuctionHouseMgr()
         delete itr.second;
 }
 
-AuctionHouseObject * AuctionHouseMgr::GetAuctionsMap(AuctionHouseEntry const* house)
+AuctionHouseObject* AuctionHouseMgr::GetAuctionsMap(AuctionHouseEntry const* house)
 {
     auto itr = m_mAuctionHouses.find(house->houseId);
     if (itr != m_mAuctionHouses.end())
@@ -95,7 +95,7 @@ AuctionHouseObject * AuctionHouseMgr::GetAuctionsMap(AuctionHouseEntry const* ho
     return nullptr;
 }
 
-uint32 AuctionHouseMgr::GetAuctionDeposit(AuctionHouseEntry const* entry, uint32 time, Item *pItem)
+uint32 AuctionHouseMgr::GetAuctionDeposit(AuctionHouseEntry const* entry, uint32 time, Item* pItem)
 {
     float deposit = float(pItem->GetProto()->SellPrice * pItem->GetCount() * (time / MIN_AUCTION_TIME));
 
@@ -112,7 +112,7 @@ uint32 AuctionHouseMgr::GetAuctionDeposit(AuctionHouseEntry const* entry, uint32
 // does not clear ram
 void AuctionHouseMgr::SendAuctionWonMail(AuctionEntry* auction)
 {
-    Item *pItem = GetAItem(auction->itemGuidLow);
+    Item* pItem = GetAItem(auction->itemGuidLow);
     if (!pItem)
         return;
 
@@ -137,7 +137,7 @@ void AuctionHouseMgr::SendAuctionWonMail(AuctionEntry* auction)
             bidder_accId = sObjectMgr.GetPlayerAccountIdByGUID(bidder_guid);
             bidder_security = sAccountMgr.GetSecurity(bidder_accId);
 
-            if (bidder_security > SEC_PLAYER)               // not do redundant DB requests
+            if (bidder_security > SEC_PLAYER) // not do redundant DB requests
             {
                 if (!sObjectMgr.GetPlayerNameByGUID(bidder_guid, bidder_name))
                     bidder_name = sObjectMgr.GetMangosStringForDBCLocale(LANG_UNKNOWN);
@@ -153,9 +153,7 @@ void AuctionHouseMgr::SendAuctionWonMail(AuctionEntry* auction)
 
             uint32 owner_accid = sObjectMgr.GetPlayerAccountIdByGUID(owner_guid);
 
-            sLog.Player(bidder_accId, LOG_GM, LOG_LVL_BASIC, 
-                "GM %s (Account: %u) won item in auction: %s (Entry: %u Count: %u) and pay money: %u. Original owner %s (Account: %u)",
-                bidder_name.c_str(), bidder_accId, pItem->GetProto()->Name1, pItem->GetEntry(), pItem->GetCount(), auction->bid, owner_name.c_str(), owner_accid);
+            sLog.Player(bidder_accId, LOG_GM, LOG_LVL_BASIC, "GM %s (Account: %u) won item in auction: %s (Entry: %u Count: %u) and pay money: %u. Original owner %s (Account: %u)", bidder_name.c_str(), bidder_accId, pItem->GetProto()->Name1, pItem->GetEntry(), pItem->GetCount(), auction->bid, owner_name.c_str(), owner_accid);
         }
     }
     else if (!bidder)
@@ -181,18 +179,16 @@ void AuctionHouseMgr::SendAuctionWonMail(AuctionEntry* auction)
         if (bidder)
             bidder->GetSession()->SendAuctionBidderNotification(auction, true);
         else
-            RemoveAItem(pItem->GetGUIDLow());               // we have to remove the item, before we delete it !!
+            RemoveAItem(pItem->GetGUIDLow()); // we have to remove the item, before we delete it !!
 
         // will delete item or place to receiver mail list
-        MailDraft(msgAuctionWonSubject.str(), msgAuctionWonBody.str())
-        .AddItem(pItem)
-        .SendMailTo(MailReceiver(bidder, bidder_guid), auction, MAIL_CHECK_MASK_COPIED);
+        MailDraft(msgAuctionWonSubject.str(), msgAuctionWonBody.str()).AddItem(pItem).SendMailTo(MailReceiver(bidder, bidder_guid), auction, MAIL_CHECK_MASK_COPIED);
     }
     // receiver not exist
     else
     {
         CharacterDatabase.PExecute("DELETE FROM `item_instance` WHERE `guid`='%u'", pItem->GetGUIDLow());
-        RemoveAItem(pItem->GetGUIDLow());                   // we have to remove the item, before we delete it !!
+        RemoveAItem(pItem->GetGUIDLow()); // we have to remove the item, before we delete it !!
         delete pItem;
     }
 }
@@ -227,13 +223,11 @@ void AuctionHouseMgr::SendAuctionSuccessfulMail(AuctionEntry* auction)
 
         if (owner)
         {
-            //send auction owner notification, bidder must be current!
+            // send auction owner notification, bidder must be current!
             owner->GetSession()->SendAuctionOwnerNotification(auction, true);
         }
 
-        MailDraft(msgAuctionSuccessfulSubject.str(), auctionSuccessfulBody.str())
-        .SetMoney(profit)
-        .SendMailTo(MailReceiver(owner, owner_guid), auction, MAIL_CHECK_MASK_COPIED);
+        MailDraft(msgAuctionSuccessfulSubject.str(), auctionSuccessfulBody.str()).SetMoney(profit).SendMailTo(MailReceiver(owner, owner_guid), auction, MAIL_CHECK_MASK_COPIED);
     }
 }
 
@@ -241,7 +235,7 @@ void AuctionHouseMgr::SendAuctionSuccessfulMail(AuctionEntry* auction)
 void AuctionHouseMgr::SendAuctionExpiredMail(AuctionEntry* auction)
 {
     // return an item in auction to its owner by mail
-    Item *pItem = GetAItem(auction->itemGuidLow);
+    Item* pItem = GetAItem(auction->itemGuidLow);
     if (!pItem)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Auction item (GUID: %u) not found, and lost.", auction->itemGuidLow);
@@ -264,18 +258,16 @@ void AuctionHouseMgr::SendAuctionExpiredMail(AuctionEntry* auction)
         if (owner)
             owner->GetSession()->SendAuctionOwnerNotification(auction, false);
         else
-            RemoveAItem(pItem->GetGUIDLow());               // we have to remove the item, before we delete it !!
+            RemoveAItem(pItem->GetGUIDLow()); // we have to remove the item, before we delete it !!
 
         // will delete item or place to receiver mail list
-        MailDraft(subject.str())
-        .AddItem(pItem)
-        .SendMailTo(MailReceiver(owner, owner_guid), auction, MAIL_CHECK_MASK_COPIED);
+        MailDraft(subject.str()).AddItem(pItem).SendMailTo(MailReceiver(owner, owner_guid), auction, MAIL_CHECK_MASK_COPIED);
     }
     // owner not found
     else
     {
         CharacterDatabase.PExecute("DELETE FROM `item_instance` WHERE `guid`='%u'", pItem->GetGUIDLow());
-        RemoveAItem(pItem->GetGUIDLow());                   // we have to remove the item, before we delete it !!
+        RemoveAItem(pItem->GetGUIDLow()); // we have to remove the item, before we delete it !!
         delete pItem;
     }
 }
@@ -329,15 +321,15 @@ void AuctionHouseMgr::LoadAuctionHouses()
 
             switch (GetAuctionHouseTeam(houseEntry))
             {
-                case ALLIANCE:
-                    m_mAuctionHouses.insert(std::make_pair(houseEntry->houseId, AllianceAuctionHouse));
-                    break;
-                case HORDE:
-                    m_mAuctionHouses.insert(std::make_pair(houseEntry->houseId, HordeAuctionHouse));
-                    break;
-                default:
-                    m_mAuctionHouses.insert(std::make_pair(houseEntry->houseId, NeutralAuctionHouse));
-                    break;
+            case ALLIANCE:
+                m_mAuctionHouses.insert(std::make_pair(houseEntry->houseId, AllianceAuctionHouse));
+                break;
+            case HORDE:
+                m_mAuctionHouses.insert(std::make_pair(houseEntry->houseId, HordeAuctionHouse));
+                break;
+            default:
+                m_mAuctionHouses.insert(std::make_pair(houseEntry->houseId, NeutralAuctionHouse));
+                break;
             }
         }
     }
@@ -378,7 +370,7 @@ void AuctionHouseMgr::LoadAuctionItems()
             continue;
         }
 
-        Item *item = NewItemOrBag(proto);
+        Item* item = NewItemOrBag(proto);
 
         if (!item->LoadFromDB(itemGuid, ObjectGuid(), fields, itemId))
         {
@@ -418,7 +410,7 @@ void AuctionHouseMgr::LoadAuctions()
 
         AuctionEntry* auction = new AuctionEntry;
         auction->Id = fields[0].GetUInt32();
-        uint32 houseId  = fields[1].GetUInt32();
+        uint32 houseId = fields[1].GetUInt32();
         auction->itemGuidLow = fields[2].GetUInt32();
         auction->itemTemplate = fields[3].GetUInt32();
         auction->owner = fields[4].GetUInt32();
@@ -429,7 +421,7 @@ void AuctionHouseMgr::LoadAuctions()
         auction->bid = fields[8].GetUInt32();
         auction->startbid = fields[9].GetUInt32();
         auction->deposit = fields[10].GetUInt32();
-        auction->auctionHouseEntry = nullptr;                  // init later
+        auction->auctionHouseEntry = nullptr; // init later
 
         auction->ownerAccount = sObjectMgr.GetPlayerAccountIdByGUID(auction->owner);
 
@@ -456,9 +448,9 @@ void AuctionHouseMgr::LoadAuctions()
             msgAuctionCanceledOwner << auction->itemTemplate << ":0:" << AUCTION_CANCELED;
 
             // item will deleted or added to received mail list
-            MailDraft(msgAuctionCanceledOwner.str(), "")    // TODO: fix body
-            .AddItem(pItem)
-            .SendMailTo(MailReceiver(ObjectGuid(HIGHGUID_PLAYER, auction->owner)), auction, MAIL_CHECK_MASK_COPIED);
+            MailDraft(msgAuctionCanceledOwner.str(), "") // TODO: fix body
+                .AddItem(pItem)
+                .SendMailTo(MailReceiver(ObjectGuid(HIGHGUID_PLAYER, auction->owner)), auction, MAIL_CHECK_MASK_COPIED);
 
             RemoveAItem(auction->itemGuidLow);
             auction->DeleteFromDB();
@@ -505,17 +497,17 @@ uint32 AuctionHouseMgr::GetAuctionHouseTeam(AuctionHouseEntry const* house)
     // so more easy just sort by auction house ids
     switch (house->houseId)
     {
-        case 1:
-        case 2:
-        case 3:
-            return ALLIANCE;
-        case 4:
-        case 5:
-        case 6:
-            return HORDE;
-        case 7:
-        default:
-            return 0;                                       // neutral
+    case 1:
+    case 2:
+    case 3:
+        return ALLIANCE;
+    case 4:
+    case 5:
+    case 6:
+        return HORDE;
+    case 7:
+    default:
+        return 0; // neutral
     }
 }
 
@@ -524,53 +516,53 @@ uint32 AuctionHouseMgr::GetAuctionHouseId(uint32 factionTemplateId)
     uint32 houseId = 1;
     switch (factionTemplateId)
     {
-        case   11:
-        case   12:
-            houseId = 1; // Human
-            break;
-        case   29:
-        case   85:
-            houseId = 6; // Orc
-            break;
-        case   55:
-        case   57:
-            houseId = 2; // Dwarf
-            break;
-        case   68:
-        case   71:
-            houseId = 4; // Undead
-            break;
-        case   79:
-        case   80:
-            houseId = 3; // Night Elf
-            break;
-        case  104:
-        case  105:
-            houseId = 5; // Tauren
-            break;
-        case  120:
-            houseId = 7; // Booty Bay
-            break;
-        case  474:
-            houseId = 7; // Gadgetzan
-            break;
-        case  534:
-            houseId = 2; // Alliance Generic
-            break;
-        case  855:
-            houseId = 7; // Everlook
-            break;
-        default:                                    // for unknown case
+    case 11:
+    case 12:
+        houseId = 1; // Human
+        break;
+    case 29:
+    case 85:
+        houseId = 6; // Orc
+        break;
+    case 55:
+    case 57:
+        houseId = 2; // Dwarf
+        break;
+    case 68:
+    case 71:
+        houseId = 4; // Undead
+        break;
+    case 79:
+    case 80:
+        houseId = 3; // Night Elf
+        break;
+    case 104:
+    case 105:
+        houseId = 5; // Tauren
+        break;
+    case 120:
+        houseId = 7; // Booty Bay
+        break;
+    case 474:
+        houseId = 7; // Gadgetzan
+        break;
+    case 534:
+        houseId = 2; // Alliance Generic
+        break;
+    case 855:
+        houseId = 7; // Everlook
+        break;
+    default: // for unknown case
         {
             FactionTemplateEntry const* u_entry = sObjectMgr.GetFactionTemplateEntry(factionTemplateId);
             if (!u_entry)
-                houseId = 7;                        // goblin auction house
+                houseId = 7; // goblin auction house
             else if (u_entry->ourMask & FACTION_MASK_ALLIANCE)
-                houseId = 1;                        // human auction house
+                houseId = 1; // human auction house
             else if (u_entry->ourMask & FACTION_MASK_HORDE)
-                houseId = 6;                        // orc auction house
+                houseId = 6; // orc auction house
             else
-                houseId = 7;                        // goblin auction house
+                houseId = 7; // goblin auction house
             break;
         }
     }
@@ -579,7 +571,7 @@ uint32 AuctionHouseMgr::GetAuctionHouseId(uint32 factionTemplateId)
 
 AuctionHouseEntry const* AuctionHouseMgr::GetAuctionHouseEntry(Unit* unit)
 {
-    uint32 houseId = 1;                                     // dwarf auction house (used for normal cut/etc percents)
+    uint32 houseId = 1; // dwarf auction house (used for normal cut/etc percents)
 
     if (!sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION))
     {
@@ -599,12 +591,12 @@ AuctionHouseEntry const* AuctionHouseMgr::GetAuctionHouseEntry(Unit* unit)
             {
                 switch (((Player*)unit)->GetTeam())
                 {
-                    case ALLIANCE:
-                        houseId = player->GetAuctionAccessMode() == 0 ? 1 : 6;
-                        break;
-                    case HORDE:
-                        houseId = player->GetAuctionAccessMode() == 0 ? 6 : 1;
-                        break;
+                case ALLIANCE:
+                    houseId = player->GetAuctionAccessMode() == 0 ? 1 : 6;
+                    break;
+                case HORDE:
+                    houseId = player->GetAuctionAccessMode() == 0 ? 6 : 1;
+                    break;
                 }
             }
         }
@@ -632,7 +624,7 @@ void AuctionHouseObject::Update()
     for (AuctionEntryMap::iterator itr = AuctionsMap.begin(); itr != AuctionsMap.end(); itr = next)
     {
         entry = itr->second;
-        if (entry->depositTime + 5*60 < curTime) // Locked for 5 minutes on IP to prevent AH snipping
+        if (entry->depositTime + 5 * 60 < curTime) // Locked for 5 minutes on IP to prevent AH snipping
             entry->lockedIpAddress.clear();
 
         next = itr;
@@ -656,9 +648,9 @@ void AuctionHouseObject::Update()
                 data.parts[1].money = entry->bid;
                 sWorld.LogTransaction(data);
 
-                //we should send an "item sold" message if the seller is online
-                //we send the item to the winner
-                //we send the money to the seller
+                // we should send an "item sold" message if the seller is online
+                // we send the item to the winner
+                // we send the money to the seller
                 sAuctionMgr.SendAuctionSuccessfulMail(entry);
                 sAuctionMgr.SendAuctionWonMail(entry);
             }
@@ -708,13 +700,10 @@ void AuctionHouseObject::BuildListOwnerItems(WorldPacket& data, Player* player, 
     }
 }
 
-void AuctionHouseObject::BuildListAuctionItems(WorldPacket& data, Player* player,
-        AuctionHouseClientQuery const& query,
-        uint32& count, uint32& totalcount)
+void AuctionHouseObject::BuildListAuctionItems(WorldPacket& data, Player* player, AuctionHouseClientQuery const& query, uint32& count, uint32& totalcount)
 {
     // Happening often, and easy to deal with
-    if (query.auctionMainCategory == 0xffffffff && query.auctionSubCategory == 0xffffffff && query.auctionSlotID == 0xffffffff &&
-        query.quality == 0xffffffff && query.levelmin == 0x00 && query.levelmax == 0x00 && query.usable == 0x00 && query.wsearchedname.empty())
+    if (query.auctionMainCategory == 0xffffffff && query.auctionSubCategory == 0xffffffff && query.auctionSlotID == 0xffffffff && query.quality == 0xffffffff && query.levelmin == 0x00 && query.levelmax == 0x00 && query.usable == 0x00 && query.wsearchedname.empty())
     {
         totalcount = OrderedAuctionMap.size();
         if (query.listfrom < totalcount)
@@ -744,7 +733,7 @@ void AuctionHouseObject::BuildListAuctionItems(WorldPacket& data, Player* player
     for (const auto& itr : OrderedAuctionMap)
     {
         AuctionEntry* auctionEntry = itr.second;
-        Item *item = sAuctionMgr.GetAItem(auctionEntry->itemGuidLow);
+        Item* item = sAuctionMgr.GetAItem(auctionEntry->itemGuidLow);
         if (!item)
             continue;
 
@@ -757,8 +746,7 @@ void AuctionHouseObject::BuildListAuctionItems(WorldPacket& data, Player* player
             if (query.auctionSubCategory != 0xffffffff && proto->SubClass != query.auctionSubCategory)
                 continue;
 
-            if (query.auctionSlotID != 0xffffffff && proto->InventoryType != query.auctionSlotID &&
-                    (query.auctionSlotID != INVTYPE_CHEST || (query.auctionSlotID == INVTYPE_CHEST && proto->InventoryType != INVTYPE_ROBE)))
+            if (query.auctionSlotID != 0xffffffff && proto->InventoryType != query.auctionSlotID && (query.auctionSlotID != INVTYPE_CHEST || (query.auctionSlotID == INVTYPE_CHEST && proto->InventoryType != INVTYPE_ROBE)))
                 continue;
 
             if (query.quality != 0xffffffff && proto->Quality < query.quality)
@@ -788,7 +776,7 @@ void AuctionHouseObject::BuildListAuctionItems(WorldPacket& data, Player* player
                 int32 propertyId = item->GetItemRandomPropertyId();
                 ItemRandomPropertiesEntry const* randomProperty = nullptr;
                 if (propertyId > 0)
-                     randomProperty = sItemRandomPropertiesStore.LookupEntry(static_cast<uint32>(propertyId));
+                    randomProperty = sItemRandomPropertiesStore.LookupEntry(static_cast<uint32>(propertyId));
 
                 Item::GetLocalizedNameWithSuffix(name, proto, randomProperty, loc_idx, dbc_loc);
 
@@ -810,7 +798,7 @@ void AuctionHouseObject::BuildListAuctionItems(WorldPacket& data, Player* player
 // this function inserts to WorldPacket auction's data
 bool AuctionEntry::BuildAuctionInfo(WorldPacket& data) const
 {
-    Item *pItem = sAuctionMgr.GetAItem(itemGuidLow);
+    Item* pItem = sAuctionMgr.GetAItem(itemGuidLow);
     if (!pItem)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "auction to item, that doesn't exist !!!!");
@@ -820,31 +808,28 @@ bool AuctionEntry::BuildAuctionInfo(WorldPacket& data) const
     data << uint32(pItem->GetEntry());
 
     // [-ZERO] no other infos about enchantment in 1.12 [?]
-    //for (uint8 i = 0; i < MAX_INSPECTED_ENCHANTMENT_SLOT; ++i)
+    // for (uint8 i = 0; i < MAX_INSPECTED_ENCHANTMENT_SLOT; ++i)
     //{
     data << uint32(pItem->GetEnchantmentId(EnchantmentSlot(PERM_ENCHANTMENT_SLOT)));
     //    data << uint32(pItem->GetEnchantmentDuration(EnchantmentSlot(i)));
     //    data << uint32(pItem->GetEnchantmentCharges(EnchantmentSlot(i)));
     //}
 
-    data << uint32(pItem->GetItemRandomPropertyId());       // random item property id
-    data << uint32(pItem->GetItemSuffixFactor());           // SuffixFactor
-    data << uint32(pItem->GetCount());                      // item->count
-    data << uint32(pItem->GetSpellCharges());               // item->charge FFFFFFF
-    data << ObjectGuid(HIGHGUID_PLAYER, owner);             // Auction->owner
-    data << uint32(startbid);                               // Auction->startbid (not sure if useful)
-    data << uint32(bid ? GetAuctionOutBid() : 0);           // minimal outbid
-    data << uint32(buyout);                                 // auction->buyout
-    data << uint32((expireTime - time(nullptr))*IN_MILLISECONDS); // time left
-    data << ObjectGuid(HIGHGUID_PLAYER, bidder);            // auction->bidder current
-    data << uint32(bid);                                    // current bid
+    data << uint32(pItem->GetItemRandomPropertyId()); // random item property id
+    data << uint32(pItem->GetItemSuffixFactor()); // SuffixFactor
+    data << uint32(pItem->GetCount()); // item->count
+    data << uint32(pItem->GetSpellCharges()); // item->charge FFFFFFF
+    data << ObjectGuid(HIGHGUID_PLAYER, owner); // Auction->owner
+    data << uint32(startbid); // Auction->startbid (not sure if useful)
+    data << uint32(bid ? GetAuctionOutBid() : 0); // minimal outbid
+    data << uint32(buyout); // auction->buyout
+    data << uint32((expireTime - time(nullptr)) * IN_MILLISECONDS); // time left
+    data << ObjectGuid(HIGHGUID_PLAYER, bidder); // auction->bidder current
+    data << uint32(bid); // current bid
     return true;
 }
 
-uint32 AuctionEntry::GetAuctionCut() const
-{
-    return uint32(auctionHouseEntry->cutPercent * bid * sWorld.getConfig(CONFIG_FLOAT_RATE_AUCTION_CUT) / 100.0f);
-}
+uint32 AuctionEntry::GetAuctionCut() const { return uint32(auctionHouseEntry->cutPercent * bid * sWorld.getConfig(CONFIG_FLOAT_RATE_AUCTION_CUT) / 100.0f); }
 
 // The sum of outbid is (1% from current bid)*5, if bid is very small, it is 1c
 uint32 AuctionEntry::GetAuctionOutBid() const
@@ -857,13 +842,13 @@ uint32 AuctionEntry::GetAuctionOutBid() const
 
 void AuctionEntry::DeleteFromDB() const
 {
-    //No SQL injection (Id is integer)
+    // No SQL injection (Id is integer)
     CharacterDatabase.PExecute("DELETE FROM `auction` WHERE `id` = '%u'", Id);
 }
 
 void AuctionEntry::SaveToDB() const
 {
-    //No SQL injection (no strings)
+    // No SQL injection (no strings)
     CharacterDatabase.PExecute("INSERT INTO `auction` (`id`, `house_id`, `item_guid`, `item_id`, `seller_guid`, `buyout_price`, `expire_time`, `buyer_guid`, `last_bid`, `start_bid`, `deposit`) "
                                "VALUES ('%u', '%u', '%u', '%u', '%u', '%u', '" UI64FMTD "', '%u', '%u', '%u', '%u')",
                                Id, auctionHouseEntry->houseId, itemGuidLow, itemTemplate, owner, buyout, (uint64)expireTime, bidder, bid, startbid, deposit);

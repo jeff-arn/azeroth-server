@@ -17,34 +17,34 @@ enum
     // NPC ID
     // ------
 
-    NPC_OHGAN           = 14988,
-    NPC_CHAINED_SPIRIT  = 15117,                            //resing spirits
-    NPC_MANDOKIR        = 11382,
+    NPC_OHGAN = 14988,
+    NPC_CHAINED_SPIRIT = 15117, // resing spirits
+    NPC_MANDOKIR = 11382,
 
     // Emotes
     // ------
 
-    SAY_AGGRO           = 10446,
-    SAY_DING_KILL       = 10505,
-    SAY_GRATS_JINDO     = 10601,
-    SAY_WATCH           = 10604,
-    SAY_WATCH_WHISPER   = 10628,
-    EMOTE_RAGE          = 10545,
+    SAY_AGGRO = 10446,
+    SAY_DING_KILL = 10505,
+    SAY_GRATS_JINDO = 10601,
+    SAY_WATCH = 10604,
+    SAY_WATCH_WHISPER = 10628,
+    EMOTE_RAGE = 10545,
 
     // Mandokir's spells
     // -----------------
 
     // Charge - Charge regulierement le membre du raid le plus �loigne dans le range 8-40m.
     // OK
-    SPELL_CHARGE        = 24408,
+    SPELL_CHARGE = 24408,
 
     // Fear - Le fear peut toucher jusqu'a 20 joueur. Mandokir envoie un fear si plus de 3 joueurs sont au cac ou apres une charge.
     // OK
-    SPELL_FEAR          = 19134, //29544, // 20511 // must affect up to 20 targets.
+    SPELL_FEAR = 19134, // 29544, // 20511 // must affect up to 20 targets.
 
     // Whirlwind - le tourbillon est visible 2 secondes avant l'effet et peut donc etre anticipe par les cac.
     // OK
-    SPELL_WHIRLWIND     = 13736,
+    SPELL_WHIRLWIND = 13736,
 
     // Mortal Strike - Si la cible a moins de 50% hp.
     // OK
@@ -52,36 +52,36 @@ enum
 
     // Frenzy - Si le raptor meurt avant Mandokir, Mandokir passe en enrage pour 1 min 30.
     // OK
-    SPELL_ENRAGE        = 24318,
+    SPELL_ENRAGE = 24318,
 
     // Watch - Surveille un membre du raid. Si ce joueur bouge, attaque ou cast pendant que Mandokir le surveille, Mandokir le charge et le decapite.
     // OK
-    SPELL_WATCH         = 24314,
-    SPELL_DECAPITATE    = 24315,
+    SPELL_WATCH = 24314,
+    SPELL_DECAPITATE = 24315,
     SPELL_SUMMON_PLAYER = 25104,
 
     // Level-up - Chaque fois que Mandokir tue un joueur, il gagne un niveau.
-    SPELL_LEVEL_UP      = 24312,
+    SPELL_LEVEL_UP = 24312,
 
     // ??
-    SPELL_OVERPOWER     = 24407,
+    SPELL_OVERPOWER = 24407,
 
     // Mount - monture.
-    SPELL_MOUNT         = 23243,                            //this spell may not be correct, it's the spell used by item
+    SPELL_MOUNT = 23243, // this spell may not be correct, it's the spell used by item
 
     // SPELL_CLEAVE        = 20691,
 
     // Ohgans's spells
     // ---------------
 
-    SPELL_SUNDERARMOR     = 24317,
-    SPELL_THRASH          = 3391,
-    SPELL_EXECUTE         = 7160,
+    SPELL_SUNDERARMOR = 24317,
+    SPELL_THRASH = 3391,
+    SPELL_EXECUTE = 7160,
 
     // Chained Spirit's spells
     // -----------------------
 
-    SPELL_REVIVE        = 24341
+    SPELL_REVIVE = 24341
 };
 
 struct SpawnLocations
@@ -89,34 +89,12 @@ struct SpawnLocations
     float fX, fY, fZ, fAng;
 };
 
-static SpawnLocations aSpirits[] =
-{
-    { -12150.9f, -1956.24f, 133.407f, 2.57835f},
-    { -12157.1f, -1972.78f, 133.947f, 2.64903f},
-    { -12172.3f, -1982.63f, 134.061f, 1.48664f},
-    { -12194.0f, -1979.54f, 132.194f, 1.45916f},
-    { -12211.3f, -1978.49f, 133.580f, 1.35705f},
-    { -12228.4f, -1977.10f, 132.728f, 1.25495f},
-    { -12250.0f, -1964.78f, 135.066f, 0.92901f},
-    { -12264.0f, -1953.08f, 134.072f, 0.62663f},
-    { -12289.0f, -1924.00f, 132.620f, 5.37829f},
-    { -12267.3f, -1902.26f, 131.328f, 5.32724f},
-    { -12255.3f, -1893.53f, 134.026f, 5.06413f},
-    { -12229.9f, -1891.39f, 134.704f, 4.40047f},
-    { -12215.9f, -1889.09f, 137.273f, 4.70285f},
-    { -12200.5f, -1890.69f, 135.777f, 4.84422f},
-    { -12186.0f, -1890.12f, 134.261f, 4.36513f},
-    { -12246.3f, -1890.09f, 135.475f, 4.73427f},
-    { -12170.7f, -1894.85f, 133.852f, 3.51690f},
-    { -12279.0f, -1931.92f, 136.130f, 0.04151f},
-    { -12266.1f, -1940.72f, 132.606f, 0.70910f}
-};
+static SpawnLocations aSpirits[] = {{-12150.9f, -1956.24f, 133.407f, 2.57835f}, {-12157.1f, -1972.78f, 133.947f, 2.64903f}, {-12172.3f, -1982.63f, 134.061f, 1.48664f}, {-12194.0f, -1979.54f, 132.194f, 1.45916f}, {-12211.3f, -1978.49f, 133.580f, 1.35705f}, {-12228.4f, -1977.10f, 132.728f, 1.25495f}, {-12250.0f, -1964.78f, 135.066f, 0.92901f}, {-12264.0f, -1953.08f, 134.072f, 0.62663f}, {-12289.0f, -1924.00f, 132.620f, 5.37829f}, {-12267.3f, -1902.26f, 131.328f, 5.32724f}, {-12255.3f, -1893.53f, 134.026f, 5.06413f}, {-12229.9f, -1891.39f, 134.704f, 4.40047f}, {-12215.9f, -1889.09f, 137.273f, 4.70285f}, {-12200.5f, -1890.69f, 135.777f, 4.84422f}, {-12186.0f, -1890.12f, 134.261f, 4.36513f}, {-12246.3f, -1890.09f, 135.475f, 4.73427f}, {-12170.7f, -1894.85f, 133.852f, 3.51690f}, {-12279.0f, -1931.92f, 136.130f, 0.04151f}, {-12266.1f, -1940.72f, 132.606f, 0.70910f}};
 
 
 struct boss_mandokirAI : public ScriptedAI
 {
-    const static uint32 START_FLAGS = UNIT_FLAG_PACIFIED | UNIT_FLAG_SPAWNING |
-        UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_IMMUNE_TO_PLAYER;
+    const static uint32 START_FLAGS = UNIT_FLAG_PACIFIED | UNIT_FLAG_SPAWNING | UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_IMMUNE_TO_PLAYER;
 
     boss_mandokirAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
@@ -209,7 +187,7 @@ struct boss_mandokirAI : public ScriptedAI
             if (!m_pInstance)
                 return;
 
-            if (!urand(0,2))
+            if (!urand(0, 2))
             {
                 if (Creature* jTemp = m_creature->GetMap()->GetCreature(m_pInstance->GetData64(DATA_JINDO)))
                 {
@@ -230,9 +208,9 @@ struct boss_mandokirAI : public ScriptedAI
 
         SpawnSpirits();
 
-        //At combat start Mandokir is mounted so we must unmount it first, and set his flags for attackable
-        //m_creature->RemoveAurasDueToSpell(SPELL_MOUNT);
-        //SpawnRaptor();
+        // At combat start Mandokir is mounted so we must unmount it first, and set his flags for attackable
+        // m_creature->RemoveAurasDueToSpell(SPELL_MOUNT);
+        // SpawnRaptor();
     }
 
     void CheckRaptor()
@@ -241,7 +219,7 @@ struct boss_mandokirAI : public ScriptedAI
         if (!m_bRaptorDead)
             SpawnRaptor();
 
-        //Checking if Ohgan is dead. If yes Mandokir will enrage.
+        // Checking if Ohgan is dead. If yes Mandokir will enrage.
         if (!m_bRaptorDead && m_pInstance && m_pInstance->GetData(TYPE_OHGAN) == DONE)
         {
             if (DoCastSpellIfCan(m_creature, SPELL_ENRAGE) == CAST_OK)
@@ -359,7 +337,7 @@ struct boss_mandokirAI : public ScriptedAI
 
     void SpawnRaptor()
     {
-        //And summon his raptor
+        // And summon his raptor
         if (m_uiRaptorGUID.IsEmpty())
         {
             Creature* pRaptor = m_creature->SummonCreature(NPC_OHGAN, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 35000);
@@ -377,7 +355,7 @@ struct boss_mandokirAI : public ScriptedAI
             pSummoned->AI()->AttackStart(m_creature->GetVictim());
     }
 
-    void MoveInLineOfSight(Unit *pWho) override
+    void MoveInLineOfSight(Unit* pWho) override
     {
         if (m_creature->GetVictim())
             return;
@@ -394,8 +372,8 @@ struct boss_mandokirAI : public ScriptedAI
         if (pSpell->Id == SPELL_WATCH)
         {
             m_uiWatchTarget = pTarget->GetGUID();
-            m_fTargetX      = pTarget->GetPositionX();
-            m_fTargetY      = pTarget->GetPositionY();
+            m_fTargetX = pTarget->GetPositionX();
+            m_fTargetY = pTarget->GetPositionY();
             m_bTargetMoved = false;
             m_bTargetActed = false;
             m_fTargetThreat = m_creature->GetThreatManager().getThreat(pTarget);
@@ -513,7 +491,7 @@ struct boss_mandokirAI : public ScriptedAI
                         }
                         if (!bTargetKilled)
                             m_creature->DoKillUnit(pTargetToKill);
-                        if(pTargetToKill->IsAlive())
+                        if (pTargetToKill->IsAlive())
                             m_creature->DoKillUnit(pTargetToKill);
                         m_uiGlobalCooldown = 1000;
                         m_uiTargetToKill = 0;
@@ -568,13 +546,13 @@ struct boss_mandokirAI : public ScriptedAI
         {
             if (m_bFearAfterCharge)
             {
-                if(m_uiChargedPlayerGUID)
+                if (m_uiChargedPlayerGUID)
                 {
                     if (Player* player = m_creature->GetMap()->GetPlayer(m_uiChargedPlayerGUID))
                     {
                         if (player->IsAlive())
                         {
-                            if(m_creature->GetDistance(player) < 4.0f)
+                            if (m_creature->GetDistance(player) < 4.0f)
                             {
                                 if (DoCastSpellIfCan(player, SPELL_FEAR) == CAST_OK)
                                 {
@@ -587,11 +565,10 @@ struct boss_mandokirAI : public ScriptedAI
                         }
                         else
                         {
-                                    m_uiFear_Timer = 24000;
-                                    m_uiGlobalCooldown = 500;
-                                    m_bFearAfterCharge = false;
-                                    m_uiChargedPlayerGUID.Clear();
-
+                            m_uiFear_Timer = 24000;
+                            m_uiGlobalCooldown = 500;
+                            m_bFearAfterCharge = false;
+                            m_uiChargedPlayerGUID.Clear();
                         }
                     }
                 }
@@ -634,7 +611,7 @@ struct boss_mandokirAI : public ScriptedAI
     }
 };
 
-//Ohgan
+// Ohgan
 struct mob_ohganAI : public ScriptedAI
 {
     mob_ohganAI(Creature* pCreature) : ScriptedAI(pCreature)
@@ -694,7 +671,7 @@ struct mob_ohganAI : public ScriptedAI
             Thrash_Timer -= diff;
 
         // Execute_Timer
-        if (me->GetVictim()->GetHealth() <= me->GetVictim()->GetMaxHealth() * 0.2f)  // check health first
+        if (me->GetVictim()->GetHealth() <= me->GetVictim()->GetMaxHealth() * 0.2f) // check health first
         {
             if (Execute_Timer <= diff)
             {
@@ -711,15 +688,9 @@ struct mob_ohganAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_mandokir(Creature* pCreature)
-{
-    return new boss_mandokirAI(pCreature);
-}
+CreatureAI* GetAI_boss_mandokir(Creature* pCreature) { return new boss_mandokirAI(pCreature); }
 
-CreatureAI* GetAI_mob_ohgan(Creature* pCreature)
-{
-    return new mob_ohganAI(pCreature);
-}
+CreatureAI* GetAI_mob_ohgan(Creature* pCreature) { return new mob_ohganAI(pCreature); }
 
 
 // Chained Spirits
@@ -738,10 +709,7 @@ struct mob_chainedSpiritsAI : public ScriptedAI
     uint64 m_uiTargetRezGUID;
     uint32 m_uiRezTimer;
 
-    void Reset() override
-    {
-        m_uiRezTimer = 0;
-    }
+    void Reset() override { m_uiRezTimer = 0; }
 
     // Ready to revive someone ?
     uint32 GetData(uint32) override
@@ -789,22 +757,14 @@ struct mob_chainedSpiritsAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_mob_chained_spirit(Creature* pCreature)
-{
-    return new mob_chainedSpiritsAI(pCreature);
-}
+CreatureAI* GetAI_mob_chained_spirit(Creature* pCreature) { return new mob_chainedSpiritsAI(pCreature); }
 
 // Vilebranche
 struct mob_vilebrancheAI : public ScriptedAI
 {
-    mob_vilebrancheAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    mob_vilebrancheAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
-    void Reset() override
-    {
-    }
+    void Reset() override {}
 
     void JustDied(Unit* Killer) override
     {
@@ -820,10 +780,7 @@ struct mob_vilebrancheAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_mob_vilebranche(Creature* pCreature)
-{
-    return new mob_vilebrancheAI(pCreature);
-}
+CreatureAI* GetAI_mob_vilebranche(Creature* pCreature) { return new mob_vilebrancheAI(pCreature); }
 
 void AddSC_boss_mandokir()
 {
@@ -850,4 +807,3 @@ void AddSC_boss_mandokir()
     newscript->RegisterSelf();
     */
 }
-

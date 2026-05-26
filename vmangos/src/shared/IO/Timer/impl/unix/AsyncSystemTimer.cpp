@@ -1,14 +1,14 @@
 #include "../../AsyncSystemTimer.h"
-#include "Policies/SingletonImp.h"
 #include "IO/Multithreading/CreateThread.h"
-#include "Log.h"
 #include "IO/SystemErrorToString.h"
+#include "Log.h"
+#include "Policies/SingletonImp.h"
 
 INSTANTIATE_SINGLETON_1(IO::Timer::AsyncSystemTimer);
 
 IO::Timer::AsyncSystemTimer::AsyncSystemTimer()
 {
-    m_thread = IO::Multithreading::CreateThread("SystemTimer", [this](){ _TimerThreadFunc(); });
+    m_thread = IO::Multithreading::CreateThread("SystemTimer", [this]() { _TimerThreadFunc(); });
 }
 
 void IO::Timer::AsyncSystemTimer::RemoveAllTimersAndStopThread()
@@ -22,7 +22,7 @@ std::shared_ptr<IO::Timer::TimerHandle> IO::Timer::AsyncSystemTimer::_ScheduleFu
 {
     std::chrono::time_point<std::chrono::system_clock> whenToTriggerMe = std::chrono::system_clock::now() + std::chrono::milliseconds(milliseconds);
     std::shared_ptr<IO::Timer::TimerHandle> timerHandle(new IO::Timer::TimerHandle(this, function));
-    InternalTimerEntry newEntry { whenToTriggerMe, timerHandle };
+    InternalTimerEntry newEntry{whenToTriggerMe, timerHandle};
 
     {
         std::lock_guard<std::mutex> lock(m_orderedPendingTimer_mutex);
@@ -64,9 +64,8 @@ void IO::Timer::AsyncSystemTimer::_TimerThreadFunc()
         auto now = std::chrono::system_clock::now();
         lock.lock();
 
-        std::chrono::time_point<std::chrono::system_clock> sleepUntil = m_orderedPendingTimer.empty()
-                                ? std::chrono::time_point<std::chrono::system_clock>::max() // INFINITE SLEEP
-                                : m_orderedPendingTimer.begin()->m_whenToTriggerMe;
+        std::chrono::time_point<std::chrono::system_clock> sleepUntil = m_orderedPendingTimer.empty() ? std::chrono::time_point<std::chrono::system_clock>::max() // INFINITE SLEEP
+                                                                                                      : m_orderedPendingTimer.begin()->m_whenToTriggerMe;
 
         if (sleepUntil <= now)
         { // we have something to process RIGHT NOW

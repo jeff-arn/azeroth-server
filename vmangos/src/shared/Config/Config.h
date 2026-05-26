@@ -17,16 +17,16 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <shared_mutex>
+#include <unordered_map>
 #include "Common.h"
 #include "Platform/Define.h"
 #include "Policies/SingletonImp.h"
 #include "Policies/ThreadingModel.h"
-#include <shared_mutex>
-#include <unordered_map>
 
 class Config
 {
- public:
+public:
     using Lock = MaNGOS::ClassLevelLockable<Config, std::shared_timed_mutex>;
 
     bool LoadFromFile(std::string const& filename);
@@ -42,7 +42,7 @@ class Config
     std::string GetFilename() const;
     bool GetValueHelper(char const* name, std::string& result) const;
 
- private:
+private:
     friend class MaNGOS::Singleton<Config, Lock>;
 
     bool ProcessLine(char const* line);

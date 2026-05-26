@@ -25,34 +25,34 @@ EndScriptData */
 
 enum
 {
-    SPELL_MENDING_BUFF =        2147,
-    SPELL_KNOCK_BUFF =          21737,
-    SPELL_KNOCK =               23382,
-    SPELL_MANAB_BUFF =          812,
-    SPELL_MANAB =               25779,
+    SPELL_MENDING_BUFF = 2147,
+    SPELL_KNOCK_BUFF = 21737,
+    SPELL_KNOCK = 23382,
+    SPELL_MANAB_BUFF = 812,
+    SPELL_MANAB = 25779,
 
-    SPELL_REFLECTAF_BUFF =      13022,
-    SPELL_REFLECTSFr_BUFF =     19595,
-    SPELL_THORNS_BUFF =         25777,
+    SPELL_REFLECTAF_BUFF = 13022,
+    SPELL_REFLECTSFr_BUFF = 19595,
+    SPELL_THORNS_BUFF = 25777,
 
-    SPELL_THUNDER_BUFF =        2834,
-    SPELL_THUNDER =             23931,
+    SPELL_THUNDER_BUFF = 2834,
+    SPELL_THUNDER = 23931,
 
-    SPELL_MSTRIKE_BUFF =        9347,
-    SPELL_MSTRIKE =             24573,
+    SPELL_MSTRIKE_BUFF = 9347,
+    SPELL_MSTRIKE = 24573,
 
-    SPELL_STORM_BUFF =          2148,
-    SPELL_STORM =               26546,
+    SPELL_STORM_BUFF = 2148,
+    SPELL_STORM = 26546,
 
-    SPELL_ENRAGE =              24318,
-    EMOTE_ENRAGE =              2384,
+    SPELL_ENRAGE = 24318,
+    EMOTE_ENRAGE = 2384,
 
-    SPELL_TRANSFER =            2400,
-    EMOTE_TRANSFER =            -1388101,
+    SPELL_TRANSFER = 2400,
+    EMOTE_TRANSFER = -1388101,
 
-    SPELL_HEAL_BRETHREN =       26565,
+    SPELL_HEAL_BRETHREN = 26565,
 
-    NPC_SENTINEL =              15264
+    NPC_SENTINEL = 15264
 };
 
 struct aqsentinelAI;
@@ -119,12 +119,9 @@ struct aqsentinelAI : public ScriptedAI
         ScriptedAI::MoveInLineOfSight(pWho);
     }
 
-    void ClearBuddyList()
-    {
-        nearby.clear();
-    }
+    void ClearBuddyList() { nearby.clear(); }
 
-    void AddBuddyToList(Creature *buddy)
+    void AddBuddyToList(Creature* buddy)
     {
         if (buddy == m_creature)
             return;
@@ -163,7 +160,7 @@ struct aqsentinelAI : public ScriptedAI
         }
     }
 
-    void CallBuddiesToAttack(Unit *who)
+    void CallBuddiesToAttack(Unit* who)
     {
         for (const auto& guid : nearby)
         {
@@ -204,10 +201,10 @@ struct aqsentinelAI : public ScriptedAI
                 }
             }
         }
-        return 0;                                           // should never happen
+        return 0; // should never happen
     }
 
-    void GetOtherSentinels(Unit *who)
+    void GetOtherSentinels(Unit* who)
     {
         std::vector<bool> chosenAbilities(9);
         selectAbility(pickAbilityRandom(chosenAbilities));
@@ -225,7 +222,6 @@ struct aqsentinelAI : public ScriptedAI
                     sentinelAI->gatherOthersWhenAggro = false;
                     sentinelAI->selectAbility(pickAbilityRandom(chosenAbilities));
                 }
-
             }
         }
 
@@ -253,10 +249,7 @@ struct aqsentinelAI : public ScriptedAI
         m_bEnraged = false;
     }
 
-    void GainSentinelAbility(uint32 id)
-    {
-        m_creature->AddAura(id);
-    }
+    void GainSentinelAbility(uint32 id) { m_creature->AddAura(id); }
 
     // Threat reduction for Knock Away
     void SpellHitTarget(Unit* pTarget, SpellEntry const* pSpell) override
@@ -307,7 +300,7 @@ struct aqsentinelAI : public ScriptedAI
 
     void UpdateAI(uint32 const uiDiff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
@@ -334,10 +327,7 @@ struct aqsentinelAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_mob_anubisath_sentinelAI(Creature* pCreature)
-{
-    return new aqsentinelAI(pCreature);
-}
+CreatureAI* GetAI_mob_anubisath_sentinelAI(Creature* pCreature) { return new aqsentinelAI(pCreature); }
 
 void AddSC_mob_anubisath_sentinel()
 {

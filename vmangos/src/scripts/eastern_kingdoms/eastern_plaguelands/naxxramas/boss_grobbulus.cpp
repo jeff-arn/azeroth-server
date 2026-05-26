@@ -1,18 +1,18 @@
 /* This file is part of the ScriptDev2 Project. See AUTHORS file for Copyright information
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 /* ScriptData
 SDName: Boss_Grobbulus
@@ -23,8 +23,8 @@ EndScriptData
 
 */
 
-#include "scriptPCH.h"
 #include "naxxramas.h"
+#include "scriptPCH.h"
 
 /*Poison Cloud 26590
 Slime Spray 28157
@@ -36,18 +36,18 @@ Enrages 26527*/
 
 enum GrobbulusData
 {
-    SPELL_SLIME_STREAM       = 28137,
+    SPELL_SLIME_STREAM = 28137,
     SPELL_MUTATING_INJECTION = 28169,
-    SPELL_SLIME_SPRAY        = 28157,
-    SPELL_BERSERK            = 26662,
-    SPELL_POISON_CLOUD       = 28240, // Summons a poison cloud npc
-    SPELL_MUTAGEN_EXPLOSION  = 28206,
-    //SPELL_POISON_CLOUD_PASSIVE  = 28158, // the visual poison cloud, triggers 28241 every second
-    //SPELL_DISEASE_CLOUD         = 28362, // triggers ~300 dmg every 3 sec in 10yd radius, used by fallout slimes EventAI
-    SPELL_BOMBARD_SLIME      = 28280, // todo: should spawn a slime at the room before patch every patroll round, if any are dead.
+    SPELL_SLIME_SPRAY = 28157,
+    SPELL_BERSERK = 26662,
+    SPELL_POISON_CLOUD = 28240, // Summons a poison cloud npc
+    SPELL_MUTAGEN_EXPLOSION = 28206,
+    // SPELL_POISON_CLOUD_PASSIVE  = 28158, // the visual poison cloud, triggers 28241 every second
+    // SPELL_DISEASE_CLOUD         = 28362, // triggers ~300 dmg every 3 sec in 10yd radius, used by fallout slimes EventAI
+    SPELL_BOMBARD_SLIME = 28280, // todo: should spawn a slime at the room before patch every patroll round, if any are dead.
 
-    NPC_FALLOUT_SLIME        = 16290,
-    NPC_POISON_CLOUD         = 16363
+    NPC_FALLOUT_SLIME = 16290,
+    NPC_POISON_CLOUD = 16363
 };
 
 enum eGrobbulusEvents
@@ -58,11 +58,11 @@ enum eGrobbulusEvents
     EVENT_BERSERK
 };
 
-static uint32 POISONCLOUD_CD() { return 15000; } //return urand(20000, 25000); }
-static uint32 SLIMESPRAY_CD(bool initial) { return initial ? urand(20000, 30000): urand(30000,35000); }
+static uint32 POISONCLOUD_CD() { return 15000; } // return urand(20000, 25000); }
+static uint32 SLIMESPRAY_CD(bool initial) { return initial ? urand(20000, 30000) : urand(30000, 35000); }
 static constexpr uint32 BERSERK_TIMER = 12 * 60 * 1000; // 12 minute enrage
 
-static constexpr uint32 SLIMESTREAM_REPEAT_CD   = 1500; // used every 1500ms if current target is out of melee range
+static constexpr uint32 SLIMESTREAM_REPEAT_CD = 1500; // used every 1500ms if current target is out of melee range
 
 struct boss_grobbulusAI : public ScriptedAI
 {
@@ -81,11 +81,10 @@ struct boss_grobbulusAI : public ScriptedAI
         // todo: its supposedly used more frequent after 30%. Need confirmation
         if (initial)
             return 12000;
+        else if (m_creature->GetHealthPercent() > 30.0f)
+            return urand(7000, 13000);
         else
-            if(m_creature->GetHealthPercent() > 30.0f)
-                return urand(7000, 13000);
-            else
-                return urand(3000, 7000);
+            return urand(3000, 7000);
     }
 
     void Reset() override
@@ -151,9 +150,7 @@ struct boss_grobbulusAI : public ScriptedAI
     void SpellHitTarget(Unit* pTarget, SpellEntry const* pSpell) override
     {
         if ((pSpell->Id == SPELL_SLIME_SPRAY) && pTarget->GetTypeId() == TYPEID_PLAYER)
-            if (Creature* pSlime = m_creature->SummonCreature(NPC_FALLOUT_SLIME, 
-                pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ(), 0.0f,
-                TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS))
+            if (Creature* pSlime = m_creature->SummonCreature(NPC_FALLOUT_SLIME, pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ(), 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 10 * IN_MILLISECONDS))
             {
                 pSlime->SetInCombatWithZone();
             }
@@ -174,12 +171,12 @@ struct boss_grobbulusAI : public ScriptedAI
                 m_uiSlimeStreamTimer -= uiDiff;
         }
     }
-    
+
     void UpdateAI(uint32 const uiDiff) override
     {
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
-        
+
         if (!m_pInstance->HandleEvadeOutOfHome(m_creature))
             return;
 
@@ -191,32 +188,32 @@ struct boss_grobbulusAI : public ScriptedAI
         {
             switch (l_EventId)
             {
-                case EVENT_MUTATING_INJECTION:
-                    if (DoCastMutagenInjection())
-                        m_events.Repeat(INJECTION_CD(false));
-                    else
-                        m_events.Repeat(100);
-                    break;
-                case EVENT_POISON_CLOUD:
-                    // todo: spell spawns the cloud slightly off center, make sure this is intended
-                    if (DoCastSpellIfCan(m_creature, SPELL_POISON_CLOUD) == CAST_OK)
-                        m_events.Repeat(POISONCLOUD_CD());
-                    else
-                        m_events.Repeat(100);
-                    break;
-                case EVENT_SLIME_SPRAY:
-                    if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SLIME_SPRAY) == CAST_OK)
-                    {
-                        m_events.Repeat(SLIMESPRAY_CD(false));
-                        //DoScriptText(EMOTE_SPRAY_SLIME, m_creature);
-                    }
-                    else
-                        m_events.Repeat(100);
-                    break;
-                case EVENT_BERSERK:
-                    if (DoCastSpellIfCan(m_creature, SPELL_BERSERK) != CAST_OK)
-                        m_events.Repeat(100);
-                    break;
+            case EVENT_MUTATING_INJECTION:
+                if (DoCastMutagenInjection())
+                    m_events.Repeat(INJECTION_CD(false));
+                else
+                    m_events.Repeat(100);
+                break;
+            case EVENT_POISON_CLOUD:
+                // todo: spell spawns the cloud slightly off center, make sure this is intended
+                if (DoCastSpellIfCan(m_creature, SPELL_POISON_CLOUD) == CAST_OK)
+                    m_events.Repeat(POISONCLOUD_CD());
+                else
+                    m_events.Repeat(100);
+                break;
+            case EVENT_SLIME_SPRAY:
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SLIME_SPRAY) == CAST_OK)
+                {
+                    m_events.Repeat(SLIMESPRAY_CD(false));
+                    // DoScriptText(EMOTE_SPRAY_SLIME, m_creature);
+                }
+                else
+                    m_events.Repeat(100);
+                break;
+            case EVENT_BERSERK:
+                if (DoCastSpellIfCan(m_creature, SPELL_BERSERK) != CAST_OK)
+                    m_events.Repeat(100);
+                break;
             }
         }
 
@@ -224,10 +221,7 @@ struct boss_grobbulusAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_grobbulus(Creature* pCreature)
-{
-    return new boss_grobbulusAI(pCreature);
-}
+CreatureAI* GetAI_boss_grobbulus(Creature* pCreature) { return new boss_grobbulusAI(pCreature); }
 
 // 28169 - Mutating Injection (Grobbulus)
 struct GrobbulusMutatingInjectionScript : public AuraScript
@@ -238,7 +232,7 @@ struct GrobbulusMutatingInjectionScript : public AuraScript
         {
             if (Unit* pCaster = aura->GetCaster())
             {
-                if (aura->GetRemoveMode()  == AuraRemoveMode::AURA_REMOVE_BY_DISPEL)
+                if (aura->GetRemoveMode() == AuraRemoveMode::AURA_REMOVE_BY_DISPEL)
                 {
                     // Mutagen Explosion
                     pCaster->CastSpell(aura->GetTarget(), SPELL_MUTAGEN_EXPLOSION, true);
@@ -256,10 +250,7 @@ struct GrobbulusMutatingInjectionScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_GrobbulusMutatingInjection(SpellEntry const*)
-{
-    return new GrobbulusMutatingInjectionScript();
-}
+AuraScript* GetScript_GrobbulusMutatingInjection(SpellEntry const*) { return new GrobbulusMutatingInjectionScript(); }
 
 // 28241 - Poison (Grobbulus Cloud)
 struct GrobbulusCloudPoisonScript : SpellScript
@@ -276,16 +267,13 @@ struct GrobbulusCloudPoisonScript : SpellScript
                 const int maxDur = auraHolder->GetAuraMaxDuration();
                 const int currTick = maxDur - auraHolder->GetAuraDuration();
                 radius = 18.0f / maxDur * currTick + 2;
-                //radius = 0.5f * (60000 - auraHolder->GetAuraDuration()) * 0.001f;
+                // radius = 0.5f * (60000 - auraHolder->GetAuraDuration()) * 0.001f;
             }
         }
     }
 };
 
-SpellScript* GetScript_GrobbulusCloudPoison(SpellEntry const*)
-{
-    return new GrobbulusCloudPoisonScript();
-}
+SpellScript* GetScript_GrobbulusCloudPoison(SpellEntry const*) { return new GrobbulusCloudPoisonScript(); }
 
 // 28206 - Mutagen Explosion (Grobbulus)
 struct GrobbulusMutagenExplosionScript : public SpellScript
@@ -307,10 +295,7 @@ struct GrobbulusMutagenExplosionScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_GrobbulusMutagenExplosion(SpellEntry const*)
-{
-    return new GrobbulusMutagenExplosionScript();
-}
+SpellScript* GetScript_GrobbulusMutagenExplosion(SpellEntry const*) { return new GrobbulusMutagenExplosionScript(); }
 
 void AddSC_boss_grobbulus()
 {

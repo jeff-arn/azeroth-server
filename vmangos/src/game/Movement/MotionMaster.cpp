@@ -20,28 +20,25 @@
  */
 
 #include "MotionMaster.h"
-#include "CreatureAISelector.h"
-#include "Creature.h"
-#include "Transport.h"
-#include "Map.h"
 #include "ConfusedMovementGenerator.h"
-#include "FleeingMovementGenerator.h"
+#include "Creature.h"
+#include "CreatureAISelector.h"
+#include "CyclicMovementGenerator.h"
 #include "FearMovementGenerator.h"
+#include "FleeingMovementGenerator.h"
 #include "HomeMovementGenerator.h"
 #include "IdleMovementGenerator.h"
+#include "Map.h"
 #include "PointMovementGenerator.h"
-#include "TargetedMovementGenerator.h"
-#include "WaypointMovementGenerator.h"
-#include "CyclicMovementGenerator.h"
 #include "RandomMovementGenerator.h"
+#include "TargetedMovementGenerator.h"
+#include "Transport.h"
+#include "WaypointMovementGenerator.h"
 
 #include "MoveSpline.h"
 #include "MoveSplineInit.h"
 
-inline bool isStatic(MovementGenerator* mv)
-{
-    return (mv == &si_idleMovement);
-}
+inline bool isStatic(MovementGenerator* mv) { return (mv == &si_idleMovement); }
 
 void MotionMaster::Initialize()
 {
@@ -61,12 +58,12 @@ void MotionMaster::Initialize()
 
         switch (top()->GetMovementGeneratorType())
         {
-            case WAYPOINT_MOTION_TYPE:
-                (static_cast<WaypointMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*(static_cast<Creature*>(m_owner)), 0, PATH_NO_PATH, 0, 0, 0, true);
-                break;
-            case CYCLIC_MOTION_TYPE:
-                (static_cast<CyclicMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*(static_cast<Creature*>(m_owner)), PATH_NO_PATH, 0, 0);
-                break;
+        case WAYPOINT_MOTION_TYPE:
+            (static_cast<WaypointMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*(static_cast<Creature*>(m_owner)), 0, PATH_NO_PATH, 0, 0, 0, true);
+            break;
+        case CYCLIC_MOTION_TYPE:
+            (static_cast<CyclicMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*(static_cast<Creature*>(m_owner)), PATH_NO_PATH, 0, 0);
+            break;
         }
     }
     else
@@ -85,7 +82,7 @@ void MotionMaster::InitializeNewDefault(bool alwaysReplace)
 {
     // This method changes the creature's default movement type
     // without interrupting the currently used movement generator
-    
+
     if (empty())
     {
         Initialize();
@@ -122,12 +119,12 @@ void MotionMaster::InitializeNewDefault(bool alwaysReplace)
 
             switch (top()->GetMovementGeneratorType())
             {
-                case WAYPOINT_MOTION_TYPE:
-                    (static_cast<WaypointMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*(static_cast<Creature*>(m_owner)), 0, PATH_NO_PATH, 0, 0, 0, true);
-                    break;
-                case CYCLIC_MOTION_TYPE:
-                    (static_cast<CyclicMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*(static_cast<Creature*>(m_owner)), PATH_NO_PATH, 0, 0);
-                    break;
+            case WAYPOINT_MOTION_TYPE:
+                (static_cast<WaypointMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*(static_cast<Creature*>(m_owner)), 0, PATH_NO_PATH, 0, 0, 0, true);
+                break;
+            case CYCLIC_MOTION_TYPE:
+                (static_cast<CyclicMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*(static_cast<Creature*>(m_owner)), PATH_NO_PATH, 0, 0);
+                break;
             }
         }
         else
@@ -155,7 +152,7 @@ MotionMaster::~MotionMaster()
     // just deallocate movement generator, but do not Finalize since it may access to already deallocated owner's memory
     while (!empty())
     {
-        MovementGenerator*  m = top();
+        MovementGenerator* m = top();
         pop();
         if (!isStatic(m))
             delete m;
@@ -246,7 +243,7 @@ void MotionMaster::DirectClean(bool reset, bool all)
     {
         itr->Finalize(*m_owner);
         if (!isStatic(itr))
-            delete(itr);
+            delete (itr);
     }
 }
 
@@ -262,7 +259,7 @@ void MotionMaster::DelayedClean(bool reset, bool all)
 
     if (!m_expList)
         m_expList = new ExpireList();
-;
+    ;
     std::vector<MovementGenerator*> mvtGensToFinalize;
     while (all ? !empty() : size() > 1)
     {
@@ -298,7 +295,7 @@ void MotionMaster::DirectExpire(bool reset)
     for (auto const& itr : mvtGensToFinalize)
     {
         itr->Finalize(*m_owner);
-        delete(itr);
+        delete (itr);
     }
     // Store current top MMGen, as Finalize might push a new MMGen
     MovementGenerator* nowTop = empty() ? nullptr : top();
@@ -434,7 +431,7 @@ void MotionMaster::MoveChase(Unit* target, float dist, float angle)
         // interrupt current movespline
         if (!m_owner->IsStopped())
             m_owner->StopMoving();
-        
+
         Mutate(new ChaseMovementGenerator<Creature>(*target, dist, angle));
     }
 }
@@ -474,8 +471,7 @@ void MotionMaster::MoveSeekAssistance(float x, float y, float z)
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s attempt to seek assistance", m_owner->GetGuidStr().c_str());
     else
     {
-        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s seek assistance (X: %f Y: %f Z: %f)",
-                         m_owner->GetGuidStr().c_str(), x, y, z);
+        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s seek assistance (X: %f Y: %f Z: %f)", m_owner->GetGuidStr().c_str(), x, y, z);
         Mutate(new AssistanceMovementGenerator(x, y, z));
     }
 }
@@ -486,8 +482,7 @@ void MotionMaster::MoveSeekAssistanceDistract(uint32 time)
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s attempt to call distract after assistance", m_owner->GetGuidStr().c_str());
     else
     {
-        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s is distracted after assistance call (Time: %u)",
-                         m_owner->GetGuidStr().c_str(), time);
+        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s is distracted after assistance call (Time: %u)", m_owner->GetGuidStr().c_str(), time);
         Mutate(new AssistanceDistractMovementGenerator(time));
     }
 }
@@ -557,7 +552,7 @@ void MotionMaster::MoveWaypointAsDefault(uint32 startPoint /*=0*/, uint32 source
         {
             Clear(false, true);
             push(newWPMMgen);
-        } 
+        }
 
         newWPMMgen->InitializeWaypointPath(*creature, startPoint, (WaypointPathOrigin)source, initialDelay, overwriteGuid, overwriteEntry, repeat);
     }
@@ -619,14 +614,12 @@ void MotionMaster::MoveTaxiFlight(uint32 path, uint32 pathnode)
         }
         else
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s attempt taxi to (nonexistent Path %u node %u)",
-                          m_owner->GetGuidStr().c_str(), path, pathnode);
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s attempt taxi to (nonexistent Path %u node %u)", m_owner->GetGuidStr().c_str(), path, pathnode);
         }
     }
     else
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s attempt taxi to (Path %u node %u)",
-                      m_owner->GetGuidStr().c_str(), path, pathnode);
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s attempt taxi to (Path %u node %u)", m_owner->GetGuidStr().c_str(), path, pathnode);
     }
 }
 
@@ -649,8 +642,7 @@ void MotionMaster::MoveTaxiFlight()
                         debugString << "(Path " << foundPath << ")";
                     else
                     {
-                        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s attempt taxi to (nonexistent Path %u)",
-                            m_owner->GetGuidStr().c_str(), foundPath);
+                        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s attempt taxi to (nonexistent Path %u)", m_owner->GetGuidStr().c_str(), foundPath);
                         return;
                     }
                 }
@@ -683,19 +675,19 @@ void MotionMaster::Mutate(MovementGenerator* m)
     {
         switch (top()->GetMovementGeneratorType())
         {
-            // Chase movement should not be preserved in most cases
-            case CHASE_MOTION_TYPE:
+        // Chase movement should not be preserved in most cases
+        case CHASE_MOTION_TYPE:
             {
                 if (m->GetMovementGeneratorType() == DISTANCING_MOTION_TYPE)
                     break;
             }
-            // HomeMovement is not that important, delete it if meanwhile a new comes
-            case HOME_MOTION_TYPE:
-            // Distract and Distancing movement interrupted by any other movement
-            case DISTRACT_MOTION_TYPE:
-            case DISTANCING_MOTION_TYPE:
-                MovementExpired(false);
-                break;
+        // HomeMovement is not that important, delete it if meanwhile a new comes
+        case HOME_MOTION_TYPE:
+        // Distract and Distancing movement interrupted by any other movement
+        case DISTRACT_MOTION_TYPE:
+        case DISTANCING_MOTION_TYPE:
+            MovementExpired(false);
+            break;
         }
 
         if (!empty())
@@ -735,46 +727,46 @@ char const* MotionMaster::GetMovementGeneratorTypeName(MovementGeneratorType gen
 {
     switch (generator)
     {
-        case IDLE_MOTION_TYPE:
-            return "IDLE_MOTION_TYPE";
-        case RANDOM_MOTION_TYPE:
-            return "RANDOM_MOTION_TYPE";
-        case WAYPOINT_MOTION_TYPE:
-            return "WAYPOINT_MOTION_TYPE";
-        case CYCLIC_MOTION_TYPE:
-            return "CYCLIC_MOTION_TYPE";
-        case MAX_DB_MOTION_TYPE:
-            return "MAX_DB_MOTION_TYPE";
-        case CONFUSED_MOTION_TYPE:
-            return "CONFUSED_MOTION_TYPE";
-        case CHASE_MOTION_TYPE:
-            return "CHASE_MOTION_TYPE";
-        case HOME_MOTION_TYPE:
-            return "HOME_MOTION_TYPE";
-        case FLIGHT_MOTION_TYPE:
-            return "FLIGHT_MOTION_TYPE";
-        case POINT_MOTION_TYPE:
-            return "POINT_MOTION_TYPE";
-        case FLEEING_MOTION_TYPE:
-            return "FLEEING_MOTION_TYPE";
-        case DISTRACT_MOTION_TYPE:
-            return "DISTRACT_MOTION_TYPE";
-        case ASSISTANCE_MOTION_TYPE:
-            return "ASSISTANCE_MOTION_TYPE";
-        case ASSISTANCE_DISTRACT_MOTION_TYPE:
-            return "ASSISTANCE_DISTRACT_MOTION_TYPE";
-        case TIMED_FLEEING_MOTION_TYPE:
-            return "TIMED_FLEEING_MOTION_TYPE";
-        case FOLLOW_MOTION_TYPE:
-            return "FOLLOW_MOTION_TYPE";
-        case EFFECT_MOTION_TYPE:
-            return "EFFECT_MOTION_TYPE";
-        case PATROL_MOTION_TYPE:
-            return "PATROL_MOTION_TYPE";
-        case CHARGE_MOTION_TYPE:
-            return "CHARGE_MOTION_TYPE";
-        case DISTANCING_MOTION_TYPE:
-            return "DISTANCING_MOTION_TYPE";
+    case IDLE_MOTION_TYPE:
+        return "IDLE_MOTION_TYPE";
+    case RANDOM_MOTION_TYPE:
+        return "RANDOM_MOTION_TYPE";
+    case WAYPOINT_MOTION_TYPE:
+        return "WAYPOINT_MOTION_TYPE";
+    case CYCLIC_MOTION_TYPE:
+        return "CYCLIC_MOTION_TYPE";
+    case MAX_DB_MOTION_TYPE:
+        return "MAX_DB_MOTION_TYPE";
+    case CONFUSED_MOTION_TYPE:
+        return "CONFUSED_MOTION_TYPE";
+    case CHASE_MOTION_TYPE:
+        return "CHASE_MOTION_TYPE";
+    case HOME_MOTION_TYPE:
+        return "HOME_MOTION_TYPE";
+    case FLIGHT_MOTION_TYPE:
+        return "FLIGHT_MOTION_TYPE";
+    case POINT_MOTION_TYPE:
+        return "POINT_MOTION_TYPE";
+    case FLEEING_MOTION_TYPE:
+        return "FLEEING_MOTION_TYPE";
+    case DISTRACT_MOTION_TYPE:
+        return "DISTRACT_MOTION_TYPE";
+    case ASSISTANCE_MOTION_TYPE:
+        return "ASSISTANCE_MOTION_TYPE";
+    case ASSISTANCE_DISTRACT_MOTION_TYPE:
+        return "ASSISTANCE_DISTRACT_MOTION_TYPE";
+    case TIMED_FLEEING_MOTION_TYPE:
+        return "TIMED_FLEEING_MOTION_TYPE";
+    case FOLLOW_MOTION_TYPE:
+        return "FOLLOW_MOTION_TYPE";
+    case EFFECT_MOTION_TYPE:
+        return "EFFECT_MOTION_TYPE";
+    case PATROL_MOTION_TYPE:
+        return "PATROL_MOTION_TYPE";
+    case CHARGE_MOTION_TYPE:
+        return "CHARGE_MOTION_TYPE";
+    case DISTANCING_MOTION_TYPE:
+        return "DISTANCING_MOTION_TYPE";
     }
 
     return "UNKNOWN";
@@ -819,7 +811,7 @@ void MotionMaster::GetWaypointPathInformation(std::ostringstream& oss) const
     }
 }
 
-bool MotionMaster::GetDestination(float &x, float &y, float &z)
+bool MotionMaster::GetDestination(float& x, float& y, float& z)
 {
     // Often used in motion gen, lock target movespline while checking in case
     // they are async updating their spline too. Don't blocking lock, otherwise
@@ -882,7 +874,7 @@ bool MotionMaster::MoveDistance(Unit const* pTarget, float distance)
 
     float x, y, z;
     pTarget->GetNearPoint(m_owner, x, y, z, 0, distance, pTarget->GetAngle(m_owner));
-    
+
     if (z > (m_owner->GetPositionZ() + 10.0f))
         return false;
 
@@ -935,14 +927,14 @@ void Creature::PauseOutOfCombatMovement(uint32 pauseTime)
 
     switch (GetMotionMaster()->GetCurrentMovementGeneratorType())
     {
-        case RANDOM_MOTION_TYPE:
+    case RANDOM_MOTION_TYPE:
         {
             if (!IsStopped())
                 StopMoving();
             ((RandomMovementGenerator*)(GetMotionMaster()->GetCurrent()))->AddPauseTime(pauseTime);
             break;
         }
-        case WAYPOINT_MOTION_TYPE:
+    case WAYPOINT_MOTION_TYPE:
         {
             if (!IsStopped())
                 StopMoving();

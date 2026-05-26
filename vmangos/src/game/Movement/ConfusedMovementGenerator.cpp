@@ -17,16 +17,16 @@
  */
 
 #include "ConfusedMovementGenerator.h"
-#include "MapManager.h"
 #include "Creature.h"
-#include "Player.h"
-#include "MoveSplineInit.h"
+#include "MapManager.h"
 #include "MoveSpline.h"
+#include "MoveSplineInit.h"
 #include "PathFinder.h"
+#include "Player.h"
 #include "Transport.h"
 
-template<class T>
-void ConfusedMovementGenerator<T>::Initialize(T &unit)
+template <class T>
+void ConfusedMovementGenerator<T>::Initialize(T& unit)
 {
     // set initial position
     unit.GetSafePosition(i_x, i_y, i_z, unit.GetTransport());
@@ -37,21 +37,21 @@ void ConfusedMovementGenerator<T>::Initialize(T &unit)
     unit.UpdateControl();
 }
 
-template<class T>
-void ConfusedMovementGenerator<T>::Interrupt(T &unit)
+template <class T>
+void ConfusedMovementGenerator<T>::Interrupt(T& unit)
 {
 }
 
-template<class T>
-void ConfusedMovementGenerator<T>::Reset(T &unit)
+template <class T>
+void ConfusedMovementGenerator<T>::Reset(T& unit)
 {
     unit.StopMoving();
     unit.AddUnitState(UNIT_STATE_CONFUSED);
     unit.UpdateControl();
 }
 
-template<class T>
-bool ConfusedMovementGenerator<T>::Update(T &unit, uint32 const& diff)
+template <class T>
+bool ConfusedMovementGenerator<T>::Update(T& unit, uint32 const& diff)
 {
     // ignore in case other no reaction state
     if (unit.HasUnitState((UNIT_STATE_CAN_NOT_REACT | UNIT_STATE_CAN_NOT_MOVE | UNIT_STATE_STUNNED | UNIT_STATE_PENDING_STUNNED) & ~UNIT_STATE_CONFUSED))
@@ -87,26 +87,26 @@ bool ConfusedMovementGenerator<T>::Update(T &unit, uint32 const& diff)
     return true;
 }
 
-template<>
-void ConfusedMovementGenerator<Player>::Finalize(Player &unit)
+template <>
+void ConfusedMovementGenerator<Player>::Finalize(Player& unit)
 {
     unit.ClearUnitState(UNIT_STATE_CONFUSED);
     unit.StopMoving();
     unit.UpdateControl();
 }
 
-template<>
-void ConfusedMovementGenerator<Creature>::Finalize(Creature &unit)
+template <>
+void ConfusedMovementGenerator<Creature>::Finalize(Creature& unit)
 {
     unit.ClearUnitState(UNIT_STATE_CONFUSED);
     unit.UpdateControl();
 }
 
-template void ConfusedMovementGenerator<Player>::Initialize(Player &player);
-template void ConfusedMovementGenerator<Creature>::Initialize(Creature &creature);
-template void ConfusedMovementGenerator<Player>::Interrupt(Player &player);
-template void ConfusedMovementGenerator<Creature>::Interrupt(Creature &creature);
-template void ConfusedMovementGenerator<Player>::Reset(Player &player);
-template void ConfusedMovementGenerator<Creature>::Reset(Creature &creature);
-template bool ConfusedMovementGenerator<Player>::Update(Player &player, uint32 const& diff);
-template bool ConfusedMovementGenerator<Creature>::Update(Creature &creature, uint32 const& diff);
+template void ConfusedMovementGenerator<Player>::Initialize(Player& player);
+template void ConfusedMovementGenerator<Creature>::Initialize(Creature& creature);
+template void ConfusedMovementGenerator<Player>::Interrupt(Player& player);
+template void ConfusedMovementGenerator<Creature>::Interrupt(Creature& creature);
+template void ConfusedMovementGenerator<Player>::Reset(Player& player);
+template void ConfusedMovementGenerator<Creature>::Reset(Creature& creature);
+template bool ConfusedMovementGenerator<Player>::Update(Player& player, uint32 const& diff);
+template bool ConfusedMovementGenerator<Creature>::Update(Creature& creature, uint32 const& diff);

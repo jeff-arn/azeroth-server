@@ -29,9 +29,7 @@ NullCreatureAI::NullCreatureAI(Creature* c) : CreatureAI(c)
     m_bCombatMovement = false;
 }
 
-NullCreatureAI::~NullCreatureAI()
-{
-}
+NullCreatureAI::~NullCreatureAI() {}
 
 void NullCreatureAI::UpdateAI(uint32 const)
 {

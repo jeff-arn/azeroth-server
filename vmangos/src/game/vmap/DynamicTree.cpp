@@ -17,39 +17,30 @@
  */
 
 #include "DynamicTree.h"
-#include "Log.h"
-#include "Timer.h"
 #include "BIHWrap.h"
-#include "RegularGrid.h"
-#include "GameObjectModel.h"
 #include "Errors.h"
+#include "GameObjectModel.h"
+#include "Log.h"
+#include "RegularGrid.h"
+#include "Timer.h"
 
-template<> struct HashTrait< GameObjectModel>
+template <>
+struct HashTrait<GameObjectModel>
 {
-    static size_t hashCode(GameObjectModel const& g)
-    {
-        return (size_t)(void*)&g;
-    }
+    static size_t hashCode(GameObjectModel const& g) { return (size_t)(void*)&g; }
 };
 
-template<> struct PositionTrait< GameObjectModel>
+template <>
+struct PositionTrait<GameObjectModel>
 {
-    static void getPosition(GameObjectModel const& g, Vector3& p)
-    {
-        p = g.getPosition();
-    }
+    static void getPosition(GameObjectModel const& g, Vector3& p) { p = g.getPosition(); }
 };
 
-template<> struct BoundsTrait< GameObjectModel>
+template <>
+struct BoundsTrait<GameObjectModel>
 {
-    static void getBounds(GameObjectModel const& g, G3D::AABox& out)
-    {
-        out = g.getBounds();
-    }
-    static void getBounds2(GameObjectModel const* g, G3D::AABox& out)
-    {
-        out = g->getBounds();
-    }
+    static void getBounds(GameObjectModel const& g, G3D::AABox& out) { out = g.getBounds(); }
+    static void getBounds2(GameObjectModel const* g, G3D::AABox& out) { out = g->getBounds(); }
 };
 
 /*
@@ -60,21 +51,17 @@ static bool operator == (GameObjectModel const& mdl, GameObjectModel const& mdl2
 
 // int valuesPerNode = 5, numMeanSplits = 3;
 
-//int UNBALANCED_TIMES_LIMIT = 5;
+// int UNBALANCED_TIMES_LIMIT = 5;
 int CHECK_TREE_PERIOD = 200;
 
-typedef RegularGrid2D<GameObjectModel, BIHWrap<GameObjectModel> > ParentTree;
+typedef RegularGrid2D<GameObjectModel, BIHWrap<GameObjectModel>> ParentTree;
 
-struct DynTreeImpl : public ParentTree/*, public Intersectable*/
+struct DynTreeImpl : public ParentTree /*, public Intersectable*/
 {
     typedef GameObjectModel Model;
     typedef ParentTree base;
 
-    DynTreeImpl() :
-        rebalance_timer(CHECK_TREE_PERIOD),
-        unbalanced_times(0)
-    {
-    }
+    DynTreeImpl() : rebalance_timer(CHECK_TREE_PERIOD), unbalanced_times(0) {}
 
     void insert(Model const& mdl)
     {
@@ -112,44 +99,21 @@ struct DynTreeImpl : public ParentTree/*, public Intersectable*/
     int unbalanced_times;
 };
 
-DynamicMapTree::DynamicMapTree() : impl(*new DynTreeImpl())
-{
-}
+DynamicMapTree::DynamicMapTree() : impl(*new DynTreeImpl()) {}
 
-DynamicMapTree::~DynamicMapTree()
-{
-    delete &impl;
-}
+DynamicMapTree::~DynamicMapTree() { delete &impl; }
 
-void DynamicMapTree::insert(GameObjectModel const& mdl)
-{
-    impl.insert(mdl);
-}
+void DynamicMapTree::insert(GameObjectModel const& mdl) { impl.insert(mdl); }
 
-void DynamicMapTree::remove(GameObjectModel const& mdl)
-{
-    impl.remove(mdl);
-}
+void DynamicMapTree::remove(GameObjectModel const& mdl) { impl.remove(mdl); }
 
-bool DynamicMapTree::contains(GameObjectModel const& mdl) const
-{
-    return impl.contains(mdl);
-}
+bool DynamicMapTree::contains(GameObjectModel const& mdl) const { return impl.contains(mdl); }
 
-void DynamicMapTree::balance()
-{
-    impl.balance();
-}
+void DynamicMapTree::balance() { impl.balance(); }
 
-int DynamicMapTree::size() const
-{
-    return impl.size();
-}
+int DynamicMapTree::size() const { return impl.size(); }
 
-void DynamicMapTree::update(uint32 t_diff)
-{
-    impl.update(t_diff);
-}
+void DynamicMapTree::update(uint32 t_diff) { impl.update(t_diff); }
 
 struct DynamicTreeIntersectionCallback
 {
@@ -166,10 +130,7 @@ struct DynamicTreeIntersectionCallback
 struct DynamicTreeIntersectionCallback_WithLogger
 {
     bool did_hit;
-    DynamicTreeIntersectionCallback_WithLogger() : did_hit(false)
-    {
-        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Dynamic Intersection log");
-    }
+    DynamicTreeIntersectionCallback_WithLogger() : did_hit(false) { sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "Dynamic Intersection log"); }
     bool operator()(const G3D::Ray& r, GameObjectModel const& obj, float& distance, bool stopAtFirst, bool ignoreM2Model)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "testing intersection with %s", obj.name.c_str());
@@ -189,7 +150,7 @@ struct DynamicTreeIntersectionCallback_findCollisionObject
     bool did_hit;
     GameObjectModel const* hitObj;
     DynamicTreeIntersectionCallback_findCollisionObject() : did_hit(false), hitObj(nullptr) {}
-    bool operator()(G3D::Ray const &r, GameObjectModel const &obj, float& distance, bool stopAtFirst, bool ignoreM2Model)
+    bool operator()(G3D::Ray const& r, GameObjectModel const& obj, float& distance, bool stopAtFirst, bool ignoreM2Model)
     {
         bool hit = obj.intersectRay(r, distance, stopAtFirst, ignoreM2Model);
         if (hit)
@@ -248,7 +209,7 @@ bool DynamicMapTree::getObjectHitPos(Vector3 const& pPos1, Vector3 const& pPos2,
         pResultHitPos = pPos2;
         return false;
     }
-    Vector3 dir = (pPos2 - pPos1) / maxDist;            // direction with length of 1
+    Vector3 dir = (pPos2 - pPos1) / maxDist; // direction with length of 1
     G3D::Ray ray(pPos1, dir);
     float dist = maxDist;
     if (getIntersectionTime(ray, pPos2, dist))

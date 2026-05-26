@@ -32,13 +32,13 @@ enum
     // -------------------
 
     // Frost Breath - Slow attack and movement speed, drains mana.
-    SPELL_FROSTBREATH            = 16099,
+    SPELL_FROSTBREATH = 16099,
 
     // Massive Geyser - Tosses everyone into the air for 500 damage, then subsequent fall damage. Temporary aggro wipe.
-    SPELL_MASSIVEGEYSER          = 22421, //Not working. Cause its a summon...
+    SPELL_MASSIVEGEYSER = 22421, // Not working. Cause its a summon...
 
     // Slam - Inflicts normal damage plus 250 to nearby enemies and knocks them back.
-    SPELL_SLAM                   = 24326
+    SPELL_SLAM = 24326
 };
 
 struct boss_gahzrankaAI : public ScriptedAI
@@ -65,7 +65,7 @@ struct boss_gahzrankaAI : public ScriptedAI
         if (m_pInstance && m_pInstance->GetData(TYPE_GAHZRANKA) != DONE)
             m_pInstance->SetData(TYPE_GAHZRANKA, NOT_STARTED);
     }
-    void Aggro(Unit *who) override
+    void Aggro(Unit* who) override
     {
         if (m_pInstance)
             m_pInstance->SetData(TYPE_GAHZRANKA, IN_PROGRESS);
@@ -76,13 +76,10 @@ struct boss_gahzrankaAI : public ScriptedAI
             m_pInstance->SetData(TYPE_GAHZRANKA, DONE);
     }
 
-    void JustRespawned() override
-    {
-        CheckSpawnStatus();
-    }
+    void JustRespawned() override { CheckSpawnStatus(); }
 
-   void CheckSpawnStatus()
-   {
+    void CheckSpawnStatus()
+    {
         if (!m_pInstance)
             return;
 
@@ -105,23 +102,24 @@ struct boss_gahzrankaAI : public ScriptedAI
 
         if (uiPointId == 0) // move to the Beach
             m_creature->GetMotionMaster()->MovePoint(1, -11688.95f, -1777.21f, 12.593f, 0, 0, 5.81f);
-    } 
+    }
 
     void UpdateAI(uint32 const diff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //Frostbreath_Timer
+        // Frostbreath_Timer
         if (Frostbreath_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FROSTBREATH) == CAST_OK)
                 Frostbreath_Timer = urand(8000, 20000);
         }
-        else Frostbreath_Timer -= diff;
+        else
+            Frostbreath_Timer -= diff;
 
-        //MassiveGeyser_Timer
+        // MassiveGeyser_Timer
         if (MassiveGeyser_Timer < diff)
         {
             if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
@@ -133,23 +131,22 @@ struct boss_gahzrankaAI : public ScriptedAI
                 }
             }
         }
-        else MassiveGeyser_Timer -= diff;
+        else
+            MassiveGeyser_Timer -= diff;
 
-        //Slam_Timer
+        // Slam_Timer
         if (Slam_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SLAM) == CAST_OK)
                 Slam_Timer = urand(12000, 20000);
         }
-        else Slam_Timer -= diff;
+        else
+            Slam_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_gahzranka(Creature* pCreature)
-{
-    return new boss_gahzrankaAI(pCreature);
-}
+CreatureAI* GetAI_boss_gahzranka(Creature* pCreature) { return new boss_gahzrankaAI(pCreature); }
 
 void AddSC_boss_gahzranka()
 {

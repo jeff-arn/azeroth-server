@@ -19,15 +19,15 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "Anticheat.h"
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
-#include "Opcodes.h"
 #include "Log.h"
+#include "Opcodes.h"
 #include "Player.h"
+#include "UpdateMask.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "UpdateMask.h"
-#include "Anticheat.h"
 
 void WorldSession::HandleLearnTalentOpcode(WorldPacket& recv_data)
 {
@@ -55,14 +55,14 @@ void WorldSession::HandleTalentWipeConfirmOpcode(WorldPacket& recv_data)
 
     if (!(_player->ResetTalents()))
     {
-        WorldPacket data(MSG_TALENT_WIPE_CONFIRM, 8 + 4);   //you have not any talent
+        WorldPacket data(MSG_TALENT_WIPE_CONFIRM, 8 + 4); // you have not any talent
         data << uint64(0);
         data << uint32(0);
         SendPacket(&data);
         return;
     }
 
-    unit->CastSpell(_player, 14867, true);                  //spell: "Untalent Visual Effect"
+    unit->CastSpell(_player, 14867, true); // spell: "Untalent Visual Effect"
 }
 
 void WorldSession::HandleUnlearnSkillOpcode(WorldPacket& recv_data)

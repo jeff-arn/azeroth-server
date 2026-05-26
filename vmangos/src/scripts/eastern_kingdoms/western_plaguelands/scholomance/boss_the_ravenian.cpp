@@ -21,20 +21,17 @@ SDComment:
 SDCategory: Scholomance
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "scholomance.h"
+#include "scriptPCH.h"
 
-#define SPELL_TRAMPLE           15550
-#define SPELL_CLEAVE            20691
-#define SPELL_SUNDERINCLEAVE    25174
-#define SPELL_KNOCKAWAY         10101
+#define SPELL_TRAMPLE 15550
+#define SPELL_CLEAVE 20691
+#define SPELL_SUNDERINCLEAVE 25174
+#define SPELL_KNOCKAWAY 10101
 
 struct boss_theravenianAI : public ScriptedAI
 {
-    boss_theravenianAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_theravenianAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 Trample_Timer;
     uint32 Cleave_Timer;
@@ -51,7 +48,7 @@ struct boss_theravenianAI : public ScriptedAI
         HasYelled = false;
     }
 
-    void JustDied(Unit *killer) override
+    void JustDied(Unit* killer) override
     {
         if (ScriptedInstance* pInstance = (ScriptedInstance*)m_creature->GetInstanceData())
             pInstance->SetData(TYPE_RAVENIAN, DONE);
@@ -62,46 +59,47 @@ struct boss_theravenianAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //Trample_Timer
+        // Trample_Timer
         if (Trample_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_TRAMPLE);
             Trample_Timer = 10000;
         }
-        else Trample_Timer -= diff;
+        else
+            Trample_Timer -= diff;
 
-        //Cleave_Timer
+        // Cleave_Timer
         if (Cleave_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CLEAVE);
             Cleave_Timer = 7000;
         }
-        else Cleave_Timer -= diff;
+        else
+            Cleave_Timer -= diff;
 
-        //SunderingCleave_Timer
+        // SunderingCleave_Timer
         if (SunderingCleave_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SUNDERINCLEAVE);
             SunderingCleave_Timer = 20000;
         }
-        else SunderingCleave_Timer -= diff;
+        else
+            SunderingCleave_Timer -= diff;
 
-        //KnockAway_Timer
+        // KnockAway_Timer
         if (KnockAway_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_KNOCKAWAY);
             KnockAway_Timer = 12000;
         }
-        else KnockAway_Timer -= diff;
+        else
+            KnockAway_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_boss_theravenian(Creature* pCreature)
-{
-    return new boss_theravenianAI(pCreature);
-}
+CreatureAI* GetAI_boss_theravenian(Creature* pCreature) { return new boss_theravenianAI(pCreature); }
 
 void AddSC_boss_theravenian()
 {

@@ -26,8 +26,8 @@ npc_deathstalker_erland
 npc_deathstalker_faerleia
 EndContentData */
 
-#include "scriptPCH.h"
 #include "Group.h"
+#include "scriptPCH.h"
 
 namespace SilverpineUtils
 {
@@ -35,34 +35,34 @@ namespace SilverpineUtils
     {
         time_t rawtime;
         time(&rawtime);
-        struct tm * timeinfo = localtime(&rawtime);
+        struct tm* timeinfo = localtime(&rawtime);
         return ((timeinfo->tm_hour >= 21) || (timeinfo->tm_hour >= 0 && timeinfo->tm_hour < 9));
     }
-}
+} // namespace SilverpineUtils
 /*#####
 ## npc_deathstalker_erland
 #####*/
 
 enum DeathstalkerErlandData
 {
-    SAY_START_1         = 481,
-    SAY_START_2         = 482,
-    SAY_AGGRO_1         = 543,
-    SAY_AGGRO_2         = 544,
-    SAY_AGGRO_3         = 541,
-    SAY_PROGRESS        = 483,
-    SAY_END             = 484,
-    SAY_RANE            = 534,
-    SAY_RANE_REPLY      = 535,
-    SAY_CHECK_NEXT      = 536,
-    SAY_QUINN           = 537,
-    SAY_QUINN_REPLY     = 539,
-    SAY_BYE             = 538,
+    SAY_START_1 = 481,
+    SAY_START_2 = 482,
+    SAY_AGGRO_1 = 543,
+    SAY_AGGRO_2 = 544,
+    SAY_AGGRO_3 = 541,
+    SAY_PROGRESS = 483,
+    SAY_END = 484,
+    SAY_RANE = 534,
+    SAY_RANE_REPLY = 535,
+    SAY_CHECK_NEXT = 536,
+    SAY_QUINN = 537,
+    SAY_QUINN_REPLY = 539,
+    SAY_BYE = 538,
 
-    QUEST_ERLAND        = 435,
-    NPC_RANE            = 1950,
-    NPC_QUINN           = 1951,
-    FACTION_ESCORTEE    = 232
+    QUEST_ERLAND = 435,
+    NPC_RANE = 1950,
+    NPC_QUINN = 1951,
+    FACTION_ESCORTEE = 232
 };
 
 struct npc_deathstalker_erlandAI : public npc_escortAI
@@ -105,33 +105,33 @@ struct npc_deathstalker_erlandAI : public npc_escortAI
 
         switch (i)
         {
-            case 0:
-                DoScriptText(SAY_START_2, m_creature, pPlayer);
-                break;
-            case 13:
-                DoScriptText(SAY_END, m_creature, pPlayer);
-                pPlayer->GroupEventHappens(QUEST_ERLAND, m_creature);
-                break;
-            case 14:
-                if (Unit* pRane = m_creature->GetMap()->GetUnit(uiRaneGUID))
-                    DoScriptText(SAY_RANE, pRane, m_creature);
-                break;
-            case 15:
-                DoScriptText(SAY_RANE_REPLY, m_creature);
-                break;
-            case 16:
-                DoScriptText(SAY_CHECK_NEXT, m_creature);
-                break;
-            case 24:
-                DoScriptText(SAY_QUINN, m_creature);
-                break;
-            case 25:
-                if (Unit* pQuinn = m_creature->GetMap()->GetUnit(uiQuinnGUID))
-                    DoScriptText(SAY_QUINN_REPLY, pQuinn, m_creature);
-                break;
-            case 26:
-                DoScriptText(SAY_BYE, m_creature);
-                break;
+        case 0:
+            DoScriptText(SAY_START_2, m_creature, pPlayer);
+            break;
+        case 13:
+            DoScriptText(SAY_END, m_creature, pPlayer);
+            pPlayer->GroupEventHappens(QUEST_ERLAND, m_creature);
+            break;
+        case 14:
+            if (Unit* pRane = m_creature->GetMap()->GetUnit(uiRaneGUID))
+                DoScriptText(SAY_RANE, pRane, m_creature);
+            break;
+        case 15:
+            DoScriptText(SAY_RANE_REPLY, m_creature);
+            break;
+        case 16:
+            DoScriptText(SAY_CHECK_NEXT, m_creature);
+            break;
+        case 24:
+            DoScriptText(SAY_QUINN, m_creature);
+            break;
+        case 25:
+            if (Unit* pQuinn = m_creature->GetMap()->GetUnit(uiQuinnGUID))
+                DoScriptText(SAY_QUINN_REPLY, pQuinn, m_creature);
+            break;
+        case 26:
+            DoScriptText(SAY_BYE, m_creature);
+            break;
         }
     }
 
@@ -148,15 +148,15 @@ struct npc_deathstalker_erlandAI : public npc_escortAI
     {
         switch (urand(0, 2))
         {
-            case 0:
-                DoScriptText(SAY_AGGRO_1, m_creature, who);
-                break;
-            case 1:
-                DoScriptText(SAY_AGGRO_2, m_creature, who);
-                break;
-            case 2:
-                DoScriptText(SAY_AGGRO_3, m_creature, who);
-                break;
+        case 0:
+            DoScriptText(SAY_AGGRO_1, m_creature, who);
+            break;
+        case 1:
+            DoScriptText(SAY_AGGRO_2, m_creature, who);
+            break;
+        case 2:
+            DoScriptText(SAY_AGGRO_3, m_creature, who);
+            break;
         }
     }
 };
@@ -174,10 +174,7 @@ bool QuestAccept_npc_deathstalker_erland(Player* pPlayer, Creature* pCreature, Q
     return true;
 }
 
-CreatureAI* GetAI_npc_deathstalker_erland(Creature* pCreature)
-{
-    return new npc_deathstalker_erlandAI(pCreature);
-}
+CreatureAI* GetAI_npc_deathstalker_erland(Creature* pCreature) { return new npc_deathstalker_erlandAI(pCreature); }
 
 void AddSC_silverpine_forest()
 {

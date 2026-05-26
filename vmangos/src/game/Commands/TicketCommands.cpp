@@ -1,10 +1,10 @@
 #include "AccountMgr.h"
 #include "Chat.h"
+#include "GMTicketMgr.h"
 #include "Language.h"
 #include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "Player.h"
-#include "GMTicketMgr.h"
 #include "World.h"
 
 bool ChatHandler::HandleGMTicketAssignToCommand(char* args)
@@ -193,8 +193,7 @@ bool ChatHandler::HandleGMTicketCompleteCommand(char* args)
     if (Player* player = ticket->GetPlayer())
         ticket->SendResponse(player->GetSession());
 
-    std::string msg = ticket->FormatMessageString(*this, nullptr, nullptr,
-        nullptr, nullptr, GetSession() ? GetSession()->GetPlayer()->GetName() : "Console");
+    std::string msg = ticket->FormatMessageString(*this, nullptr, nullptr, nullptr, nullptr, GetSession() ? GetSession()->GetPlayer()->GetName() : "Console");
     sWorld.SendGMTicketText(msg.c_str());
     sTicketMgr->UpdateLastChange();
     return true;
@@ -278,13 +277,7 @@ bool ChatHandler::HandleGMTicketListEscalatedCommand(char* /*args*/)
 
 bool ChatHandler::HandleGMTicketListCommand(char* args)
 {
-    static std::unordered_map<std::string, uint8> const categories
-    {
-        { "stuck", 1 },{ "behavior", 2 },{ "harassment", 2 },{ "guild", 3 },
-        { "item", 4 },{ "environment", 5 },{ "world", 5 },{ "npc", 6 },
-        { "creature", 6 },{ "creep", 6 },{ "quest", 7 },{ "questnpc", 7 },
-        { "technical", 8 },{ "account", 9 },{ "billing", 9 },{ "character", 10 }
-    };
+    static std::unordered_map<std::string, uint8> const categories{{"stuck", 1}, {"behavior", 2}, {"harassment", 2}, {"guild", 3}, {"item", 4}, {"environment", 5}, {"world", 5}, {"npc", 6}, {"creature", 6}, {"creep", 6}, {"quest", 7}, {"questnpc", 7}, {"technical", 8}, {"account", 9}, {"billing", 9}, {"character", 10}};
 
     auto it = categories.find(args);
 
@@ -298,13 +291,7 @@ bool ChatHandler::HandleGMTicketListCommand(char* args)
 
 bool ChatHandler::HandleGMTicketListOnlineCommand(char* args)
 {
-    static std::unordered_map<std::string, uint8> const categories
-    {
-        { "stuck", 1 },{ "behavior", 2 },{ "harassment", 2 },{ "guild", 3 },
-        { "item", 4 },{ "environment", 5 },{ "world", 5 },{ "npc", 6 },
-        { "creature", 6 },{ "creep", 6 },{ "quest", 7 },{ "questnpc", 7 },
-        { "technical", 8 },{ "account", 9 },{ "billing", 9 },{ "character", 10 }
-    };
+    static std::unordered_map<std::string, uint8> const categories{{"stuck", 1}, {"behavior", 2}, {"harassment", 2}, {"guild", 3}, {"item", 4}, {"environment", 5}, {"world", 5}, {"npc", 6}, {"creature", 6}, {"creep", 6}, {"quest", 7}, {"questnpc", 7}, {"technical", 8}, {"account", 9}, {"billing", 9}, {"character", 10}};
 
     auto it = categories.find(args);
 
@@ -385,8 +372,7 @@ bool ChatHandler::HandleGMTicketUnAssignCommand(char* args)
     ticket->SaveToDB();
     sTicketMgr->UpdateLastChange();
 
-    std::string msg = ticket->FormatMessageString(*this, nullptr, assignedTo.c_str(),
-        GetSession() ? GetSession()->GetPlayer()->GetName() : "Console", nullptr, nullptr);
+    std::string msg = ticket->FormatMessageString(*this, nullptr, assignedTo.c_str(), GetSession() ? GetSession()->GetPlayer()->GetName() : "Console", nullptr, nullptr);
     sWorld.SendGMTicketText(msg.c_str());
 
     return true;
@@ -451,20 +437,11 @@ bool ChatHandler::ViewTicket(GmTicket* ticket)
     return true;
 }
 
-bool ChatHandler::HandleGMTicketGetByIdOrNameCommand(char* args)
-{
-    return ViewTicketByIdOrName(args, args);
-}
+bool ChatHandler::HandleGMTicketGetByIdOrNameCommand(char* args) { return ViewTicketByIdOrName(args, args); }
 
-bool ChatHandler::HandleGMTicketGetByIdCommand(char* args)
-{
-    return ViewTicketByIdOrName(args, nullptr);
-}
+bool ChatHandler::HandleGMTicketGetByIdCommand(char* args) { return ViewTicketByIdOrName(args, nullptr); }
 
-bool ChatHandler::HandleGMTicketGetByNameCommand(char* args)
-{
-    return ViewTicketByIdOrName(nullptr, args);
-}
+bool ChatHandler::HandleGMTicketGetByNameCommand(char* args) { return ViewTicketByIdOrName(nullptr, args); }
 
 bool ChatHandler::HandleGMTicketResponseResetCommand(char* args)
 {
@@ -532,15 +509,9 @@ bool _HandleGMTicketResponseAppendCommand(char* args, bool newLine, ChatHandler*
     return true;
 }
 
-bool ChatHandler::HandleGMTicketResponseAppendCommand(char* args)
-{
-    return _HandleGMTicketResponseAppendCommand(args, false, this);
-}
+bool ChatHandler::HandleGMTicketResponseAppendCommand(char* args) { return _HandleGMTicketResponseAppendCommand(args, false, this); }
 
-bool ChatHandler::HandleGMTicketResponseAppendLnCommand(char* args)
-{
-    return _HandleGMTicketResponseAppendCommand(args, true, this);
-}
+bool ChatHandler::HandleGMTicketResponseAppendLnCommand(char* args) { return _HandleGMTicketResponseAppendCommand(args, true, this); }
 
 bool ChatHandler::HandleGMTicketNotifyCommand(char* args)
 {

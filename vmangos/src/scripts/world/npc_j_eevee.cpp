@@ -1,5 +1,5 @@
-#include "scriptPCH.h"
 #include "npc_j_eevee.h"
+#include "scriptPCH.h"
 
 struct EventLocations
 {
@@ -7,31 +7,30 @@ struct EventLocations
     int m_wait;
 };
 
-static EventLocations aJeeveeDreadsteedLocations[] =
-{
-    { -38.939999f, 812.849976f, -29.530002f, 4.890318f, 3500 }, //Jeevee spawn
-    { -27.768442f, 812.457703f, -29.535814f, 6.258483f, 4000 }, //Jeevee first point
-    { -45.293509f, 822.046747f, -29.535671f, 2.211563f, 3000 }, //Jeevee second point
-    { -44.074763f, 802.921135f, -29.535734f, 4.357706f, 3000 }, //Jeevee third point
-    { -38.939999f, 812.849976f, -29.530002f, 4.890318f, 4000 } //Jeevee last point
+static EventLocations aJeeveeDreadsteedLocations[] = {
+    {-38.939999f, 812.849976f, -29.530002f, 4.890318f, 3500}, // Jeevee spawn
+    {-27.768442f, 812.457703f, -29.535814f, 6.258483f, 4000}, // Jeevee first point
+    {-45.293509f, 822.046747f, -29.535671f, 2.211563f, 3000}, // Jeevee second point
+    {-44.074763f, 802.921135f, -29.535734f, 4.357706f, 3000}, // Jeevee third point
+    {-38.939999f, 812.849976f, -29.530002f, 4.890318f, 4000} // Jeevee last point
 };
 enum
 {
-    SPELL_J_EEVEE_SUMMONS_OBJECT    = 23140,
-    SPELL_J_EEVEE_TELEPORT          = 7791,
+    SPELL_J_EEVEE_SUMMONS_OBJECT = 23140,
+    SPELL_J_EEVEE_TELEPORT = 7791,
 
-    SHOUT_J_EEVEE_FREEDOM           = 9705,
-    SAY_J_EEVEE_DREADSTEED_1        = 9702,
-    SAY_J_EEVEE_DREADSTEED_2        = 9703,
-    SAY_J_EEVEE_DREADSTEED_3        = 9704,
-    SAY_J_EEVEE_DREADSTEED_4        = 9706,
+    SHOUT_J_EEVEE_FREEDOM = 9705,
+    SAY_J_EEVEE_DREADSTEED_1 = 9702,
+    SAY_J_EEVEE_DREADSTEED_2 = 9703,
+    SAY_J_EEVEE_DREADSTEED_3 = 9704,
+    SAY_J_EEVEE_DREADSTEED_4 = 9706,
 
-    SAY_J_EEVEE_SCHOLOMANCE_1       = 9769,
-    SAY_J_EEVEE_SCHOLOMANCE_2       = 9770,
-    SAY_J_EEVEE_SCHOLOMANCE_3       = 9771,
-    SAY_J_EEVEE_SCHOLOMANCE_4       = 9742,
+    SAY_J_EEVEE_SCHOLOMANCE_1 = 9769,
+    SAY_J_EEVEE_SCHOLOMANCE_2 = 9770,
+    SAY_J_EEVEE_SCHOLOMANCE_3 = 9771,
+    SAY_J_EEVEE_SCHOLOMANCE_4 = 9742,
 
-    QUEST_IMP_DELIVERY              = 7629
+    QUEST_IMP_DELIVERY = 7629
 };
 
 
@@ -54,21 +53,21 @@ void npc_j_eevee_dreadsteedAI::MovementInform(uint32 uiType, uint32 uiPointId)
         return;
     switch (uiPointId)
     {
-        case 1:
-        case 2:
-        case 3:
-            m_creature->SetFacingTo(aJeeveeDreadsteedLocations[currentPoint].m_fO);
-            waypointReached = true;
-            m_creature->CastSpell(m_creature, SPELL_J_EEVEE_SUMMONS_OBJECT, false);
-            break;
-        case 4:
-            m_creature->SetFacingTo(aJeeveeDreadsteedLocations[currentPoint].m_fO);
-            waypointReached = true;
-            if (Player* player = m_creature->GetMap()->GetPlayer(guidPlayer))
-                DoScriptText(SAY_J_EEVEE_DREADSTEED_4, m_creature, player);
+    case 1:
+    case 2:
+    case 3:
+        m_creature->SetFacingTo(aJeeveeDreadsteedLocations[currentPoint].m_fO);
+        waypointReached = true;
+        m_creature->CastSpell(m_creature, SPELL_J_EEVEE_SUMMONS_OBJECT, false);
+        break;
+    case 4:
+        m_creature->SetFacingTo(aJeeveeDreadsteedLocations[currentPoint].m_fO);
+        waypointReached = true;
+        if (Player* player = m_creature->GetMap()->GetPlayer(guidPlayer))
+            DoScriptText(SAY_J_EEVEE_DREADSTEED_4, m_creature, player);
 
-            DoCastSpellIfCan(m_creature, SPELL_J_EEVEE_TELEPORT, CF_TRIGGERED);
-            break;
+        DoCastSpellIfCan(m_creature, SPELL_J_EEVEE_TELEPORT, CF_TRIGGERED);
+        break;
     }
 }
 void npc_j_eevee_dreadsteedAI::UpdateAI(uint32 const uiDiff)
@@ -83,15 +82,15 @@ void npc_j_eevee_dreadsteedAI::UpdateAI(uint32 const uiDiff)
                 {
                     switch (currentPoint)
                     {
-                        case 0:
-                            DoScriptText(SAY_J_EEVEE_DREADSTEED_1, m_creature);
-                            break;
-                        case 1:
-                            DoScriptText(SAY_J_EEVEE_DREADSTEED_2, m_creature);
-                            break;
-                        case 2:
-                            DoScriptText(SAY_J_EEVEE_DREADSTEED_3, m_creature);
-                            break;
+                    case 0:
+                        DoScriptText(SAY_J_EEVEE_DREADSTEED_1, m_creature);
+                        break;
+                    case 1:
+                        DoScriptText(SAY_J_EEVEE_DREADSTEED_2, m_creature);
+                        break;
+                    case 2:
+                        DoScriptText(SAY_J_EEVEE_DREADSTEED_3, m_creature);
+                        break;
                     }
                     currentPoint++;
                     m_creature->GetMotionMaster()->MovePoint(currentPoint, aJeeveeDreadsteedLocations[currentPoint].m_fX, aJeeveeDreadsteedLocations[currentPoint].m_fY, aJeeveeDreadsteedLocations[currentPoint].m_fZ, true);
@@ -108,31 +107,24 @@ void npc_j_eevee_dreadsteedAI::UpdateAI(uint32 const uiDiff)
     }
     DoMeleeAttackIfReady();
 }
-void npc_j_eevee_dreadsteedAI::SetPlayerGuid(uint64 playerGuid)
-{
-    guidPlayer = playerGuid;
-}
-void npc_j_eevee_dreadsteedAI::ShoutFreedom()
-{
-    DoScriptText(SHOUT_J_EEVEE_FREEDOM, m_creature);
-}
+void npc_j_eevee_dreadsteedAI::SetPlayerGuid(uint64 playerGuid) { guidPlayer = playerGuid; }
+void npc_j_eevee_dreadsteedAI::ShoutFreedom() { DoScriptText(SHOUT_J_EEVEE_FREEDOM, m_creature); }
 
-static EventLocations aJeeveeScholomanceLocations[] =
-{
-    { 38.706051f, 156.989319f, 83.545631f, 1.585528f, 2000 },       // 1. spawn, Text 1
-    { 38.123325f, 159.745956f, 83.545631f, 1.587492f, 300 },        // 2. Move
-    { 36.478260f, 160.530975f, 83.545631f, 3.179874f, 4000 },       // 3. Move, EMOTE_ONESHOT_ATTACK once point reached
-    { 38.123325f, 159.745956f, 83.545631f, 5.250862f, 100 },        // 4. Move, text 2 at start of movement
-    { 41.213757f, 155.202774f, 83.545631f, 0.098650f, 50 },         // 5. Move
-    { 45.890804f, 155.115601f, 83.545631f, 0.018146f, 50 },         // 6. Move
-    { 46.639896f, 160.362015f, 83.545631f, 2.549089f, 50 },         // 7. Move
-    { 44.227440f, 160.631088f, 83.545631f, 2.549089f, 4000 },       // 8. Move, EMOTE_ONESHOT_ATTACK once point reached (attack twice?)
-    { 46.639896f, 160.362015f, 83.545631f, 5.250862f, 300 },        // 9. Move, run. text 3 at start of movement
-    { 46.425823f, 154.547577f, 83.645631f, 3.108989f, 50 },         // 10. Move
-    { 34.415833f, 154.561859f, 83.645631f, 3.140403f, 50 },         // 11. Move, run
-    { 28.838001f, 160.411469f, 83.645631f, 2.378568f, 100 },        // 12. Move, run
-    { 33.201927f, 160.234833f, 83.645624f, 6.242730f, 4000 },       // 13. Move WALK again, emote attack
-    { 33.201927f, 160.234833f, 83.645624f, 6.242730f, 2000 },       // 14. Finished, speak Text 4
+static EventLocations aJeeveeScholomanceLocations[] = {
+    {38.706051f, 156.989319f, 83.545631f, 1.585528f, 2000}, // 1. spawn, Text 1
+    {38.123325f, 159.745956f, 83.545631f, 1.587492f, 300}, // 2. Move
+    {36.478260f, 160.530975f, 83.545631f, 3.179874f, 4000}, // 3. Move, EMOTE_ONESHOT_ATTACK once point reached
+    {38.123325f, 159.745956f, 83.545631f, 5.250862f, 100}, // 4. Move, text 2 at start of movement
+    {41.213757f, 155.202774f, 83.545631f, 0.098650f, 50}, // 5. Move
+    {45.890804f, 155.115601f, 83.545631f, 0.018146f, 50}, // 6. Move
+    {46.639896f, 160.362015f, 83.545631f, 2.549089f, 50}, // 7. Move
+    {44.227440f, 160.631088f, 83.545631f, 2.549089f, 4000}, // 8. Move, EMOTE_ONESHOT_ATTACK once point reached (attack twice?)
+    {46.639896f, 160.362015f, 83.545631f, 5.250862f, 300}, // 9. Move, run. text 3 at start of movement
+    {46.425823f, 154.547577f, 83.645631f, 3.108989f, 50}, // 10. Move
+    {34.415833f, 154.561859f, 83.645631f, 3.140403f, 50}, // 11. Move, run
+    {28.838001f, 160.411469f, 83.645631f, 2.378568f, 100}, // 12. Move, run
+    {33.201927f, 160.234833f, 83.645624f, 6.242730f, 4000}, // 13. Move WALK again, emote attack
+    {33.201927f, 160.234833f, 83.645624f, 6.242730f, 2000}, // 14. Finished, speak Text 4
 };
 
 npc_j_eevee_scholomanceAI::npc_j_eevee_scholomanceAI(Creature* pCreature) : ScriptedAI(pCreature)
@@ -171,22 +163,22 @@ void npc_j_eevee_scholomanceAI::MovementInform(uint32 uiType, uint32 uiPointId)
     waypointReached = true;
     switch (uiPointId)
     {
-        case 2:
-            m_creature->HandleEmote(EMOTE_ONESHOT_ATTACKUNARMED);
-            attackRepeatTimer = 1000;
-            break;
-        case 7:
-            m_creature->HandleEmote(EMOTE_ONESHOT_ATTACKUNARMED);
-            attackRepeatTimer = 1000;
-            break;
-        case 12:
-            m_creature->HandleEmote(EMOTE_ONESHOT_ATTACKUNARMED);
-            attackRepeatTimer = 1000;
-            break;
-        case 13:
-            DoCastSpellIfCan(m_creature, SPELL_J_EEVEE_TELEPORT, CF_TRIGGERED);
-            finished = true;
-            break;
+    case 2:
+        m_creature->HandleEmote(EMOTE_ONESHOT_ATTACKUNARMED);
+        attackRepeatTimer = 1000;
+        break;
+    case 7:
+        m_creature->HandleEmote(EMOTE_ONESHOT_ATTACKUNARMED);
+        attackRepeatTimer = 1000;
+        break;
+    case 12:
+        m_creature->HandleEmote(EMOTE_ONESHOT_ATTACKUNARMED);
+        attackRepeatTimer = 1000;
+        break;
+    case 13:
+        DoCastSpellIfCan(m_creature, SPELL_J_EEVEE_TELEPORT, CF_TRIGGERED);
+        finished = true;
+        break;
     }
 }
 
@@ -202,27 +194,27 @@ void npc_j_eevee_scholomanceAI::UpdateAI(uint32 const uiDiff)
                 {
                     switch (currentPoint)
                     {
-                        case 0:
-                            DoScriptText(SAY_J_EEVEE_SCHOLOMANCE_1, m_creature);
-                            break;
-                        case 3:
-                            DoScriptText(SAY_J_EEVEE_SCHOLOMANCE_2, m_creature);
-                            break;
-                        case 8:
-                            DoScriptText(SAY_J_EEVEE_SCHOLOMANCE_3, m_creature);
-                            m_creature->SetWalk(false);
-                            break;
-                        case 11:
-                            m_creature->SetWalk(true);
-                            break;
-                        case 12:
-                            // final script text
-                            DoScriptText(SAY_J_EEVEE_SCHOLOMANCE_4, m_creature);
+                    case 0:
+                        DoScriptText(SAY_J_EEVEE_SCHOLOMANCE_1, m_creature);
+                        break;
+                    case 3:
+                        DoScriptText(SAY_J_EEVEE_SCHOLOMANCE_2, m_creature);
+                        break;
+                    case 8:
+                        DoScriptText(SAY_J_EEVEE_SCHOLOMANCE_3, m_creature);
+                        m_creature->SetWalk(false);
+                        break;
+                    case 11:
+                        m_creature->SetWalk(true);
+                        break;
+                    case 12:
+                        // final script text
+                        DoScriptText(SAY_J_EEVEE_SCHOLOMANCE_4, m_creature);
 
-                            if (Player* player = m_creature->GetMap()->GetPlayer(guidPlayer))
-                                player->KilledMonsterCredit(14500, m_creature->GetObjectGuid());
+                        if (Player* player = m_creature->GetMap()->GetPlayer(guidPlayer))
+                            player->KilledMonsterCredit(14500, m_creature->GetObjectGuid());
 
-                            break;
+                        break;
                     }
 
                     currentPoint++;
@@ -260,7 +252,7 @@ void npc_j_eevee_scholomanceAI::UpdateAI(uint32 const uiDiff)
 
 CreatureAI* GetAI_npc_j_eevee(Creature* pCreature)
 {
-    if (pCreature->GetMapId() == MAP_DIRE_MAUL) //Map 429 Zone 2557. Dire Maul.
+    if (pCreature->GetMapId() == MAP_DIRE_MAUL) // Map 429 Zone 2557. Dire Maul.
         return new npc_j_eevee_dreadsteedAI(pCreature);
     else if (pCreature->GetMapId() == MAP_SCHOLOMANCE) // Map 289, Zone 2057. Scholomance
         return new npc_j_eevee_scholomanceAI(pCreature);

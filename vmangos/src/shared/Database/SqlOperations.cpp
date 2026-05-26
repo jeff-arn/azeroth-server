@@ -20,11 +20,11 @@
  */
 
 #include "SqlOperations.h"
-#include "SqlDelayThread.h"
 #include "DatabaseEnv.h"
 #include "DatabaseImpl.h"
-#include "Timer.h"
+#include "SqlDelayThread.h"
 #include "ThreadPool.h"
+#include "Timer.h"
 
 #define LOCK_DB_CONN(conn) SqlConnection::Lock guard(conn)
 
@@ -39,7 +39,7 @@ bool SqlPlainRequest::Execute(SqlConnection* conn)
 
 SqlTransaction::~SqlTransaction()
 {
-    while(!m_queue.empty())
+    while (!m_queue.empty())
     {
         delete m_queue.back();
         m_queue.pop_back();
@@ -48,7 +48,7 @@ SqlTransaction::~SqlTransaction()
 
 bool SqlTransaction::Execute(SqlConnection* conn)
 {
-    if(m_queue.empty())
+    if (m_queue.empty())
         return true;
 
     LOCK_DB_CONN(conn);
@@ -60,7 +60,7 @@ bool SqlTransaction::Execute(SqlConnection* conn)
     {
         SqlOperation* pStmt = m_queue[i];
 
-        if(!pStmt->Execute(conn))
+        if (!pStmt->Execute(conn))
         {
             conn->RollbackTransaction();
             return false;
@@ -70,14 +70,9 @@ bool SqlTransaction::Execute(SqlConnection* conn)
     return conn->CommitTransaction();
 }
 
-SqlPreparedRequest::SqlPreparedRequest(int nIndex, SqlStmtParameters* arg) : m_nIndex(nIndex), m_param(arg)
-{
-}
+SqlPreparedRequest::SqlPreparedRequest(int nIndex, SqlStmtParameters* arg) : m_nIndex(nIndex), m_param(arg) {}
 
-SqlPreparedRequest::~SqlPreparedRequest()
-{
-    delete m_param;
-}
+SqlPreparedRequest::~SqlPreparedRequest() { delete m_param; }
 
 bool SqlPreparedRequest::Execute(SqlConnection* conn)
 {
@@ -89,7 +84,7 @@ bool SqlPreparedRequest::Execute(SqlConnection* conn)
 
 bool SqlQuery::Execute(SqlConnection* conn)
 {
-    if(!m_callback || !m_queue)
+    if (!m_callback || !m_queue)
         return false;
 
     LOCK_DB_CONN(conn);
@@ -120,8 +115,9 @@ void SqlResultQueue::Update(uint32 timeout)
         else
         {
             ++n;
-            //caller->queue.add(callback);
-            m_callbackThreads << [callback, n](){
+            // caller->queue.add(callback);
+            m_callbackThreads << [callback, n]()
+            {
                 callback->Execute();
                 delete callback;
             };
@@ -143,7 +139,7 @@ void SqlResultQueue::Update(uint32 timeout)
 
     if (job.valid())
         job.wait();
- }
+}
 
 
 #ifndef DO_POSTGRESQL
@@ -152,13 +148,9 @@ using SqlResultQueueWorker = ThreadPool::ThreadPool::MySQL<>;
 using SqlResultQueueWorker = ThreadPool::SingleQueue;
 #endif
 
-SqlResultQueue::SqlResultQueue() :
-    numUnsafeQueries(0), m_callbackThreads(new ThreadPool("SqlResult", 6))
-{
-    m_callbackThreads->start<SqlResultQueueWorker>();
-}
+SqlResultQueue::SqlResultQueue() : numUnsafeQueries(0), m_callbackThreads(new ThreadPool("SqlResult", 6)) { m_callbackThreads->start<SqlResultQueueWorker>(); }
 
-SqlResultQueue::~SqlResultQueue(){}
+SqlResultQueue::~SqlResultQueue() {}
 
 void SqlResultQueue::CancelAll()
 {
@@ -173,12 +165,12 @@ void SqlResultQueue::CancelAll()
 
 bool SqlQueryHolder::Execute(MaNGOS::IQueryCallback* callback, Database* database, SqlResultQueue* queue)
 {
-    if(!callback || !database || !queue)
+    if (!callback || !database || !queue)
         return false;
 
     // delay the execution of the queries, sync them with the delay thread
     // which will in turn resync on execution (via the queue) and call back
-    SqlQueryHolderEx *holderEx = new SqlQueryHolderEx(this, callback, queue, serialId);
+    SqlQueryHolderEx* holderEx = new SqlQueryHolderEx(this, callback, queue, serialId);
 
     database->AddToSerialDelayQueue(holderEx);
     return true;
@@ -186,16 +178,15 @@ bool SqlQueryHolder::Execute(MaNGOS::IQueryCallback* callback, Database* databas
 
 bool SqlQueryHolder::SetQuery(size_t index, std::string const& sql)
 {
-    if(m_queries.size() <= index)
+    if (m_queries.size() <= index)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Query index (" SIZEFMTD ") out of range (size: " SIZEFMTD ") for query: %s", index, m_queries.size(), sql.c_str());
         return false;
     }
 
-    if(!m_queries[index].first.empty())
+    if (!m_queries[index].first.empty())
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Attempt assign query to holder index (" SIZEFMTD ") where other query stored (Old: [%s] New: [%s])",
-            index,m_queries[index].first.c_str(), sql.c_str());
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Attempt assign query to holder index (" SIZEFMTD ") where other query stored (Old: [%s] New: [%s])", index, m_queries[index].first.c_str(), sql.c_str());
         return false;
     }
 
@@ -206,37 +197,39 @@ bool SqlQueryHolder::SetQuery(size_t index, std::string const& sql)
 
 bool SqlQueryHolder::SetPQuery(size_t index, char const* format, ...)
 {
-    if(!format)
+    if (!format)
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Query (index: " SIZEFMTD ") is empty.",index);
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Query (index: " SIZEFMTD ") is empty.", index);
         return false;
     }
 
     va_list ap;
-    char szQuery [MAX_QUERY_LEN];
+    char szQuery[MAX_QUERY_LEN];
     va_start(ap, format);
     int res = vsnprintf(szQuery, MAX_QUERY_LEN, format, ap);
     va_end(ap);
 
-    if(res == -1)
+    if (res == -1)
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s",format);
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SQL Query truncated (and not execute) for format: %s", format);
         return false;
     }
 
-    return SetQuery(index,std::string(szQuery)); // std::string ctor copies szQuery
+    return SetQuery(index, std::string(szQuery)); // std::string ctor copies szQuery
 }
 
 /// When you are using this function, you are the new owner of the ptr. The query will be removed from the QueryHolder
 std::unique_ptr<QueryResult> SqlQueryHolder::TakeResult(size_t index)
 {
-    if (index >= m_queries.size()) {
+    if (index >= m_queries.size())
+    {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SqlQueryHolder: TakeResult(" SIZEFMTD ") out of range (size: " SIZEFMTD ")", index, m_queries.size());
         return nullptr;
     }
 
     auto& entry = m_queries[index];
-    if (entry.first.empty()) {
+    if (entry.first.empty())
+    {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "SqlQueryHolder: TakeResult(" SIZEFMTD ") is already empty", index);
         return nullptr;
     }
@@ -248,7 +241,7 @@ std::unique_ptr<QueryResult> SqlQueryHolder::TakeResult(size_t index)
 void SqlQueryHolder::SetResult(size_t index, std::unique_ptr<QueryResult> result)
 {
     // store the result in the holder
-    if(index < m_queries.size())
+    if (index < m_queries.size())
         m_queries[index].second = std::move(result);
 }
 
@@ -270,7 +263,7 @@ void SqlQueryHolder::SetSize(size_t size)
 
 bool SqlQueryHolderEx::Execute(SqlConnection* conn)
 {
-    if(!m_holder || !m_callback || !m_queue)
+    if (!m_holder || !m_callback || !m_queue)
         return false;
 
     LOCK_DB_CONN(conn);
@@ -280,7 +273,8 @@ bool SqlQueryHolderEx::Execute(SqlConnection* conn)
     {
         // execute all queries in the holder and pass the results
         std::string const& sql = queries[i].first;
-        if (!sql.empty()) {
+        if (!sql.empty())
+        {
             std::unique_ptr<QueryResult> result = conn->Query(sql);
             m_holder->SetResult(i, std::move(result));
         }

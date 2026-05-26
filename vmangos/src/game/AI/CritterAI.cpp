@@ -62,4 +62,3 @@ void CritterAI::UpdateAI(uint32 const diff)
             m_uiCombatTimer -= diff;
     }
 }
-

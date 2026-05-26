@@ -22,11 +22,11 @@
 #ifndef _ACCMGR_H
 #define _ACCMGR_H
 
-#include "Common.h"
-#include "Policies/Singleton.h"
-#include <string>
 #include <memory>
 #include <shared_mutex>
+#include <string>
+#include "Common.h"
+#include "Policies/Singleton.h"
 
 enum AccountOpResult
 {
@@ -51,8 +51,8 @@ class QueryResult;
 class AccountPersistentData
 {
     friend class AccountMgr;
-public:
 
+public:
     // WHISP FLOOD
     struct WhisperData
     {
@@ -86,65 +86,66 @@ protected:
 
 class AccountMgr
 {
-    public:
-        AccountMgr();
-        ~AccountMgr();
+public:
+    AccountMgr();
+    ~AccountMgr();
 
-        AccountOpResult CreateAccount(std::string username, std::string password);
-        AccountOpResult DeleteAccount(uint32 accid);
-        AccountOpResult ChangeUsername(uint32 accid, std::string new_uname, std::string new_passwd);
-        AccountOpResult ChangePassword(uint32 accid, std::string new_passwd, std::string username="");
-        bool CheckPassword(uint32 accid, std::string passwd, std::string username="");
-        std::string CalculateShaPassHash(std::string const& name, std::string const& password);
+    AccountOpResult CreateAccount(std::string username, std::string password);
+    AccountOpResult DeleteAccount(uint32 accid);
+    AccountOpResult ChangeUsername(uint32 accid, std::string new_uname, std::string new_passwd);
+    AccountOpResult ChangePassword(uint32 accid, std::string new_passwd, std::string username = "");
+    bool CheckPassword(uint32 accid, std::string passwd, std::string username = "");
+    std::string CalculateShaPassHash(std::string const& name, std::string const& password);
 
-        void Load();
-        void LoadAccountData();
-        AccountPersistentData& GetAccountPersistentData(uint32 accountId);
-        void UpdateAccountData(uint32 accountId, std::string const& username, std::string const& email, bool verifiedEmail, AccountTypes security);
+    void Load();
+    void LoadAccountData();
+    AccountPersistentData& GetAccountPersistentData(uint32 accountId);
+    void UpdateAccountData(uint32 accountId, std::string const& username, std::string const& email, bool verifiedEmail, AccountTypes security);
 
-        uint32 GetId(std::string username);
-        AccountTypes GetSecurity(uint32 accountId);
-        void SetSecurity(uint32 accountId, AccountTypes security);
-        bool GetName(uint32 accountId, std::string &name);
-        uint32 GetCharactersCount(uint32 acc_id);
-        bool HasTrialRestrictions(uint32 accountId);
+    uint32 GetId(std::string username);
+    AccountTypes GetSecurity(uint32 accountId);
+    void SetSecurity(uint32 accountId, AccountTypes security);
+    bool GetName(uint32 accountId, std::string& name);
+    uint32 GetCharactersCount(uint32 acc_id);
+    bool HasTrialRestrictions(uint32 accountId);
 
-        static bool normalizeString(std::string& utf8str);
+    static bool normalizeString(std::string& utf8str);
 
-        void Update(uint32 diff);
-        void LoadIPBanList(std::unique_ptr<QueryResult> result, bool silent=false);
-        void LoadAccountBanList(bool silent=false);
-        void BanIP(std::string const& ip, uint32 unbandate) { m_ipBanned[ip] = unbandate; }
-        void UnbanIP(std::string const& ip) { m_ipBanned.erase(ip); }
-        void BanAccount(uint32 account, uint32 unbandate) { m_accountBanned[account] = unbandate; }
-        void UnbanAccount(uint32 acc) { m_accountBanned.erase(acc); }
-        bool IsIPBanned(std::string const& ip) const;
-        bool IsAccountBanned(uint32 acc) const;
+    void Update(uint32 diff);
+    void LoadIPBanList(std::unique_ptr<QueryResult> result, bool silent = false);
+    void LoadAccountBanList(bool silent = false);
+    void BanIP(std::string const& ip, uint32 unbandate) { m_ipBanned[ip] = unbandate; }
+    void UnbanIP(std::string const& ip) { m_ipBanned.erase(ip); }
+    void BanAccount(uint32 account, uint32 unbandate) { m_accountBanned[account] = unbandate; }
+    void UnbanAccount(uint32 acc) { m_accountBanned.erase(acc); }
+    bool IsIPBanned(std::string const& ip) const;
+    bool IsAccountBanned(uint32 acc) const;
 
-        void LoadAccountWarnings();
-        void WarnAccount(uint32 acc, std::string reason) { m_accountWarnings[acc] = reason; }
-        char const* GetWarningText(uint32 acc) const
-        {
-            auto itr = m_accountWarnings.find(acc);
-            if (itr != m_accountWarnings.end())
-                return itr->second.c_str();
-            return nullptr;
-        }
+    void LoadAccountWarnings();
+    void WarnAccount(uint32 acc, std::string reason) { m_accountWarnings[acc] = reason; }
+    char const* GetWarningText(uint32 acc) const
+    {
+        auto itr = m_accountWarnings.find(acc);
+        if (itr != m_accountWarnings.end())
+            return itr->second.c_str();
+        return nullptr;
+    }
 
-        // Max instance reset per account per hour
-        bool CheckInstanceCount(uint32 accountId, uint32 instanceId, uint32 maxCount);
-        void AddInstanceEnterTime(uint32 accountId, uint32 instanceId, time_t enterTime);
-    protected:
-        std::map<uint32, std::string> m_accountWarnings;
-        uint32 m_banlistUpdateTimer;
-        std::map<std::string, uint32> m_ipBanned;
-        mutable std::shared_timed_mutex m_ipBannedMutex;
-        std::map<uint32, uint32> m_accountBanned;
-        typedef std::map<uint32 /* instanceId */, time_t /* enter time */> InstanceEnterTimesMap;
-        typedef std::map<uint32 /* accountId */, InstanceEnterTimesMap> AccountInstanceEnterTimesMap;
-        AccountInstanceEnterTimesMap m_instanceEnterTimes;
-        std::map<uint32, AccountPersistentData> m_accountPersistentData;
-        std::shared_timed_mutex m_accountPersistentDataMutex;
+    // Max instance reset per account per hour
+    bool CheckInstanceCount(uint32 accountId, uint32 instanceId, uint32 maxCount);
+    void AddInstanceEnterTime(uint32 accountId, uint32 instanceId, time_t enterTime);
+
+protected:
+    std::map<uint32, std::string> m_accountWarnings;
+    uint32 m_banlistUpdateTimer;
+    std::map<std::string, uint32> m_ipBanned;
+    mutable std::shared_timed_mutex m_ipBannedMutex;
+    std::map<uint32, uint32> m_accountBanned;
+    typedef std::map<uint32 /* instanceId */, time_t /* enter time */> InstanceEnterTimesMap;
+    typedef std::map<uint32 /* accountId */, InstanceEnterTimesMap> AccountInstanceEnterTimesMap;
+    AccountInstanceEnterTimesMap m_instanceEnterTimes;
+    std::map<uint32, AccountPersistentData> m_accountPersistentData;
+    std::shared_timed_mutex m_accountPersistentDataMutex;
 };
 
 #define sAccountMgr MaNGOS::Singleton<AccountMgr>::Instance()

@@ -14,23 +14,23 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "blackwing_lair.h"
+#include "scriptPCH.h"
 
 // Razorgore Phase 2 Script
 enum Razorgore : uint32
 {
-    SAY_FREE              = 7980,
-    EMOTE_FLEE            = 9592,
+    SAY_FREE = 7980,
+    EMOTE_FLEE = 9592,
 
-    SPELL_CLEAVE          = 19632,
-    SPELL_WARSTOMP        = 24375,
+    SPELL_CLEAVE = 19632,
+    SPELL_WARSTOMP = 24375,
     SPELL_FIREBALL_VOLLEY = 22425,
-    SPELL_CONFLAGRATION   = 23023,
-    SPELL_SUMMON_PLAYER   = 25104,
-    MODEL_INVISIBLE       = 11686,
+    SPELL_CONFLAGRATION = 23023,
+    SPELL_SUMMON_PLAYER = 25104,
+    MODEL_INVISIBLE = 11686,
 
-    SPELL_EXPLOSION       = 20038, // TODO : better use?
+    SPELL_EXPLOSION = 20038, // TODO : better use?
 };
 
 // North
@@ -92,12 +92,12 @@ struct boss_razorgoreAI : public ScriptedAI
     void Reset() override
     {
         SetCombatMovement(true);
-        m_uiCleaveTimer         = 9000; // These times are probably wrong
-        m_uiWarStompTimer       = 22000;
-        m_uiConflagrationTimer  = 12000;
+        m_uiCleaveTimer = 9000; // These times are probably wrong
+        m_uiWarStompTimer = 22000;
+        m_uiConflagrationTimer = 12000;
         m_uiFireballVolleyTimer = 7000;
-        m_uiOutOfReachTimer     = 10000;
-        m_uiInitTimer           = 5000;
+        m_uiOutOfReachTimer = 10000;
+        m_uiInitTimer = 5000;
 
         m_uiEvadeTroopsTimer = 5000;
     }
@@ -185,8 +185,8 @@ struct boss_razorgoreAI : public ScriptedAI
             return;
         if (m_pInstance->GetData(TYPE_RAZORGORE) != IN_PROGRESS)
         {
-            std::list<Creature *> lCreature;
-            GetCreatureListWithEntryInGrid(lCreature, m_creature, { NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE, NPC_DEATH_TALON_DRAGONSPAWN }, 250.0f);
+            std::list<Creature*> lCreature;
+            GetCreatureListWithEntryInGrid(lCreature, m_creature, {NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE, NPC_DEATH_TALON_DRAGONSPAWN}, 250.0f);
 
             for (const auto& itr : lCreature)
                 itr->DeleteLater();
@@ -211,7 +211,7 @@ struct boss_razorgoreAI : public ScriptedAI
             }
 
             std::list<Creature*> GardesListe;
-            GetCreatureListWithEntryInGrid(GardesListe, m_creature, { NPC_BLACKWING_GUARDSMAN, NPC_GRETHOK_THE_CONTROLLER }, 150.0f);
+            GetCreatureListWithEntryInGrid(GardesListe, m_creature, {NPC_BLACKWING_GUARDSMAN, NPC_GRETHOK_THE_CONTROLLER}, 150.0f);
 
             for (const auto& itr : GardesListe)
             {
@@ -234,7 +234,7 @@ struct boss_razorgoreAI : public ScriptedAI
     void EvadeTroops()
     {
         std::list<Creature*> lCreatureNear;
-        GetCreatureListWithEntryInGrid(lCreatureNear, m_creature, { NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE, NPC_DEATH_TALON_DRAGONSPAWN }, 250.0f);
+        GetCreatureListWithEntryInGrid(lCreatureNear, m_creature, {NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE, NPC_DEATH_TALON_DRAGONSPAWN}, 250.0f);
 
         for (const auto& it : lCreatureNear)
         {
@@ -280,7 +280,7 @@ struct boss_razorgoreAI : public ScriptedAI
         }
 
         // World of Warcraft Client Patch 1.8.0 (2005-10-11)
-        // - Razorgore now has the ability to summon players to him if he cannot 
+        // - Razorgore now has the ability to summon players to him if he cannot
         //   reach them for a time.
         if ((sWorld.GetWowPatch() >= WOW_PATCH_108) && m_creature->CantPathToVictim())
         {
@@ -332,10 +332,7 @@ struct boss_razorgoreAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_razorgore(Creature* pCreature)
-{
-    return new boss_razorgoreAI(pCreature);
-}
+CreatureAI* GetAI_boss_razorgore(Creature* pCreature) { return new boss_razorgoreAI(pCreature); }
 
 struct trigger_orb_of_commandAI : public ScriptedAI
 {
@@ -354,9 +351,9 @@ struct trigger_orb_of_commandAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiPopTimer       = 45000; // Timer confirmed by BigWigs
+        m_uiPopTimer = 45000; // Timer confirmed by BigWigs
         m_uiRazorgorePhase = true;
-        m_uiCombatStarted  = false;
+        m_uiCombatStarted = false;
         m_uiPossesseurGuid.Clear();
     }
 
@@ -366,7 +363,7 @@ struct trigger_orb_of_commandAI : public ScriptedAI
             return;
 
         std::list<Creature*> lCreatureNear;
-        GetCreatureListWithEntryInGrid(lCreatureNear, m_creature, { NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE, NPC_DEATH_TALON_DRAGONSPAWN }, 250.0f);
+        GetCreatureListWithEntryInGrid(lCreatureNear, m_creature, {NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE, NPC_DEATH_TALON_DRAGONSPAWN}, 250.0f);
 
         for (const auto& it : lCreatureNear)
         {
@@ -425,7 +422,7 @@ struct trigger_orb_of_commandAI : public ScriptedAI
         std::list<Creature*> lOrc;
         uint32 uiType = 0;
 
-        GetCreatureListWithEntryInGrid(lDrake, m_creature, { NPC_DEATH_TALON_DRAGONSPAWN, NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE }, 250.0f);
+        GetCreatureListWithEntryInGrid(lDrake, m_creature, {NPC_DEATH_TALON_DRAGONSPAWN, NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE}, 250.0f);
 
         if ((lDrake.size() >= 12) && (lOrc.size() >= 40))
             return;
@@ -438,7 +435,7 @@ struct trigger_orb_of_commandAI : public ScriptedAI
 
         switch (uiType)
         {
-            case 1:
+        case 1:
             {
                 uiID = NPC_BLACKWING_LEGGIONAIRE;
                 if (urand(0, 1))
@@ -447,7 +444,7 @@ struct trigger_orb_of_commandAI : public ScriptedAI
                 }
                 break;
             }
-            case 2:
+        case 2:
             {
                 uiID = NPC_BLACKWING_MAGE;
                 if (urand(0, 1))
@@ -456,7 +453,7 @@ struct trigger_orb_of_commandAI : public ScriptedAI
                 }
                 break;
             }
-            case 3:
+        case 3:
             {
                 uiID = NPC_DEATH_TALON_DRAGONSPAWN;
                 break;
@@ -468,64 +465,64 @@ struct trigger_orb_of_commandAI : public ScriptedAI
             bool bSide = urand(0, 1) != 0;
             switch (uiHow)
             {
-                case 0:
-                    x = bSide ? SPAWN_X1 : SPAWN_X1_BIS;
-                    y = bSide ? SPAWN_Y1 : SPAWN_Y1_BIS;
-                    z = bSide ? SPAWN_Z1 : SPAWN_Z1_BIS;
-                    break;
-                case 1:
-                    x = bSide ? SPAWN_X2 : SPAWN_X2_BIS;
-                    y = bSide ? SPAWN_Y2 : SPAWN_Y2_BIS;
-                    z = bSide ? SPAWN_Z2 : SPAWN_Z2_BIS;
-                    break;
-                case 2:
-                    x = bSide ? SPAWN_X3 : SPAWN_X3_BIS;
-                    y = bSide ? SPAWN_Y3 : SPAWN_Y3_BIS;
-                    z = bSide ? SPAWN_Z3 : SPAWN_Z3_BIS;
-                    break;
-                case 3:
-                    x = bSide ? SPAWN_X4 : SPAWN_X4_BIS;
-                    y = bSide ? SPAWN_Y4 : SPAWN_Y4_BIS;
-                    z = bSide ? SPAWN_Z4 : SPAWN_Z4_BIS;
-                    break;
+            case 0:
+                x = bSide ? SPAWN_X1 : SPAWN_X1_BIS;
+                y = bSide ? SPAWN_Y1 : SPAWN_Y1_BIS;
+                z = bSide ? SPAWN_Z1 : SPAWN_Z1_BIS;
+                break;
+            case 1:
+                x = bSide ? SPAWN_X2 : SPAWN_X2_BIS;
+                y = bSide ? SPAWN_Y2 : SPAWN_Y2_BIS;
+                z = bSide ? SPAWN_Z2 : SPAWN_Z2_BIS;
+                break;
+            case 2:
+                x = bSide ? SPAWN_X3 : SPAWN_X3_BIS;
+                y = bSide ? SPAWN_Y3 : SPAWN_Y3_BIS;
+                z = bSide ? SPAWN_Z3 : SPAWN_Z3_BIS;
+                break;
+            case 3:
+                x = bSide ? SPAWN_X4 : SPAWN_X4_BIS;
+                y = bSide ? SPAWN_Y4 : SPAWN_Y4_BIS;
+                z = bSide ? SPAWN_Z4 : SPAWN_Z4_BIS;
+                break;
             }
         }
         else
         {
             switch (uiHow)
             {
-                case 0:
-                    x = SPAWN_X1;
-                    x_bis = SPAWN_X1_BIS;
-                    y = SPAWN_Y1;
-                    y_bis = SPAWN_Y1_BIS;
-                    z = SPAWN_Z1;
-                    z_bis = SPAWN_Z1_BIS;
-                    break;
-                case 1:
-                    x = SPAWN_X2;
-                    x_bis = SPAWN_X2_BIS;
-                    y = SPAWN_Y2;
-                    y_bis = SPAWN_Y2_BIS;
-                    z = SPAWN_Z2;
-                    z_bis = SPAWN_Z2_BIS;
-                    break;
-                case 2:
-                    x = SPAWN_X3;
-                    x_bis = SPAWN_X3_BIS;
-                    y = SPAWN_Y3;
-                    y_bis = SPAWN_Y3_BIS;
-                    z = SPAWN_Z3;
-                    z_bis = SPAWN_Z3_BIS;
-                    break;
-                case 3:
-                    x = SPAWN_X4;
-                    x_bis = SPAWN_X4_BIS;
-                    y = SPAWN_Y4;
-                    y_bis = SPAWN_Y4_BIS;
-                    z = SPAWN_Z4;
-                    z_bis = SPAWN_Z4_BIS;
-                    break;
+            case 0:
+                x = SPAWN_X1;
+                x_bis = SPAWN_X1_BIS;
+                y = SPAWN_Y1;
+                y_bis = SPAWN_Y1_BIS;
+                z = SPAWN_Z1;
+                z_bis = SPAWN_Z1_BIS;
+                break;
+            case 1:
+                x = SPAWN_X2;
+                x_bis = SPAWN_X2_BIS;
+                y = SPAWN_Y2;
+                y_bis = SPAWN_Y2_BIS;
+                z = SPAWN_Z2;
+                z_bis = SPAWN_Z2_BIS;
+                break;
+            case 2:
+                x = SPAWN_X3;
+                x_bis = SPAWN_X3_BIS;
+                y = SPAWN_Y3;
+                y_bis = SPAWN_Y3_BIS;
+                z = SPAWN_Z3;
+                z_bis = SPAWN_Z3_BIS;
+                break;
+            case 3:
+                x = SPAWN_X4;
+                x_bis = SPAWN_X4_BIS;
+                y = SPAWN_Y4;
+                y_bis = SPAWN_Y4_BIS;
+                z = SPAWN_Z4;
+                z_bis = SPAWN_Z4_BIS;
+                break;
             }
         }
 
@@ -563,7 +560,7 @@ struct trigger_orb_of_commandAI : public ScriptedAI
                 pRazorgore->SetInCombatWithZone();
 
                 std::list<Creature*> lGuards;
-                GetCreatureListWithEntryInGrid(lGuards, m_creature, { NPC_BLACKWING_GUARDSMAN, NPC_GRETHOK_THE_CONTROLLER }, 150.0f);
+                GetCreatureListWithEntryInGrid(lGuards, m_creature, {NPC_BLACKWING_GUARDSMAN, NPC_GRETHOK_THE_CONTROLLER}, 150.0f);
 
                 for (const auto& pGuard : lGuards)
                 {
@@ -608,7 +605,7 @@ struct trigger_orb_of_commandAI : public ScriptedAI
                         }
 
                         std::list<Creature*> lCreature;
-                        GetCreatureListWithEntryInGrid(lCreature, m_creature, { NPC_DEATH_TALON_DRAGONSPAWN, NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE }, 150.0f);
+                        GetCreatureListWithEntryInGrid(lCreature, m_creature, {NPC_DEATH_TALON_DRAGONSPAWN, NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE}, 150.0f);
 
                         for (const auto& itr : lCreature)
                         {
@@ -630,7 +627,7 @@ struct trigger_orb_of_commandAI : public ScriptedAI
                     m_creature->SetUInt32Value(UNIT_CHANNEL_SPELL, 0);
 
                     std::list<Creature*> lCreature;
-                    GetCreatureListWithEntryInGrid(lCreature, m_creature, { NPC_DEATH_TALON_DRAGONSPAWN, NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE }, 150.0f);
+                    GetCreatureListWithEntryInGrid(lCreature, m_creature, {NPC_DEATH_TALON_DRAGONSPAWN, NPC_BLACKWING_LEGGIONAIRE, NPC_BLACKWING_MAGE}, 150.0f);
 
                     for (const auto& itr : lCreature)
                         itr->GetThreatManager().modifyThreatPercent(pRazorgore, -100);
@@ -664,10 +661,7 @@ struct trigger_orb_of_commandAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_trigger_orb_of_command(Creature* pCreature)
-{
-    return new trigger_orb_of_commandAI(pCreature);
-}
+CreatureAI* GetAI_trigger_orb_of_command(Creature* pCreature) { return new trigger_orb_of_commandAI(pCreature); }
 
 void AddSC_boss_razorgore()
 {

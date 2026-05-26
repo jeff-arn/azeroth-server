@@ -20,49 +20,36 @@ SD%Complete: 100%
 SDCategory: Ruins of Ahn'Qiraj
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "ruins_of_ahnqiraj.h"
+#include "scriptPCH.h"
 
 enum
 {
-    EMOTE_TARGET                = 11074,
+    EMOTE_TARGET = 11074,
 
-    SPELL_CREEPING_PLAGUE       = 20512,
-    SPELL_DISMEMBER             = 96,
-    SPELL_GAIN_SPEED            = 1834,
-    SPELL_FULL_SPEED            = 1557,
-    SPELL_THORNS                = 25640,
-    SPELL_BURU_TRANSFORM        = 24721,
-    SPELL_SELF_FREEZE           = 29826,
+    SPELL_CREEPING_PLAGUE = 20512,
+    SPELL_DISMEMBER = 96,
+    SPELL_GAIN_SPEED = 1834,
+    SPELL_FULL_SPEED = 1557,
+    SPELL_THORNS = 25640,
+    SPELL_BURU_TRANSFORM = 24721,
+    SPELL_SELF_FREEZE = 29826,
 
-    NPC_BURU_EGG                = 15514,
-    SPELL_SUMMON_HATCHLING      = 1881,
-    SPELL_EXPLODE               = 19593,
-    NPC_BURU_EGG_TRIGGER        = 15964,
+    NPC_BURU_EGG = 15514,
+    SPELL_SUMMON_HATCHLING = 1881,
+    SPELL_EXPLODE = 19593,
+    NPC_BURU_EGG_TRIGGER = 15964,
 
-    NPC_HIVEZARA_HATCHLING      = 15521,
+    NPC_HIVEZARA_HATCHLING = 15521,
 
-    MODEL_INVISIBLE             = 11686
+    MODEL_INVISIBLE = 11686
 };
 
 float const THREAT_LOCK = FLT_MAX;
 
-static SpawnLocations AddPop[] =
-{
-    { -9312.0f, 1281.0f, -62.0f },
-    { -9268.0f, 1249.0f, -62.0f },
-    { -9263.0f, 1292.0f, -63.0f }
-};
+static SpawnLocations AddPop[] = {{-9312.0f, 1281.0f, -62.0f}, {-9268.0f, 1249.0f, -62.0f}, {-9263.0f, 1292.0f, -63.0f}};
 
-static SpawnLocations Eggs[] =
-{
-    { -9312.73f, 1281.51f, -63.56f },
-    { -9300.03f, 1304.52f, -63.25f },
-    { -9263.38f, 1293.48f, -63.84f },
-    { -9245.11f, 1280.30f, -63.33f },
-    { -9234.96f, 1244.95f, -63.05f },
-    { -9267.78f, 1249.26f, -63.58f }
-};
+static SpawnLocations Eggs[] = {{-9312.73f, 1281.51f, -63.56f}, {-9300.03f, 1304.52f, -63.25f}, {-9263.38f, 1293.48f, -63.84f}, {-9245.11f, 1280.30f, -63.33f}, {-9234.96f, 1244.95f, -63.05f}, {-9267.78f, 1249.26f, -63.58f}};
 
 struct boss_buruAI : public ScriptedAI
 {
@@ -99,7 +86,7 @@ struct boss_buruAI : public ScriptedAI
         m_uiTransformTimer = 0;
         m_transitionStep = 0;
 
-        for (uint32 & i : m_uiRespawnEgg_Timer)
+        for (uint32& i : m_uiRespawnEgg_Timer)
             i = 120000;
 
         Creature* egg;
@@ -116,7 +103,7 @@ struct boss_buruAI : public ScriptedAI
             m_pInstance->SetData(TYPE_BURU, NOT_STARTED);
     }
 
-    void EnterCombat(Unit *pWho) override
+    void EnterCombat(Unit* pWho) override
     {
         m_creature->SetInCombatWithZone();
         m_creature->SetArmor(20000);
@@ -131,8 +118,8 @@ struct boss_buruAI : public ScriptedAI
 
     void JustDied(Unit* pKiller) override
     {
-        // The debuff should fade when dead, otherwise the raid gets decimated 
-        Map::PlayerList const &liste = m_creature->GetMap()->GetPlayers();
+        // The debuff should fade when dead, otherwise the raid gets decimated
+        Map::PlayerList const& liste = m_creature->GetMap()->GetPlayers();
         for (const auto& i : liste)
             i.getSource()->RemoveAurasDueToSpell(SPELL_CREEPING_PLAGUE);
 
@@ -168,7 +155,6 @@ struct boss_buruAI : public ScriptedAI
                 }
                 else
                     m_uiRespawnEgg_Timer[i] -= uiDiff;
-
             }
         }
 
@@ -179,15 +165,15 @@ struct boss_buruAI : public ScriptedAI
             {
                 switch (m_transitionStep)
                 {
-                    case 0:
-                    {    
+                case 0:
+                    {
                         m_creature->RemoveAllAuras(); // Delete Thorns ability during Phase 2
                         DoCastSpellIfCan(m_creature, SPELL_BURU_TRANSFORM);
                         m_transitionStep = 1;
                         m_uiTransformTimer = 5000;
                         break;
                     }
-                    case 1:
+                case 1:
                     {
                         DoCastSpellIfCan(m_creature, SPELL_FULL_SPEED, CF_TRIGGERED);
                         SetMeleeAttack(true);
@@ -210,14 +196,14 @@ struct boss_buruAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        // If he is not enraged and no longer has a threat list, he chooses a person with focus at random 
+        // If he is not enraged and no longer has a threat list, he chooses a person with focus at random
         if (!m_bIsEnraged)
         {
             if (m_creature->GetHealthPercent() < 20)
             {
                 m_bIsEnraged = true;
 
-                // The transformation spell should not be cast right away if you want to have the visual. 
+                // The transformation spell should not be cast right away if you want to have the visual.
                 m_uiTransformTimer = 200;
                 m_transitionStep = 0;
 
@@ -235,7 +221,7 @@ struct boss_buruAI : public ScriptedAI
                 m_creature->AttackStop(true);
 
                 // Despawn eggs when enraged
-                for (uint64 & guid : m_eggsGUID)
+                for (uint64& guid : m_eggsGUID)
                 {
                     if (guid)
                     {
@@ -248,7 +234,7 @@ struct boss_buruAI : public ScriptedAI
             }
             else if (m_creature->GetThreatManager().getThreat(m_creature->GetVictim()) < (THREAT_LOCK / 1000))
             {
-                std::array<uint64, 40> GUIDs = { };
+                std::array<uint64, 40> GUIDs = {};
 
                 int var = 0;
                 ThreatList const& tList = m_creature->GetThreatManager().getThreatList();
@@ -300,7 +286,7 @@ struct boss_buruAI : public ScriptedAI
             else
                 m_uiCreepingPlague_Timer -= uiDiff;
 
-            // Pop additions when enraged (3, but I'm not sure of this number and don't know if they all happen at once) 
+            // Pop additions when enraged (3, but I'm not sure of this number and don't know if they all happen at once)
             if (!m_HatchPop)
             {
                 for (const auto& i : AddPop)
@@ -337,11 +323,9 @@ struct mob_buru_eggAI : public ScriptedAI
     ScriptedInstance* m_pInstance;
     Creature* pBuru;
 
-    void Reset() override
-    {
-    }
+    void Reset() override {}
 
-    void DamageTaken(Unit* pDoneBy, uint32 &uiDamage) override
+    void DamageTaken(Unit* pDoneBy, uint32& uiDamage) override
     {
         // Aggro Buru on taking damage
         if (Creature* pBuru = m_pInstance->GetCreature(m_pInstance->GetData64(DATA_BURU)))
@@ -359,8 +343,7 @@ struct mob_buru_eggAI : public ScriptedAI
         // Explodes and spawns a creature when it dies
         m_creature->CastSpell(m_creature, SPELL_EXPLODE, false);
 
-        if (Creature* add = m_creature->SummonCreature(NPC_HIVEZARA_HATCHLING, m_creature->GetPositionX(), m_creature->GetPositionY(),
-            m_creature->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000))
+        if (Creature* add = m_creature->SummonCreature(NPC_HIVEZARA_HATCHLING, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000))
         {
             add->SetInCombatWithZone();
         }
@@ -369,15 +352,9 @@ struct mob_buru_eggAI : public ScriptedAI
     void UpdateAI(uint32 const /*uiDiff*/) override {}
 };
 
-CreatureAI* GetAI_boss_buru(Creature* pCreature)
-{
-    return new boss_buruAI(pCreature);
-}
+CreatureAI* GetAI_boss_buru(Creature* pCreature) { return new boss_buruAI(pCreature); }
 
-CreatureAI* GetAI_mob_buru_egg(Creature* pCreature)
-{
-    return new mob_buru_eggAI(pCreature);
-}
+CreatureAI* GetAI_mob_buru_egg(Creature* pCreature) { return new mob_buru_eggAI(pCreature); }
 
 void AddSC_boss_buru()
 {
@@ -392,4 +369,3 @@ void AddSC_boss_buru()
     newscript->GetAI = &GetAI_mob_buru_egg;
     newscript->RegisterSelf();
 }
-

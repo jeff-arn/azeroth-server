@@ -23,8 +23,8 @@
 #define MANGOS_INSTANCE_DATA_H
 
 #include "Common.h"
-#include "ZoneScript.h"
 #include "ObjectGuid.h"
+#include "ZoneScript.h"
 
 class Map;
 class Unit;
@@ -35,49 +35,48 @@ class WorldObject;
 
 class InstanceData : public ZoneScript
 {
-    public:
+public:
+    explicit InstanceData(Map* map) : instance(map) { SetMap(map); }
+    ~InstanceData() override {}
 
-        explicit InstanceData(Map* map) : instance(map) { SetMap(map); }
-        ~InstanceData() override {}
+    Map* instance;
 
-        Map* instance;
+    // On creation, NOT load.
+    virtual void Initialize() {}
 
-        //On creation, NOT load.
-        virtual void Initialize() {}
+    // On load
+    virtual void Load(char const* /*data*/) {}
+    virtual void Create() {} // At creation. Not at loading.
 
-        //On load
-        virtual void Load(char const* /*data*/) {}
-        virtual void Create() {} // At creation. Not at loading.
+    // When save is needed, this function generates the data
+    virtual char const* Save() { return ""; }
 
-        //When save is needed, this function generates the data
-        virtual char const* Save() { return ""; }
+    void SaveToDB();
 
-        void SaveToDB();
+    // Called every map update
+    void Update(uint32 /*diff*/) override {}
 
-        //Called every map update
-        void Update(uint32 /*diff*/) override {}
+    // Used by the map's CanEnter function.
+    // This is to prevent players from entering during boss encounters.
+    virtual bool IsEncounterInProgress() const { return false; }
 
-        //Used by the map's CanEnter function.
-        //This is to prevent players from entering during boss encounters.
-        virtual bool IsEncounterInProgress() const { return false; }
+    // Spells
+    virtual void CustomSpellCasted(uint32 /*spellId*/, Unit* /*caster*/ = nullptr, Unit* /*target*/ = nullptr) {}
 
-        // Spells
-        virtual void CustomSpellCasted (uint32 /*spellId*/, Unit* /*caster*/ = nullptr, Unit* /*target*/ = nullptr) {}
+    // All-purpose data storage 64 bit
+    virtual uint64 GetData64(uint32 /*Data*/) { return 0; }
+    virtual void SetData64(uint32 /*Data*/, uint64 /*Value*/) {}
 
-        //All-purpose data storage 64 bit
-        virtual uint64 GetData64(uint32 /*Data*/) { return 0; }
-        virtual void SetData64(uint32 /*Data*/, uint64 /*Value*/) { }
+    // Guid data storage (wrapper for set/get from uint64 storage
+    ObjectGuid GetGuid(uint32 dataIdx) { return ObjectGuid(GetData64(dataIdx)); }
+    void SetGuid(uint32 dataIdx, ObjectGuid value) { SetData64(dataIdx, value.GetRawValue()); }
 
-        //Guid data storage (wrapper for set/get from uint64 storage
-        ObjectGuid GetGuid(uint32 dataIdx) { return ObjectGuid(GetData64(dataIdx)); }
-        void SetGuid(uint32 dataIdx, ObjectGuid value) { SetData64(dataIdx, value.GetRawValue()); }
+    // All-purpose data storage 32 bit
+    virtual uint32 GetData(uint32 /*Type*/) { return 0; }
+    virtual void SetData(uint32 /*Type*/, uint32 /*Data*/) {}
 
-        //All-purpose data storage 32 bit
-        virtual uint32 GetData(uint32 /*Type*/) { return 0; }
-        virtual void SetData(uint32 /*Type*/, uint32 /*Data*/) {}
-
-        // Condition criteria additional requirements check
-        // This is used for such things are heroic loot
-        virtual bool CheckConditionCriteriaMeet(Player const* player, uint32 map_id, WorldObject const* source, uint32 instance_condition_id) const;
+    // Condition criteria additional requirements check
+    // This is used for such things are heroic loot
+    virtual bool CheckConditionCriteriaMeet(Player const* player, uint32 map_id, WorldObject const* source, uint32 instance_condition_id) const;
 };
 #endif

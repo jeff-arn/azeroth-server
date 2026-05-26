@@ -19,19 +19,19 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "Anticheat.h"
 #include "Common.h"
-#include "WorldPacket.h"
-#include "WorldSession.h"
-#include "World.h"
-#include "ObjectMgr.h"
-#include "Log.h"
-#include "Opcodes.h"
+#include "GossipDef.h"
 #include "Guild.h"
 #include "GuildMgr.h"
-#include "GossipDef.h"
-#include "SocialMgr.h"
 #include "Language.h"
-#include "Anticheat.h"
+#include "Log.h"
+#include "ObjectMgr.h"
+#include "Opcodes.h"
+#include "SocialMgr.h"
+#include "World.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 void WorldSession::HandleGuildQueryOpcode(WorldPacket& recvPacket)
 {
@@ -52,7 +52,7 @@ void WorldSession::HandleGuildCreateOpcode(WorldPacket& recvPacket)
     std::string gname;
     recvPacket >> gname;
 
-    if (GetPlayer()->GetGuildId())                          // already in guild
+    if (GetPlayer()->GetGuildId()) // already in guild
         return;
 
     if (HasTrialRestrictions())
@@ -67,7 +67,7 @@ void WorldSession::HandleGuildCreateOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    Guild *guild = new Guild;
+    Guild* guild = new Guild;
     if (!guild->Create(GetPlayer(), gname))
     {
         delete guild;
@@ -143,7 +143,7 @@ void WorldSession::HandleGuildInviteOpcode(WorldPacket& recvPacket)
     // Put record into guildlog
     guild->LogGuildEvent(GUILD_EVENT_LOG_INVITE_PLAYER, GetPlayer()->GetObjectGuid(), player->GetObjectGuid());
 
-    WorldPacket data(SMSG_GUILD_INVITE, (8 + 10));          // guess size
+    WorldPacket data(SMSG_GUILD_INVITE, (8 + 10)); // guess size
     data << GetPlayer()->GetName();
     data << guild->GetName();
     player->GetSession()->SendPacket(&data);
@@ -265,8 +265,8 @@ void WorldSession::HandleGuildInfoOpcode(WorldPacket& /*recvPacket*/)
     data << uint32(guild->GetCreatedDay());
     data << uint32(guild->GetCreatedMonth());
     data << uint32(guild->GetCreatedYear());
-    data << uint32(guild->GetMemberSize());                 // amount of chars
-    data << uint32(guild->GetAccountsNumber());             // amount of accounts
+    data << uint32(guild->GetMemberSize()); // amount of chars
+    data << uint32(guild->GetAccountsNumber()); // amount of accounts
     SendPacket(&data);
 }
 
@@ -318,7 +318,7 @@ void WorldSession::HandleGuildPromoteOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    uint32 newRankId = slot->RankId - 1;                    //when promoting player, rank is decreased
+    uint32 newRankId = slot->RankId - 1; // when promoting player, rank is decreased
 
     slot->ChangeRank(newRankId);
     // Put record into guild log
@@ -377,7 +377,7 @@ void WorldSession::HandleGuildDemoteOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    uint32 newRankId = slot->RankId + 1;                    //when demoting player, rank is increased
+    uint32 newRankId = slot->RankId + 1; // when demoting player, rank is increased
 
     slot->ChangeRank(newRankId);
     // Put record into guild log
@@ -607,14 +607,14 @@ void WorldSession::HandleGuildRankOpcode(WorldPacket& recvPacket)
     Guild* guild = sGuildMgr.GetGuildById(GetPlayer()->GetGuildId());
     if (!guild)
     {
-        recvPacket.rpos(recvPacket.wpos());                 // set to end to avoid warnings spam
+        recvPacket.rpos(recvPacket.wpos()); // set to end to avoid warnings spam
         SendGuildCommandResult(GUILD_CREATE_S, "", ERR_GUILD_PLAYER_NOT_IN_GUILD);
         return;
     }
 
     if (GetPlayer()->GetObjectGuid() != guild->GetLeaderGuid())
     {
-        recvPacket.rpos(recvPacket.wpos());                 // set to end to avoid warnings spam
+        recvPacket.rpos(recvPacket.wpos()); // set to end to avoid warnings spam
         SendGuildCommandResult(GUILD_INVITE_S, "", ERR_GUILD_PERMISSIONS);
         return;
     }
@@ -631,13 +631,13 @@ void WorldSession::HandleGuildRankOpcode(WorldPacket& recvPacket)
 
     guild->SetRankName(rankId, rankName);
 
-    if (rankId == GR_GUILDMASTER)                           // prevent loss leader rights
+    if (rankId == GR_GUILDMASTER) // prevent loss leader rights
         rights = GR_RIGHT_ALL;
 
     guild->SetRankRights(rankId, rights);
 
     guild->Query(this);
-    guild->Roster();                                        // broadcast for tab rights update
+    guild->Roster(); // broadcast for tab rights update
 }
 
 void WorldSession::HandleGuildAddRankOpcode(WorldPacket& recvPacket)
@@ -664,13 +664,13 @@ void WorldSession::HandleGuildAddRankOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (guild->GetRanksSize() >= GUILD_RANKS_MAX_COUNT)     // client not let create more 10 than ranks
+    if (guild->GetRanksSize() >= GUILD_RANKS_MAX_COUNT) // client not let create more 10 than ranks
         return;
 
     guild->CreateRank(rankName, GR_RIGHT_GCHATLISTEN | GR_RIGHT_GCHATSPEAK);
 
     guild->Query(this);
-    guild->Roster();                                        // broadcast for tab rights update
+    guild->Roster(); // broadcast for tab rights update
 }
 
 void WorldSession::HandleGuildDelRankOpcode(WorldPacket& /*recvPacket*/)
@@ -691,7 +691,7 @@ void WorldSession::HandleGuildDelRankOpcode(WorldPacket& /*recvPacket*/)
     guild->DelRank();
 
     guild->Query(this);
-    guild->Roster();                                        // broadcast for tab rights update
+    guild->Roster(); // broadcast for tab rights update
 }
 
 void WorldSession::SendGuildCommandResult(uint32 typecmd, std::string const& str, uint32 cmdresult)
@@ -785,6 +785,6 @@ void WorldSession::HandleSaveGuildEmblemOpcode(WorldPacket& recvPacket)
 void WorldSession::SendSaveGuildEmblem(uint32 msg)
 {
     WorldPacket data(MSG_SAVE_GUILD_EMBLEM, 4);
-    data << uint32(msg);                                    // not part of guild
+    data << uint32(msg); // not part of guild
     SendPacket(&data);
 }

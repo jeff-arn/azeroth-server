@@ -26,8 +26,8 @@ npc_bartleby
 npc_dashel_stonefist
 EndContentData */
 
-#include "scriptPCH.h"
 #include <list>
+#include "scriptPCH.h"
 
 /*######
 ## npc_bartleby
@@ -35,8 +35,8 @@ EndContentData */
 
 enum BartlebyData
 {
-    FACTION_ENEMY       = 168,
-    QUEST_BEAT          = 1640
+    FACTION_ENEMY = 168,
+    QUEST_BEAT = 1640
 };
 
 struct npc_bartlebyAI : public ScriptedAI
@@ -63,7 +63,7 @@ struct npc_bartlebyAI : public ScriptedAI
         AttackStart(pAttacker);
     }
 
-    void DamageTaken(Unit* pDoneBy, uint32 &uiDamage) override
+    void DamageTaken(Unit* pDoneBy, uint32& uiDamage) override
     {
         if (!pDoneBy)
             return;
@@ -93,10 +93,7 @@ bool QuestAccept_npc_bartleby(Player* pPlayer, Creature* pCreature, Quest const*
     return true;
 }
 
-CreatureAI* GetAI_npc_bartleby(Creature* pCreature)
-{
-    return new npc_bartlebyAI(pCreature);
-}
+CreatureAI* GetAI_npc_bartleby(Creature* pCreature) { return new npc_bartlebyAI(pCreature); }
 
 /*######
 ## npc_dashel_stonefist
@@ -114,7 +111,7 @@ enum DashelStonefistData
     SAY_PROGRESS_3_DAS = 1713, // It's okay, boys. Back off. You've done enough. I'll meet up with you later.
     SAY_PROGRESS_4_THU = 1716, // All right, boss. You sure though? Just seems like a waste of good practice.
     SAY_PROGRESS_5_THU = 1715, // Yeah, okay, boss. No problem.
-    // quest id
+                               // quest id
     QUEST_MISSING_DIPLO_PT8 = 1447,
     // NPCs that helps Dashel
     NPC_OLD_TOWN_THUG = 4969,
@@ -135,10 +132,7 @@ enum DashelStonefistData
     MDQP_QUEST_COMPLETE = 7 // Triggers quest complete
 };
 
-float aThugResetPosition[][3] = {
-    { -8669.338867f, 448.362976f, 99.740005f },
-    { -8686.397461f, 447.595703f, 99.994408f }
-};
+float aThugResetPosition[][3] = {{-8669.338867f, 448.362976f, 99.740005f}, {-8686.397461f, 447.595703f, 99.994408f}};
 
 struct npc_dashel_stonefistAI : public ScriptedAI
 {
@@ -210,7 +204,7 @@ struct npc_dashel_stonefistAI : public ScriptedAI
         m_playerGuid.Clear();
     }
 
-    void DamageTaken(Unit* pDoneBy, uint32 &uiDamage) override
+    void DamageTaken(Unit* pDoneBy, uint32& uiDamage) override
     {
         if (m_questFightStarted)
         {
@@ -261,7 +255,7 @@ struct npc_dashel_stonefistAI : public ScriptedAI
     {
         switch (m_eventPhase)
         {
-            case MDQP_SAY1: // Occurs only if thugs are alive
+        case MDQP_SAY1: // Occurs only if thugs are alive
             {
                 if (m_nextPhaseDelayTimer < uiDiff)
                 {
@@ -275,7 +269,7 @@ struct npc_dashel_stonefistAI : public ScriptedAI
                     m_nextPhaseDelayTimer -= uiDiff;
                 break;
             }
-            case MDQP_SAY2: // Occurs only if thugs are alive
+        case MDQP_SAY2: // Occurs only if thugs are alive
             {
                 if (m_nextPhaseDelayTimer < uiDiff)
                 {
@@ -292,7 +286,7 @@ struct npc_dashel_stonefistAI : public ScriptedAI
                     m_nextPhaseDelayTimer -= uiDiff;
                 break;
             }
-            case MDQP_SAY3: // Occurs only if thugs are alive
+        case MDQP_SAY3: // Occurs only if thugs are alive
             {
                 if (m_nextPhaseDelayTimer < uiDiff)
                 {
@@ -309,7 +303,7 @@ struct npc_dashel_stonefistAI : public ScriptedAI
                     m_nextPhaseDelayTimer -= uiDiff;
                 break;
             }
-            case MDQP_THUG_WALK_AWAY_1: // Occurs only if thugs are alive
+        case MDQP_THUG_WALK_AWAY_1: // Occurs only if thugs are alive
             {
                 if (m_nextPhaseDelayTimer < uiDiff)
                 {
@@ -322,7 +316,7 @@ struct npc_dashel_stonefistAI : public ScriptedAI
                     m_nextPhaseDelayTimer -= uiDiff;
                 break;
             }
-            case MDQP_THUG_WALK_AWAY_2: // Occurs only if thugs are alive
+        case MDQP_THUG_WALK_AWAY_2: // Occurs only if thugs are alive
             {
                 if (m_nextPhaseDelayTimer < uiDiff)
                 {
@@ -336,7 +330,7 @@ struct npc_dashel_stonefistAI : public ScriptedAI
                     m_nextPhaseDelayTimer -= uiDiff;
                 break;
             }
-            case MDQP_QUEST_COMPLETE:
+        case MDQP_QUEST_COMPLETE:
             {
                 if (m_nextPhaseDelayTimer < uiDiff)
                 {
@@ -351,9 +345,9 @@ struct npc_dashel_stonefistAI : public ScriptedAI
                     m_nextPhaseDelayTimer -= uiDiff;
                 break;
             }
-            default: // MDQP_NONE
-                ScriptedAI::UpdateAI(uiDiff);
-                break;
+        default: // MDQP_NONE
+            ScriptedAI::UpdateAI(uiDiff);
+            break;
         }
     }
 
@@ -400,7 +394,7 @@ struct npc_dashel_stonefistAI : public ScriptedAI
         }
     }
 
-    void SummonedCreatureJustDied(Creature *creature) override
+    void SummonedCreatureJustDied(Creature* creature) override
     {
         // If the thug died for whatever reason, clear the pointer. Otherwise, if
         // combat is extended, the thug may despawn and we'll access a dangling
@@ -470,10 +464,7 @@ bool QuestAccept_npc_dashel_stonefist(Player* pPlayer, Creature* pCreature, Ques
     return true;
 }
 
-CreatureAI* GetAI_npc_dashel_stonefist(Creature* pCreature)
-{
-    return new npc_dashel_stonefistAI(pCreature);
-}
+CreatureAI* GetAI_npc_dashel_stonefist(Creature* pCreature) { return new npc_dashel_stonefistAI(pCreature); }
 
 void AddSC_stormwind_city()
 {

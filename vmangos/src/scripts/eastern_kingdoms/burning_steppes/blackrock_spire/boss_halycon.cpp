@@ -23,8 +23,8 @@ EndScriptData */
 
 #include "scriptPCH.h"
 
-#define SPELL_CROWDPUMMEL       10887
-#define SPELL_MIGHTYBLOW        14099
+#define SPELL_CROWDPUMMEL 10887
+#define SPELL_MIGHTYBLOW 14099
 
 struct boss_halyconAI : public ScriptedAI
 {
@@ -46,31 +46,33 @@ struct boss_halyconAI : public ScriptedAI
 
     void UpdateAI(uint32 const diff) override
     {
-        //Return since we have no target
+        // Return since we have no target
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //CrowdPummel_Timer
+        // CrowdPummel_Timer
         if (CrowdPummel_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CROWDPUMMEL);
             CrowdPummel_Timer = 14000;
         }
-        else CrowdPummel_Timer -= diff;
+        else
+            CrowdPummel_Timer -= diff;
 
-        //MightyBlow_Timer
+        // MightyBlow_Timer
         if (MightyBlow_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MIGHTYBLOW);
             MightyBlow_Timer = 10000;
         }
-        else MightyBlow_Timer -= diff;
+        else
+            MightyBlow_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
     void JustDied(Unit* pKiller) override
     {
-        //Summon Gizrul
+        // Summon Gizrul
         if (!Summoned)
         {
             m_creature->MonsterTextEmote("Halycon lets loose a gutteral growl as her body collapses. A horrifying howl can be heard echoing through the halls of Blackrock Spire. Something is very, very angry.");
@@ -83,10 +85,7 @@ struct boss_halyconAI : public ScriptedAI
         }
     }
 };
-CreatureAI* GetAI_boss_halycon(Creature* pCreature)
-{
-    return new boss_halyconAI(pCreature);
-}
+CreatureAI* GetAI_boss_halycon(Creature* pCreature) { return new boss_halyconAI(pCreature); }
 
 void AddSC_boss_halycon()
 {

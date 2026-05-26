@@ -26,16 +26,13 @@ EndScriptData */
 enum
 {
     SPELL_CURSEOFBLOOD = 24673,
-    SPELL_HEX          = 16708,
-    SPELL_CLEAVE       = 20691
+    SPELL_HEX = 16708,
+    SPELL_CLEAVE = 20691
 };
 
 struct boss_shadowvoshAI : public ScriptedAI
 {
-    boss_shadowvoshAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_shadowvoshAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiCurseOfBloodTimer;
     uint32 m_uiHexTimer;
@@ -44,10 +41,10 @@ struct boss_shadowvoshAI : public ScriptedAI
     void Reset() override
     {
         m_uiCurseOfBloodTimer = 2000;
-        m_uiHexTimer          = 8000;
-        m_uiCleaveTimer       = 14000;
+        m_uiHexTimer = 8000;
+        m_uiCleaveTimer = 14000;
 
-        //m_creature->CastSpell(m_creature,SPELL_ICEARMOR,true);
+        // m_creature->CastSpell(m_creature,SPELL_ICEARMOR,true);
     }
 
     void UpdateAI(uint32 const uiDiff) override
@@ -90,10 +87,7 @@ struct boss_shadowvoshAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_shadowvosh(Creature* pCreature)
-{
-    return new boss_shadowvoshAI(pCreature);
-}
+CreatureAI* GetAI_boss_shadowvosh(Creature* pCreature) { return new boss_shadowvoshAI(pCreature); }
 
 void AddSC_boss_shadowvosh()
 {

@@ -1,10 +1,10 @@
 #ifndef MANGOS_BOT_COMBAT_EVENT_BUFFER_H
 #define MANGOS_BOT_COMBAT_EVENT_BUFFER_H
 
-#include "Common.h"
+#include <mutex>
 #include <unordered_map>
 #include <vector>
-#include <mutex>
+#include "Common.h"
 
 // ============================================================
 // Combat Event Ring Buffer + Pattern Learning System
@@ -12,20 +12,20 @@
 
 enum CombatEventType : uint8
 {
-    COMBAT_EVENT_DAMAGE     = 0,
+    COMBAT_EVENT_DAMAGE = 0,
     COMBAT_EVENT_CAST_START = 1,
-    COMBAT_EVENT_DEATH      = 2,
+    COMBAT_EVENT_DEATH = 2,
 };
 
 struct CombatEvent
 {
-    uint32 timestamp;       // WorldTimer::getMSTime()
-    uint8  eventType;       // CombatEventType
+    uint32 timestamp; // WorldTimer::getMSTime()
+    uint8 eventType; // CombatEventType
     uint64 sourceGuid;
     uint64 targetGuid;
     uint32 spellId;
     uint32 damage;
-    uint32 creatureEntry;   // Source creature entry (0 for players)
+    uint32 creatureEntry; // Source creature entry (0 for players)
 };
 
 class CombatEventBuffer
@@ -35,15 +35,15 @@ public:
 
     // Scan backwards from newest event, calling visitor(CombatEvent const&)
     // until visitor returns false or all 256 entries are visited.
-    template<typename Fn>
+    template <typename Fn>
     void ScanBackwards(Fn&& visitor) const
     {
         uint8 idx = m_writeIdx;
         for (uint16 i = 0; i < 256; ++i)
         {
-            idx--;  // wraps naturally for uint8
+            idx--; // wraps naturally for uint8
             if (m_events[idx].timestamp == 0)
-                break;  // uninitialized slot
+                break; // uninitialized slot
             if (!visitor(m_events[idx]))
                 break;
         }
@@ -60,25 +60,25 @@ private:
 
 enum PatternResponse : uint8
 {
-    RESPONSE_INTERRUPT        = 0,
-    RESPONSE_MOVE_AWAY        = 1,
-    RESPONSE_SPREAD           = 2,
-    RESPONSE_SAVE_CD          = 3,
+    RESPONSE_INTERRUPT = 0,
+    RESPONSE_MOVE_AWAY = 1,
+    RESPONSE_SPREAD = 2,
+    RESPONSE_SAVE_CD = 3,
     // Future extensibility:
-    RESPONSE_MOVE_TO_POSITION = 4,  // safety dance waypoints
-    RESPONSE_STACK            = 5,  // stack for shared damage
-    RESPONSE_SWAP_SIDE        = 6,  // polarity
+    RESPONSE_MOVE_TO_POSITION = 4, // safety dance waypoints
+    RESPONSE_STACK = 5, // stack for shared damage
+    RESPONSE_SWAP_SIDE = 6, // polarity
 };
 
 struct LearnedPattern
 {
     uint32 creatureEntry;
     uint32 triggerSpellId;
-    uint8  responseType;     // PatternResponse
-    float  responseParam;    // e.g. avoidance range in yards
-    uint8  confidence;       // 0-254 = learned, 255 = permanent (hand-crafted)
-    uint32 lastSeen;         // unix timestamp
-    bool   isPermanent;      // hand-crafted override, cannot decay
+    uint8 responseType; // PatternResponse
+    float responseParam; // e.g. avoidance range in yards
+    uint8 confidence; // 0-254 = learned, 255 = permanent (hand-crafted)
+    uint32 lastSeen; // unix timestamp
+    bool isPermanent; // hand-crafted override, cannot decay
 };
 
 // ============================================================
@@ -91,10 +91,8 @@ public:
     static BotPatternMgr& Instance();
 
     // --- Recording (called from hooks in Unit.cpp / Spell.cpp) ---
-    void RecordDamage(Unit* source, Unit* victim, uint32 damage,
-                      uint32 spellId, uint32 mapId, uint32 creatureEntry);
-    void RecordCastStart(Unit* caster, Unit* target, SpellEntry const* spell,
-                         uint32 mapId, uint32 creatureEntry);
+    void RecordDamage(Unit* source, Unit* victim, uint32 damage, uint32 spellId, uint32 mapId, uint32 creatureEntry);
+    void RecordCastStart(Unit* caster, Unit* target, SpellEntry const* spell, uint32 mapId, uint32 creatureEntry);
     void RecordDeath(Unit* killer, Unit* victim, uint32 mapId, uint32 creatureEntry);
 
     // --- Queries (called from EvaluateSituation) ---
@@ -102,7 +100,7 @@ public:
     bool HasPatternsForCreature(uint32 creatureEntry) const;
 
     // --- Confidence management ---
-    void DecayPatterns();    // called periodically (~5 min)
+    void DecayPatterns(); // called periodically (~5 min)
 
     // --- DB persistence ---
     void LoadFromDB();

@@ -39,56 +39,58 @@ void MyCoolFunction(EnumFlag<MyCoolFlags> flags)
         // Do something
 }
  */
-template<typename T>
-constexpr bool IsEnumFlag(T) { return false; }
+template <typename T>
+constexpr bool IsEnumFlag(T)
+{
+    return false;
+}
 
-#define DEFINE_ENUM_FLAG(enumType) constexpr bool IsEnumFlag(enumType) { return true; }
+#define DEFINE_ENUM_FLAG(enumType)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    \
+    constexpr bool IsEnumFlag(enumType) { return true; }
 
 namespace EnumTraits
 {
-    template<typename T>
+    template <typename T>
     using IsFlag = std::integral_constant<bool, IsEnumFlag(T{})>;
 }
 
-template<typename T>
+template <typename T>
 inline constexpr auto operator&(T left, T right) -> typename std::enable_if<EnumTraits::IsFlag<T>::value, T>::type
 {
     return static_cast<T>(static_cast<std::underlying_type_t<T>>(left) & static_cast<std::underlying_type_t<T>>(right));
 }
 
-template<typename T>
+template <typename T>
 inline constexpr auto operator&=(T& left, T right) -> typename std::enable_if<EnumTraits::IsFlag<T>::value, T&>::type
 {
     return left = left & right;
 }
 
-template<typename T>
+template <typename T>
 inline constexpr auto operator|(T left, T right) -> typename std::enable_if<EnumTraits::IsFlag<T>::value, T>::type
 {
     return static_cast<T>(static_cast<std::underlying_type_t<T>>(left) | static_cast<std::underlying_type_t<T>>(right));
 }
 
-template<typename T>
+template <typename T>
 inline constexpr auto operator|=(T& left, T right) -> typename std::enable_if<EnumTraits::IsFlag<T>::value, T&>::type
 {
     return left = left | right;
 }
 
-template<typename T>
+template <typename T>
 inline constexpr auto operator~(T value) -> typename std::enable_if<EnumTraits::IsFlag<T>::value, T>::type
 {
     return static_cast<T>(~static_cast<std::underlying_type_t<T>>(value));
 }
 
-template<typename T>
+template <typename T>
 class EnumFlag
 {
     static_assert(EnumTraits::IsFlag<T>::value, "EnumFlag must be used only with enums that are marked as flags by DEFINE_ENUM_FLAG macro");
 
 public:
-    /*implicit*/ constexpr EnumFlag(T value) : _value(value)
-    {
-    }
+    /*implicit*/ constexpr EnumFlag(T value) : _value(value) {}
 
     EnumFlag& operator&=(EnumFlag right)
     {
@@ -96,10 +98,7 @@ public:
         return *this;
     }
 
-    constexpr friend EnumFlag operator&(EnumFlag left, EnumFlag right)
-    {
-        return left &= right;
-    }
+    constexpr friend EnumFlag operator&(EnumFlag left, EnumFlag right) { return left &= right; }
 
     EnumFlag& operator|=(EnumFlag right)
     {
@@ -107,20 +106,11 @@ public:
         return *this;
     }
 
-    constexpr friend EnumFlag operator|(EnumFlag left, EnumFlag right)
-    {
-        return left |= right;
-    }
+    constexpr friend EnumFlag operator|(EnumFlag left, EnumFlag right) { return left |= right; }
 
-    constexpr EnumFlag operator~() const
-    {
-        return static_cast<T>(~static_cast<std::underlying_type_t<T>>(_value));
-    }
+    constexpr EnumFlag operator~() const { return static_cast<T>(~static_cast<std::underlying_type_t<T>>(_value)); }
 
-    void RemoveFlag(EnumFlag flag)
-    {
-        _value &= ~flag._value;
-    }
+    void RemoveFlag(EnumFlag flag) { _value &= ~flag._value; }
 
     constexpr bool HasFlag(T flag) const
     {
@@ -128,23 +118,14 @@ public:
         return static_cast<i>((i)_value & (i)flag) != static_cast<i>(0);
     }
 
-    constexpr bool HasAllFlags(T flags) const
-    {
-        return (_value & flags) == flags;
-    }
+    constexpr bool HasAllFlags(T flags) const { return (_value & flags) == flags; }
 
-    constexpr operator T() const
-    {
-        return _value;
-    }
+    constexpr operator T() const { return _value; }
 
-    constexpr std::underlying_type_t<T> AsUnderlyingType() const
-    {
-        return static_cast<std::underlying_type_t<T>>(_value);
-    }
+    constexpr std::underlying_type_t<T> AsUnderlyingType() const { return static_cast<std::underlying_type_t<T>>(_value); }
 
 private:
     T _value;
 };
 
-#endif //MANGOS_ENUMFLAG_H
+#endif // MANGOS_ENUMFLAG_H

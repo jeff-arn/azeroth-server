@@ -34,7 +34,7 @@ void MirrorTimer::Stop()
     }
 }
 
-void MirrorTimer::Start(uint32 interval, uint32 spellId/* = 0*/)
+void MirrorTimer::Start(uint32 interval, uint32 spellId /* = 0*/)
 {
     if (m_scale < 0)
     {
@@ -109,7 +109,7 @@ bool MirrorTimer::Update(uint32 diff)
 
     diff *= uint32(std::abs(m_scale));
 
-    if (m_scale < 0)    // Timer running out
+    if (m_scale < 0) // Timer running out
     {
         m_tracker.Update(diff);
 
@@ -121,7 +121,7 @@ bool MirrorTimer::Update(uint32 diff)
 
         m_tracker.SetCurrent(interval);
 
-        if (overflow == diff)   // Pulse: subsequent ticks after instant tick on expiration
+        if (overflow == diff) // Pulse: subsequent ticks after instant tick on expiration
         {
             m_pulse.Update(overflow);
 
@@ -133,7 +133,7 @@ bool MirrorTimer::Update(uint32 diff)
 
         return false;
     }
-    else                // Timer regenerating
+    else // Timer regenerating
     {
         uint32 const current = m_tracker.GetCurrent();
 

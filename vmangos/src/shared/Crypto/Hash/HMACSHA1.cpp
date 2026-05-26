@@ -22,8 +22,7 @@
 #include <openssl/hmac.h>
 
 
-Crypto::Hash::HMACSHA1::Generator::Generator(std::vector<uint8> const& key)
-  : Generator(key.data(), key.size())
+Crypto::Hash::HMACSHA1::Generator::Generator(std::vector<uint8> const& key) : Generator(key.data(), key.size())
 {
     // use base ctor
 }
@@ -49,25 +48,13 @@ Crypto::Hash::HMACSHA1::Generator::~Generator()
 #endif
 }
 
-void Crypto::Hash::HMACSHA1::Generator::UpdateData(std::vector<uint8> const& data)
-{
-    UpdateData(data.data(), data.size());
-}
+void Crypto::Hash::HMACSHA1::Generator::UpdateData(std::vector<uint8> const& data) { UpdateData(data.data(), data.size()); }
 
-void Crypto::Hash::HMACSHA1::Generator::UpdateData(std::string const& str)
-{
-    UpdateData(reinterpret_cast<uint8 const*>(str.c_str()), str.length());
-}
+void Crypto::Hash::HMACSHA1::Generator::UpdateData(std::string const& str) { UpdateData(reinterpret_cast<uint8 const*>(str.c_str()), str.length()); }
 
-void Crypto::Hash::HMACSHA1::Generator::UpdateData(BigNumber const& bn)
-{
-    UpdateData(bn.AsByteArray());
-}
+void Crypto::Hash::HMACSHA1::Generator::UpdateData(BigNumber const& bn) { UpdateData(bn.AsByteArray()); }
 
-void Crypto::Hash::HMACSHA1::Generator::UpdateData(uint8 const* data, size_t length)
-{
-    HMAC_Update(m_ctx, data, length);
-}
+void Crypto::Hash::HMACSHA1::Generator::UpdateData(uint8 const* data, size_t length) { HMAC_Update(m_ctx, data, length); }
 
 Crypto::Hash::HMACSHA1::Digest Crypto::Hash::HMACSHA1::Generator::GetDigest()
 {

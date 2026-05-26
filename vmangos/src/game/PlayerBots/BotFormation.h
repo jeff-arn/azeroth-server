@@ -41,8 +41,8 @@ class BreadcrumbTrail
 {
 public:
     static constexpr uint32 MAX_CRUMBS = 40;
-    static constexpr float MIN_RECORD_DIST_SQ = 4.0f;   // 2yd minimum movement
-    static constexpr uint32 RECORD_INTERVAL_MS = 1000;   // match bot tick rate
+    static constexpr float MIN_RECORD_DIST_SQ = 4.0f; // 2yd minimum movement
+    static constexpr uint32 RECORD_INTERVAL_MS = 1000; // match bot tick rate
 
     void RecordPoint(float x, float y, float z, float o, uint32 now);
     void Clear();
@@ -79,9 +79,9 @@ private:
 struct FormationSlot
 {
     uint8 slotIndex = 0;
-    uint8 role = 0;              // CombatBotRoles value
+    uint8 role = 0; // CombatBotRoles value
     float trailDistBehind = 0.0f;
-    float lateralOffset = 0.0f;  // +right / -left relative to trail direction
+    float lateralOffset = 0.0f; // +right / -left relative to trail direction
     ObjectGuid assignedBot;
 };
 
@@ -101,13 +101,11 @@ struct FormationState
 
     // Compute world position for a given slot.
     // Returns true if a valid position was found.
-    bool CalculateSlotPosition(uint32 slotIndex, Map* map, Player* bot,
-                               float& outX, float& outY, float& outZ) const;
+    bool CalculateSlotPosition(uint32 slotIndex, Map* map, Player* bot, float& outX, float& outY, float& outZ) const;
 
     // Compute a safe flee point along the trail (backward toward cleared area).
     // Returns true if a safe point was found.
-    bool CalculateFleePoint(Player* bot, Map* map,
-                            float& outX, float& outY, float& outZ) const;
+    bool CalculateFleePoint(Player* bot, Map* map, float& outX, float& outY, float& outZ) const;
 };
 
 // ============================================================
@@ -134,25 +132,25 @@ private:
 namespace BotFormationDefaults
 {
     // Trail distance behind leader (yards)
-    constexpr float TANK_TRAIL_DIST     = 2.0f;
-    constexpr float MELEE_TRAIL_DIST    = 4.0f;
-    constexpr float RANGED_TRAIL_DIST   = 8.0f;
-    constexpr float HEALER_TRAIL_DIST   = 10.0f;
+    constexpr float TANK_TRAIL_DIST = 2.0f;
+    constexpr float MELEE_TRAIL_DIST = 4.0f;
+    constexpr float RANGED_TRAIL_DIST = 8.0f;
+    constexpr float HEALER_TRAIL_DIST = 10.0f;
 
     // Lateral offset from trail center (yards)
-    constexpr float MELEE_LATERAL       = 1.0f;
-    constexpr float RANGED_LATERAL      = 1.0f;
+    constexpr float MELEE_LATERAL = 1.0f;
+    constexpr float RANGED_LATERAL = 1.0f;
 
     // Flee point search parameters
-    constexpr float FLEE_MIN_DIST       = 15.0f;
-    constexpr float FLEE_MAX_DIST       = 30.0f;
-    constexpr float FLEE_HOSTILE_SCAN   = 12.0f;
+    constexpr float FLEE_MIN_DIST = 15.0f;
+    constexpr float FLEE_MAX_DIST = 30.0f;
+    constexpr float FLEE_HOSTILE_SCAN = 12.0f;
 
     // Position dead-zone to prevent jitter
-    constexpr float MOVE_DEADZONE       = 2.0f;
+    constexpr float MOVE_DEADZONE = 2.0f;
 
     // Aggro safety scan radius for lateral slot validation
-    constexpr float SLOT_HOSTILE_SCAN   = 12.0f;
-}
+    constexpr float SLOT_HOSTILE_SCAN = 12.0f;
+} // namespace BotFormationDefaults
 
 #endif

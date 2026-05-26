@@ -3,11 +3,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
+#include <memory>
 #include <shared_mutex>
 #include <thread>
 #include <vector>
-#include <cstddef>
-#include <memory>
 
 class PlayerBroadcaster;
 

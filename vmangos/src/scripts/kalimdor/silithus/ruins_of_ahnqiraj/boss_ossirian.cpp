@@ -21,8 +21,8 @@ SDComment:
 SDCategory: Ruins of Ahn'Qiraj
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "ruins_of_ahnqiraj.h"
+#include "scriptPCH.h"
 
 #include <array>
 
@@ -34,34 +34,29 @@ enum
     // SAY_SURPREME3 = -1509020, // My powers return! Sound: 8596
 
     SAY_AGGRO = 11449,
-    SAY_SLAY  = 11450,
+    SAY_SLAY = 11450,
     SAY_DEATH = 11451,
 
-    SPELL_CURSE_OF_TONGUES      =  25195,
-    SPELL_STRENGTH_OF_OSSIRIAN  =  25176,
-    SPELL_SUMMON_PLAYER         =  20477,
-    SPELL_WAR_STOMP             =  25188,
+    SPELL_CURSE_OF_TONGUES = 25195,
+    SPELL_STRENGTH_OF_OSSIRIAN = 25176,
+    SPELL_SUMMON_PLAYER = 20477,
+    SPELL_WAR_STOMP = 25188,
 
     // Tornado
-    NPC_TORNADO                 =  15428,
-    SPELL_ENVELOPING_WINDS      =  25189,
-    SPELL_SANDSTORM             =  25160
+    NPC_TORNADO = 15428,
+    SPELL_ENVELOPING_WINDS = 25189,
+    SPELL_SANDSTORM = 25160
 };
 
-std::array<uint32, 5> const SpellWeakness =
-{
-    25177u, //Fire weakness
-    25178u, //Frost weakness
-    25180u, //Nature weakness
-    25183u, //Shadow weakness
-    25181u  //Arcane weakness
+std::array<uint32, 5> const SpellWeakness = {
+    25177u, // Fire weakness
+    25178u, // Frost weakness
+    25180u, // Nature weakness
+    25183u, // Shadow weakness
+    25181u // Arcane weakness
 };
 
-std::array<SpawnLocations, 2> const TornadoSpawn =
-{{
-    { -9444.0f, 1857.0f, 85.55f },
-    { -9352.0f, 2012.0f, 85.55f }
-}};
+std::array<SpawnLocations, 2> const TornadoSpawn = {{{-9444.0f, 1857.0f, 85.55f}, {-9352.0f, 2012.0f, 85.55f}}};
 
 struct boss_ossirianAI : public ScriptedAI
 {
@@ -100,13 +95,13 @@ struct boss_ossirianAI : public ScriptedAI
         DoCast(m_creature, SPELL_STRENGTH_OF_OSSIRIAN);
 
         m_uiSpeed_Timer = 10000;
-        m_creature->SetSpeedRate(MOVE_RUN,  1.0f);
+        m_creature->SetSpeedRate(MOVE_RUN, 1.0f);
         m_creature->SetSpeedRate(MOVE_WALK, 1.0f);
 
-        m_uiCurseOfTongues_Timer     = 30000;
+        m_uiCurseOfTongues_Timer = 30000;
         m_uiStrengthOfOssirian_Timer = 25000;
-        m_uiWarStomp_Timer           = 25000;
-        m_uiEnvelopingWinds_Timer    = 20000;
+        m_uiWarStomp_Timer = 25000;
+        m_uiEnvelopingWinds_Timer = 20000;
 
         TmpThreatList.clear();
         TmpThreatVal.clear();
@@ -118,7 +113,7 @@ struct boss_ossirianAI : public ScriptedAI
             int i = -1;
             while (++i < TornadoGUIDs.size())
             {
-                Creature *Crea = m_creature->GetMap()->GetCreature(TornadoGUIDs[i]);
+                Creature* Crea = m_creature->GetMap()->GetCreature(TornadoGUIDs[i]);
                 if (Crea)
                     Crea->AddObjectToRemoveList();
             }
@@ -169,13 +164,7 @@ struct boss_ossirianAI : public ScriptedAI
         DoCast(m_creature, SPELL_STRENGTH_OF_OSSIRIAN);
         for (const auto& i : TornadoSpawn)
         {
-            Creature *pCreature = m_creature->SummonCreature(NPC_TORNADO,
-                                  i.x,
-                                  i.y,
-                                  i.z,
-                                  0,
-                                  TEMPSUMMON_MANUAL_DESPAWN,
-                                  0);
+            Creature* pCreature = m_creature->SummonCreature(NPC_TORNADO, i.x, i.y, i.z, 0, TEMPSUMMON_MANUAL_DESPAWN, 0);
             if (pCreature)
             {
                 pCreature->CastSpell(pCreature, SPELL_SANDSTORM, true);
@@ -206,7 +195,7 @@ struct boss_ossirianAI : public ScriptedAI
             int i = -1;
             while (++i < TornadoGUIDs.size())
             {
-                Creature *Crea = m_creature->GetMap()->GetCreature(TornadoGUIDs[i]);
+                Creature* Crea = m_creature->GetMap()->GetCreature(TornadoGUIDs[i]);
                 if (Crea)
                     Crea->ForcedDespawn();
             }
@@ -237,7 +226,7 @@ struct boss_ossirianAI : public ScriptedAI
         if (m_uiSpeed_Timer >= uiDiff)
         {
             m_uiSpeed_Timer -= uiDiff;
-            m_creature->SetSpeedRate(MOVE_RUN, (2.0f - m_uiSpeed_Timer*1.0f/10000));
+            m_creature->SetSpeedRate(MOVE_RUN, (2.0f - m_uiSpeed_Timer * 1.0f / 10000));
         }
 
         if (!m_bIsEnraged && m_uiStrengthOfOssirian_Timer < uiDiff)
@@ -289,17 +278,11 @@ struct boss_ossirianAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_ossirian(Creature* pCreature)
-{
-    return new boss_ossirianAI(pCreature);
-}
+CreatureAI* GetAI_boss_ossirian(Creature* pCreature) { return new boss_ossirianAI(pCreature); }
 
 struct generic_random_moveAI : public ScriptedAI
 {
-    generic_random_moveAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    generic_random_moveAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiTimer;
 
@@ -316,7 +299,7 @@ struct generic_random_moveAI : public ScriptedAI
             if (!urand(0, 2))
             {
                 std::vector<Player*> PlayerList;
-                Map::PlayerList const &liste = m_creature->GetMap()->GetPlayers();
+                Map::PlayerList const& liste = m_creature->GetMap()->GetPlayers();
                 for (const auto& i : liste)
                 {
                     if (i.getSource()->GetDistance2d(m_creature) < MAX_VISIBILITY_DISTANCE)
@@ -324,7 +307,7 @@ struct generic_random_moveAI : public ScriptedAI
                 }
                 if (!PlayerList.empty())
                 {
-                    Player *tmp = PlayerList[urand(0, PlayerList.size() - 1)];
+                    Player* tmp = PlayerList[urand(0, PlayerList.size() - 1)];
                     m_creature->MonsterMove(tmp->GetPositionX(), tmp->GetPositionY(), tmp->GetPositionZ());
                     m_uiTimer = (urand(5000, 20000));
                 }
@@ -378,13 +361,7 @@ struct ossirian_crystalAI : public GameObjectAI
         if (!ossirian->SelectHostileTarget() || !ossirian->GetVictim())
             return true;
 
-        Creature* triggerCrystalPylons = me->SummonCreature(CRYSTAL_TRIGGER,
-                                            me->GetPositionX(),
-                                            me->GetPositionY(),
-                                            me->GetPositionZ(),
-                                            me->GetOrientation(),
-                                            TEMPSUMMON_TIMED_DESPAWN,
-                                            8000);
+        Creature* triggerCrystalPylons = me->SummonCreature(CRYSTAL_TRIGGER, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), me->GetOrientation(), TEMPSUMMON_TIMED_DESPAWN, 8000);
 
         if (triggerCrystalPylons)
             triggerCrystalPylons->CastSpell(ossirian, SpellWeakness[urand(0, 4)], true);
@@ -394,16 +371,10 @@ struct ossirian_crystalAI : public GameObjectAI
 };
 
 
-GameObjectAI* GetAI_ossirian_crystal(GameObject* pGo)
-{
-    return new ossirian_crystalAI(pGo);
-}
+GameObjectAI* GetAI_ossirian_crystal(GameObject* pGo) { return new ossirian_crystalAI(pGo); }
 
 
-CreatureAI* GetAI_generic_random_move(Creature* pCreature)
-{
-    return new generic_random_moveAI(pCreature);
-}
+CreatureAI* GetAI_generic_random_move(Creature* pCreature) { return new generic_random_moveAI(pCreature); }
 
 void AddSC_boss_ossirian()
 {

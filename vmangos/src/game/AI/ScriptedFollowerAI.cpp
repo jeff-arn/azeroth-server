@@ -11,52 +11,46 @@ EndScriptData */
 
 #include "ScriptedFollowerAI.h"
 #include "Chat.h"
-#include "Player.h"
 #include "Group.h"
 #include "Map.h"
+#include "Player.h"
 
 float const MAX_PLAYER_DISTANCE = 100.0f;
 
 enum
 {
-    POINT_COMBAT_START  = 0xFFFFFF
+    POINT_COMBAT_START = 0xFFFFFF
 };
 
-FollowerAI::FollowerAI(Creature* pCreature) : ScriptedAI(pCreature),
-    m_uiLeaderGUID(0),
-    m_uiUpdateFollowTimer(2500),
-    m_uiFollowState(STATE_FOLLOW_NONE),
-    m_pQuestForFollow(nullptr),
-    m_uiFollowDistance(0.0f)
-{}
+FollowerAI::FollowerAI(Creature* pCreature) : ScriptedAI(pCreature), m_uiLeaderGUID(0), m_uiUpdateFollowTimer(2500), m_uiFollowState(STATE_FOLLOW_NONE), m_pQuestForFollow(nullptr), m_uiFollowDistance(0.0f) {}
 
-//This part provides assistance to a player that are attacked by pWho, even if out of normal aggro range
-//It will cause m_creature to attack pWho that are attacking _any_ player (which has been confirmed may happen also on offi)
-//The flag (type_flag) is unconfirmed, but used here for further research and is a good candidate.
+// This part provides assistance to a player that are attacked by pWho, even if out of normal aggro range
+// It will cause m_creature to attack pWho that are attacking _any_ player (which has been confirmed may happen also on offi)
+// The flag (type_flag) is unconfirmed, but used here for further research and is a good candidate.
 bool FollowerAI::AssistPlayerInCombat(Unit* pWho)
 {
     if (!pWho->GetVictim())
         return false;
 
-    //experimental (unknown) flag not present
+    // experimental (unknown) flag not present
     if (!m_creature->CanAssistPlayers())
         return false;
 
     if (m_creature->HasUnitState(UNIT_STATE_STUNNED | UNIT_STATE_FEIGN_DEATH))
         return false;
 
-    //not a player
+    // not a player
     if (!pWho->GetVictim()->GetCharmerOrOwnerPlayerOrPlayerItself())
         return false;
 
-    //never attack friendly
+    // never attack friendly
     if (m_creature->IsFriendlyTo(pWho))
         return false;
 
-    //too far away and no free sight?
+    // too far away and no free sight?
     if (m_creature->IsWithinDistInMap(pWho, MAX_PLAYER_DISTANCE) && m_creature->IsWithinLOSInMap(pWho))
     {
-        //already fighting someone?
+        // already fighting someone?
         if (!m_creature->GetVictim())
         {
             AttackStart(pWho);
@@ -84,8 +78,8 @@ void FollowerAI::MoveInLineOfSight(Unit* pWho)
         if (!m_creature->CanInitiateAttack())
             return;
 
-       // if (!m_creature->canFly() && m_creature->GetDistanceZ(pWho) > CREATURE_Z_ATTACK_RANGE)
-         //   return;
+        // if (!m_creature->canFly() && m_creature->GetDistanceZ(pWho) > CREATURE_Z_ATTACK_RANGE)
+        //   return;
 
         if (m_creature->IsHostileTo(pWho))
         {
@@ -103,12 +97,12 @@ void FollowerAI::JustDied(Unit* /*pKiller*/)
     if (!HasFollowState(STATE_FOLLOW_INPROGRESS) || !m_uiLeaderGUID || !m_pQuestForFollow)
         return;
 
-    //TODO: need a better check for quests with time limit.
+    // TODO: need a better check for quests with time limit.
     if (Player* pPlayer = GetLeaderForFollower())
     {
         if (Group* pGroup = pPlayer->GetGroup())
         {
-            for(GroupReference* pRef = pGroup->GetFirstMember(); pRef != nullptr; pRef = pRef->next())
+            for (GroupReference* pRef = pGroup->GetFirstMember(); pRef != nullptr; pRef = pRef->next())
             {
                 if (Player* pMember = pRef->getSource())
                 {
@@ -154,13 +148,13 @@ void FollowerAI::EnterEvadeMode()
         // instead lets make it return to the leader
         switch (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType())
         {
-            case IDLE_MOTION_TYPE:
-            case CONFUSED_MOTION_TYPE:
-            case CHASE_MOTION_TYPE:
-            case FLEEING_MOTION_TYPE:
-            case DISTRACT_MOTION_TYPE:
-            case CHARGE_MOTION_TYPE:
-            case DISTANCING_MOTION_TYPE:
+        case IDLE_MOTION_TYPE:
+        case CONFUSED_MOTION_TYPE:
+        case CHASE_MOTION_TYPE:
+        case FLEEING_MOTION_TYPE:
+        case DISTRACT_MOTION_TYPE:
+        case CHARGE_MOTION_TYPE:
+        case DISTANCING_MOTION_TYPE:
             {
                 if (!HasFollowState(STATE_FOLLOW_PAUSED))
                     AddFollowState(STATE_FOLLOW_RETURNING);
@@ -171,13 +165,13 @@ void FollowerAI::EnterEvadeMode()
     {
         switch (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType())
         {
-            case IDLE_MOTION_TYPE:
-            case CONFUSED_MOTION_TYPE:
-            case CHASE_MOTION_TYPE:
-            case FLEEING_MOTION_TYPE:
-            case DISTRACT_MOTION_TYPE:
-            case CHARGE_MOTION_TYPE:
-            case DISTANCING_MOTION_TYPE:
+        case IDLE_MOTION_TYPE:
+        case CONFUSED_MOTION_TYPE:
+        case CHASE_MOTION_TYPE:
+        case FLEEING_MOTION_TYPE:
+        case DISTRACT_MOTION_TYPE:
+        case CHARGE_MOTION_TYPE:
+        case DISTANCING_MOTION_TYPE:
             {
                 m_creature->GetMotionMaster()->MoveTargetedHome();
             }
@@ -218,7 +212,7 @@ void FollowerAI::UpdateAI(uint32 const uiDiff)
 
                 if (Group* pGroup = pPlayer->GetGroup())
                 {
-                    for(GroupReference* pRef = pGroup->GetFirstMember(); pRef != nullptr; pRef = pRef->next())
+                    for (GroupReference* pRef = pGroup->GetFirstMember(); pRef != nullptr; pRef = pRef->next())
                     {
                         Player* pMember = pRef->getSource();
 
@@ -309,7 +303,7 @@ void FollowerAI::StartFollow(Player* pLeader, uint32 uiFactionForFollower, Quest
         return;
     }
 
-    //set variables
+    // set variables
     m_uiLeaderGUID = pLeader->GetGUID();
     m_uiFollowDistance = followDist;
 
@@ -343,7 +337,7 @@ Player* FollowerAI::GetLeaderForFollower()
 
         if (Group* pGroup = pLeader->GetGroup())
         {
-            for(GroupReference* pRef = pGroup->GetFirstMember(); pRef != nullptr; pRef = pRef->next())
+            for (GroupReference* pRef = pGroup->GetFirstMember(); pRef != nullptr; pRef = pRef->next())
             {
                 Player* pMember = pRef->getSource();
 

@@ -14,34 +14,34 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Common.h"
-#include "Database/DatabaseEnv.h"
-#include "Opcodes.h"
-#include "World.h"
-#include "Player.h"
-#include "Chat.h"
-#include "ObjectAccessor.h"
-#include "Language.h"
 #include "AccountMgr.h"
-#include "ObjectMgr.h"
-#include "ScriptMgr.h"
-#include "GuildMgr.h"
-#include "SystemConfig.h"
-#include "Config/Config.h"
-#include "revision.h"
-#include "Util.h"
-#include "Weather.h"
 #include "Anticheat.h"
-#include "GameEventMgr.h"
-#include "BattleGroundMgr.h"
-#include "CreatureEventAIMgr.h"
-#include "CharacterDatabaseCache.h"
 #include "AuraRemovalMgr.h"
 #include "AutoBroadCastMgr.h"
-#include "SpellModMgr.h"
-#include "MapManager.h"
+#include "BattleGroundMgr.h"
+#include "CharacterDatabaseCache.h"
+#include "Chat.h"
+#include "Common.h"
+#include "Config/Config.h"
+#include "CreatureEventAIMgr.h"
 #include "CreatureGroups.h"
+#include "Database/DatabaseEnv.h"
+#include "GameEventMgr.h"
+#include "GuildMgr.h"
 #include "HardcodedEvents.h"
+#include "Language.h"
+#include "MapManager.h"
+#include "ObjectAccessor.h"
+#include "ObjectMgr.h"
+#include "Opcodes.h"
+#include "Player.h"
+#include "ScriptMgr.h"
+#include "SpellModMgr.h"
+#include "SystemConfig.h"
+#include "Util.h"
+#include "Weather.h"
+#include "World.h"
+#include "revision.h"
 
 bool ChatHandler::HandleAnnounceCommand(char* args)
 {
@@ -67,7 +67,7 @@ bool ChatHandler::HandleNotifyCommand(char* args)
     return true;
 }
 
-bool ChatHandler::HandleVariableCommand(char *args)
+bool ChatHandler::HandleVariableCommand(char* args)
 {
     uint32 index = 0;
     uint32 value = 0;
@@ -129,7 +129,7 @@ bool ChatHandler::HandleChangeWeatherCommand(char* args)
     return true;
 }
 
- //Save all players in the world
+// Save all players in the world
 bool ChatHandler::HandleSaveAllCommand(char* /*args*/)
 {
     sObjectAccessor.SaveAllPlayers();
@@ -232,7 +232,7 @@ bool ChatHandler::HandleAntiSpamRemoveReplace(char* args)
     return true;
 }
 
-bool ChatHandler::HandleWorldUpdateCommand(char *args)
+bool ChatHandler::HandleWorldUpdateCommand(char* args)
 {
     bool modify = true;
     Unit* target = GetSelectedUnit();
@@ -264,7 +264,7 @@ bool ChatHandler::HandleWorldUpdateCommand(char *args)
     return true;
 }
 
-bool ChatHandler::HandleWorldTestCommand(char *args)
+bool ChatHandler::HandleWorldTestCommand(char* args)
 {
     Unit* target = GetSelectedUnit();
     Player* me = m_session->GetPlayer();
@@ -280,7 +280,7 @@ bool ChatHandler::HandleWorldTestCommand(char *args)
     return true;
 }
 
-bool ChatHandler::HandleWorldDetailCommand(char *args)
+bool ChatHandler::HandleWorldDetailCommand(char* args)
 {
     Unit* target = GetSelectedUnit();
     if (!target)
@@ -329,7 +329,7 @@ bool ChatHandler::HandleServerSetMotdCommand(char* args)
     return true;
 }
 
-bool ChatHandler::HandleServerPLimitCommand(char *args)
+bool ChatHandler::HandleServerPLimitCommand(char* args)
 {
     if (*args)
     {
@@ -370,21 +370,21 @@ bool ChatHandler::HandleServerPLimitCommand(char *args)
     char const* secName = "";
     switch (allowedAccountType)
     {
-        case SEC_PLAYER:
-            secName = "Player";
-            break;
-        case SEC_MODERATOR:
-            secName = "Moderator";
-            break;
-        case SEC_GAMEMASTER:
-            secName = "Gamemaster";
-            break;
-        case SEC_ADMINISTRATOR:
-            secName = "Administrator";
-            break;
-        default:
-            secName = "<unknown>";
-            break;
+    case SEC_PLAYER:
+        secName = "Player";
+        break;
+    case SEC_MODERATOR:
+        secName = "Moderator";
+        break;
+    case SEC_GAMEMASTER:
+        secName = "Gamemaster";
+        break;
+    case SEC_ADMINISTRATOR:
+        secName = "Administrator";
+        break;
+    default:
+        secName = "<unknown>";
+        break;
     }
 
     PSendSysMessage("Player limits: amount %u, min. security level %s.", pLimit, secName);
@@ -536,7 +536,7 @@ bool ChatHandler::HandleServerLogFilterCommand(char* args)
         return true;
     }
 
-    char *filtername = ExtractLiteralArg(&args);
+    char* filtername = ExtractLiteralArg(&args);
     if (!filtername)
         return false;
 
@@ -572,12 +572,11 @@ bool ChatHandler::HandleServerLogFilterCommand(char* args)
 }
 
 // Set the level of logging
-bool ChatHandler::HandleServerLogLevelCommand(char *args)
+bool ChatHandler::HandleServerLogLevelCommand(char* args)
 {
     if (!*args)
     {
-        PSendSysMessage("Console log level: %u File log level: %u",
-            sLog.GetConsoleLevel(), sLog.GetFileLevel());
+        PSendSysMessage("Console log level: %u File log level: %u", sLog.GetConsoleLevel(), sLog.GetFileLevel());
         return true;
     }
 
@@ -585,9 +584,9 @@ bool ChatHandler::HandleServerLogLevelCommand(char *args)
     return true;
 }
 
- // SPELL GROUPS
+// SPELL GROUPS
 
-bool ChatHandler::HandleGroupAddSpellCommand(char *args)
+bool ChatHandler::HandleGroupAddSpellCommand(char* args)
 {
     uint32 spellId = ExtractSpellIdFromLink(&args);
     uint32 groupId = 0;
@@ -609,7 +608,7 @@ bool ChatHandler::HandleGroupAddSpellCommand(char *args)
     return true;
 }
 
-bool ChatHandler::HandleGroupSetRuleCommand(char *args)
+bool ChatHandler::HandleGroupSetRuleCommand(char* args)
 {
     uint32 groupId = 0, ruleId = SPELL_GROUP_STACK_RULE_EXCLUSIVE;
     if (!ExtractUInt32(&args, groupId))
@@ -713,9 +712,7 @@ bool ChatHandler::HandleEventInfoCommand(char* args)
     std::string occurenceStr = secsToTimeString(eventData.occurence * MINUTE);
     std::string lengthStr = secsToTimeString(eventData.length * MINUTE);
 
-    PSendSysMessage(LANG_EVENT_INFO, event_id, eventData.description.c_str(), activeStr,
-        startTimeStr.c_str(), endTimeStr.c_str(), occurenceStr.c_str(), lengthStr.c_str(),
-        nextStr.c_str());
+    PSendSysMessage(LANG_EVENT_INFO, event_id, eventData.description.c_str(), activeStr, startTimeStr.c_str(), endTimeStr.c_str(), occurenceStr.c_str(), lengthStr.c_str(), nextStr.c_str());
     return true;
 }
 
@@ -906,7 +903,7 @@ bool ChatHandler::HandleReloadAllCommand(char* /*args*/)
 
 bool ChatHandler::HandleReloadAllAreaCommand(char* /*args*/)
 {
-    //HandleReloadQuestAreaTriggersCommand((char*)""); -- reloaded in HandleReloadAllQuestCommand
+    // HandleReloadQuestAreaTriggersCommand((char*)""); -- reloaded in HandleReloadAllQuestCommand
     HandleReloadAreaTriggerTeleportCommand((char*)"");
     HandleReloadAreaTriggerTavernCommand((char*)"");
     HandleReloadGameGraveyardZoneCommand((char*)"");
@@ -924,7 +921,7 @@ bool ChatHandler::HandleReloadAllLootCommand(char* /*args*/)
 
 bool ChatHandler::HandleReloadAllNpcCommand(char* args)
 {
-    if (*args != 'a')                                       // will be reloaded from all_gossips
+    if (*args != 'a') // will be reloaded from all_gossips
         HandleReloadNpcGossipCommand((char*)"a");
     HandleReloadNpcTrainerCommand((char*)"a");
     HandleReloadNpcVendorCommand((char*)"a");
@@ -986,7 +983,7 @@ bool ChatHandler::HandleReloadAllGossipsCommand(char* args)
 {
     HandleReloadGossipMenuCommand((char*)"a");
     HandleReloadGossipMenuOptionCommand((char*)"a");
-    if (*args != 'a')                                       // already reload from all_scripts
+    if (*args != 'a') // already reload from all_scripts
         HandleReloadGossipScriptsCommand((char*)"a");
     HandleReloadNpcGossipCommand((char*)"a");
     HandleReloadPointsOfInterestCommand((char*)"a");
@@ -1713,7 +1710,7 @@ bool ChatHandler::HandleReloadLocalesQuestCommand(char* /*args*/)
     return true;
 }
 
-bool ChatHandler::HandleReloadCharacterPetCommand(char *args)
+bool ChatHandler::HandleReloadCharacterPetCommand(char* args)
 {
     uint32 petId = 0;
     if (!ExtractUInt32(&args, petId))
@@ -1894,42 +1891,42 @@ bool ChatHandler::HandleReloadVariablesCommand(char*)
     return true;
 }
 
-bool ChatHandler::HandleReloadCreatureGroupsCommand(char *args)
+bool ChatHandler::HandleReloadCreatureGroupsCommand(char* args)
 {
     sCreatureGroupsManager->Load();
     SendSysMessage("DB table `creature_groups` reloaded.");
     return true;
 }
 
-bool ChatHandler::HandleReloadCinematicWaypointsCommand(char *args)
+bool ChatHandler::HandleReloadCinematicWaypointsCommand(char* args)
 {
     sObjectMgr.LoadCinematicsWaypoints();
     SendSysMessage("DB table `cinematic_waypoints` reloaded.");
     return true;
 }
 
-bool ChatHandler::HandleReloadSpellDisabledCommand(char *args)
+bool ChatHandler::HandleReloadSpellDisabledCommand(char* args)
 {
     sObjectMgr.LoadSpellDisabledEntrys();
     SendSysMessage("DB table `spell_disabed` reloaded.");
     return true;
 }
 
-bool ChatHandler::HandleReloadAutoBroadcastCommand(char *args)
+bool ChatHandler::HandleReloadAutoBroadcastCommand(char* args)
 {
     sAutoBroadCastMgr.Load();
     SendSysMessage("DB table `autobroadcast` reloaded.");
     return true;
 }
 
-bool ChatHandler::HandleReloadSpellModsCommand(char *args)
+bool ChatHandler::HandleReloadSpellModsCommand(char* args)
 {
     sSpellModMgr.LoadSpellMods();
     SendSysMessage("DB table `spell_mod` reloaded.");
     return true;
 }
 
-bool ChatHandler::HandleReloadMapLootDisabledCommand(char *args)
+bool ChatHandler::HandleReloadMapLootDisabledCommand(char* args)
 {
     sObjectMgr.LoadMapLootDisabled();
     SendSysMessage("DB table `map_loot_disabled` reloaded.");

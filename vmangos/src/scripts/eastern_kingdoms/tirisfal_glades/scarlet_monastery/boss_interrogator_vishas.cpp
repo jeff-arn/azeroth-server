@@ -21,18 +21,18 @@ SDComment:
 SDCategory: Scarlet Monastery
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "scarlet_monastery.h"
+#include "scriptPCH.h"
 
 enum
 {
-    SAY_AGGRO               = 6204, // Tell me... tell me everything!
-    SAY_HEALTH1             = 6206, // Naughty secrets!
-    SAY_HEALTH2             = 6207, // I'll rip the secrets from your flesh!
-    SAY_KILL                = 6205, // Purged by pain!
-    SAY_TRIGGER_VORREL      = 1376, // Finally. The bastard got what he deserved. 
+    SAY_AGGRO = 6204, // Tell me... tell me everything!
+    SAY_HEALTH1 = 6206, // Naughty secrets!
+    SAY_HEALTH2 = 6207, // I'll rip the secrets from your flesh!
+    SAY_KILL = 6205, // Purged by pain!
+    SAY_TRIGGER_VORREL = 1376, // Finally. The bastard got what he deserved.
 
-    SPELL_SHADOWWORDPAIN    = 2767,
+    SPELL_SHADOWWORDPAIN = 2767,
 };
 
 struct boss_interrogator_vishasAI : public ScriptedAI
@@ -56,23 +56,17 @@ struct boss_interrogator_vishasAI : public ScriptedAI
         ShadowWordPain_Timer = 5000;
     }
 
-    void Aggro(Unit *who) override
-    {
-        DoScriptText(SAY_AGGRO, m_creature);
-    }
+    void Aggro(Unit* who) override { DoScriptText(SAY_AGGRO, m_creature); }
 
-    void KilledUnit(Unit* Victim) override
-    {
-        DoScriptText(SAY_KILL, m_creature);
-    }
+    void KilledUnit(Unit* Victim) override { DoScriptText(SAY_KILL, m_creature); }
 
     void JustDied(Unit* Killer) override
     {
         if (!m_pInstance)
             return;
 
-        //Any other actions to do with vorrel? setStandState?
-        if (Unit *vorrel = m_creature->GetMap()->GetUnit(m_pInstance->GetData64(DATA_VORREL)))
+        // Any other actions to do with vorrel? setStandState?
+        if (Unit* vorrel = m_creature->GetMap()->GetUnit(m_pInstance->GetData64(DATA_VORREL)))
             DoScriptText(SAY_TRIGGER_VORREL, vorrel);
     }
 
@@ -81,7 +75,7 @@ struct boss_interrogator_vishasAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //If we are low on hp Do sayings
+        // If we are low on hp Do sayings
         if (!Yell60 && m_creature->GetHealthPercent() <= 60.0f)
         {
             DoScriptText(SAY_HEALTH1, m_creature);
@@ -94,22 +88,20 @@ struct boss_interrogator_vishasAI : public ScriptedAI
             Yell30 = true;
         }
 
-        //ShadowWordPain_Timer
+        // ShadowWordPain_Timer
         if (ShadowWordPain_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHADOWWORDPAIN);
             ShadowWordPain_Timer = urand(5000, 15000);
         }
-        else ShadowWordPain_Timer -= diff;
+        else
+            ShadowWordPain_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_boss_interrogator_vishas(Creature* pCreature)
-{
-    return new boss_interrogator_vishasAI(pCreature);
-}
+CreatureAI* GetAI_boss_interrogator_vishas(Creature* pCreature) { return new boss_interrogator_vishasAI(pCreature); }
 
 void AddSC_boss_interrogator_vishas()
 {

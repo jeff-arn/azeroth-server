@@ -24,12 +24,12 @@ EndScriptData */
 #include "scriptPCH.h"
 #include "stratholme.h"
 
-#define SPELL_BANSHEEWAIL   16565
-#define SPELL_BANSHEECURSE  16867
-#define SPELL_SILENCE       18327
-#define SPELL_POSSESS       17244
+#define SPELL_BANSHEEWAIL 16565
+#define SPELL_BANSHEECURSE 16867
+#define SPELL_SILENCE 18327
+#define SPELL_POSSESS 17244
 
-#define SPELL_INVISIBLE     24699
+#define SPELL_INVISIBLE 24699
 
 struct SpawnLocations
 {
@@ -63,14 +63,14 @@ struct boss_baroness_anastariAI : public ScriptedAI
 
     void Reset() override
     {
-        BansheeWail_Timer       = 1000;
-        BansheeCurse_Timer      = 11000;
-        Silence_Timer           = 13000;
-        Possess_Timer           = 20000;
-        CheckPossess_Timer      = 1000;
-        PlayerHealth            = 0;
+        BansheeWail_Timer = 1000;
+        BansheeCurse_Timer = 11000;
+        Silence_Timer = 13000;
+        Possess_Timer = 20000;
+        CheckPossess_Timer = 1000;
+        PlayerHealth = 0;
 
-        PossessedPlayerGuid     = 0;
+        PossessedPlayerGuid = 0;
         Possessed = false;
         Position_memorized = false;
 
@@ -102,7 +102,7 @@ struct boss_baroness_anastariAI : public ScriptedAI
             if (Unit* pTarget = m_creature->GetMap()->GetUnit(PlayerGuids[i]))
                 pTarget->RestoreFaction();
     }
-    void DamageTaken(Unit *done_by, uint32 &damage) override
+    void DamageTaken(Unit* done_by, uint32& damage) override
     {
         if (Possessed)
             damage = 0;
@@ -164,7 +164,7 @@ struct boss_baroness_anastariAI : public ScriptedAI
         if (m_creature->GetVisibility() != VISIBILITY_ON)
             m_creature->SetVisibility(VISIBILITY_ON);
 
-        //Possess
+        // Possess
         if (Possess_Timer < diff)
         {
             if (m_creature->SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 1)) // au moins 2 joueurs présents
@@ -207,7 +207,7 @@ struct boss_baroness_anastariAI : public ScriptedAI
                             /** Memorize current health of the possessed player */
                             PlayerHealth = target->GetHealthPercent();
 
-                            Position_memorized =  true;
+                            Position_memorized = true;
                         }
 
                         m_creature->NearTeleportTo(target->GetPosition());
@@ -234,37 +234,37 @@ struct boss_baroness_anastariAI : public ScriptedAI
         else
             Possess_Timer -= diff;
 
-        //BansheeWail
+        // BansheeWail
         if (BansheeWail_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BANSHEEWAIL) == CAST_OK)
                 BansheeWail_Timer = 4000;
         }
-        else BansheeWail_Timer -= diff;
+        else
+            BansheeWail_Timer -= diff;
 
-        //BansheeCurse
+        // BansheeCurse
         if (BansheeCurse_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BANSHEECURSE, CF_AURA_NOT_PRESENT) == CAST_OK)
                 BansheeCurse_Timer = 18000;
         }
-        else BansheeCurse_Timer -= diff;
+        else
+            BansheeCurse_Timer -= diff;
 
-        //Silence
+        // Silence
         if (Silence_Timer < diff)
         {
             if (DoCastSpellIfCan(m_creature, SPELL_SILENCE) == CAST_OK)
                 Silence_Timer = urand(13000, 18000);
         }
-        else Silence_Timer -= diff;
+        else
+            Silence_Timer -= diff;
 
         DoMeleeAttackIfReady();
     }
 };
-CreatureAI* GetAI_boss_baroness_anastari(Creature* pCreature)
-{
-    return new boss_baroness_anastariAI(pCreature);
-}
+CreatureAI* GetAI_boss_baroness_anastari(Creature* pCreature) { return new boss_baroness_anastariAI(pCreature); }
 
 void AddSC_boss_baroness_anastari()
 {

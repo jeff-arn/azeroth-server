@@ -17,12 +17,12 @@
 #ifndef _SPELL_CASTER_OBJECT_H
 #define _SPELL_CASTER_OBJECT_H
 
+#include <array>
+#include <memory>
 #include "Object.h"
 #include "SpellDefines.h"
 #include "Utilities/EventProcessor.h"
 #include "nonstd/optional.hpp"
-#include <array>
-#include <memory>
 
 using nonstd::optional;
 
@@ -40,9 +40,9 @@ enum MeleeHitOutcome
 {
     MELEE_HIT_EVADE = 0,
     MELEE_HIT_MISS = 1,
-    MELEE_HIT_DODGE = 2,                                // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
-    MELEE_HIT_BLOCK = 3,                                // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
-    MELEE_HIT_PARRY = 4,                                // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
+    MELEE_HIT_DODGE = 2, // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
+    MELEE_HIT_BLOCK = 3, // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
+    MELEE_HIT_PARRY = 4, // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
     MELEE_HIT_GLANCING = 5,
     MELEE_HIT_CRIT = 6,
     MELEE_HIT_CRUSHING = 7,
@@ -51,11 +51,9 @@ enum MeleeHitOutcome
 };
 
 // Spell damage info structure based on structure sending in SMSG_SPELLNONMELEEDAMAGELOG opcode
-struct SpellNonMeleeDamage {
-    SpellNonMeleeDamage(SpellCaster* _attacker, Unit* _target, uint32 _SpellID, SpellSchools _school)
-        : target(_target), attacker(_attacker), SpellID(_SpellID), damage(0), school(_school),
-        absorb(0), resist(0), periodicLog(false), reflected(false), blocked(0), HitInfo(0), spell(nullptr)
-    {}
+struct SpellNonMeleeDamage
+{
+    SpellNonMeleeDamage(SpellCaster* _attacker, Unit* _target, uint32 _SpellID, SpellSchools _school) : target(_target), attacker(_attacker), SpellID(_SpellID), damage(0), school(_school), absorb(0), resist(0), periodicLog(false), reflected(false), blocked(0), HitInfo(0), spell(nullptr) {}
 
     Unit* target;
     SpellCaster* attacker;
@@ -64,8 +62,8 @@ struct SpellNonMeleeDamage {
     SpellSchools school;
     uint32 absorb;
     int32 resist;
-    bool   periodicLog;
-    bool   reflected;
+    bool periodicLog;
+    bool reflected;
     uint32 blocked;
     uint32 HitInfo;
     Spell* spell;
@@ -73,8 +71,7 @@ struct SpellNonMeleeDamage {
 
 struct CleanDamage
 {
-    CleanDamage(uint32 _damage, WeaponAttackType _attackType, MeleeHitOutcome _hitOutCome, uint32 _Absorb, int32 _Resist) :
-    damage(_damage), attackType(_attackType), hitOutCome(_hitOutCome), absorb(_Absorb), resist(_Resist) {}
+    CleanDamage(uint32 _damage, WeaponAttackType _attackType, MeleeHitOutcome _hitOutCome, uint32 _Absorb, int32 _Resist) : damage(_damage), attackType(_attackType), hitOutCome(_hitOutCome), absorb(_Absorb), resist(_Resist) {}
 
     uint32 damage;
     WeaponAttackType attackType;
@@ -85,87 +82,78 @@ struct CleanDamage
 
 enum CurrentSpellTypes
 {
-    CURRENT_MELEE_SPELL             = 0,
-    CURRENT_GENERIC_SPELL           = 1,
-    CURRENT_AUTOREPEAT_SPELL        = 2,
-    CURRENT_CHANNELED_SPELL         = 3
+    CURRENT_MELEE_SPELL = 0,
+    CURRENT_GENERIC_SPELL = 1,
+    CURRENT_AUTOREPEAT_SPELL = 2,
+    CURRENT_CHANNELED_SPELL = 3
 };
 
 #define CURRENT_FIRST_NON_MELEE_SPELL 1
-#define CURRENT_MAX_SPELL             4
+#define CURRENT_MAX_SPELL 4
 
 class CooldownData
 {
-        friend class CooldownContainer;
-    public:
-        CooldownData(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory, uint32 categoryDuration, uint32 itemId = 0, bool isPermanent = false) :
-            m_spellId(spellId),
-            m_category(spellCategory),
-            m_expireTime(duration ? std::chrono::milliseconds(duration) + clockNow : TimePoint()),
-            m_catExpireTime(spellCategory && categoryDuration ? std::chrono::milliseconds(categoryDuration) + clockNow : TimePoint()),
-            m_typePermanent(isPermanent),
-            m_itemId(itemId)
-        {}
+    friend class CooldownContainer;
 
-        // return false if permanent
-        bool GetSpellCDExpireTime(TimePoint& expireTime) const
-        {
-            if (m_typePermanent)
-                return false;
+public:
+    CooldownData(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory, uint32 categoryDuration, uint32 itemId = 0, bool isPermanent = false) : m_spellId(spellId), m_category(spellCategory), m_expireTime(duration ? std::chrono::milliseconds(duration) + clockNow : TimePoint()), m_catExpireTime(spellCategory && categoryDuration ? std::chrono::milliseconds(categoryDuration) + clockNow : TimePoint()), m_typePermanent(isPermanent), m_itemId(itemId) {}
 
-            expireTime = m_expireTime;
-            return true;
-        }
-
-        void SetCatCDExpireTime(TimePoint expireTime)
-        {
-            m_catExpireTime = expireTime;
-        }
-
-        // return false if permanent
-        bool GetCatCDExpireTime(TimePoint& expireTime) const
-        {
-            if (m_typePermanent)
-                return false;
-
-            expireTime = m_catExpireTime;
-            return true;
-        }
-
-        bool IsSpellCDExpired(TimePoint const& now) const
-        {
-            if (m_typePermanent)
-                return false;
-
-            return now >= m_expireTime;
-        }
-
-        bool IsCatCDExpired(TimePoint const& now) const
-        {
-            if (m_typePermanent)
-                return false;
-
-            if (!m_category)
-                return true;
-
-            if (now >= m_catExpireTime)
-                return true;
-
+    // return false if permanent
+    bool GetSpellCDExpireTime(TimePoint& expireTime) const
+    {
+        if (m_typePermanent)
             return false;
-        }
 
-        bool IsPermanent() const { return m_typePermanent; }
-        uint32 GetItemId() const { return m_itemId; }
-        uint32 GetSpellId() const { return m_spellId; }
-        uint32 GetCategory() const { return m_category; }
+        expireTime = m_expireTime;
+        return true;
+    }
 
-    private:
-        uint32            m_spellId;
-        uint32            m_category;
-        TimePoint         m_expireTime;
-        TimePoint         m_catExpireTime;
-        bool              m_typePermanent;
-        uint32            m_itemId;
+    void SetCatCDExpireTime(TimePoint expireTime) { m_catExpireTime = expireTime; }
+
+    // return false if permanent
+    bool GetCatCDExpireTime(TimePoint& expireTime) const
+    {
+        if (m_typePermanent)
+            return false;
+
+        expireTime = m_catExpireTime;
+        return true;
+    }
+
+    bool IsSpellCDExpired(TimePoint const& now) const
+    {
+        if (m_typePermanent)
+            return false;
+
+        return now >= m_expireTime;
+    }
+
+    bool IsCatCDExpired(TimePoint const& now) const
+    {
+        if (m_typePermanent)
+            return false;
+
+        if (!m_category)
+            return true;
+
+        if (now >= m_catExpireTime)
+            return true;
+
+        return false;
+    }
+
+    bool IsPermanent() const { return m_typePermanent; }
+    uint32 GetItemId() const { return m_itemId; }
+    uint32 GetSpellId() const { return m_spellId; }
+    uint32 GetCategory() const { return m_category; }
+
+private:
+    uint32 m_spellId;
+    uint32 m_category;
+    TimePoint m_expireTime;
+    TimePoint m_catExpireTime;
+    bool m_typePermanent;
+    uint32 m_itemId;
 };
 
 typedef std::unique_ptr<CooldownData> CooldownDataUPTR;
@@ -174,86 +162,63 @@ typedef std::map<SpellSchools, TimePoint> LockoutMap;
 
 class CooldownContainer
 {
-    public:
-        typedef std::map<uint32, CooldownDataUPTR> spellIdMap;
-        typedef spellIdMap::const_iterator ConstIterator;
-        typedef spellIdMap::iterator Iterator;
-        typedef std::map<uint32, ConstIterator> categoryMap;
+public:
+    typedef std::map<uint32, CooldownDataUPTR> spellIdMap;
+    typedef spellIdMap::const_iterator ConstIterator;
+    typedef spellIdMap::iterator Iterator;
+    typedef std::map<uint32, ConstIterator> categoryMap;
 
-        void Update(TimePoint const& now)
+    void Update(TimePoint const& now)
+    {
+        auto spellCDItr = m_spellIdMap.begin();
+        while (spellCDItr != m_spellIdMap.end())
         {
-            auto spellCDItr = m_spellIdMap.begin();
-            while (spellCDItr != m_spellIdMap.end())
+            auto& cd = spellCDItr->second;
+            if (cd->IsSpellCDExpired(now) && cd->IsCatCDExpired(now)) // will not remove permanent CD
+                spellCDItr = erase(spellCDItr);
+            else
             {
-                auto& cd = spellCDItr->second;
-                if (cd->IsSpellCDExpired(now) && cd->IsCatCDExpired(now)) // will not remove permanent CD
-                    spellCDItr = erase(spellCDItr);
-                else
+                if (cd->m_category && cd->IsCatCDExpired(now))
                 {
-                    if (cd->m_category && cd->IsCatCDExpired(now))
-                    {
-                        m_categoryMap.erase(cd->m_category);
-                        cd->m_category = 0;
-                    }
-                    ++spellCDItr;
+                    m_categoryMap.erase(cd->m_category);
+                    cd->m_category = 0;
                 }
+                ++spellCDItr;
             }
         }
+    }
 
-        bool AddCooldown(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory = 0, uint32 categoryDuration = 0, uint32 itemId = 0, bool onHold = false)
+    bool AddCooldown(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory = 0, uint32 categoryDuration = 0, uint32 itemId = 0, bool onHold = false)
+    {
+        RemoveBySpellId(spellId);
+        auto resultItr = m_spellIdMap.emplace(spellId, std::move(std::unique_ptr<CooldownData>(new CooldownData(clockNow, spellId, duration, spellCategory, categoryDuration, itemId, onHold))));
+        // do not overwrite one permanent category cooldown with another permanent category cooldown
+        if (resultItr.second && spellCategory && categoryDuration)
         {
-            RemoveBySpellId(spellId);
-            auto resultItr = m_spellIdMap.emplace(spellId, std::move(std::unique_ptr<CooldownData>(new CooldownData(clockNow, spellId, duration, spellCategory, categoryDuration, itemId, onHold))));
-            // do not overwrite one permanent category cooldown with another permanent category cooldown
-            if (resultItr.second && spellCategory && categoryDuration)
+            auto catItr = FindByCategory(spellCategory);
+            if (!onHold || catItr == m_spellIdMap.end() || !catItr->second->IsPermanent())
             {
-                auto catItr = FindByCategory(spellCategory);
-                if (!onHold || catItr == m_spellIdMap.end() || !catItr->second->IsPermanent())
+                // we must keep original category cd owner for sake of client sync
+                if (catItr != m_spellIdMap.end())
                 {
-                    // we must keep original category cd owner for sake of client sync
-                    if (catItr != m_spellIdMap.end())
-                    {
-                        catItr->second->SetCatCDExpireTime(std::chrono::milliseconds(categoryDuration) + clockNow);
-                        catItr->second->m_typePermanent = false;
-                        resultItr.first->second->m_category = 0;
-                    }
-                    else
-                        m_categoryMap.emplace(spellCategory, resultItr.first);
-                }
-                else
+                    catItr->second->SetCatCDExpireTime(std::chrono::milliseconds(categoryDuration) + clockNow);
+                    catItr->second->m_typePermanent = false;
                     resultItr.first->second->m_category = 0;
-            }
-
-            return resultItr.second;
-        }
-
-        void RemoveBySpellId(uint32 spellId)
-        {
-            auto spellCDItr = m_spellIdMap.find(spellId);
-            if (spellCDItr != m_spellIdMap.end())
-            {
-                auto& cdData = spellCDItr->second;
-                if (cdData->m_category)
-                {
-                    auto catCDItr = m_categoryMap.find(cdData->m_category);
-                    if (catCDItr != m_categoryMap.end())
-                        m_categoryMap.erase(catCDItr);
                 }
-                m_spellIdMap.erase(spellCDItr);
+                else
+                    m_categoryMap.emplace(spellCategory, resultItr.first);
             }
+            else
+                resultItr.first->second->m_category = 0;
         }
 
-        void RemoveByCategory(uint32 category)
-        {
-            auto spellCDItr = m_categoryMap.find(category);
-            if (spellCDItr != m_categoryMap.end())
-            {
-                spellCDItr->second->second->m_category = 0;
-                m_categoryMap.erase(spellCDItr);
-            }
-        }
+        return resultItr.second;
+    }
 
-        Iterator erase(ConstIterator spellCDItr)
+    void RemoveBySpellId(uint32 spellId)
+    {
+        auto spellCDItr = m_spellIdMap.find(spellId);
+        if (spellCDItr != m_spellIdMap.end())
         {
             auto& cdData = spellCDItr->second;
             if (cdData->m_category)
@@ -262,27 +227,54 @@ class CooldownContainer
                 if (catCDItr != m_categoryMap.end())
                     m_categoryMap.erase(catCDItr);
             }
-            return m_spellIdMap.erase(spellCDItr);
+            m_spellIdMap.erase(spellCDItr);
         }
+    }
 
-        ConstIterator FindBySpellId(uint32 id) const { return m_spellIdMap.find(id); }
-
-        ConstIterator FindByCategory(uint32 category) const
+    void RemoveByCategory(uint32 category)
+    {
+        auto spellCDItr = m_categoryMap.find(category);
+        if (spellCDItr != m_categoryMap.end())
         {
-            auto itr = m_categoryMap.find(category);
-            return itr != m_categoryMap.end() ? itr->second : end();
+            spellCDItr->second->second->m_category = 0;
+            m_categoryMap.erase(spellCDItr);
         }
+    }
 
-        void clear() { m_spellIdMap.clear(); m_categoryMap.clear(); }
+    Iterator erase(ConstIterator spellCDItr)
+    {
+        auto& cdData = spellCDItr->second;
+        if (cdData->m_category)
+        {
+            auto catCDItr = m_categoryMap.find(cdData->m_category);
+            if (catCDItr != m_categoryMap.end())
+                m_categoryMap.erase(catCDItr);
+        }
+        return m_spellIdMap.erase(spellCDItr);
+    }
 
-        ConstIterator begin() const { return m_spellIdMap.begin(); }
-        ConstIterator end() const { return m_spellIdMap.end(); }
-        bool IsEmpty() const { return m_spellIdMap.empty(); }
-        size_t size() const { return m_spellIdMap.size(); }
+    ConstIterator FindBySpellId(uint32 id) const { return m_spellIdMap.find(id); }
 
-    private:
-        spellIdMap m_spellIdMap;
-        categoryMap m_categoryMap;
+    ConstIterator FindByCategory(uint32 category) const
+    {
+        auto itr = m_categoryMap.find(category);
+        return itr != m_categoryMap.end() ? itr->second : end();
+    }
+
+    void clear()
+    {
+        m_spellIdMap.clear();
+        m_categoryMap.clear();
+    }
+
+    ConstIterator begin() const { return m_spellIdMap.begin(); }
+    ConstIterator end() const { return m_spellIdMap.end(); }
+    bool IsEmpty() const { return m_spellIdMap.empty(); }
+    size_t size() const { return m_spellIdMap.size(); }
+
+private:
+    spellIdMap m_spellIdMap;
+    categoryMap m_categoryMap;
 };
 
 // Unit* victim, uint32 procAttacker, uint32 procVictim, uint32 procExtra, uint32 amount, WeaponAttackType attType, SpellEntry const* procSpell, bool dontTriggerSpecial
@@ -307,8 +299,7 @@ struct ProcSystemArguments
     bool isSpellTriggeredByAuraOrItem;
     time_t procTime;
 
-    explicit ProcSystemArguments(Unit* pVictim_, uint32 procFlagsAttacker_, uint32 procFlagsVictim_, uint32 procExtra_, uint32 amount_, uint32 originalAmount_, WeaponAttackType attType_ = BASE_ATTACK,
-        SpellEntry const* procSpell_ = nullptr, Spell const* spell = nullptr);
+    explicit ProcSystemArguments(Unit* pVictim_, uint32 procFlagsAttacker_, uint32 procFlagsVictim_, uint32 procExtra_, uint32 amount_, uint32 originalAmount_, WeaponAttackType attType_ = BASE_ATTACK, SpellEntry const* procSpell_ = nullptr, Spell const* spell = nullptr);
 };
 
 // Needed because of SPELL_ATTR_EX3_INSTANT_TARGET_PROCS
@@ -344,7 +335,11 @@ public:
     Spell* GetCurrentSpell(CurrentSpellTypes spellType) const { return m_currentSpells[spellType]; }
     Spell* FindCurrentSpellBySpellId(uint32 spell_id) const;
     bool CheckAndIncreaseCastCounter();
-    void DecreaseCastCounter() { if (m_castCounter) --m_castCounter; }
+    void DecreaseCastCounter()
+    {
+        if (m_castCounter)
+            --m_castCounter;
+    }
 
     // set withDelayed to true to account delayed spells as casted
     // delayed+channeled spells are always accounted as casted
@@ -365,7 +360,7 @@ public:
     virtual bool IsSpellCrit(Unit const* pVictim, SpellEntry const* spellProto, SpellSchoolMask schoolMask, WeaponAttackType attackType = BASE_ATTACK, Spell* spell = nullptr) const { return false; }
     float SpellCriticalHealingBonus(SpellEntry const* spellProto, uint32 damage, Unit const* pVictim) const;
     uint32 SpellCriticalDamageBonus(SpellEntry const* spellProto, uint32 damage, Unit const* pVictim, Spell* spell = nullptr);
-    float  MeleeSpellMissChance(Unit const* pVictim, WeaponAttackType attType, int32 skillDiff, SpellEntry const* spell, Spell* spellPtr = nullptr);
+    float MeleeSpellMissChance(Unit const* pVictim, WeaponAttackType attType, int32 skillDiff, SpellEntry const* spell, Spell* spellPtr = nullptr);
     SpellMissInfo MeleeSpellHitResult(Unit const* pVictim, SpellEntry const* spell, Spell* spellPtr = nullptr);
     SpellMissInfo MagicSpellHitResult(Unit const* pVictim, SpellEntry const* spell, Spell* spellPtr = nullptr);
     int32 MagicSpellHitChance(Unit const* pVictim, SpellEntry const* spell, Spell* spellPtr = nullptr);
@@ -416,7 +411,12 @@ public:
     virtual void RemoveSpellCooldown(SpellEntry const& spellEntry, bool updateClient = true);
     void RemoveSpellCooldown(uint32 spellId, bool updateClient = true);
     virtual void RemoveSpellCategoryCooldown(uint32 category, bool updateClient = true);
-    virtual void RemoveAllCooldowns(bool /*sendOnly*/ = false) { m_GCDCatMap.clear(); m_cooldownMap.clear(); m_lockoutMap.clear(); }
+    virtual void RemoveAllCooldowns(bool /*sendOnly*/ = false)
+    {
+        m_GCDCatMap.clear();
+        m_cooldownMap.clear();
+        m_lockoutMap.clear();
+    }
     bool IsSpellReady(SpellEntry const& spellEntry, ItemPrototype const* itemProto = nullptr) const;
     bool IsSpellReady(uint32 spellId, ItemPrototype const* itemProto = nullptr) const;
     bool IsSpellOnPermanentCooldown(SpellEntry const& spellEntry) const;
@@ -427,14 +427,15 @@ public:
 
     // Event handler
     EventProcessor m_Events;
+
 protected:
     explicit SpellCaster() = default;
 
     // cooldown system
     bool GetExpireTime(SpellEntry const& spellEntry, TimePoint& expireTime, bool& isPermanent) const;
 
-    GCDMap            m_GCDCatMap;
-    LockoutMap        m_lockoutMap;
+    GCDMap m_GCDCatMap;
+    LockoutMap m_lockoutMap;
     CooldownContainer m_cooldownMap;
 
     std::vector<ObjectGuid> m_spellDynObjects;
@@ -442,7 +443,7 @@ protected:
     uint32 m_procsUpdateTimer = 0;
     std::vector<ProcSystemArguments> m_pendingProcChecks;
     std::array<Spell*, CURRENT_MAX_SPELL> m_currentSpells{};
-    uint32 m_castCounter = 0;                           // count casts chain of triggered spells for prevent infinity cast crashes
+    uint32 m_castCounter = 0; // count casts chain of triggered spells for prevent infinity cast crashes
 private:
     // Error traps for some wrong args using
     // this will catch and prevent build for any cases when all optional args skipped and instead triggered used non boolean type
@@ -461,24 +462,12 @@ private:
     SpellCastResult CastSpell(float x, float y, float z, SpellEntry const* spell, TR triggered);
 };
 
-inline SpellCaster* Object::ToSpellCaster()
-{
-    return IsSpellCaster() ? static_cast<SpellCaster*>(this) : nullptr;
-}
+inline SpellCaster* Object::ToSpellCaster() { return IsSpellCaster() ? static_cast<SpellCaster*>(this) : nullptr; }
 
-inline SpellCaster const* Object::ToSpellCaster() const
-{
-    return IsSpellCaster() ? static_cast<SpellCaster const*>(this) : nullptr;
-}
+inline SpellCaster const* Object::ToSpellCaster() const { return IsSpellCaster() ? static_cast<SpellCaster const*>(this) : nullptr; }
 
-inline SpellCaster* ToSpellCaster(Object* object)
-{
-    return object && object->IsSpellCaster() ? static_cast<SpellCaster*>(object) : nullptr;
-}
+inline SpellCaster* ToSpellCaster(Object* object) { return object && object->IsSpellCaster() ? static_cast<SpellCaster*>(object) : nullptr; }
 
-inline SpellCaster const* ToSpellCaster(Object const* object)
-{
-    return object && object->IsSpellCaster() ? static_cast<SpellCaster const*>(object) : nullptr;
-}
+inline SpellCaster const* ToSpellCaster(Object const* object) { return object && object->IsSpellCaster() ? static_cast<SpellCaster const*>(object) : nullptr; }
 
 #endif

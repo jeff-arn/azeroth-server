@@ -24,11 +24,10 @@
 
 #include "MovementGenerator.h"
 
-template<class MOVEMENT_GEN>
-inline MovementGenerator*
-MovementGeneratorFactory<MOVEMENT_GEN>::Create(void *data) const
+template <class MOVEMENT_GEN>
+inline MovementGenerator* MovementGeneratorFactory<MOVEMENT_GEN>::Create(void* data) const
 {
-    Creature* creature = reinterpret_cast<Creature* >(data);
+    Creature* creature = reinterpret_cast<Creature*>(data);
     return (new MOVEMENT_GEN(*creature));
 }
 #endif

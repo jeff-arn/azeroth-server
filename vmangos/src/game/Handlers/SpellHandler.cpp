@@ -21,15 +21,15 @@
 
 #include "Common.h"
 #include "DBCStores.h"
-#include "WorldPacket.h"
-#include "WorldSession.h"
-#include "SpellMgr.h"
+#include "GameObject.h"
 #include "Log.h"
+#include "Map.h"
 #include "Opcodes.h"
 #include "Spell.h"
 #include "SpellAuras.h"
-#include "GameObject.h"
-#include "Map.h"
+#include "SpellMgr.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 using namespace Spells;
 
@@ -46,14 +46,14 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
     // ignore for remote control state
     if (!pUser->IsSelfMover())
     {
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at not read packet tail
+        recvPacket.rpos(recvPacket.wpos()); // prevent spam at not read packet tail
         return;
     }
 
-    Item *pItem = pUser->GetItemByPos(bagIndex, slot);
+    Item* pItem = pUser->GetItemByPos(bagIndex, slot);
     if (!pItem)
     {
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at not read packet tail
+        recvPacket.rpos(recvPacket.wpos()); // prevent spam at not read packet tail
         pUser->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, nullptr, nullptr);
         return;
     }
@@ -61,16 +61,14 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
     ItemPrototype const* proto = pItem->GetProto();
     if (!proto)
     {
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at not read packet tail
+        recvPacket.rpos(recvPacket.wpos()); // prevent spam at not read packet tail
         pUser->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, pItem, nullptr);
         return;
     }
 
-    if (spellSlot >= MAX_ITEM_PROTO_SPELLS ||
-        proto->Spells[spellSlot].SpellId == 0 ||
-        proto->Spells[spellSlot].SpellTrigger != ITEM_SPELLTRIGGER_ON_USE)
+    if (spellSlot >= MAX_ITEM_PROTO_SPELLS || proto->Spells[spellSlot].SpellId == 0 || proto->Spells[spellSlot].SpellTrigger != ITEM_SPELLTRIGGER_ON_USE)
     {
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at not read packet tail
+        recvPacket.rpos(recvPacket.wpos()); // prevent spam at not read packet tail
         pUser->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, pItem, nullptr);
         return;
     }
@@ -78,7 +76,7 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
     // some item classes can be used only in equipped state
     if (proto->InventoryType != INVTYPE_NON_EQUIP && !pItem->IsEquipped())
     {
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at not read packet tail
+        recvPacket.rpos(recvPacket.wpos()); // prevent spam at not read packet tail
         pUser->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, pItem, nullptr);
         return;
     }
@@ -86,7 +84,7 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
     InventoryResult msg = pUser->CanUseItem(pItem);
     if (msg != EQUIP_ERR_OK)
     {
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at not read packet tail
+        recvPacket.rpos(recvPacket.wpos()); // prevent spam at not read packet tail
         pUser->SendEquipError(msg, pItem, nullptr);
         return;
     }
@@ -94,7 +92,7 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
     // not allow use item from trade (cheat way only)
     if (pItem->IsInTrade())
     {
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at not read packet tail
+        recvPacket.rpos(recvPacket.wpos()); // prevent spam at not read packet tail
         pUser->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, pItem, nullptr);
         return;
     }
@@ -107,7 +105,7 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
             {
                 if (spellInfo->IsNonCombatSpell())
                 {
-                    recvPacket.rpos(recvPacket.wpos());     // prevent spam at not read packet tail
+                    recvPacket.rpos(recvPacket.wpos()); // prevent spam at not read packet tail
                     pUser->SendEquipError(EQUIP_ERR_NOT_IN_COMBAT, pItem, nullptr);
                     return;
                 }
@@ -141,7 +139,7 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
         if (!(bagIndex == INVENTORY_SLOT_BAG_0 && slot < EQUIPMENT_SLOT_END))
 #endif
-        itemCastCheckResult = SPELL_FAILED_NO_ITEMS_WHILE_SHAPESHIFTED;
+            itemCastCheckResult = SPELL_FAILED_NO_ITEMS_WHILE_SHAPESHIFTED;
     }
 
     if (itemCastCheckResult != SPELL_CAST_OK)
@@ -170,7 +168,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
     if (!pUser->IsSelfMover())
         return;
 
-    Item *pItem = pUser->GetItemByPos(bagIndex, slot);
+    Item* pItem = pUser->GetItemByPos(bagIndex, slot);
     if (!pItem)
     {
         pUser->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, nullptr, nullptr);
@@ -205,7 +203,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
         if (!lockInfo)
         {
             pUser->SendEquipError(EQUIP_ERR_ITEM_LOCKED, pItem, nullptr);
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WORLD::OpenItem: item [guid = %u] has an unknown lockId: %u!", pItem->GetGUIDLow() , lockId);
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WORLD::OpenItem: item [guid = %u] has an unknown lockId: %u!", pItem->GetGUIDLow(), lockId);
             return;
         }
 
@@ -220,7 +218,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
     if (_player->IsNonMeleeSpellCasted())
         _player->InterruptNonMeleeSpells(false);
 
-    if (pItem->HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_WRAPPED))// wrapped?
+    if (pItem->HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_WRAPPED)) // wrapped?
     {
         std::unique_ptr<QueryResult> result = CharacterDatabase.PQuery("SELECT `item_id`, `flags` FROM `character_gifts` WHERE `item_guid` = '%u'", pItem->GetGUIDLow());
         if (result)
@@ -241,7 +239,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
             return;
         }
 
-        static SqlStatementID delGifts ;
+        static SqlStatementID delGifts;
 
         SqlStatement stmt = CharacterDatabase.CreateStatement(delGifts, "DELETE FROM `character_gifts` WHERE `item_guid` = ?");
         stmt.PExecute(pItem->GetGUIDLow());
@@ -294,7 +292,7 @@ void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
 
     if (!spellInfo)
     {
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at ignore packet
+        recvPacket.rpos(recvPacket.wpos()); // prevent spam at ignore packet
         return;
     }
 
@@ -302,8 +300,8 @@ void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
     if (!_player->HasActiveSpell(spellId) || spellInfo->IsPassiveSpell())
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "World: Player %u casts spell %u which he shouldn't have", _player->GetGUIDLow(), spellId);
-        //cheater? kick? ban?
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at ignore packet
+        // cheater? kick? ban?
+        recvPacket.rpos(recvPacket.wpos()); // prevent spam at ignore packet
         return;
     }
 
@@ -385,7 +383,7 @@ void WorldSession::HandleCancelAuraOpcode(WorldPacket& recvPacket)
 
     if (spellInfo->HasAttribute(SPELL_ATTR_DO_NOT_DISPLAY))
         return;
-    
+
     if (spellInfo->HasAttribute(SPELL_ATTR_EX_NO_AURA_ICON) && !spellInfo->activeIconID)
         return;
 
@@ -401,8 +399,7 @@ void WorldSession::HandleCancelAuraOpcode(WorldPacket& recvPacket)
             bool allow = false;
             for (uint32 k : spellInfo->EffectApplyAuraName)
             {
-                if (k == SPELL_AURA_MOD_POSSESS ||
-                    k == SPELL_AURA_MOD_POSSESS_PET)
+                if (k == SPELL_AURA_MOD_POSSESS || k == SPELL_AURA_MOD_POSSESS_PET)
                 {
                     allow = true;
                     break;
@@ -493,7 +490,7 @@ void WorldSession::HandleCancelAutoRepeatSpellOpcode(WorldPacket& /*recvPacket*/
 
 void WorldSession::HandleCancelChanneling(WorldPacket& recv_data)
 {
-    recv_data.read_skip<uint32>();                          // spellid, not used
+    recv_data.read_skip<uint32>(); // spellid, not used
 
     // ignore for remote control state (for player case)
     Unit* mover = _player->GetMover();

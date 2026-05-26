@@ -2,23 +2,23 @@
 #include "Internal.h"
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include "IO/Utils_Unix.h"
-    #define GetNetworkError() errno
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include "IO/Utils_Unix.h"
+#define GetNetworkError() errno
 #elif defined(WIN32)
-    #include <WinSock2.h>
-    #include <WS2tcpip.h>
-    #define GetNetworkError() ::WSAGetLastError()
+#include <WS2tcpip.h>
+#include <WinSock2.h>
+#define GetNetworkError() ::WSAGetLastError()
 #endif
 
 #if defined(__linux__)
-    #include <sys/epoll.h>
-    #include <fcntl.h>
+#include <fcntl.h>
+#include <sys/epoll.h>
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    #include <sys/event.h>
-    #include <unistd.h>
+#include <sys/event.h>
+#include <unistd.h>
 #endif
 
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -55,15 +55,15 @@ nonstd::expected<IO::Networking::SocketDescriptor, IO::NetworkError> IO::Network
         return nonstd::make_unexpected(IO::NetworkError(NetworkError::ErrorType::InternalError, GetNetworkError()));
 #endif
 
-    int result = ::connect(nativeSocket, (struct sockaddr *)&targetAddress, sizeof(targetAddress));
+    int result = ::connect(nativeSocket, (struct sockaddr*)&targetAddress, sizeof(targetAddress));
     if (result == -1)
     {
         int lastError = GetNetworkError();
         if (lastError !=
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-        EINPROGRESS
+            EINPROGRESS
 #elif defined(WIN32)
-        WSAEWOULDBLOCK
+            WSAEWOULDBLOCK
 #endif
         )
         { // Oh, this is an actual error :(

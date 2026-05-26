@@ -16,66 +16,60 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "Common.h"
 #include "GMTicketMgr.h"
+#include "Chat.h"
+#include "Common.h"
 #include "Database/DatabaseEnv.h"
 #include "Database/DatabaseImpl.h"
-#include "Log.h"
 #include "Language.h"
+#include "Log.h"
+#include "ObjectMgr.h"
 #include "Opcodes.h"
+#include "Player.h"
+#include "World.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "Chat.h"
-#include "World.h"
-#include "Player.h"
-#include "ObjectMgr.h"
 
 inline float GetAge(uint64 t) { return float(time(nullptr) - t) / float(DAY); }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // GM ticket
-GmTicket::GmTicket() : m_id(0), m_posX(0), m_posY(0), m_posZ(0), m_mapId(0), m_createTime(0), m_lastModifiedTime(0),
-                       m_completed(false), m_escalatedStatus(TICKET_UNASSIGNED), m_viewed(false),
-                       m_needResponse(false), m_needMoreHelp(false), m_securityNeeded(SEC_MODERATOR)
-{
-}
+GmTicket::GmTicket() : m_id(0), m_posX(0), m_posY(0), m_posZ(0), m_mapId(0), m_createTime(0), m_lastModifiedTime(0), m_completed(false), m_escalatedStatus(TICKET_UNASSIGNED), m_viewed(false), m_needResponse(false), m_needMoreHelp(false), m_securityNeeded(SEC_MODERATOR) {}
 
-GmTicket::GmTicket(Player* player) : m_posX(0), m_posY(0), m_posZ(0), m_mapId(0), m_createTime(time(nullptr)), m_lastModifiedTime(time(nullptr)),
-                       m_completed(false), m_escalatedStatus(TICKET_UNASSIGNED), m_viewed(false),
-                       m_needResponse(false), m_needMoreHelp(false), m_securityNeeded(SEC_MODERATOR)
+GmTicket::GmTicket(Player* player) : m_posX(0), m_posY(0), m_posZ(0), m_mapId(0), m_createTime(time(nullptr)), m_lastModifiedTime(time(nullptr)), m_completed(false), m_escalatedStatus(TICKET_UNASSIGNED), m_viewed(false), m_needResponse(false), m_needMoreHelp(false), m_securityNeeded(SEC_MODERATOR)
 {
     m_id = sTicketMgr->GenerateTicketId();
     m_playerName = player->GetName();
     m_playerGuid = player->GetGUID();
 }
 
-GmTicket::~GmTicket() { }
+GmTicket::~GmTicket() {}
 
 bool GmTicket::LoadFromDB(Field* fields)
 {
     // 0          1     2     3        4            5    6           7           8           9                   10         11           12       13        14         15         16      17           18           19
     // ticket_id, guid, name, message, create_time, map, position_x, position_y, position_z, last_modified_time, closed_by, assigned_to, comment, response, completed, escalated, viewed, have_ticket, ticket_type, security_needed
     uint8 index = 0;
-    m_id                = fields[  index].GetUInt32();
-    m_playerGuid        = ObjectGuid(HIGHGUID_PLAYER, fields[++index].GetUInt32());
-    m_playerName        = fields[++index].GetString();
-    m_message           = fields[++index].GetString();
-    m_createTime        = fields[++index].GetUInt32();
-    m_mapId             = fields[++index].GetUInt16();
-    m_posX              = fields[++index].GetFloat();
-    m_posY              = fields[++index].GetFloat();
-    m_posZ              = fields[++index].GetFloat();
-    m_lastModifiedTime  = fields[++index].GetUInt32();
-    m_closedBy          = ObjectGuid(uint64(fields[++index].GetInt32()));
-    m_assignedTo        = ObjectGuid(HIGHGUID_PLAYER, fields[++index].GetUInt32());
-    m_comment           = fields[++index].GetString();
-    m_response          = fields[++index].GetString();
-    m_completed         = fields[++index].GetBool();
-    m_escalatedStatus   = GMTicketEscalationStatus(fields[++index].GetUInt8());
-    m_viewed            = fields[++index].GetBool();
-    m_needMoreHelp      = fields[++index].GetBool();
-    m_ticketType        = TicketType(fields[++index].GetUInt8());
-    m_securityNeeded    = fields[++index].GetUInt8();
+    m_id = fields[index].GetUInt32();
+    m_playerGuid = ObjectGuid(HIGHGUID_PLAYER, fields[++index].GetUInt32());
+    m_playerName = fields[++index].GetString();
+    m_message = fields[++index].GetString();
+    m_createTime = fields[++index].GetUInt32();
+    m_mapId = fields[++index].GetUInt16();
+    m_posX = fields[++index].GetFloat();
+    m_posY = fields[++index].GetFloat();
+    m_posZ = fields[++index].GetFloat();
+    m_lastModifiedTime = fields[++index].GetUInt32();
+    m_closedBy = ObjectGuid(uint64(fields[++index].GetInt32()));
+    m_assignedTo = ObjectGuid(HIGHGUID_PLAYER, fields[++index].GetUInt32());
+    m_comment = fields[++index].GetString();
+    m_response = fields[++index].GetString();
+    m_completed = fields[++index].GetBool();
+    m_escalatedStatus = GMTicketEscalationStatus(fields[++index].GetUInt8());
+    m_viewed = fields[++index].GetBool();
+    m_needMoreHelp = fields[++index].GetBool();
+    m_ticketType = TicketType(fields[++index].GetUInt8());
+    m_securityNeeded = fields[++index].GetUInt8();
     return true;
 }
 
@@ -92,20 +86,20 @@ void GmTicket::SaveToDB() const
     stmt.addString(m_message);
     stmt.addUInt64(m_createTime);
     stmt.addUInt16(m_mapId);
-    stmt.addFloat (m_posX);
-    stmt.addFloat (m_posY);
-    stmt.addFloat (m_posZ);
+    stmt.addFloat(m_posX);
+    stmt.addFloat(m_posY);
+    stmt.addFloat(m_posZ);
     stmt.addUInt64(m_lastModifiedTime);
-    stmt.addInt32 (int32(m_closedBy.GetCounter()));
+    stmt.addInt32(int32(m_closedBy.GetCounter()));
     stmt.addUInt32(m_assignedTo.GetCounter());
     stmt.addString(m_comment);
     stmt.addString(m_response);
-    stmt.addUInt8 (m_completed);
-    stmt.addUInt8 (uint8(m_escalatedStatus));
-    stmt.addUInt8 (m_viewed);
-    stmt.addUInt8 (m_needMoreHelp);
-    stmt.addUInt8 (uint8(m_ticketType));
-    stmt.addUInt8 (m_securityNeeded);
+    stmt.addUInt8(m_completed);
+    stmt.addUInt8(uint8(m_escalatedStatus));
+    stmt.addUInt8(m_viewed);
+    stmt.addUInt8(m_needMoreHelp);
+    stmt.addUInt8(uint8(m_ticketType));
+    stmt.addUInt8(m_securityNeeded);
     stmt.Execute();
 }
 
@@ -141,11 +135,11 @@ void GmTicket::WritePacket(WorldPacket& data) const
         data << float(0);
 
     // I am not sure how blizzlike this is, and we don't really have a way to find out
-    data << GetAge(sTicketMgr->GetLastChange());         // Estimated wait time ?
+    data << GetAge(sTicketMgr->GetLastChange()); // Estimated wait time ?
 
     GMTicketEscalationStatus escStatus = std::min(m_escalatedStatus, TICKET_IN_ESCALATION_QUEUE);
     GMTicketOpenedByGMStatus openedStatus = m_viewed ? GMTICKET_OPENEDBYGM_STATUS_OPENED : GMTICKET_OPENEDBYGM_STATUS_NOT_OPENED;
-    data << uint8(escStatus);                              // escalated data
+    data << uint8(escStatus); // escalated data
     data << uint8(openedStatus); // whether or not it has been viewed
 }
 
@@ -205,40 +199,34 @@ char const* GmTicket::GetTicketCategoryName(TicketType category) const
 {
     switch (category)
     {
-        case GMTICKET_STUCK:
-            return "Stuck";
-        case GMTICKET_BEHAVIOR_HARASSMENT:
-            return "Behavior";
-        case GMTICKET_GUILD:
-            return "Guild";
-        case GMTICKET_ITEM:
-            return "Item";
-        case GMTICKET_ENVIRONMENTAL:
-            return "Environment";
-        case GMTICKET_NONQUEST_CREEP:
-            return "Creature";
-        case GMTICKET_QUEST_QUESTNPC:
-            return "Quest";
-        case GMTICKET_TECHNICAL:
-            return "Technical";
-        case GMTICKET_ACCOUNT_BILLING:
-            return "Billing";
-        case GMTICKET_CHARACTER:
-            return "Character";
+    case GMTICKET_STUCK:
+        return "Stuck";
+    case GMTICKET_BEHAVIOR_HARASSMENT:
+        return "Behavior";
+    case GMTICKET_GUILD:
+        return "Guild";
+    case GMTICKET_ITEM:
+        return "Item";
+    case GMTICKET_ENVIRONMENTAL:
+        return "Environment";
+    case GMTICKET_NONQUEST_CREEP:
+        return "Creature";
+    case GMTICKET_QUEST_QUESTNPC:
+        return "Quest";
+    case GMTICKET_TECHNICAL:
+        return "Technical";
+    case GMTICKET_ACCOUNT_BILLING:
+        return "Billing";
+    case GMTICKET_CHARACTER:
+        return "Character";
     }
 
     return "Unknown";
 }
 
-Player* GmTicket::GetPlayer() const
-{
-    return ObjectAccessor::FindPlayer(m_playerGuid);
-}
+Player* GmTicket::GetPlayer() const { return ObjectAccessor::FindPlayer(m_playerGuid); }
 
-Player* GmTicket::GetAssignedPlayer() const
-{
-    return ObjectAccessor::FindPlayer(m_assignedTo);
-}
+Player* GmTicket::GetAssignedPlayer() const { return ObjectAccessor::FindPlayer(m_assignedTo); }
 
 std::string GmTicket::GetAssignedToName() const
 {
@@ -255,12 +243,16 @@ void GmTicket::SetUnassigned()
     m_assignedTo.Clear();
     switch (m_escalatedStatus)
     {
-        case TICKET_ASSIGNED: m_escalatedStatus = TICKET_UNASSIGNED; break;
-        case TICKET_ESCALATED_ASSIGNED: m_escalatedStatus = TICKET_IN_ESCALATION_QUEUE; break;
-        case TICKET_UNASSIGNED:
-        case TICKET_IN_ESCALATION_QUEUE:
-        default:
-            break;
+    case TICKET_ASSIGNED:
+        m_escalatedStatus = TICKET_UNASSIGNED;
+        break;
+    case TICKET_ESCALATED_ASSIGNED:
+        m_escalatedStatus = TICKET_IN_ESCALATION_QUEUE;
+        break;
+    case TICKET_UNASSIGNED:
+    case TICKET_IN_ESCALATION_QUEUE:
+    default:
+        break;
     }
 }
 
@@ -274,14 +266,11 @@ void GmTicket::SetPosition(uint32 mapId, float x, float y, float z)
 
 void GmTicket::SetGmAction(uint32 needResponse, bool needMoreHelp)
 {
-    m_needResponse = (needResponse == 17);   // Requires GM response. 17 = true, 1 = false (17 is default)
-    m_needMoreHelp = needMoreHelp;           // Requests further GM interaction on a ticket to which a GM has already responded. Basically means "has a new ticket"
+    m_needResponse = (needResponse == 17); // Requires GM response. 17 = true, 1 = false (17 is default)
+    m_needMoreHelp = needMoreHelp; // Requests further GM interaction on a ticket to which a GM has already responded. Basically means "has a new ticket"
 }
 
-void GmTicket::TeleportTo(Player* player) const
-{
-    player->TeleportTo(m_mapId, m_posX, m_posY, m_posZ, 0.0f, 0);
-}
+void GmTicket::TeleportTo(Player* player) const { player->TeleportTo(m_mapId, m_posX, m_posY, m_posZ, 0.0f, 0); }
 
 void GmTicket::SetChatLog(std::list<uint32> time, std::string const& log)
 {
@@ -299,8 +288,7 @@ void GmTicket::SetChatLog(std::list<uint32> time, std::string const& log)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Ticket manager
-TicketMgr::TicketMgr() : _status(true), _lastTicketId(0), _lastSurveyId(0), _openTicketCount(0),
-    _lastChange(time(nullptr)) { }
+TicketMgr::TicketMgr() : _status(true), _lastTicketId(0), _lastSurveyId(0), _openTicketCount(0), _lastChange(time(nullptr)) {}
 
 TicketMgr::~TicketMgr()
 {
@@ -308,10 +296,7 @@ TicketMgr::~TicketMgr()
         delete itr.second;
 }
 
-void TicketMgr::Initialize()
-{
-    SetStatus(sWorld.getConfig(CONFIG_BOOL_GMTICKETS_ENABLE));
-}
+void TicketMgr::Initialize() { SetStatus(sWorld.getConfig(CONFIG_BOOL_GMTICKETS_ENABLE)); }
 
 void TicketMgr::ResetTickets()
 {
@@ -370,7 +355,8 @@ void TicketMgr::LoadTickets()
 
         _ticketList[id] = ticket;
         ++count;
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u GM tickets in %u ms", count, WorldTimer::getMSTimeDiffToNow(oldMSTime));
 }

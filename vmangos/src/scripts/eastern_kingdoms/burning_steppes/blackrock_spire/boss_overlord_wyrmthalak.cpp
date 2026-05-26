@@ -25,28 +25,21 @@ EndScriptData */
 
 enum
 {
-    SPELL_BLASTWAVE            = 11130,
-    SPELL_SHOUT                = 23511,
-    SPELL_CLEAVE               = 20691,
-    SPELL_KNOCKAWAY            = 20686,
+    SPELL_BLASTWAVE = 11130,
+    SPELL_SHOUT = 23511,
+    SPELL_CLEAVE = 20691,
+    SPELL_KNOCKAWAY = 20686,
 
-    NPC_SPIRESTONE_WARLORD     = 9216,
+    NPC_SPIRESTONE_WARLORD = 9216,
     NPC_SMOLDERTHORN_BERSERKER = 9268
 
 };
 
-float const afLocations[2][4] =
-{
-    { -39.355381f, -513.456482f, 88.472046f, 4.679872f},
-    { -49.875881f, -511.896942f, 88.195160f, 4.613114f}
-};
+float const afLocations[2][4] = {{-39.355381f, -513.456482f, 88.472046f, 4.679872f}, {-49.875881f, -511.896942f, 88.195160f, 4.613114f}};
 
 struct boss_overlordwyrmthalakAI : public ScriptedAI
 {
-    boss_overlordwyrmthalakAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_overlordwyrmthalakAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiBlastWaveTimer;
     uint32 m_uiShoutTimer;
@@ -59,8 +52,8 @@ struct boss_overlordwyrmthalakAI : public ScriptedAI
     void Reset() override
     {
         m_uiBlastWaveTimer = 20000;
-        m_uiShoutTimer     = 2000;
-        m_uiCleaveTimer    = 6000;
+        m_uiShoutTimer = 2000;
+        m_uiCleaveTimer = 6000;
         m_uiKnockawayTimer = 12000;
         m_bSummoned = false;
         m_bPulledByPet = false;
@@ -102,7 +95,7 @@ struct boss_overlordwyrmthalakAI : public ScriptedAI
 
         if (m_bPulledByPet || (m_creature->GetPositionZ() > 100.0f))
             EnterEvadeMode();
-    } 
+    }
 
     void UpdateAI(uint32 const uiDiff) override
     {
@@ -162,10 +155,7 @@ struct boss_overlordwyrmthalakAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_overlordwyrmthalak(Creature* pCreature)
-{
-    return new boss_overlordwyrmthalakAI(pCreature);
-}
+CreatureAI* GetAI_boss_overlordwyrmthalak(Creature* pCreature) { return new boss_overlordwyrmthalakAI(pCreature); }
 
 void AddSC_boss_overlordwyrmthalak()
 {

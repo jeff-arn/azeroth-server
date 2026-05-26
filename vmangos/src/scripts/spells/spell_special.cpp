@@ -35,10 +35,7 @@ struct MeteorScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_Meteor(SpellEntry const*)
-{
-    return new MeteorScript();
-}
+SpellScript* GetScript_Meteor(SpellEntry const*) { return new MeteorScript(); }
 
 // 24934 - Darkmoon Steam Tonk Control Console
 struct DarkmoonSteamTonkControlConsoleScript : public SpellScript
@@ -53,10 +50,7 @@ struct DarkmoonSteamTonkControlConsoleScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_DarkmoonSteamTonkControlConsole(SpellEntry const*)
-{
-    return new DarkmoonSteamTonkControlConsoleScript();
-}
+SpellScript* GetScript_DarkmoonSteamTonkControlConsole(SpellEntry const*) { return new DarkmoonSteamTonkControlConsoleScript(); }
 
 // 24933 - Cannon (Darkmoon Steam Tonk)
 struct DarkmoonSteamTonkCannonScript : public SpellScript
@@ -71,10 +65,7 @@ struct DarkmoonSteamTonkCannonScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_DarkmoonSteamTonkCannon(SpellEntry const*)
-{
-    return new DarkmoonSteamTonkCannonScript();
-}
+SpellScript* GetScript_DarkmoonSteamTonkCannon(SpellEntry const*) { return new DarkmoonSteamTonkCannonScript(); }
 
 // 456 - SHOWLABEL Only OFF
 struct ShowlabelOffScript : public SpellScript
@@ -90,10 +81,7 @@ struct ShowlabelOffScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_ShowlabelOff(SpellEntry const*)
-{
-    return new ShowlabelOffScript();
-}
+SpellScript* GetScript_ShowlabelOff(SpellEntry const*) { return new ShowlabelOffScript(); }
 
 // 2765 - SHOWLABEL Only ON
 struct ShowlabelOnScript : public SpellScript
@@ -109,10 +97,7 @@ struct ShowlabelOnScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_ShowlabelOn(SpellEntry const*)
-{
-    return new ShowlabelOnScript();
-}
+SpellScript* GetScript_ShowlabelOn(SpellEntry const*) { return new ShowlabelOnScript(); }
 
 // 1509 - GM Only OFF
 struct GMOffScript : public SpellScript
@@ -128,10 +113,7 @@ struct GMOffScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_GMOff(SpellEntry const*)
-{
-    return new GMOffScript();
-}
+SpellScript* GetScript_GMOff(SpellEntry const*) { return new GMOffScript(); }
 
 // 18139 - GM Only ON
 struct GMOnScript : public SpellScript
@@ -147,10 +129,7 @@ struct GMOnScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_GMOn(SpellEntry const*)
-{
-    return new GMOnScript();
-}
+SpellScript* GetScript_GMOn(SpellEntry const*) { return new GMOnScript(); }
 
 // 6147 - INVIS Only OFF
 struct InvisOffScript : public SpellScript
@@ -166,10 +145,7 @@ struct InvisOffScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_InvisOff(SpellEntry const*)
-{
-    return new InvisOffScript();
-}
+SpellScript* GetScript_InvisOff(SpellEntry const*) { return new InvisOffScript(); }
 
 // 2763 - INVIS Only ON
 struct InvisOnScript : public SpellScript
@@ -185,10 +161,7 @@ struct InvisOnScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_InvisOn(SpellEntry const*)
-{
-    return new InvisOnScript();
-}
+SpellScript* GetScript_InvisOn(SpellEntry const*) { return new InvisOnScript(); }
 
 // 20114 - BM Only OFF
 // 24675 - BM OFF
@@ -205,10 +178,7 @@ struct BMOffScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_BMOff(SpellEntry const*)
-{
-    return new BMOffScript();
-}
+SpellScript* GetScript_BMOff(SpellEntry const*) { return new BMOffScript(); }
 
 // 20115 - BM Only ON
 // 24676 - BM ON
@@ -225,10 +195,7 @@ struct BMOnScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_BMOn(SpellEntry const*)
-{
-    return new BMOnScript();
-}
+SpellScript* GetScript_BMOn(SpellEntry const*) { return new BMOnScript(); }
 
 // 29313 - CooldownAll
 struct ClearAllCooldownsScript : public SpellScript
@@ -241,10 +208,7 @@ struct ClearAllCooldownsScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_ClearAllCooldowns(SpellEntry const*)
-{
-    return new ClearAllCooldownsScript();
-}
+SpellScript* GetScript_ClearAllCooldowns(SpellEntry const*) { return new ClearAllCooldownsScript(); }
 
 // 21651 - Opening
 struct OpeningBattlegroundBannerScript : public SpellScript
@@ -268,10 +232,7 @@ struct OpeningBattlegroundBannerScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_OpeningBattlegroundBanner(SpellEntry const*)
-{
-    return new OpeningBattlegroundBannerScript();
-}
+SpellScript* GetScript_OpeningBattlegroundBanner(SpellEntry const*) { return new OpeningBattlegroundBannerScript(); }
 
 // 20577 - Cannibalize
 struct CannibalizeSpellScript : public SpellScript
@@ -288,10 +249,7 @@ struct CannibalizeSpellScript : public SpellScript
     }
 };
 
-SpellScript* GetScript_Cannibalize(SpellEntry const*)
-{
-    return new CannibalizeSpellScript();
-}
+SpellScript* GetScript_Cannibalize(SpellEntry const*) { return new CannibalizeSpellScript(); }
 
 // 20578 - Cannibalize Aura
 struct CannibalizeAuraScript : public AuraScript
@@ -322,19 +280,16 @@ struct CannibalizeAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_CannibalizeAura(SpellEntry const*)
-{
-    return new CannibalizeAuraScript();
-}
+AuraScript* GetScript_CannibalizeAura(SpellEntry const*) { return new CannibalizeAuraScript(); }
 
 // 29519 - Silithyst
 struct SilithystAuraScript : public AuraScript
 {
     enum
     {
-        ZONE_SILITHUS       = 1377,
+        ZONE_SILITHUS = 1377,
         SPELL_ALLIANCE_BUFF = 29894,
-        SPELL_HORDE_BUFF    = 29895
+        SPELL_HORDE_BUFF = 29895
     };
 
     void OnAfterApply(Aura* aura, bool apply) final
@@ -367,9 +322,7 @@ struct SilithystAuraScript : public AuraScript
             player->RemoveAurasDueToSpell(buffSpell);
 
             // Outdoor PVP Silithus: Loss of Silithyst Buff
-            if (aura->GetHolder()->GetRemoveMode() == AURA_REMOVE_BY_CANCEL ||
-                aura->GetHolder()->GetRemoveMode() == AURA_REMOVE_BY_DEATH ||
-                aura->GetHolder()->GetRemoveMode() == AURA_REMOVE_BY_DISPEL)
+            if (aura->GetHolder()->GetRemoveMode() == AURA_REMOVE_BY_CANCEL || aura->GetHolder()->GetRemoveMode() == AURA_REMOVE_BY_DEATH || aura->GetHolder()->GetRemoveMode() == AURA_REMOVE_BY_DISPEL)
             {
                 if (ZoneScript* pScript = player->GetZoneScript())
                     pScript->HandleDropFlag(player, aura->GetId());
@@ -379,10 +332,7 @@ struct SilithystAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_Silithyst(SpellEntry const*)
-{
-    return new SilithystAuraScript();
-}
+AuraScript* GetScript_Silithyst(SpellEntry const*) { return new SilithystAuraScript(); }
 
 // 25026 - Activate MG Turret
 // 25027 - Flamethrower
@@ -409,24 +359,18 @@ struct DarkmoonFaireManaConsumptionAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_ActivateMGTurret(SpellEntry const*)
-{
-    return new DarkmoonFaireManaConsumptionAuraScript();
-}
+AuraScript* GetScript_ActivateMGTurret(SpellEntry const*) { return new DarkmoonFaireManaConsumptionAuraScript(); }
 
-AuraScript* GetScript_Flamethrower(SpellEntry const*)
-{
-    return new DarkmoonFaireManaConsumptionAuraScript();
-}
+AuraScript* GetScript_Flamethrower(SpellEntry const*) { return new DarkmoonFaireManaConsumptionAuraScript(); }
 
 // 24937 - Using Control Console
 struct ControllingSteamTonkAuraScript : public AuraScript
 {
     enum
     {
-        SPELL_DAMAGED_TONK      = 27771,
-        SPELL_STUN              = 9179,
-        SPELL_UNROOT            = 24935,
+        SPELL_DAMAGED_TONK = 27771,
+        SPELL_STUN = 9179,
+        SPELL_UNROOT = 24935,
         GO_TONK_CONTROL_CONSOLE = 180524
     };
 
@@ -464,10 +408,7 @@ struct ControllingSteamTonkAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_ControllingSteamTonk(SpellEntry const*)
-{
-    return new ControllingSteamTonkAuraScript();
-}
+AuraScript* GetScript_ControllingSteamTonk(SpellEntry const*) { return new ControllingSteamTonkAuraScript(); }
 
 // 20580 - Shadowmeld (Night Elf Racial)
 struct ShadowmeldAuraScript : public AuraScript
@@ -510,10 +451,7 @@ struct ShadowmeldAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_Shadowmeld(SpellEntry const*)
-{
-    return new ShadowmeldAuraScript();
-}
+AuraScript* GetScript_Shadowmeld(SpellEntry const*) { return new ShadowmeldAuraScript(); }
 
 // 20594 - Stoneform (Dwarf Racial)
 struct StoneformAuraScript : public AuraScript
@@ -537,10 +475,7 @@ struct StoneformAuraScript : public AuraScript
     }
 };
 
-AuraScript* GetScript_Stoneform(SpellEntry const*)
-{
-    return new StoneformAuraScript();
-}
+AuraScript* GetScript_Stoneform(SpellEntry const*) { return new StoneformAuraScript(); }
 
 void AddSC_special_spell_scripts()
 {

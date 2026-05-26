@@ -19,8 +19,8 @@
 #ifndef MANGOSSERVER_MOVESPLINEINIT_ARGS_H
 #define MANGOSSERVER_MOVESPLINEINIT_ARGS_H
 
-#include "MoveSplineFlag.h"
 #include <G3D/Vector3.h>
+#include "MoveSplineFlag.h"
 
 class Unit;
 
@@ -34,8 +34,8 @@ namespace Movement
         {
             float x, y, z;
         } f;
-        uint64  target;
-        float   angle;
+        uint64 target;
+        float angle;
 
         FacingInfo(float o) : angle(o) {}
         FacingInfo(uint64 t) : target(t) {}
@@ -44,26 +44,23 @@ namespace Movement
 
     struct MoveSplineInitArgs
     {
-            MoveSplineInitArgs(size_t path_capacity = 16) : path_Idx_offset(0),
-                velocity(0.f), splineId(0), transportGuid(0), uninterruptible(false)
-            {
-                path.reserve(path_capacity);
-            }
+        MoveSplineInitArgs(size_t path_capacity = 16) : path_Idx_offset(0), velocity(0.f), splineId(0), transportGuid(0), uninterruptible(false) { path.reserve(path_capacity); }
 
-            PointsArray path;
-            FacingInfo facing;
-            MoveSplineFlag flags;
-            int32 path_Idx_offset;
-            float velocity;
-            uint32 splineId;
-            uint32 transportGuid;
-            bool uninterruptible;
+        PointsArray path;
+        FacingInfo facing;
+        MoveSplineFlag flags;
+        int32 path_Idx_offset;
+        float velocity;
+        uint32 splineId;
+        uint32 transportGuid;
+        bool uninterruptible;
 
-            /** Returns true to show that the arguments were configured correctly and MoveSpline initialization will succeed. */
-            bool Validate(Unit* unit) const;
-        private:
-            bool _checkPathBounds() const;
+        /** Returns true to show that the arguments were configured correctly and MoveSpline initialization will succeed. */
+        bool Validate(Unit* unit) const;
+
+    private:
+        bool _checkPathBounds() const;
     };
-}
+} // namespace Movement
 
 #endif // MANGOSSERVER_MOVESPLINEINIT_ARGS_H

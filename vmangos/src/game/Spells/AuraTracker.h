@@ -17,6 +17,6 @@ namespace AuraTracker
     void SendAuraRefresh(SpellAuraHolder const* holder);
     void SendAuraDose(SpellAuraHolder const* holder, bool increased);
     void SendPeriodicTick(Aura const* aura, uint32 amount);
-}
+} // namespace AuraTracker
 
 #endif // MANGOS_AURA_TRACKER_H

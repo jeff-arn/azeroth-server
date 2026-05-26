@@ -42,8 +42,7 @@ void PlayerTaxi::LoadTaxiMask(char const* data)
 
     int index;
     Tokens::iterator iter;
-    for (iter = tokens.begin(), index = 0;
-            (index < TaxiMaskSize) && (iter != tokens.end()); ++iter, ++index)
+    for (iter = tokens.begin(), index = 0; (index < TaxiMaskSize) && (iter != tokens.end()); ++iter, ++index)
     {
         // load and set bits only for existing taxi nodes
         m_taximask[index] = sTaxiNodesMask[index] & uint32(atol((*iter).c_str()));
@@ -55,12 +54,12 @@ void PlayerTaxi::AppendTaximaskTo(ByteBuffer& data, bool all)
     if (all)
     {
         for (uint32 i : sTaxiNodesMask)
-            data << uint32(i);              // all existing nodes
+            data << uint32(i); // all existing nodes
     }
     else
     {
         for (uint32 i : m_taximask)
-            data << uint32(i);                  // known nodes
+            data << uint32(i); // known nodes
     }
 }
 
@@ -136,7 +135,7 @@ uint32 PlayerTaxi::GetCurrentTaxiCost() const
     return uint32(cost * m_discount + 0.5f);
 }
 
-std::ostringstream& operator<< (std::ostringstream& ss, PlayerTaxi const& taxi)
+std::ostringstream& operator<<(std::ostringstream& ss, PlayerTaxi const& taxi)
 {
     for (uint32 i : taxi.m_taximask)
         ss << i << " ";

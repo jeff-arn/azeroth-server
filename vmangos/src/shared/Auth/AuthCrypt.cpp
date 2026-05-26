@@ -24,10 +24,7 @@
 
 #include "AuthCrypt.h"
 
-AuthCrypt::AuthCrypt()
-{
-    _initialized = false;
-}
+AuthCrypt::AuthCrypt() { _initialized = false; }
 
 void AuthCrypt::Init()
 {
@@ -37,8 +34,14 @@ void AuthCrypt::Init()
 
 void AuthCrypt::DecryptRecv(uint8* data, size_t len)
 {
-    if (!_initialized) { return; }
-    if (len < CRYPTED_RECV_LEN) { return; }
+    if (!_initialized)
+    {
+        return;
+    }
+    if (len < CRYPTED_RECV_LEN)
+    {
+        return;
+    }
 
     for (size_t t = 0; t < CRYPTED_RECV_LEN; t++)
     {
@@ -52,8 +55,14 @@ void AuthCrypt::DecryptRecv(uint8* data, size_t len)
 
 void AuthCrypt::EncryptSend(uint8* data, size_t len)
 {
-    if (!_initialized) { return; }
-    if (len < CRYPTED_SEND_LEN) { return; }
+    if (!_initialized)
+    {
+        return;
+    }
+    if (len < CRYPTED_SEND_LEN)
+    {
+        return;
+    }
 
     for (size_t t = 0; t < CRYPTED_SEND_LEN; t++)
     {
@@ -66,7 +75,7 @@ void AuthCrypt::EncryptSend(uint8* data, size_t len)
 
 void AuthCrypt::SetKey(std::vector<uint8> const& key)
 {
-    //MANGOS_ASSERT(key.size());
+    // MANGOS_ASSERT(key.size());
     _key = key;
     if (_key.empty())
         _key.resize(1); // temp
@@ -74,7 +83,7 @@ void AuthCrypt::SetKey(std::vector<uint8> const& key)
 
 void AuthCrypt::SetKey(uint8* key, size_t len)
 {
-    //MANGOS_ASSERT(len);
+    // MANGOS_ASSERT(len);
     _key.resize(len);
     std::copy(key, key + len, _key.begin());
 
@@ -83,6 +92,4 @@ void AuthCrypt::SetKey(uint8* key, size_t len)
 }
 
 
-AuthCrypt::~AuthCrypt()
-{
-}
+AuthCrypt::~AuthCrypt() {}

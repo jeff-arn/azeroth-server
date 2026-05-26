@@ -3,10 +3,10 @@
  * Please see the included DOCS/LICENSE.TXT for more information */
 
 #include "ScriptedInstance.h"
-#include "Player.h"
 #include "GameObject.h"
+#include "Player.h"
 
-//Optional uiWithRestoreTime. If not defined, autoCloseTime will be used (if not 0 by default in *_template)
+// Optional uiWithRestoreTime. If not defined, autoCloseTime will be used (if not 0 by default in *_template)
 void ScriptedInstance::DoUseDoorOrButton(uint64 uiGuid, uint32 uiWithRestoreTime, bool bUseAlternativeState)
 {
     if (!uiGuid)
@@ -19,12 +19,12 @@ void ScriptedInstance::DoUseDoorOrButton(uint64 uiGuid, uint32 uiWithRestoreTime
         if (pGo->GetGoType() == GAMEOBJECT_TYPE_DOOR || pGo->GetGoType() == GAMEOBJECT_TYPE_BUTTON)
         {
             if (pGo->getLootState() == GO_READY)
-                pGo->UseDoorOrButton(uiWithRestoreTime,bUseAlternativeState);
+                pGo->UseDoorOrButton(uiWithRestoreTime, bUseAlternativeState);
             else if (pGo->getLootState() == GO_ACTIVATED)
                 pGo->ResetDoorOrButton();
         }
         else
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Script call DoUseDoorOrButton, but gameobject entry %u is type %u.",pGo->GetEntry(),pGo->GetGoType());
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Script call DoUseDoorOrButton, but gameobject entry %u is type %u.", pGo->GetEntry(), pGo->GetGoType());
     }
 }
 
@@ -32,9 +32,8 @@ void ScriptedInstance::DoRespawnGameObject(uint64 uiGuid, uint32 uiTimeToDespawn
 {
     if (GameObject* pGo = instance->GetGameObject(uiGuid))
     {
-        //not expect any of these should ever be handled
-        if (pGo->GetGoType()==GAMEOBJECT_TYPE_FISHINGNODE || pGo->GetGoType()==GAMEOBJECT_TYPE_DOOR ||
-            pGo->GetGoType()==GAMEOBJECT_TYPE_BUTTON || pGo->GetGoType()==GAMEOBJECT_TYPE_TRAP)
+        // not expect any of these should ever be handled
+        if (pGo->GetGoType() == GAMEOBJECT_TYPE_FISHINGNODE || pGo->GetGoType() == GAMEOBJECT_TYPE_DOOR || pGo->GetGoType() == GAMEOBJECT_TYPE_BUTTON || pGo->GetGoType() == GAMEOBJECT_TYPE_TRAP)
             return;
 
         if (pGo->isSpawned())
@@ -60,7 +59,7 @@ void ScriptedInstance::DoOpenDoor(uint64 uiGuid)
                 pGo->UseDoorOrButton(0, false);
         }
         else
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Script call DoOpenDoor, but gameobject entry %u is type %u.",pGo->GetEntry(),pGo->GetGoType());
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Script call DoOpenDoor, but gameobject entry %u is type %u.", pGo->GetEntry(), pGo->GetGoType());
     }
 }
 
@@ -76,7 +75,7 @@ void ScriptedInstance::DoResetDoor(uint64 uiGuid)
         if (pGo->GetGoType() == GAMEOBJECT_TYPE_DOOR || pGo->GetGoType() == GAMEOBJECT_TYPE_BUTTON)
             pGo->ResetDoorOrButton();
         else
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Script call DoResetDoor, but gameobject entry %u is type %u.",pGo->GetEntry(),pGo->GetGoType());
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Script call DoResetDoor, but gameobject entry %u is type %u.", pGo->GetEntry(), pGo->GetGoType());
     }
 }
 
@@ -86,7 +85,7 @@ void ScriptedInstance::DoUpdateWorldState(uint32 uiStateId, uint32 uiStateData)
 
     if (!lPlayers.isEmpty())
     {
-        for(const auto & itr : lPlayers)
+        for (const auto& itr : lPlayers)
         {
             if (Player* pPlayer = itr.getSource())
                 pPlayer->SendUpdateWorldState(uiStateId, uiStateData);
@@ -181,7 +180,7 @@ void ScriptedInstance_PTR::OnCreatureEnterCombat(Creature* creature)
 
 void ScriptedInstance_PTR::Update(uint32 diff)
 {
-    time_t expiration = time(nullptr) - 30*60;
+    time_t expiration = time(nullptr) - 30 * 60;
     std::map<ObjectGuid, time_t>::iterator it = boss_expirations.begin();
     for (; it != boss_expirations.end(); ++it)
     {
@@ -202,31 +201,13 @@ void ScriptedInstance_PTR::Update(uint32 diff)
    Constructor for DialogueHelper
    @param   pDialogueArray The static const array of DialogueEntry holding the information about the dialogue. This array MUST be terminated by {0,0,0}
 */
-DialogueHelper::DialogueHelper(SIDialogueEntry const* pDialogueArray) :
-    m_pInstance(nullptr),
-    m_pDialogueArray(pDialogueArray),
-    m_pCurrentEntry(nullptr),
-    m_pDialogueTwoSideArray(nullptr),
-    m_pCurrentEntryTwoSide(nullptr),
-    m_uiTimer(0),
-    m_bIsFirstSide(true),
-    m_bCanSimulate(false)
-{}
+DialogueHelper::DialogueHelper(SIDialogueEntry const* pDialogueArray) : m_pInstance(nullptr), m_pDialogueArray(pDialogueArray), m_pCurrentEntry(nullptr), m_pDialogueTwoSideArray(nullptr), m_pCurrentEntryTwoSide(nullptr), m_uiTimer(0), m_bIsFirstSide(true), m_bCanSimulate(false) {}
 
 /**
    Constructor for DialogueHelper (Two Sides)
    @param   pDialogueTwoSideArray The static const array of DialogueEntryTwoSide holding the information about the dialogue. This array MUST be terminated by {0,0,0,0,0}
 */
-DialogueHelper::DialogueHelper(SIDialogueEntryTwoSide const* pDialogueTwoSideArray) :
-    m_pInstance(nullptr),
-    m_pDialogueArray(nullptr),
-    m_pCurrentEntry(nullptr),
-    m_pDialogueTwoSideArray(pDialogueTwoSideArray),
-    m_pCurrentEntryTwoSide(nullptr),
-    m_uiTimer(0),
-    m_bIsFirstSide(true),
-    m_bCanSimulate(false)
-{}
+DialogueHelper::DialogueHelper(SIDialogueEntryTwoSide const* pDialogueTwoSideArray) : m_pInstance(nullptr), m_pDialogueArray(nullptr), m_pCurrentEntry(nullptr), m_pDialogueTwoSideArray(pDialogueTwoSideArray), m_pCurrentEntryTwoSide(nullptr), m_uiTimer(0), m_bIsFirstSide(true), m_bCanSimulate(false) {}
 
 /**
    Function to start a (part of a) dialogue
@@ -237,7 +218,7 @@ void DialogueHelper::StartNextDialogueText(int32 iTextEntry)
     // Find iTextEntry
     bool bFound = false;
 
-    if (m_pDialogueArray)                                   // One Side
+    if (m_pDialogueArray) // One Side
     {
         for (SIDialogueEntry const* pEntry = m_pDialogueArray; pEntry->iTextEntry; ++pEntry)
         {
@@ -249,7 +230,7 @@ void DialogueHelper::StartNextDialogueText(int32 iTextEntry)
             }
         }
     }
-    else                                                    // Two Sides
+    else // Two Sides
     {
         for (SIDialogueEntryTwoSide const* pEntry = m_pDialogueTwoSideArray; pEntry->iTextEntry; ++pEntry)
         {
@@ -260,7 +241,7 @@ void DialogueHelper::StartNextDialogueText(int32 iTextEntry)
                 break;
             }
         }
-   }
+    }
 
     if (!bFound)
     {
@@ -285,14 +266,14 @@ void DialogueHelper::DoNextDialogueStep()
     int32 iTextEntry = 0;
     uint32 uiSpeakerEntry = 0;
 
-    if (m_pDialogueArray)                               // One Side
+    if (m_pDialogueArray) // One Side
     {
         uiSpeakerEntry = m_pCurrentEntry->uiSayerEntry;
         iTextEntry = m_pCurrentEntry->iTextEntry;
 
         m_uiTimer = m_pCurrentEntry->uiTimer;
     }
-    else                                                // Two Sides
+    else // Two Sides
     {
         // Second Entries can be 0, if they are the entry from first side will be taken
         uiSpeakerEntry = !m_bIsFirstSide && m_pCurrentEntryTwoSide->uiSayerEntryAlt ? m_pCurrentEntryTwoSide->uiSayerEntryAlt : m_pCurrentEntryTwoSide->uiSayerEntry;
@@ -306,9 +287,9 @@ void DialogueHelper::DoNextDialogueStep()
     {
         // Use Speaker if directly provided
         Creature* pSpeaker = GetSpeakerByEntry(uiSpeakerEntry);
-        if (m_pInstance && !pSpeaker)                       // Get Speaker from instance
+        if (m_pInstance && !pSpeaker) // Get Speaker from instance
         {
-            if (m_bCanSimulate)                             // Simulate case
+            if (m_bCanSimulate) // Simulate case
                 m_pInstance->DoOrSimulateScriptTextForThisInstance(iTextEntry, uiSpeakerEntry);
             else
                 pSpeaker = m_pInstance->GetSingleCreatureFromStorage(uiSpeakerEntry);
@@ -318,7 +299,7 @@ void DialogueHelper::DoNextDialogueStep()
             DoScriptText(iTextEntry, pSpeaker);
     }
 
-    JustDidDialogueStep(m_pDialogueArray ?  m_pCurrentEntry->iTextEntry : m_pCurrentEntryTwoSide->iTextEntry);
+    JustDidDialogueStep(m_pDialogueArray ? m_pCurrentEntry->iTextEntry : m_pCurrentEntryTwoSide->iTextEntry);
 
     // Increment position
     if (m_pDialogueArray)

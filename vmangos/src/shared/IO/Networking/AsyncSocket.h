@@ -1,31 +1,35 @@
 #ifndef MANGOS_IO_NETWORKING_ASYNCSOCKET_H
 #define MANGOS_IO_NETWORKING_ASYNCSOCKET_H
 
+#include "IO/Context/AsyncIoOperation.h"
 #include "IO/Context/IoContext.h"
+#include "IO/NativeAliases.h"
 #include "IO/Networking/NetworkError.h"
 #include "IO/Networking/SocketDescriptor.h"
-#include "IO/Context/AsyncIoOperation.h"
-#include "IO/NativeAliases.h"
 #include "IO/ReadableBuffer.h"
 
 #include "Policies/ObjectConstructorTraits.h"
 
+#include <array>
+#include <atomic>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
-#include <array>
-#include <cstdint>
-#include <functional>
-#include <atomic>
 
-namespace IO { namespace Networking {
-
-    /// You have to keep the instance alive while a transaction is running. Use a shared pointer or something on every callback!
-    class AsyncSocket final : public MaNGOS::Policies::NoCopyButAllowMove
-#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-           , public IO::SystemIoEventReceiver
-#endif
+namespace IO
+{
+    namespace Networking
     {
+
+        /// You have to keep the instance alive while a transaction is running. Use a shared pointer or something on every callback!
+        class AsyncSocket final : public MaNGOS::Policies::NoCopyButAllowMove
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+            ,
+                                  public IO::SystemIoEventReceiver
+#endif
+        {
         public: // public functions
             /// Dont forget to call `InitializeAndFixateMemoryLocation` before making a transfer
             explicit AsyncSocket(IO::IoContext* ctx, SocketDescriptor socketDescriptor);
@@ -68,17 +72,11 @@ namespace IO { namespace Networking {
             void CloseSocket();
             bool IsClosing() const;
 
-            IO::Networking::IpEndpoint const& GetRemoteEndpoint() const
-            {
-                return m_descriptor.GetRemoteEndpoint();
-            }
+            IO::Networking::IpEndpoint const& GetRemoteEndpoint() const { return m_descriptor.GetRemoteEndpoint(); }
 
             /// IPv4 Format: 255.255.255.255
             /// IPv6 Format: [FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF]
-            std::string const& GetRemoteIpString() const
-            {
-                return GetRemoteEndpoint().ip.ToString();
-            }
+            std::string const& GetRemoteIpString() const { return GetRemoteEndpoint().ip.ToString(); }
 
         private:
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -90,30 +88,29 @@ namespace IO { namespace Networking {
             IO::Networking::SocketDescriptor m_descriptor;
 
         private: // internal stuff
-
             // We are doing all this atomic stuff, just so we don't have to std::mutex everything
             enum SocketStateFlags : int
             {
-                SHUTDOWN_PENDING     = (1 << 0), // stop all new transaction requests. There should never be a new `*_PENDING_*` when this is present
-                IGNORE_TRANSFERS     = (1 << 1), // Like SHUTDOWN_PENDING but the event receivers `PerformNonBlockingRead` and `PerformNonBlockingWrite` will ignore the event
+                SHUTDOWN_PENDING = (1 << 0), // stop all new transaction requests. There should never be a new `*_PENDING_*` when this is present
+                IGNORE_TRANSFERS = (1 << 1), // Like SHUTDOWN_PENDING but the event receivers `PerformNonBlockingRead` and `PerformNonBlockingWrite` will ignore the event
 
                 // PRESENT: Stuff that is present and set
                 // PENDING: Stuff that is currently being used, if you want to close the socket you must spinwait it.
 
-                WRITE_PENDING_SET    = (1 << 2),
-                WRITE_PRESENT        = (1 << 3),
-                WRITE_PENDING_LOAD   = (1 << 4),
+                WRITE_PENDING_SET = (1 << 2),
+                WRITE_PRESENT = (1 << 3),
+                WRITE_PENDING_LOAD = (1 << 4),
 
-                READ_PENDING_SET     = (1 << 5),
-                READ_PRESENT         = (1 << 6),
-                READ_PENDING_LOAD    = (1 << 7),
+                READ_PENDING_SET = (1 << 5),
+                READ_PRESENT = (1 << 6),
+                READ_PENDING_LOAD = (1 << 7),
 
-                CONTEXT_PENDING_SET  = (1 << 8),
-                CONTEXT_PRESENT      = (1 << 9),
+                CONTEXT_PENDING_SET = (1 << 8),
+                CONTEXT_PRESENT = (1 << 9),
                 CONTEXT_PENDING_LOAD = (1 << 10),
 
-                WAS_MOVED_NO_DTOR    = (1 << 11),
-                IS_INITIALIZED       = (1 << 12), // memory address of this socket is fixed because its referenced in kernel code (epoll/kqueue). Cant std::move this object.
+                WAS_MOVED_NO_DTOR = (1 << 11),
+                IS_INITIALIZED = (1 << 12), // memory address of this socket is fixed because its referenced in kernel code (epoll/kqueue). Cant std::move this object.
             };
             std::atomic<int> m_atomicState{0};
 
@@ -144,7 +141,8 @@ namespace IO { namespace Networking {
 
             size_t m_writeSrcAlreadyTransferred = 0;
 #endif
-    };
-}} // namespace IO::Networking
+        };
+    } // namespace Networking
+} // namespace IO
 
-#endif //MANGOS_IO_NETWORKING_ASYNCSOCKET_H
+#endif // MANGOS_IO_NETWORKING_ASYNCSOCKET_H

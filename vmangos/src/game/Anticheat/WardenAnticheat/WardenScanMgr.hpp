@@ -14,43 +14,43 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
- /*
-  *
-  * This code was written by namreeb (legal@namreeb.org) and is released with
-  * permission as part of vmangos (https://github.com/vmangos/core)
-  *
-  */
+/*
+ *
+ * This code was written by namreeb (legal@namreeb.org) and is released with
+ * permission as part of vmangos (https://github.com/vmangos/core)
+ *
+ */
 
 #ifndef __WARDENSCANMGR_HPP_
 #define __WARDENSCANMGR_HPP_
 
-#include "WardenScan.hpp"
 #include "Policies/Singleton.h"
+#include "WardenScan.hpp"
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 class WardenScanMgr
 {
-    private:
-        // these are stored as shared pointers to allow this collection to be emptied (presumably in the
-        // process of repopulating it) without invalidating pointers held elsewhere, namely in the queues
-        // of existing clients
-        std::vector<std::shared_ptr<Scan const>> m_scans;
+private:
+    // these are stored as shared pointers to allow this collection to be emptied (presumably in the
+    // process of repopulating it) without invalidating pointers held elsewhere, namely in the queues
+    // of existing clients
+    std::vector<std::shared_ptr<Scan const>> m_scans;
 
-    public:
-        // load static scans from database
-        void LoadFromDB();
+public:
+    // load static scans from database
+    void LoadFromDB();
 
-        size_t Count() const { return m_scans.size(); }
+    size_t Count() const { return m_scans.size(); }
 
-        void AddMacScan(MacScan const*);
-        void AddMacScan(std::shared_ptr<MacScan>);
+    void AddMacScan(MacScan const*);
+    void AddMacScan(std::shared_ptr<MacScan>);
 
-        void AddWindowsScan(WindowsScan const*);
-        void AddWindowsScan(std::shared_ptr<WindowsScan>);
+    void AddWindowsScan(WindowsScan const*);
+    void AddWindowsScan(std::shared_ptr<WindowsScan>);
 
-        std::vector<std::shared_ptr<Scan const>> GetRandomScans(ScanFlags flags, uint32 build) const;
+    std::vector<std::shared_ptr<Scan const>> GetRandomScans(ScanFlags flags, uint32 build) const;
 };
 
 #define sWardenScanMgr MaNGOS::Singleton<WardenScanMgr>::Instance()

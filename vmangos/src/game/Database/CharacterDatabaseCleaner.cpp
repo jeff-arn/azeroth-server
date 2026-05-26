@@ -19,12 +19,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Common.h"
 #include "CharacterDatabaseCleaner.h"
-#include "World.h"
-#include "Database/DatabaseEnv.h"
+#include "Common.h"
 #include "DBCStores.h"
+#include "Database/DatabaseEnv.h"
 #include "SpellMgr.h"
+#include "World.h"
 
 void CharacterDatabaseCleaner::CleanDatabase()
 {
@@ -89,22 +89,10 @@ void CharacterDatabaseCleaner::CheckUnique(char const* column, char const* table
     }
 }
 
-bool CharacterDatabaseCleaner::SkillCheck(uint32 skill)
-{
-    return sSkillLineStore.LookupEntry(skill);
-}
+bool CharacterDatabaseCleaner::SkillCheck(uint32 skill) { return sSkillLineStore.LookupEntry(skill); }
 
-void CharacterDatabaseCleaner::CleanCharacterSkills()
-{
-    CheckUnique("skill", "character_skills", &SkillCheck);
-}
+void CharacterDatabaseCleaner::CleanCharacterSkills() { CheckUnique("skill", "character_skills", &SkillCheck); }
 
-bool CharacterDatabaseCleaner::SpellCheck(uint32 spell_id)
-{
-    return sSpellMgr.GetSpellEntry(spell_id);
-}
+bool CharacterDatabaseCleaner::SpellCheck(uint32 spell_id) { return sSpellMgr.GetSpellEntry(spell_id); }
 
-void CharacterDatabaseCleaner::CleanCharacterSpell()
-{
-    CheckUnique("spell", "character_spell", &SpellCheck);
-}
+void CharacterDatabaseCleaner::CleanCharacterSpell() { CheckUnique("spell", "character_spell", &SpellCheck); }

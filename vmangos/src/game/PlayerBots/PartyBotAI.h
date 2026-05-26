@@ -1,47 +1,44 @@
 /*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 #ifndef MANGOS_PARTYBOTAI_H
 #define MANGOS_PARTYBOTAI_H
 
+#include <memory>
+#include <unordered_map>
+#include <vector>
+#include "BotBehavior.h"
+#include "BotSituationContext.h"
+#include "BotSpellKit.h"
 #include "CombatBotBaseAI.h"
 #include "Group.h"
 #include "ObjectAccessor.h"
-#include "BotBehavior.h"
-#include "BotSpellKit.h"
-#include "BotSituationContext.h"
-#include <unordered_map>
-#include <vector>
-#include <memory>
 
 
 class PartyBotAI : public CombatBotBaseAI
 {
 public:
-
-    PartyBotAI(Player* pLeader, Player* pClone, CombatBotRoles role, uint8 race, uint8 class_, uint8 level, uint32 mapId, uint32 instanceId, float x, float y, float z, float o)
-        : CombatBotBaseAI(), m_race(race), m_class(class_), m_level(level), m_mapId(mapId), m_instanceId(instanceId), m_x(x), m_y(y), m_z(z), m_o(o)
+    PartyBotAI(Player* pLeader, Player* pClone, CombatBotRoles role, uint8 race, uint8 class_, uint8 level, uint32 mapId, uint32 instanceId, float x, float y, float z, float o) : CombatBotBaseAI(), m_race(race), m_class(class_), m_level(level), m_mapId(mapId), m_instanceId(instanceId), m_x(x), m_y(y), m_z(z), m_o(o)
     {
         m_role = role;
         m_leaderGuid = pLeader->GetObjectGuid();
         m_cloneGuid = pClone ? pClone->GetObjectGuid() : ObjectGuid();
         m_updateTimer.Reset(2000);
     }
-    PartyBotAI(Player* pLeader, uint32 mapId, uint32 instanceId, float x, float y, float z, float o)
-        : CombatBotBaseAI(), m_mapId(mapId), m_instanceId(instanceId), m_x(x), m_y(y), m_z(z), m_o(o)
+    PartyBotAI(Player* pLeader, uint32 mapId, uint32 instanceId, float x, float y, float z, float o) : CombatBotBaseAI(), m_mapId(mapId), m_instanceId(instanceId), m_x(x), m_y(y), m_z(z), m_o(o)
     {
         m_role = ROLE_INVALID;
         m_leaderGuid = pLeader->GetObjectGuid();
@@ -95,7 +92,7 @@ public:
 
     std::vector<RaidTargetIcon> m_marksToCC;
     std::vector<RaidTargetIcon> m_marksToFocus;
-    std::vector<RaidTargetIcon> m_autoMarksToCC;  // auto-assigned CC marks, cleared between pulls
+    std::vector<RaidTargetIcon> m_autoMarksToCC; // auto-assigned CC marks, cleared between pulls
     ShortTimeTracker m_updateTimer;
     ObjectGuid m_leaderGuid;
     ObjectGuid m_cloneGuid;
@@ -117,19 +114,19 @@ public:
 
     // Social chat cooldowns
     bool m_greetedGroup = false;
-    uint32 m_greetDelayTimer = 0;      // countdown ms before greeting
-    uint32 m_oomChatCooldown = 0;      // ms until OOM chat allowed again
-    uint32 m_pullChatCooldown = 0;     // ms until pull announcement allowed
-    ObjectGuid m_lastCombatTarget;     // track target death for boss kill detection
-    bool m_wipeReacted = false;        // prevent spamming wipe reaction
+    uint32 m_greetDelayTimer = 0; // countdown ms before greeting
+    uint32 m_oomChatCooldown = 0; // ms until OOM chat allowed again
+    uint32 m_pullChatCooldown = 0; // ms until pull announcement allowed
+    ObjectGuid m_lastCombatTarget; // track target death for boss kill detection
+    bool m_wipeReacted = false; // prevent spamming wipe reaction
 
     // Dungeon wipe respawn system
-    bool m_dungeonWipeDetected = false;   // full wipe detected inside dungeon/raid
-    uint32 m_dungeonRespawnDelay = 0;     // ms countdown before revive+teleport after wipe
+    bool m_dungeonWipeDetected = false; // full wipe detected inside dungeon/raid
+    uint32 m_dungeonRespawnDelay = 0; // ms countdown before revive+teleport after wipe
     bool m_needPostReviveTeleport = false; // partial wipe: teleport to leader after reviving
 
     // Formation system
-    int8 m_formationSlotIndex = -1;    // assigned by FormationState::AssignSlots
+    int8 m_formationSlotIndex = -1; // assigned by FormationState::AssignSlots
 };
 
 #endif

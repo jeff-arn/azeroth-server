@@ -4,7 +4,7 @@
 
 #include "GridSearchers.h"
 
-//return closest GO in grid, with range from pSource
+// return closest GO in grid, with range from pSource
 GameObject* GetClosestGameObjectWithEntry(WorldObject* pSource, uint32 uiEntry, float fMaxSearchRange)
 {
     ASSERT(pSource);
@@ -18,7 +18,7 @@ GameObject* GetClosestGameObjectWithEntry(WorldObject* pSource, uint32 uiEntry, 
     return pGo;
 }
 
-//return closest creature alive in grid, with range from pSource
+// return closest creature alive in grid, with range from pSource
 Creature* GetClosestCreatureWithEntry(WorldObject* pSource, uint32 uiEntry, float fMaxSearchRange)
 {
     ASSERT(pSource);
@@ -32,7 +32,7 @@ Creature* GetClosestCreatureWithEntry(WorldObject* pSource, uint32 uiEntry, floa
     return pCreature;
 }
 
-void GetGameObjectListWithEntryInGrid(std::list<GameObject*>& lList , WorldObject* pSource, uint32 uiEntry, float fMaxSearchRange)
+void GetGameObjectListWithEntryInGrid(std::list<GameObject*>& lList, WorldObject* pSource, uint32 uiEntry, float fMaxSearchRange)
 {
     ASSERT(pSource);
     MaNGOS::AllGameObjectsWithEntryInRange check(pSource, uiEntry, fMaxSearchRange);

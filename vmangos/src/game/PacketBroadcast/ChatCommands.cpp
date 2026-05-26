@@ -9,10 +9,8 @@ bool ChatHandler::HandlePBCastStatsCommand(char*)
     auto const& stats = bcaster->GetStats();
     PSendSysMessage("PacketBroadcast: %u threads.", stats.size());
     for (int i = 0; i < stats.size(); ++i)
-        PSendSysMessage("Thread #%02u: Update %03ums | %u packets",
-            i, stats[i].update_time, stats[i].num_packets);
-    PSendSysMessage("Created %u broadcasters | Deleted %u",
-        PlayerBroadcaster::num_bcaster_created, PlayerBroadcaster::num_bcaster_deleted);
+        PSendSysMessage("Thread #%02u: Update %03ums | %u packets", i, stats[i].update_time, stats[i].num_packets);
+    PSendSysMessage("Created %u broadcasters | Deleted %u", PlayerBroadcaster::num_bcaster_created, PlayerBroadcaster::num_bcaster_deleted);
     return true;
 }
 
@@ -33,8 +31,7 @@ bool ChatHandler::HandlePBCastSetThreadsCommand(char* args)
     if (!num_threads_after)
         PSendSysMessage("PacketBroadcast: Disabling broadcaster...");
     else
-        PSendSysMessage("PacketBroadcast: Changing num of threads from %u to %u...",
-            num_threads_before, num_threads_after);
+        PSendSysMessage("PacketBroadcast: Changing num of threads from %u to %u...", num_threads_before, num_threads_after);
 
     bcaster->UpdateConfiguration(num_threads_after, bcaster->GetSleepTimer());
     SendSysMessage(".. done!");

@@ -1,15 +1,12 @@
-#include <unistd.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <thread>
-#include "Log.h"
-#include "IoContext.h"
+#include <unistd.h>
 #include "IO/SystemErrorToString.h"
+#include "IoContext.h"
+#include "Log.h"
 
-IO::IoContext::IoContext(IO::Native::FileHandle epollDescriptor, IO::Native::FileHandle contextSwitchEventFd)
-        : m_epollDescriptor(epollDescriptor), m_contextSwitchNotifyEventFd(contextSwitchEventFd), m_isRunning{true}
-{
-}
+IO::IoContext::IoContext(IO::Native::FileHandle epollDescriptor, IO::Native::FileHandle contextSwitchEventFd) : m_epollDescriptor(epollDescriptor), m_contextSwitchNotifyEventFd(contextSwitchEventFd), m_isRunning{true} {}
 
 IO::IoContext::~IoContext()
 {
@@ -38,7 +35,9 @@ std::unique_ptr<IO::IoContext> IO::IoContext::CreateIoContext()
     }
 
     // Add our contextSwitchEventFd to the epoll set
-    struct epoll_event event{};
+    struct epoll_event event
+    {
+    };
     event.events = EPOLLIN | EPOLLET; // We are using edge here, since we are just using it as a "once" signalling process system
     event.data.u32 = static_cast<uint32_t>(IoContextEpollTargetType::ContextSwitchRequest);
     if (::epoll_ctl(epollDescriptor, EPOLL_CTL_ADD, contextSwitchEventFd, &event) == -1)
@@ -93,15 +92,9 @@ void IO::IoContext::RunUntilShutdown()
     }
 }
 
-bool IO::IoContext::IsRunning() const
-{
-    return m_isRunning;
-}
+bool IO::IoContext::IsRunning() const { return m_isRunning; }
 
-void IO::IoContext::Shutdown()
-{
-    m_isRunning = false;
-}
+void IO::IoContext::Shutdown() { m_isRunning = false; }
 
 void IO::IoContext::PostForImmediateInvocation(IO::SystemIoEventReceiver* eventReceiver)
 {

@@ -14,15 +14,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "scriptPCH.h"
 #include "molten_core.h"
+#include "scriptPCH.h"
 
 struct instance_molten_core : ScriptedInstance
 {
-    explicit instance_molten_core(Map* pMap) : ScriptedInstance(pMap)
-    {
-        instance_molten_core::Initialize();
-    }
+    explicit instance_molten_core(Map* pMap) : ScriptedInstance(pMap) { instance_molten_core::Initialize(); }
 
     uint32 m_auiEncounter[INSTANCE_MC_MAX_ENCOUNTER];
 
@@ -39,25 +36,25 @@ struct instance_molten_core : ScriptedInstance
     {
         memset(&m_auiEncounter, 0, sizeof(m_auiEncounter));
 
-        m_uiLucifronGUID  = 0;
-        m_uiMagmadarGUID  = 0;
-        m_uiGehennasGUID  = 0;
-        m_uiGarrGUID      = 0;
-        m_uiGeddonGUID    = 0;
-        m_uiShazzrahGUID  = 0;
-        m_uiSulfuronGUID  = 0;
-        m_uiGolemaggGUID  = 0;
+        m_uiLucifronGUID = 0;
+        m_uiMagmadarGUID = 0;
+        m_uiGehennasGUID = 0;
+        m_uiGarrGUID = 0;
+        m_uiGeddonGUID = 0;
+        m_uiShazzrahGUID = 0;
+        m_uiSulfuronGUID = 0;
+        m_uiGolemaggGUID = 0;
         m_uiMajorDomoGUID = 0;
-        m_uiRagnarosGUID  = 0;
+        m_uiRagnarosGUID = 0;
         m_uiFlamewakerPriestGUID = 0;
 
-        m_uiRuneKoroGUID  = 0;
-        m_uiRuneZethGUID  = 0;
-        m_uiRuneMazjGUID  = 0;
+        m_uiRuneKoroGUID = 0;
+        m_uiRuneZethGUID = 0;
+        m_uiRuneMazjGUID = 0;
         m_uiRuneTheriGUID = 0;
-        m_uiRuneBlazGUID  = 0;
+        m_uiRuneBlazGUID = 0;
         m_uiRuneKressGUID = 0;
-        m_uiRuneMohnGUID  = 0;
+        m_uiRuneMohnGUID = 0;
 
         m_uiHotCoalsGUID = 0;
         m_uiFirelordCacheGUID = 0;
@@ -90,7 +87,7 @@ struct instance_molten_core : ScriptedInstance
     {
         switch (pGo->GetEntry())
         {
-            case RUNE_SULFURON:
+        case RUNE_SULFURON:
             {
                 m_uiRuneKoroGUID = pGo->GetGUID();
                 if (m_RuneSates[0] == DONE)
@@ -99,7 +96,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case RUNE_GEDDON:
+        case RUNE_GEDDON:
             {
                 m_uiRuneZethGUID = pGo->GetGUID();
                 if (m_RuneSates[1] == DONE)
@@ -108,7 +105,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case RUNE_SHAZZRAH:
+        case RUNE_SHAZZRAH:
             {
                 m_uiRuneMazjGUID = pGo->GetGUID();
                 if (m_RuneSates[2] == DONE)
@@ -117,7 +114,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case RUNE_GOLEMAGG:
+        case RUNE_GOLEMAGG:
             {
                 m_uiRuneTheriGUID = pGo->GetGUID();
                 if (m_RuneSates[3] == DONE)
@@ -126,7 +123,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case RUNE_GARR:
+        case RUNE_GARR:
             {
                 m_uiRuneBlazGUID = pGo->GetGUID();
                 if (m_RuneSates[4] == DONE)
@@ -135,7 +132,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case RUNE_MAGMADAR:
+        case RUNE_MAGMADAR:
             {
                 m_uiRuneKressGUID = pGo->GetGUID();
                 if (m_RuneSates[5] == DONE)
@@ -144,7 +141,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case RUNE_GEHENNAS:
+        case RUNE_GEHENNAS:
             {
                 m_uiRuneMohnGUID = pGo->GetGUID();
                 if (m_RuneSates[6] == DONE)
@@ -153,13 +150,13 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case GO_HOT_COALS:
+        case GO_HOT_COALS:
             {
                 m_uiHotCoalsGUID = pGo->GetGUID();
                 pGo->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE);
                 break;
             }
-            case RUNE_MAJORDOMO:
+        case RUNE_MAJORDOMO:
             {
                 m_uiFirelordCacheGUID = pGo->GetGUID();
                 break;
@@ -171,7 +168,7 @@ struct instance_molten_core : ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_FLAMEWAKER_PRIEST:
+        case NPC_FLAMEWAKER_PRIEST:
             {
                 if (m_auiEncounter[TYPE_SULFURON] == DONE)
                 {
@@ -179,7 +176,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_CORE_RAGER:
+        case NPC_CORE_RAGER:
             {
                 if (m_auiEncounter[TYPE_GOLEMAGG] == DONE)
                 {
@@ -187,7 +184,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_FLAMEWAKER:
+        case NPC_FLAMEWAKER:
             {
                 if (m_auiEncounter[TYPE_GEHENNAS] == DONE)
                 {
@@ -195,7 +192,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_FLAMEWAKER_PROTECTOR:
+        case NPC_FLAMEWAKER_PROTECTOR:
             {
                 if (m_auiEncounter[TYPE_LUCIFRON] == DONE)
                 {
@@ -203,8 +200,8 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_CORE_HOUND:
-            case NPC_ANCIENT_CORE_HOUND:
+        case NPC_CORE_HOUND:
+        case NPC_ANCIENT_CORE_HOUND:
             {
                 if (m_auiEncounter[TYPE_MAGMADAR] == DONE)
                 {
@@ -212,9 +209,9 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_GARR:
-            case NPC_FIRESWORN:
-            case NPC_LAVA_SURGER:
+        case NPC_GARR:
+        case NPC_FIRESWORN:
+        case NPC_LAVA_SURGER:
             {
                 if (m_auiEncounter[TYPE_GARR] == DONE)
                 {
@@ -222,19 +219,19 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_MAJORDOMO:
+        case NPC_MAJORDOMO:
             {
                 m_auiEncounter[TYPE_MAJORDOMO] = DONE;
                 pCreature->AddObjectToRemoveList();
                 break;
             }
-            case NPC_RAGNAROS:
+        case NPC_RAGNAROS:
             {
                 m_auiEncounter[TYPE_RAGNAROS] = DONE;
                 pCreature->AddObjectToRemoveList();
                 break;
             }
-            case NPC_LAVA_ANNIHILATOR:
+        case NPC_LAVA_ANNIHILATOR:
             {
                 if (urand(0, 1))
                 {
@@ -244,7 +241,7 @@ struct instance_molten_core : ScriptedInstance
                 pCreature->AIM_Initialize();
                 break;
             }
-            case NPC_FIRELORD:
+        case NPC_FIRELORD:
             {
                 if (urand(0, 1))
                 {
@@ -259,9 +256,7 @@ struct instance_molten_core : ScriptedInstance
 
     void OnCreatureEnterCombat(Creature* pCreature) override
     {
-        if (pCreature->GetEntry() != NPC_MAJORDOMO &&
-            pCreature->GetEntry() != NPC_FLAMEWAKER_HEALER &&
-            pCreature->GetEntry() != NPC_FLAMEWAKER_ELITE)
+        if (pCreature->GetEntry() != NPC_MAJORDOMO && pCreature->GetEntry() != NPC_FLAMEWAKER_HEALER && pCreature->GetEntry() != NPC_FLAMEWAKER_ELITE)
         {
             return;
         }
@@ -291,52 +286,52 @@ struct instance_molten_core : ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_LUCIFRON:
+        case NPC_LUCIFRON:
             {
                 m_uiLucifronGUID = pCreature->GetGUID();
                 break;
             }
-            case NPC_MAGMADAR:
+        case NPC_MAGMADAR:
             {
                 m_uiMagmadarGUID = pCreature->GetGUID();
                 break;
             }
-            case NPC_GEHENNAS:
+        case NPC_GEHENNAS:
             {
                 m_uiGehennasGUID = pCreature->GetGUID();
                 break;
             }
-            case NPC_GEDDON:
+        case NPC_GEDDON:
             {
                 m_uiGeddonGUID = pCreature->GetGUID();
                 break;
             }
-            case NPC_SHAZZRAH:
+        case NPC_SHAZZRAH:
             {
                 m_uiShazzrahGUID = pCreature->GetGUID();
                 break;
             }
-            case NPC_SULFURON:
+        case NPC_SULFURON:
             {
                 m_uiSulfuronGUID = pCreature->GetGUID();
                 break;
             }
-            case NPC_GOLEMAGG:
+        case NPC_GOLEMAGG:
             {
                 m_uiGolemaggGUID = pCreature->GetGUID();
                 break;
             }
-            case NPC_MAJORDOMO:
+        case NPC_MAJORDOMO:
             {
                 m_uiMajorDomoGUID = pCreature->GetGUID();
                 break;
             }
-            case NPC_RAGNAROS:
+        case NPC_RAGNAROS:
             {
                 m_uiRagnarosGUID = pCreature->GetGUID();
                 break;
             }
-            case NPC_FLAMEWAKER_PRIEST:
+        case NPC_FLAMEWAKER_PRIEST:
             {
                 m_uiFlamewakerPriestGUID = pCreature->GetGUID();
                 if (m_auiEncounter[TYPE_SULFURON] == DONE)
@@ -345,7 +340,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_CORE_RAGER:
+        case NPC_CORE_RAGER:
             {
                 if (m_auiEncounter[TYPE_GOLEMAGG] == DONE)
                 {
@@ -353,7 +348,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_FLAMEWAKER:
+        case NPC_FLAMEWAKER:
             {
                 if (m_auiEncounter[TYPE_GEHENNAS] == DONE)
                 {
@@ -361,7 +356,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_FLAMEWAKER_PROTECTOR:
+        case NPC_FLAMEWAKER_PROTECTOR:
             {
                 if (m_auiEncounter[TYPE_LUCIFRON] == DONE)
                 {
@@ -369,7 +364,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_LAVA_ANNIHILATOR:
+        case NPC_LAVA_ANNIHILATOR:
             {
                 if (urand(0, 1))
                 {
@@ -379,7 +374,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_FIRELORD:
+        case NPC_FIRELORD:
             {
                 if (urand(0, 1))
                 {
@@ -389,8 +384,8 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_CORE_HOUND:
-            case NPC_ANCIENT_CORE_HOUND:
+        case NPC_CORE_HOUND:
+        case NPC_ANCIENT_CORE_HOUND:
             {
                 if (m_auiEncounter[TYPE_MAGMADAR] == DONE)
                 {
@@ -398,14 +393,14 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_GARR:
+        case NPC_GARR:
             {
                 m_uiGarrGUID = pCreature->GetGUID();
                 m_mNpcEntryGuidStore[pCreature->GetEntry()] = pCreature->GetObjectGuid();
                 break;
             }
-            case NPC_FIRESWORN:
-            case NPC_LAVA_SURGER:
+        case NPC_FIRESWORN:
+        case NPC_LAVA_SURGER:
             {
                 if (m_auiEncounter[TYPE_GARR] == DONE)
                 {
@@ -413,7 +408,7 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case NPC_LAVA_SPAWN:
+        case NPC_LAVA_SPAWN:
             {
                 // Prevent exponential lava spawn creation in case of evade bug
                 std::list<Creature*> LavaSpawnList;
@@ -431,19 +426,19 @@ struct instance_molten_core : ScriptedInstance
     {
         switch (uiType)
         {
-            case TYPE_SULFURON:
-            case TYPE_GEDDON:
-            case TYPE_SHAZZRAH:
-            case TYPE_GOLEMAGG:
-            case TYPE_GARR:
-            case TYPE_MAGMADAR:
-            case TYPE_GEHENNAS:
-            case TYPE_LUCIFRON:
+        case TYPE_SULFURON:
+        case TYPE_GEDDON:
+        case TYPE_SHAZZRAH:
+        case TYPE_GOLEMAGG:
+        case TYPE_GARR:
+        case TYPE_MAGMADAR:
+        case TYPE_GEHENNAS:
+        case TYPE_LUCIFRON:
             {
                 m_auiEncounter[uiType] = uiData;
                 break;
             }
-            case TYPE_MAJORDOMO:
+        case TYPE_MAJORDOMO:
             {
                 m_auiEncounter[TYPE_MAJORDOMO] = uiData;
                 if (uiData == DONE)
@@ -452,47 +447,47 @@ struct instance_molten_core : ScriptedInstance
                 }
                 break;
             }
-            case TYPE_RAGNAROS:
+        case TYPE_RAGNAROS:
             {
                 m_auiEncounter[9] = uiData;
                 break;
             }
-            case DATA_RUNE_ACTIVE_0:
+        case DATA_RUNE_ACTIVE_0:
             {
                 m_RuneSates[0] = uiData;
                 break;
             }
-            case DATA_RUNE_ACTIVE_1:
+        case DATA_RUNE_ACTIVE_1:
             {
                 m_RuneSates[1] = uiData;
                 break;
             }
-            case DATA_RUNE_ACTIVE_2:
+        case DATA_RUNE_ACTIVE_2:
             {
                 m_RuneSates[2] = uiData;
                 break;
             }
-            case DATA_RUNE_ACTIVE_3:
+        case DATA_RUNE_ACTIVE_3:
             {
                 m_RuneSates[3] = uiData;
                 break;
             }
-            case DATA_RUNE_ACTIVE_4:
+        case DATA_RUNE_ACTIVE_4:
             {
                 m_RuneSates[4] = uiData;
                 break;
             }
-            case DATA_RUNE_ACTIVE_5:
+        case DATA_RUNE_ACTIVE_5:
             {
                 m_RuneSates[5] = uiData;
                 break;
             }
-            case DATA_RUNE_ACTIVE_6:
+        case DATA_RUNE_ACTIVE_6:
             {
                 m_RuneSates[6] = uiData;
                 break;
             }
-            case DATA_DOMO_SPAWNED:
+        case DATA_DOMO_SPAWNED:
             {
                 m_dataDomoSpawned = uiData;
                 break;
@@ -510,12 +505,7 @@ struct instance_molten_core : ScriptedInstance
     char const* Save() override
     {
         std::ostringstream saveStream;
-        saveStream << m_auiEncounter[0] << " " << m_auiEncounter[1] << " " << m_auiEncounter[2] << " "
-                   << m_auiEncounter[3] << " " << m_auiEncounter[4] << " " << m_auiEncounter[5] << " "
-                   << m_auiEncounter[6] << " " << m_auiEncounter[7] << " " << m_auiEncounter[8] << " "
-                   << m_auiEncounter[9] << " " << m_RuneSates[0] << " " << m_RuneSates[1] << " "
-                   << m_RuneSates[2] << " " << m_RuneSates[3] << " " << m_RuneSates[4] << " "
-                   << m_RuneSates[5] << " " << m_RuneSates[6];
+        saveStream << m_auiEncounter[0] << " " << m_auiEncounter[1] << " " << m_auiEncounter[2] << " " << m_auiEncounter[3] << " " << m_auiEncounter[4] << " " << m_auiEncounter[5] << " " << m_auiEncounter[6] << " " << m_auiEncounter[7] << " " << m_auiEncounter[8] << " " << m_auiEncounter[9] << " " << m_RuneSates[0] << " " << m_RuneSates[1] << " " << m_RuneSates[2] << " " << m_RuneSates[3] << " " << m_RuneSates[4] << " " << m_RuneSates[5] << " " << m_RuneSates[6];
         strInstData = saveStream.str();
         return strInstData.c_str();
     }
@@ -524,48 +514,48 @@ struct instance_molten_core : ScriptedInstance
     {
         switch (uiType)
         {
-            case TYPE_SULFURON:
-            case TYPE_GEDDON:
-            case TYPE_SHAZZRAH:
-            case TYPE_GOLEMAGG:
-            case TYPE_GARR:
-            case TYPE_MAGMADAR:
-            case TYPE_GEHENNAS:
-            case TYPE_LUCIFRON:
-            case TYPE_MAJORDOMO:
-            case TYPE_RAGNAROS:
+        case TYPE_SULFURON:
+        case TYPE_GEDDON:
+        case TYPE_SHAZZRAH:
+        case TYPE_GOLEMAGG:
+        case TYPE_GARR:
+        case TYPE_MAGMADAR:
+        case TYPE_GEHENNAS:
+        case TYPE_LUCIFRON:
+        case TYPE_MAJORDOMO:
+        case TYPE_RAGNAROS:
             {
                 return m_auiEncounter[uiType];
             }
-            case DATA_RUNE_ACTIVE_0:
+        case DATA_RUNE_ACTIVE_0:
             {
                 return m_RuneSates[0];
             }
-            case DATA_RUNE_ACTIVE_1:
+        case DATA_RUNE_ACTIVE_1:
             {
                 return m_RuneSates[1];
             }
-            case DATA_RUNE_ACTIVE_2:
+        case DATA_RUNE_ACTIVE_2:
             {
                 return m_RuneSates[2];
             }
-            case DATA_RUNE_ACTIVE_3:
+        case DATA_RUNE_ACTIVE_3:
             {
                 return m_RuneSates[3];
             }
-            case DATA_RUNE_ACTIVE_4:
+        case DATA_RUNE_ACTIVE_4:
             {
                 return m_RuneSates[4];
             }
-            case DATA_RUNE_ACTIVE_5:
+        case DATA_RUNE_ACTIVE_5:
             {
                 return m_RuneSates[5];
             }
-            case DATA_RUNE_ACTIVE_6:
+        case DATA_RUNE_ACTIVE_6:
             {
                 return m_RuneSates[6];
             }
-            case DATA_DOMO_SPAWNED:
+        case DATA_DOMO_SPAWNED:
             {
                 return m_dataDomoSpawned;
             }
@@ -578,19 +568,19 @@ struct instance_molten_core : ScriptedInstance
     {
         switch (uiData)
         {
-            case DATA_SULFURON:
+        case DATA_SULFURON:
             {
                 return m_uiSulfuronGUID;
             }
-            case DATA_GOLEMAGG:
+        case DATA_GOLEMAGG:
             {
                 return m_uiGolemaggGUID;
             }
-            case DATA_GARR:
+        case DATA_GARR:
             {
                 return m_uiGarrGUID;
             }
-            case DATA_MAJORDOMO:
+        case DATA_MAJORDOMO:
             {
                 return m_uiMajorDomoGUID;
             }
@@ -636,37 +626,37 @@ struct instance_molten_core : ScriptedInstance
 
                     switch (pRune->GetEntry())
                     {
-                        case RUNE_SULFURON:
+                    case RUNE_SULFURON:
                         {
                             RemoveRuneFire(pRune, liste.getFirst()->getSource(), 178187, i);
                             break;
                         }
-                        case RUNE_GEDDON:
+                    case RUNE_GEDDON:
                         {
                             RemoveRuneFire(pRune, liste.getFirst()->getSource(), 178188, i);
                             break;
                         }
-                        case RUNE_SHAZZRAH:
+                    case RUNE_SHAZZRAH:
                         {
                             RemoveRuneFire(pRune, liste.getFirst()->getSource(), 178189, i);
                             break;
                         }
-                        case RUNE_GOLEMAGG:
+                    case RUNE_GOLEMAGG:
                         {
                             RemoveRuneFire(pRune, liste.getFirst()->getSource(), 178190, i);
                             break;
                         }
-                        case RUNE_GARR:
+                    case RUNE_GARR:
                         {
                             RemoveRuneFire(pRune, liste.getFirst()->getSource(), 178191, i);
                             break;
                         }
-                        case RUNE_MAGMADAR:
+                    case RUNE_MAGMADAR:
                         {
                             RemoveRuneFire(pRune, liste.getFirst()->getSource(), 178192, i);
                             break;
                         }
-                        case RUNE_GEHENNAS:
+                    case RUNE_GEHENNAS:
                         {
                             RemoveRuneFire(pRune, liste.getFirst()->getSource(), 178193, i);
                             break;
@@ -689,11 +679,7 @@ struct instance_molten_core : ScriptedInstance
 
         std::istringstream loadStream(chrIn);
 
-        loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2] >> m_auiEncounter[3]
-                   >> m_auiEncounter[4] >> m_auiEncounter[5] >> m_auiEncounter[6]
-                   >> m_auiEncounter[7] >> m_auiEncounter[8] >> m_auiEncounter[9]
-                   >> m_RuneSates[0] >> m_RuneSates[1] >> m_RuneSates[2] >> m_RuneSates[3]
-                   >> m_RuneSates[4] >> m_RuneSates[5] >> m_RuneSates[6];
+        loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2] >> m_auiEncounter[3] >> m_auiEncounter[4] >> m_auiEncounter[5] >> m_auiEncounter[6] >> m_auiEncounter[7] >> m_auiEncounter[8] >> m_auiEncounter[9] >> m_RuneSates[0] >> m_RuneSates[1] >> m_RuneSates[2] >> m_RuneSates[3] >> m_RuneSates[4] >> m_RuneSates[5] >> m_RuneSates[6];
 
         for (uint32& i : m_auiEncounter)
         {
@@ -744,7 +730,7 @@ bool GOHello_go_rune_MC(Player* pPlayer, GameObject* pGo)
 
     switch (pGo->GetEntry())
     {
-        case RUNE_SULFURON:
+    case RUNE_SULFURON:
         {
             if (!UpdateRune(pInstance, pGo, TYPE_SULFURON, DATA_RUNE_ACTIVE_0, 178187))
             {
@@ -752,7 +738,7 @@ bool GOHello_go_rune_MC(Player* pPlayer, GameObject* pGo)
             }
             break;
         }
-        case RUNE_GEDDON:
+    case RUNE_GEDDON:
         {
             if (!UpdateRune(pInstance, pGo, TYPE_GEDDON, DATA_RUNE_ACTIVE_1, 178188))
             {
@@ -760,7 +746,7 @@ bool GOHello_go_rune_MC(Player* pPlayer, GameObject* pGo)
             }
             break;
         }
-        case RUNE_SHAZZRAH:
+    case RUNE_SHAZZRAH:
         {
             if (!UpdateRune(pInstance, pGo, TYPE_SHAZZRAH, DATA_RUNE_ACTIVE_2, 178189))
             {
@@ -768,7 +754,7 @@ bool GOHello_go_rune_MC(Player* pPlayer, GameObject* pGo)
             }
             break;
         }
-        case RUNE_GOLEMAGG:
+    case RUNE_GOLEMAGG:
         {
             if (!UpdateRune(pInstance, pGo, TYPE_GOLEMAGG, DATA_RUNE_ACTIVE_3, 178190))
             {
@@ -776,7 +762,7 @@ bool GOHello_go_rune_MC(Player* pPlayer, GameObject* pGo)
             }
             break;
         }
-        case RUNE_GARR:
+    case RUNE_GARR:
         {
             if (!UpdateRune(pInstance, pGo, TYPE_GARR, DATA_RUNE_ACTIVE_4, 178191))
             {
@@ -784,7 +770,7 @@ bool GOHello_go_rune_MC(Player* pPlayer, GameObject* pGo)
             }
             break;
         }
-        case RUNE_MAGMADAR:
+    case RUNE_MAGMADAR:
         {
             if (!UpdateRune(pInstance, pGo, TYPE_MAGMADAR, DATA_RUNE_ACTIVE_5, 178192))
             {
@@ -792,7 +778,7 @@ bool GOHello_go_rune_MC(Player* pPlayer, GameObject* pGo)
             }
             break;
         }
-        case RUNE_GEHENNAS:
+    case RUNE_GEHENNAS:
         {
             if (!UpdateRune(pInstance, pGo, TYPE_GEHENNAS, DATA_RUNE_ACTIVE_6, 178193))
             {
@@ -802,19 +788,12 @@ bool GOHello_go_rune_MC(Player* pPlayer, GameObject* pGo)
         }
     }
 
-    if (pInstance->GetData(TYPE_RAGNAROS) == DONE ||
-        pInstance->GetData(DATA_DOMO_SPAWNED) == DONE)
+    if (pInstance->GetData(TYPE_RAGNAROS) == DONE || pInstance->GetData(DATA_DOMO_SPAWNED) == DONE)
     {
         return false;
     }
 
-    if (pInstance->GetData(DATA_RUNE_ACTIVE_0) != DONE ||
-        pInstance->GetData(DATA_RUNE_ACTIVE_1) != DONE ||
-        pInstance->GetData(DATA_RUNE_ACTIVE_2) != DONE ||
-        pInstance->GetData(DATA_RUNE_ACTIVE_3) != DONE ||
-        pInstance->GetData(DATA_RUNE_ACTIVE_4) != DONE ||
-        pInstance->GetData(DATA_RUNE_ACTIVE_5) != DONE ||
-        pInstance->GetData(DATA_RUNE_ACTIVE_6) != DONE)
+    if (pInstance->GetData(DATA_RUNE_ACTIVE_0) != DONE || pInstance->GetData(DATA_RUNE_ACTIVE_1) != DONE || pInstance->GetData(DATA_RUNE_ACTIVE_2) != DONE || pInstance->GetData(DATA_RUNE_ACTIVE_3) != DONE || pInstance->GetData(DATA_RUNE_ACTIVE_4) != DONE || pInstance->GetData(DATA_RUNE_ACTIVE_5) != DONE || pInstance->GetData(DATA_RUNE_ACTIVE_6) != DONE)
     {
         return false;
     }
@@ -846,10 +825,7 @@ bool GOHello_go_rune_MC(Player* pPlayer, GameObject* pGo)
     return false;
 }
 
-InstanceData* GetInstance_instance_molten_core(Map* pMap)
-{
-    return new instance_molten_core(pMap);
-}
+InstanceData* GetInstance_instance_molten_core(Map* pMap) { return new instance_molten_core(pMap); }
 
 void AddSC_instance_molten_core()
 {

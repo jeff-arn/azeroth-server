@@ -25,25 +25,19 @@ EndScriptData */
 
 enum : uint32
 {
-    SAY_SPAWN          = 6150,
+    SAY_SPAWN = 6150,
     SPELL_RAVENOUSCLAW = 17470,
-    SPELL_ENRAGE       = 8599,
-    TIMMY_ENTRY        = 10808
+    SPELL_ENRAGE = 8599,
+    TIMMY_ENTRY = 10808
 };
 
 struct boss_timmy_the_cruelAI : public ScriptedAI
 {
-    boss_timmy_the_cruelAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
+    boss_timmy_the_cruelAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
 
     uint32 m_uiRavenousClawTimer;
 
-    void Reset() override
-    {
-        m_uiRavenousClawTimer = 7000;
-    }
+    void Reset() override { m_uiRavenousClawTimer = 7000; }
 
     void UpdateAI(uint32 const diff) override
     {
@@ -66,16 +60,10 @@ struct boss_timmy_the_cruelAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 
-    void CorpseRemoved(uint32 &respawnDelay) override
-    {
-        m_creature->DeleteLater();
-    }
+    void CorpseRemoved(uint32& respawnDelay) override { m_creature->DeleteLater(); }
 };
 
-CreatureAI* GetAI_boss_timmy_the_cruel(Creature* pCreature)
-{
-    return new boss_timmy_the_cruelAI(pCreature);
-}
+CreatureAI* GetAI_boss_timmy_the_cruel(Creature* pCreature) { return new boss_timmy_the_cruelAI(pCreature); }
 
 struct npc_crimson_guardsmanAI : public ScriptedAI
 {
@@ -103,10 +91,7 @@ struct npc_crimson_guardsmanAI : public ScriptedAI
     {
         if (m_bIsTimmySpawner)
         {
-            Creature* pTimmy =
-                    m_creature->SummonCreature(TIMMY_ENTRY, 3614.7f, -3187.64f,
-                                               131.406f, 0.0f,
-                                               TEMPSUMMON_MANUAL_DESPAWN, 0);
+            Creature* pTimmy = m_creature->SummonCreature(TIMMY_ENTRY, 3614.7f, -3187.64f, 131.406f, 0.0f, TEMPSUMMON_MANUAL_DESPAWN, 0);
 
             if (pTimmy)
             {
@@ -160,10 +145,7 @@ struct npc_crimson_guardsmanAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_crimson_guardsman(Creature* pCreature)
-{
-    return new npc_crimson_guardsmanAI(pCreature);
-}
+CreatureAI* GetAI_npc_crimson_guardsman(Creature* pCreature) { return new npc_crimson_guardsmanAI(pCreature); }
 
 void AddSC_boss_timmy_the_cruel()
 {

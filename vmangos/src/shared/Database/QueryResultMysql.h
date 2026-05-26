@@ -33,18 +33,18 @@
 
 class QueryResultMysql : public QueryResult
 {
-    public:
-        QueryResultMysql(MYSQL_RES* result, MYSQL_FIELD* fields, uint64 rowCount, uint32 fieldCount);
+public:
+    QueryResultMysql(MYSQL_RES* result, MYSQL_FIELD* fields, uint64 rowCount, uint32 fieldCount);
 
-        ~QueryResultMysql() override;
+    ~QueryResultMysql() override;
 
-        bool NextRow() override;
+    bool NextRow() override;
 
-    private:
-        enum Field::DataTypes ConvertNativeType(enum_field_types mysqlType) const;
-        void EndQuery();
+private:
+    enum Field::DataTypes ConvertNativeType(enum_field_types mysqlType) const;
+    void EndQuery();
 
-        MYSQL_RES* mResult;
+    MYSQL_RES* mResult;
 };
 #endif
 #endif

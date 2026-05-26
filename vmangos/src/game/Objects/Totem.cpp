@@ -20,13 +20,13 @@
  */
 
 #include "Totem.h"
+#include "CreatureAI.h"
 #include "Group.h"
+#include "InstanceData.h"
+#include "Map.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 #include "SpellMgr.h"
-#include "CreatureAI.h"
-#include "InstanceData.h"
-#include "ObjectAccessor.h"
-#include "Map.h"
 
 Totem::Totem() : Creature(CREATURE_SUBTYPE_TOTEM)
 {
@@ -50,9 +50,9 @@ bool Totem::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* 
     if (!cPos.Relocate(this))
         return false;
 
-    //Notify the map's instance data.
-    //Only works if you create the object in it, not if it is moves to that map.
-    //Normally non-players do not teleport to other maps.
+    // Notify the map's instance data.
+    // Only works if you create the object in it, not if it is moves to that map.
+    // Normally non-players do not teleport to other maps.
     if (InstanceData* iData = GetMap()->GetInstanceData())
         iData->OnCreatureCreate(this);
 
@@ -66,13 +66,11 @@ bool Totem::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* 
 void Totem::Update(uint32 update_diff, uint32 time)
 {
     Unit* owner = GetOwner();
-    if (!owner || 
+    if (!owner ||
         // Don't unsummon if owner is a creature - let them persist after creature death
-        (owner->GetTypeId() != TYPEID_UNIT && !owner->IsAlive()) || 
-        !IsAlive() || 
-        !IsWithinVisibilityDistanceOf(owner, owner))
+        (owner->GetTypeId() != TYPEID_UNIT && !owner->IsAlive()) || !IsAlive() || !IsWithinVisibilityDistanceOf(owner, owner))
     {
-        UnSummon();                                         // remove self
+        UnSummon(); // remove self
         return;
     }
 
@@ -84,7 +82,7 @@ void Totem::Update(uint32 update_diff, uint32 time)
 
     if (m_duration <= update_diff)
     {
-        UnSummon();                                         // remove self
+        UnSummon(); // remove self
         return;
     }
 
@@ -105,7 +103,7 @@ void Totem::Summon(Unit* owner)
     if (!GetSpell())
         return;
 
-    if (m_type==TOTEM_PASSIVE)
+    if (m_type == TOTEM_PASSIVE)
     {
         CastSpell(this, GetSpell(), true);
     }
@@ -123,7 +121,7 @@ void Totem::UnSummon()
         owner->_RemoveTotem(this);
         owner->RemoveAurasDueToSpell(GetSpell());
 
-        //remove aura all party members too
+        // remove aura all party members too
         if (owner->GetTypeId() == TYPEID_PLAYER)
         {
             // Not only the player can summon the totem (scripted AI)
@@ -191,15 +189,15 @@ bool Totem::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex 
 
     switch (spellInfo->Effect[index])
     {
-        case SPELL_EFFECT_ATTACK_ME:
-        // immune to any type of regeneration effects hp/mana etc.
-        case SPELL_EFFECT_HEAL:
-        case SPELL_EFFECT_HEAL_MAX_HEALTH:
-        case SPELL_EFFECT_HEAL_MECHANICAL:
-        case SPELL_EFFECT_ENERGIZE:
-            return true;
-        default:
-            break;
+    case SPELL_EFFECT_ATTACK_ME:
+    // immune to any type of regeneration effects hp/mana etc.
+    case SPELL_EFFECT_HEAL:
+    case SPELL_EFFECT_HEAL_MAX_HEALTH:
+    case SPELL_EFFECT_HEAL_MECHANICAL:
+    case SPELL_EFFECT_ENERGIZE:
+        return true;
+    default:
+        break;
     }
 
     if (!spellInfo->IsPositiveSpell())

@@ -23,8 +23,8 @@
 #include "TransportMgr.h"
 
 #include <map>
-#include <set>
 #include <mutex>
+#include <set>
 
 typedef std::set<Unit*> PassengerSet;
 
@@ -48,16 +48,10 @@ public:
     PassengerSet& GetPassengers() { return m_passengers; }
 
     // This method transforms supplied transport offsets into global coordinates
-    void CalculatePassengerPosition(float& x, float& y, float& z, float* o = nullptr) const
-    {
-        CalculatePassengerPosition(x, y, z, o, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation());
-    }
+    void CalculatePassengerPosition(float& x, float& y, float& z, float* o = nullptr) const { CalculatePassengerPosition(x, y, z, o, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation()); }
 
     // This method transforms supplied global coordinates into local offsets
-    void CalculatePassengerOffset(float& x, float& y, float& z, float* o = nullptr) const
-    {
-        CalculatePassengerOffset(x, y, z, o, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation());
-    }
+    void CalculatePassengerOffset(float& x, float& y, float& z, float* o = nullptr) const { CalculatePassengerOffset(x, y, z, o, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation()); }
 
     void CalculatePassengerOrientation(float& o) const;
 
@@ -65,6 +59,7 @@ public:
     static void CalculatePassengerOffset(float& x, float& y, float& z, float* o, float transX, float transY, float transZ, float transO);
 
     uint32 GetPathProgress() const { return m_pathProgress; }
+
 protected:
     void UpdatePassengerPositions();
     uint32 GetTimeSinceCreation();
@@ -81,8 +76,7 @@ protected:
 class ElevatorTransport : public GenericTransport
 {
 public:
-    bool Create(uint32 guidlow, uint32 name_id, Map* map, float x, float y, float z, float ang,
-        float rotation0 = 0.0f, float rotation1 = 0.0f, float rotation2 = 0.0f, float rotation3 = 0.0f, uint32 animprogress = GO_ANIMPROGRESS_DEFAULT, GOState go_state = GO_STATE_READY) override;
+    bool Create(uint32 guidlow, uint32 name_id, Map* map, float x, float y, float z, float ang, float rotation0 = 0.0f, float rotation1 = 0.0f, float rotation2 = 0.0f, float rotation3 = 0.0f, uint32 animprogress = GO_ANIMPROGRESS_DEFAULT, GOState go_state = GO_STATE_READY) override;
     void Update(uint32 update_diff, uint32 /*time_diff*/) override;
 
 private:
@@ -103,9 +97,10 @@ public:
     void SetPeriod(uint32 period) { m_period = period; }
 
     KeyFrameVec const& GetKeyFrames() const { return m_transportTemplate.keyFrames; }
+
 private:
     bool TeleportTransport(uint32 newMapid, float x, float y, float z, float o);
-    void MoveToNextWayPoint();                          // move m_next/m_cur to next points
+    void MoveToNextWayPoint(); // move m_next/m_cur to next points
     float CalculateSegmentPos(float perc);
 
     bool IsMoving() const override { return m_isMoving; }
@@ -124,14 +119,8 @@ private:
     TransportTemplate const& m_transportTemplate;
 };
 
-inline GenericTransport* GameObject::ToTransport()
-{
-    return IsTransport() ? static_cast<GenericTransport*>(this) : nullptr;
-}
+inline GenericTransport* GameObject::ToTransport() { return IsTransport() ? static_cast<GenericTransport*>(this) : nullptr; }
 
-inline GenericTransport const* GameObject::ToTransport() const
-{
-    return IsTransport() ? static_cast<GenericTransport const*>(this) : nullptr;
-}
+inline GenericTransport const* GameObject::ToTransport() const { return IsTransport() ? static_cast<GenericTransport const*>(this) : nullptr; }
 
 #endif

@@ -1,9 +1,9 @@
 #ifndef MANGOS_BOT_BEHAVIOR_H
 #define MANGOS_BOT_BEHAVIOR_H
 
-#include "Common.h"
-#include <vector>
 #include <memory>
+#include <vector>
+#include "Common.h"
 
 struct SituationContext;
 class BotSpellKit;

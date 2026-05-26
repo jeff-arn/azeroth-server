@@ -14,25 +14,25 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
- /*
-  *
-  * This code was written by namreeb (legal@namreeb.org) and is released with
-  * permission as part of vmangos (https://github.com/vmangos/core)
-  *
-  */
+/*
+ *
+ * This code was written by namreeb (legal@namreeb.org) and is released with
+ * permission as part of vmangos (https://github.com/vmangos/core)
+ *
+ */
 
 #include "WardenScanMgr.hpp"
-#include "WardenScan.hpp"
 #include "Warden.hpp"
+#include "WardenScan.hpp"
 
-#include "Policies/SingletonImp.h"
 #include "Database/DatabaseEnv.h"
-#include "World.h"
 #include "Log.h"
+#include "Policies/SingletonImp.h"
+#include "World.h"
 
-#include <vector>
 #include <algorithm>
 #include <random>
+#include <vector>
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_5_1
 
@@ -40,45 +40,45 @@ INSTANTIATE_SINGLETON_1(WardenScanMgr);
 
 namespace
 {
-bool BuildRawData(std::string const& hexData, std::vector<uint8>& out)
-{
-    if (!!(hexData.length() % 2))
-        return false;
-
-    auto curr = hexData;
-
-    out.resize(hexData.length() / 2);
-
-    for (auto i = 0; i < out.size(); ++i)
+    bool BuildRawData(std::string const& hexData, std::vector<uint8>& out)
     {
-        auto const byte = curr.substr(0, 2);
-        curr = curr.substr(2);
-
-        auto const a = byte[0];
-        auto const b = byte[1];
-
-        unsigned int an;
-        if (a >= '0' && a <= '9')
-            an = a - '0';
-        else if (a >= 'A' && a <= 'F')
-            an = 10 + a - 'A';
-        else
+        if (!!(hexData.length() % 2))
             return false;
 
-        unsigned int bn;
-        if (b >= '0' && b <= '9')
-            bn = b - '0';
-        else if (b >= 'A' && b <= 'F')
-            bn = 10 + b - 'A';
-        else
-            return false;
+        auto curr = hexData;
 
-        out[i] = static_cast<uint8>(an * 16 + bn);
+        out.resize(hexData.length() / 2);
+
+        for (auto i = 0; i < out.size(); ++i)
+        {
+            auto const byte = curr.substr(0, 2);
+            curr = curr.substr(2);
+
+            auto const a = byte[0];
+            auto const b = byte[1];
+
+            unsigned int an;
+            if (a >= '0' && a <= '9')
+                an = a - '0';
+            else if (a >= 'A' && a <= 'F')
+                an = 10 + a - 'A';
+            else
+                return false;
+
+            unsigned int bn;
+            if (b >= '0' && b <= '9')
+                bn = b - '0';
+            else if (b >= 'A' && b <= 'F')
+                bn = 10 + b - 'A';
+            else
+                return false;
+
+            out[i] = static_cast<uint8>(an * 16 + bn);
+        }
+
+        return true;
     }
-
-    return true;
-}
-}
+} // namespace
 
 void WardenScanMgr::LoadFromDB()
 {
@@ -92,7 +92,7 @@ void WardenScanMgr::LoadFromDB()
     }
 
     // copy any non-database scans into a placeholder
-    std::vector<std::shared_ptr<Scan const> > new_scans;
+    std::vector<std::shared_ptr<Scan const>> new_scans;
     new_scans.reserve(m_scans.size());
 
     for (auto const& s : m_scans)
@@ -129,7 +129,7 @@ void WardenScanMgr::LoadFromDB()
 
         switch (scanType)
         {
-            case READ_MEMORY:
+        case READ_MEMORY:
             {
                 std::vector<uint8> expected;
 
@@ -150,7 +150,7 @@ void WardenScanMgr::LoadFromDB()
                 break;
             }
 
-            case FIND_MODULE_BY_NAME:
+        case FIND_MODULE_BY_NAME:
             {
                 auto const moduleName = fields[2].GetCppString();
                 auto const wanted = fields[6].GetBool();
@@ -159,8 +159,8 @@ void WardenScanMgr::LoadFromDB()
                 break;
             }
 
-            case FIND_MEM_IMAGE_CODE_BY_HASH:
-            case FIND_CODE_BY_HASH:
+        case FIND_MEM_IMAGE_CODE_BY_HASH:
+        case FIND_CODE_BY_HASH:
             {
                 auto const wanted = fields[6].GetBool();
 
@@ -175,7 +175,7 @@ void WardenScanMgr::LoadFromDB()
                 break;
             }
 
-            case HASH_CLIENT_FILE:
+        case HASH_CLIENT_FILE:
             {
                 auto const filename = fields[2].GetCppString();
 
@@ -199,7 +199,7 @@ void WardenScanMgr::LoadFromDB()
                 break;
             }
 
-            case GET_LUA_VARIABLE:
+        case GET_LUA_VARIABLE:
             {
                 auto const variable = fields[2].GetCppString();
                 auto const expected = fields[3].GetCppString();
@@ -212,7 +212,7 @@ void WardenScanMgr::LoadFromDB()
                 break;
             }
 
-            case API_CHECK:
+        case API_CHECK:
             {
                 auto const module = fields[2].GetCppString();
                 auto const proc = fields[3].GetCppString();
@@ -230,7 +230,7 @@ void WardenScanMgr::LoadFromDB()
                 break;
             }
 
-            case FIND_DRIVER_BY_NAME:
+        case FIND_DRIVER_BY_NAME:
             {
                 auto const driver = fields[2].GetCppString();
                 auto const path = fields[3].GetCppString();
@@ -240,7 +240,7 @@ void WardenScanMgr::LoadFromDB()
                 break;
             }
 
-            default:
+        default:
             {
                 sLog.Out(LOG_ANTICHEAT, LOG_LVL_ERROR, "Unhandled Warden scan type %u id %u.  Skipped.", scanType, id);
                 continue;
@@ -259,30 +259,19 @@ void WardenScanMgr::LoadFromDB()
         }
 
         m_scans.emplace_back(std::shared_ptr<Scan const>(scan));
-    } while (result->NextRow());
+    }
+    while (result->NextRow());
 
     sLog.Out(LOG_ANTICHEAT, LOG_LVL_MINIMAL, ">> %u Warden scans loaded from world database", m_scans.size());
 }
 
-void WardenScanMgr::AddMacScan(MacScan const* scan)
-{
-    m_scans.push_back(std::shared_ptr<MacScan const>(scan));
-}
+void WardenScanMgr::AddMacScan(MacScan const* scan) { m_scans.push_back(std::shared_ptr<MacScan const>(scan)); }
 
-void WardenScanMgr::AddMacScan(std::shared_ptr<MacScan> scan)
-{
-    m_scans.push_back(scan);
-}
+void WardenScanMgr::AddMacScan(std::shared_ptr<MacScan> scan) { m_scans.push_back(scan); }
 
-void WardenScanMgr::AddWindowsScan(WindowsScan const* scan)
-{
-    m_scans.push_back(std::shared_ptr<WindowsScan const>(scan));
-}
+void WardenScanMgr::AddWindowsScan(WindowsScan const* scan) { m_scans.push_back(std::shared_ptr<WindowsScan const>(scan)); }
 
-void WardenScanMgr::AddWindowsScan(std::shared_ptr<WindowsScan> scan)
-{
-    m_scans.push_back(scan);
-}
+void WardenScanMgr::AddWindowsScan(std::shared_ptr<WindowsScan> scan) { m_scans.push_back(scan); }
 
 std::vector<std::shared_ptr<Scan const>> WardenScanMgr::GetRandomScans(ScanFlags flags, uint32 build) const
 {
@@ -311,7 +300,7 @@ std::vector<std::shared_ptr<Scan const>> WardenScanMgr::GetRandomScans(ScanFlags
             continue;
 
         // if the scan is an in-world scan, and that wasn't explicitly requested, do not include it
-        //if (!!(scan->flags & InWorld) && !(flags & InWorld))
+        // if (!!(scan->flags & InWorld) && !(flags & InWorld))
         //    continue;
 
         // if the scan requires the module to be initialized, and it's not initialized, do not request it

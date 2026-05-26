@@ -1,29 +1,29 @@
 /*
-* Copyright (C) 2017 Elysium Project <https://github.com/elysium-project>
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * Copyright (C) 2017 Elysium Project <https://github.com/elysium-project>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 #include "InstanceStatistics.h"
-#include "Policies/Singleton.h"
-#include "Database/DatabaseEnv.h"
-#include "Policies/SingletonImp.h"
-#include "Map.h"
 #include "Creature.h"
-#include "SpellEntry.h"
+#include "Database/DatabaseEnv.h"
+#include "Map.h"
+#include "Policies/Singleton.h"
+#include "Policies/SingletonImp.h"
 #include "ProgressBar.h"
+#include "SpellEntry.h"
 
 INSTANTIATE_SINGLETON_1(InstanceStatisticsMgr);
 
@@ -53,9 +53,10 @@ void InstanceStatisticsMgr::LoadFromDB()
             uint32 creatureEntry = fields[1].GetUInt32();
             uint32 killCount = fields[2].GetUInt32();
 
-            m_instanceWipes[std::make_pair(mapId, creatureEntry)] = InstanceWipes{ mapId,creatureEntry,killCount };
+            m_instanceWipes[std::make_pair(mapId, creatureEntry)] = InstanceWipes{mapId, creatureEntry, killCount};
             ++count;
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u entries from `instance_wipes`", count);
@@ -100,12 +101,12 @@ void InstanceStatisticsMgr::LoadFromDB()
                 it->second.killsBySpells[spellEntry] = killCount;
             }
             ++count;
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u entries from `instance_creature_kills`", count);
     }
-
 
 
     m_instanceCustomCounters.clear();
@@ -133,7 +134,8 @@ void InstanceStatisticsMgr::LoadFromDB()
             uint32 count = fields[1].GetUInt32();
             m_instanceCustomCounters[index] = count;
             ++count;
-        } while (result->NextRow());
+        }
+        while (result->NextRow());
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u entries from `instance_custom_counters`", count);
@@ -148,10 +150,11 @@ void InstanceStatisticsMgr::IncrementWipeCounter(uint32 mapId, uint32 creatureEn
     if (it == m_instanceWipes.end())
     {
         count = 1;
-        InstanceWipes obj{ mapId,creatureEntry, count };
+        InstanceWipes obj{mapId, creatureEntry, count};
         m_instanceWipes[std::make_pair(mapId, creatureEntry)] = obj;
     }
-    else {
+    else
+    {
         it->second.count++;
         count = it->second.count;
     }
@@ -184,7 +187,8 @@ void InstanceStatisticsMgr::IncrementKillCounter(Creature* pKiller, Player* pVic
         obj.killsBySpells[spellId] = count;
         m_instanceCreatureKills.insert(std::make_pair(std::make_pair(mapId, creatureEntry), std::move(obj)));
     }
-    else {
+    else
+    {
         auto it2 = it->second.killsBySpells.find(spellId);
         if (it2 == it->second.killsBySpells.end())
         {
@@ -198,7 +202,7 @@ void InstanceStatisticsMgr::IncrementKillCounter(Creature* pKiller, Player* pVic
     }
     lock.unlock();
 
-    Save(mapId,creatureEntry,spellId,count);
+    Save(mapId, creatureEntry, spellId, count);
 }
 
 void InstanceStatisticsMgr::IncrementCustomCounter(eInstanceCustomCounter index, bool save)
@@ -230,17 +234,15 @@ void InstanceStatisticsMgr::IncrementCustomCounter(eInstanceCustomCounter index,
 void InstanceStatisticsMgr::Save(uint32 mapId, uint32 creatureEntry, uint32 spellId, uint32 count)
 {
     LogsDatabase.BeginTransaction();
-    LogsDatabase.PExecute("DELETE FROM `instance_creature_kills` WHERE `mapId` = %u and `creatureEntry` = %u and `spellEntry` = %u",
-        mapId, creatureEntry, spellId);
-    LogsDatabase.PExecute("INSERT INTO `instance_creature_kills` (`mapId`, `creatureEntry`, `spellEntry`, `count`) VALUES (%u, %u, %u, %u)",
-        mapId, creatureEntry, spellId, count);
+    LogsDatabase.PExecute("DELETE FROM `instance_creature_kills` WHERE `mapId` = %u and `creatureEntry` = %u and `spellEntry` = %u", mapId, creatureEntry, spellId);
+    LogsDatabase.PExecute("INSERT INTO `instance_creature_kills` (`mapId`, `creatureEntry`, `spellEntry`, `count`) VALUES (%u, %u, %u, %u)", mapId, creatureEntry, spellId, count);
     LogsDatabase.CommitTransaction();
 }
 
 void InstanceStatisticsMgr::Save(uint32 mapId, uint32 creatureEntry, uint32 count)
 {
     LogsDatabase.BeginTransaction();
-    LogsDatabase.PExecute("DELETE FROM `instance_wipes` WHERE `mapId` = %u and `creatureEntry` = %u",  mapId, creatureEntry);
+    LogsDatabase.PExecute("DELETE FROM `instance_wipes` WHERE `mapId` = %u and `creatureEntry` = %u", mapId, creatureEntry);
     LogsDatabase.PExecute("INSERT INTO `instance_wipes` (`mapId`, `creatureEntry`, `count`) VALUES (%u, %u, %u)", mapId, creatureEntry, count);
     LogsDatabase.CommitTransaction();
 }

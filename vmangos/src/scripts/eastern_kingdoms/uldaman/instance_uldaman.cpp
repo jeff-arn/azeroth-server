@@ -27,10 +27,7 @@
 
 struct instance_uldaman : public ScriptedInstance
 {
-    instance_uldaman(Map* pMap) : ScriptedInstance(pMap)
-    {
-        Initialize();
-    };
+    instance_uldaman(Map* pMap) : ScriptedInstance(pMap) { Initialize(); };
 
     uint32 m_auiEncounter[ULDAMAN_MAX_ENCOUNTER];
     std::string strInstData;
@@ -53,7 +50,7 @@ struct instance_uldaman : public ScriptedInstance
     std::vector<uint64> vVaultWarder;
     std::vector<uint64> vVaultWarderFurniture;
     std::vector<uint64> vEarthenGuardian;
-    std::vector<uint64> vArchaedasWallMinions; //Minions lined up around the wall
+    std::vector<uint64> vArchaedasWallMinions; // Minions lined up around the wall
 
     void Initialize() override
     {
@@ -68,7 +65,7 @@ struct instance_uldaman : public ScriptedInstance
         uiAncientVaultDoor = 0;
         uiIronayaSealDoor = 0;
         uiKeystoneGUID = 0;
-        uiIronayaSealDoorTimer = 27000; //animation time
+        uiIronayaSealDoorTimer = 27000; // animation time
         bKeystoneCheck = false;
         vVaultWarder.reserve(2);
         vVaultWarderFurniture.reserve(2);
@@ -93,88 +90,88 @@ struct instance_uldaman : public ScriptedInstance
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_STONE_KEEPER:
-                vStoneKeeper.push_back(pCreature->GetGUID());
-                if (m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] != DONE)
-                    RespawnMinion(pCreature->GetGUID());
-                break;
-            case NPC_EARTHEN_CUSTODIAN:
-                vArchaedasWallMinions.push_back(pCreature->GetGUID());
+        case NPC_STONE_KEEPER:
+            vStoneKeeper.push_back(pCreature->GetGUID());
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] != DONE)
+                RespawnMinion(pCreature->GetGUID());
+            break;
+        case NPC_EARTHEN_CUSTODIAN:
+            vArchaedasWallMinions.push_back(pCreature->GetGUID());
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] != DONE)
+                RespawnMinion(pCreature->GetGUID());
+            break;
+        case NPC_EARTHEN_HALLSHAPER:
+            vArchaedasWallMinions.push_back(pCreature->GetGUID());
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] != DONE)
+                RespawnMinion(pCreature->GetGUID());
+            break;
+        case NPC_EARTHEN_GUARDIAN:
+            vEarthenGuardian.push_back(pCreature->GetGUID());
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] != DONE)
+                RespawnMinion(pCreature->GetGUID());
+            break;
+        case NPC_IRONAYA:
+            uiIronayaGUID = pCreature->GetGUID();
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR] != DONE)
+            {
+                SetFrozenState(pCreature);
+            }
+            break;
+        case NPC_VAULT_WARDER:
+            // Only take the ones inside Archaedas room
+            if (pCreature->IsWithinDist2d(104, 272, 35.0f))
+            {
+                vVaultWarder.push_back(pCreature->GetGUID());
                 if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] != DONE)
                     RespawnMinion(pCreature->GetGUID());
-                break;
-            case NPC_EARTHEN_HALLSHAPER:
-                vArchaedasWallMinions.push_back(pCreature->GetGUID());
-                if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] != DONE)
-                    RespawnMinion(pCreature->GetGUID());
-                break;
-            case NPC_EARTHEN_GUARDIAN:
-                vEarthenGuardian.push_back(pCreature->GetGUID());
-                if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] != DONE)
-                    RespawnMinion(pCreature->GetGUID());
-                break;
-            case NPC_IRONAYA:
-                uiIronayaGUID = pCreature->GetGUID();
-                if (m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR] != DONE)
-                {
-                    SetFrozenState(pCreature);
-                }
-                break;
-            case NPC_VAULT_WARDER:
-                // Only take the ones inside Archaedas room
-                if (pCreature->IsWithinDist2d(104, 272, 35.0f))
-                {
-                    vVaultWarder.push_back(pCreature->GetGUID());
-                    if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] != DONE)
-                        RespawnMinion(pCreature->GetGUID());
-                }
-                else
-                    vVaultWarderFurniture.push_back(pCreature->GetGUID());
-                break;
-            case NPC_ARCHAEDAS:
-                uiArchaedasGUID = pCreature->GetGUID();
-                break;
+            }
+            else
+                vVaultWarderFurniture.push_back(pCreature->GetGUID());
+            break;
+        case NPC_ARCHAEDAS:
+            uiArchaedasGUID = pCreature->GetGUID();
+            break;
         }
     }
 
     void OnObjectCreate(GameObject* pGo) override
     {
-        //sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "%s %u",pGo->GetNameForLocaleIdx(0),pGo->GetEntry());
+        // sLog.Out(LOG_SCRIPTS, LOG_LVL_ERROR, "%s %u",pGo->GetNameForLocaleIdx(0),pGo->GetEntry());
         switch (pGo->GetEntry())
         {
-            case GO_ALTAR_ARCHAEDAS:
-                uiAltarOfArchaedas = pGo->GetGUID();
-                break;
-            case GO_ALTAR_KEEPERS:
-                uiAltarOfTheKeeper = pGo->GetGUID();
-                break;
-            case GO_ALTAR_OF_THE_KEEPER_TEMPLE_DOOR:
-                uiAltarOfTheKeeperTempleDoor = pGo->GetGUID();
-                if (m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] == DONE)
-                    pGo->UseDoorOrButton(0, false);
-                break;
-            case GO_ARCHAEDAS_TEMPLE_DOOR:
-                uiArchaedasTempleDoor = pGo->GetGUID();
-                if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] == DONE)
-                    pGo->UseDoorOrButton(0, false);
-                break;
-            case GO_ANCIENT_VAULT_DOOR:
-                pGo->SetGoState(GO_STATE_READY);
-                pGo->SetUInt32Value(GAMEOBJECT_FLAGS, 33);
-                uiAncientVaultDoor = pGo->GetGUID();
-                if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] == DONE)
-                    pGo->UseDoorOrButton(0, false);
-                break;
-            case GO_IRONAYA_SEAL_DOOR:
-                uiIronayaSealDoor = pGo->GetGUID();
-                if (m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR] == DONE)
-                    pGo->UseDoorOrButton(0, false);
-                break;
-            case GO_KEYSTONE:
-                uiKeystoneGUID = pGo->GetGUID();
-                if (m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR] == DONE)
-                    pGo->SetUInt32Value(GAMEOBJECT_FLAGS, GO_FLAG_INTERACT_COND);
-                break;
+        case GO_ALTAR_ARCHAEDAS:
+            uiAltarOfArchaedas = pGo->GetGUID();
+            break;
+        case GO_ALTAR_KEEPERS:
+            uiAltarOfTheKeeper = pGo->GetGUID();
+            break;
+        case GO_ALTAR_OF_THE_KEEPER_TEMPLE_DOOR:
+            uiAltarOfTheKeeperTempleDoor = pGo->GetGUID();
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] == DONE)
+                pGo->UseDoorOrButton(0, false);
+            break;
+        case GO_ARCHAEDAS_TEMPLE_DOOR:
+            uiArchaedasTempleDoor = pGo->GetGUID();
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] == DONE)
+                pGo->UseDoorOrButton(0, false);
+            break;
+        case GO_ANCIENT_VAULT_DOOR:
+            pGo->SetGoState(GO_STATE_READY);
+            pGo->SetUInt32Value(GAMEOBJECT_FLAGS, 33);
+            uiAncientVaultDoor = pGo->GetGUID();
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] == DONE)
+                pGo->UseDoorOrButton(0, false);
+            break;
+        case GO_IRONAYA_SEAL_DOOR:
+            uiIronayaSealDoor = pGo->GetGUID();
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR] == DONE)
+                pGo->UseDoorOrButton(0, false);
+            break;
+        case GO_KEYSTONE:
+            uiKeystoneGUID = pGo->GetGUID();
+            if (m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR] == DONE)
+                pGo->SetUInt32Value(GAMEOBJECT_FLAGS, GO_FLAG_INTERACT_COND);
+            break;
         }
     }
 
@@ -247,18 +244,30 @@ struct instance_uldaman : public ScriptedInstance
 
     uint64 GetData64(uint32 uiData) override
     {
-        if (uiData == 0) return uiWhoWokeIronayaGUID;
-        if (uiData == 1) return vVaultWarder[0]; // VaultWarder1
-        if (uiData == 2) return vVaultWarder[1]; // VaultWarder2
-        if (uiData == 5) return vEarthenGuardian[0];
-        if (uiData == 6) return vEarthenGuardian[1];
-        if (uiData == 7) return vEarthenGuardian[2];
-        if (uiData == 8) return vEarthenGuardian[3];
-        if (uiData == 9) return vEarthenGuardian[4];
-        if (uiData == 10) return vEarthenGuardian[5];
-        if (uiData == 11) return uiArchaedasGUID;
-        if (uiData == 12) return vVaultWarderFurniture[0];
-        if (uiData == 13) return vVaultWarderFurniture[1];
+        if (uiData == 0)
+            return uiWhoWokeIronayaGUID;
+        if (uiData == 1)
+            return vVaultWarder[0]; // VaultWarder1
+        if (uiData == 2)
+            return vVaultWarder[1]; // VaultWarder2
+        if (uiData == 5)
+            return vEarthenGuardian[0];
+        if (uiData == 6)
+            return vEarthenGuardian[1];
+        if (uiData == 7)
+            return vEarthenGuardian[2];
+        if (uiData == 8)
+            return vEarthenGuardian[3];
+        if (uiData == 9)
+            return vEarthenGuardian[4];
+        if (uiData == 10)
+            return vEarthenGuardian[5];
+        if (uiData == 11)
+            return uiArchaedasGUID;
+        if (uiData == 12)
+            return vVaultWarderFurniture[0];
+        if (uiData == 13)
+            return vVaultWarderFurniture[1];
 
         return 0;
     }
@@ -267,143 +276,143 @@ struct instance_uldaman : public ScriptedInstance
     {
         switch (uiType)
         {
-            case ULDAMAN_ENCOUNTER_IRONAYA_DOOR:
-                if (uiData == DONE)
-                {
-                    bKeystoneCheck = true;
-                    m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR] = uiData;
-                }
+        case ULDAMAN_ENCOUNTER_IRONAYA_DOOR:
+            if (uiData == DONE)
+            {
+                bKeystoneCheck = true;
+                m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR] = uiData;
+            }
+            break;
+        case DATA_KEEPERS_ALTAR:
+            if (uiData == IN_PROGRESS)
+            {
+                if (GameObject* pGo = instance->GetGameObject(uiAltarOfTheKeeper))
+                    pGo->SetGoState(GO_STATE_ACTIVE);
+            }
+            else if (uiData == NOT_STARTED)
+            {
+                if (GameObject* pGo = instance->GetGameObject(uiAltarOfTheKeeper))
+                    pGo->SetGoState(GO_STATE_READY);
+            }
+            break;
+        case ULDAMAN_ENCOUNTER_STONE_KEEPERS:
+            switch (uiData)
+            {
+            case DONE:
+                m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] = uiData;
+                DoOpenDoor(uiAltarOfTheKeeperTempleDoor);
                 break;
-            case DATA_KEEPERS_ALTAR :
-                if (uiData == IN_PROGRESS)
+            case IN_PROGRESS:
                 {
-                    if(GameObject* pGo = instance->GetGameObject(uiAltarOfTheKeeper))
-                        pGo->SetGoState(GO_STATE_ACTIVE);
-                }
-                else if (uiData == NOT_STARTED)
-                {
-                    if(GameObject* pGo = instance->GetGameObject(uiAltarOfTheKeeper))
-                        pGo->SetGoState(GO_STATE_READY);
-                }
-                break;
-            case ULDAMAN_ENCOUNTER_STONE_KEEPERS:
-                switch (uiData)
-                {
-                    case DONE:
-                        m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] = uiData;
-                        DoOpenDoor(uiAltarOfTheKeeperTempleDoor);
-                        break;
-                    case IN_PROGRESS:
+                    m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] = uiData;
+                    /** Check the list of Stone Keeper created at instance creation */
+                    Creature* target = nullptr;
+                    bool encounterDone = true;
+                    for (const auto& guid : vStoneKeeper)
                     {
-                        m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] = uiData;
-                        /** Check the list of Stone Keeper created at instance creation */
-                        Creature* target = nullptr;
-                        bool encounterDone = true;
-                        for (const auto& guid : vStoneKeeper)
-                        {
-                            Creature* current = instance->GetCreature(guid);
+                        Creature* current = instance->GetCreature(guid);
 
-                            /* Do nothing if one is already alive and awaken */
-                            if (current && current->IsAlive() && !current->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC))
-                            {
-                                target = nullptr;
-                                encounterDone = false;
-                                break;
-                            }
-                            /* Save a creature that can be awaken for later */
-                            if (!target && current && current->IsAlive() && current->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC))
-                            {
-                                target = current;
-                            }
-                        }
-                        if (target)
+                        /* Do nothing if one is already alive and awaken */
+                        if (current && current->IsAlive() && !current->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC))
                         {
+                            target = nullptr;
                             encounterDone = false;
-                            /** Creature become alive */
-                            SetUnFrozenState(target);
-                            target->SetFactionTemporary(470, TEMPFACTION_RESTORE_RESPAWN | TEMPFACTION_RESTORE_COMBAT_STOP);
-                            if (Unit* victim = target->SelectNearestTarget(80.0f))
-                            {
-                                target->AI()->AttackStart(victim);
-                            }
-                            else
-                            {
-                                SetData(ULDAMAN_ENCOUNTER_STONE_KEEPERS, FAIL);
-                            }
+                            break;
                         }
-                        if (encounterDone)
-                            SetData(ULDAMAN_ENCOUNTER_STONE_KEEPERS, DONE); //Open the doors
-                        break;
-                    }
-                    case FAIL:
-                        m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] = uiData;
-                        for (const auto& guid : vStoneKeeper)
+                        /* Save a creature that can be awaken for later */
+                        if (!target && current && current->IsAlive() && current->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC))
                         {
-                            Creature* target = instance->GetCreature(guid);
-                            if (!target)
-                            {
-                                continue;
-                            }
-                            if (target->IsDead())
-                            {
-                                target->Respawn();
-                                SetFrozenState(target);
-                            }
-                            else if (!target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC))
-                            {
-                                target->SetDeathState(JUST_DIED);
-                                target->RemoveCorpse();
-                                target->Respawn();
-                                SetFrozenState(target);
-                            }
+                            target = current;
                         }
-                        break;
-                    default:
-                        m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] = uiData;
-                        break;
-                }
-                break;
-            case DATA_ANCIENT_DOOR:
-                if (uiData == DONE) //archeadas defeat
-                {
-                    DoOpenDoor(uiArchaedasTempleDoor); //re open entrance
-                    DoOpenDoor(uiAncientVaultDoor);
-                }
-                else if (uiData == FAIL)
-                {
-                    DoOpenDoor(uiArchaedasTempleDoor);
-                    if (GameObject* pGo = GetGameObject(uiArchaedasTempleDoor))
-                        pGo->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
-                }
-                else if (uiData == IN_PROGRESS)
-                {
-                    DoResetDoor(uiArchaedasTempleDoor); //reset the door
-                    if (GameObject* pGo = GetGameObject(uiArchaedasTempleDoor))
-                        pGo->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
-                }
-                break;
-            case DATA_ARCHAEDAS_ALTAR :
-                if (uiData == IN_PROGRESS)
-                {
-                    if(GameObject* pGo = instance->GetGameObject(uiAltarOfArchaedas))
+                    }
+                    if (target)
                     {
-                        pGo->SetGoState(GO_STATE_ACTIVE);
+                        encounterDone = false;
+                        /** Creature become alive */
+                        SetUnFrozenState(target);
+                        target->SetFactionTemporary(470, TEMPFACTION_RESTORE_RESPAWN | TEMPFACTION_RESTORE_COMBAT_STOP);
+                        if (Unit* victim = target->SelectNearestTarget(80.0f))
+                        {
+                            target->AI()->AttackStart(victim);
+                        }
+                        else
+                        {
+                            SetData(ULDAMAN_ENCOUNTER_STONE_KEEPERS, FAIL);
+                        }
+                    }
+                    if (encounterDone)
+                        SetData(ULDAMAN_ENCOUNTER_STONE_KEEPERS, DONE); // Open the doors
+                    break;
+                }
+            case FAIL:
+                m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] = uiData;
+                for (const auto& guid : vStoneKeeper)
+                {
+                    Creature* target = instance->GetCreature(guid);
+                    if (!target)
+                    {
+                        continue;
+                    }
+                    if (target->IsDead())
+                    {
+                        target->Respawn();
+                        SetFrozenState(target);
+                    }
+                    else if (!target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC))
+                    {
+                        target->SetDeathState(JUST_DIED);
+                        target->RemoveCorpse();
+                        target->Respawn();
+                        SetFrozenState(target);
                     }
                 }
-                else if (uiData == NOT_STARTED)
-                {
-                    if(GameObject* pGo = instance->GetGameObject(uiAltarOfArchaedas))
-                    {
-                        pGo->SetGoState(GO_STATE_READY);
-                    }
-                }
                 break;
-            case ULDAMAN_ENCOUNTER_ARCHAEDAS:
+            default:
+                m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS] = uiData;
+                break;
+            }
+            break;
+        case DATA_ANCIENT_DOOR:
+            if (uiData == DONE) // archeadas defeat
+            {
+                DoOpenDoor(uiArchaedasTempleDoor); // re open entrance
+                DoOpenDoor(uiAncientVaultDoor);
+            }
+            else if (uiData == FAIL)
+            {
+                DoOpenDoor(uiArchaedasTempleDoor);
+                if (GameObject* pGo = GetGameObject(uiArchaedasTempleDoor))
+                    pGo->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
+            }
+            else if (uiData == IN_PROGRESS)
+            {
+                DoResetDoor(uiArchaedasTempleDoor); // reset the door
+                if (GameObject* pGo = GetGameObject(uiArchaedasTempleDoor))
+                    pGo->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
+            }
+            break;
+        case DATA_ARCHAEDAS_ALTAR:
+            if (uiData == IN_PROGRESS)
+            {
+                if (GameObject* pGo = instance->GetGameObject(uiAltarOfArchaedas))
+                {
+                    pGo->SetGoState(GO_STATE_ACTIVE);
+                }
+            }
+            else if (uiData == NOT_STARTED)
+            {
+                if (GameObject* pGo = instance->GetGameObject(uiAltarOfArchaedas))
+                {
+                    pGo->SetGoState(GO_STATE_READY);
+                }
+            }
+            break;
+        case ULDAMAN_ENCOUNTER_ARCHAEDAS:
             {
                 Creature* archaedas = instance->GetCreature(uiArchaedasGUID);
                 switch (uiData)
                 {
-                    case IN_PROGRESS: // Event is started
+                case IN_PROGRESS: // Event is started
                     {
                         if (m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] != IN_PROGRESS)
                         {
@@ -435,59 +444,58 @@ struct instance_uldaman : public ScriptedInstance
                         m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] = uiData;
                         break;
                     }
-                    case NOT_STARTED: // Archaedas reaches his spawn point
-                        // respawn any aggroed wall minions
-                        for (const auto& i : vArchaedasWallMinions)
-                            RespawnMinion(i);
-                        // Vault Warders
-                        for (const auto& i : vVaultWarder)
-                            RespawnMinion(i);
-                        // Earthen Guardians
-                        for (const auto& i : vEarthenGuardian)
-                            RespawnMinion(i);
-                        // Furniture
-                        for (const auto& i : vVaultWarderFurniture)
-                        {
-                            Creature* target = instance->GetCreature(i);
-                            if (target && target->IsDespawned())
-                                target->Respawn();
-                        }
-                        if (archaedas)
-                            SetFrozenState(archaedas);
-                        m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] = uiData;
-                        break;
-                    case FAIL: // Archaedas resets and moves towards his spawn point
-                        m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] = uiData;
-                        SetData(DATA_ANCIENT_DOOR, FAIL); // open the temple door
-                        break;
-                    case DONE: // Archaedas is dead
-                        m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] = uiData;
-                        // remove anything that isn't dead
-                        // Wall minions
-                        for (const auto& i : vArchaedasWallMinions)
-                            DespawnMinion(i);
-                        // Vault Warders
-                        for (const auto& i : vVaultWarder)
-                            DespawnMinion(i);
-                        // Earthen Guardians
-                        for (const auto& i : vEarthenGuardian)
-                            DespawnMinion(i);
-                        // Furniture
-                        for (const auto& i : vVaultWarderFurniture)
-                        {
-                            Creature* target = instance->GetCreature(i);
-                            if (target && target->IsDespawned())
-                                target->Respawn();
-                        }
-                        // Open the Vault door
-                        SetData(DATA_ANCIENT_DOOR, DONE);
-                        // Summon Ancient Treasure
-                        instance->SummonGameObject(GO_ANCIENT_TREASURE, 153.39f, 289.091f, -52.2262f, 2.68781f,
-                                0, 0, 0.97437f, 0.224951f, -1, 0);
-                        break;
-                    default:
-                        m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] = uiData;
-                        break;
+                case NOT_STARTED: // Archaedas reaches his spawn point
+                    // respawn any aggroed wall minions
+                    for (const auto& i : vArchaedasWallMinions)
+                        RespawnMinion(i);
+                    // Vault Warders
+                    for (const auto& i : vVaultWarder)
+                        RespawnMinion(i);
+                    // Earthen Guardians
+                    for (const auto& i : vEarthenGuardian)
+                        RespawnMinion(i);
+                    // Furniture
+                    for (const auto& i : vVaultWarderFurniture)
+                    {
+                        Creature* target = instance->GetCreature(i);
+                        if (target && target->IsDespawned())
+                            target->Respawn();
+                    }
+                    if (archaedas)
+                        SetFrozenState(archaedas);
+                    m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] = uiData;
+                    break;
+                case FAIL: // Archaedas resets and moves towards his spawn point
+                    m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] = uiData;
+                    SetData(DATA_ANCIENT_DOOR, FAIL); // open the temple door
+                    break;
+                case DONE: // Archaedas is dead
+                    m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] = uiData;
+                    // remove anything that isn't dead
+                    // Wall minions
+                    for (const auto& i : vArchaedasWallMinions)
+                        DespawnMinion(i);
+                    // Vault Warders
+                    for (const auto& i : vVaultWarder)
+                        DespawnMinion(i);
+                    // Earthen Guardians
+                    for (const auto& i : vEarthenGuardian)
+                        DespawnMinion(i);
+                    // Furniture
+                    for (const auto& i : vVaultWarderFurniture)
+                    {
+                        Creature* target = instance->GetCreature(i);
+                        if (target && target->IsDespawned())
+                            target->Respawn();
+                    }
+                    // Open the Vault door
+                    SetData(DATA_ANCIENT_DOOR, DONE);
+                    // Summon Ancient Treasure
+                    instance->SummonGameObject(GO_ANCIENT_TREASURE, 153.39f, 289.091f, -52.2262f, 2.68781f, 0, 0, 0.97437f, 0.224951f, -1, 0);
+                    break;
+                default:
+                    m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS] = uiData;
+                    break;
                 }
             }
         }
@@ -503,10 +511,7 @@ struct instance_uldaman : public ScriptedInstance
         }
     }
 
-    char const* Save() override
-    {
-        return strInstData.c_str();
-    }
+    char const* Save() override { return strInstData.c_str(); }
 
     void Load(char const* chrIn) override
     {
@@ -519,7 +524,7 @@ struct instance_uldaman : public ScriptedInstance
         OUT_LOAD_INST_DATA(chrIn);
         std::istringstream loadStream(chrIn);
         loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2];
-        for (uint32 & i : m_auiEncounter)
+        for (uint32& i : m_auiEncounter)
             if (i != DONE)
                 i = NOT_STARTED;
         OUT_LOAD_INST_DATA_COMPLETE;
@@ -527,9 +532,12 @@ struct instance_uldaman : public ScriptedInstance
 
     uint32 GetData(uint32 uiType) override
     {
-        if (uiType == ULDAMAN_ENCOUNTER_IRONAYA_DOOR) return m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR];
-        if (uiType == ULDAMAN_ENCOUNTER_STONE_KEEPERS) return m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS];
-        if (uiType == ULDAMAN_ENCOUNTER_ARCHAEDAS) return m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS];
+        if (uiType == ULDAMAN_ENCOUNTER_IRONAYA_DOOR)
+            return m_auiEncounter[ULDAMAN_ENCOUNTER_IRONAYA_DOOR];
+        if (uiType == ULDAMAN_ENCOUNTER_STONE_KEEPERS)
+            return m_auiEncounter[ULDAMAN_ENCOUNTER_STONE_KEEPERS];
+        if (uiType == ULDAMAN_ENCOUNTER_ARCHAEDAS)
+            return m_auiEncounter[ULDAMAN_ENCOUNTER_ARCHAEDAS];
 
         return 0;
     }
@@ -557,10 +565,7 @@ struct instance_uldaman : public ScriptedInstance
     }
 };
 
-InstanceData* GetInstanceData_instance_uldaman(Map* pMap)
-{
-    return new instance_uldaman(pMap);
-}
+InstanceData* GetInstanceData_instance_uldaman(Map* pMap) { return new instance_uldaman(pMap); }
 
 void AddSC_instance_uldaman()
 {

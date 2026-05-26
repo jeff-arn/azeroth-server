@@ -21,21 +21,21 @@ SDComment: Learning Smelt Dark Iron if tribute quest rewarded. Basic event imple
 SDCategory: Blackrock Depths
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "blackrock_depths.h"
+#include "scriptPCH.h"
 
 enum
 {
-    FACTION_NEUTRAL                     = 734,
-    FACTION_HOSTILE                     = 54,
+    FACTION_NEUTRAL = 734,
+    FACTION_HOSTILE = 54,
 
-    SPELL_SHADOWBOLTVOLLEY              = 15245,
-    SPELL_IMMOLATE                      = 12742,
-    SPELL_CURSEOFWEAKNESS               = 12493,
-    SPELL_DEMONARMOR                    = 13787,
-    SPELL_SUMMON_VOIDWALKERS            = 15092,
+    SPELL_SHADOWBOLTVOLLEY = 15245,
+    SPELL_IMMOLATE = 12742,
+    SPELL_CURSEOFWEAKNESS = 12493,
+    SPELL_DEMONARMOR = 13787,
+    SPELL_SUMMON_VOIDWALKERS = 15092,
 
-    MAX_DWARF                           = 7
+    MAX_DWARF = 7
 };
 
 struct boss_doomrelAI : public ScriptedAI
@@ -75,12 +75,12 @@ struct boss_doomrelAI : public ScriptedAI
             m_pInstance->SetData(TYPE_TOMB_OF_SEVEN, FAIL);
     }
 
-    void JustDied(Unit *victim) override
+    void JustDied(Unit* victim) override
     {
         if (m_pInstance)
             m_pInstance->SetData(TYPE_TOMB_OF_SEVEN, DONE);
 
-        //m_creature->SummonGameObject ( 169243, 1274.655640f, -283.507874f, -78.219254f, 2.365980, 0, 0, 0, 0, 0);
+        // m_creature->SummonGameObject ( 169243, 1274.655640f, -283.507874f, -78.219254f, 2.365980, 0, 0, 0, 0, 0);
     }
 
     void JustSummoned(Creature* pSummoned) override
@@ -93,20 +93,20 @@ struct boss_doomrelAI : public ScriptedAI
     {
         switch (uiPhase)
         {
-            case 0:
-                return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_ANGERREL));
-            case 1:
-                return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_SEETHREL));
-            case 2:
-                return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_DOPEREL));
-            case 3:
-                return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_GLOOMREL));
-            case 4:
-                return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_VILEREL));
-            case 5:
-                return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_HATEREL));
-            case 6:
-                return m_creature;
+        case 0:
+            return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_ANGERREL));
+        case 1:
+            return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_SEETHREL));
+        case 2:
+            return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_DOPEREL));
+        case 3:
+            return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_GLOOMREL));
+        case 4:
+            return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_VILEREL));
+        case 5:
+            return m_pInstance->instance->GetCreature(m_pInstance->GetData64(DATA_HATEREL));
+        case 6:
+            return m_creature;
         }
         return nullptr;
     }
@@ -119,7 +119,7 @@ struct boss_doomrelAI : public ScriptedAI
             {
                 pDwarf->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
                 pDwarf->SetFactionTemplateId(FACTION_HOSTILE);
-                pDwarf->SetInCombatWithZone();              // attackstart
+                pDwarf->SetInCombatWithZone(); // attackstart
             }
             else
             {
@@ -184,7 +184,7 @@ struct boss_doomrelAI : public ScriptedAI
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
-        //ShadowVolley_Timer
+        // ShadowVolley_Timer
         if (m_uiShadowVolley_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHADOWBOLTVOLLEY);
@@ -193,7 +193,7 @@ struct boss_doomrelAI : public ScriptedAI
         else
             m_uiShadowVolley_Timer -= diff;
 
-        //Immolate_Timer
+        // Immolate_Timer
         if (m_uiImmolate_Timer < diff)
         {
             if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
@@ -204,7 +204,7 @@ struct boss_doomrelAI : public ScriptedAI
         else
             m_uiImmolate_Timer -= diff;
 
-        //CurseOfWeakness_Timer
+        // CurseOfWeakness_Timer
         if (m_uiCurseOfWeakness_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CURSEOFWEAKNESS);
@@ -213,7 +213,7 @@ struct boss_doomrelAI : public ScriptedAI
         else
             m_uiCurseOfWeakness_Timer -= diff;
 
-        //DemonArmor_Timer
+        // DemonArmor_Timer
         if (m_uiDemonArmor_Timer < diff)
         {
             DoCastSpellIfCan(m_creature, SPELL_DEMONARMOR);
@@ -222,7 +222,7 @@ struct boss_doomrelAI : public ScriptedAI
         else
             m_uiDemonArmor_Timer -= diff;
 
-        //Summon Voidwalkers
+        // Summon Voidwalkers
         if (!m_bHasSummoned && m_creature->GetHealthPercent() <= 50.0f)
         {
             m_creature->CastSpell(m_creature, SPELL_SUMMON_VOIDWALKERS, true);
@@ -233,10 +233,7 @@ struct boss_doomrelAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_doomrel(Creature* pCreature)
-{
-    return new boss_doomrelAI(pCreature);
-}
+CreatureAI* GetAI_boss_doomrel(Creature* pCreature) { return new boss_doomrelAI(pCreature); }
 
 void AddSC_boss_tomb_of_seven()
 {

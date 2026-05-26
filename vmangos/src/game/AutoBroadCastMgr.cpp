@@ -1,9 +1,9 @@
 #include "Database/DatabaseEnv.h"
-#include "World.h"
 #include "Log.h"
-#include "ProgressBar.h"
 #include "Policies/SingletonImp.h"
+#include "ProgressBar.h"
 #include "Util.h"
+#include "World.h"
 
 #include "AutoBroadCastMgr.h"
 
@@ -15,10 +15,7 @@ AutoBroadCastMgr::AutoBroadCastMgr()
     _current = 0;
 }
 
-AutoBroadCastMgr::~AutoBroadCastMgr()
-{
-    entries.clear();
-}
+AutoBroadCastMgr::~AutoBroadCastMgr() { entries.clear(); }
 
 void AutoBroadCastMgr::Load()
 {
@@ -54,7 +51,6 @@ void AutoBroadCastMgr::Load()
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u AutoBroadCast messages", count);
-
 }
 
 void AutoBroadCastMgr::Update(uint32 diff)

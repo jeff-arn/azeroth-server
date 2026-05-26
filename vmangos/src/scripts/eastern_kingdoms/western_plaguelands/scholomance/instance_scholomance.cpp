@@ -21,15 +21,12 @@ SDComment:
 SDCategory: Scholomance
 EndScriptData */
 
-#include "scriptPCH.h"
 #include "scholomance.h"
+#include "scriptPCH.h"
 
 struct instance_scholomance : public ScriptedInstance
 {
-    instance_scholomance(Map* pMap) : ScriptedInstance(pMap)
-    {
-        Initialize();
-    };
+    instance_scholomance(Map* pMap) : ScriptedInstance(pMap) { Initialize(); };
 
     std::string strInstData;
     uint32 m_auiEncounter[INSTANCE_SCHOLOMANCE_MAX_ENCOUNTER];
@@ -60,55 +57,54 @@ struct instance_scholomance : public ScriptedInstance
         m_uiGateBarovGUID = 0;
         m_uiGateIlluciaGUID = 0;
         m_uiBrazierKirtonosGUID = 0;
-
     }
     void OnCreatureCreate(Creature* pCreature) override
     {
         switch (pCreature->GetEntry())
         {
-            case NPC_VECTUS:
-                m_uiVectusGUID = pCreature->GetGUID();
-                break;
-            case NPC_MARDUKE:
-                m_uiMardukeGUID = pCreature->GetGUID();
-                break;
+        case NPC_VECTUS:
+            m_uiVectusGUID = pCreature->GetGUID();
+            break;
+        case NPC_MARDUKE:
+            m_uiMardukeGUID = pCreature->GetGUID();
+            break;
         }
     }
     void OnGameObjectCreate(GameObject* pGo) override
     {
         switch (pGo->GetEntry())
         {
-            case GO_GATE_KIRTONOS:
-                m_uiGateKirtonosGUID = pGo->GetGUID();
-                break;
-            case GO_GATE_GANDLING:
-                m_uiGateGandlingGUID = pGo->GetGUID();
-                break;
-            case GO_GATE_MALICIA:
-                m_uiGateMiliciaGUID = pGo->GetGUID();
-                break;
-            case GO_GATE_THEOLEN:
-                m_uiGateTheolenGUID = pGo->GetGUID();
-                break;
-            case GO_GATE_POLKELT:
-                m_uiGatePolkeltGUID = pGo->GetGUID();
-                break;
-            case GO_GATE_RAVENIAN:
-                m_uiGateRavenianGUID = pGo->GetGUID();
-                break;
-            case GO_GATE_BAROV:
-                m_uiGateBarovGUID = pGo->GetGUID();
-                break;
-            case GO_GATE_ILLUCIA:
-                m_uiGateIlluciaGUID = pGo->GetGUID();
-                break;
-            case GO_BRAZIER_KIRTONOS:
-                m_uiBrazierKirtonosGUID = pGo->GetGUID();
-                break;
-            case GO_VIEWING_ROOM_DOOR:
-                if (GetData(TYPE_VIEWING_ROOM_DOOR) == DONE)
-                    pGo->UseDoorOrButton();
-                break;
+        case GO_GATE_KIRTONOS:
+            m_uiGateKirtonosGUID = pGo->GetGUID();
+            break;
+        case GO_GATE_GANDLING:
+            m_uiGateGandlingGUID = pGo->GetGUID();
+            break;
+        case GO_GATE_MALICIA:
+            m_uiGateMiliciaGUID = pGo->GetGUID();
+            break;
+        case GO_GATE_THEOLEN:
+            m_uiGateTheolenGUID = pGo->GetGUID();
+            break;
+        case GO_GATE_POLKELT:
+            m_uiGatePolkeltGUID = pGo->GetGUID();
+            break;
+        case GO_GATE_RAVENIAN:
+            m_uiGateRavenianGUID = pGo->GetGUID();
+            break;
+        case GO_GATE_BAROV:
+            m_uiGateBarovGUID = pGo->GetGUID();
+            break;
+        case GO_GATE_ILLUCIA:
+            m_uiGateIlluciaGUID = pGo->GetGUID();
+            break;
+        case GO_BRAZIER_KIRTONOS:
+            m_uiBrazierKirtonosGUID = pGo->GetGUID();
+            break;
+        case GO_VIEWING_ROOM_DOOR:
+            if (GetData(TYPE_VIEWING_ROOM_DOOR) == DONE)
+                pGo->UseDoorOrButton();
+            break;
         }
     }
 
@@ -116,8 +112,7 @@ struct instance_scholomance : public ScriptedInstance
     {
         if (uiType == TYPE_GANDLING)
         {
-            if (m_auiEncounter[TYPE_GANDLING] == NOT_STARTED && m_auiEncounter[TYPE_ALEXEIBAROV] == DONE && m_auiEncounter[TYPE_THEOLEN] == DONE && m_auiEncounter[TYPE_RAVENIAN] == DONE &&
-                    m_auiEncounter[TYPE_POLKELT] == DONE && m_auiEncounter[TYPE_MALICIA] == DONE && m_auiEncounter[TYPE_ILLUCIABAROV] == DONE)
+            if (m_auiEncounter[TYPE_GANDLING] == NOT_STARTED && m_auiEncounter[TYPE_ALEXEIBAROV] == DONE && m_auiEncounter[TYPE_THEOLEN] == DONE && m_auiEncounter[TYPE_RAVENIAN] == DONE && m_auiEncounter[TYPE_POLKELT] == DONE && m_auiEncounter[TYPE_MALICIA] == DONE && m_auiEncounter[TYPE_ILLUCIABAROV] == DONE)
                 m_auiEncounter[TYPE_GANDLING] = SPECIAL;
             return m_auiEncounter[TYPE_GANDLING];
         }
@@ -129,22 +124,22 @@ struct instance_scholomance : public ScriptedInstance
     {
         switch (uiData)
         {
-            case DATA_VECTUS:
-                return m_uiVectusGUID;
-            case DATA_MARDUKE:
-                return m_uiMardukeGUID;
+        case DATA_VECTUS:
+            return m_uiVectusGUID;
+        case DATA_MARDUKE:
+            return m_uiMardukeGUID;
         }
         return 0;
     }
-    void OnCreatureDeath(Creature *who) override
+    void OnCreatureDeath(Creature* who) override
     {
         switch (who->GetEntry())
         {
-            case NPC_KIRTONOS:
-                if (GameObject* pGo = instance->GetGameObject(m_uiGateKirtonosGUID))
-                    if (pGo->GetGoState() != GO_STATE_ACTIVE) // fermée
-                        DoUseDoorOrButton(m_uiGateKirtonosGUID);
-                break;
+        case NPC_KIRTONOS:
+            if (GameObject* pGo = instance->GetGameObject(m_uiGateKirtonosGUID))
+                if (pGo->GetGoState() != GO_STATE_ACTIVE) // fermée
+                    DoUseDoorOrButton(m_uiGateKirtonosGUID);
+            break;
         }
     }
 
@@ -152,59 +147,59 @@ struct instance_scholomance : public ScriptedInstance
     {
         switch (uiType)
         {
-            case TYPE_GANDLING:
-                m_auiEncounter[TYPE_GANDLING] = uiData;
-                if (uiData == FAIL || uiData == DONE)
-                {
-                    if (GameObject* pGo = instance->GetGameObject(m_uiGateMiliciaGUID))
-                        if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                            DoUseDoorOrButton(m_uiGateMiliciaGUID);
-                    if (GameObject* pGo = instance->GetGameObject(m_uiGateTheolenGUID))
-                        if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                            DoUseDoorOrButton(m_uiGateTheolenGUID);
-                    if (GameObject* pGo = instance->GetGameObject(m_uiGatePolkeltGUID))
-                        if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                            DoUseDoorOrButton(m_uiGatePolkeltGUID);
-                    if (GameObject* pGo = instance->GetGameObject(m_uiGateRavenianGUID))
-                        if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                            DoUseDoorOrButton(m_uiGateRavenianGUID);
-                    if (GameObject* pGo = instance->GetGameObject(m_uiGateBarovGUID))
-                        if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                            DoUseDoorOrButton(m_uiGateBarovGUID);
-                    if (GameObject* pGo = instance->GetGameObject(m_uiGateIlluciaGUID))
-                        if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                            DoUseDoorOrButton(m_uiGateIlluciaGUID);
-                }
-                break;
-            case TYPE_KIRTONOS:
-                m_auiEncounter[TYPE_KIRTONOS] = uiData;
-                if (uiData == IN_PROGRESS)
-                {
-                    if (GameObject* pGo = instance->GetGameObject(m_uiGateKirtonosGUID))
-                        if (pGo->GetGoState() == GO_STATE_ACTIVE)
-                            DoUseDoorOrButton(m_uiGateKirtonosGUID);
-                }
-                else if (uiData == FAIL)
-                {
-                    if (GameObject* pGo = instance->GetGameObject(m_uiGateKirtonosGUID))
-                        if (pGo->GetGoState() != GO_STATE_ACTIVE)
-                            DoUseDoorOrButton(m_uiGateKirtonosGUID);
-                    if (GameObject* pGo = instance->GetGameObject(m_uiBrazierKirtonosGUID))
-                            pGo->ResetDoorOrButton();
-                }
-                break;
-            case TYPE_ALEXEIBAROV:
-            case TYPE_THEOLEN:
-            case TYPE_RAVENIAN:
-            case TYPE_POLKELT:
-            case TYPE_MALICIA:
-            case TYPE_ILLUCIABAROV:
-            case TYPE_VIEWING_ROOM_DOOR:
-            case TYPE_DARKREAVER:
-                m_auiEncounter[uiType] = uiData;
-                break;
-            default:
-                break;
+        case TYPE_GANDLING:
+            m_auiEncounter[TYPE_GANDLING] = uiData;
+            if (uiData == FAIL || uiData == DONE)
+            {
+                if (GameObject* pGo = instance->GetGameObject(m_uiGateMiliciaGUID))
+                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                        DoUseDoorOrButton(m_uiGateMiliciaGUID);
+                if (GameObject* pGo = instance->GetGameObject(m_uiGateTheolenGUID))
+                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                        DoUseDoorOrButton(m_uiGateTheolenGUID);
+                if (GameObject* pGo = instance->GetGameObject(m_uiGatePolkeltGUID))
+                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                        DoUseDoorOrButton(m_uiGatePolkeltGUID);
+                if (GameObject* pGo = instance->GetGameObject(m_uiGateRavenianGUID))
+                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                        DoUseDoorOrButton(m_uiGateRavenianGUID);
+                if (GameObject* pGo = instance->GetGameObject(m_uiGateBarovGUID))
+                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                        DoUseDoorOrButton(m_uiGateBarovGUID);
+                if (GameObject* pGo = instance->GetGameObject(m_uiGateIlluciaGUID))
+                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                        DoUseDoorOrButton(m_uiGateIlluciaGUID);
+            }
+            break;
+        case TYPE_KIRTONOS:
+            m_auiEncounter[TYPE_KIRTONOS] = uiData;
+            if (uiData == IN_PROGRESS)
+            {
+                if (GameObject* pGo = instance->GetGameObject(m_uiGateKirtonosGUID))
+                    if (pGo->GetGoState() == GO_STATE_ACTIVE)
+                        DoUseDoorOrButton(m_uiGateKirtonosGUID);
+            }
+            else if (uiData == FAIL)
+            {
+                if (GameObject* pGo = instance->GetGameObject(m_uiGateKirtonosGUID))
+                    if (pGo->GetGoState() != GO_STATE_ACTIVE)
+                        DoUseDoorOrButton(m_uiGateKirtonosGUID);
+                if (GameObject* pGo = instance->GetGameObject(m_uiBrazierKirtonosGUID))
+                    pGo->ResetDoorOrButton();
+            }
+            break;
+        case TYPE_ALEXEIBAROV:
+        case TYPE_THEOLEN:
+        case TYPE_RAVENIAN:
+        case TYPE_POLKELT:
+        case TYPE_MALICIA:
+        case TYPE_ILLUCIABAROV:
+        case TYPE_VIEWING_ROOM_DOOR:
+        case TYPE_DARKREAVER:
+            m_auiEncounter[uiType] = uiData;
+            break;
+        default:
+            break;
         }
 
         if (uiData == DONE)
@@ -220,17 +215,14 @@ struct instance_scholomance : public ScriptedInstance
         SummonGandlingIfPossible();
     }
     /** Load / save system */
-    char const* Save() override
-    {
-        return strInstData.c_str();
-    }
+    char const* Save() override { return strInstData.c_str(); }
 
     void Load(char const* chrIn) override
     {
         if (!chrIn)
             return;
         std::istringstream loadStream(chrIn);
-        for (uint32 & i : m_auiEncounter)
+        for (uint32& i : m_auiEncounter)
         {
             loadStream >> i;
             if (i == IN_PROGRESS)
@@ -250,20 +242,17 @@ struct instance_scholomance : public ScriptedInstance
     }
 };
 
-InstanceData* GetInstanceData_instance_scholomance(Map* pMap)
-{
-    return new instance_scholomance(pMap);
-}
+InstanceData* GetInstanceData_instance_scholomance(Map* pMap) { return new instance_scholomance(pMap); }
 
-bool GOOpen_brazier_herald(Player* pUser, GameObject *pGo)
+bool GOOpen_brazier_herald(Player* pUser, GameObject* pGo)
 {
     if (InstanceData* pInst = pGo->GetInstanceData())
     {
         switch (pInst->GetData(TYPE_KIRTONOS))
         {
-            case IN_PROGRESS:
-            case DONE:
-                return false;
+        case IN_PROGRESS:
+        case DONE:
+            return false;
         }
 
         pInst->SetData(TYPE_KIRTONOS, IN_PROGRESS);
@@ -288,10 +277,7 @@ struct go_viewing_room_door : public GameObjectAI
     }
 };
 
-GameObjectAI* GOGetAI_go_viewing_room_door(GameObject *pGo)
-{
-    return new go_viewing_room_door(pGo);
-}
+GameObjectAI* GOGetAI_go_viewing_room_door(GameObject* pGo) { return new go_viewing_room_door(pGo); }
 
 void AddSC_instance_scholomance()
 {

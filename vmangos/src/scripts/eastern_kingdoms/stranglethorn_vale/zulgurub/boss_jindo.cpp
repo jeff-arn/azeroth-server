@@ -25,25 +25,25 @@ EndScriptData */
 
 enum
 {
-    SAY_AGGRO                       = 10449,
+    SAY_AGGRO = 10449,
 
-    SPELL_BRAIN_WASH_TOTEM          = 24262,
-    SPELL_POWERFULL_HEALING_WARD    = 24309,
-    SPELL_HEX                       = 17172,
-    SPELL_DELUSIONS_OF_JINDO        = 24306,
-    SPELL_SHADE_OF_JINDO            = 24308,
-    SPELL_BANISH                    = 24466,
+    SPELL_BRAIN_WASH_TOTEM = 24262,
+    SPELL_POWERFULL_HEALING_WARD = 24309,
+    SPELL_HEX = 17172,
+    SPELL_DELUSIONS_OF_JINDO = 24306,
+    SPELL_SHADE_OF_JINDO = 24308,
+    SPELL_BANISH = 24466,
     // Brainwash Totem spells
-    SPELL_BRAINWASH                 = 24261,
+    SPELL_BRAINWASH = 24261,
     // Healing Ward spells
-    SPELL_HEAL                      = 24311,
+    SPELL_HEAL = 24311,
     // Shade of Jindo spells
-    SPELL_SHADOWSHOCK               = 24458,
-    SPELL_INVISIBLE                 = 24307,
+    SPELL_SHADOWSHOCK = 24458,
+    SPELL_INVISIBLE = 24307,
 
-    NPC_SHADE                       = 14986,
-    NPC_BRAINWASH_TOTEM             = 15112,
-    NPC_POWERFULL_HEALING_WARD      = 14987
+    NPC_SHADE = 14986,
+    NPC_BRAINWASH_TOTEM = 15112,
+    NPC_POWERFULL_HEALING_WARD = 14987
 };
 
 struct boss_jindoAI : public ScriptedAI
@@ -81,12 +81,12 @@ struct boss_jindoAI : public ScriptedAI
             m_summonedCreatures.pop_front();
             switch (g.GetEntry())
             {
-                case NPC_BRAINWASH_TOTEM:
-                case NPC_SHADE:
-                case NPC_POWERFULL_HEALING_WARD:
-                    if (Creature* c = m_creature->GetMap()->GetCreature(g))
-                        c->AddObjectToRemoveList();
-                    break;
+            case NPC_BRAINWASH_TOTEM:
+            case NPC_SHADE:
+            case NPC_POWERFULL_HEALING_WARD:
+                if (Creature* c = m_creature->GetMap()->GetCreature(g))
+                    c->AddObjectToRemoveList();
+                break;
             }
         }
         while (Creature* Crea = m_creature->FindNearestCreature(NPC_BRAINWASH_TOTEM, 150.0f))
@@ -108,15 +108,15 @@ struct boss_jindoAI : public ScriptedAI
     }
     void Reset() override
     {
-        m_brainWashTotemTimer    = urand(10, 20) * IN_MILLISECONDS;
-        m_healingWardTimer       = urand(20, 30) * IN_MILLISECONDS;
-        m_hexTimer               = urand(20, 50) * IN_MILLISECONDS;
-        m_delusionsTimer         = urand(3, 6) * IN_MILLISECONDS;
-        m_summonShadeTimer       = urand(6, 8) * IN_MILLISECONDS;
-        m_banishTimer            = urand(15, 30) * IN_MILLISECONDS;
-        m_checkBrainWashTimer    = 1000;
+        m_brainWashTotemTimer = urand(10, 20) * IN_MILLISECONDS;
+        m_healingWardTimer = urand(20, 30) * IN_MILLISECONDS;
+        m_hexTimer = urand(20, 50) * IN_MILLISECONDS;
+        m_delusionsTimer = urand(3, 6) * IN_MILLISECONDS;
+        m_summonShadeTimer = urand(6, 8) * IN_MILLISECONDS;
+        m_banishTimer = urand(15, 30) * IN_MILLISECONDS;
+        m_checkBrainWashTimer = 1000;
 
-        m_hexAggro                = 0;
+        m_hexAggro = 0;
 
         m_brainWashedPlayerGuids.clear();
         m_brainWashedPlayersAggro.clear();
@@ -148,7 +148,7 @@ struct boss_jindoAI : public ScriptedAI
             m_pInstance->SetData(TYPE_JINDO, DONE);
     }
 
-    void Aggro(Unit *who) override
+    void Aggro(Unit* who) override
     {
         DoScriptText(SAY_AGGRO, m_creature);
         if (m_pInstance)
@@ -245,7 +245,7 @@ struct boss_jindoAI : public ScriptedAI
             if (!m_creature->FindNearestCreature(NPC_POWERFULL_HEALING_WARD, 200.0f))
             {
                 DoCastSpellIfCan(m_creature, SPELL_POWERFULL_HEALING_WARD);
-                //m_creature->SummonCreature(NPC_POWERFULL_HEALING_WARD, m_creature->GetPositionX() + 3, m_creature->GetPositionY() - 2, m_creature->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 15000);
+                // m_creature->SummonCreature(NPC_POWERFULL_HEALING_WARD, m_creature->GetPositionX() + 3, m_creature->GetPositionY() - 2, m_creature->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 15000);
                 m_healingWardTimer = urand(20, 30) * IN_MILLISECONDS;
             }
         }
@@ -271,7 +271,6 @@ struct boss_jindoAI : public ScriptedAI
                     m_delusionsTimer = urand(3, 9) * IN_MILLISECONDS;
                 }
             }
-
         }
         else
             m_delusionsTimer -= diff;
@@ -303,7 +302,7 @@ struct boss_jindoAI : public ScriptedAI
     }
 };
 
-//Shade of Jindo
+// Shade of Jindo
 struct mob_shade_of_jindoAI : public ScriptedAI
 {
     mob_shade_of_jindoAI(Creature* pCreature) : ScriptedAI(pCreature)
@@ -322,7 +321,7 @@ struct mob_shade_of_jindoAI : public ScriptedAI
         m_creature->AddAura(SPELL_INVISIBLE, ADD_AURA_PERMANENT);
     }
 
-    void DamageTaken(Unit *done_by, uint32 &damage) override
+    void DamageTaken(Unit* done_by, uint32& damage) override
     {
         if (done_by && !done_by->HasAura(SPELL_DELUSIONS_OF_JINDO))
             damage = 0;
@@ -336,7 +335,7 @@ struct mob_shade_of_jindoAI : public ScriptedAI
         if (m_creature->GetVictim()->HasAura(SPELL_HEX))
             m_creature->GetThreatManager().modifyThreatPercent(m_creature->GetVictim(), -100);
 
-        //ShadowShock_Timer
+        // ShadowShock_Timer
         if (ShadowShock_Timer < diff)
         {
             DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHADOWSHOCK);
@@ -415,20 +414,11 @@ struct mob_brain_wash_totemAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_boss_jindo(Creature* pCreature)
-{
-    return new boss_jindoAI(pCreature);
-}
+CreatureAI* GetAI_boss_jindo(Creature* pCreature) { return new boss_jindoAI(pCreature); }
 
-CreatureAI* GetAI_mob_shade_of_jindo(Creature* pCreature)
-{
-    return new mob_shade_of_jindoAI(pCreature);
-}
+CreatureAI* GetAI_mob_shade_of_jindo(Creature* pCreature) { return new mob_shade_of_jindoAI(pCreature); }
 
-CreatureAI* GetAI_mob_brain_wash(Creature* pCreature)
-{
-    return new mob_brain_wash_totemAI(pCreature);
-}
+CreatureAI* GetAI_mob_brain_wash(Creature* pCreature) { return new mob_brain_wash_totemAI(pCreature); }
 
 // UPDATE `creature_template` SET `ai_name` = '', `script_name` = 'mob_brain_wash' WHERE `entry` = 15112;
 void AddSC_boss_jindo()

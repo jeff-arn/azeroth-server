@@ -20,8 +20,8 @@
  */
 
 #include "QuestDef.h"
-#include "World.h"
 #include "Database/Field.h"
+#include "World.h"
 
 Quest::Quest(Field* questRecord)
 {
@@ -197,7 +197,7 @@ uint32 Quest::XPValue(uint32 playerLevel) const
     return 0;
 }
 
-int32  Quest::GetRewOrReqMoney() const
+int32 Quest::GetRewOrReqMoney() const
 {
     if (RewOrReqMoney <= 0)
         return RewOrReqMoney;

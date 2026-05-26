@@ -83,6 +83,6 @@ namespace IO
         explicit IoContext(IO::Native::FileHandle kqueueDescriptor);
 #endif
     };
-}
+} // namespace IO
 
-#endif //MANGOS_IO_IOCONTEXT_H
+#endif // MANGOS_IO_IOCONTEXT_H

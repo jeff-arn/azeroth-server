@@ -11,17 +11,16 @@
 /// If the file does not exists or you dont have permission to open it the ptr will be null
 std::unique_ptr<IO::Filesystem::FileHandleReadonly> IO::Filesystem::TryOpenFileReadonly(std::string const& filePath)
 {
-    HANDLE nativeFileHandle = CreateFileA(
-            filePath.c_str(),
-            GENERIC_READ,
-            FILE_SHARE_READ,       // Share mode: allow other processes to read
-            nullptr,               // Security attributes
-            OPEN_EXISTING,         // Open exising file. Fail if it does not exist
-            FILE_ATTRIBUTE_NORMAL, // Normal open, without any special flags
-            nullptr                // Template file handle (would be used when creating a new file and copy the attributes)
+    HANDLE nativeFileHandle = CreateFileA(filePath.c_str(), GENERIC_READ,
+                                          FILE_SHARE_READ, // Share mode: allow other processes to read
+                                          nullptr, // Security attributes
+                                          OPEN_EXISTING, // Open exising file. Fail if it does not exist
+                                          FILE_ATTRIBUTE_NORMAL, // Normal open, without any special flags
+                                          nullptr // Template file handle (would be used when creating a new file and copy the attributes)
     );
 
-    if (nativeFileHandle == INVALID_HANDLE_VALUE) {
+    if (nativeFileHandle == INVALID_HANDLE_VALUE)
+    {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Unable to open file. Error %d on file: %s", GetLastError(), filePath.c_str());
         return nullptr;
     }
@@ -57,14 +56,12 @@ std::vector<std::string> IO::Filesystem::GetAllFilesInFolder(std::string const& 
         {
             if (!(fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) // Somehow Windows detects .MPQ files as FILE_ATTRIBUTE_ARCHIVE? Thus, we can't use FILE_ATTRIBUTE_NORMAL
             {
-                std::string filePath = filePathOption == OutputFilePath::FullFilePath
-                        ? IO::Filesystem::ToAbsolutePath(folderPath + "\\" + fileData.cFileName)
-                        : fileData.cFileName;
+                std::string filePath = filePathOption == OutputFilePath::FullFilePath ? IO::Filesystem::ToAbsolutePath(folderPath + "\\" + fileData.cFileName) : fileData.cFileName;
 
                 files.emplace_back(filePath);
             }
-
-        } while (::FindNextFileA(hFind, &fileData));
+        }
+        while (::FindNextFileA(hFind, &fileData));
 
         ::FindClose(hFind);
     }

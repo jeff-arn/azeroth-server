@@ -49,21 +49,21 @@ enum GroupLeaveMethod
 
 enum MeetingstoneQueueStatus
 {
-    MEETINGSTONE_STATUS_LEAVE_QUEUE                         = 0,
-    MEETINGSTONE_STATUS_JOINED_QUEUE                        = 1,
-    MEETINGSTONE_STATUS_PARTY_MEMBER_LEFT_LFG               = 2,
-    MEETINGSTONE_STATUS_PARTY_MEMBER_REMOVED_PARTY_REMOVED  = 3,
-    MEETINGSTONE_STATUS_LOOKING_FOR_NEW_PARTY_IN_QUEUE      = 4,
-    MEETINGSTONE_STATUS_NONE                                = 5
+    MEETINGSTONE_STATUS_LEAVE_QUEUE = 0,
+    MEETINGSTONE_STATUS_JOINED_QUEUE = 1,
+    MEETINGSTONE_STATUS_PARTY_MEMBER_LEFT_LFG = 2,
+    MEETINGSTONE_STATUS_PARTY_MEMBER_REMOVED_PARTY_REMOVED = 3,
+    MEETINGSTONE_STATUS_LOOKING_FOR_NEW_PARTY_IN_QUEUE = 4,
+    MEETINGSTONE_STATUS_NONE = 5
 };
 
 enum MeetingstoneFailedStatus
 {
-    MEETINGSTONE_FAIL_NONE                                  = 0, // custom, not to be sent
-    MEETINGSTONE_FAIL_PARTYLEADER                           = 1,
-    MEETINGSTONE_FAIL_FULL_GROUP                            = 2,
-    MEETINGSTONE_FAIL_RAID_GROUP                            = 3,
-    //MEETINGSTONE_FAIL_NONE_UNK                              = 4 [-ZERO]
+    MEETINGSTONE_FAIL_NONE = 0, // custom, not to be sent
+    MEETINGSTONE_FAIL_PARTYLEADER = 1,
+    MEETINGSTONE_FAIL_FULL_GROUP = 2,
+    MEETINGSTONE_FAIL_RAID_GROUP = 3,
+    // MEETINGSTONE_FAIL_NONE_UNK                              = 4 [-ZERO]
 };
 
 #endif

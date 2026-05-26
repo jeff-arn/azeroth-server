@@ -21,9 +21,9 @@
 
 #include "Common.h"
 #include "LFGDefines.h"
+#include "Multithreading/Messager.h"
 #include "ObjectGuid.h"
 #include "SharedDefines.h"
-#include "Multithreading/Messager.h"
 
 class Player;
 
@@ -55,36 +55,37 @@ struct LFGGroupQueueInfo
 
 class LFGQueue
 {
-    public:
-        void Update();
+public:
+    void Update();
 
-        bool IsPlayerInQueue(ObjectGuid const& plrGuid) const;
-        bool IsGroupInQueue(uint32 groupId) const;
+    bool IsPlayerInQueue(ObjectGuid const& plrGuid) const;
+    bool IsGroupInQueue(uint32 groupId) const;
 
-        void UpdateGroup(LFGGroupQueueInfo const& groupInfo, bool join, ObjectGuid playerGuid, uint32 groupId);
-        void RestoreOfflinePlayer(ObjectGuid playerGuid);
+    void UpdateGroup(LFGGroupQueueInfo const& groupInfo, bool join, ObjectGuid playerGuid, uint32 groupId);
+    void RestoreOfflinePlayer(ObjectGuid playerGuid);
 
-        void RemovePlayerFromQueue(ObjectGuid playerGuid, PlayerLeaveMethod leaveMethod = PLAYER_CLIENT_LEAVE); // 0 == by default system (cmsg, leader leave), 1 == by lfg system (no need report text you left queu)
-        void RemoveGroupFromQueue(uint32 groupId, GroupLeaveMethod leaveMethod = GROUP_CLIENT_LEAVE);
+    void RemovePlayerFromQueue(ObjectGuid playerGuid, PlayerLeaveMethod leaveMethod = PLAYER_CLIENT_LEAVE); // 0 == by default system (cmsg, leader leave), 1 == by lfg system (no need report text you left queu)
+    void RemoveGroupFromQueue(uint32 groupId, GroupLeaveMethod leaveMethod = GROUP_CLIENT_LEAVE);
 
-        Messager<LFGQueue>& GetMessager() { return m_messager; }
+    Messager<LFGQueue>& GetMessager() { return m_messager; }
 
-        void AddGroup(LFGGroupQueueInfo const& groupInfo, uint32 groupId);
-        void AddPlayer(LFGPlayerQueueInfo const& playerInfo, ObjectGuid playerGuid);
-    private:
-        void FindInArea(std::vector<ObjectGuid>& players, uint32 area, uint32 team, ObjectGuid const& exclude);
-        bool FindRoleToGroup(ObjectGuid playerGuid, uint32 groupId, LfgRoles role);
+    void AddGroup(LFGGroupQueueInfo const& groupInfo, uint32 groupId);
+    void AddPlayer(LFGPlayerQueueInfo const& playerInfo, ObjectGuid playerGuid);
 
-        typedef std::map<ObjectGuid, LFGPlayerQueueInfo> QueuedPlayersMap;
-        QueuedPlayersMap m_queuedPlayers;
-        QueuedPlayersMap m_offlinePlayers;
+private:
+    void FindInArea(std::vector<ObjectGuid>& players, uint32 area, uint32 team, ObjectGuid const& exclude);
+    bool FindRoleToGroup(ObjectGuid playerGuid, uint32 groupId, LfgRoles role);
 
-        typedef std::map<uint32, LFGGroupQueueInfo> QueuedGroupsMap;
-        QueuedGroupsMap m_queuedGroups;
+    typedef std::map<ObjectGuid, LFGPlayerQueueInfo> QueuedPlayersMap;
+    QueuedPlayersMap m_queuedPlayers;
+    QueuedPlayersMap m_offlinePlayers;
 
-        Messager<LFGQueue> m_messager;
+    typedef std::map<uint32, LFGGroupQueueInfo> QueuedGroupsMap;
+    QueuedGroupsMap m_queuedGroups;
 
-        uint32 m_groupSize = 5;
+    Messager<LFGQueue> m_messager;
+
+    uint32 m_groupSize = 5;
 };
 
 #endif
