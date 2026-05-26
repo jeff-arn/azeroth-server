@@ -202,7 +202,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-request: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
