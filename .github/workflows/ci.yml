@@ -163,7 +163,7 @@ jobs:
       - name: Build
         working-directory: vmangos/build
         run: cmake --build . -j "$(nproc)"
-
+        
   # C++ doctest unit tests for vmangos. Same toolchain as cpp-build but
   # builds with -DBUILD_TESTS=ON and runs the test binary. Main-only.
   cpp-test:
@@ -200,6 +200,9 @@ jobs:
   gitleaks:
     name: gitleaks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-request: read
     steps:
       - uses: actions/checkout@v4
         with:
