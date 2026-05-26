@@ -93,8 +93,8 @@ enum
 class BattleGroundWGScore : public BattleGroundScore
 {
 public:
-    BattleGroundWGScore() : flagCaptures(0), flagReturns(0) {};
-    virtual ~BattleGroundWGScore() {};
+    BattleGroundWGScore() : flagCaptures(0), flagReturns(0){};
+    virtual ~BattleGroundWGScore(){};
     uint32 flagCaptures;
     uint32 flagReturns;
 };

@@ -3373,9 +3373,7 @@ void WorldObject::Update(uint32 update_diff, uint32 /*time_diff*/)
         if (m_summonLimitAlert <= update_diff)
         {
             std::stringstream message;
-            message << "SummonCreature: " << GetGuidStr().c_str() << " in (map " << GetMapId() << ", instance " << GetInstanceId() << ")"
-                    << " has " << GetCreatureSummonCount() << " active summons,"
-                    << " and the limit is " << GetCreatureSummonLimit();
+            message << "SummonCreature: " << GetGuidStr().c_str() << " in (map " << GetMapId() << ", instance " << GetInstanceId() << ")" << " has " << GetCreatureSummonCount() << " active summons," << " and the limit is " << GetCreatureSummonLimit();
             sWorld.SendGMText(LANG_GM_ANNOUNCE_COLOR, "SummonAlert", message.str().c_str());
 
             m_summonLimitAlert = 5 * MINUTE * IN_MILLISECONDS;

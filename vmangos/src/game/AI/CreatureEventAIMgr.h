@@ -28,8 +28,8 @@
 class CreatureEventAIMgr
 {
 public:
-    CreatureEventAIMgr() {};
-    ~CreatureEventAIMgr() {};
+    CreatureEventAIMgr(){};
+    ~CreatureEventAIMgr(){};
 
     void LoadCreatureEventAI_Events();
     void ClearEventData() { m_CreatureEventAI_Event_Map.clear(); }

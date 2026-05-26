@@ -19,7 +19,7 @@ namespace IO
         };
 
     public:
-        explicit constexpr NetworkError(ErrorType errorType) : NetworkError(errorType, 0) {};
+        explicit constexpr NetworkError(ErrorType errorType) : NetworkError(errorType, 0){};
         explicit constexpr NetworkError(ErrorType errorType, int osErrorCode) : m_error{errorType}, m_additionalOsErrorCode{osErrorCode} {};
 
         ErrorType GetErrorType() const { return m_error; };

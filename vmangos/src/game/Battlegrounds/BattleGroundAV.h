@@ -437,8 +437,8 @@ inline BG_AV_Nodes& operator++(BG_AV_Nodes& i) { return i = BG_AV_Nodes(i + 1); 
 class BattleGroundAVScore : public BattleGroundScore
 {
 public:
-    BattleGroundAVScore() : graveyardsAssaulted(0), graveyardsDefended(0), towersAssaulted(0), towersDefended(0), secondaryObjectives(0), lieutnantCount(0), secondaryNPC(0) {};
-    ~BattleGroundAVScore() override {};
+    BattleGroundAVScore() : graveyardsAssaulted(0), graveyardsDefended(0), towersAssaulted(0), towersDefended(0), secondaryObjectives(0), lieutnantCount(0), secondaryNPC(0){};
+    ~BattleGroundAVScore() override{};
     uint32 graveyardsAssaulted;
     uint32 graveyardsDefended;
     uint32 towersAssaulted;

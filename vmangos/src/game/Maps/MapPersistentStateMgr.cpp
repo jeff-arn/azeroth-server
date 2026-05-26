@@ -891,7 +891,7 @@ void MapPersistentStateManager::_ResetInstance(uint32 mapId, uint32 instanceId)
 
 struct MapPersistantStateResetWorker
 {
-    MapPersistantStateResetWorker() {};
+    MapPersistantStateResetWorker(){};
     void operator()(Map* map)
     {
         map->TeleportAllPlayersTo(TELEPORT_LOCATION_HOMEBIND);
@@ -903,7 +903,7 @@ struct MapPersistantStateResetWorker
 
 struct MapPersistantStateWarnWorker
 {
-    MapPersistantStateWarnWorker(time_t _timeLeft) : timeLeft(_timeLeft) {};
+    MapPersistantStateWarnWorker(time_t _timeLeft) : timeLeft(_timeLeft){};
 
     void operator()(Map* map) { ((DungeonMap*)map)->SendResetWarnings(timeLeft); }
 

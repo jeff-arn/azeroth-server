@@ -44,7 +44,7 @@ namespace IO
             std::string GetFilePath() const;
 
         protected:
-            explicit FileHandle(std::string filePath, IO::Native::FileHandle nativeFileHandle) : m_filePath(std::move(filePath)), m_nativeFileHandle(nativeFileHandle) {};
+            explicit FileHandle(std::string filePath, IO::Native::FileHandle nativeFileHandle) : m_filePath(std::move(filePath)), m_nativeFileHandle(nativeFileHandle){};
             std::string m_filePath;
             IO::Native::FileHandle m_nativeFileHandle;
         };
@@ -52,7 +52,7 @@ namespace IO
         class FileHandleReadonly : public FileHandle
         {
         public:
-            explicit FileHandleReadonly(std::string const& filePath, IO::Native::FileHandle nativeFileHandle) : FileHandle(filePath, nativeFileHandle) {};
+            explicit FileHandleReadonly(std::string const& filePath, IO::Native::FileHandle nativeFileHandle) : FileHandle(filePath, nativeFileHandle){};
             FileHandleReadonly(FileHandleReadonly const&) = delete;
             FileHandleReadonly& operator=(FileHandleReadonly const&) = delete;
             FileHandleReadonly(FileHandleReadonly&&) = delete;

@@ -557,7 +557,7 @@ class PvPMaintenanceMaker;
 
 struct PlayerPremadeItem
 {
-    PlayerPremadeItem(uint32 item, uint32 enchant, uint32 team) : itemId(item), enchantId(enchant), requiredTeam(team) {};
+    PlayerPremadeItem(uint32 item, uint32 enchant, uint32 team) : itemId(item), enchantId(enchant), requiredTeam(team){};
     uint32 itemId = 0;
     uint32 enchantId = 0;
     uint32 requiredTeam = 0;

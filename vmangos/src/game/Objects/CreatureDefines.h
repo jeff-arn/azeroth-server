@@ -438,7 +438,7 @@ struct CreatureDisplayInfoAddon
 struct CreatureClassLevelStats
 {
     CreatureClassLevelStats() = default;
-    CreatureClassLevelStats(float melee_damage_, float ranged_damage_, int32 attack_power_, int32 ranged_attack_power_, int32 health_, int32 base_health_, int32 mana_, int32 base_mana_, int32 strength_, int32 agility_, int32 stamina_, int32 intellect_, int32 spirit_, int32 armor_) : melee_damage(melee_damage_), ranged_damage(ranged_damage_), attack_power(attack_power_), ranged_attack_power(ranged_attack_power_), health(health_), base_health(base_health_), mana(mana_), base_mana(base_mana_), strength(strength_), agility(agility_), stamina(stamina_), intellect(intellect_), spirit(spirit_), armor(armor_) {};
+    CreatureClassLevelStats(float melee_damage_, float ranged_damage_, int32 attack_power_, int32 ranged_attack_power_, int32 health_, int32 base_health_, int32 mana_, int32 base_mana_, int32 strength_, int32 agility_, int32 stamina_, int32 intellect_, int32 spirit_, int32 armor_) : melee_damage(melee_damage_), ranged_damage(ranged_damage_), attack_power(attack_power_), ranged_attack_power(ranged_attack_power_), health(health_), base_health(base_health_), mana(mana_), base_mana(base_mana_), strength(strength_), agility(agility_), stamina(stamina_), intellect(intellect_), spirit(spirit_), armor(armor_){};
 
     float melee_damage = 0.0f;
     float ranged_damage = 0.0f;

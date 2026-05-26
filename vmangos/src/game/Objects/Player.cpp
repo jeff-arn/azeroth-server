@@ -16892,8 +16892,7 @@ bool Player::CanSpeak() const { return GetSession()->m_muteTime <= time(nullptr)
 void Player::SavePositionInDB(ObjectGuid guid, uint32 mapId, float x, float y, float z, float o, uint32 zone)
 {
     std::ostringstream ss;
-    ss << "UPDATE `characters` SET `position_x`=" << x << ", `position_y`=" << y << ", `position_z`=" << z << ", `orientation`=" << o << " ,`map`=" << mapId << " ,`zone`=" << zone << " ,`transport_x`=0, `transport_y`=0, `transport_z`=0, "
-       << "`transport_guid`=0, `current_taxi_path`='' WHERE `guid`=" << guid.GetCounter();
+    ss << "UPDATE `characters` SET `position_x`=" << x << ", `position_y`=" << y << ", `position_z`=" << z << ", `orientation`=" << o << " ,`map`=" << mapId << " ,`zone`=" << zone << " ,`transport_x`=0, `transport_y`=0, `transport_z`=0, " << "`transport_guid`=0, `current_taxi_path`='' WHERE `guid`=" << guid.GetCounter();
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "%s", ss.str().c_str());
     CharacterDatabase.Execute(ss.str().c_str());
 }

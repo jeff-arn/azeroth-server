@@ -22,7 +22,7 @@
 
 struct RecordedMovementPacket
 {
-    RecordedMovementPacket(uint16 opcode_, uint32 timeDiff_, uint32 moveFlags_, float x, float y, float z, float o) : opcode(opcode_), timeDiff(timeDiff_), moveFlags(moveFlags_), position(x, y, z, o) {};
+    RecordedMovementPacket(uint16 opcode_, uint32 timeDiff_, uint32 moveFlags_, float x, float y, float z, float o) : opcode(opcode_), timeDiff(timeDiff_), moveFlags(moveFlags_), position(x, y, z, o){};
     uint16 opcode = 0;
     uint32 timeDiff = 0;
     uint32 moveFlags = 0;
@@ -48,7 +48,7 @@ typedef void (*BattleBotWaypointFunc)(BattleBotAI* pAI);
 
 struct BattleBotWaypoint
 {
-    BattleBotWaypoint(float x_, float y_, float z_, BattleBotWaypointFunc func) : x(x_), y(y_), z(z_), pFunc(func) {};
+    BattleBotWaypoint(float x_, float y_, float z_, BattleBotWaypointFunc func) : x(x_), y(y_), z(z_), pFunc(func){};
     float x = 0.0f;
     float y = 0.0f;
     float z = 0.0f;

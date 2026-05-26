@@ -186,8 +186,8 @@ float const BG_AB_BuffPositions[BG_AB_NODES_MAX][4] = {
 class BattleGroundABScore : public BattleGroundScore
 {
 public:
-    BattleGroundABScore() : basesAssaulted(0), basesDefended(0) {};
-    virtual ~BattleGroundABScore() {};
+    BattleGroundABScore() : basesAssaulted(0), basesDefended(0){};
+    virtual ~BattleGroundABScore(){};
     uint32 basesAssaulted;
     uint32 basesDefended;
 };

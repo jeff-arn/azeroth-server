@@ -17,7 +17,7 @@ struct ObjectDistanceOrder
 {
     Unit const* m_pSource;
 
-    ObjectDistanceOrder(Unit const* pSource) : m_pSource(pSource) {};
+    ObjectDistanceOrder(Unit const* pSource) : m_pSource(pSource){};
 
     bool operator()(WorldObject const* pLeft, WorldObject const* pRight) const { return m_pSource->GetDistanceOrder(pLeft, pRight); }
 };
@@ -26,7 +26,7 @@ struct ObjectDistanceOrderReversed
 {
     Unit const* m_pSource;
 
-    ObjectDistanceOrderReversed(Unit const* pSource) : m_pSource(pSource) {};
+    ObjectDistanceOrderReversed(Unit const* pSource) : m_pSource(pSource){};
 
     bool operator()(WorldObject const* pLeft, WorldObject const* pRight) const { return !m_pSource->GetDistanceOrder(pLeft, pRight); }
 };

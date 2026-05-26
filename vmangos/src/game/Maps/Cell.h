@@ -48,7 +48,7 @@ struct CellArea
 
 struct Cell
 {
-    Cell() : data() {};
+    Cell() : data(){};
     explicit Cell(CellPair const& p);
 
     void Compute(uint32& x, uint32& y) const

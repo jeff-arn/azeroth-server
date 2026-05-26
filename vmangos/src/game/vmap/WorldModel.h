@@ -36,8 +36,8 @@ namespace VMAP
     class MeshTriangle
     {
     public:
-        MeshTriangle() : idx0(0), idx1(0), idx2(0) {};
-        MeshTriangle(uint32 na, uint32 nb, uint32 nc) : idx0(na), idx1(nb), idx2(nc) {};
+        MeshTriangle() : idx0(0), idx1(0), idx2(0){};
+        MeshTriangle(uint32 na, uint32 nb, uint32 nc) : idx0(na), idx1(nb), idx2(nc){};
 
         uint32 idx0;
         uint32 idx1;
@@ -60,7 +60,7 @@ namespace VMAP
         static bool readFromFile(FILE* rf, WmoLiquid*& out);
 
     private:
-        WmoLiquid() : iTilesX(0), iTilesY(0), iType(0), iHeight(nullptr), iFlags(nullptr) {};
+        WmoLiquid() : iTilesX(0), iTilesY(0), iType(0), iHeight(nullptr), iFlags(nullptr){};
         uint32 iTilesX; //!< number of tiles in x direction, each
         uint32 iTilesY;
         Vector3 iCorner; //!< the lower corner

@@ -41,7 +41,7 @@ class PathMovementBase
 {
 public:
     PathMovementBase() : i_currentNode(0) {}
-    virtual ~PathMovementBase() {};
+    virtual ~PathMovementBase(){};
 
     bool MovementInProgress(void) const { return (i_currentNode + 1) < i_path->size(); }
 

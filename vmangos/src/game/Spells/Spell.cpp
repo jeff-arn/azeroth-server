@@ -2097,7 +2097,7 @@ bool Spell::HasValidUnitPresentInTargetList()
 struct ChainHealingOrder
 {
     Unit const* MainTarget;
-    ChainHealingOrder(Unit const* Target) : MainTarget(Target) {};
+    ChainHealingOrder(Unit const* Target) : MainTarget(Target){};
     // functor for operator ">"
     bool operator()(Unit const* _Left, Unit const* _Right) const { return (ChainHealingHash(_Left) < ChainHealingHash(_Right)); }
     int32 ChainHealingHash(Unit const* Target) const
@@ -2120,7 +2120,7 @@ class ChainHealingFullHealth
 {
 public:
     Unit const* MainTarget;
-    ChainHealingFullHealth(Unit const* Target) : MainTarget(Target) {};
+    ChainHealingFullHealth(Unit const* Target) : MainTarget(Target){};
 
     bool operator()(Unit const* Target) const { return (Target != MainTarget && Target->GetHealth() == Target->GetMaxHealth()); }
 };
@@ -2130,7 +2130,7 @@ public:
 struct TargetDistanceOrderNear
 {
     WorldObject const* MainTarget;
-    TargetDistanceOrderNear(WorldObject const* Target) : MainTarget(Target) {};
+    TargetDistanceOrderNear(WorldObject const* Target) : MainTarget(Target){};
     // functor for operator ">"
     bool operator()(WorldObject const* _Left, WorldObject const* _Right) const { return MainTarget->GetDistanceOrder(_Left, _Right); }
 };

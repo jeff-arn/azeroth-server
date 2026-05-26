@@ -57,7 +57,7 @@ class Weather
 {
 public:
     Weather(uint32 zone, WeatherZoneChances const* weatherChances);
-    ~Weather() {};
+    ~Weather(){};
 
     // Send Weather to one player
     void SendWeatherUpdateToPlayer(Player* player);
@@ -142,8 +142,8 @@ struct WeatherZoneChances
 class WeatherMgr
 {
 public:
-    WeatherMgr() {};
-    ~WeatherMgr() {};
+    WeatherMgr(){};
+    ~WeatherMgr(){};
 
     void LoadWeatherZoneChances();
 

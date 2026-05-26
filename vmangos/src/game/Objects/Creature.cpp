@@ -1618,8 +1618,7 @@ void Creature::SaveToDB(uint32 mapid)
     WorldDatabase.PExecuteLog("DELETE FROM `creature` WHERE `guid`=%u", GetGUIDLow());
 
     std::ostringstream ss;
-    ss << "INSERT INTO `creature` VALUES (" << GetGUIDLow() << "," << data.creature_id[0] << "," << data.creature_id[1] << "," << data.creature_id[2] << "," << data.creature_id[3] << "," << data.creature_id[4] << "," << mapid << "," << data.position.x << "," << data.position.y << "," << data.position.z << "," << data.position.o << "," << data.spawntimesecsmin << "," << data.spawntimesecsmax << "," << wander_distance << "," << data.health_percent << "," << data.mana_percent << "," << uint32(data.movement_type) << "," << data.spawn_flags << "," << m_visibilityModifier << ","
-       << "0," // patch_min
+    ss << "INSERT INTO `creature` VALUES (" << GetGUIDLow() << "," << data.creature_id[0] << "," << data.creature_id[1] << "," << data.creature_id[2] << "," << data.creature_id[3] << "," << data.creature_id[4] << "," << mapid << "," << data.position.x << "," << data.position.y << "," << data.position.z << "," << data.position.o << "," << data.spawntimesecsmin << "," << data.spawntimesecsmax << "," << wander_distance << "," << data.health_percent << "," << data.mana_percent << "," << uint32(data.movement_type) << "," << data.spawn_flags << "," << m_visibilityModifier << "," << "0," // patch_min
        << "10)"; // patch_max
 
     WorldDatabase.PExecuteLog("%s", ss.str().c_str());

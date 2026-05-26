@@ -89,7 +89,7 @@ private:
 class Petition
 {
 public:
-    Petition() : m_id(0) {};
+    Petition() : m_id(0){};
     Petition(uint32 id, ObjectGuid charterGuid, ObjectGuid ownerGuid, std::string& name) : m_id(id), m_charterGuid(charterGuid), m_ownerGuid(ownerGuid), m_name(name) {}
 
     ~Petition();

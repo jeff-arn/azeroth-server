@@ -158,8 +158,8 @@ private:
 class BgQueueInviteEvent : public BasicEvent
 {
 public:
-    BgQueueInviteEvent(ObjectGuid playerGuid, uint32 bgInstanceGuid, BattleGroundTypeId bgTypeId, uint32 removeTime) : m_playerGuid(playerGuid), m_bgInstanceGuid(bgInstanceGuid), m_bgTypeId(bgTypeId), m_removeTime(removeTime) {};
-    virtual ~BgQueueInviteEvent() {};
+    BgQueueInviteEvent(ObjectGuid playerGuid, uint32 bgInstanceGuid, BattleGroundTypeId bgTypeId, uint32 removeTime) : m_playerGuid(playerGuid), m_bgInstanceGuid(bgInstanceGuid), m_bgTypeId(bgTypeId), m_removeTime(removeTime){};
+    virtual ~BgQueueInviteEvent(){};
 
     virtual bool Execute(uint64 e_time, uint32 p_time);
     virtual void Abort(uint64 e_time);
