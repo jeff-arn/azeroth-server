@@ -41,6 +41,7 @@ __pycache__/
 docs/*
 !docs/ARCHITECTURE.md
 !docs/BOT_ARCHITECTURE_PROPOSAL.md
+!docs/migration-map/
 
 # ============ Addon zip uploads ============
 dashboard/static/addons/*.zip
