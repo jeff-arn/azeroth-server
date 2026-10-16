@@ -1,0 +1,13 @@
+[package]
+name = "mangos-db"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "MySQL access layer for the Rust port (Phase 0 seed: connection + harness; actor/serial-lane design lands in Phase 1)"
+
+[dependencies]
+mysql = "26"
+
+[lints]
+workspace = true

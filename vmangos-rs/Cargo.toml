@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+license = "GPL-2.0-or-later"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# The C++ wire/DB formats require deliberate casts; each use is reviewed,
+# so these pedantic cast lints would only push casts into hiding.
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+
+[profile.release]
+# Production binaries are built off-box (see docs section 9/13); keep the
+# release profile portable (no target-cpu=native equivalent of the C++
+# -march=native) so one binary runs anywhere with the glibc floor.

@@ -1,0 +1,8 @@
+# Pin for rustup users and CI. The current dev Mac uses Homebrew rustc
+# (no rustup), which ignores this file; keep the Homebrew version in
+# step manually until rustup is adopted. Recorded 2026-10-16:
+# Homebrew rustc/cargo 1.98.1.
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

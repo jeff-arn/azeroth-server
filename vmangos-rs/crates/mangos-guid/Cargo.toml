@@ -1,0 +1,10 @@
+[package]
+name = "mangos-guid"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "ObjectGuid wire/DB identity types, byte-compatible with vmangos src/game/ObjectGuid.h"
+
+[lints]
+workspace = true

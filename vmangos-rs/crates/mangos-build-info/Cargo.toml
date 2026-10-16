@@ -1,0 +1,11 @@
+[package]
+name = "mangos-build-info"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Git revision stamping mirroring the C++ revision.h mechanism (vmangos/CMakeLists.txt:143-174)"
+build = "build.rs"
+
+[lints]
+workspace = true
