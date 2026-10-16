@@ -1,0 +1,130 @@
+=== legacy units ===
+# /etc/systemd/system/mangosd.service
+[Unit]
+Description=VMaNGOS World Server
+After=mysql.service realmd.service network.target
+Wants=mysql.service realmd.service
+
+[Service]
+Type=simple
+User=wow
+Group=wow
+WorkingDirectory=/home/wow/vmangos/run/bin
+ExecStart=/home/wow/vmangos/run/bin/mangosd
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+
+# /etc/systemd/system/realmd.service
+[Unit]
+Description=VMaNGOS Realm Server
+After=mysql.service network.target
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=wow
+Group=wow
+WorkingDirectory=/home/wow/vmangos/run/bin
+ExecStart=/home/wow/vmangos/run/bin/realmd
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+NRestarts=90690
+ExecMainStartTimestamp=Fri 2026-10-16 00:49:33 UTC
+Id=mangosd.service
+ActiveState=activating
+SubState=auto-restart
+
+NRestarts=272071
+ExecMainStartTimestamp=Fri 2026-10-16 00:49:43 UTC
+Id=realmd.service
+ActiveState=activating
+SubState=auto-restart
+=== PS ===
+    PID    PPID USER     %CPU %MEM   RSS NLWP     ELAPSED COMMAND
+ 258570       1 wow       2.1 17.4 1417508 73 31-16:28:21 mangosd-main
+    943       1 mysql     0.8 12.6 1024604 68 32-06:22:49 mysqld
+   1631    1423 lxd       0.1  2.4 195832  37 32-06:22:47 mysqld
+   3578    3391 wow       1.8  1.3 107684   5 32-06:22:19 zone
+   1732    1567 root      0.0  1.1 96628    1 32-06:22:47 apache2
+   3584    3391 wow       2.0  1.0 88036    5 32-06:22:19 zone
+   3556    3391 wow       2.1  0.8 72140    5 32-06:22:19 zone
+   3582    3391 wow       2.2  0.8 65940    5 32-06:22:19 zone
+   3580    3391 wow       1.6  0.7 64880    5 32-06:22:19 zone
+   3576    3391 wow       1.6  0.7 60288    5 32-06:22:19 zone
+   3565    3391 wow       1.2  0.6 55992    5 32-06:22:19 zone
+   3574    3391 wow       1.6  0.6 55932    5 32-06:22:19 zone
+   3567    3391 wow       1.3  0.6 55536    5 32-06:22:19 zone
+   3560    3391 wow       1.3  0.6 53008    5 32-06:22:19 zone
+   3571    3391 wow       1.2  0.6 52180    5 32-06:22:19 zone
+   3562    3391 wow       1.4  0.6 50188    5 32-06:22:19 zone
+   3570    3391 wow       1.2  0.5 44952    5 32-06:22:19 zone
+2888679       1 root      0.0  0.5 41416   11  5-18:23:30 snapd
+   2200       1 wow       0.0  0.5 41328    3 32-06:22:46 python3
+   3557    3391 wow       1.0  0.5 41100    5 32-06:22:19 zone
+   3616    3391 wow       0.3  0.5 40864    5 32-06:22:18 zone
+   2198       1 wow       0.0  0.4 39812    5 32-06:22:46 python3
+    990       1 root      0.2  0.4 37456   74 32-06:22:49 dockerd
+   3621    3391 wow       0.3  0.3 31332    5 32-06:22:17 zone
+=== PS targeted ===
+    PID USER     %CPU %MEM   RSS    VSZ NLWP     ELAPSED COMMAND
+   2198 wow       0.0  0.4 39812 351892    5 32-06:22:46 /home/wow/wow-private-server/dashboard/venv/bin/python3 /home/wow/wow-private-server/dashboard/dashboard.py
+   2200 wow       0.0  0.5 41328 210408    3 32-06:22:46 /home/wow/wow-private-server/discord-bot/venv/bin/python3 /home/wow/wow-private-server/discord-bot/bot.py
+ 209408 wow       0.2  0.1 10420 292408   10  2-04:59:26 /home/wow/wow-private-server/vmangos/run/bin/realmd
+ 258570 wow       2.1 17.4 1417508 3945752 73 31-16:28:21 /home/wow/wow-private-server/vmangos/run/bin/mangosd
+=== SS ===
+State  Recv-Q Send-Q               Local Address:Port  Peer Address:PortProcess                                   
+LISTEN 0      200                      127.0.0.1:3306       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3307       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:7778       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:8082       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:8081       0.0.0.0:*                                             
+LISTEN 0      50                         0.0.0.0:3724       0.0.0.0:*    users:(("realmd-main",pid=209408,fd=9))  
+LISTEN 0      4096                     127.0.0.1:2222       0.0.0.0:*                                             
+LISTEN 0      1024                       0.0.0.0:8080       0.0.0.0:*    users:(("python3",pid=2198,fd=6))        
+LISTEN 0      50                         0.0.0.0:8085       0.0.0.0:*    users:(("mangosd-main",pid=258570,fd=42))
+LISTEN 0      4096                 127.0.0.53%lo:53         0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3010       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3008       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3009       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3006       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3007       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3004       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3005       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3002       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3003       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3000       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:3001       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:9500       0.0.0.0:*                                             
+LISTEN 0      4096                104.131.68.176:5998       0.0.0.0:*                                             
+LISTEN 0      4096                104.131.68.176:5999       0.0.0.0:*                                             
+LISTEN 0      128                        0.0.0.0:22         0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:6000       0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:2019       0.0.0.0:*                                             
+LISTEN 0      70                       127.0.0.1:33060      0.0.0.0:*                                             
+LISTEN 0      4096                104.131.68.176:9000       0.0.0.0:*                                             
+LISTEN 0      128                      127.0.0.1:8787       0.0.0.0:*                                             
+LISTEN 0      4096                 100.126.96.57:65511      0.0.0.0:*                                             
+LISTEN 0      4096                     127.0.0.1:9001       0.0.0.0:*                                             
+LISTEN 0      4096   [fd7a:115c:a1e0::932f:603a]:60122         [::]:*                                             
+LISTEN 0      4096                             *:80               *:*                                             
+LISTEN 0      128                           [::]:22            [::]:*                                             
+LISTEN 0      4096                             *:443              *:*                                             
+=== CPU ===
+model name	: DO-Regular
+4
+=== toolchain ===
+/usr/bin/gcc
+/usr/bin/g++
+/usr/bin/cmake
+/usr/bin/mysql
+/usr/bin/python3
+gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+cmake version 3.22.1
+bash: line 1: rustc: command not found
+bash: line 1: cargo: command not found

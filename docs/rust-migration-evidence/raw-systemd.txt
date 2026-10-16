@@ -1,0 +1,110 @@
+===== azeroth-realmd cat =====
+# /etc/systemd/system/azeroth-realmd.service
+[Unit]
+Description=Azeroth Realm Server (realmd)
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=wow
+WorkingDirectory=/home/wow/wow-private-server/vmangos/run/bin
+ExecStart=/home/wow/wow-private-server/vmangos/run/bin/realmd
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+===== azeroth-realmd show =====
+MainPID=209408
+NRestarts=24
+ExecMainStartTimestamp=Tue 2026-10-13 19:50:18 UTC
+MemoryCurrent=3571712
+CPUUsageNSec=568053214000
+TasksCurrent=10
+ActiveState=active
+SubState=running
+===== azeroth-mangosd cat =====
+# /etc/systemd/system/azeroth-mangosd.service
+[Unit]
+Description=Azeroth World Server (mangosd)
+After=network.target mysql.service azeroth-realmd.service
+
+[Service]
+Type=simple
+User=wow
+WorkingDirectory=/home/wow/wow-private-server/vmangos/run/bin
+ExecStart=/home/wow/wow-private-server/vmangos/run/bin/mangosd
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+===== azeroth-mangosd show =====
+MainPID=258570
+NRestarts=21
+ExecMainStartTimestamp=Mon 2026-09-14 08:21:23 UTC
+MemoryCurrent=1458626560
+CPUUsageNSec=59810505263000
+TasksCurrent=73
+ActiveState=active
+SubState=running
+===== azeroth-dashboard cat =====
+# /etc/systemd/system/azeroth-dashboard.service
+[Unit]
+Description=Azeroth Server Dashboard
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=wow
+WorkingDirectory=/home/wow/wow-private-server/dashboard
+EnvironmentFile=/home/wow/wow-private-server/.env
+ExecStart=/home/wow/wow-private-server/dashboard/venv/bin/python3 /home/wow/wow-private-server/dashboard/dashboard.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+===== azeroth-dashboard show =====
+MainPID=2198
+NRestarts=0
+ExecMainStartTimestamp=Sun 2026-09-13 18:26:58 UTC
+MemoryCurrent=43974656
+CPUUsageNSec=330747498000
+TasksCurrent=5
+ActiveState=active
+SubState=running
+===== azeroth-discord-bot cat =====
+# /etc/systemd/system/azeroth-discord-bot.service
+[Unit]
+Description=Azeroth Discord Bot
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=wow
+WorkingDirectory=/home/wow/wow-private-server/discord-bot
+EnvironmentFile=/home/wow/wow-private-server/.env
+ExecStart=/home/wow/wow-private-server/discord-bot/venv/bin/python3 /home/wow/wow-private-server/discord-bot/bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+===== azeroth-discord-bot show =====
+MainPID=2200
+NRestarts=0
+ExecMainStartTimestamp=Sun 2026-09-13 18:26:58 UTC
+MemoryCurrent=36859904
+CPUUsageNSec=1871069975000
+TasksCurrent=3
+ActiveState=active
+SubState=running
+===== list-units azeroth/bot =====
+  azeroth-dashboard.service                      loaded    active     running      Azeroth Server Dashboard
+  azeroth-discord-bot.service                    loaded    active     running      Azeroth Discord Bot
+  azeroth-mangosd.service                        loaded    active     running      Azeroth World Server (mangosd)
+  azeroth-realmd.service                         loaded    active     running      Azeroth Realm Server (realmd)
+  groupme-remindme.service                       loaded    active     running      GroupMe Remind-Me Bot
+  mangosd.service                                loaded    activating auto-restart VMaNGOS World Server
+  realmd.service                                 loaded    activating auto-restart VMaNGOS Realm Server

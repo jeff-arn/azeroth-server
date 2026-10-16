@@ -41,6 +41,9 @@ __pycache__/
 docs/*
 !docs/ARCHITECTURE.md
 !docs/BOT_ARCHITECTURE_PROPOSAL.md
+!docs/RUST_MIGRATION_ARCHITECTURE.md
+!docs/rust-migration-evidence/
+!docs/rust-migration-evidence/**
 
 # ============ Addon zip uploads ============
 dashboard/static/addons/*.zip

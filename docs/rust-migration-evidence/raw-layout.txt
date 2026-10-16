@@ -1,0 +1,108 @@
+=== co-tenant parent ===
+    PID USER         ELAPSED COMMAND
+   3391 wow      32-06:22:49 /tmp/spire-launcher eqemu-server:launcher start
+25
+permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+=== HOME ===
+total 136
+drwxr-x--- 13 wow  wow   4096 May 26 04:54 .
+drwxr-xr-x  4 root root  4096 May 26 01:21 ..
+-rw-------  1 wow  wow   8313 May 26 04:54 .bash_history
+-rw-r--r--  1 wow  wow    220 Mar 22  2026 .bash_logout
+-rw-r--r--  1 wow  wow   3771 Mar 22  2026 .bashrc
+drwx------  8 wow  wow   4096 May 25 23:26 .cache
+drwxrwxr-x 15 wow  wow   4096 May 26 01:53 .claude
+-rw-------  1 wow  wow  29522 May 26 04:54 .claude.json
+-rw-r--r--  1 wow  wow      0 Mar 22  2026 .cloud-locale-test.skip
+drwxrwx--x  4 wow  wow   4096 May 26 00:34 .config
+drwxrwxr-x  3 wow  wow   4096 Mar 25  2026 .dotnet
+-rw-------  1 wow  wow    122 May 26 02:20 .git-credentials
+-rw-rw-r--  1 wow  wow     96 Mar 22  2026 .gitconfig
+-rw-------  1 wow  wow     20 May 26 01:11 .lesshst
+drwxrwxr-x  6 wow  wow   4096 May 25 23:21 .local
+-rw-r--r--  1 wow  wow    807 Mar 22  2026 .profile
+drwxrwxr-x  3 wow  wow   4096 Mar 25  2026 .ruff_cache
+drwx------  2 wow  wow   4096 Mar 25  2026 .ssh
+-rw-r--r--  1 wow  wow      0 Mar 22  2026 .sudo_as_admin_successful
+drwxr-xr-x  2 wow  wow   4096 May 25 23:28 .vim
+-rw-------  1 wow  wow   9868 May 25 23:28 .viminfo
+drwxr-x---  5 wow  wow   4096 Apr  6  2026 .vscode-server
+-rw-rw-r--  1 wow  wow    218 Mar 28  2026 .wget-hsts
+drwxrwxr-x  3 wow  wow   4096 Mar 25  2026 backups
+drwxrwxr-x 14 wow  wow   4096 May 26 01:36 wow-private-server
+=== checkout ===
+total 104
+drwxrwxr-x 14 wow wow 4096 May 26 01:36 .
+drwxr-x--- 13 wow wow 4096 May 26 04:54 ..
+-rw-rw-r--  1 wow wow  222 May 26 01:36 .clang-format-ignore
+drwxrwxr-x  3 wow wow 4096 May 26 00:34 .claude
+-rw-rw-r--  1 wow wow  239 Mar 25  2026 .env
+-rw-rw-r--  1 wow wow  876 May 25 23:28 .env.example
+drwxrwxr-x  8 wow wow 4096 May 26 02:20 .git
+drwxrwxr-x  2 wow wow 4096 May 26 01:36 .githooks
+drwxrwxr-x  3 wow wow 4096 May 25 23:28 .github
+-rw-rw-r--  1 wow wow 1112 May 25 23:28 .gitignore
+-rw-rw-r--  1 wow wow  937 May 25 23:28 .gitleaks.toml
+drwxrwxr-x  3 wow wow 4096 Mar 25  2026 .ruff_cache
+-rw-rw-r--  1 wow wow 7777 May 25 23:28 CLAUDE.md
+-rw-rw-r--  1 wow wow 5101 Mar 28  2026 README.md
+drwxrwxr-x  3 wow wow 4096 Mar 25  2026 backups
+drwxrwxr-x  7 wow wow 4096 May 26 01:36 dashboard
+drwxrwxr-x  4 wow wow 4096 May 26 01:36 discord-bot
+drwxrwxr-x  3 wow wow 4096 May 25 23:28 docs
+-rw-rw-r--  1 wow wow  422 May 26 01:36 pyproject.toml
+-rw-rw-r--  1 wow wow   97 May 26 01:36 requirements-dev.txt
+-rw-rw-r--  1 wow wow  223 Mar 25  2026 ruff.toml
+drwxrwxr-x  3 wow wow 4096 May 26 01:36 scripts
+drwxrwxr-x 12 wow wow 4096 May 26 01:36 vmangos
+drwxrwxr-x  3 wow wow 4096 Mar 22  2026 vmangos-database
+ls: cannot access '/home/wow/vmangos': No such file or directory
+=== bin ===
+total 46M
+drwxrwxr-x 3 wow wow 4.0K Mar 22  2026 5875
+-rw-rw-r-- 1 wow wow 207K Sep 14 08:21 Anticheat.log
+-rw-rw-r-- 1 wow wow    0 Mar 22  2026 Bg.log
+-rw-rw-r-- 1 wow wow  184 Mar 26  2026 Char.log
+-rw-rw-r-- 1 wow wow 9.8K Apr 14  2026 Chat.log
+-rw-rw-r-- 1 wow wow    0 Sep 14 08:21 DBErrorFixes.sql
+-rw-rw-r-- 1 wow wow 1.7K Sep 14 08:56 DBErrors.log
+drwxrwxr-x 2 wow wow 4.0K Mar 22  2026 Extractors
+-rw-rw-r-- 1 wow wow  104 Mar 25  2026 HCR__2026-03-25_02-01-1.txt
+-rw-r--r-- 1 wow wow  104 Apr  1  2026 HCR__2026-04-01_00-15-3.txt
+-rw-r--r-- 1 wow wow  104 Apr  8  2026 HCR__2026-04-08_01-26-2.txt
+-rw-r--r-- 1 wow wow  104 Apr 15  2026 HCR__2026-04-15_00-15-4.txt
+-rw-r--r-- 1 wow wow  104 Apr 22 00:16 HCR__2026-04-22_00-16-2.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 18:27 HCR__2026-09-13_18-27-1.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 18:42 HCR__2026-09-13_18-42-4.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 18:58 HCR__2026-09-13_18-58-0.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 19:13 HCR__2026-09-13_19-13-3.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 19:29 HCR__2026-09-13_19-29-0.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 19:44 HCR__2026-09-13_19-44-3.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 19:59 HCR__2026-09-13_19-59-5.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 20:15 HCR__2026-09-13_20-15-2.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 20:30 HCR__2026-09-13_20-30-5.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 20:46 HCR__2026-09-13_20-46-2.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 21:01 HCR__2026-09-13_21-01-4.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 21:17 HCR__2026-09-13_21-17-1.txt
+-rw-r--r-- 1 wow wow  104 Sep 13 21:32 HCR__2026-09-13_21-32-4.txt
+-rw-r--r-- 1 wow wow  104 Sep 14 00:00 HCR__2026-09-14_00-00-2.txt
+-rw-r--r-- 1 wow wow  104 Sep 14 00:15 HCR__2026-09-14_00-15-5.txt
+-rw-r--r-- 1 wow wow  104 Sep 14 00:31 HCR__2026-09-14_00-31-1.txt
+-rw-r--r-- 1 wow wow  104 Sep 14 00:46 HCR__2026-09-14_00-46-4.txt
+-rw-r--r-- 1 wow wow  104 Sep 14 01:02 HCR__2026-09-14_01-02-1.txt
+-rw-r--r-- 1 wow wow  104 Sep 14 01:17 HCR__2026-09-14_01-17-3.txt
+-rw-r--r-- 1 wow wow  104 Sep 14 01:33 HCR__2026-09-14_01-33-0.txt
+-rw-rw-r-- 1 wow wow  12M Sep 14 11:18 LevelUp.log
+-rw-rw-r-- 1 wow wow 332K Apr 14  2026 Loot.log
+-rw-rw-r-- 1 wow wow    0 Mar 22  2026 Movement.log
+-rw-rw-r-- 1 wow wow 1.3M Oct 15 20:35 Network.log
+-rw-rw-r-- 1 wow wow  11M Sep 14 11:16 Perf.log
+-rw-rw-r-- 1 wow wow  239 Apr  5  2026 Ra.log
+=== file type ===
+/home/wow/wow-private-server/vmangos/run/bin/mangosd: ELF 64-bit LSB pie executable, x86-64, version 1 (GNU/Linux), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=8fc715286e1640cb62da79fcffed525156de6adc, for GNU/Linux 3.2.0, not stripped
+/home/wow/wow-private-server/vmangos/run/bin/realmd:  ELF 64-bit LSB pie executable, x86-64, version 1 (GNU/Linux), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=7a802db180c0e4ecc10d1d5fca0860726f9dd7f9, for GNU/Linux 3.2.0, not stripped
+=== GIT ===
+aaf9b5e 2026-05-26 02:20:19 +0000 fix(vmangos): forward-declare QueryNamedResult in Database.h
+fix/database-h-forward-decl
+origin	https://github.com/jeff-arn/azeroth-server.git (fetch)
+origin	https://github.com/jeff-arn/azeroth-server.git (push)

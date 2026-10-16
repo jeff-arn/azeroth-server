@@ -1,6 +1,6 @@
 # Architecture Reference
 
-Deep dive into how the Azeroth server is built — directory layout, services, custom VMaNGOS bot systems, dashboard API, and design lessons. This is the encyclopedia. For the standards and rules that govern day-to-day work, see [CLAUDE.md](../CLAUDE.md) and the files under `.claude/rules/`.
+Deep dive into how the Azeroth server is built — directory layout, services, custom VMaNGOS bot systems, dashboard API, and design lessons. This is the encyclopedia. For the standards and rules that govern day-to-day work, see [CLAUDE.md](../CLAUDE.md) and the files under `.claude/rules/`. For the architectural evidence base prepared for a future C++→Rust migration (crate map, sequencing, byte-compatibility contracts, live deployment facts), see [RUST_MIGRATION_ARCHITECTURE.md](RUST_MIGRATION_ARCHITECTURE.md).
 
 ## Owner
 - GitHub: jeff-arn

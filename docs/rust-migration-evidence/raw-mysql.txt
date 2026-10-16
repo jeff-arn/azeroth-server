@@ -1,0 +1,87 @@
+=== backup db dir ===
+total 664M
+-rw-rw-r-- 1 wow wow 116K Oct 15 04:00 backup.log
+-rw-rw-r-- 1 wow wow 2.3K Oct 15 04:00 logs_20261015_040001.sql.gz
+-rw-rw-r-- 1 wow wow 8.8K Oct 15 04:00 realmd_20261015_040001.sql.gz
+-rw-rw-r-- 1 wow wow  13M Oct 15 04:00 characters_20261015_040001.sql.gz
+-rw-rw-r-- 1 wow wow  32M Oct 15 04:00 mangos_20261015_040001.sql.gz
+-rw-rw-r-- 1 wow wow 2.3K Oct 14 04:00 logs_20261014_040001.sql.gz
+-rw-rw-r-- 1 wow wow 8.8K Oct 14 04:00 realmd_20261014_040001.sql.gz
+-rw-rw-r-- 1 wow wow  13M Oct 14 04:00 characters_20261014_040001.sql.gz
+-rw-rw-r-- 1 wow wow  32M Oct 14 04:00 mangos_20261014_040001.sql.gz
+-rw-rw-r-- 1 wow wow 2.3K Oct 13 04:00 logs_20261013_040001.sql.gz
+-rw-rw-r-- 1 wow wow 8.8K Oct 13 04:00 realmd_20261013_040001.sql.gz
+-rw-rw-r-- 1 wow wow  13M Oct 13 04:00 characters_20261013_040001.sql.gz
+-rw-rw-r-- 1 wow wow  32M Oct 13 04:00 mangos_20261013_040001.sql.gz
+-rw-rw-r-- 1 wow wow 2.3K Oct 12 04:00 logs_20261012_040001.sql.gz
+-rw-rw-r-- 1 wow wow 8.8K Oct 12 04:00 realmd_20261012_040001.sql.gz
+-rw-rw-r-- 1 wow wow  13M Oct 12 04:00 characters_20261012_040001.sql.gz
+-rw-rw-r-- 1 wow wow  32M Oct 12 04:00 mangos_20261012_040001.sql.gz
+-rw-rw-r-- 1 wow wow 2.3K Oct 11 04:00 logs_20261011_040001.sql.gz
+-rw-rw-r-- 1 wow wow 8.8K Oct 11 04:00 realmd_20261011_040001.sql.gz
+-rw-rw-r-- 1 wow wow  13M Oct 11 04:00 characters_20261011_040001.sql.gz
+-rw-rw-r-- 1 wow wow  32M Oct 11 04:00 mangos_20261011_040001.sql.gz
+-rw-rw-r-- 1 wow wow 2.3K Oct 10 04:00 logs_20261010_040001.sql.gz
+-rw-rw-r-- 1 wow wow 8.8K Oct 10 04:00 realmd_20261010_040001.sql.gz
+-rw-rw-r-- 1 wow wow  13M Oct 10 04:00 characters_20261010_040001.sql.gz
+Thu Oct 15 04:00:16 UTC 2026: Backed up mangos -> /home/wow/wow-private-server/backups/db/mangos_20261015_040001.sql.gz (32M)
+Thu Oct 15 04:00:24 UTC 2026: Backed up characters -> /home/wow/wow-private-server/backups/db/characters_20261015_040001.sql.gz (13M)
+Thu Oct 15 04:00:24 UTC 2026: Backed up realmd -> /home/wow/wow-private-server/backups/db/realmd_20261015_040001.sql.gz (12K)
+Thu Oct 15 04:00:25 UTC 2026: Backed up logs -> /home/wow/wow-private-server/backups/db/logs_20261015_040001.sql.gz (4.0K)
+Thu Oct 15 04:00:25 UTC 2026: Backup complete. Pruned 4 old files.
+664M	/home/wow/wow-private-server/backups/db
+total 148K
+drwxrwxr-x 2 wow  wow  4.0K Mar 25  2026 db
+-rw-r--r-- 1 root root  295 Mar 25  2026 azeroth-dashboard.service
+-rw-r--r-- 1 root root  393 Mar 25  2026 azeroth-discord-bot.service
+-rw-r--r-- 1 root root  300 Mar 25  2026 bot-director.service
+-rw-r--r-- 1 wow  wow  7.1K Mar 25  2026 realmd.conf
+-rw-r--r-- 1 wow  wow  108K Mar 25  2026 mangosd.conf
+-rw-rw-r-- 1 wow  wow  5.4K Mar 25  2026 CLAUDE.md
+drwxrwxr-x 4 wow  wow  4.0K Mar 23  2026 dashboard
+drwxrwxr-x 3 wow  wow  4.0K Mar 23  2026 discord-bot
+=== safe conf keys ===
+RealmID = 1
+DataDir = "."
+LogsDir = ""
+WorldServerPort = 8085
+BindIP = "0.0.0.0"
+UseProcessors = 0
+ProcessPriority = 1
+PlayerLimit = 100
+LogLevel.Console = 2
+LogLevel.File = 2
+LogLevel.DB = 2
+MaxPlayerLevel = 60
+RealmServerPort = 3724
+BindIP = "0.0.0.0"
+LogLevel.Console = 2
+LogLevel.File = 2
+/home/wow/wow-private-server/vmangos/run/etc/mangosd.conf size=111555 perm=644 mtime=2026-04-05 00:18:52.002720580 +0000
+/home/wow/wow-private-server/vmangos/run/etc/realmd.conf size=7177 perm=644 mtime=2026-03-22 02:04:12.176396116 +0000
+/home/wow/wow-private-server/.env size=239 perm=664 mtime=2026-03-25 01:55:11.529730742 +0000
+=== mysql service ===
+MainPID=943
+ExecMainStartTimestamp=Sun 2026-09-13 18:26:55 UTC
+MemoryCurrent=1213906944
+ActiveState=active
+SubState=running
+mysql  Ver 8.0.46-0ubuntu0.22.04.4 for Linux on x86_64 ((Ubuntu))
+=== mysql no-cred attempt ===
+ls: cannot access '/home/wow/.my.cnf': No such file or directory
+ls: cannot access '/home/wow/.mylogin.cnf': No such file or directory
+ERROR 1045 (28000): Access denied for user 'wow'@'localhost' (using password: NO)
+=== mysql datadir size attempt ===
+du: cannot read directory '/var/lib/mysql': Permission denied
+4.0K	/var/lib/mysql
+ls: cannot open directory '/var/lib/mysql': Permission denied
+=== groupme/botdirector ===
+  caddy.service                                  loaded    active     running      Caddy
+  docker.service                                 loaded    active     running      Docker Application Container Engine
+  lxd-agent.service                              loaded    inactive   dead         LXD - agent
+  snap.lxd.activate.service                      loaded    inactive   dead         Service for snap application lxd.activate
+  snap.lxd.daemon.service                        loaded    inactive   dead         Service for snap application lxd.daemon
+  snap.lxd.user-daemon.service                   loaded    inactive   dead         Service for snap application lxd.user-daemon
+  systemd-tmpfiles-clean.service                 loaded    inactive   dead         Cleanup of Temporary Directories
+  systemd-tmpfiles-setup.service                 loaded    active     exited       Create Volatile Files and Directories
+  user-runtime-dir@1000.service                  loaded    active     exited       User Runtime Directory /run/user/1000
