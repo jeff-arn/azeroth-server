@@ -607,41 +607,6 @@ fn stop_via_pidfile(config: &Config) -> ExitCode {
     }
 }
 
-/// Parse `host;port;user;password;db` (`LoginDatabaseInfo`) into a
-/// mysql URL, applying the C++ "exactly 4 semicolons" format check.
-fn login_db_url(dbstring: &str) -> Option<(String, String)> {
-    if dbstring.matches(';').count() != 4 {
-        return None;
-    }
-    let parts: Vec<&str> = dbstring.split(';').collect();
-    let (host, port, user, password, db) = (parts[0], parts[1], parts[2], parts[3], parts[4]);
-    let masked = format!("{host};{port};{user};*;{db}");
-    let url = format!(
-        "mysql://{}:{}@{}:{}/{}",
-        percent_encode(user),
-        percent_encode(password),
-        host,
-        port,
-        percent_encode(db)
-    );
-    Some((url, masked))
-}
-
-fn percent_encode(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                out.push(char::from(byte));
-            }
-            _ => {
-                let _ = write!(out, "%{byte:02X}");
-            }
-        }
-    }
-    out
-}
-
 // Mirrors the C++ main() startup sequence step for step.
 #[allow(clippy::too_many_lines)]
 fn main() -> ExitCode {
@@ -710,18 +675,18 @@ fn main() -> ExitCode {
         log.out(Level::Error, "Database not specified");
         return ExitCode::FAILURE;
     }
-    let Some((db_url, masked)) = login_db_url(&dbstring) else {
+    let Some(db_info) = mangos_db::ConnectionInfo::parse(&dbstring) else {
         log.out(
             Level::Error,
             "Incorrectly formatted database connection string for logon database",
         );
         return ExitCode::FAILURE;
     };
-    log.out(Level::Minimal, &format!("Database: {masked}"));
+    log.out(Level::Minimal, &format!("Database: {}", db_info.masked()));
     if Level::Minimal <= console_level {
-        println!("Database: {masked}");
+        println!("Database: {}", db_info.masked());
     }
-    let Ok(db) = LoginDb::spawn(&db_url) else {
+    let Ok(db) = LoginDb::spawn(&db_info.mysql_url()) else {
         log.out(Level::Error, "Cannot connect to database");
         return ExitCode::FAILURE;
     };

@@ -11,10 +11,12 @@ license = "GPL-2.0-or-later"
 mysql = "26"
 num-bigint = "0.4"
 rand = "0.9"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 md-5 = "0.10"
 sha1 = "0.10"
 sha2 = "0.10"
 time = { version = "0.3", features = ["local-offset", "macros"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time", "signal", "io-util"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

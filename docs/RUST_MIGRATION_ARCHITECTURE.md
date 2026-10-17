@@ -913,10 +913,10 @@ Two were partially closed by later reports and are flagged inline
 6. Live production thread-count config values not read (secret hygiene); only *.conf.dist.in defaults cited
 7. Spell.cpp/SpellAuras.cpp internal flows beyond headers/dispatch not deep-read
 8. mangosd.conf cadence-gate defaults not read (credential-bearing, out of bounds)
-9. Battlegrounds/Anticheat/Server interiors and src/shared DBC loading left to sibling scopes
+9. Battlegrounds/Anticheat/Server interiors and src/shared DBC loading left to sibling scopes [Phase 3 2026-10-17: the Server interior (WorldSocket/WorldSession/OpcodeHandler admission chain, AddSession queue, Master boot sequence) was read line-by-line and ported; Battlegrounds/Anticheat interiors remain unread]
 10. vmangos-rs/crates absent in this checkout — existing Rust MySQL crates (mangos-realmd-mysql per memory) not inspectable here [closed 2026-10-16 by owner direction: the former workspace no longer exists; migration starts from scratch — see Preface]
 11. World DB content dump gitignored/absent — world table/row inventory and loader validation data unavailable [Phase 0: 2026-10-15 nightly world dump restored on the dev bench (174 tables) — inventory/validation now possible locally; still absent from the repo]
-12. Live production DB not queried (read-only) — engine/charset drift and applied-migration state unverified [Phase 0 via restored snapshot: migrations complete (1005/18/6/6); characters engines 48 MyISAM/13 InnoDB; mixed collations observed (utf8mb3/utf8mb4/latin1) — charset parity remains a Phase 1/3 watch item] [Phase 1 2026-10-17: login-DB path exercised end to end on the restored snapshot by BOTH servers with byte-identical results (account/sessionkey/realm rows); no charset divergence observed on the realmd surface (ASCII usernames) — remains a watch item for world/character text in Phase 2/3]
+12. Live production DB not queried (read-only) — engine/charset drift and applied-migration state unverified [Phase 0 via restored snapshot: migrations complete (1005/18/6/6); characters engines 48 MyISAM/13 InnoDB; mixed collations observed (utf8mb3/utf8mb4/latin1) — charset parity remains a Phase 1/3 watch item] [Phase 1 2026-10-17: login-DB path exercised end to end on the restored snapshot by BOTH servers with byte-identical results (account/sessionkey/realm rows); no charset divergence observed on the realmd surface (ASCII usernames) — remains a watch item for world/character text in Phase 2/3] [Phase 3 2026-10-17: world/character text exercised on the snapshot through the binary protocol — character names, mail subjects, and account-data blobs byte-exact vs independent oracle (298 load rows); no divergence observed, still a watch item for non-ASCII player input at save time (Phase 6)]
 13. Postgre backend parity, CharacterDatabaseCache/Cleaner, per-loader SELECT catalog sampled not exhaustive; Python dashboard/discord DB writers out of scope [Python writers later scoped by 07: guild_bot_roster only]
 14. Largest .cpp bodies read selectively: per-behavior Score/Execute internals, BotDirector cycle math, AH pricing formulas, GuildBot gear scoring characterized from headers/docs/greps, not line-by-line
 15. docs/BOT_ARCHITECTURE_PROPOSAL.md and gitignored research docs not read [proposal read by 10; gitignored docs still absent]
@@ -939,7 +939,7 @@ Two were partially closed by later reports and are flagged inline
 32. 3 gitignored docs/ research notes (ARCHITECTURE.md:149) absent from tree, contents uninspectable
 33. macOS configure/compile unverified (no CMake; blockers predicted only) [duplicate of #1, short form]
 34. per-lock inventory + lock ordering absent (41 shared_timed_mutex mentions unnamed) [Phase 0: named inventory + two sampled ordering pairs in evidence 21; exhaustive whole-program ordering still open]
-35. per-opcode payload catalog absent (272 handlers parse positionally) [Phase 0: generated skeleton in evidence 22 (826 rows, counts reconciled); 47 '?'-rows + ~10 helpers need Phase 3 triage]
+35. per-opcode payload catalog absent (272 handlers parse positionally) [Phase 0: generated skeleton in evidence 22 (826 rows, counts reconciled); 47 '?'-rows + ~10 helpers need Phase 3 triage] [Phase 3 2026-10-17: registry generated and census-asserted in-crate (826/276/525/828); all 47 '?'-rows hand-triaged in evidence 22 section 7 — 36 are the single MovementInfo helper (exact field list recorded, parser itself is Phase 4), 11 are member-access reads now typed. Remaining: spell-target helper expansion belongs to Phase 5 spell work]
 36. ~28 char-DB save tables untranscribed (auras/cooldowns/mail/pet/BG/etc) [Phase 0: full save/load transcription in evidence 20 (61-bind REPLACE, 10 in-txn sub-saves, dead holder slot found)]
 37. world DB schema absent; live engine/charset/migration state unverified [duplicate of #11/#12]
 38. production binary-commit mapping + live thread/config values unknown [duplicate of #6/#30; mapping closed 2026-10-16 in Phase 0 — both binaries are commit `2bae5f921f59892d4c41002a0869b154f02867d3` per their embedded revision strings; live config values remain unread]
@@ -947,13 +947,13 @@ Two were partially closed by later reports and are flagged inline
 40. GMOD layout + vendored Detour version unread [duplicate of #19/#21] [Detour half closed with #21 in Phase 2; GMOD layout (#19) still unread]
 41. Anticheat/Warden, core LFG, BG, ZoneScript, Honor internals unread [duplicate of #9, extended]
 42. SOAP op surface + RA command set unenumerated
-43. PostgreSQL backend disposition undecided; CharacterDatabaseCache/Cleaner unread [duplicate of #13]
+43. PostgreSQL backend disposition undecided; CharacterDatabaseCache/Cleaner unread [duplicate of #13] [CLOSED by owner decision 2026-10-18 (Phase 3 kickoff): PostgreSQL is dropped from Rust scope; MySQL-only. CharacterDatabaseCache/Cleaner still unread and still unported]
 44. guild_bot_roster re-read-after-startup (dashboard liveness) untraced [duplicate of #23] [closed with #23]
 45. characters.online C++ writer site unpinned; no live LevelUp.log sample [duplicate of #24/#25] [closed with #24/#25]
 46. existing Rust workspace (~190 crates claim) uninspectable in this checkout [duplicate of #10; closed with it]
 47. realmd NRestarts=24 cause unknown; backup restore never tested [extends #30] [restore half CLOSED in Phase 0: nightly dumps restore cleanly and the production-commit oracle boots on them to 'World initialized.']
 48. Caddy/TLS/firewall fronting :8080; MySQL per-table sizes unknown [duplicate of #27/#29]
-49. no load/perf baseline (live world idle at inspection) [Phase 0: idle baseline recorded in PHASE0-PROGRESS.md; loaded baseline still open for Phase 3]
+49. no load/perf baseline (live world idle at inspection) [Phase 0: idle baseline recorded in PHASE0-PROGRESS.md; loaded baseline still open for Phase 3] [Phase 3 2026-10-17: still open — the Rust skeleton is an empty world by design, so no loaded baseline is meaningful yet; idle bench boot of the Rust binary (50 ms world tick) is healthy but is not a perf measurement]
 50. Spell.cpp/SpellAuras.cpp internals beyond dispatch unread [duplicate of #7]
 51. Map.cpp:1781/BattleGround.cpp:787 bot-branch contexts unread [duplicate of #17]
 52. bot per-behavior Score/Execute, AH pricing, GuildBot gear math not line-read [duplicate of #14]

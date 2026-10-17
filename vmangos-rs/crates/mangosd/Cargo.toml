@@ -1,0 +1,30 @@
+[package]
+name = "mangosd"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Rust mangosd: world server, wire- and DB-compatible with vmangos mangosd"
+
+[[bin]]
+name = "mangosd"
+path = "src/main.rs"
+
+[dependencies]
+mangos-build-info = { path = "../mangos-build-info" }
+mangos-config = { path = "../mangos-config" }
+mangos-db = { path = "../mangos-db" }
+mangos-guid = { path = "../mangos-guid" }
+mangos-log = { path = "../mangos-log" }
+mangos-protocol = { path = "../mangos-protocol" }
+mangos-world-data = { path = "../mangos-world-data" }
+flate2.workspace = true
+md-5.workspace = true
+mysql.workspace = true
+num-bigint.workspace = true
+rand.workspace = true
+time.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

@@ -132,3 +132,56 @@ Rerun: `python3 /tmp/muse-phase0/gen_opcode_catalog.py [out.csv]`
 the ~10 highest-traffic `call(...)` helpers (movement, spell targets) into
 field lists, and hand-clear the 47 `?` rows — that turns this skeleton into
 a codegen-ready payload spec.
+
+
+## 7. Phase 3 triage of the 47 `?` rows (2026-10-17)
+
+All 47 rows resolved to concrete field lists by reading the
+handler bodies; no row was an extraction mystery:
+
+- **Movement family (36 rows)** — `HandleMovementOpcodes` (22),
+  `HandleForceSpeedChangeAckOpcodes` (6),
+  `HandleMovementFlagChangeToggleAck` (3), `HandleMoveRootAck`
+  (2), `HandleMoveTeleportAckOpcode`, `HandleMoveKnockBackAck`,
+  `HandleMoveSplineDoneOpcode` (1 each): each `?` is one
+  `MovementInfo` read (`recvData >> movementInfo`,
+  `Object.cpp:61-103`): `moveFlags u32, ctime u32, pos.x/y/z/o
+  f32`, then conditional blocks — ONTRANSPORT: `t_guid u64,
+  t_pos.x/y/z/o f32`; SWIMMING: `s_pitch f32`; `fallTime u32`;
+  JUMPING: `zspeed, cosAngle, sinAngle, xyspeed f32` (cos is
+  read before sin); SPLINE_ELEVATION: `splineElevation f32`.
+  SplineDone appends `splineId u32` + `Unused<float>`. This
+  parser is NOT yet ported (Phase 2's `mangos-movement` covers
+  spline math/packet building, not `MovementInfo`); it is the
+  first item of Phase 4 movement ingestion, now with the exact
+  field list.
+- **`CMSG_WHO`** — task members are all `uint32`
+  (`MiscHandler.cpp:74`): levelMin, levelMax, raceMask,
+  classMask, zonesCount (loop of u32 zone ids, client cap 10),
+  strCount (loop, cap 4), plus the two plain strings.
+- **`CMSG_PET_SET_ACTION`** — `petGuid` then a size-derived
+  count (packet size 24 → 2, else 1) of (`position u32`,
+  `data u32`) pairs; the `?` was the size-derived count itself.
+- **`CMSG_ACTIVATE_TAXI`** — guid + `nodes[0..2]` u32 pair
+  (vector element lvalues).
+- **`CMSG_TRAINER_BUY_SPELL`** — guid + `spellId u32`
+  (initialized local shadowed the extractor's declaration scan).
+- **`CMSG_SEND_MAIL`** — mailbox guid, three `req->` member
+  strings (receiver/subject/body), two u32 unknowns,
+  `req->itemGuid u32`, `req->money u32`, `req->COD u32`
+  (`Mail.h:297,334,336`), then u64 + u8 consts.
+- **`CMSG_BATTLEFIELD_LIST` / `CMSG_LEAVE_BATTLEFIELD`** —
+  single `mapId u32` each.
+- **`CMSG_BATTLEFIELD_PORT`** — at >1.8.4: `mapId u32,
+  action u8`; the catalog's double `action` read is the
+  `#else` branch conflated by the non-preprocessing extractor.
+- **`CMSG_AUCTION_LIST_ITEMS`** — `AuctionListItemsTask`
+  (`AuctionHouseMgr.h:96-104`): listfrom u32, name string,
+  levelmin u8, levelmax u8, slot/main/sub/quality u32 x4,
+  usable u8.
+- **`CMSG_BUYBACK_ITEM`** — vendor guid + `slot u32`.
+- **`CMSG_SET_WATCHED_FACTION`** — `repId i32` (signed; -1
+  clears the watched faction).
+
+The CSV itself is unchanged (generator output); this appendix
+is the hand-clearing the catalog asked for.

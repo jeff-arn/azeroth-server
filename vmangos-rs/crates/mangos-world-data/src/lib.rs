@@ -1,0 +1,72 @@
+//! Read-only static stores (architecture section 12:
+//! `ObjectMgr` loaders, `SpellMgr`, `SQLStorage`).
+//!
+//! Phase 3 slice: the boot gates an empty world still has to
+//! pass — `DataDir` resolution, the six start-area map/vmap
+//! existence checks `SetInitialWorldSettings` opens with, and
+//! the `mangos_string` table whose absence aborts boot. Stores
+//! land here only when a Phase 3 consumer exists; the remaining
+//! ~90 loaders are later phases and are logged as deferred by
+//! the binary, never silently skipped.
+
+pub mod assets_check;
+pub mod enum_stores;
+pub mod strings;
+
+use std::path::{Path, PathBuf};
+
+use mangos_config::Config;
+
+/// `sWorld.GetDataPath()`: the `DataDir` config value with the
+/// C++ normalization (empty → `./`; `World.cpp:905-920`).
+/// Subpaths join from here instead of the C++ string
+/// concatenation, with identical results.
+#[derive(Clone, Debug)]
+pub struct DataDir(PathBuf);
+
+impl DataDir {
+    #[must_use]
+    pub fn from_config(cfg: &Config) -> DataDir {
+        let raw = cfg.string_default("DataDir", "./");
+        DataDir::new(if raw.is_empty() {
+            "./".to_string()
+        } else {
+            raw
+        })
+    }
+
+    #[must_use]
+    pub fn new(path: impl Into<PathBuf>) -> DataDir {
+        DataDir(path.into())
+    }
+
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+
+    /// `<DataDir>/maps`
+    #[must_use]
+    pub fn maps_dir(&self) -> PathBuf {
+        self.0.join("maps")
+    }
+
+    /// `<DataDir>/vmaps`
+    #[must_use]
+    pub fn vmaps_dir(&self) -> PathBuf {
+        self.0.join("vmaps")
+    }
+
+    /// `<DataDir>/mmaps`
+    #[must_use]
+    pub fn mmaps_dir(&self) -> PathBuf {
+        self.0.join("mmaps")
+    }
+
+    /// `<DataDir>/5875` (the DBC path is suffixed with the
+    /// supported client build, `World.cpp:1376-1382`).
+    #[must_use]
+    pub fn dbc_dir(&self) -> PathBuf {
+        self.0.join("5875")
+    }
+}

@@ -1,0 +1,16 @@
+[package]
+name = "mangos-world-data"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Static world data for the Rust mangosd: boot asset checks, mangos strings, and the read-only stores the login path consumes"
+
+[dependencies]
+mangos-assets = { path = "../mangos-assets" }
+mangos-config = { path = "../mangos-config" }
+mangos-db = { path = "../mangos-db" }
+mysql.workspace = true
+
+[lints]
+workspace = true

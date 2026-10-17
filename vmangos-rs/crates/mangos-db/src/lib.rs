@@ -14,13 +14,29 @@
 //!
 //! Phase 1: [`login::LoginDb`] is the per-DB actor for the login
 //! database; [`connect`]/[`Conn::count_migrations`] remain as the
-//! boot-time migration-gate read and live-test probe.
+//! live-test probe. Phase 3 adds the generic [`actor::DbActor`],
+//! the [`migrations`] boot gate, [`connection_info::ConnectionInfo`],
+//! and [`world_auth::WorldAuthDb`] for mangosd.
 
 use mysql::prelude::Queryable;
 
+pub mod actor;
+pub mod character_load;
+pub mod characters;
+pub mod connection_info;
 pub mod login;
+pub mod migrations;
+// Field conversions wrap/round like C++ atol/atof by design.
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_precision_loss)]
+pub mod row;
+pub mod world_auth;
 
+pub use actor::DbActor;
+pub use characters::CharacterDb;
+pub use connection_info::ConnectionInfo;
 pub use login::LoginDb;
+pub use world_auth::WorldAuthDb;
 
 /// Errors from the MySQL driver or URL parsing.
 #[derive(Debug)]

@@ -41,3 +41,30 @@ if [ -n "${MANGOS_MMAPS_DIR:-}" ]; then
 else
   echo "MANGOS_MMAPS_DIR unset -- skipping production mmap parity tests"
 fi
+
+if [ -n "${MANGOS_DATADIR:-}" ]; then
+  cargo test -p mangos-world-data --test production_assets -- --ignored
+else
+  echo "MANGOS_DATADIR unset -- skipping production asset-gate tests"
+fi
+if [ -n "${TEST_MYSQL_URL_WORLD:-}" ]; then
+  cargo test -p mangos-world-data --test live_strings -- --ignored
+else
+  echo "TEST_MYSQL_URL_WORLD unset -- skipping live mangos_string tests"
+fi
+
+if [ -n "${TEST_MYSQL_URL_CHARACTERS:-}" ] && [ -n "${TEST_MYSQL_URL_WORLD:-}" ] && [ -n "${CHAR_ENUM_ORACLE:-}" ]; then
+  cargo test -p mangosd --test live_char_enum -- --ignored
+else
+  echo "char-enum oracle env unset -- skipping live enum tests"
+fi
+if [ -n "${TEST_MYSQL_URL_CHARACTERS:-}" ]; then
+  cargo test -p mangos-db --test live_characters -- --ignored
+else
+  echo "TEST_MYSQL_URL_CHARACTERS unset -- skipping live character tests"
+fi
+if [ -n "${TEST_MYSQL_URL_CHARACTERS:-}" ] && [ -n "${CHARACTER_LOAD_ORACLE:-}" ]; then
+  cargo test -p mangos-db --test live_character_load -- --ignored
+else
+  echo "character-load oracle env unset -- skipping live load tests"
+fi
