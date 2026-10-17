@@ -11,8 +11,16 @@
 //! document's recommendation (section 11) to prefer pure-Rust MySQL +
 //! rustls over recreating the C++ find-module/`libmysqlclient` pain;
 //! it also keeps a musl-static build possible. Owner-overridable.
+//!
+//! Phase 1: [`login::LoginDb`] is the per-DB actor for the login
+//! database; [`connect`]/[`Conn::count_migrations`] remain as the
+//! boot-time migration-gate read and live-test probe.
 
 use mysql::prelude::Queryable;
+
+pub mod login;
+
+pub use login::LoginDb;
 
 /// Errors from the MySQL driver or URL parsing.
 #[derive(Debug)]

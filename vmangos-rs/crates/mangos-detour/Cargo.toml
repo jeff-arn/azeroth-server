@@ -1,0 +1,28 @@
+[package]
+name = "mangos-detour"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Thin unsafe FFI over the vendored (patched) Detour navmesh, with MoveMap/PathFinder load and query policy"
+build = "build.rs"
+
+[dependencies]
+mangos-movement = { path = "../mangos-movement" }
+
+[build-dependencies]
+cc = "1"
+
+# The workspace forbids unsafe; this crate is the one sanctioned
+# exception (Detour FFI). unsafe_code is deny here and allowed ONLY
+# on the `ffi` module; every other lint matches the workspace table
+# verbatim (keep in sync with ../../Cargo.toml [workspace.lints]).
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"

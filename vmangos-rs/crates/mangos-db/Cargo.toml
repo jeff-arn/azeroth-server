@@ -7,7 +7,11 @@ license.workspace = true
 description = "MySQL access layer for the Rust port (Phase 0 seed: connection + harness; actor/serial-lane design lands in Phase 1)"
 
 [dependencies]
-mysql = "26"
+mysql.workspace = true
+
+[dev-dependencies]
+mangos-protocol = { path = "../mangos-protocol" }
+mysql.workspace = true
 
 [lints]
 workspace = true

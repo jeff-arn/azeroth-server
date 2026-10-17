@@ -7,6 +7,15 @@ edition = "2024"
 rust-version = "1.85"
 license = "GPL-2.0-or-later"
 
+[workspace.dependencies]
+mysql = "26"
+num-bigint = "0.4"
+rand = "0.9"
+md-5 = "0.10"
+sha1 = "0.10"
+sha2 = "0.10"
+time = { version = "0.3", features = ["local-offset", "macros"] }
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 

@@ -1,0 +1,13 @@
+[package]
+name = "mangos-movement"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Movement splines + SMSG_MONSTER_MOVE packet builder, f32/byte-exact with vmangos Movement/spline"
+
+[dependencies]
+mangos-protocol = { path = "../mangos-protocol" }
+
+[lints]
+workspace = true

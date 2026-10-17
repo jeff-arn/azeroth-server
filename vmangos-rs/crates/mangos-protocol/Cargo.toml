@@ -1,0 +1,15 @@
+[package]
+name = "mangos-protocol"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Wire types for the 1.12.1 protocols (Phase 1: auth/logon half + SRP6), byte-compatible with vmangos ByteBuffer/AuthPackets/SRP6"
+
+[dependencies]
+num-bigint.workspace = true
+rand.workspace = true
+sha1.workspace = true
+
+[lints]
+workspace = true

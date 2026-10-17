@@ -26,4 +26,7 @@ paths = [
     '''CLAUDE\.md''',
     '''\.claude/rules/.*\.md''',
     '''docs/.*\.md''',
+
+    # Generated Rust parity fixtures contain SHA-256 digests, not credentials
+    '''vmangos-rs/crates/.*/tests/.*_oracle\.json$''',
 ]

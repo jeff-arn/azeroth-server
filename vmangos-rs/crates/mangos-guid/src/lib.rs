@@ -434,4 +434,116 @@ impl GuidGenerator {
         self.next += RANGE;
         Some((first, self.next))
     }
+
+    /// The gap scan of `LoadFromDB` (`ObjectGuid.cpp:110-157`), pure
+    /// part: seed the freed pool from the ascending-sorted set of
+    /// counters already used in the DB. Call after
+    /// [`Self::set_max_used`] with the table's max. `used` must be
+    /// sorted ascending and duplicate-free (as the `ORDER BY` query
+    /// returns it); values are consumed window by window exactly as
+    /// the SQL loop does:
+    /// - window size `max(pool_size * 2, 1000)`, windows start at 1;
+    /// - a window with no used counters stops the scan entirely
+    ///   (the C++ `goto end` on a null result);
+    /// - only gaps *between* consecutive used counters in a window
+    ///   are collected — the tail after a window's last row is not;
+    /// - scanning stops when the pool is full or when a window's
+    ///   upper bound reaches `next` (the do-while condition).
+    ///
+    /// The DB queries themselves stay with the Phase 3 world layer.
+    /// Returns how many counters were seeded (the C++ log line count).
+    pub fn seed_freed_from_used(&mut self, used: &[u32], pool_size: u32) -> usize {
+        if pool_size == 0 {
+            return 0;
+        }
+        let pool_size = pool_size as usize;
+        let window = (pool_size * 2).max(1000) as u32;
+        let mut seeded = 0usize;
+        let mut lower: u32 = 1;
+        'scan: loop {
+            let upper = lower - 1 + window;
+            let rows: Vec<u32> = used
+                .iter()
+                .copied()
+                .filter(|g| (lower..=upper).contains(g))
+                .collect();
+            if rows.is_empty() {
+                break;
+            }
+            let mut last = lower - 1;
+            for current in rows {
+                for gap in (last + 1)..current {
+                    self.freed.push_back(gap);
+                    seeded += 1;
+                    if self.freed.len() >= pool_size {
+                        break 'scan;
+                    }
+                }
+                last = current;
+            }
+            lower += window;
+            if upper >= self.next {
+                break;
+            }
+        }
+        seeded
+    }
+}
+
+#[cfg(test)]
+mod gap_scan_tests {
+    use super::*;
+
+    fn seeded_pool(genr: &GuidGenerator) -> Vec<u32> {
+        genr.freed.iter().copied().collect()
+    }
+
+    #[test]
+    fn gaps_between_used_counters_are_seeded() {
+        let mut genr = GuidGenerator::new(HighGuid::PLAYER);
+        assert!(genr.set_max_used(10));
+        let n = genr.seed_freed_from_used(&[1, 2, 5, 10], 100);
+        assert_eq!(n, 6);
+        assert_eq!(seeded_pool(&genr), vec![3, 4, 6, 7, 8, 9]);
+    }
+
+    #[test]
+    fn tail_after_last_row_in_window_is_not_collected() {
+        let mut genr = GuidGenerator::new(HighGuid::PLAYER);
+        assert!(genr.set_max_used(2000));
+        // Window is 1000 (pool 100 -> 2*100 < 1000). Used ends at 3;
+        // gaps 4..=1000 are the window tail and must NOT be seeded.
+        let n = genr.seed_freed_from_used(&[1, 3], 100);
+        assert_eq!(n, 1);
+        assert_eq!(seeded_pool(&genr), vec![2]);
+    }
+
+    #[test]
+    fn empty_window_stops_scan() {
+        let mut genr = GuidGenerator::new(HighGuid::PLAYER);
+        assert!(genr.set_max_used(5000));
+        // Window 1 (1..=1000) has rows; window 2 (1001..=2000) is
+        // empty -> scan ends, rows in later windows never examined.
+        let n = genr.seed_freed_from_used(&[2, 3000, 3002], 100);
+        assert_eq!(n, 1);
+        assert_eq!(seeded_pool(&genr), vec![1]);
+    }
+
+    #[test]
+    fn pool_size_caps_seeding() {
+        let mut genr = GuidGenerator::new(HighGuid::PLAYER);
+        assert!(genr.set_max_used(10));
+        let n = genr.seed_freed_from_used(&[10], 3);
+        assert_eq!(n, 3);
+        assert_eq!(seeded_pool(&genr), vec![1, 2, 3]);
+        assert_eq!(genr.generate(), Some(1));
+    }
+
+    #[test]
+    fn zero_pool_disables_seeding() {
+        let mut genr = GuidGenerator::new(HighGuid::PLAYER);
+        assert!(genr.set_max_used(10));
+        assert_eq!(genr.seed_freed_from_used(&[5], 0), 0);
+        assert_eq!(genr.generate(), Some(11));
+    }
 }

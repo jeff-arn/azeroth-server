@@ -1,0 +1,25 @@
+[package]
+name = "mangos-auth"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Rust realmd: auth/logon server (SRP6, realm list, patch XFER), wire- and DB-compatible with vmangos realmd"
+
+[[bin]]
+name = "realmd"
+path = "src/main.rs"
+
+[dependencies]
+mangos-build-info = { path = "../mangos-build-info" }
+mangos-config = { path = "../mangos-config" }
+mangos-db = { path = "../mangos-db" }
+mangos-log = { path = "../mangos-log" }
+mangos-protocol = { path = "../mangos-protocol" }
+md-5.workspace = true
+num-bigint.workspace = true
+rand.workspace = true
+sha1.workspace = true
+
+[lints]
+workspace = true

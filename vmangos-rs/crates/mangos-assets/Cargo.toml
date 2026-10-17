@@ -1,0 +1,13 @@
+[package]
+name = "mangos-assets"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "LE-explicit parsers for client asset data (maps/vmaps), byte/f32-exact with vmangos GridMap and VMap"
+
+[dev-dependencies]
+sha2.workspace = true
+
+[lints]
+workspace = true
