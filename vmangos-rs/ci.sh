@@ -49,8 +49,29 @@ else
 fi
 if [ -n "${TEST_MYSQL_URL_WORLD:-}" ]; then
   cargo test -p mangos-world-data --test live_strings -- --ignored
+  cargo test -p mangos-world-data --test live_creature_templates -- --ignored
+  cargo test -p mangos-world-data --test live_gameobject_templates -- --ignored
+  cargo test -p mangos-world-data --test live_spawns -- --ignored
+  cargo test -p mangos-world-data --test live_spawn_support -- --ignored
 else
   echo "TEST_MYSQL_URL_WORLD unset -- skipping live mangos_string tests"
+fi
+if [ -n "${TEST_MYSQL_URL_WORLD:-}" ] && [ -n "${MANGOS_DBC_DIR:-}" ]; then
+  cargo test -p mangos-world-data --test live_player_info -- --ignored
+else
+  echo "player-info env unset -- skipping live player info tests"
+fi
+if [ -n "${TEST_MYSQL_URL_WORLD:-}" ] && [ -n "${TEST_MYSQL_URL_CHARACTERS:-}" ] && [ -n "${CHARACTER_LOAD_GUID:-}" ] && [ -n "${MANGOS_DBC_DIR:-}" ]; then
+  cargo test -p mangos-entities --test live_player_materialize -- --ignored
+  cargo test -p mangos-entities --test live_creature_spawn -- --ignored
+  cargo test -p mangos-map --test live_map -- --ignored
+  cargo test -p mangos-map --test live_motion -- --ignored
+  cargo test -p mangos-map --test live_spells -- --ignored
+  cargo test -p mangos-map --test live_ai -- --ignored
+  cargo test -p mangos-map --test live_eventai -- --ignored
+  cargo test -p mangos-map --test live_deadmines -- --ignored
+else
+  echo "entity/map live env unset -- skipping live aggregate/map tests"
 fi
 
 if [ -n "${TEST_MYSQL_URL_CHARACTERS:-}" ] && [ -n "${TEST_MYSQL_URL_WORLD:-}" ] && [ -n "${CHAR_ENUM_ORACLE:-}" ]; then

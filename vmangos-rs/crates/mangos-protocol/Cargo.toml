@@ -7,6 +7,8 @@ license.workspace = true
 description = "Wire types for the 1.12.1 protocols (Phase 1: auth/logon half + SRP6), byte-compatible with vmangos ByteBuffer/AuthPackets/SRP6"
 
 [dependencies]
+flate2.workspace = true
+mangos-guid = { path = "../mangos-guid" }
 num-bigint.workspace = true
 rand.workspace = true
 sha1.workspace = true

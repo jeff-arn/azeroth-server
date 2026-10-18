@@ -30,10 +30,13 @@ use mangos_world_data::DataDir;
 use mangos_world_data::assets_check::check_start_area_assets;
 use mangos_world_data::strings::{MangosStrings, load_mangos_strings};
 
+use mangos_map::WorldStores;
+use mangos_world_data::player_info::RaceClassDbc;
+use mangos_world_data::spawn_support::RespawnTimes;
 use mangosd::auth::{AuthBackend, WorldAuthAccount};
 use mangosd::char_queries::CharQueries;
 use mangosd::socket::{ConnectionDeps, default_server_addresses, run_connection};
-use mangosd::world_actor::{RealmPublisher, SessionId, WorldDeps, spawn_world};
+use mangosd::world_actor::{PresenceWriter, RealmPublisher, SessionId, WorldDeps, spawn_world};
 use mangosd::{ERROR_EXIT_CODE, RESTART_EXIT_CODE, SHUTDOWN_EXIT_CODE, ServerConfig};
 
 const DEFAULT_CONFIG_PATH: &str = "mangosd.conf";
@@ -215,6 +218,61 @@ impl CharQueries for MysqlCharQueries {
 
     fn tutorials(&self, account_id: u32) -> Result<Option<[u32; 8]>, DbError> {
         self.db.load_tutorials(account_id)
+    }
+}
+
+struct MysqlPresenceWriter {
+    db: Arc<CharacterDb>,
+}
+
+impl PresenceWriter for MysqlPresenceWriter {
+    fn set_character_online(&self, guid_low: u32, online: bool) -> Result<(), DbError> {
+        self.db.actor().call(move |conn| {
+            conn.exec_drop(
+                "UPDATE `characters` SET `online` = ? WHERE `guid` = ?",
+                (u8::from(online), guid_low),
+            )
+            .map_err(DbError::Driver)?;
+            Ok(())
+        })
+    }
+
+    fn clear_creature_respawn(&self, guid_low: u32) -> Result<(), DbError> {
+        self.db.actor().call(move |conn| {
+            conn.exec_drop(
+                "DELETE FROM `creature_respawn` WHERE `guid` = ? AND `instance` = 0",
+                (guid_low,),
+            )
+            .map_err(DbError::Driver)?;
+            Ok(())
+        })
+    }
+
+    fn store_creature_respawn(
+        &self,
+        guid_low: u32,
+        respawn_time: u64,
+        map_id: u32,
+    ) -> Result<(), DbError> {
+        self.db.actor().call(move |conn| {
+            conn.exec_drop(
+                "REPLACE INTO `creature_respawn` (`guid`, `respawn_time`, `instance`, `map`) VALUES (?, ?, 0, ?)",
+                (guid_low, respawn_time, map_id),
+            )
+            .map_err(DbError::Driver)?;
+            Ok(())
+        })
+    }
+
+    fn clear_gameobject_respawn(&self, guid_low: u32) -> Result<(), DbError> {
+        self.db.actor().call(move |conn| {
+            conn.exec_drop(
+                "DELETE FROM `gameobject_respawn` WHERE `guid` = ? AND `instance` = 0",
+                (guid_low,),
+            )
+            .map_err(DbError::Driver)?;
+            Ok(())
+        })
     }
 }
 
@@ -512,8 +570,15 @@ fn start_databases(config: &Config, log: &Log, realm_id: u32) -> Result<Database
 /// stores beyond this slice, ~90 `ObjectMgr` loads, scripts)
 /// are later phases; that deferral is logged, never silent.
 struct InitialWorldSettings {
+    /// Extracted `.map` directory for ground heights.
+    maps_dir: std::path::PathBuf,
+    /// Extracted `mmaps` directory for navmesh paths.
+    mmaps_dir: std::path::PathBuf,
     strings: MangosStrings,
     enum_stores: mangos_world_data::enum_stores::EnumStores,
+    world_stores: Arc<WorldStores>,
+    race_class_dbc: Arc<RaceClassDbc>,
+    respawn_times: RespawnTimes,
 }
 
 fn load_initial_world_settings(
@@ -621,14 +686,475 @@ fn load_initial_world_settings(
         ),
     );
 
+    // Phase 4 static stores: DBC subsets, templates,
+    // spawns/support stores, player infos, persisted
+    // respawn times, and (Slice 5) the spell store.
+    // Loader diagnostics are counted and sampled, never
+    // silent; AI/script stores remain later slices and
+    // are logged as deferred below.
+    let phase4 = load_phase4_stores(server_config, databases, &data_dir, log)?;
     log.out(
         Level::Minimal,
-        "Phase 3: remaining world loaders (spells, most DBC stores, ObjectMgr content, scripts) are deferred; the world stays empty by design",
+        "Phase 4: AI/script stores are later slices; the simulated world runs without them by design",
     );
     Ok(InitialWorldSettings {
+        maps_dir: data_dir.maps_dir(),
+        mmaps_dir: data_dir.mmaps_dir(),
         strings,
         enum_stores,
+        world_stores: phase4.0,
+        race_class_dbc: phase4.1,
+        respawn_times: phase4.2,
     })
+}
+
+/// DBC display tables: display id -> (native scale,
+/// collision height).
+type DisplayModelMap = std::collections::HashMap<u32, (f32, Option<f32>)>;
+
+/// The DBC half of the Phase 4 stores: race/class tables
+/// plus display scale and native-scale/collision maps.
+fn read_dbc_tables(
+    data_dir: &DataDir,
+    log: &Log,
+) -> Result<
+    (
+        RaceClassDbc,
+        std::collections::HashMap<u32, f32>,
+        DisplayModelMap,
+    ),
+    ExitCode,
+> {
+    use mangos_dbc::{DbcFile, FieldValue, formats};
+    use mangos_entities::unit::check_valid_scale;
+    use mangos_world_data::player_info::RaceDbc;
+    use std::collections::HashMap;
+
+    fn uint(row: &[FieldValue], idx: usize) -> u32 {
+        match row.get(idx) {
+            Some(FieldValue::UInt(v)) => *v,
+            _ => 0,
+        }
+    }
+    fn float(row: &[FieldValue], idx: usize) -> f32 {
+        match row.get(idx) {
+            Some(FieldValue::Float(v)) => *v,
+            _ => 0.0,
+        }
+    }
+    let dbc_dir = data_dir.dbc_dir().join("dbc");
+    let read_store = |def: formats::StoreDef| -> Result<Vec<Vec<FieldValue>>, ExitCode> {
+        let path = dbc_dir.join(def.file);
+        let bytes = std::fs::read(&path).map_err(|e| {
+            log.out(
+                Level::Error,
+                &format!("cannot read {}: {e}", path.display()),
+            );
+            ExitCode::from(ERROR_EXIT_CODE)
+        })?;
+        let store = DbcFile::parse(&bytes, def.fmt)
+            .and_then(|f| f.produce(def.fmt))
+            .map_err(|e| {
+                log.out(Level::Error, &format!("{}: {e}", path.display()));
+                ExitCode::from(ERROR_EXIT_CODE)
+            })?;
+        Ok(store.rows().to_vec())
+    };
+
+    let mut race_class = RaceClassDbc::default();
+    for row in read_store(formats::CHR_RACES)? {
+        race_class.races.insert(
+            uint(&row, 0),
+            RaceDbc {
+                faction_id: uint(&row, 2),
+                model_m: uint(&row, 3),
+                model_f: uint(&row, 4),
+                team_id: uint(&row, 5),
+            },
+        );
+    }
+    for row in read_store(formats::CHR_CLASSES)? {
+        race_class.classes.insert(uint(&row, 0));
+        race_class.class_power.insert(uint(&row, 0), uint(&row, 1));
+    }
+    let mut model_scale: HashMap<u32, (f32, Option<f32>)> = HashMap::new();
+    for row in read_store(formats::CREATURE_MODEL_DATA)? {
+        model_scale.insert(uint(&row, 0), (float(&row, 3), Some(float(&row, 4))));
+    }
+    let mut display_scales: HashMap<u32, f32> = HashMap::new();
+    let mut display_model: HashMap<u32, (f32, Option<f32>)> = HashMap::new();
+    for row in read_store(formats::CREATURE_DISPLAY_INFO)? {
+        let (display_id, model_id, scale) = (uint(&row, 0), uint(&row, 1), float(&row, 3));
+        match model_scale.get(&model_id) {
+            Some((ms, collision)) => {
+                display_scales.insert(display_id, check_valid_scale(ms * scale));
+                let native = check_valid_scale(ms * scale);
+                let collision = collision.map(|h| if *ms == 0.0 { h } else { h / ms });
+                display_model.insert(display_id, (native, collision));
+            }
+            None => {
+                display_scales.insert(display_id, check_valid_scale(scale));
+            }
+        }
+    }
+    Ok((race_class, display_scales, display_model))
+}
+
+/// The world-DB half of the Phase 4 stores (one actor call).
+#[allow(clippy::type_complexity)]
+fn load_world_db_stores(
+    databases: &Databases,
+    wow_patch: u32,
+) -> Result<
+    (
+        mangos_world_data::creature_template::CreatureTemplates,
+        mangos_world_data::gameobject_template::GameObjectTemplates,
+        mangos_world_data::spawns::SpawnData,
+        mangos_world_data::spawn_support::CreatureAddons,
+        mangos_world_data::spawn_support::EquipmentTemplates,
+        mangos_world_data::spawn_support::ClassLevelStats,
+        mangos_world_data::spawn_support::DisplayInfoAddons,
+        mangos_world_data::item_prototype::ItemPrototypesLite,
+        mangos_world_data::waypoints::WaypointStore,
+        std::collections::HashMap<u32, mangos_spells::SpellEntry>,
+        mangos_world_data::creature_spells::CreatureSpellsMap,
+        mangos_scripts_engine::ScriptStores,
+        std::collections::HashSet<u32>,
+        Vec<(&'static str, mangos_world_data::load_report::LoadReport)>,
+    ),
+    DbError,
+> {
+    use mangos_world_data::creature_spells::load_creature_spells;
+    use mangos_world_data::creature_template::{TemplateValidation, load_creature_templates};
+    use mangos_world_data::gameobject_template::{GameObjectValidation, load_gameobject_templates};
+    use mangos_world_data::item_prototype::load_item_prototypes_lite;
+    use mangos_world_data::load_report::LoadReport;
+    use mangos_world_data::script_engine::load_script_stores;
+    use mangos_world_data::spawn_support::{
+        load_class_level_stats, load_creature_addons, load_display_info_addons,
+        load_equipment_templates,
+    };
+    use mangos_world_data::spawns::{SpawnData, load_map_ids};
+    use mangos_world_data::spell_template::load_spell_templates;
+    use mangos_world_data::waypoints::load_waypoints;
+
+    databases.world.actor.call(move |conn| {
+        let (creature_templates, r) =
+            load_creature_templates(conn, wow_patch, &TemplateValidation::default())?;
+        let reports = [("creature_template", r)];
+        let (gameobject_templates, r2) =
+            load_gameobject_templates(conn, wow_patch, &GameObjectValidation::default())?;
+        let map_ids = load_map_ids(conn)?;
+        let mut spawns = SpawnData::new();
+        let r3 =
+            spawns.load_creatures(conn, wow_patch, &creature_templates, Some(&map_ids), false)?;
+        let r4 = spawns.load_gameobjects(
+            conn,
+            wow_patch,
+            &gameobject_templates,
+            Some(&map_ids),
+            None,
+            false,
+        )?;
+        let (creature_addons, r5) = load_creature_addons(conn, wow_patch, None, None, None)?;
+        let items = load_item_prototypes_lite(conn, wow_patch)?;
+        let inv_types = items.inventory_types();
+        let (equipment, r6) = load_equipment_templates(conn, wow_patch, Some(&inv_types))?;
+        let (cls, r7) = load_class_level_stats(conn)?;
+        let (display_addons, r8) = load_display_info_addons(conn, 5875, None, None)?;
+        let mut r9 = LoadReport::default();
+        let waypoints = load_waypoints(conn, &mut r9)?;
+        let mut r10 = LoadReport::default();
+        let spell_entries = load_spell_templates(conn, 5875, &mut r10)?;
+        let spell_id_set: std::collections::HashSet<u32> = spell_entries.keys().copied().collect();
+        let mut r11 = LoadReport::default();
+        let creature_spells = load_creature_spells(conn, &spell_id_set, &mut r11)?;
+        let template_ids: std::collections::HashSet<u32> =
+            creature_templates.iter().map(|(id, _)| *id).collect();
+        let mut r12 = LoadReport::default();
+        let script_stores = load_script_stores(conn, &template_ids, &mut r12)?;
+        let mut reports_all: Vec<(&str, LoadReport)> = reports.into_iter().collect();
+        reports_all.extend([
+            ("gameobject_template", r2),
+            ("creature spawns", r3),
+            ("gameobject spawns", r4),
+            ("creature_addon", r5),
+            ("creature_equip_template", r6),
+            ("creature_classlevelstats", r7),
+            ("display_info_addon", r8),
+            ("creature_movement", r9),
+            ("spell_template", r10),
+            ("creature_spells", r11),
+            ("script engine", r12),
+        ]);
+        Ok((
+            creature_templates,
+            gameobject_templates,
+            spawns,
+            creature_addons,
+            equipment,
+            cls,
+            display_addons,
+            items,
+            waypoints,
+            spell_entries,
+            creature_spells,
+            script_stores,
+            map_ids,
+            reports_all,
+        ))
+    })
+}
+
+/// Expired-row cleanup (write register) + respawn load.
+fn load_persisted_respawns(
+    databases: &Databases,
+    stores: &WorldStores,
+    map_ids: std::collections::HashSet<u32>,
+    log: &Log,
+) -> Result<RespawnTimes, ExitCode> {
+    use mangos_world_data::spawn_support::load_respawn_times;
+    use std::collections::HashMap;
+
+    // Expired respawn cleanup (write register) then load.
+    let cleaned = databases.characters.actor().call(|conn| {
+        conn.query_drop(
+            "DELETE FROM `creature_respawn` WHERE `respawn_time` <= UNIX_TIMESTAMP(NOW())",
+        )
+        .map_err(DbError::Driver)?;
+        conn.query_drop(
+            "DELETE FROM `gameobject_respawn` WHERE `respawn_time` <= UNIX_TIMESTAMP(NOW())",
+        )
+        .map_err(DbError::Driver)?;
+        Ok(())
+    });
+    if let Err(e) = cleaned {
+        log.out(Level::Error, &format!("respawn cleanup failed: {e}"));
+        return Err(ExitCode::from(ERROR_EXIT_CODE));
+    }
+    let creature_maps: HashMap<u32, u32> = stores
+        .spawns
+        .creatures()
+        .map(|(g, s)| (*g, u32::from(s.position.map_id)))
+        .collect();
+    let go_maps: HashMap<u32, u32> = stores
+        .spawns
+        .gameobjects()
+        .map(|(g, s)| (*g, u32::from(s.position.map_id)))
+        .collect();
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let respawn_times =
+        match databases.characters.actor().call(move |conn| {
+            load_respawn_times(conn, now_unix, &creature_maps, &go_maps, &map_ids)
+        }) {
+            Ok(times) => times,
+            Err(e) => {
+                log.out(Level::Error, &format!("respawn time load failed: {e}"));
+                return Err(ExitCode::from(ERROR_EXIT_CODE));
+            }
+        };
+    log.out(
+        Level::Minimal,
+        &format!(
+            ">> Loaded {} creature and {} gameobject respawn times",
+            respawn_times.creature_len(),
+            respawn_times.gameobject_len()
+        ),
+    );
+    Ok(respawn_times)
+}
+/// Phase 4 Slice 3 stores: the DBC subsets the aggregates
+/// consume, the world-DB template/spawn/support loaders,
+/// and persisted respawn times. The expired-respawn DELETEs
+/// are on the owner-approved Phase 4 write register
+/// (2026-10-19) and run before the load, exactly where C++
+/// runs them.
+fn log_loaded_counts(
+    log: &Log,
+    creature_templates: &mangos_world_data::creature_template::CreatureTemplates,
+    gameobject_templates: &mangos_world_data::gameobject_template::GameObjectTemplates,
+    spawns: &mangos_world_data::spawns::SpawnData,
+    waypoints: &mangos_world_data::waypoints::WaypointStore,
+) {
+    log.out(
+        Level::Minimal,
+        &format!(
+            ">> Loaded {} creature templates, {} GO templates, {} creature spawns, {} GO spawns, {} waypoint nodes",
+            creature_templates.len(),
+            gameobject_templates.len(),
+            spawns.creature_count(),
+            spawns.gameobject_count(),
+            waypoints.total_nodes()
+        ),
+    );
+}
+
+/// Spell DBC aux tables (cast times/durations/ranges/radii).
+fn load_spell_tables(
+    data_dir: &DataDir,
+    log: &Log,
+) -> Result<mangos_spells::SpellDbcTables, ExitCode> {
+    match mangos_spells::load_spell_dbc_tables(&data_dir.dbc_dir().join("dbc")) {
+        Ok(t) => Ok(t),
+        Err(e) => {
+            log.out(Level::Error, &format!("spell DBC load failed: {e}"));
+            Err(ExitCode::from(ERROR_EXIT_CODE))
+        }
+    }
+}
+
+/// Model data join: display-addon bounding/combat reach
+/// with DBC native scale + collision height.
+fn build_model_data(
+    display_model: &std::collections::HashMap<u32, (f32, Option<f32>)>,
+    display_addons: &mangos_world_data::spawn_support::DisplayInfoAddons,
+) -> std::collections::HashMap<u32, mangos_entities::unit::ModelData> {
+    use mangos_entities::unit::ModelData;
+    let mut model_data = std::collections::HashMap::new();
+    for (display_id, (native, collision)) in display_model {
+        if let Some(addon) = display_addons.creature(*display_id) {
+            model_data.insert(
+                *display_id,
+                ModelData {
+                    native_scale: *native,
+                    bounding_radius: addon.bounding_radius,
+                    combat_reach: addon.combat_reach,
+                    collision_height: *collision,
+                },
+            );
+        }
+    }
+    model_data
+}
+
+#[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_lines)]
+fn load_phase4_stores(
+    server_config: &ServerConfig,
+    databases: &Databases,
+    data_dir: &DataDir,
+    log: &Log,
+) -> Result<(Arc<WorldStores>, Arc<RaceClassDbc>, RespawnTimes), ExitCode> {
+    use mangos_world_data::load_report::LoadReport;
+    use mangos_world_data::player_info::load_player_infos;
+    use std::collections::HashSet;
+
+    let (race_class, display_scales, display_model) = read_dbc_tables(data_dir, log)?;
+
+    let wow_patch = server_config.wow_patch;
+    let report = |r: &LoadReport, what: &str| {
+        if !r.is_empty() {
+            log.out(
+                Level::Error,
+                &format!(
+                    "{what}: {} loader diagnostics (first: {})",
+                    r.len(),
+                    r.errors[0]
+                ),
+            );
+        }
+    };
+    let (
+        creature_templates,
+        gameobject_templates,
+        spawns,
+        creature_addons,
+        equipment,
+        cls,
+        display_addons,
+        items,
+        waypoints,
+        spell_entries,
+        creature_spells,
+        script_stores,
+        map_ids,
+        reports,
+    ) = match load_world_db_stores(databases, wow_patch) {
+        Ok(v) => v,
+        Err(e) => {
+            log.out(Level::Error, &format!("world store load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    for (what, r) in &reports {
+        report(r, what);
+    }
+    // Player infos need the DBC tables (display ids).
+    let race_class_owned = race_class.clone();
+    let map_ids_owned: HashSet<u32> = map_ids.clone();
+    let player_infos = match databases.world.actor.call(move |conn| {
+        let (infos, r) = load_player_infos(
+            conn,
+            60,
+            Some(&race_class_owned),
+            Some(&map_ids_owned),
+            None,
+        )?;
+        Ok((infos, r))
+    }) {
+        Ok((infos, r)) => {
+            report(&r, "player info");
+            infos
+        }
+        Err(e) => {
+            log.out(Level::Error, &format!("player info load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    let model_data = build_model_data(&display_model, &display_addons);
+    log_loaded_counts(
+        log,
+        &creature_templates,
+        &gameobject_templates,
+        &spawns,
+        &waypoints,
+    );
+    let spell_tables = load_spell_tables(data_dir, log)?;
+    log.out(
+        Level::Minimal,
+        &format!(
+            ">> Loaded {} spells, {} creature spell templates.",
+            spell_entries.len(),
+            creature_spells.len()
+        ),
+    );
+    log.out(
+        Level::Minimal,
+        &format!(
+            ">> Loaded {} EventAI events, {} creature AI script steps, \
+             {} generic script steps, {} conditions, {} broadcast texts.",
+            script_stores.event_count(),
+            script_stores.creature_script_steps(),
+            script_stores.generic_script_steps(),
+            script_stores.conditions.len(),
+            script_stores.broadcast_texts.len()
+        ),
+    );
+    let stores = Arc::new(WorldStores {
+        creature_templates,
+        gameobject_templates,
+        spawns,
+        creature_addons,
+        equipment,
+        cls,
+        display_addons,
+        player_infos,
+        items,
+        waypoints,
+        spells: mangos_spells::SpellStore {
+            spells: spell_entries,
+            tables: spell_tables,
+        },
+        creature_spells,
+        scripts: script_stores,
+        display_scales,
+        model_data,
+    });
+
+    let respawn_times = load_persisted_respawns(databases, &stores, map_ids, log)?;
+    Ok((stores, Arc::new(race_class), respawn_times))
 }
 
 async fn accept_loop(
@@ -840,6 +1366,14 @@ async fn run_server(config: Config, log: Arc<Log>) -> ExitCode {
         char_queries: Arc::clone(&char_queries),
         realm_publisher: Arc::new(MysqlRealmPublisher {
             db: Arc::clone(&databases.login),
+        }),
+        world_stores: initial.world_stores,
+        maps_dir: Some(initial.maps_dir),
+        mmaps_dir: Some(initial.mmaps_dir),
+        race_class_dbc: initial.race_class_dbc,
+        respawn_times: initial.respawn_times,
+        presence: Arc::new(MysqlPresenceWriter {
+            db: Arc::clone(&databases.characters),
         }),
     };
     let (world_tx, _world_handle, world_health) = spawn_world(

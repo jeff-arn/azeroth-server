@@ -450,6 +450,12 @@ impl MoveSpline {
         self.last_point_sent_idx = i;
     }
 
+    /// `_Interrupt` (`MoveSpline.h:87`): marks the spline done in
+    /// place (position evaluation stays where it is).
+    pub fn interrupt(&mut self) {
+        self.flags.0 |= MoveSplineFlag::DONE;
+    }
+
     fn next_timestamp(&self) -> i32 {
         self.spline.length_at(self.point_idx + 1)
     }

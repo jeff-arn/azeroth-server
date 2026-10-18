@@ -44,6 +44,8 @@ pub mod opcode {
     pub const CMSG_AUTH_SESSION: u16 = 493;
     pub const SMSG_AUTH_RESPONSE: u16 = 494;
     pub const SMSG_LOGIN_VERIFY_WORLD: u16 = 566;
+    pub const CMSG_LOGOUT_REQUEST: u16 = 75;
+    pub const SMSG_LOGOUT_COMPLETE: u16 = 77;
 }
 
 /// `SMSG_AUTH_RESPONSE` result bytes from `SharedDefines.h` (the

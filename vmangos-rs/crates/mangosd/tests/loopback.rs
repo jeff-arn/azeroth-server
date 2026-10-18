@@ -28,7 +28,7 @@ use mangosd::ServerConfig;
 use mangosd::auth::{AuthBackend, WorldAuthAccount};
 use mangosd::char_queries::CharQueries;
 use mangosd::socket::{ConnectionDeps, run_connection};
-use mangosd::world_actor::{RealmPublisher, SessionId, WorldDeps, spawn_world};
+use mangosd::world_actor::{PresenceWriter, RealmPublisher, SessionId, WorldDeps, spawn_world};
 
 const SESSIONKEY_HEX: &str = "9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08";
 const CLIENT_SEED: u32 = 0x1122_3344;
@@ -230,12 +230,89 @@ impl CharQueries for FakeCharQueries {
     }
 }
 
+struct FakePresence;
+
+impl PresenceWriter for FakePresence {
+    fn set_character_online(&self, _guid_low: u32, _online: bool) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn clear_creature_respawn(&self, _guid_low: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+    fn store_creature_respawn(
+        &self,
+        _guid_low: u32,
+        _respawn_time: u64,
+        _map_id: u32,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn clear_gameobject_respawn(&self, _guid_low: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
 struct FakeRealmPublisher;
 
 impl RealmPublisher for FakeRealmPublisher {
     fn set_realm_population(&self, _realm_id: u32, _population: f32) -> Result<(), DbError> {
         Ok(())
     }
+}
+
+fn fake_world_stores() -> mangos_map::WorldStores {
+    use mangos_world_data::player_info::{
+        PlayerClassLevelInfo, PlayerCreateInfo, PlayerInfos, PlayerLevelInfo,
+    };
+    let mut stores = mangos_map::WorldStores::empty();
+    stores.player_infos = PlayerInfos::from_maps_for_tests(
+        60,
+        HashMap::from([(
+            (1, 1),
+            PlayerCreateInfo {
+                map_id: 0,
+                area_id: 12,
+                position_x: -8949.95,
+                position_y: -132.493,
+                position_z: 83.5312,
+                orientation: 1.5,
+                display_id_m: 49,
+                display_id_f: 50,
+            },
+        )]),
+        HashMap::from([(
+            1,
+            vec![
+                PlayerClassLevelInfo {
+                    basehealth: 20,
+                    basemana: 0
+                };
+                60
+            ],
+        )]),
+        HashMap::from([((1, 1), vec![PlayerLevelInfo { stats: [20; 5] }; 60])]),
+        vec![400; 61],
+    );
+    stores
+}
+
+fn fake_race_class_dbc() -> mangos_world_data::player_info::RaceClassDbc {
+    use mangos_world_data::player_info::{RaceClassDbc, RaceDbc};
+    let mut dbc = RaceClassDbc::default();
+    dbc.races.insert(
+        1,
+        RaceDbc {
+            faction_id: 1,
+            model_m: 49,
+            model_f: 50,
+            team_id: 7,
+        },
+    );
+    dbc.classes.insert(1);
+    dbc.class_power.insert(1, 1);
+    dbc
 }
 
 fn fake_enum_stores() -> EnumStores {
@@ -277,6 +354,12 @@ async fn start_server(backend: Arc<FakeBackend>) -> u16 {
             enum_stores: Arc::new(fake_enum_stores()),
             char_queries: Arc::clone(&char_queries),
             realm_publisher: Arc::new(FakeRealmPublisher),
+            maps_dir: None,
+            mmaps_dir: None,
+            world_stores: Arc::new(fake_world_stores()),
+            race_class_dbc: Arc::new(fake_race_class_dbc()),
+            respawn_times: mangos_world_data::spawn_support::RespawnTimes::default(),
+            presence: Arc::new(FakePresence),
         },
     );
     let deps = Arc::new(ConnectionDeps {
@@ -527,12 +610,23 @@ async fn auth_then_ping_pong_and_enum() {
     );
 
     // Ping proves the session exists and the crypt directions agree.
+    // Phase 4: the map also sends init-self/visibility object
+    // updates after the login train; they must arrive, and the
+    // pong still answers after them.
     let mut ping_body = Vec::new();
     ping_body.extend_from_slice(&0xDEAD_BEEFu32.to_le_bytes());
     ping_body.extend_from_slice(&123u32.to_le_bytes());
     client.send_packet(opcode::CMSG_PING, &ping_body).await;
-    let (op, body) = client.read_packet().await.expect("pong");
-    assert_eq!(op, opcode::SMSG_PONG);
+    let mut saw_update = false;
+    let body = loop {
+        let (op, body) = client.read_packet().await.expect("pong or update");
+        match op {
+            opcode::SMSG_PONG => break body,
+            169 | 502 => saw_update = true, // UPDATE_OBJECT / COMPRESSED
+            other => panic!("unexpected opcode {other} before pong"),
+        }
+    };
+    assert!(saw_update, "init-self object update after login");
     assert_eq!(body, 0xDEAD_BEEFu32.to_le_bytes());
 
     client.send_packet(opcode::CMSG_PING, &ping_body).await;

@@ -10,7 +10,14 @@ description = "Static world data for the Rust mangosd: boot asset checks, mangos
 mangos-assets = { path = "../mangos-assets" }
 mangos-config = { path = "../mangos-config" }
 mangos-db = { path = "../mangos-db" }
+mangos-guid = { path = "../mangos-guid" }
+mangos-movement = { path = "../mangos-movement" }
+mangos-spells = { path = "../mangos-spells" }
+mangos-scripts-engine = { path = "../mangos-scripts-engine" }
 mysql.workspace = true
+
+[dev-dependencies]
+mangos-dbc = { path = "../mangos-dbc" }
 
 [lints]
 workspace = true

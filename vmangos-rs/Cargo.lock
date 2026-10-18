@@ -546,6 +546,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mangos-entities"
+version = "0.1.0"
+dependencies = [
+ "mangos-db",
+ "mangos-dbc",
+ "mangos-guid",
+ "mangos-movement",
+ "mangos-protocol",
+ "mangos-spells",
+ "mangos-world-data",
+]
+
+[[package]]
 name = "mangos-guid"
 version = "0.1.0"
 
@@ -557,9 +570,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "mangos-map"
+version = "0.1.0"
+dependencies = [
+ "mangos-assets",
+ "mangos-db",
+ "mangos-dbc",
+ "mangos-detour",
+ "mangos-entities",
+ "mangos-guid",
+ "mangos-movement",
+ "mangos-protocol",
+ "mangos-scripts-engine",
+ "mangos-spells",
+ "mangos-threat",
+ "mangos-world-data",
+ "mysql",
+ "rand",
+]
+
+[[package]]
 name = "mangos-movement"
 version = "0.1.0"
 dependencies = [
+ "mangos-guid",
  "mangos-protocol",
 ]
 
@@ -567,9 +601,22 @@ dependencies = [
 name = "mangos-protocol"
 version = "0.1.0"
 dependencies = [
+ "flate2",
+ "mangos-guid",
  "num-bigint",
  "rand",
  "sha1",
+]
+
+[[package]]
+name = "mangos-scripts-engine"
+version = "0.1.0"
+
+[[package]]
+name = "mangos-spells"
+version = "0.1.0"
+dependencies = [
+ "mangos-dbc",
 ]
 
 [[package]]
@@ -586,6 +633,11 @@ dependencies = [
  "mangos-assets",
  "mangos-config",
  "mangos-db",
+ "mangos-dbc",
+ "mangos-guid",
+ "mangos-movement",
+ "mangos-scripts-engine",
+ "mangos-spells",
  "mysql",
 ]
 
@@ -597,9 +649,15 @@ dependencies = [
  "mangos-build-info",
  "mangos-config",
  "mangos-db",
+ "mangos-dbc",
+ "mangos-entities",
  "mangos-guid",
  "mangos-log",
+ "mangos-map",
+ "mangos-movement",
  "mangos-protocol",
+ "mangos-scripts-engine",
+ "mangos-spells",
  "mangos-world-data",
  "md-5",
  "mysql",

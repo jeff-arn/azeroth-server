@@ -77,12 +77,30 @@ pub fn build_character_login_failed() -> WorldPacket {
 /// movement; the row position is what the empty world knows.
 #[must_use]
 pub fn build_login_verify_world(row: &CharacterRow) -> WorldPacket {
+    build_login_verify_world_at(
+        row.map,
+        mangos_movement::movement_info::Position::new(
+            row.position_x,
+            row.position_y,
+            row.position_z,
+            row.orientation,
+        ),
+    )
+}
+
+/// Same packet at a materialized position (homebind
+/// fallback may differ from the saved row).
+#[must_use]
+pub fn build_login_verify_world_at(
+    map_id: u32,
+    position: mangos_movement::movement_info::Position,
+) -> WorldPacket {
     let mut writer = PacketWriter::new();
-    writer.write_u32_le(row.map);
-    writer.write_f32_le(row.position_x);
-    writer.write_f32_le(row.position_y);
-    writer.write_f32_le(row.position_z);
-    writer.write_f32_le(row.orientation);
+    writer.write_u32_le(map_id);
+    writer.write_f32_le(position.x);
+    writer.write_f32_le(position.y);
+    writer.write_f32_le(position.z);
+    writer.write_f32_le(position.o);
     let mut packet = WorldPacket::new(opcode_id::SMSG_LOGIN_VERIFY_WORLD);
     packet.take_writer(writer);
     packet

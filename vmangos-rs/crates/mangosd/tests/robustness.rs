@@ -25,7 +25,7 @@ use mangosd::ServerConfig;
 use mangosd::auth::{AuthBackend, WorldAuthAccount};
 use mangosd::char_queries::CharQueries;
 use mangosd::socket::{ConnectionDeps, run_connection};
-use mangosd::world_actor::{RealmPublisher, SessionId, WorldDeps, spawn_world};
+use mangosd::world_actor::{PresenceWriter, RealmPublisher, SessionId, WorldDeps, spawn_world};
 
 const SESSIONKEY_HEX: &str = "9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08";
 const CLIENT_SEED: u32 = 0x1122_3344;
@@ -103,6 +103,30 @@ impl CharQueries for FakeCharQueries {
     }
 }
 
+struct FakePresence;
+
+impl PresenceWriter for FakePresence {
+    fn set_character_online(&self, _guid_low: u32, _online: bool) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn clear_creature_respawn(&self, _guid_low: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+    fn store_creature_respawn(
+        &self,
+        _guid_low: u32,
+        _respawn_time: u64,
+        _map_id: u32,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn clear_gameobject_respawn(&self, _guid_low: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
 struct FakePublisher;
 
 impl RealmPublisher for FakePublisher {
@@ -136,6 +160,12 @@ async fn start_server() -> u16 {
             enum_stores: Arc::new(EnumStores::default()),
             char_queries: Arc::clone(&char_queries),
             realm_publisher: Arc::new(FakePublisher),
+            maps_dir: None,
+            mmaps_dir: None,
+            world_stores: Arc::new(mangos_map::WorldStores::empty()),
+            race_class_dbc: Arc::new(mangos_world_data::player_info::RaceClassDbc::default()),
+            respawn_times: mangos_world_data::spawn_support::RespawnTimes::default(),
+            presence: Arc::new(FakePresence),
         },
     );
     let backend: Arc<dyn AuthBackend> = Arc::new(FakeBackend::default());

@@ -911,7 +911,7 @@ Two were partially closed by later reports and are flagged inline
 4. SRP6.cpp interleave/hash internals not fully read (header+call sites+Proof only) - needed for Rust test vectors [full body read by 11 §1 #4; A-at-creation caveat remains] [caveat CLOSED in Phase 0: fresh SRP6 at all 4 call sites, A feeds zero bytes; vectors derived and oracle-checked] [Phase 1 2026-10-17: FULLY CLOSED — SRP6 implemented in mangos-protocol and proven against the 2bae5f9 oracle by packet/DB differential + a shadow logon into oracle mangosd; the inverted SRP6::Proof is cancelled by its sole negating call site (AuthSocket.cpp:639) so observed wire semantics are standard — see PHASE1-PROGRESS.md]
 5. Windows IOCP/ServiceWin32 impls skimmed via headers only
 6. Live production thread-count config values not read (secret hygiene); only *.conf.dist.in defaults cited
-7. Spell.cpp/SpellAuras.cpp internal flows beyond headers/dispatch not deep-read
+7. Spell.cpp/SpellAuras.cpp internal flows beyond headers/dispatch not deep-read [PARTIALLY CLOSED in Phase 4 Slice 5 (2026-10-19): the cast/aura cores needed for a functional subset (CheckCast arms, GCD/cooldowns, school damage/heal, APPLY_AURA holders + periodic ticks, spell hit/resist/crit math incl. the binary-spell rule) were deep-read line-by-line from production 2bae5f9, ported, and verified against an independent Python/SQL oracle; Slice 7 added summon effects and dead-caster triggered-cast semantics. Still unread/unported: spell mods, proc chains, most effect/aura handlers, channeling/pushback rules, threat-from-healing nuances — see PHASE4-PROGRESS.md Slice 5 deviations]
 8. mangosd.conf cadence-gate defaults not read (credential-bearing, out of bounds)
 9. Battlegrounds/Anticheat/Server interiors and src/shared DBC loading left to sibling scopes [Phase 3 2026-10-17: the Server interior (WorldSocket/WorldSession/OpcodeHandler admission chain, AddSession queue, Master boot sequence) was read line-by-line and ported; Battlegrounds/Anticheat interiors remain unread]
 10. vmangos-rs/crates absent in this checkout — existing Rust MySQL crates (mangos-realmd-mysql per memory) not inspectable here [closed 2026-10-16 by owner direction: the former workspace no longer exists; migration starts from scratch — see Preface]
@@ -939,7 +939,7 @@ Two were partially closed by later reports and are flagged inline
 32. 3 gitignored docs/ research notes (ARCHITECTURE.md:149) absent from tree, contents uninspectable
 33. macOS configure/compile unverified (no CMake; blockers predicted only) [duplicate of #1, short form]
 34. per-lock inventory + lock ordering absent (41 shared_timed_mutex mentions unnamed) [Phase 0: named inventory + two sampled ordering pairs in evidence 21; exhaustive whole-program ordering still open]
-35. per-opcode payload catalog absent (272 handlers parse positionally) [Phase 0: generated skeleton in evidence 22 (826 rows, counts reconciled); 47 '?'-rows + ~10 helpers need Phase 3 triage] [Phase 3 2026-10-17: registry generated and census-asserted in-crate (826/276/525/828); all 47 '?'-rows hand-triaged in evidence 22 section 7 — 36 are the single MovementInfo helper (exact field list recorded, parser itself is Phase 4), 11 are member-access reads now typed. Remaining: spell-target helper expansion belongs to Phase 5 spell work]
+35. per-opcode payload catalog absent (272 handlers parse positionally) [Phase 0: generated skeleton in evidence 22 (826 rows, counts reconciled); 47 '?'-rows + ~10 helpers need Phase 3 triage] [Phase 3 2026-10-17: registry generated and census-asserted in-crate (826/276/525/828); all 47 '?'-rows hand-triaged in evidence 22 section 7 — 36 are the single MovementInfo helper (exact field list recorded, parser itself is Phase 4), 11 are member-access reads now typed. Remaining: spell-target helper expansion belongs to Phase 5 spell work] [Phase 4 2026-10-19: the MovementInfo parser landed in Slice 0 (golden-vector verified vs C++ text); the spell-target reading subset landed with the Slice 5 cast engine (single-unit/self/dest modes; full SpellCastTargets parity remains future work)]
 36. ~28 char-DB save tables untranscribed (auras/cooldowns/mail/pet/BG/etc) [Phase 0: full save/load transcription in evidence 20 (61-bind REPLACE, 10 in-txn sub-saves, dead holder slot found)]
 37. world DB schema absent; live engine/charset/migration state unverified [duplicate of #11/#12]
 38. production binary-commit mapping + live thread/config values unknown [duplicate of #6/#30; mapping closed 2026-10-16 in Phase 0 — both binaries are commit `2bae5f921f59892d4c41002a0869b154f02867d3` per their embedded revision strings; live config values remain unread]
@@ -953,8 +953,8 @@ Two were partially closed by later reports and are flagged inline
 46. existing Rust workspace (~190 crates claim) uninspectable in this checkout [duplicate of #10; closed with it]
 47. realmd NRestarts=24 cause unknown; backup restore never tested [extends #30] [restore half CLOSED in Phase 0: nightly dumps restore cleanly and the production-commit oracle boots on them to 'World initialized.']
 48. Caddy/TLS/firewall fronting :8080; MySQL per-table sizes unknown [duplicate of #27/#29]
-49. no load/perf baseline (live world idle at inspection) [Phase 0: idle baseline recorded in PHASE0-PROGRESS.md; loaded baseline still open for Phase 3] [Phase 3 2026-10-17: still open — the Rust skeleton is an empty world by design, so no loaded baseline is meaningful yet; idle bench boot of the Rust binary (50 ms world tick) is healthy but is not a perf measurement]
-50. Spell.cpp/SpellAuras.cpp internals beyond dispatch unread [duplicate of #7]
+49. no load/perf baseline (live world idle at inspection) [Phase 0: idle baseline recorded in PHASE0-PROGRESS.md; loaded baseline still open for Phase 3] [Phase 3 2026-10-17: still open — the Rust skeleton is an empty world by design, so no loaded baseline is meaningful yet; idle bench boot of the Rust binary (50 ms world tick) is healthy but is not a perf measurement] [Phase 4 2026-10-19: bench-host micro-baseline only (NOT a production load test): live_motion PERF harness, 400 ticks over a populated single-player map slice (23 active creatures): 59 us/tick at Slice 4 (movement only), 110 us/tick with the full Slice 4-7 stack (spells/AI/EventAI/content) — i.e. ~0.2% of the 50 ms tick budget on this workload. A real loaded baseline (many players, continent-wide activation) remains open]
+50. Spell.cpp/SpellAuras.cpp internals beyond dispatch unread [duplicate of #7] [partially closed with #7 in Phase 4]
 51. Map.cpp:1781/BattleGround.cpp:787 bot-branch contexts unread [duplicate of #17]
 52. bot per-behavior Score/Execute, AH pricing, GuildBot gear math not line-read [duplicate of #14]
 53. Windows IOCP/ServiceWin32 headers-only; USE_STD_MALLOC prod use presumed dead [duplicate of #3/#5]
@@ -967,6 +967,13 @@ Two were partially closed by later reports and are flagged inline
 1. **Content scripts strategy** (the effort-dominating choice, R5/§13.1):
    FFI-retain the 107k-line C++ scripts behind the registry, mechanically
    transpile them, or hand-port region by region. Required before Phase 3.
+   [Owner decisions: 2026-10-18 FFI-retain chosen as the default direction;
+   2026-10-19 (Phase 4 Slice 7) the owner chose to hand-port Deadmines
+   natively instead of building the shim first — done and gated. The
+   strategy for the EK/Kalimdor bulk (FFI shim vs continued hand-port)
+   remains OPEN and should be decided with the Deadmines cost data in
+   PHASE4-PROGRESS.md: this fork is heavily DB-driven, so the measured
+   hand-port surface per dungeon may stay small]
 2. **Detour disposition** (R8): wrap the vendored Detour via FFI to reuse
    the 2.0 GiB production `.mmtile` set, reimplement tile loading/query,
    or regenerate navmeshes with a Rust-side pipeline.

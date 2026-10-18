@@ -14,9 +14,15 @@ path = "src/main.rs"
 mangos-build-info = { path = "../mangos-build-info" }
 mangos-config = { path = "../mangos-config" }
 mangos-db = { path = "../mangos-db" }
+mangos-dbc = { path = "../mangos-dbc" }
+mangos-entities = { path = "../mangos-entities" }
 mangos-guid = { path = "../mangos-guid" }
 mangos-log = { path = "../mangos-log" }
+mangos-map = { path = "../mangos-map" }
+mangos-scripts-engine = { path = "../mangos-scripts-engine" }
+mangos-movement = { path = "../mangos-movement" }
 mangos-protocol = { path = "../mangos-protocol" }
+mangos-spells = { path = "../mangos-spells" }
 mangos-world-data = { path = "../mangos-world-data" }
 flate2.workspace = true
 md-5.workspace = true

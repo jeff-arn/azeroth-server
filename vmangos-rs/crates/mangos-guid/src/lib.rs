@@ -14,6 +14,8 @@
 //! instead and the world layer (Phase 3+) decides the shutdown policy.
 //! DB loading (`LoadFromDB`) is not ported; it belongs to `mangos-db`.
 
+pub mod timer;
+
 use std::collections::VecDeque;
 
 /// The 16-bit high part of a GUID (`enum HighGuid`, `ObjectGuid.h:66-78`).

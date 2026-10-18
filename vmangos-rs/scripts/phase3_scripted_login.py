@@ -209,7 +209,13 @@ def main() -> None:
     print("MOTD-OK")
 
     client.send_packet(CMSG_PING, struct.pack("<II", 0xDEADBEEF, 50))
-    op, body = client.read_packet()
+    # Phase 4: object-update packets (169/502) may precede the pong;
+    # Slice 5 adds SMSG_UPDATE_AURA_DURATION for saved auras.
+    while True:
+        op, body = client.read_packet()
+        if op in (169, 502, 311):
+            continue
+        break
     assert op == SMSG_PONG and body == struct.pack("<I", 0xDEADBEEF)
     print("PING-PONG")
 

@@ -1,17 +1,29 @@
 //! Read-only static stores (architecture section 12:
 //! `ObjectMgr` loaders, `SpellMgr`, `SQLStorage`).
 //!
-//! Phase 3 slice: the boot gates an empty world still has to
-//! pass — `DataDir` resolution, the six start-area map/vmap
-//! existence checks `SetInitialWorldSettings` opens with, and
-//! the `mangos_string` table whose absence aborts boot. Stores
-//! land here only when a Phase 3 consumer exists; the remaining
-//! ~90 loaders are later phases and are logged as deferred by
-//! the binary, never silently skipped.
+//! Phase 3 landed the boot gates an empty world passes
+//! (`DataDir`, start-area asset checks, `mangos_string`, enum
+//! stores). Phase 4 adds the simulation data loaders slice by
+//! slice (creature templates first); loaders that do not exist
+//! yet are still logged as deferred by the binary, never
+//! silently skipped.
 
 pub mod assets_check;
+pub mod creature_spells;
+pub mod creature_template;
 pub mod enum_stores;
+pub mod gameobject_template;
+pub mod item_prototype;
+pub mod load_report;
+pub mod player_info;
+pub mod script_engine;
+pub mod spawn_support;
+pub mod spawns;
+pub mod spell_template;
 pub mod strings;
+pub mod waypoints;
+
+pub use load_report::LoadReport;
 
 use std::path::{Path, PathBuf};
 

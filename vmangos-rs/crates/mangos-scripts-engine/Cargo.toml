@@ -1,0 +1,10 @@
+[package]
+name = "mangos-scripts-engine"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "DB script engine data (ScriptInfo, EventAI events, conditions, texts) for the Rust mangosd (Phase 4 Slice 6b), mirroring vmangos ScriptMgr/CreatureEventAI/Conditions"
+
+[lints]
+workspace = true

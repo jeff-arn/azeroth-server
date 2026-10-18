@@ -1,0 +1,1297 @@
+//! One simulated map: spawn activation, player visibility,
+//! values replication, and movement relay at Slice 3
+//! scope. Tick order follows `Map::Update`
+//! (`Map.cpp:933-1060`) minus the continent barrier (not
+//! reproduced — recorded in `PHASE4-PROGRESS.md`), grid
+//! state machine/unload (cells stay loaded), transports,
+//! scripts, weather, and adaptive visibility.
+//!
+//! Session packet pumping happens in the binary's world
+//! actor before/around [`Map::tick`]; packets the map
+//! produces are drained as [`MapEvent`]s tagged with the
+//! receiving player's GUID.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
+use mangos_entities::creature::{Creature, CreatureRates, DisplayResolver, VirtualItemPrototype};
+use mangos_entities::gameobject::GameObject;
+use mangos_entities::player::Player;
+use mangos_entities::unit::DeathState;
+use mangos_entities::update::{
+    BuildEffects, MovementSection, ObjectView, Viewer, build_create_block, build_values_block,
+};
+use mangos_guid::ObjectGuid;
+use mangos_guid::timer::ShortIntervalTimer;
+use mangos_movement::movement_info::{MovementInfo, Position};
+use mangos_protocol::buffer::PacketWriter;
+use mangos_protocol::update_data::{CompressionConfig, UpdateData};
+use mangos_protocol::world::WorldPacket;
+use mangos_world_data::spawn_support::RespawnTimes;
+use mangos_world_data::spawns::{cell_id, compute_cell_pair};
+
+use crate::stores::WorldStores;
+use crate::visibility;
+
+/// Map tuning (`mangosd.conf` values with their tree
+/// defaults).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MapConfig {
+    /// `Visibility.Distance.*` for this map kind.
+    pub visibility_distance: f32,
+    /// Grid activation distance (= visibility on
+    /// continents, `Map.cpp:208-213`).
+    pub grid_activation_distance: f32,
+    /// `Visibility.Distance.Grey.Unit` (1).
+    pub grey_unit: f32,
+    /// `Visibility.Distance.Grey.Object` (10).
+    pub grey_object: f32,
+    /// `Visibility.RelocationLowerLimit` squared (100).
+    pub relocation_lower_limit_sq: f32,
+    /// `MapUpdate.UpdatePlayersDiff` (100 ms).
+    pub update_players_diff: u32,
+    /// `Rate.Creature.Aggro` (1.0) — ghost corpse sight.
+    pub aggro_rate: f32,
+    /// `Visibility.ForceActiveObjects` (true).
+    pub force_active_objects: bool,
+    pub creature_rates: CreatureRates,
+    pub compression: CompressionConfig,
+}
+
+impl Default for MapConfig {
+    fn default() -> Self {
+        Self {
+            visibility_distance: 100.0,
+            grid_activation_distance: 100.0,
+            grey_unit: 1.0,
+            grey_object: 10.0,
+            relocation_lower_limit_sq: 100.0,
+            update_players_diff: 100,
+            aggro_rate: 1.0,
+            force_active_objects: true,
+            creature_rates: CreatureRates::default(),
+            compression: CompressionConfig::default(),
+        }
+    }
+}
+
+/// Opaque map-local player handle = character GUID.
+pub type PlayerSlotId = ObjectGuid;
+
+/// Something the map wants the caller to do.
+#[derive(Clone, Debug)]
+pub enum MapEvent {
+    /// Deliver a packet to this player's session.
+    Packet { to: ObjectGuid, packet: WorldPacket },
+    /// Persist `respawn_time = 0` for a creature spawn
+    /// (expired row consumed at spawn).
+    ClearCreatureRespawn { guid_low: u32 },
+    /// Persist `respawn_time = 0` for a gameobject spawn.
+    ClearGameObjectRespawn { guid_low: u32 },
+    /// Persist a future creature respawn time
+    /// (`REPLACE INTO creature_respawn`, death in
+    /// Slice 5).
+    StoreCreatureRespawn {
+        guid_low: u32,
+        respawn_time: u64,
+        map_id: u32,
+    },
+    /// A unit died (Slice 5 damage; threat/loot are
+    /// Slice 6 consumers).
+    UnitDied {
+        guid: ObjectGuid,
+        killer: Option<ObjectGuid>,
+    },
+    /// `AI()->MovementInform(type, id)` — consumed by the
+    /// AI slice; emitted by Point/Waypoint generators.
+    MovementInform {
+        guid: ObjectGuid,
+        motion_type: u32,
+        point_id: u32,
+    },
+    /// `AI()->JustReachedHome()` (Home generator arrival).
+    JustReachedHome { guid: ObjectGuid },
+    /// Chase `_reachTarget`: in melee reach — the C++
+    /// `Attack(target, true)` hook (melee is Slice 5/6).
+    ChaseReached {
+        guid: ObjectGuid,
+        target: ObjectGuid,
+    },
+    /// Waypoint node carried a `script_id`
+    /// (`ScriptsStart(sCreatureMovementScripts, ...)`) —
+    /// consumed by the script-engine slice.
+    WaypointScript {
+        guid: ObjectGuid,
+        script_id: u32,
+        point_id: u32,
+    },
+}
+
+pub(crate) struct PlayerEntry {
+    pub(crate) player: Player,
+    pub(crate) visible: HashSet<ObjectGuid>,
+    /// `m_lastNotifiedPosition`.
+    pub(crate) last_notified: Position,
+    /// A full camera re-scan is due (entry or relocation
+    /// past the lower limit).
+    pub(crate) scan_due: bool,
+}
+
+/// One simulated map instance.
+pub struct Map {
+    #[allow(clippy::struct_field_names)] // mirrors C++ GetId()
+    pub(crate) map_id: u32,
+    pub(crate) instance_id: u32,
+    pub(crate) config: MapConfig,
+    pub(crate) stores: Arc<WorldStores>,
+    pub(crate) rng: crate::WorldRng,
+    pub(crate) players: HashMap<ObjectGuid, PlayerEntry>,
+    pub(crate) creatures: HashMap<ObjectGuid, Creature>,
+    pub(crate) gameobjects: HashMap<ObjectGuid, GameObject>,
+    /// Runtime cell index for units/GOs (guid sets per
+    /// cell id) — visibility queries walk these.
+    pub(crate) cells: HashMap<u32, CellObjects>,
+    /// DB spawn cells whose objects are instantiated.
+    pub(crate) spawn_cells_loaded: HashSet<u32>,
+    /// Transport gameobjects by guid (created at map
+    /// construction from the transport spawn sets; motion
+    /// deferred with the transport system).
+    pub(crate) events: Vec<MapEvent>,
+    pub(crate) players_timer: ShortIntervalTimer,
+    /// Server ms clock stamped into creates/movement.
+    pub(crate) now_ms: u32,
+    pub(crate) now_unix: u64,
+    /// Per-creature movement generators (Slice 4).
+    pub(crate) motion: HashMap<ObjectGuid, crate::motion::MotionMaster>,
+    /// `splineCounter` (`MoveSplineInit.cpp:63`, starts 1).
+    pub(crate) spline_counter: u32,
+    /// Ground-height source (`.map` grid files).
+    pub(crate) heights: crate::motion::Heights,
+    /// Detour navmesh host (`.mmap`/`.mmtile` files).
+    pub(crate) navhost: crate::motion::NavHost,
+    /// Per-creature AI runtime (Slice 6), created lazily
+    /// on first AI update or first damage taken.
+    pub(crate) ai: HashMap<ObjectGuid, crate::ai::CreatureAi>,
+    /// In-progress casts by caster (Slice 5).
+    pub(crate) casts: HashMap<ObjectGuid, crate::spells::ActiveCast>,
+    /// Spell + category cooldown expiries (map ms clock):
+    /// (caster, spell id) and (caster, category) share
+    /// one map via the high-bit tag on the id.
+    pub(crate) cooldowns: HashMap<(ObjectGuid, u32), u32>,
+    /// Dead creatures awaiting respawn: guid -> respawn
+    /// unix time (Slice 5 death handling).
+    pub(crate) respawns_due: HashMap<ObjectGuid, u64>,
+    /// Scheduled generic script steps (`m_scriptSchedule`,
+    /// Slice 6b): (due map ms, insertion sequence) ->
+    /// step. C++ keys by game-time seconds; the map ms
+    /// clock gives the same order with finer grain
+    /// (recorded deviation).
+    pub(crate) script_schedule:
+        std::collections::BTreeMap<(u64, u64), crate::scripts::ScheduledScript>,
+    pub(crate) script_seq: u64,
+    /// Server variables (`SetSavedVariable` store),
+    /// in-memory only — C++ persists them, which would
+    /// be a new DB write (recorded; not in the write
+    /// register).
+    pub(crate) saved_variables: HashMap<u32, u32>,
+    /// `InstanceData` field stores (present on instanced
+    /// maps only, mirroring `GetInstanceData()` null on
+    /// world maps).
+    pub(crate) instance_data: HashMap<u32, u32>,
+    pub(crate) instance_data64: HashMap<u32, u64>,
+    /// Delayed creature despawns (Slice 6b
+    /// `DespawnOrUnsummon(msTimeToDespawn, respawn)`):
+    /// guid -> (despawn-at map ms, respawn delay sec;
+    /// `u32::MAX` = never respawn).
+    pub(crate) despawns_due: HashMap<ObjectGuid, (u64, u32)>,
+    /// Temporary summons (Slice 7): guid -> lifecycle.
+    pub(crate) summons: HashMap<ObjectGuid, SummonState>,
+    /// Local counter for summon guids (DB spawn guids
+    /// stay well below this band on the bench).
+    pub(crate) summon_counter: u32,
+    /// Objects with visibility switched off
+    /// (`VISIBILITY_OFF` / `SetVisible(false)`): the
+    /// Deadmines patrols and the Darkmoon chest.
+    pub(crate) hidden_objects: std::collections::HashSet<ObjectGuid>,
+    /// Deadmines instance script state (map 36 with a
+    /// real instance id; Slice 7 hand-port).
+    pub(crate) deadmines: Option<crate::content::DeadminesState>,
+}
+
+/// `TempSummon` lifecycle (Slice 7 subset).
+pub(crate) struct SummonState {
+    pub summoner: ObjectGuid,
+    /// `TempSummonType`.
+    pub kind: u32,
+    /// Absolute map-ms despawn/kill time for the timed
+    /// types; `None` for manual/corpse types.
+    pub despawn_at_ms: Option<u64>,
+    pub despawn_delay_ms: u32,
+}
+
+#[derive(Default)]
+pub(crate) struct CellObjects {
+    pub(crate) players: HashSet<ObjectGuid>,
+    pub(crate) creatures: HashSet<ObjectGuid>,
+    pub(crate) gameobjects: HashSet<ObjectGuid>,
+}
+
+impl Map {
+    #[must_use]
+    pub fn new(
+        map_id: u32,
+        instance_id: u32,
+        config: MapConfig,
+        stores: Arc<WorldStores>,
+        rng: crate::WorldRng,
+    ) -> Map {
+        let mut players_timer = ShortIntervalTimer::new();
+        players_timer.set_interval(config.update_players_diff);
+        Map {
+            map_id,
+            instance_id,
+            config,
+            stores,
+            rng,
+            players: HashMap::new(),
+            creatures: HashMap::new(),
+            gameobjects: HashMap::new(),
+            cells: HashMap::new(),
+            spawn_cells_loaded: HashSet::new(),
+            events: Vec::new(),
+            players_timer,
+            now_ms: 0,
+            now_unix: 0,
+            motion: HashMap::new(),
+            spline_counter: 1,
+            heights: crate::motion::Heights::new(map_id, None),
+            navhost: crate::motion::NavHost::new(map_id, None),
+            ai: HashMap::new(),
+            casts: HashMap::new(),
+            cooldowns: HashMap::new(),
+            respawns_due: HashMap::new(),
+            script_schedule: std::collections::BTreeMap::new(),
+            script_seq: 0,
+            saved_variables: HashMap::new(),
+            instance_data: HashMap::new(),
+            instance_data64: HashMap::new(),
+            despawns_due: HashMap::new(),
+            summons: HashMap::new(),
+            summon_counter: 0x00F0_0000,
+            hidden_objects: std::collections::HashSet::new(),
+            deadmines: (map_id == 36 && instance_id != 0).then(crate::content::DeadminesState::new),
+        }
+    }
+
+    /// Points the height source at the extracted `.map`
+    /// directory (binary boot; tests may leave it unset,
+    /// in which case ground queries fall back to the
+    /// caller's z hint).
+    pub fn set_maps_dir(&mut self, dir: Option<std::path::PathBuf>) {
+        self.heights = crate::motion::Heights::new(self.map_id, dir);
+    }
+
+    #[must_use]
+    pub fn id(&self) -> u32 {
+        self.map_id
+    }
+
+    #[must_use]
+    pub fn instance_id(&self) -> u32 {
+        self.instance_id
+    }
+
+    #[must_use]
+    pub fn player_count(&self) -> usize {
+        self.players.len()
+    }
+
+    #[must_use]
+    pub fn creature_count(&self) -> usize {
+        self.creatures.len()
+    }
+
+    #[must_use]
+    pub fn gameobject_count(&self) -> usize {
+        self.gameobjects.len()
+    }
+
+    /// One gameobject by guid (tests/tools).
+    #[must_use]
+    pub fn gameobject(&self, guid: ObjectGuid) -> Option<&GameObject> {
+        self.gameobjects.get(&guid)
+    }
+
+    #[must_use]
+    pub fn player(&self, guid: ObjectGuid) -> Option<&Player> {
+        self.players.get(&guid).map(|e| &e.player)
+    }
+
+    pub fn player_mut(&mut self, guid: ObjectGuid) -> Option<&mut Player> {
+        self.players.get_mut(&guid).map(|e| &mut e.player)
+    }
+
+    pub fn creature_mut(&mut self, guid: ObjectGuid) -> Option<&mut Creature> {
+        self.creatures.get_mut(&guid)
+    }
+
+    #[must_use]
+    pub fn creature(&self, guid: ObjectGuid) -> Option<&Creature> {
+        self.creatures.get(&guid)
+    }
+
+    /// GUIDs currently visible to a player (tests/tools).
+    #[must_use]
+    pub fn visible_to(&self, guid: ObjectGuid) -> Option<&HashSet<ObjectGuid>> {
+        self.players.get(&guid).map(|e| &e.visible)
+    }
+
+    pub fn drain_events(&mut self) -> Vec<MapEvent> {
+        std::mem::take(&mut self.events)
+    }
+
+    pub(crate) fn cell_of(position: Position) -> u32 {
+        cell_id(position.x, position.y)
+    }
+
+    /// `Map::Add(Player*)` subset: activates spawn cells in
+    /// range, registers the player, and runs the first
+    /// visibility pass (own creates arrive through
+    /// [`Map::build_init_self`], called by the login flow
+    /// before or after this, matching `SendInitSelf`).
+    pub fn add_player(
+        &mut self,
+        mut player: Player,
+        respawns: &RespawnTimes,
+        now_unix: u64,
+        now_ms: u32,
+    ) {
+        self.now_unix = now_unix;
+        self.now_ms = now_ms;
+        let guid = player.unit.guid();
+        let position = player.unit.world.position();
+        self.activate_cells_around(position, respawns);
+        player.unit.world.object.add_to_world();
+        // New objects arrive as CREATE_OBJECT2 for the
+        // first viewer pass: creators are new until their
+        // first update send (Object::AddToWorld sets
+        // m_isNewObject? — new-object state is set by the
+        // spawn functions in this port below for creatures;
+        // players entering world are new too).
+        player.unit.world.object.set_is_new_object(true);
+        let cell = Self::cell_of(position);
+        self.cells.entry(cell).or_default().players.insert(guid);
+        let entry = PlayerEntry {
+            player,
+            visible: HashSet::new(),
+            last_notified: position,
+            scan_due: true,
+        };
+        self.players.insert(guid, entry);
+        // The newcomer scans; everyone else re-scans for
+        // the newcomer (object-centric path).
+        self.scan_player_visibility(guid);
+        let others: Vec<ObjectGuid> = self
+            .players
+            .keys()
+            .copied()
+            .filter(|g| *g != guid)
+            .collect();
+        for other in others {
+            self.scan_player_visibility(other);
+        }
+    }
+
+    /// `Map::Remove(Player*)` subset: out-of-range to
+    /// viewers, returns the aggregate for logout handling.
+    pub fn remove_player(&mut self, guid: ObjectGuid) -> Option<Player> {
+        let entry = self.players.remove(&guid)?;
+        let cell = Self::cell_of(entry.player.unit.world.position());
+        if let Some(c) = self.cells.get_mut(&cell) {
+            c.players.remove(&guid);
+        }
+        let mut player = entry.player;
+        player.unit.world.object.remove_from_world();
+        // Viewers lose the player; the leaver's own visible
+        // set dies with the session.
+        let others: Vec<ObjectGuid> = self.players.keys().copied().collect();
+        for other in others {
+            if self
+                .players
+                .get(&other)
+                .is_some_and(|e| e.visible.contains(&guid))
+            {
+                let mut data = UpdateData::new();
+                data.add_out_of_range_guid(guid);
+                self.send_update_data(other, &mut data);
+                if let Some(e) = self.players.get_mut(&other) {
+                    e.visible.remove(&guid);
+                }
+            }
+        }
+        Some(player)
+    }
+
+    /// Cell ids in the activation square around a position
+    /// (`Cell::CalculateCellArea`): corner pairs from
+    /// `(x-r, y-r)` to `(x+r, y+r)`, clamped to the
+    /// 1024-cell axis.
+    #[allow(clippy::unused_self)] // grid constants move here with grid state
+    fn cell_area(&self, position: Position, radius: f32) -> Vec<u32> {
+        let norm = |v: u32| v.min(1023);
+        let (x0, y0) = compute_cell_pair(position.x - radius, position.y - radius);
+        let (x1, y1) = compute_cell_pair(position.x + radius, position.y + radius);
+        let (x0, x1) = (norm(x0.min(x1)), norm(x0.max(x1)));
+        let (y0, y1) = (norm(y0.min(y1)), norm(y0.max(y1)));
+        let mut out = Vec::with_capacity(((x1 - x0 + 1) * (y1 - y0 + 1)) as usize);
+        for cy in y0..=y1 {
+            for cx in x0..=x1 {
+                out.push(cy * 1024 + cx);
+            }
+        }
+        out
+    }
+
+    /// Instantiates DB spawns for newly entered cells
+    /// (`EnsureGridLoaded` data half). Elevator transports
+    /// were registered separately by the spawn loader and
+    /// are created on first activation too (Slice 3 keeps
+    /// them static). Pooled/event spawns: the loader
+    /// already withheld pooled GUIDs from the grid, so
+    /// cells only contain directly-spawnable objects.
+    fn activate_cells_around(&mut self, position: Position, respawns: &RespawnTimes) {
+        for cell in self.cell_area(position, self.config.grid_activation_distance) {
+            if !self.spawn_cells_loaded.insert(cell) {
+                continue;
+            }
+            let Some(guids) = self.stores.spawns.grid().cell(self.map_id, cell) else {
+                continue;
+            };
+            let creature_guids: Vec<u32> = guids.creatures.iter().copied().collect();
+            let go_guids: Vec<u32> = guids.gameobjects.iter().copied().collect();
+            for guid_low in creature_guids {
+                self.spawn_creature(guid_low, respawns);
+            }
+            for guid_low in go_guids {
+                self.spawn_gameobject(guid_low, respawns);
+            }
+        }
+        // Elevator transports for this map ride along on
+        // first activation (they are not in spawn cells).
+        let elevators: Vec<u32> = self.stores.spawns.elevator_transports(self.map_id).to_vec();
+        for guid_low in elevators {
+            self.spawn_gameobject(guid_low, respawns);
+        }
+    }
+
+    pub(crate) fn spawn_creature(&mut self, guid_low: u32, respawns: &RespawnTimes) {
+        let Some(data) = self.stores.spawns.creature(guid_low).cloned() else {
+            return;
+        };
+        let respawn_time = respawns
+            .creature(data.instanciated_continent_instance_id, guid_low)
+            .map_or(0, |e| e.respawn_time);
+        let addon = self.stores.creature_addons.get(guid_low).cloned();
+        self.materialize_creature(guid_low, &data, addon.as_ref(), respawn_time);
+    }
+
+    /// Materialize one creature from a spawn row (DB
+    /// spawn or a synthetic temp-summon row) and add it
+    /// to the world. Returns its guid.
+    pub(crate) fn materialize_creature(
+        &mut self,
+        guid_low: u32,
+        data: &mangos_world_data::spawns::CreatureSpawn,
+        addon: Option<&mangos_world_data::spawn_support::CreatureDataAddon>,
+        respawn_time: u64,
+    ) -> Option<ObjectGuid> {
+        // ObjectGuid needs the chosen entry; spawn_from_db
+        // picks it — compute the key after spawn from the
+        // creature's own guid.
+        let stores = &self.stores;
+        let resolver = DisplayResolver {
+            scale_for_display: &|id| stores.scale_for_display(id),
+            model_for_display: &|id| stores.model_for_display(id),
+        };
+        let rates = self.config.creature_rates;
+        let now_unix = self.now_unix;
+        let item_store = &self.stores.items;
+        let items = |id: u32| {
+            item_store.get(id).map(|p| VirtualItemPrototype {
+                display_id: p.display_id,
+                class: p.class,
+                subclass: p.subclass,
+                material: p.material,
+                inventory_type: p.inventory_type,
+                sheath: p.sheath,
+            })
+        };
+        let result = Creature::spawn_from_db(
+            guid_low,
+            data,
+            &stores.creature_templates,
+            addon,
+            &stores.equipment,
+            &items,
+            &stores.cls,
+            &stores.display_addons,
+            &resolver,
+            &rates,
+            respawn_time,
+            now_unix,
+            false,
+            &mut self.rng,
+        );
+        // Failures are logged at the loader level in C++.
+        let Ok(mut creature) = result else {
+            return None;
+        };
+        creature.unit.world.object.set_is_new_object(true);
+        creature.unit.world.object.add_to_world();
+        if creature.respawn_row_expired {
+            self.events
+                .push(MapEvent::ClearCreatureRespawn { guid_low });
+        }
+        let guid = creature.unit.guid();
+        // Re-materialization (respawn) replaces a corpse
+        // that may sit in a different cell than the spawn
+        // point: drop the stale cell entry first.
+        if let Some(old) = self.creatures.get(&guid) {
+            let old_cell = Self::cell_of(old.unit.world.position());
+            if let Some(cell) = self.cells.get_mut(&old_cell) {
+                cell.creatures.remove(&guid);
+            }
+        }
+        let cell = Self::cell_of(creature.unit.world.position());
+        self.cells.entry(cell).or_default().creatures.insert(guid);
+        self.creatures.insert(guid, creature);
+        // `MotionMaster::Initialize` at AddToWorld: default
+        // generator from the spawn's movement type.
+        self.motion_initialize(guid);
+        // Spawn/addon auras (`AddAura` in LoadCreatureAddon /
+        // template auras), applied now that the spell store
+        // exists (Slice 5/6).
+        let pending: Vec<u32> = self
+            .creatures
+            .get(&guid)
+            .map(|c| c.pending_auras.clone())
+            .unwrap_or_default();
+        for spell_id in pending {
+            self.apply_aura_by_id(guid, spell_id, guid);
+        }
+        // EventAI `JustRespawned` (Slice 6b).
+        self.eventai_on_spawn(guid);
+        // Instance-script `OnCreatureCreate` (Slice 7).
+        self.instance_on_creature_create(guid);
+        Some(guid)
+    }
+
+    /// `WorldObject::SummonCreature` subset (Slice 7):
+    /// materialize a temporary creature from a
+    /// synthetic spawn row and track its lifecycle.
+    pub(crate) fn summon_creature(
+        &mut self,
+        entry: u32,
+        position: Position,
+        summoner: ObjectGuid,
+        kind: u32,
+        despawn_delay_ms: u32,
+    ) -> Option<ObjectGuid> {
+        self.stores.creature_templates.get(entry)?;
+        self.summon_counter += 1;
+        let guid_low = self.summon_counter;
+        let mut creature_id = [0u32; mangos_world_data::spawns::MAX_CREATURE_IDS_PER_SPAWN];
+        creature_id[0] = entry;
+        let data = mangos_world_data::spawns::CreatureSpawn {
+            creature_id,
+            position: mangos_world_data::spawns::WorldLocation {
+                // Map ids above u16 do not exist in 1.12 data.
+                #[allow(clippy::cast_possible_truncation)]
+                map_id: self.map_id as u16,
+                x: position.x,
+                y: position.y,
+                z: position.z,
+                o: position.o,
+            },
+            ..Default::default()
+        };
+        let guid = self.materialize_creature(guid_low, &data, None, 0)?;
+        let despawn_at_ms = match kind {
+            // Timed types count from summoning.
+            1 | 2 | 3 | 9 | 10 | 11 if despawn_delay_ms > 0 => {
+                Some(u64::from(self.now_ms) + u64::from(despawn_delay_ms))
+            }
+            _ => None,
+        };
+        self.summons.insert(
+            guid,
+            SummonState {
+                summoner,
+                kind,
+                despawn_at_ms,
+                despawn_delay_ms,
+            },
+        );
+        if summoner.is_creature() {
+            self.eventai_process_type(
+                summoner,
+                mangos_scripts_engine::event_type::SUMMONED_UNIT,
+                Some(guid),
+            );
+        }
+        Some(guid)
+    }
+
+    /// Temp-summon timers (`TemporarySummon::Update`
+    /// subset).
+    pub(crate) fn update_summons(&mut self) {
+        if self.summons.is_empty() {
+            return;
+        }
+        let now = u64::from(self.now_ms);
+        let mut expired: Vec<(ObjectGuid, u32)> = Vec::new();
+        for (guid, state) in &self.summons {
+            let Some(at) = state.despawn_at_ms else {
+                continue;
+            };
+            if at > now {
+                continue;
+            }
+            // Out-of-combat timed types wait for combat
+            // to end (checked every tick).
+            if matches!(state.kind, 1..=4) && self.ai_in_combat(*guid) {
+                continue;
+            }
+            expired.push((*guid, state.kind));
+        }
+        for (guid, kind) in expired {
+            if kind == 11 {
+                // TIMED_DEATH_AND_DEAD_DESPAWN: dies now.
+                if self.unit_is_alive(guid) {
+                    self.kill_unit(guid, None);
+                }
+            } else {
+                self.despawn_creature_now(guid, u32::MAX);
+            }
+        }
+    }
+
+    pub(crate) fn spawn_gameobject(&mut self, guid_low: u32, respawns: &RespawnTimes) {
+        let Some(data) = self.stores.spawns.gameobject(guid_low).cloned() else {
+            return;
+        };
+
+        let respawn_time = respawns
+            .gameobject(data.instanciated_continent_instance_id, guid_low)
+            .map_or(0, |e| e.respawn_time);
+        let now_unix = self.now_unix;
+        let force_active = self.config.force_active_objects;
+        let Ok(mut go) = GameObject::spawn_from_db(
+            guid_low,
+            &data,
+            &self.stores.gameobject_templates,
+            respawn_time,
+            now_unix,
+            false,
+            force_active,
+            &mut self.rng,
+        ) else {
+            return;
+        };
+        go.world.object.set_is_new_object(true);
+        go.world.object.add_to_world();
+        if go.respawn_row_expired {
+            self.events
+                .push(MapEvent::ClearGameObjectRespawn { guid_low });
+        }
+        let guid = go.world.object.object_guid();
+        if self.gameobjects.contains_key(&guid) {
+            return;
+        }
+        let cell = Self::cell_of(go.world.position());
+        self.cells.entry(cell).or_default().gameobjects.insert(guid);
+        self.gameobjects.insert(guid, go);
+        self.instance_on_object_create(guid);
+    }
+
+    /// Serialized `UpdateData` -> packet events for one
+    /// viewer (`SendObjectUpdates` tail: build + compress +
+    /// send, normally via the Broadcaster; Slice 3 builds
+    /// per viewer directly).
+    pub(crate) fn send_update_data(&mut self, to: ObjectGuid, data: &mut UpdateData) {
+        if !data.has_data() {
+            return;
+        }
+        // has_transport: transports exist on the map; the
+        // byte only tells the client to expect transport
+        // movement blocks. Slice 3 spawns no moving
+        // transports, so false matches C++ output until a
+        // transport block is written.
+        for packet in data.build_packets(false, self.config.compression) {
+            self.events.push(MapEvent::Packet { to, packet });
+        }
+    }
+
+    /// `ObjectView` for a unit (player or creature arm).
+    /// The active spline rides along when the unit is
+    /// server-moving (`SPLINE_ENABLED` in the info); the
+    /// block builder checks the flag itself.
+    fn unit_view(
+        info: MovementInfo,
+        position: Position,
+        speeds: [f32; 6],
+        is_creature: bool,
+        spline: Option<&mangos_movement::MoveSpline>,
+    ) -> ObjectView<'_> {
+        ObjectView {
+            movement: MovementSection::Living {
+                info,
+                position,
+                speeds,
+                is_creature,
+                spline,
+            },
+            rewrites: mangos_entities::update::RewriteInputs::default(),
+            melee_victim: None,
+            transport_path_progress: None,
+            is_transport: false,
+        }
+    }
+
+    /// Viewer context for `viewer` looking at an object.
+    fn viewer_for(is_self: bool) -> Viewer {
+        Viewer {
+            is_self,
+            // Default visibility masks everything non-public;
+            // health-percent rules resolve inside the
+            // builder from values + viewer relation.
+            can_see_health: false,
+            ..Viewer::default()
+        }
+    }
+
+    /// Camera-side visibility recomputation
+    /// (`Player::UpdateObjectVisibility`): collects the
+    /// full visible candidate set around the view point,
+    /// then applies creates/destroys.
+    fn scan_player_visibility(&mut self, viewer_guid: ObjectGuid) {
+        let (view_point, search_radius) = {
+            let Some(entry) = self.players.get(&viewer_guid) else {
+                return;
+            };
+            let pos = entry.player.unit.world.position();
+            // Grey distances extend the outgoing edge; the
+            // search must cover the larger of the two.
+            let r = self.config.visibility_distance
+                + self.config.grey_unit.max(self.config.grey_object);
+            (pos, r)
+        };
+        let mut candidates: Vec<ObjectGuid> = Vec::new();
+        for cell in self.cell_area(view_point, search_radius) {
+            let Some(objects) = self.cells.get(&cell) else {
+                continue;
+            };
+            candidates.extend(objects.players.iter().copied());
+            candidates.extend(objects.creatures.iter().copied());
+            candidates.extend(objects.gameobjects.iter().copied());
+        }
+        // Objects already visible but outside the cell
+        // search (they moved, or the viewer teleported) must
+        // still be visited to fall out.
+        if let Some(entry) = self.players.get(&viewer_guid) {
+            for guid in &entry.visible {
+                if !candidates.contains(guid) {
+                    candidates.push(*guid);
+                }
+            }
+        }
+        let mut data = UpdateData::new();
+        let mut effects = BuildEffects::default();
+        for target in candidates {
+            if target == viewer_guid {
+                continue;
+            }
+            self.update_visibility_of(viewer_guid, target, &mut data, &mut effects);
+        }
+        self.send_update_data(viewer_guid, &mut data);
+        if let Some(entry) = self.players.get_mut(&viewer_guid) {
+            entry.last_notified = view_point;
+            entry.scan_due = false;
+        }
+        // Objects that produced their first create are no
+        // longer new (C++ clears in SendObjectUpdates/AOI
+        // after CreateObject2).
+    }
+
+    /// `Player::UpdateVisibilityOf<T>` for one target.
+    fn update_visibility_of(
+        &mut self,
+        viewer_guid: ObjectGuid,
+        target: ObjectGuid,
+        data: &mut UpdateData,
+        effects: &mut BuildEffects,
+    ) {
+        let in_visible_list = self
+            .players
+            .get(&viewer_guid)
+            .is_some_and(|e| e.visible.contains(&target));
+        let visible_now = !self.hidden_objects.contains(&target)
+            && self.is_visible(viewer_guid, target, in_visible_list);
+        match (in_visible_list, visible_now) {
+            (false, true) => {
+                self.build_create_for(viewer_guid, target, data, effects);
+                if let Some(e) = self.players.get_mut(&viewer_guid) {
+                    e.visible.insert(target);
+                }
+            }
+            (true, false) => {
+                data.add_out_of_range_guid(target);
+                if let Some(e) = self.players.get_mut(&viewer_guid) {
+                    e.visible.remove(&target);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Distance + state visibility for one pair.
+    fn is_visible(
+        &self,
+        viewer_guid: ObjectGuid,
+        target: ObjectGuid,
+        in_visible_list: bool,
+    ) -> bool {
+        let Some(viewer) = self.players.get(&viewer_guid).map(|e| &e.player) else {
+            return false;
+        };
+        let view_point = viewer.unit.world.position();
+        if let Some(target_player) = self.players.get(&target).map(|e| &e.player) {
+            let dist = visibility::dist2d(view_point, target_player.unit.world.position());
+            if !visibility::within_unit_visibility(
+                dist,
+                self.config.visibility_distance,
+                self.config.grey_unit,
+                in_visible_list,
+                0.0,
+            ) {
+                return false;
+            }
+            return visibility::unit_visible_for_player(
+                viewer,
+                None,
+                Some(target_player),
+                None,
+                self.config.aggro_rate,
+            );
+        }
+        if let Some(target_creature) = self.creatures.get(&target) {
+            let dist = visibility::dist2d(view_point, target_creature.unit.world.position());
+            if !visibility::within_unit_visibility(
+                dist,
+                self.config.visibility_distance,
+                self.config.grey_unit,
+                in_visible_list,
+                target_creature.visibility_modifier,
+            ) {
+                return false;
+            }
+            return target_creature.respawn_time <= self.now_unix
+                && visibility::unit_visible_for_player(
+                    viewer,
+                    None,
+                    None,
+                    Some(target_creature),
+                    self.config.aggro_rate,
+                );
+        }
+        if let Some(target_go) = self.gameobjects.get(&target) {
+            let dist = visibility::dist2d(view_point, target_go.world.position());
+            return visibility::gameobject_visible(
+                target_go,
+                dist,
+                self.config.visibility_distance,
+                self.config.grey_object,
+                in_visible_list,
+                self.now_unix,
+            );
+        }
+        false
+    }
+
+    fn build_create_for(
+        &mut self,
+        viewer_guid: ObjectGuid,
+        target: ObjectGuid,
+        data: &mut UpdateData,
+        effects: &mut BuildEffects,
+    ) {
+        let viewer = Self::viewer_for(false);
+        let now_ms = self.now_ms;
+        if let Some(p) = self.players.get(&target).map(|e| &e.player) {
+            let view = Self::unit_view(
+                p.unit.world.movement_info,
+                p.unit.world.position(),
+                p.unit.speeds(),
+                false,
+                Some(&p.unit.spline),
+            );
+            build_create_block(&p.unit.world.object, &view, &viewer, data, now_ms, effects);
+            return;
+        }
+        if let Some(c) = self.creatures.get(&target) {
+            let view = Self::unit_view(
+                c.unit.world.movement_info,
+                c.unit.world.position(),
+                c.unit.speeds(),
+                true,
+                Some(&c.unit.spline),
+            );
+            build_create_block(&c.unit.world.object, &view, &viewer, data, now_ms, effects);
+            return;
+        }
+        if let Some(go) = self.gameobjects.get(&target) {
+            let _ = viewer_guid;
+            let view = ObjectView {
+                movement: MovementSection::HasPosition(go.stationary_position),
+                rewrites: mangos_entities::update::RewriteInputs::default(),
+                melee_victim: None,
+                transport_path_progress: None,
+                is_transport: go.world.object.update_flag().0
+                    & mangos_protocol::update_data::ObjectUpdateFlags::TRANSPORT
+                    != 0,
+            };
+            build_create_block(&go.world.object, &view, &viewer, data, now_ms, effects);
+        }
+    }
+
+    /// `Player::SendInitSelf` create (own object to own
+    /// session). The login flow sends this before the
+    /// first tick; transports/owned summons join later.
+    pub fn build_init_self(&mut self, guid: ObjectGuid) {
+        let Some(entry) = self.players.get(&guid) else {
+            return;
+        };
+        let player = &entry.player;
+        let view = Self::unit_view(
+            player.unit.world.movement_info,
+            player.unit.world.position(),
+            player.unit.speeds(),
+            false,
+            Some(&player.unit.spline),
+        );
+        let viewer = Self::viewer_for(true);
+        let mut data = UpdateData::new();
+        let mut effects = BuildEffects::default();
+        build_create_block(
+            &player.unit.world.object,
+            &view,
+            &viewer,
+            &mut data,
+            self.now_ms,
+            &mut effects,
+        );
+        self.send_update_data(guid, &mut data);
+    }
+
+    /// Applies a client movement packet (`HandleMovementOpcodes`
+    /// relay half): verify, relocate, broadcast to viewers
+    /// of the mover, schedule visibility/activation.
+    /// Returns false when the mover is unknown or the info
+    /// is rejected (anticheat is Phase 4-late; position
+    /// validity is the only gate here).
+    pub fn apply_movement(
+        &mut self,
+        guid: ObjectGuid,
+        opcode: u16,
+        info: MovementInfo,
+        respawns: &RespawnTimes,
+    ) -> bool {
+        self.apply_movement_impl(guid, Some(opcode), info, respawns)
+    }
+
+    /// `HandleMoverRelocation` as used by the ACK
+    /// handlers: relocate + visibility, no packet relay
+    /// (observers get the change packet instead).
+    pub fn relocate_from_client(
+        &mut self,
+        guid: ObjectGuid,
+        info: MovementInfo,
+        respawns: &RespawnTimes,
+    ) -> bool {
+        self.apply_movement_impl(guid, None, info, respawns)
+    }
+
+    fn apply_movement_impl(
+        &mut self,
+        guid: ObjectGuid,
+        relay_opcode: Option<u16>,
+        info: MovementInfo,
+        respawns: &RespawnTimes,
+    ) -> bool {
+        if !mangos_movement::movement_info::is_valid_map_coord(
+            info.pos.x, info.pos.y, info.pos.z, info.pos.o,
+        ) {
+            return false;
+        }
+        let (old_cell, new_position) = {
+            let Some(entry) = self.players.get(&guid) else {
+                return false;
+            };
+            (Self::cell_of(entry.player.unit.world.position()), info.pos)
+        };
+        let new_cell = Self::cell_of(new_position);
+        // Moving interrupts a timed cast
+        // (`Spell::CheckAllowedToMove` subset — no
+        // cast-while-moving attributes in the slice).
+        if self.casts.contains_key(&guid)
+            && info
+                .flags
+                .has(mangos_movement::movement_info::MovementFlags::MASK_MOVING)
+        {
+            self.cancel_cast(guid, true);
+        }
+        // Grid transition loads new spawn cells.
+        self.activate_cells_around(new_position, respawns);
+        let relocation_due = {
+            let Some(entry) = self.players.get_mut(&guid) else {
+                return false;
+            };
+            entry.player.unit.world.movement_info = info;
+            entry.player.unit.world.relocate(new_position);
+            visibility::dist_sq(entry.last_notified, new_position)
+                >= self.config.relocation_lower_limit_sq
+        };
+        if old_cell != new_cell {
+            if let Some(c) = self.cells.get_mut(&old_cell) {
+                c.players.remove(&guid);
+            }
+            self.cells.entry(new_cell).or_default().players.insert(guid);
+        }
+        if relocation_due {
+            if let Some(entry) = self.players.get_mut(&guid) {
+                entry.scan_due = true;
+            }
+            // Object-centric pass (`Unit::OnRelocated` ->
+            // watchers' `UpdateVisibilityOf`): players who
+            // see the mover re-evaluate it immediately.
+            let watchers: Vec<ObjectGuid> = self
+                .players
+                .iter()
+                .filter(|(g, e)| **g != guid && e.visible.contains(&guid))
+                .map(|(g, _)| *g)
+                .collect();
+            for watcher in watchers {
+                let mut data = UpdateData::new();
+                let mut effects = BuildEffects::default();
+                self.update_visibility_of(watcher, guid, &mut data, &mut effects);
+                self.send_update_data(watcher, &mut data);
+            }
+        }
+        // Relay: packed mover GUID + MovementInfo under the
+        // original opcode, to every player who sees the
+        // mover (PlayerBroadcaster listener set). Skipped
+        // for ACK relocations.
+        let Some(opcode) = relay_opcode else {
+            return true;
+        };
+        let mut guid_bytes = Vec::new();
+        guid.write_packed(&mut guid_bytes);
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&guid_bytes);
+        info.write(&mut payload);
+        let packet = WorldPacket::with_body(opcode, payload.into_vec());
+        let viewers: Vec<ObjectGuid> = self
+            .players
+            .iter()
+            .filter(|(g, e)| **g != guid && e.visible.contains(&guid))
+            .map(|(g, _)| *g)
+            .collect();
+        for viewer in viewers {
+            self.events.push(MapEvent::Packet {
+                to: viewer,
+                packet: packet.clone(),
+            });
+        }
+        true
+    }
+
+    /// One map tick (`Map::Update` subset). `diff_ms` is
+    /// real elapsed milliseconds.
+    pub fn tick(&mut self, diff_ms: u32, now_ms: u32, now_unix: u64) {
+        self.now_ms = now_ms;
+        self.now_unix = now_unix;
+        self.players_timer.update(diff_ms);
+        if self.players_timer.passed() {
+            let accumulated = self.players_timer.current();
+            debug_assert!(accumulated >= diff_ms);
+            let _ = accumulated; // handed onward when player updates exist
+            self.players_timer.reset();
+            let due: Vec<ObjectGuid> = self
+                .players
+                .iter()
+                .filter(|(_, e)| e.scan_due)
+                .map(|(g, _)| *g)
+                .collect();
+            for guid in due {
+                self.scan_player_visibility(guid);
+            }
+        }
+        // Slice 4: spline integration then creature
+        // movement generators (C++ runs both inside
+        // `Creature::Update` during the grid pass, before
+        // `SendObjectUpdates`; the relative order vs the
+        // values pass only matters for same-tick creates,
+        // which read post-move positions either way here).
+        self.update_spline_movement(diff_ms);
+        self.update_creature_motion(diff_ms);
+        // Slice 6: creature AI (aggro/threat/chase/spell
+        // lists) + melee swings.
+        self.update_ai(diff_ms);
+        // Slice 5: casts finish, auras tick/expire, dead
+        // creatures respawn.
+        self.update_casts(diff_ms);
+        // Slice 6b: due generic script steps
+        // (`ScriptsProcess` inside `Map::Update`).
+        self.scripts_process();
+        self.process_despawns_due();
+        self.update_summons();
+        self.instance_update(diff_ms);
+        self.update_auras(diff_ms);
+        self.update_respawns();
+        self.send_object_updates();
+        // The second players gate runs the same scan for
+        // late relocations.
+        let due: Vec<ObjectGuid> = self
+            .players
+            .iter()
+            .filter(|(_, e)| e.scan_due)
+            .map(|(g, _)| *g)
+            .collect();
+        for guid in due {
+            self.scan_player_visibility(guid);
+        }
+    }
+
+    /// `SendObjectUpdates`: values blocks for updated
+    /// objects to every viewer that sees them; masks clear
+    /// afterwards (`clear_update_mask(false)`).
+    fn send_object_updates(&mut self) {
+        let mut updated: Vec<ObjectGuid> = Vec::new();
+        for (guid, entry) in &self.players {
+            if entry.player.unit.world.object.is_object_updated() {
+                updated.push(*guid);
+            }
+        }
+        for (guid, creature) in &self.creatures {
+            if creature.unit.world.object.is_object_updated() {
+                updated.push(*guid);
+            }
+        }
+        for (guid, go) in &self.gameobjects {
+            if go.world.object.is_object_updated() {
+                updated.push(*guid);
+            }
+        }
+        if updated.is_empty() {
+            return;
+        }
+        let viewers: Vec<ObjectGuid> = self.players.keys().copied().collect();
+        for viewer_guid in viewers {
+            let mut data = UpdateData::new();
+            let mut effects = BuildEffects::default();
+            for target in &updated {
+                let sees = *target == viewer_guid
+                    || self
+                        .players
+                        .get(&viewer_guid)
+                        .is_some_and(|e| e.visible.contains(target));
+                if !sees {
+                    continue;
+                }
+                let viewer = Self::viewer_for(*target == viewer_guid);
+                self.build_values_for(*target, &viewer, &mut data, &mut effects);
+            }
+            self.send_update_data(viewer_guid, &mut data);
+        }
+        for guid in &updated {
+            self.clear_object_update(*guid);
+        }
+        // New-object state persists until the first values
+        // pass after creation (matches create-then-update
+        // ordering closely enough for Slice 3; the flag
+        // only changes CREATE_OBJECT vs CREATE_OBJECT2).
+        for guid in &updated {
+            self.clear_is_new(*guid);
+        }
+    }
+
+    fn build_values_for(
+        &self,
+        target: ObjectGuid,
+        viewer: &Viewer,
+        data: &mut UpdateData,
+        effects: &mut BuildEffects,
+    ) {
+        if let Some(p) = self.players.get(&target).map(|e| &e.player) {
+            let view = Self::unit_view(
+                p.unit.world.movement_info,
+                p.unit.world.position(),
+                p.unit.speeds(),
+                false,
+                Some(&p.unit.spline),
+            );
+            build_values_block(&p.unit.world.object, &view, viewer, data, effects);
+            return;
+        }
+        if let Some(c) = self.creatures.get(&target) {
+            let view = Self::unit_view(
+                c.unit.world.movement_info,
+                c.unit.world.position(),
+                c.unit.speeds(),
+                true,
+                Some(&c.unit.spline),
+            );
+            build_values_block(&c.unit.world.object, &view, viewer, data, effects);
+            return;
+        }
+        if let Some(go) = self.gameobjects.get(&target) {
+            let view = ObjectView {
+                movement: MovementSection::HasPosition(go.stationary_position),
+                rewrites: mangos_entities::update::RewriteInputs::default(),
+                melee_victim: None,
+                transport_path_progress: None,
+                is_transport: go.world.object.update_flag().0
+                    & mangos_protocol::update_data::ObjectUpdateFlags::TRANSPORT
+                    != 0,
+            };
+            build_values_block(&go.world.object, &view, viewer, data, effects);
+        }
+    }
+
+    fn clear_object_update(&mut self, guid: ObjectGuid) {
+        if let Some(e) = self.players.get_mut(&guid) {
+            e.player.unit.world.object.clear_update_mask(false);
+        } else if let Some(c) = self.creatures.get_mut(&guid) {
+            c.unit.world.object.clear_update_mask(false);
+        } else if let Some(go) = self.gameobjects.get_mut(&guid) {
+            go.world.object.clear_update_mask(false);
+        }
+    }
+
+    fn clear_is_new(&mut self, guid: ObjectGuid) {
+        if let Some(e) = self.players.get_mut(&guid) {
+            e.player.unit.world.object.set_is_new_object(false);
+        } else if let Some(c) = self.creatures.get_mut(&guid) {
+            c.unit.world.object.set_is_new_object(false);
+        } else if let Some(go) = self.gameobjects.get_mut(&guid) {
+            go.world.object.set_is_new_object(false);
+        }
+    }
+
+    /// Death-state helper for tests/tools (logout cleanup
+    /// and kill paths use the aggregate directly later).
+    #[must_use]
+    pub fn player_death_state(&self, guid: ObjectGuid) -> Option<DeathState> {
+        self.players.get(&guid).map(|e| e.player.unit.death_state)
+    }
+}

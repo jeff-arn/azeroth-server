@@ -1,0 +1,28 @@
+[package]
+name = "mangos-map"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Map/grid/visibility/update replication for the Rust mangosd (Phase 4), mirroring vmangos src/game/Maps"
+
+[dependencies]
+mangos-assets = { path = "../mangos-assets" }
+mangos-detour = { path = "../mangos-detour" }
+mangos-entities = { path = "../mangos-entities" }
+mangos-guid = { path = "../mangos-guid" }
+mangos-movement = { path = "../mangos-movement" }
+mangos-protocol = { path = "../mangos-protocol" }
+mangos-spells = { path = "../mangos-spells" }
+mangos-scripts-engine = { path = "../mangos-scripts-engine" }
+mangos-threat = { path = "../mangos-threat" }
+mangos-world-data = { path = "../mangos-world-data" }
+rand.workspace = true
+
+[dev-dependencies]
+mysql.workspace = true
+mangos-db = { path = "../mangos-db" }
+mangos-dbc = { path = "../mangos-dbc" }
+
+[lints]
+workspace = true
