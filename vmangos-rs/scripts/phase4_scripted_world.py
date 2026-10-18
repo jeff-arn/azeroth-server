@@ -125,8 +125,10 @@ def main() -> None:
     print("MONSTER-MOVE-OBSERVED")
 
     # Heartbeat a small step east; relay has no watcher, but
-    # the session must stay alive and answer ping.
-    move = struct.pack("<IIffff", 0, 1000, x + 3.0, y, z, o)
+    # the session must stay alive and answer ping. The body is
+    # the full 28-byte flagless MovementInfo including fall
+    # time; MovementInfo::read rejects anything shorter.
+    move = struct.pack("<IIffffI", 0, 1000, x + 3.0, y, z, o, 0)
     client.send_packet(MSG_MOVE_HEARTBEAT, move)
     client.send_packet(CMSG_PING, struct.pack("<II", 0xABCD, 40))
     op, body = read_until(client, {SMSG_PONG}, tally)

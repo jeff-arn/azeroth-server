@@ -5,7 +5,7 @@
 
 use mangos_db::DbError;
 use mangos_db::character_load::CharacterLoad;
-use mangos_db::characters::{AccountDataEntry, CharEnumRow};
+use mangos_db::characters::{AccountDataEntry, CharEnumRow, NameQueryRow};
 
 pub trait CharQueries: Send + Sync {
     /// The `CMSG_CHAR_ENUM` rows for one account.
@@ -22,6 +22,14 @@ pub trait CharQueries: Send + Sync {
     ///
     /// Returns [`DbError`] on driver failure.
     fn load_character(&self, guid_low: u32) -> Result<Option<CharacterLoad>, DbError>;
+
+    /// The `CMSG_NAME_QUERY` fallback identity row;
+    /// `Ok(None)` = no such character.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn name_query(&self, guid_low: u32) -> Result<Option<NameQueryRow>, DbError>;
 
     /// Global `account_data` rows (loaded at world auth).
     ///

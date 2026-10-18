@@ -14,7 +14,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{Duration, timeout};
 
 use mangos_db::DbError;
-use mangos_db::characters::{AccountDataEntry, CharEnumRow};
+use mangos_db::characters::{AccountDataEntry, CharEnumRow, NameQueryRow};
 use mangos_log::Log;
 use mangos_protocol::world::{
     auth_response, expected_auth_session_digest, opcode, session_key_from_hex,
@@ -91,6 +91,10 @@ impl CharQueries for FakeCharQueries {
         &self,
         _guid_low: u32,
     ) -> Result<Option<mangos_db::character_load::CharacterLoad>, DbError> {
+        Ok(None)
+    }
+
+    fn name_query(&self, _guid_low: u32) -> Result<Option<NameQueryRow>, DbError> {
         Ok(None)
     }
 

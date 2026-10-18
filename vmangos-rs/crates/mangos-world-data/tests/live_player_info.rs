@@ -76,6 +76,9 @@ fn bench_player_infos_load() {
 
     assert_eq!(infos.create_count(), 40);
     assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+    let orc_warrior_defaults = infos.default_spells(2, 1);
+    assert!(orc_warrior_defaults.contains(&78), "orc warrior defaults");
+    assert!(orc_warrior_defaults.contains(&6603), "Attack default");
     let human_warrior = infos.create_info(1, 1).expect("human warrior create");
     assert_eq!(
         (human_warrior.map_id, human_warrior.area_id),

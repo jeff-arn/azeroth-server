@@ -116,6 +116,10 @@ fn bench_map_visibility_and_relay() {
                     display_addons,
                     player_infos,
                     items,
+                    item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
+                    factions: mangos_world_data::reputations::FactionStore::default(),
+                    areas: mangos_world_data::areas::AreaStore::default(),
+                    weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore::default(),
                     creature_spells: mangos_world_data::creature_spells::CreatureSpellsMap::new(),
@@ -170,8 +174,8 @@ fn bench_map_visibility_and_relay() {
             assert!(d <= 101.0, "creature at {d} beyond grey edge");
         }
     }
-    // Creates were emitted as SMSG_UPDATE_OBJECT packets.
-    map.build_init_self(guid1);
+    // add_player emitted init-self before visibility
+    // creates as SMSG_UPDATE_OBJECT packets.
     let events = map.drain_events();
     let update_packets = events
         .iter()

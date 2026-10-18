@@ -192,7 +192,7 @@ impl Heights {
         (tx, ty)
     }
 
-    fn grid(&mut self, x: f32, y: f32) -> Option<&GridMap> {
+    pub(crate) fn grid(&mut self, x: f32, y: f32) -> Option<&GridMap> {
         let key = Self::tile_pair(x, y);
         if !self.grids.contains_key(&key) {
             let loaded = self.dir.as_ref().and_then(|dir| {

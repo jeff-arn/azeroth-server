@@ -14,6 +14,7 @@ pub mod char_enum;
 pub mod char_queries;
 pub mod ping;
 pub mod player_login;
+pub mod queries;
 pub mod session_core;
 pub mod socket;
 pub mod world_actor;
@@ -52,6 +53,7 @@ pub mod security {
 /// not the `.dist` file's explicit values, so an absent key behaves
 /// the same as in C++.
 #[derive(Clone, Debug)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ServerConfig {
     /// `RealmID`; 0/missing fails boot (`Master.cpp:461-466`).
     pub realm_id: u32,
@@ -110,6 +112,13 @@ pub struct ServerConfig {
     pub game_type: u32,
     /// `RealmZone` (default 1 = DEVELOPMENT, `World.cpp:585-586`).
     pub realm_zone: u32,
+    /// `Item.PreventDataMining` (default true).
+    pub prevent_item_datamining: bool,
+    /// `ActivateWeather` (default true).
+    pub activate_weather: bool,
+    /// `ChangeWeatherInterval` in milliseconds (default
+    /// 600000 = 10 minutes).
+    pub change_weather_interval_ms: u32,
 }
 
 impl ServerConfig {
@@ -149,6 +158,9 @@ impl ServerConfig {
             motd: cfg.string_default("Motd", "Welcome to the Massive Network Game Object Server."),
             game_type: to_u32(cfg.int_default("GameType", 0)),
             realm_zone: to_u32(cfg.int_default("RealmZone", 1)),
+            prevent_item_datamining: cfg.bool_default("Item.PreventDataMining", true),
+            activate_weather: cfg.bool_default("ActivateWeather", true),
+            change_weather_interval_ms: to_u32(cfg.int_default("ChangeWeatherInterval", 600_000)),
         }
     }
 }

@@ -22,13 +22,14 @@ use tokio::task::JoinHandle;
 
 use mangos_db::DbError;
 use mangos_db::character_load::CharacterLoad;
-use mangos_db::characters::CharEnumRow;
+use mangos_db::characters::{CharEnumRow, NameQueryRow};
 use mangos_entities::player::{MAX_MONEY_AMOUNT, MaterializeError, MaterializeInputs, Player};
 use mangos_guid::ObjectGuid;
 use mangos_log::{Level, Log};
 use mangos_map::{Map, MapConfig, MapEvent, WorldRng, WorldStores};
 use mangos_movement::movement_info::MovementInfo;
 use mangos_protocol::buffer::PacketWriter;
+use mangos_protocol::opcode_table::opcode_id;
 use mangos_protocol::opcodes::opcode_meta;
 use mangos_protocol::world::{WorldPacket, auth_response, opcode};
 use mangos_world_data::enum_stores::EnumStores;
@@ -42,8 +43,15 @@ use crate::auth::AcceptedAuth;
 use crate::char_enum::build_char_enum;
 use crate::char_queries::CharQueries;
 use crate::player_login::{
-    LoginGate, build_character_login_failed, build_friend_list, build_ignore_list,
-    build_login_verify_world_at, build_sys_message, evaluate_load, motd_lines,
+    LoginGate, build_action_buttons, build_bindpoint_update, build_character_login_failed,
+    build_friend_list, build_ignore_list, build_initial_spells, build_initialize_factions,
+    build_login_set_time_speed, build_login_verify_world_at, build_set_rest_start,
+    build_sys_message, build_tutorial_flags, evaluate_load, initial_spell_cooldowns, motd_lines,
+    time_bit_fields_now,
+};
+use crate::queries::{
+    build_creature_query_response, build_gameobject_query_response, build_item_query_response,
+    build_name_query_response,
 };
 use crate::security;
 use crate::session_core::{Dispatch, SessionCore};
@@ -286,6 +294,13 @@ pub enum WorldMessage {
         guid_low: u32,
         load: Result<Option<Box<CharacterLoad>>, DbError>,
     },
+    /// Async `CMSG_NAME_QUERY` fallback result for a GUID
+    /// with no live player in any map.
+    NameQueryReady {
+        id: SessionId,
+        guid_low: u32,
+        row: Result<Option<NameQueryRow>, DbError>,
+    },
 }
 
 struct SessionEntry {
@@ -460,6 +475,9 @@ impl World {
             }
             WorldMessage::PlayerLoginReady { id, guid_low, load } => {
                 self.on_player_login_ready(id, guid_low, load);
+            }
+            WorldMessage::NameQueryReady { id, guid_low, row } => {
+                self.on_name_query_ready(id, guid_low, row);
             }
         }
     }
@@ -678,6 +696,178 @@ impl World {
         });
     }
 
+    fn reply_packet(&mut self, id: SessionId, packet: WorldPacket) {
+        let alive = self
+            .sessions
+            .get(&id)
+            .is_some_and(|entry| send_packet(entry, packet));
+        if !alive {
+            self.disconnect(id);
+        }
+    }
+
+    /// `HandleRequestAccountData` (`MiscHandler.cpp:897-945`).
+    fn on_request_account_data(&mut self, id: SessionId, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let Ok(data_type) = reader.read_u32_le() else {
+            self.bad_packet(id, opcode_id::CMSG_REQUEST_ACCOUNT_DATA);
+            return;
+        };
+        if data_type >= crate::account_data::NUM_ACCOUNT_DATA_TYPES as u32 {
+            self.log.out(
+                Level::Error,
+                &format!(
+                    "Client requested invalid account data type {data_type} in \
+                     CMSG_REQUEST_ACCOUNT_DATA."
+                ),
+            );
+            return;
+        }
+        let response = self
+            .sessions
+            .get(&id)
+            .and_then(|entry| entry.account_data.build_update_packet(data_type));
+        if let Some(packet) = response {
+            self.reply_packet(id, packet);
+        }
+    }
+
+    /// The static cache queries (`QueryHandler.cpp` and
+    /// the item-template query in `ItemHandler.cpp`).
+    fn on_query_packet(&mut self, id: SessionId, packet: &WorldPacket) {
+        match packet.opcode() {
+            opcode_id::CMSG_CREATURE_QUERY => self.on_creature_query(id, packet),
+            opcode_id::CMSG_GAMEOBJECT_QUERY => self.on_gameobject_query(id, packet),
+            opcode_id::CMSG_ITEM_QUERY_SINGLE => self.on_item_query(id, packet),
+            opcode_id::CMSG_NAME_QUERY => self.on_name_query(id, packet),
+            _ => {}
+        }
+    }
+
+    fn on_creature_query(&mut self, id: SessionId, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let parsed = reader
+            .read_u32_le()
+            .and_then(|entry| reader.read_u64_le().map(|guid| (entry, guid)));
+        let Ok((entry, raw_guid)) = parsed else {
+            self.bad_packet(id, opcode_id::CMSG_CREATURE_QUERY);
+            return;
+        };
+        let info = self.deps.world_stores.creature_templates.get(entry);
+        if info.is_none() {
+            self.log.out(
+                Level::Debug,
+                &format!(
+                    "WORLD: CMSG_CREATURE_QUERY - Guid: {} Entry: {entry} NO CREATURE INFO!",
+                    ObjectGuid::from_wire_raw(raw_guid)
+                ),
+            );
+        }
+        self.reply_packet(id, build_creature_query_response(entry, info));
+    }
+
+    fn on_gameobject_query(&mut self, id: SessionId, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let parsed = reader
+            .read_u32_le()
+            .and_then(|entry| reader.read_u64_le().map(|guid| (entry, guid)));
+        let Ok((entry, raw_guid)) = parsed else {
+            self.bad_packet(id, opcode_id::CMSG_GAMEOBJECT_QUERY);
+            return;
+        };
+        let info = self.deps.world_stores.gameobject_templates.get(entry);
+        if info.is_none() {
+            self.log.out(
+                Level::Debug,
+                &format!(
+                    "WORLD: CMSG_GAMEOBJECT_QUERY - Guid: {} Entry: {entry} Missing gameobject info!",
+                    ObjectGuid::from_wire_raw(raw_guid)
+                ),
+            );
+        }
+        self.reply_packet(id, build_gameobject_query_response(entry, info));
+    }
+
+    fn on_item_query(&mut self, id: SessionId, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let parsed = reader
+            .read_u32_le()
+            .and_then(|entry| reader.read_u64_le().map(|guid| (entry, guid)));
+        let Ok((entry, _raw_guid)) = parsed else {
+            self.bad_packet(id, opcode_id::CMSG_ITEM_QUERY_SINGLE);
+            return;
+        };
+        let allow_datamined = self
+            .sessions
+            .get(&id)
+            .is_some_and(|entry| entry.auth.security > security::PLAYER);
+        let proto = self.deps.world_stores.item_prototypes.get(entry);
+        self.reply_packet(
+            id,
+            build_item_query_response(
+                entry,
+                proto,
+                allow_datamined,
+                &self.deps.world_stores.spells.spells,
+            ),
+        );
+    }
+
+    fn live_name_query_row(&self, guid: ObjectGuid) -> Option<NameQueryRow> {
+        if !guid.is_player() {
+            return None;
+        }
+        let &map_id = self.player_map.get(&guid.counter())?;
+        let player = self.maps.get(&map_id)?.player(guid)?;
+        Some(NameQueryRow {
+            name: player.unit.world.name.clone(),
+            race: player.unit.race(),
+            gender: player.unit.gender(),
+            class: player.unit.class(),
+        })
+    }
+
+    fn on_name_query(&mut self, id: SessionId, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let Ok(raw_guid) = reader.read_u64_le() else {
+            self.bad_packet(id, opcode_id::CMSG_NAME_QUERY);
+            return;
+        };
+        let guid = ObjectGuid::from_wire_raw(raw_guid);
+        let guid_low = guid.counter();
+        if let Some(row) = self.live_name_query_row(guid) {
+            self.reply_packet(id, build_name_query_response(guid_low, &row));
+            return;
+        }
+
+        let Some(tx) = self.self_tx.clone() else {
+            return;
+        };
+        let queries = Arc::clone(&self.deps.char_queries);
+        tokio::task::spawn_blocking(move || {
+            let row = queries.name_query(guid_low);
+            let _ = tx.blocking_send(WorldMessage::NameQueryReady { id, guid_low, row });
+        });
+    }
+
+    fn on_name_query_ready(
+        &mut self,
+        id: SessionId,
+        guid_low: u32,
+        row: Result<Option<NameQueryRow>, DbError>,
+    ) {
+        match row {
+            Ok(Some(row)) => {
+                self.reply_packet(id, build_name_query_response(guid_low, &row));
+            }
+            Ok(None) => {}
+            Err(e) => {
+                self.log
+                    .out(Level::Error, &format!("name query failed: {e}"));
+            }
+        }
+    }
+
     fn disconnect(&mut self, id: SessionId) {
         if let Some(entry) = self.sessions.get(&id) {
             let _ = entry.control.try_send(SessionControl::Disconnect);
@@ -737,6 +927,7 @@ impl World {
     /// map-independent packet train. Everything from
     /// `SendInitialPacketsBeforeAddToMap` onward (including the
     /// online-presence writes) waits for the simulated world.
+    #[allow(clippy::too_many_lines)]
     fn on_player_login_ready(
         &mut self,
         id: SessionId,
@@ -795,6 +986,7 @@ impl World {
         // materialized position (homebind fallback may
         // have moved the character).
         let account_data_packet = entry.account_data.build_md5_packet();
+        let tutorials_packet = build_tutorial_flags(&entry.tutorials);
         let social_packets = [
             build_friend_list(&load.social),
             build_ignore_list(&load.social),
@@ -813,7 +1005,35 @@ impl World {
         };
         let verify_position = player.unit.world.position();
         let map_id = player.unit.world.map_id;
-        let player_guid = player.unit.guid();
+        let bindpoint_packet =
+            build_bindpoint_update(player.homebind.location, player.homebind.area_id);
+        let initial_cooldowns = initial_spell_cooldowns(
+            &player.deferred.spell_cooldowns,
+            unix_now(),
+            |spell| self.deps.world_stores.spells.spells.contains_key(&spell),
+            |item| self.deps.world_stores.items.get(item).is_some(),
+        );
+        let default_spells = self.deps.world_stores.player_infos.default_spells(
+            u32::from(player.unit.race()),
+            u32::from(player.unit.class()),
+        );
+        let initial_spells_packet = build_initial_spells(
+            &player.deferred.spells,
+            default_spells,
+            &initial_cooldowns,
+            |spell| self.deps.world_stores.spells.spells.contains_key(&spell),
+        );
+        let action_buttons_packet = build_action_buttons(
+            &player.deferred.actions,
+            |spell| self.deps.world_stores.spells.spells.contains_key(&spell),
+            |item| self.deps.world_stores.items.get(item).is_some(),
+        );
+        let factions_packet =
+            build_initialize_factions(&self.deps.world_stores.factions.initial_slots(
+                player.unit.race(),
+                player.unit.class(),
+                &player.deferred.reputation,
+            ));
         self.enter_map(id, player);
 
         let mut packets = vec![
@@ -824,6 +1044,20 @@ impl World {
         for line in motd_lines(&self.config.motd, self.config.wow_patch) {
             packets.push(build_sys_message(&line));
         }
+        // SendInitialPacketsBeforeAddToMap, in C++ order:
+        // rest start, bindpoint, tutorial flags (the client's
+        // tutorial bitsets are null without them), initial
+        // spells, action buttons (sent twice by the C++
+        // login path), and game-time speed (the local mover
+        // never advances without it).
+        packets.push(build_set_rest_start());
+        packets.push(bindpoint_packet);
+        packets.push(tutorials_packet);
+        packets.push(initial_spells_packet);
+        packets.push(action_buttons_packet.clone());
+        packets.push(action_buttons_packet);
+        packets.push(factions_packet);
+        packets.push(build_login_set_time_speed(time_bit_fields_now()));
 
         let entry = self.sessions.get(&id).expect("present");
         for packet in packets {
@@ -832,10 +1066,7 @@ impl World {
                 return;
             }
         }
-        // Init-self + visibility creates queued by the map.
-        if let Some(map) = self.maps.get_mut(&map_id) {
-            map.build_init_self(player_guid);
-        }
+        // Map::add_player queued init-self before visibility creates.
         self.drain_map_events();
         self.log.out(
             Level::Debug,
@@ -893,11 +1124,16 @@ impl World {
         let now_unix = unix_now();
         let maps_dir = self.deps.maps_dir.clone();
         let navmesh_dir = self.deps.mmaps_dir.clone();
+        let map_config = MapConfig {
+            activate_weather: self.config.activate_weather,
+            change_weather_interval_ms: self.config.change_weather_interval_ms,
+            ..MapConfig::default()
+        };
         let map = self.maps.entry(map_id).or_insert_with(|| {
             let mut map = Map::new(
                 map_id,
                 0,
-                MapConfig::default(),
+                map_config,
                 Arc::clone(&self.deps.world_stores),
                 WorldRng::from_entropy(),
             );
@@ -1519,6 +1755,8 @@ impl World {
         let mut kicked: Vec<SessionId> = Vec::new();
         let mut enum_requests: Vec<u32> = Vec::new();
         let mut login_requests: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut query_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut account_data_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut movement_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut ack_packets: Vec<(SessionId, WorldPacket, AckKind)> = Vec::new();
         let mut cast_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
@@ -1565,6 +1803,20 @@ impl World {
                     }
                     Dispatch::Execute if opcode == opcode::CMSG_LOGOUT_REQUEST => {
                         logout_requests.push(*id);
+                    }
+                    Dispatch::Execute if opcode == opcode_id::CMSG_REQUEST_ACCOUNT_DATA => {
+                        account_data_packets.push((*id, packet));
+                    }
+                    Dispatch::Execute
+                        if matches!(
+                            opcode,
+                            opcode_id::CMSG_CREATURE_QUERY
+                                | opcode_id::CMSG_GAMEOBJECT_QUERY
+                                | opcode_id::CMSG_ITEM_QUERY_SINGLE
+                                | opcode_id::CMSG_NAME_QUERY
+                        ) =>
+                    {
+                        query_packets.push((*id, packet));
                     }
                     Dispatch::Execute if meta.handler_name == "HandleMovementOpcodes" => {
                         movement_packets.push((*id, packet));
@@ -1660,6 +1912,12 @@ impl World {
         }
         for (id, packet) in login_requests {
             self.on_player_login_opcode(id, &packet);
+        }
+        for (id, packet) in query_packets {
+            self.on_query_packet(id, &packet);
+        }
+        for (id, packet) in account_data_packets {
+            self.on_request_account_data(id, &packet);
         }
         for (id, packet) in movement_packets {
             self.on_movement_packet(id, &packet);

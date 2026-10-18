@@ -22,7 +22,7 @@ use tokio::net::TcpListener;
 
 use mangos_config::Config;
 use mangos_db::actor::DbActor;
-use mangos_db::characters::{AccountDataEntry, CharEnumRow};
+use mangos_db::characters::{AccountDataEntry, CharEnumRow, NameQueryRow};
 use mangos_db::migrations::{MigrationDb, check_required_migrations};
 use mangos_db::{CharacterDb, ConnectionInfo, DbError, WorldAuthDb};
 use mangos_log::{Level, Log};
@@ -210,6 +210,10 @@ impl CharQueries for MysqlCharQueries {
         guid_low: u32,
     ) -> Result<Option<mangos_db::character_load::CharacterLoad>, DbError> {
         self.db.load_character(guid_low)
+    }
+
+    fn name_query(&self, guid_low: u32) -> Result<Option<NameQueryRow>, DbError> {
+        self.db.name_query(guid_low)
     }
 
     fn global_account_data(&self, account_id: u32) -> Result<Vec<AccountDataEntry>, DbError> {
@@ -815,6 +819,9 @@ fn load_world_db_stores(
         mangos_world_data::spawn_support::ClassLevelStats,
         mangos_world_data::spawn_support::DisplayInfoAddons,
         mangos_world_data::item_prototype::ItemPrototypesLite,
+        mangos_world_data::reputations::FactionStore,
+        mangos_world_data::areas::AreaStore,
+        mangos_world_data::weather::WeatherChanceStore,
         mangos_world_data::waypoints::WaypointStore,
         std::collections::HashMap<u32, mangos_spells::SpellEntry>,
         mangos_world_data::creature_spells::CreatureSpellsMap,
@@ -824,11 +831,13 @@ fn load_world_db_stores(
     ),
     DbError,
 > {
+    use mangos_world_data::areas::load_areas;
     use mangos_world_data::creature_spells::load_creature_spells;
     use mangos_world_data::creature_template::{TemplateValidation, load_creature_templates};
     use mangos_world_data::gameobject_template::{GameObjectValidation, load_gameobject_templates};
     use mangos_world_data::item_prototype::load_item_prototypes_lite;
     use mangos_world_data::load_report::LoadReport;
+    use mangos_world_data::reputations::load_factions;
     use mangos_world_data::script_engine::load_script_stores;
     use mangos_world_data::spawn_support::{
         load_class_level_stats, load_creature_addons, load_display_info_addons,
@@ -837,6 +846,7 @@ fn load_world_db_stores(
     use mangos_world_data::spawns::{SpawnData, load_map_ids};
     use mangos_world_data::spell_template::load_spell_templates;
     use mangos_world_data::waypoints::load_waypoints;
+    use mangos_world_data::weather::load_weather_chances;
 
     databases.world.actor.call(move |conn| {
         let (creature_templates, r) =
@@ -858,6 +868,9 @@ fn load_world_db_stores(
         )?;
         let (creature_addons, r5) = load_creature_addons(conn, wow_patch, None, None, None)?;
         let items = load_item_prototypes_lite(conn, wow_patch)?;
+        let factions = load_factions(conn)?;
+        let areas = load_areas(conn, wow_patch)?;
+        let weather_chances = load_weather_chances(conn)?;
         let inv_types = items.inventory_types();
         let (equipment, r6) = load_equipment_templates(conn, wow_patch, Some(&inv_types))?;
         let (cls, r7) = load_class_level_stats(conn)?;
@@ -896,6 +909,9 @@ fn load_world_db_stores(
             cls,
             display_addons,
             items,
+            factions,
+            areas,
+            weather_chances,
             waypoints,
             spell_entries,
             creature_spells,
@@ -1065,6 +1081,9 @@ fn load_phase4_stores(
         cls,
         display_addons,
         items,
+        factions,
+        areas,
+        weather_chances,
         waypoints,
         spell_entries,
         creature_spells,
@@ -1120,6 +1139,39 @@ fn load_phase4_stores(
             creature_spells.len()
         ),
     );
+    let obtained_items = match databases
+        .characters
+        .actor()
+        .call(mangos_world_data::item_prototype::load_obtained_item_ids)
+    {
+        Ok(items) => items,
+        Err(e) => {
+            log.out(Level::Error, &format!("obtained item load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    let prevent_item_datamining = server_config.prevent_item_datamining;
+    let item_prototypes = match databases.world.actor.call(move |conn| {
+        let mut discovered_items = obtained_items;
+        discovered_items
+            .extend(mangos_world_data::spell_template::load_spell_referenced_item_ids(conn, 5875)?);
+        mangos_world_data::item_prototype::load_item_prototypes(
+            conn,
+            wow_patch,
+            prevent_item_datamining,
+            &discovered_items,
+        )
+    }) {
+        Ok(prototypes) => prototypes,
+        Err(e) => {
+            log.out(Level::Error, &format!("item prototype load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    log.out(
+        Level::Minimal,
+        &format!(">> Loaded {} item prototypes.", item_prototypes.len()),
+    );
     log.out(
         Level::Minimal,
         &format!(
@@ -1142,6 +1194,10 @@ fn load_phase4_stores(
         display_addons,
         player_infos,
         items,
+        item_prototypes,
+        factions,
+        areas,
+        weather_chances,
         waypoints,
         spells: mangos_spells::SpellStore {
             spells: spell_entries,

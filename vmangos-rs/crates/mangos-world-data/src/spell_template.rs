@@ -8,7 +8,7 @@
 //! events, groups, threats and the other `Load*` stores
 //! land with their consumers.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use mysql::prelude::Queryable;
 
@@ -42,6 +42,52 @@ pub fn load_spell_templates(
         spells.insert(entry.id, entry);
     }
     Ok(spells)
+}
+
+/// `SPELL_EFFECT_CREATE_ITEM` (`SpellDefines.h:235`).
+const SPELL_EFFECT_CREATE_ITEM: u32 = 24;
+
+/// Item templates referenced by spells as totems,
+/// reagents, or created items — the spell half of
+/// `ObjectMgr::FillObtainedItemsList`.
+///
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+pub fn load_spell_referenced_item_ids(
+    conn: &mut mysql::Conn,
+    supported_build: u32,
+) -> Result<HashSet<u32>, DbError> {
+    let rows: Vec<mysql::Row> = conn.exec(
+        "SELECT `totem1`, `totem2`, `reagent1`, `reagent2`, `reagent3`, `reagent4`, \
+         `reagent5`, `reagent6`, `reagent7`, `reagent8`, `effect1`, `effect2`, `effect3`, \
+         `effectItemType1`, `effectItemType2`, `effectItemType3` \
+         FROM `spell_template` t1 WHERE `build`=(SELECT max(`build`) \
+         FROM `spell_template` t2 WHERE t1.`entry`=t2.`entry` && `build` <= ?)",
+        (supported_build,),
+    )?;
+    let mut items = HashSet::new();
+    for row in rows {
+        let f = Fields::from_row(row);
+        for index in 0..2 {
+            let item = f.u32(index);
+            if item != 0 {
+                items.insert(item);
+            }
+        }
+        for index in 2..10 {
+            let item = f.i32(index);
+            if item != 0 {
+                items.insert(item as u32);
+            }
+        }
+        for i in 0..3 {
+            if f.u32(10 + i) == SPELL_EFFECT_CREATE_ITEM {
+                items.insert(f.u64(13 + i) as u32);
+            }
+        }
+    }
+    Ok(items)
 }
 
 fn effect_data(f: &Fields, i: usize) -> SpellEffectData {

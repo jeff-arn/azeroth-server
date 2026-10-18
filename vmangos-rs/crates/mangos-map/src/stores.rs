@@ -6,16 +6,19 @@ use std::collections::HashMap;
 
 use mangos_entities::unit::ModelData;
 use mangos_spells::SpellStore;
+use mangos_world_data::areas::AreaStore;
 use mangos_world_data::creature_spells::CreatureSpellsMap;
 use mangos_world_data::creature_template::CreatureTemplates;
 use mangos_world_data::gameobject_template::GameObjectTemplates;
-use mangos_world_data::item_prototype::ItemPrototypesLite;
+use mangos_world_data::item_prototype::{ItemPrototypes, ItemPrototypesLite};
 use mangos_world_data::player_info::PlayerInfos;
+use mangos_world_data::reputations::FactionStore;
 use mangos_world_data::spawn_support::{
     ClassLevelStats, CreatureAddons, DisplayInfoAddons, EquipmentTemplates,
 };
 use mangos_world_data::spawns::SpawnData;
 use mangos_world_data::waypoints::WaypointStore;
+use mangos_world_data::weather::WeatherChanceStore;
 
 /// Static stores, built once at boot by the binary and lent
 /// to maps by reference.
@@ -29,6 +32,10 @@ pub struct WorldStores {
     pub display_addons: DisplayInfoAddons,
     pub player_infos: PlayerInfos,
     pub items: ItemPrototypesLite,
+    pub item_prototypes: ItemPrototypes,
+    pub factions: FactionStore,
+    pub areas: AreaStore,
+    pub weather_chances: WeatherChanceStore,
     pub waypoints: WaypointStore,
     pub spells: SpellStore,
     /// `creature_spells` lists by `spell_list_id`
@@ -57,6 +64,10 @@ impl WorldStores {
             display_addons: DisplayInfoAddons::default(),
             player_infos: PlayerInfos::default(),
             items: ItemPrototypesLite::default(),
+            item_prototypes: ItemPrototypes::default(),
+            factions: FactionStore::default(),
+            areas: AreaStore::default(),
+            weather_chances: WeatherChanceStore::default(),
             waypoints: WaypointStore::default(),
             spells: SpellStore::default(),
             creature_spells: CreatureSpellsMap::new(),

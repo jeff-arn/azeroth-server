@@ -25,6 +25,7 @@ use mangos_guid::ObjectGuid;
 use mangos_guid::timer::ShortIntervalTimer;
 use mangos_movement::movement_info::{MovementInfo, Position};
 use mangos_protocol::buffer::PacketWriter;
+use mangos_protocol::opcode_table::opcode_id;
 use mangos_protocol::update_data::{CompressionConfig, UpdateData};
 use mangos_protocol::world::WorldPacket;
 use mangos_world_data::spawn_support::RespawnTimes;
@@ -33,6 +34,129 @@ use mangos_world_data::spawns::{cell_id, compute_cell_pair};
 use crate::stores::WorldStores;
 use crate::visibility;
 
+/// `def_world_states` (`Player.cpp:8102-8115`): default
+/// initial world-state pairs. Event/battleground-specific
+/// pairs join with their systems.
+const DEFAULT_WORLD_STATES: &[(u32, u32)] = &[
+    (0x07AE, 0x01),
+    (0x0532, 0x01),
+    (0x0531, 0x00),
+    (0x0530, 0x00),
+    (0x07A6, 0x01),
+    (0x07A5, 0x01),
+    (0x07A4, 0x03),
+    (0x07A7, 0x05),
+    (0x07A8, 0x00),
+    (0x07A9, 0x00),
+    (0x07AA, 0x00),
+    (0x07AB, 0x00),
+    (0x07AC, 0x00),
+    (0x07AD, 0x00),
+    (0x08D8, 0x14),
+    (0x08D7, 0x01),
+    (0x08D6, 0x00),
+    (0x08D5, 0x00),
+    (0x08D4, 0x01),
+    (0x08D3, 0x01),
+    (0x0A40, 0xC8),
+    (0x09F3, 0x00),
+    (0x09F2, 0x00),
+    (0x09F1, 0x00),
+    (0x09F0, 0x01),
+    (0x09EF, 0x01),
+    (0x09EE, 0x00),
+    (0x09ED, 0x00),
+    (0x09EC, 0x00),
+    (0x09EB, 0x01),
+    (0x09EA, 0x01),
+    (0x0A41, 0xC8),
+    (0x0BC7, 0x01),
+    (0x0BC6, 0x00),
+    (0x0C0D, 0x00),
+    (0x0C0E, 0x00),
+    (0x0BAF, 0x00),
+    (0x0BC5, 0x00),
+    (0x0BC4, 0x00),
+    (0x0BC3, 0x00),
+    (0x0BC2, 0x00),
+    (0x0BC1, 0x00),
+    (0x0BC0, 0x00),
+    (0x0BBF, 0x00),
+    (0x0BBE, 0x00),
+    (0x0BBD, 0x00),
+    (0x0BBC, 0x00),
+    (0x0BBB, 0x00),
+    (0x0BBA, 0x00),
+    (0x0BB9, 0x00),
+    (0x0BB8, 0x00),
+    (0x0BB7, 0x00),
+    (0x0BB6, 0x00),
+    (0x0BB5, 0x00),
+    (0x0BB4, 0x00),
+    (0x0BB3, 0x00),
+    (0x0BB2, 0x00),
+    (0x0BB1, 0x00),
+    (0x0BB0, 0x00),
+    (0x0C0C, 0x00),
+    (0x0C0B, 0x00),
+    (0x0A45, 0x00),
+    (0x0A44, 0x00),
+    (0x0A43, 0x00),
+    (0x08DC, 0x01),
+    (0x08DB, 0x00),
+    (0x08DA, 0x00),
+    (0x08D9, 0x01),
+    (0x08E2, 0x01),
+    (0x08E1, 0x01),
+    (0x08E0, 0x00),
+    (0x08DF, 0x00),
+    (0x079F, 0x00),
+    (0x079E, 0x00),
+    (0x07C0, 0x00),
+    (0x07C1, 0x00),
+    (0x07C2, 0x00),
+    (0x07C3, 0x00),
+    (0x07C4, 0x00),
+    (0x07C5, 0x00),
+    (0x0A42, 0x0A),
+    (0x0A3C, 0x00),
+    (0x0A3F, 0x00),
+    (0x0A3E, 0x00),
+    (0x0A3D, 0x00),
+    (0x0A3B, 0x00),
+    (0x0A3A, 0x00),
+    (0x0A39, 0x00),
+    (0x0A38, 0x00),
+    (0x0A36, 0x00),
+    (0x0A35, 0x00),
+    (0x0A37, 0x00),
+    (0x0A32, 0x00),
+    (0x0A33, 0x00),
+    (0x0A34, 0x00),
+    (0x0516, 0x00),
+    (0x0517, 0x00),
+    (0x0703, 0x00),
+];
+
+/// `Player::SendInitWorldStates`: map, zone, count
+/// (including the terminating zero pair), state/value
+/// pairs, terminator.
+#[must_use]
+pub fn build_init_world_states(map_id: u32, zone_id: u32) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    writer.write_u32_le(map_id);
+    writer.write_u32_le(zone_id);
+    writer.write_u16_le(DEFAULT_WORLD_STATES.len() as u16 + 1);
+    for &(state, value) in DEFAULT_WORLD_STATES {
+        writer.write_u32_le(state);
+        writer.write_u32_le(value);
+    }
+    writer.write_u32_le(0);
+    writer.write_u32_le(0);
+    let mut packet = WorldPacket::new(opcode_id::SMSG_INIT_WORLD_STATES);
+    packet.take_writer(writer);
+    packet
+}
 /// Map tuning (`mangosd.conf` values with their tree
 /// defaults).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -56,6 +180,10 @@ pub struct MapConfig {
     pub force_active_objects: bool,
     pub creature_rates: CreatureRates,
     pub compression: CompressionConfig,
+    /// `ActivateWeather` (true).
+    pub activate_weather: bool,
+    /// `ChangeWeatherInterval` in milliseconds (10 min).
+    pub change_weather_interval_ms: u32,
 }
 
 impl Default for MapConfig {
@@ -71,6 +199,8 @@ impl Default for MapConfig {
             force_active_objects: true,
             creature_rates: CreatureRates::default(),
             compression: CompressionConfig::default(),
+            activate_weather: true,
+            change_weather_interval_ms: 600_000,
         }
     }
 }
@@ -135,6 +265,10 @@ pub(crate) struct PlayerEntry {
     /// A full camera re-scan is due (entry or relocation
     /// past the lower limit).
     pub(crate) scan_due: bool,
+    /// `m_zoneUpdateId` / `m_areaUpdateId` (0 until the
+    /// first zone refresh after map entry).
+    pub(crate) zone_id: u32,
+    pub(crate) area_id: u32,
 }
 
 /// One simulated map instance.
@@ -157,6 +291,8 @@ pub struct Map {
     /// construction from the transport spawn sets; motion
     /// deferred with the transport system).
     pub(crate) events: Vec<MapEvent>,
+    /// Live per-zone weather (`WeatherSystem::m_weathers`).
+    pub(crate) zone_weather: HashMap<u32, crate::weather::ZoneWeather>,
     pub(crate) players_timer: ShortIntervalTimer,
     /// Server ms clock stamped into creates/movement.
     pub(crate) now_ms: u32,
@@ -259,6 +395,7 @@ impl Map {
             cells: HashMap::new(),
             spawn_cells_loaded: HashSet::new(),
             events: Vec::new(),
+            zone_weather: HashMap::new(),
             players_timer,
             now_ms: 0,
             now_unix: 0,
@@ -355,10 +492,10 @@ impl Map {
     }
 
     /// `Map::Add(Player*)` subset: activates spawn cells in
-    /// range, registers the player, and runs the first
-    /// visibility pass (own creates arrive through
-    /// [`Map::build_init_self`], called by the login flow
-    /// before or after this, matching `SendInitSelf`).
+    /// range, registers the player, sends init-self, and
+    /// only then runs the first visibility pass
+    /// (`Map.cpp:413-426`). Order matters: the local player
+    /// create must precede surrounding object creates.
     pub fn add_player(
         &mut self,
         mut player: Player,
@@ -370,15 +507,20 @@ impl Map {
         self.now_ms = now_ms;
         let guid = player.unit.guid();
         let position = player.unit.world.position();
-        self.activate_cells_around(position, respawns);
+        let activated = self.activate_cells_around(position, respawns);
+        // Grid-load spawns have already had their own
+        // Add-to-world pass before this player is inserted;
+        // the newcomer therefore receives CREATE_OBJECT,
+        // matching C++ Map::Add(WorldObject*) clearing
+        // m_isNewObject after UpdateObjectVisibility.
+        for activated_guid in activated {
+            self.clear_is_new(activated_guid);
+        }
         player.unit.world.object.add_to_world();
-        // New objects arrive as CREATE_OBJECT2 for the
-        // first viewer pass: creators are new until their
-        // first update send (Object::AddToWorld sets
-        // m_isNewObject? — new-object state is set by the
-        // spawn functions in this port below for creatures;
-        // players entering world are new too).
-        player.unit.world.object.set_is_new_object(true);
+        // The player is not new yet for SendInitSelf:
+        // C++ Map::Add(Player*) sends init-self before the
+        // generic WorldObject add sets m_isNewObject, so
+        // the local create uses CREATE_OBJECT.
         let cell = Self::cell_of(position);
         self.cells.entry(cell).or_default().players.insert(guid);
         let entry = PlayerEntry {
@@ -386,8 +528,18 @@ impl Map {
             visible: HashSet::new(),
             last_notified: position,
             scan_due: true,
+            zone_id: 0,
+            area_id: 0,
         };
         self.players.insert(guid, entry);
+        // `SendInitSelf` precedes `UpdateObjectVisibility`
+        // in C++ `Map::Add(Player*)`.
+        self.build_init_self(guid);
+        // The generic add now marks the newcomer new for
+        // other viewers, matching Map::Add(WorldObject*).
+        if let Some(entry) = self.players.get_mut(&guid) {
+            entry.player.unit.world.object.set_is_new_object(true);
+        }
         // The newcomer scans; everyone else re-scans for
         // the newcomer (object-centric path).
         self.scan_player_visibility(guid);
@@ -400,6 +552,8 @@ impl Map {
         for other in others {
             self.scan_player_visibility(other);
         }
+        self.clear_is_new(guid);
+        self.update_player_zone(guid, true);
     }
 
     /// `Map::Remove(Player*)` subset: out-of-range to
@@ -432,6 +586,105 @@ impl Map {
         Some(player)
     }
 
+    /// `WorldObject::GetZoneAndAreaId` over the `GridMap`
+    /// area flags. `VMap` WMO area overrides are deferred
+    /// with the rest of the vmap port; a missing grid tile
+    /// falls back to the map's linked zone, as C++ does.
+    pub fn zone_and_area_id(&mut self, position: Position) -> (u32, u32) {
+        let area_flag = match self.heights.grid(position.x, position.y) {
+            Some(grid) => grid.area(position.x, position.y),
+            None => self.stores.areas.linked_zone(self.map_id) as u16,
+        };
+        self.stores
+            .areas
+            .zone_and_area_by_flag(area_flag, self.map_id)
+    }
+
+    /// Refreshes one player's zone/area and, on a zone
+    /// change (or forced first entry), queues
+    /// `SMSG_INIT_WORLD_STATES` and the current
+    /// `SMSG_WEATHER` — the packet half of
+    /// `Player::UpdateZone`. PvP/rest/duel side effects of
+    /// `UpdateZone` remain with their own systems.
+    pub fn update_player_zone(&mut self, guid: ObjectGuid, force: bool) {
+        let Some(position) = self
+            .players
+            .get(&guid)
+            .map(|entry| entry.player.unit.world.position())
+        else {
+            return;
+        };
+        let (zone_id, area_id) = self.zone_and_area_id(position);
+        let zone_changed = {
+            let Some(entry) = self.players.get_mut(&guid) else {
+                return;
+            };
+            let changed = force || entry.zone_id != zone_id;
+            entry.zone_id = zone_id;
+            entry.area_id = area_id;
+            changed
+        };
+        if !zone_changed {
+            return;
+        }
+
+        self.events.push(MapEvent::Packet {
+            to: guid,
+            packet: build_init_world_states(self.map_id, zone_id),
+        });
+        if self.config.activate_weather {
+            let chances = self.stores.weather_chances.get(zone_id);
+            let interval = self.config.change_weather_interval_ms;
+            let weather = self
+                .zone_weather
+                .entry(zone_id)
+                .or_insert_with(|| crate::weather::ZoneWeather::new(chances, interval));
+            let packet = weather.packet();
+            self.events.push(MapEvent::Packet { to: guid, packet });
+        }
+    }
+
+    /// `WeatherSystem::UpdateWeathers`: regenerated zones
+    /// broadcast to their players; a changed zone with no
+    /// remaining players drops its weather object.
+    fn update_weather(&mut self, diff_ms: u32) {
+        if !self.config.activate_weather || self.zone_weather.is_empty() {
+            return;
+        }
+        let zones: Vec<u32> = self.zone_weather.keys().copied().collect();
+        for zone_id in zones {
+            let packet = {
+                let Some(weather) = self.zone_weather.get_mut(&zone_id) else {
+                    continue;
+                };
+                if weather.update(diff_ms, self.now_unix, &mut self.rng) {
+                    Some(weather.packet())
+                } else {
+                    None
+                }
+            };
+            let Some(packet) = packet else {
+                continue;
+            };
+            let recipients: Vec<ObjectGuid> = self
+                .players
+                .iter()
+                .filter(|(_, entry)| entry.zone_id == zone_id)
+                .map(|(guid, _)| *guid)
+                .collect();
+            if recipients.is_empty() {
+                self.zone_weather.remove(&zone_id);
+                continue;
+            }
+            for recipient in recipients {
+                self.events.push(MapEvent::Packet {
+                    to: recipient,
+                    packet: packet.clone(),
+                });
+            }
+        }
+    }
+
     /// Cell ids in the activation square around a position
     /// (`Cell::CalculateCellArea`): corner pairs from
     /// `(x-r, y-r)` to `(x+r, y+r)`, clamped to the
@@ -459,7 +712,12 @@ impl Map {
     /// them static). Pooled/event spawns: the loader
     /// already withheld pooled GUIDs from the grid, so
     /// cells only contain directly-spawnable objects.
-    fn activate_cells_around(&mut self, position: Position, respawns: &RespawnTimes) {
+    fn activate_cells_around(
+        &mut self,
+        position: Position,
+        respawns: &RespawnTimes,
+    ) -> Vec<ObjectGuid> {
+        let mut spawned = Vec::new();
         for cell in self.cell_area(position, self.config.grid_activation_distance) {
             if !self.spawn_cells_loaded.insert(cell) {
                 continue;
@@ -470,29 +728,38 @@ impl Map {
             let creature_guids: Vec<u32> = guids.creatures.iter().copied().collect();
             let go_guids: Vec<u32> = guids.gameobjects.iter().copied().collect();
             for guid_low in creature_guids {
-                self.spawn_creature(guid_low, respawns);
+                if let Some(guid) = self.spawn_creature(guid_low, respawns) {
+                    spawned.push(guid);
+                }
             }
             for guid_low in go_guids {
-                self.spawn_gameobject(guid_low, respawns);
+                if let Some(guid) = self.spawn_gameobject(guid_low, respawns) {
+                    spawned.push(guid);
+                }
             }
         }
         // Elevator transports for this map ride along on
         // first activation (they are not in spawn cells).
         let elevators: Vec<u32> = self.stores.spawns.elevator_transports(self.map_id).to_vec();
         for guid_low in elevators {
-            self.spawn_gameobject(guid_low, respawns);
+            if let Some(guid) = self.spawn_gameobject(guid_low, respawns) {
+                spawned.push(guid);
+            }
         }
+        spawned
     }
 
-    pub(crate) fn spawn_creature(&mut self, guid_low: u32, respawns: &RespawnTimes) {
-        let Some(data) = self.stores.spawns.creature(guid_low).cloned() else {
-            return;
-        };
+    pub(crate) fn spawn_creature(
+        &mut self,
+        guid_low: u32,
+        respawns: &RespawnTimes,
+    ) -> Option<ObjectGuid> {
+        let data = self.stores.spawns.creature(guid_low).cloned()?;
         let respawn_time = respawns
             .creature(data.instanciated_continent_instance_id, guid_low)
             .map_or(0, |e| e.respawn_time);
         let addon = self.stores.creature_addons.get(guid_low).cloned();
-        self.materialize_creature(guid_low, &data, addon.as_ref(), respawn_time);
+        self.materialize_creature(guid_low, &data, addon.as_ref(), respawn_time)
     }
 
     /// Materialize one creature from a spawn row (DB
@@ -676,10 +943,12 @@ impl Map {
         }
     }
 
-    pub(crate) fn spawn_gameobject(&mut self, guid_low: u32, respawns: &RespawnTimes) {
-        let Some(data) = self.stores.spawns.gameobject(guid_low).cloned() else {
-            return;
-        };
+    pub(crate) fn spawn_gameobject(
+        &mut self,
+        guid_low: u32,
+        respawns: &RespawnTimes,
+    ) -> Option<ObjectGuid> {
+        let data = self.stores.spawns.gameobject(guid_low).cloned()?;
 
         let respawn_time = respawns
             .gameobject(data.instanciated_continent_instance_id, guid_low)
@@ -696,7 +965,7 @@ impl Map {
             force_active,
             &mut self.rng,
         ) else {
-            return;
+            return None;
         };
         go.world.object.set_is_new_object(true);
         go.world.object.add_to_world();
@@ -706,12 +975,13 @@ impl Map {
         }
         let guid = go.world.object.object_guid();
         if self.gameobjects.contains_key(&guid) {
-            return;
+            return None;
         }
         let cell = Self::cell_of(go.world.position());
         self.cells.entry(cell).or_default().gameobjects.insert(guid);
         self.gameobjects.insert(guid, go);
         self.instance_on_object_create(guid);
+        Some(guid)
     }
 
     /// Serialized `UpdateData` -> packet events for one
@@ -1122,6 +1392,10 @@ impl Map {
         self.now_unix = now_unix;
         self.players_timer.update(diff_ms);
         if self.players_timer.passed() {
+            let player_guids: Vec<ObjectGuid> = self.players.keys().copied().collect();
+            for guid in player_guids {
+                self.update_player_zone(guid, false);
+            }
             let accumulated = self.players_timer.current();
             debug_assert!(accumulated >= diff_ms);
             let _ = accumulated; // handed onward when player updates exist
@@ -1158,6 +1432,7 @@ impl Map {
         self.instance_update(diff_ms);
         self.update_auras(diff_ms);
         self.update_respawns();
+        self.update_weather(diff_ms);
         self.send_object_updates();
         // The second players gate runs the same scan for
         // late relocations.

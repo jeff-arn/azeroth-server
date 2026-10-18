@@ -49,6 +49,8 @@ else
 fi
 if [ -n "${TEST_MYSQL_URL_WORLD:-}" ]; then
   cargo test -p mangos-world-data --test live_strings -- --ignored
+  cargo test -p mangos-world-data --test live_reputations -- --ignored
+  cargo test -p mangos-world-data --test live_areas_weather -- --ignored
   cargo test -p mangos-world-data --test live_creature_templates -- --ignored
   cargo test -p mangos-world-data --test live_gameobject_templates -- --ignored
   cargo test -p mangos-world-data --test live_spawns -- --ignored

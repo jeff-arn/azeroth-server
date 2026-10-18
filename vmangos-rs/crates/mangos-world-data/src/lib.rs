@@ -8,6 +8,7 @@
 //! yet are still logged as deferred by the binary, never
 //! silently skipped.
 
+pub mod areas;
 pub mod assets_check;
 pub mod creature_spells;
 pub mod creature_template;
@@ -16,12 +17,14 @@ pub mod gameobject_template;
 pub mod item_prototype;
 pub mod load_report;
 pub mod player_info;
+pub mod reputations;
 pub mod script_engine;
 pub mod spawn_support;
 pub mod spawns;
 pub mod spell_template;
 pub mod strings;
 pub mod waypoints;
+pub mod weather;
 
 pub use load_report::LoadReport;
 

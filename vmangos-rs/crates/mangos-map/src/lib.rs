@@ -18,6 +18,7 @@ pub mod scripts;
 pub mod spells;
 pub mod stores;
 pub mod visibility;
+pub mod weather;
 
 pub use map::{Map, MapConfig, MapEvent, PlayerSlotId};
 pub use stores::WorldStores;

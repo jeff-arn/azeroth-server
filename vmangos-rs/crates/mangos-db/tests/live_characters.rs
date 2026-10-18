@@ -43,3 +43,19 @@ fn tutorials_and_account_data_read() {
     let _global = db.load_global_account_data(5).expect("global data");
     let _per_char = db.load_character_account_data(1).expect("per-char data");
 }
+
+#[test]
+#[ignore = "requires TEST_MYSQL_URL_CHARACTERS pointing at the dev fixture characters DB"]
+fn name_query_for_bench_character() {
+    let db = db();
+    let row = db.name_query(1).expect("name query").expect("Ruikanis row");
+    assert_eq!(row.name, "Ruikanis");
+    assert_eq!(row.race, 1);
+    assert_eq!(row.gender, 0);
+    assert_eq!(row.class, 1);
+    assert!(
+        db.name_query(999_999)
+            .expect("missing name query")
+            .is_none()
+    );
+}

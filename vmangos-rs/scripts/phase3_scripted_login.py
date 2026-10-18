@@ -210,10 +210,13 @@ def main() -> None:
 
     client.send_packet(CMSG_PING, struct.pack("<II", 0xDEADBEEF, 50))
     # Phase 4: object-update packets (169/502) may precede the pong;
-    # Slice 5 adds SMSG_UPDATE_AURA_DURATION for saved auras.
+    # Slice 5 adds SMSG_UPDATE_AURA_DURATION for saved auras. The
+    # SendInitialPacketsBeforeAddToMap tail (542 SET_REST_START,
+    # 341 BINDPOINTUPDATE, 253 TUTORIAL_FLAGS, 66 LOGIN_SETTIMESPEED)
+    # also lands here; login_train_audit.py audits its order.
     while True:
         op, body = client.read_packet()
-        if op in (169, 502, 311):
+        if op in (169, 502, 311, 542, 341, 253, 66):
             continue
         break
     assert op == SMSG_PONG and body == struct.pack("<I", 0xDEADBEEF)

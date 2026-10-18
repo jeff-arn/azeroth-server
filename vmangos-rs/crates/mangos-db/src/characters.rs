@@ -94,6 +94,16 @@ pub struct AccountDataEntry {
     pub data: String,
 }
 
+/// The identity fields a `SMSG_NAME_QUERY_RESPONSE` serves
+/// (`QueryHandler.cpp:57-79` over the `characters` row).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NameQueryRow {
+    pub name: String,
+    pub race: u8,
+    pub gender: u8,
+    pub class: u8,
+}
+
 type TutorialRow = (u32, u32, u32, u32, u32, u32, u32, u32);
 
 /// Handle to the character-DB actor.
@@ -184,6 +194,31 @@ impl CharacterDb {
     ) -> Result<Option<crate::character_load::CharacterLoad>, DbError> {
         self.actor
             .call(move |conn| crate::character_load::load_character(conn, guid_low))
+    }
+
+    /// The `CMSG_NAME_QUERY` fallback identity lookup, serving
+    /// the fields the C++ keeps in `PlayerCacheData`
+    /// (`ObjectMgr.cpp:663-681`); `Ok(None)` = no such character.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    pub fn name_query(&self, guid_low: u32) -> Result<Option<NameQueryRow>, DbError> {
+        self.actor.call(move |conn| {
+            let row: Option<mysql::Row> = conn.exec_first(
+                "SELECT `name`, `race`, `gender`, `class` FROM `characters` WHERE `guid` = ?",
+                (guid_low,),
+            )?;
+            Ok(row.map(|row| {
+                let fields = crate::row::Fields::from_row(row);
+                NameQueryRow {
+                    name: fields.string(0),
+                    race: fields.u8(1),
+                    gender: fields.u8(2),
+                    class: fields.u8(3),
+                }
+            }))
+        })
     }
 
     /// Tutorial flags; `None` when the account has no row

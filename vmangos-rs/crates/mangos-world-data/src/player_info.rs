@@ -1,6 +1,8 @@
 //! Player create/level info: `LoadPlayerInfo` minus the
-//! create-item/spell/action sub-loaders (those feed character
-//! creation, not login), `ObjectMgr.cpp:4475-5060`.
+//! create-item/action sub-loaders (those feed character
+//! creation, not login), `ObjectMgr.cpp:4475-5060`. The
+//! create-spell sub-loader is included because
+//! `Player::LearnDefaultSpells` also runs at login load.
 //!
 //! Covers `playercreateinfo` (home position + display ids from
 //! `ChrRaces`), `player_classlevelstats` (base health/mana per
@@ -103,6 +105,7 @@ pub struct PlayerLevelInfo {
 pub struct PlayerInfos {
     max_player_level: u32,
     create: HashMap<(u32, u32), PlayerCreateInfo>,
+    create_spells: HashMap<(u32, u32), Vec<u32>>,
     class_level: HashMap<u32, Vec<PlayerClassLevelInfo>>,
     level_stats: HashMap<(u32, u32), Vec<PlayerLevelInfo>>,
     xp_per_level: Vec<u32>,
@@ -123,6 +126,7 @@ impl PlayerInfos {
         PlayerInfos {
             max_player_level,
             create,
+            create_spells: HashMap::new(),
             class_level,
             level_stats,
             xp_per_level,
@@ -143,6 +147,16 @@ impl PlayerInfos {
     #[must_use]
     pub fn create_info(&self, race: u32, class: u32) -> Option<&PlayerCreateInfo> {
         self.create.get(&(race, class))
+    }
+
+    /// `PlayerInfo::spell` for the race/class pair:
+    /// `playercreateinfo_spell` rows at build 5875, in
+    /// load order. Empty when the pair has no defaults.
+    #[must_use]
+    pub fn default_spells(&self, race: u32, class: u32) -> &[u32] {
+        self.create_spells
+            .get(&(race, class))
+            .map_or(&[], Vec::as_slice)
     }
 
     /// `GetPlayerClassLevelInfo`: `None` for level 0 or class
@@ -343,6 +357,7 @@ pub fn load_player_infos(
         &mut infos,
         &mut report,
     )?;
+    load_create_spells(conn, dbc, &mut infos, &mut report)?;
     load_class_level_stats(conn, max_player_level, dbc, &mut infos, &mut report)?;
     load_level_stats(conn, max_player_level, dbc, &mut infos, &mut report)?;
     load_xp_for_level(conn, max_player_level, &mut infos, &mut report)?;
@@ -419,6 +434,44 @@ fn load_create_info(
                 display_id_f,
             },
         );
+    }
+    Ok(())
+}
+
+fn load_create_spells(
+    conn: &mut mysql::Conn,
+    dbc: Option<&RaceClassDbc>,
+    infos: &mut PlayerInfos,
+    report: &mut LoadReport,
+) -> Result<(), DbError> {
+    let rows: Vec<mysql::Row> = conn.exec(
+        "SELECT `race`, `class`, `spell` FROM `playercreateinfo_spell` \
+         WHERE ? BETWEEN `build_min` AND `build_max`",
+        (5875u32,),
+    )?;
+    if rows.is_empty() {
+        report.error("Error loading `playercreateinfo_spell` table or empty table.".to_string());
+    }
+    for row in rows {
+        let f = mangos_db::row::Fields::from_row(row);
+        let (race, class, spell_id) = (f.u32(0), f.u32(1), f.u32(2));
+        if !race_ok(dbc, race) {
+            report.error(format!(
+                "Wrong race {race} in `playercreateinfo_spell` table, ignoring."
+            ));
+            continue;
+        }
+        if !class_ok(dbc, class) {
+            report.error(format!(
+                "Wrong class {class} in `playercreateinfo_spell` table, ignoring."
+            ));
+            continue;
+        }
+        infos
+            .create_spells
+            .entry((race, class))
+            .or_default()
+            .push(spell_id);
     }
     Ok(())
 }

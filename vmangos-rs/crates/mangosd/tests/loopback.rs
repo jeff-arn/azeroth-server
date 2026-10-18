@@ -21,7 +21,7 @@ use mangos_protocol::world::{
 };
 
 use mangos_db::character_load::{CharacterLoad, CharacterRow, SocialRow};
-use mangos_db::characters::{AccountDataEntry, CharEnumRow};
+use mangos_db::characters::{AccountDataEntry, CharEnumRow, NameQueryRow};
 use mangos_world_data::enum_stores::{EnumStores, ItemDisplay};
 
 use mangosd::ServerConfig;
@@ -221,12 +221,21 @@ impl CharQueries for FakeCharQueries {
         }))
     }
 
+    fn name_query(&self, guid_low: u32) -> Result<Option<NameQueryRow>, DbError> {
+        Ok((guid_low == 9).then(|| NameQueryRow {
+            name: "Offlinefriend".to_string(),
+            race: 4,
+            gender: 1,
+            class: 5,
+        }))
+    }
+
     fn global_account_data(&self, _account_id: u32) -> Result<Vec<AccountDataEntry>, DbError> {
         Ok(Vec::new())
     }
 
     fn tutorials(&self, _account_id: u32) -> Result<Option<[u32; 8]>, DbError> {
-        Ok(None)
+        Ok(Some([0x0000_0002, 0, 0, 0, 0, 0, 0, 0x8000_0000]))
     }
 }
 
@@ -481,6 +490,22 @@ impl Client {
         Some((op, body))
     }
 
+    async fn read_until_opcode(&mut self, want: u16) -> Vec<u8> {
+        loop {
+            let (op, body) = self
+                .read_packet()
+                .await
+                .unwrap_or_else(|| panic!("timed out waiting for opcode {want}"));
+            if op == want {
+                return body;
+            }
+            assert!(
+                matches!(op, 169 | 502),
+                "unexpected opcode {op} while waiting for {want}"
+            );
+        }
+    }
+
     async fn send_packet(&mut self, op: u16, body: &[u8]) {
         let size = u16::try_from(body.len() + 4).expect("size");
         let mut header = [0u8; 6];
@@ -520,7 +545,69 @@ fn good_digest(server_seed: u32) -> [u8; 20] {
     expected_auth_session_digest("TESTUSER", CLIENT_SEED, server_seed, &key)
 }
 
+async fn assert_query_replies(client: &mut Client) {
+    use mangos_protocol::opcode_table::opcode_id;
+
+    // Cache queries answer with the C++ not-found marker for a
+    // template entry absent from the fake stores.
+    let missing_creature = 999_999u32;
+    let mut creature_query = Vec::new();
+    creature_query.extend_from_slice(&missing_creature.to_le_bytes());
+    creature_query.extend_from_slice(&7u64.to_le_bytes());
+    client
+        .send_packet(opcode_id::CMSG_CREATURE_QUERY, &creature_query)
+        .await;
+    let body = client
+        .read_until_opcode(opcode_id::SMSG_CREATURE_QUERY_RESPONSE)
+        .await;
+    assert_eq!(body, (missing_creature | 0x8000_0000).to_le_bytes());
+
+    let missing_gameobject = 888_888u32;
+    let mut gameobject_query = Vec::new();
+    gameobject_query.extend_from_slice(&missing_gameobject.to_le_bytes());
+    gameobject_query.extend_from_slice(&7u64.to_le_bytes());
+    client
+        .send_packet(opcode_id::CMSG_GAMEOBJECT_QUERY, &gameobject_query)
+        .await;
+    let body = client
+        .read_until_opcode(opcode_id::SMSG_GAMEOBJECT_QUERY_RESPONSE)
+        .await;
+    assert_eq!(body, (missing_gameobject | 0x8000_0000).to_le_bytes());
+
+    // A name query for the entered player answers from live
+    // session state in the 1.12.1 shape.
+    client
+        .send_packet(opcode_id::CMSG_NAME_QUERY, &7u64.to_le_bytes())
+        .await;
+    let body = client
+        .read_until_opcode(opcode_id::SMSG_NAME_QUERY_RESPONSE)
+        .await;
+    let mut expected = Vec::new();
+    expected.extend_from_slice(&7u64.to_le_bytes());
+    expected.extend_from_slice(b"Enumtest\0\0");
+    expected.extend_from_slice(&1u32.to_le_bytes()); // race
+    expected.extend_from_slice(&0u32.to_le_bytes()); // gender
+    expected.extend_from_slice(&1u32.to_le_bytes()); // class
+    assert_eq!(body, expected);
+
+    // An offline name query takes the database fallback.
+    client
+        .send_packet(opcode_id::CMSG_NAME_QUERY, &9u64.to_le_bytes())
+        .await;
+    let body = client
+        .read_until_opcode(opcode_id::SMSG_NAME_QUERY_RESPONSE)
+        .await;
+    let mut expected = Vec::new();
+    expected.extend_from_slice(&9u64.to_le_bytes());
+    expected.extend_from_slice(b"Offlinefriend\0\0");
+    expected.extend_from_slice(&4u32.to_le_bytes()); // race
+    expected.extend_from_slice(&1u32.to_le_bytes()); // gender
+    expected.extend_from_slice(&5u32.to_le_bytes()); // class
+    assert_eq!(body, expected);
+}
+
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn auth_then_ping_pong_and_enum() {
     let backend = FakeBackend::with_test_user();
     let port = start_server(Arc::clone(&backend)).await;
@@ -609,6 +696,20 @@ async fn auth_then_ping_pong_and_enum() {
         "patch banner: {body:?}"
     );
 
+    // SendInitialPacketsBeforeAddToMap subset, in C++ order:
+    // rest start, bindpoint, tutorial flags, initial spells,
+    // action buttons twice, factions, time speed.
+    for want in [542u16, 341, 253, 298, 297, 297, 290, 66] {
+        let (op, body) = client.read_packet().await.expect("login train tail");
+        assert_eq!(op, want);
+        match want {
+            253 => assert_eq!((body.len(), &body[..4]), (32, &[2, 0, 0, 0][..])),
+            297 => assert_eq!(body.len(), 120 * 4),
+            290 => assert_eq!(body.len(), 4 + 64 * 5),
+            _ => {}
+        }
+    }
+
     // Ping proves the session exists and the crypt directions agree.
     // Phase 4: the map also sends init-self/visibility object
     // updates after the login train; they must arrive, and the
@@ -618,20 +719,28 @@ async fn auth_then_ping_pong_and_enum() {
     ping_body.extend_from_slice(&123u32.to_le_bytes());
     client.send_packet(opcode::CMSG_PING, &ping_body).await;
     let mut saw_update = false;
+    let mut saw_world_states = false;
+    let mut saw_weather = false;
     let body = loop {
         let (op, body) = client.read_packet().await.expect("pong or update");
         match op {
             opcode::SMSG_PONG => break body,
             169 | 502 => saw_update = true, // UPDATE_OBJECT / COMPRESSED
+            706 => saw_world_states = true, // INIT_WORLD_STATES
+            756 => saw_weather = true,      // WEATHER
             other => panic!("unexpected opcode {other} before pong"),
         }
     };
     assert!(saw_update, "init-self object update after login");
+    assert!(saw_world_states, "initial world states after login");
+    assert!(saw_weather, "initial weather after login");
     assert_eq!(body, 0xDEAD_BEEFu32.to_le_bytes());
 
     client.send_packet(opcode::CMSG_PING, &ping_body).await;
     let (op, _) = client.read_packet().await.expect("second pong");
     assert_eq!(op, opcode::SMSG_PONG);
+
+    assert_query_replies(&mut client).await;
 
     assert_eq!(
         backend.writes(),
