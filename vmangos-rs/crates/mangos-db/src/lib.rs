@@ -21,15 +21,25 @@
 use mysql::prelude::Queryable;
 
 pub mod actor;
+pub mod auction;
 pub mod character_load;
 pub mod characters;
+pub mod commands;
 pub mod connection_info;
+pub mod group;
+pub mod guild;
+pub mod guild_bots;
 pub mod login;
+pub mod mail;
 pub mod migrations;
+pub mod petition;
+pub mod playerbot;
 // Field conversions wrap/round like C++ atol/atof by design.
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_precision_loss)]
 pub mod row;
+pub mod social;
+pub mod trade;
 pub mod world_auth;
 
 pub use actor::DbActor;

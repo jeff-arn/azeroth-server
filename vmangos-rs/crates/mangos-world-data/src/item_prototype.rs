@@ -200,6 +200,13 @@ pub struct ItemPrototypes {
 }
 
 impl ItemPrototypes {
+    /// Test fixture constructor (mirrors
+    /// `PlayerInfos::from_maps_for_tests`).
+    #[must_use]
+    pub fn from_entries_for_tests(by_entry: HashMap<u32, ItemPrototype>) -> Self {
+        Self { by_entry }
+    }
+
     #[must_use]
     pub fn get(&self, entry: u32) -> Option<&ItemPrototype> {
         self.by_entry.get(&entry)

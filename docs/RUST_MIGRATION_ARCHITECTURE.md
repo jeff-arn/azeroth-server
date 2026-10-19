@@ -987,6 +987,26 @@ Two were partially closed by later reports and are flagged inline
 5. **BattleBot engine**: keep the dual-engine design or migrate BG bots
    onto the behaviour runner (BG objectives have no behaviour equivalent
    today, 05 §5).
+   **Decided (Phase 5, Slice F): keep the dual engine.** `BattleBotAI`
+   (3,026 lines) + `CombatBotBaseAI` (3,829) + waypoint data (1,089) is
+   an objective-driven state machine — flag-carrier logic, BG state,
+   recorded waypoint graphs, packet-driven queue/port flow, premade
+   character spawn directly into a BG instance — that bypasses
+   `BotBehaviorSet` in the fork itself. The Rust behaviour runner is
+   party-centric (master-relative formation, party roles, scored
+   fall-through) and has no objective or waypoint-graph concept;
+   forcing BG objectives into scored behaviours would distort both
+   engines and break fork-semantic parity, which is the migration
+   rule. The Rust `mangosd` also has no battleground subsystem yet
+   (no queues, BG maps, or objectives), so there is nothing for a
+   BattleBot port to drive. Port plan when BG internals land in a
+   later phase: a separate engine module in `mangos-bots` mirroring
+   `BattleBotAI`/`CombatBotBaseAI` structure (per-class combat/OOC
+   functions, waypoint tables as generated static arrays), sharing
+   only Host API primitives with the party engine (session-less login
+   train, spell kits, movement). Until then Phase 5 ships the
+   `.battlebot` command-table/permissions contract (Slice C) with
+   handlers unported, exactly like the rest of the GM handler backlog.
 6. **MySQL driver / TLS**: pure-Rust (enables musl-static, no
    `libmysqlclient` dependency) vs FFI to the system client (§11 FFI table).
 

@@ -33,6 +33,7 @@ impl AreaEntry {
 pub struct AreaStore {
     by_flag_and_map: HashMap<(u32, u32), AreaEntry>,
     linked_zone_by_map: HashMap<u32, u32>,
+    name_by_id: HashMap<u32, String>,
 }
 
 impl AreaStore {
@@ -44,6 +45,13 @@ impl AreaStore {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.by_flag_and_map.is_empty()
+    }
+
+    /// Area/zone display name by area id (empty when the
+    /// id is unknown), for `HandleWhoOpcode` search strings.
+    #[must_use]
+    pub fn name(&self, area_id: u32) -> &str {
+        self.name_by_id.get(&area_id).map_or("", String::as_str)
     }
 
     #[must_use]
@@ -72,6 +80,7 @@ impl AreaStore {
     fn from_rows(
         entries: impl IntoIterator<Item = AreaEntry>,
         linked_zones: impl IntoIterator<Item = (u32, u32)>,
+        names: impl IntoIterator<Item = (u32, String)>,
     ) -> Self {
         Self {
             by_flag_and_map: entries
@@ -79,6 +88,7 @@ impl AreaStore {
                 .map(|entry| ((entry.explore_flag, entry.map_id), entry))
                 .collect(),
             linked_zone_by_map: linked_zones.into_iter().collect(),
+            name_by_id: names.into_iter().collect(),
         }
     }
 }
@@ -92,12 +102,14 @@ impl AreaStore {
 pub fn load_areas(conn: &mut mysql::Conn, wow_patch: u32) -> Result<AreaStore, DbError> {
     let area_rows: Vec<mysql::Row> = conn.exec(
         "SELECT `entry`, `map_id`, `zone_id`, `explore_flag`, `flags`, `area_level`, \
-         `team`, `liquid_type` FROM `area_template`",
+         `team`, `liquid_type`, `name` FROM `area_template`",
         (),
     )?;
-    let entries = area_rows.into_iter().map(|row| {
+    let mut entries = Vec::with_capacity(area_rows.len());
+    let mut names = Vec::with_capacity(area_rows.len());
+    for row in area_rows {
         let f = mangos_db::row::Fields::from_row(row);
-        AreaEntry {
+        let entry = AreaEntry {
             id: f.u32(0),
             map_id: f.u32(1),
             zone_id: f.u32(2),
@@ -106,8 +118,10 @@ pub fn load_areas(conn: &mut mysql::Conn, wow_patch: u32) -> Result<AreaStore, D
             area_level: f.i32(5),
             team: f.u32(6),
             liquid_type: f.u32(7),
-        }
-    });
+        };
+        names.push((entry.id, f.string(8)));
+        entries.push(entry);
+    }
 
     let map_rows: Vec<mysql::Row> = conn.exec(
         "SELECT `entry`, `linked_zone` FROM `map_template` t1 \
@@ -120,7 +134,7 @@ pub fn load_areas(conn: &mut mysql::Conn, wow_patch: u32) -> Result<AreaStore, D
         (f.u32(0), f.u32(1))
     });
 
-    Ok(AreaStore::from_rows(entries, linked_zones))
+    Ok(AreaStore::from_rows(entries, linked_zones, names))
 }
 
 #[cfg(test)]
@@ -142,10 +156,16 @@ mod tests {
 
     #[test]
     fn zone_resolution_flattens_subareas_to_parent_zone() {
-        let store = AreaStore::from_rows([area(14, 0, 148), area(363, 14, 149)], [(1, 14)]);
+        let store = AreaStore::from_rows(
+            [area(14, 0, 148), area(363, 14, 149)],
+            [(1, 14)],
+            [(14, "Durotar".to_string())],
+        );
         assert_eq!(store.zone_and_area_by_flag(148, 1), (14, 14));
         assert_eq!(store.zone_and_area_by_flag(149, 1), (14, 363));
         assert_eq!(store.zone_and_area_by_flag(149, 0), (0, 0));
         assert_eq!(store.linked_zone(1), 14);
+        assert_eq!(store.name(14), "Durotar");
+        assert_eq!(store.name(999), "");
     }
 }

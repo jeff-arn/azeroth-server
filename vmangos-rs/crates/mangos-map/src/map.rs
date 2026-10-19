@@ -600,6 +600,55 @@ impl Map {
             .zone_and_area_by_flag(area_flag, self.map_id)
     }
 
+    /// `WorldObject::SendMessageToSetInRange` for player
+    /// chat: queues `packet` for every player within
+    /// `range` (3D) of `origin`, including the origin
+    /// player, optionally restricted to the origin's team.
+    pub fn broadcast_packet_in_range(
+        &mut self,
+        origin: ObjectGuid,
+        range: f32,
+        own_team_only: bool,
+        packet: &WorldPacket,
+    ) {
+        let Some((origin_pos, origin_team)) = self
+            .players
+            .get(&origin)
+            .map(|entry| (entry.player.unit.world.position(), entry.player.team))
+        else {
+            return;
+        };
+        let range_sq = range * range;
+        let recipients: Vec<ObjectGuid> = self
+            .players
+            .iter()
+            .filter(|(_, entry)| {
+                if own_team_only && entry.player.team != origin_team {
+                    return false;
+                }
+                let pos = entry.player.unit.world.position();
+                let dx = pos.x - origin_pos.x;
+                let dy = pos.y - origin_pos.y;
+                let dz = pos.z - origin_pos.z;
+                dx * dx + dy * dy + dz * dz <= range_sq
+            })
+            .map(|(guid, _)| *guid)
+            .collect();
+        for recipient in recipients {
+            self.events.push(MapEvent::Packet {
+                to: recipient,
+                packet: packet.clone(),
+            });
+        }
+    }
+
+    /// A player's current zone id (0 when absent or not yet
+    /// refreshed), for friend-list `FriendInfo::Area`.
+    #[must_use]
+    pub fn player_zone_id(&self, guid: ObjectGuid) -> u32 {
+        self.players.get(&guid).map_or(0, |entry| entry.zone_id)
+    }
+
     /// Refreshes one player's zone/area and, on a zone
     /// change (or forced first entry), queues
     /// `SMSG_INIT_WORLD_STATES` and the current

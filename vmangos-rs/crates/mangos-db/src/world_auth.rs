@@ -119,6 +119,24 @@ impl WorldAuthDb {
         })
     }
 
+    /// `account.email_verif` by id (offline trial-
+    /// restriction checks); `None` when the account
+    /// does not exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    pub fn account_email_verified(&self, account_id: u32) -> Result<Option<bool>, DbError> {
+        self.actor.call(move |conn| {
+            use mysql::prelude::Queryable;
+            let row: Option<u8> = conn.exec_first(
+                "SELECT `email_verif` FROM `account` WHERE `id` = ?",
+                (account_id,),
+            )?;
+            Ok(row.map(|value| value != 0))
+        })
+    }
+
     /// `UPDATE account SET last_ip = ? WHERE username = ?`
     /// (`WorldSocket.cpp:384`; C++ binds address first).
     ///

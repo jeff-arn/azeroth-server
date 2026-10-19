@@ -557,6 +557,14 @@ impl Map {
         }
     }
 
+    /// Same-map teleport for host-driven placement
+    /// (bot director relocation): cell-index move
+    /// only; session-less bots need no client
+    /// teleport packet train.
+    pub fn teleport_unit_within_map(&mut self, guid: ObjectGuid, position: Position) {
+        self.relocate_unit(guid, position);
+    }
+
     /// Relocates a unit, moving its cell index entry.
     pub(crate) fn relocate_unit(&mut self, guid: ObjectGuid, position: Position) {
         let Some(old) = self.unit_position(guid) else {
@@ -1827,6 +1835,29 @@ impl Map {
         })
     }
 
+    /// Sets a unit's target field (`Unit::SetTarget`
+    /// field write; selection parity for bots).
+    pub fn bot_set_target(&mut self, guid: ObjectGuid, target: ObjectGuid) {
+        {
+            let Some(unit) = self.unit_base_mut(guid) else {
+                return;
+            };
+            unit.values().set_guid(
+                mangos_protocol::update_field_table::offsets::UNIT_FIELD_TARGET,
+                target,
+            );
+        }
+    }
+
+    /// Installs an idle motion master for a player
+    /// (bot locomotion, Phase 5 Slice D). Human
+    /// players are client-driven and never call this.
+    pub fn motion_initialize_player(&mut self, guid: ObjectGuid) {
+        if self.players.contains_key(&guid) {
+            self.motion.insert(guid, MotionMaster::new(Generator::Idle));
+        }
+    }
+
     /// `MotionMaster::Initialize` for a creature: stop,
     /// clear, install the factory default from
     /// `default_movement_type`.
@@ -1892,7 +1923,15 @@ impl Map {
         let mut guids: Vec<ObjectGuid> = self.motion.keys().copied().collect();
         guids.sort_by_key(|g| g.raw());
         for guid in guids {
-            let alive = self.creatures.get(&guid).is_some_and(|c| c.unit.is_alive());
+            // Bot players (Phase 5 Slice D) carry a
+            // motion master too; human players never
+            // get one inserted, so this stays a no-op
+            // for them.
+            let alive = self.creatures.get(&guid).is_some_and(|c| c.unit.is_alive())
+                || self
+                    .players
+                    .get(&guid)
+                    .is_some_and(|entry| entry.player.unit.is_alive());
             if !alive {
                 continue;
             }

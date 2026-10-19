@@ -12,6 +12,10 @@ pub mod effect {
     pub const APPLY_AURA: u32 = 6;
     pub const HEAL: u32 = 10;
     pub const WEAPON_DAMAGE_NOSCHOOL: u32 = 17;
+    pub const RESURRECT: u32 = 18;
+    pub const ENCHANT_ITEM_TEMPORARY: u32 = 54;
+    pub const RESURRECT_NEW: u32 = 113;
+    pub const ATTACK_ME: u32 = 114;
     pub const PERSISTENT_AREA_AURA: u32 = 27;
     pub const APPLY_AREA_AURA_PARTY: u32 = 35;
     pub const WEAPON_DAMAGE: u32 = 58;
@@ -27,6 +31,7 @@ pub mod aura {
     pub const NONE: u32 = 0;
     pub const PERIODIC_DAMAGE: u32 = 3;
     pub const PERIODIC_HEAL: u32 = 8;
+    pub const MOD_TAUNT: u32 = 11;
     pub const MOD_STUN: u32 = 12;
     pub const MOD_ROOT: u32 = 26;
     pub const MOD_STAT: u32 = 29;

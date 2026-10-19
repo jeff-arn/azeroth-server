@@ -104,7 +104,9 @@ impl Map {
         })
     }
 
-    pub(crate) fn object_name(&self, guid: ObjectGuid) -> String {
+    /// World-object display name (`GetName`).
+    #[must_use]
+    pub fn object_name(&self, guid: ObjectGuid) -> String {
         if let Some(entry) = self.players.get(&guid) {
             return entry.player.unit.world.name.clone();
         }

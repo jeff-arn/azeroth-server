@@ -64,7 +64,18 @@ SMSG_CHAR_ENUM = 59
 CMSG_PLAYER_LOGIN = 61
 CMSG_LOGOUT_REQUEST = 75
 SMSG_LOGOUT_COMPLETE = 77
+CMSG_MESSAGECHAT = 149
+SMSG_MESSAGECHAT = 150
+CMSG_JOIN_CHANNEL = 151
+CMSG_LEAVE_CHANNEL = 152
+SMSG_CHANNEL_NOTIFY = 153
 SMSG_UPDATE_OBJECT = 169
+CMSG_GROUP_INVITE = 110
+SMSG_GROUP_INVITE = 111
+CMSG_GROUP_ACCEPT = 114
+CMSG_GROUP_DISBAND = 123
+SMSG_GROUP_LIST = 125
+SMSG_PARTY_COMMAND_RESULT = 127
 MSG_MOVE_HEARTBEAT = 238
 SMSG_COMPRESSED_UPDATE_OBJECT = 502
 SMSG_LOGIN_VERIFY_WORLD = 566
@@ -119,6 +130,48 @@ def parse_relay(body: bytes) -> tuple[int, float, float, float, float]:
     guid, offset = parse_packed_guid(body)
     _flags, _time, x, y, z, orientation = struct.unpack_from("<IIffff", body, offset)
     return guid, x, y, z, orientation
+
+
+def chat_body(msg_type: int, lang: int, text: str, target: str | None = None) -> bytes:
+    """CMSG_MESSAGECHAT body: type, language, optional
+    whisper/channel target cstring, message cstring."""
+    body = struct.pack("<II", msg_type, lang)
+    if target is not None:
+        body += target.encode() + b"\0"
+    return body + text.encode() + b"\0"
+
+
+def parse_chat(body: bytes) -> tuple[int, int, int, str, int]:
+    """SMSG_MESSAGECHAT body -> (type, language, sender
+    guid, text, chat tag). SAY/PARTY/YELL repeat the
+    sender guid; player GUIDs are bare counters."""
+    msg_type = body[0]
+    lang, guid = struct.unpack_from("<IQ", body, 1)
+    offset = 13
+    if msg_type in (0x00, 0x01, 0x05):
+        offset += 8
+    (length,) = struct.unpack_from("<I", body, offset)
+    text = body[offset + 4 : offset + 4 + length - 1].decode()
+    tag = body[offset + 4 + length]
+    return msg_type, lang, guid, text, tag
+
+
+def channel_body(name: str, second: str = "") -> bytes:
+    """Channel opcode body: channel name + second cstring
+    (password / target name)."""
+    return name.encode() + b"\0" + second.encode() + b"\0"
+
+
+def parse_channel_chat(body: bytes) -> tuple[int, int, str, int, str]:
+    """CHAT_MSG_CHANNEL body -> (type, language, channel,
+    sender guid, text)."""
+    msg_type = body[0]
+    (lang,) = struct.unpack_from("<I", body, 1)
+    end = body.index(0, 5)
+    channel = body[5:end].decode()
+    guid, length = struct.unpack_from("<QI", body, end + 5)
+    text = body[end + 17 : end + 17 + length - 1].decode()
+    return msg_type, lang, channel, guid, text
 
 
 def heartbeat_body(client_time: int, x: float, y: float, z: float, orientation: float) -> bytes:
@@ -229,6 +282,140 @@ def assert_relay(
     raise AssertionError(f"{label}: no relay for guid {mover_guid} before deadline")
 
 
+def assert_chat(
+    client_a: Client,
+    client_b: Client,
+    guid_a: int,
+    guid_b: int,
+    name_b: str,
+) -> None:
+    """Phase 5 B.2a: A says in universal language and B
+    (in listen range after the relays) receives it; A
+    whispers B by name and gets the inform echo while B
+    gets the whisper itself."""
+    client_a.send_packet(CMSG_MESSAGECHAT, chat_body(0x00, 0, "hello from a"))
+    body, _ = read_until_opcode(client_b, SMSG_MESSAGECHAT, 10, "CHAT-SAY-A-TO-B")
+    msg_type, lang, guid, text, _tag = parse_chat(body)
+    if (msg_type, lang, guid, text) != (0x00, 0, guid_a, "hello from a"):
+        raise AssertionError(f"say at B: type={msg_type} lang={lang} guid={guid} text={text!r}")
+    print("CHAT-SAY-A-TO-B")
+    # A hears its own say too; consume it before whispering.
+    body, _ = read_until_opcode(client_a, SMSG_MESSAGECHAT, 10, "CHAT-SAY-SELF-ECHO")
+    if parse_chat(body)[3] != "hello from a":
+        raise AssertionError(f"say self echo: {parse_chat(body)}")
+
+    client_a.send_packet(CMSG_MESSAGECHAT, chat_body(0x06, 0, "secret hello", target=name_b))
+    body, _ = read_until_opcode(client_b, SMSG_MESSAGECHAT, 10, "CHAT-WHISPER-A-TO-B")
+    msg_type, lang, guid, text, _tag = parse_chat(body)
+    if (msg_type, lang, guid, text) != (0x06, 0, guid_a, "secret hello"):
+        raise AssertionError(f"whisper at B: type={msg_type} lang={lang} guid={guid} text={text!r}")
+    body, _ = read_until_opcode(client_a, SMSG_MESSAGECHAT, 10, "CHAT-WHISPER-INFORM")
+    msg_type, lang, guid, text, _tag = parse_chat(body)
+    if (msg_type, lang, guid, text) != (0x07, 0, guid_b, "secret hello"):
+        raise AssertionError(f"whisper inform at A: type={msg_type} lang={lang} guid={guid} text={text!r}")
+    print("CHAT-WHISPER-A-TO-B")
+
+
+def assert_channel_chat(
+    client_a: Client,
+    client_b: Client,
+    guid_a: int,
+) -> None:
+    """Phase 5 B.2b: both clients join a custom channel;
+    A's channel message reaches B (and echoes to A)."""
+    for client in (client_a, client_b):
+        client.send_packet(CMSG_JOIN_CHANNEL, channel_body("botchan"))
+        body, _ = read_until_opcode(client, SMSG_CHANNEL_NOTIFY, 10, "CHANNEL-JOIN")
+        if body[0] != 0x02:  # CHAT_YOU_JOINED_NOTICE
+            raise AssertionError(f"join notify type {body[0]:#x}: {body!r}")
+    print("CHANNEL-JOIN-BOTH")
+
+    client_a.send_packet(CMSG_MESSAGECHAT, chat_body(0x0E, 0, "hello channel", target="Botchan"))
+    body, _ = read_until_opcode(client_b, SMSG_MESSAGECHAT, 10, "CHANNEL-SAY-A-TO-B")
+    msg_type, _lang, channel, guid, text = parse_channel_chat(body)
+    if (msg_type, channel, guid, text) != (0x0E, "Botchan", guid_a, "hello channel"):
+        raise AssertionError(f"channel say at B: {parse_channel_chat(body)}")
+    body, _ = read_until_opcode(client_a, SMSG_MESSAGECHAT, 10, "CHANNEL-SAY-SELF")
+    if parse_channel_chat(body)[4] != "hello channel":
+        raise AssertionError(f"channel say self echo: {parse_channel_chat(body)}")
+    print("CHANNEL-SAY-A-TO-B")
+
+    for client in (client_a, client_b):
+        client.send_packet(CMSG_LEAVE_CHANNEL, channel_body("Botchan"))
+        # The other client's LEFT broadcast may arrive
+        # first; scan for our own YOU_LEFT.
+        for _ in range(4):
+            body, _ = read_until_opcode(client, SMSG_CHANNEL_NOTIFY, 10, "CHANNEL-LEAVE")
+            if body[0] == 0x03:  # CHAT_YOU_LEFT_NOTICE
+                break
+        else:
+            raise AssertionError("no YOU_LEFT notice")
+    print("CHANNEL-LEAVE-BOTH")
+
+
+def assert_group(
+    client_a: Client,
+    client_b: Client,
+    guid_a: int,
+    name_a: str,
+    name_b: str,
+) -> None:
+    """Phase 5 B.3: A invites B by name; B receives the
+    invite and A the OK result; B accepts and both see a
+    group list naming the other; party chat crosses; B
+    leaves and the pair disbands (empty lists both
+    sides, rows gone from the characters DB)."""
+
+    def group_list_with(client: Client, needle: bytes, label: str) -> bytes:
+        for _ in range(4):
+            body, _ = read_until_opcode(client, SMSG_GROUP_LIST, 10, label)
+            if needle in body:
+                return body
+        raise AssertionError(f"{label}: no SMSG_GROUP_LIST containing {needle!r}")
+
+    client_a.send_packet(CMSG_GROUP_INVITE, name_b.encode() + b"\0")
+    body, _ = read_until_opcode(client_b, SMSG_GROUP_INVITE, 10, "PARTY-INVITE")
+    if body != name_a.encode() + b"\0":
+        raise AssertionError(f"invite at B: {body!r}")
+    body, _ = read_until_opcode(client_a, SMSG_PARTY_COMMAND_RESULT, 10, "PARTY-INVITE-RESULT")
+    expected = struct.pack("<I", 0) + name_b.encode() + b"\0" + struct.pack("<I", 0)
+    if body != expected:
+        raise AssertionError(f"invite result at A: {body!r}")
+
+    client_b.send_packet(CMSG_GROUP_ACCEPT, b"")
+    group_list_with(client_a, name_b.encode(), "PARTY-LIST-A")
+    group_list_with(client_b, name_a.encode(), "PARTY-LIST-B")
+    print("PARTY-INVITE-ACCEPT")
+
+    client_a.send_packet(CMSG_MESSAGECHAT, chat_body(0x01, 0, "hello party"))
+    body, _ = read_until_opcode(client_b, SMSG_MESSAGECHAT, 10, "PARTY-CHAT-A-TO-B")
+    msg_type, lang, guid, text, _tag = parse_chat(body)
+    if (msg_type, lang, guid, text) != (0x01, 0, guid_a, "hello party"):
+        raise AssertionError(f"party chat at B: {parse_chat(body)}")
+    body, _ = read_until_opcode(client_a, SMSG_MESSAGECHAT, 10, "PARTY-CHAT-SELF")
+    if parse_chat(body)[3] != "hello party":
+        raise AssertionError(f"party chat self echo: {parse_chat(body)}")
+    print("PARTY-CHAT-A-TO-B")
+
+    client_b.send_packet(CMSG_GROUP_DISBAND, b"")
+    body, _ = read_until_opcode(client_b, SMSG_PARTY_COMMAND_RESULT, 10, "PARTY-LEAVE-RESULT")
+    expected = struct.pack("<I", 2) + name_b.encode() + b"\0" + struct.pack("<I", 0)
+    if body != expected:
+        raise AssertionError(f"leave result at B: {body!r}")
+    for client, label in ((client_a, "PARTY-DISBAND-A"), (client_b, "PARTY-DISBAND-B")):
+        body, _ = read_until_opcode(client, SMSG_GROUP_LIST, 10, label)
+        if body != b"\0" * 24:
+            raise AssertionError(f"{label}: expected empty group list, got {body!r}")
+    remaining = sql_scalar(
+        "characters",
+        "SELECT COUNT(*) FROM group_member WHERE member_guid IN "
+        f"({guid_a}, (SELECT guid FROM characters WHERE name = '{name_b}'))",
+    )
+    if remaining != "0":
+        raise AssertionError(f"group_member rows remain after disband: {remaining}")
+    print("PARTY-LEAVE-DISBAND")
+
+
 def run_smoke(args: argparse.Namespace) -> int:
     p3.HOST = args.host
     p3.PORT = args.port
@@ -269,6 +456,18 @@ def run_smoke(args: argparse.Namespace) -> int:
 
         position_b = assert_relay(client_b, client_a, args.guid_b, position_b, 0.0, 4.0, "RELAY-B-TO-A")
         _ = (position_a, position_b)
+
+        name_b = sql_scalar("characters", f"SELECT name FROM characters WHERE guid={args.guid_b}")
+        if not name_b:
+            print(f"TWO-CLIENT-FAIL no character name for guid {args.guid_b}")
+            return 1
+        name_a = sql_scalar("characters", f"SELECT name FROM characters WHERE guid={args.guid_a}")
+        if not name_a:
+            print(f"TWO-CLIENT-FAIL no character name for guid {args.guid_a}")
+            return 1
+        assert_chat(client_a, client_b, args.guid_a, args.guid_b, name_b)
+        assert_channel_chat(client_a, client_b, args.guid_a)
+        assert_group(client_a, client_b, args.guid_a, name_a, name_b)
     except Exception as exc:
         print(f"TWO-CLIENT-FAIL: {exc}")
         return 1
@@ -314,6 +513,18 @@ def run_self_test() -> int:
 
     assert len(heartbeat_body(1000, 1.0, 2.0, 3.0, 0.5)) == 28
     print("SELFTEST heartbeat-body is the full 28-byte flagless MovementInfo")
+
+    say = bytes([0x00]) + struct.pack("<IQQI", 7, 3, 3, 3) + b"hi\0" + bytes([1])
+    assert parse_chat(say) == (0x00, 7, 3, "hi", 1)
+    whisper = bytes([0x06]) + struct.pack("<IQI", 0, 4, 5) + b"psst\0" + bytes([0])
+    assert parse_chat(whisper) == (0x06, 0, 4, "psst", 0)
+    print("SELFTEST chat-body parse (say double-guid, whisper single-guid)")
+
+    channel_chat = (
+        bytes([0x0E]) + struct.pack("<I", 1) + b"Botchan\0" + struct.pack("<IQI", 0, 3, 3) + b"hi\0" + bytes([0])
+    )
+    assert parse_channel_chat(channel_chat) == (0x0E, 1, "Botchan", 3, "hi")
+    print("SELFTEST channel-chat parse")
 
     print("TWO-CLIENT-SELFTEST-PASS")
     return 0

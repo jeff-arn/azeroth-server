@@ -9,14 +9,25 @@
 
 pub mod account_data;
 pub mod addon_info;
+pub mod auction;
 pub mod auth;
+pub mod channels;
 pub mod char_enum;
 pub mod char_queries;
+pub mod chat;
+pub mod commands;
+pub mod group;
+pub mod guild;
+pub mod mail;
+pub mod petition;
 pub mod ping;
 pub mod player_login;
 pub mod queries;
 pub mod session_core;
+pub mod social;
 pub mod socket;
+pub mod trade;
+pub mod who;
 pub mod world_actor;
 
 use std::net::{IpAddr, Ipv4Addr};
@@ -45,7 +56,19 @@ pub fn is_acceptable_client_build(build: u32) -> bool {
 /// kept as the raw u8 the DB stores.
 pub mod security {
     pub const PLAYER: u8 = 0;
+    /// `SEC_MODERATOR` (`Common.h:139`).
+    pub const MODERATOR: u8 = 1;
+    /// `SEC_TICKETMASTER` (`Common.h:140`).
+    pub const TICKETMASTER: u8 = 2;
+    /// `SEC_GAMEMASTER` (`Common.h:141`).
+    pub const GAMEMASTER: u8 = 3;
+    /// `SEC_BASIC_ADMIN` (`Common.h:142`).
+    pub const BASIC_ADMIN: u8 = 4;
+    /// `SEC_DEVELOPER` (`Common.h:143`).
+    pub const DEVELOPER: u8 = 5;
     pub const ADMINISTRATOR: u8 = 6;
+    /// `SEC_CONSOLE` (`Common.h:145`).
+    pub const CONSOLE: u8 = 7;
 }
 
 /// The `mangosd.conf` keys the Phase 3 skeleton consumes. Defaults
@@ -112,6 +135,109 @@ pub struct ServerConfig {
     pub game_type: u32,
     /// `RealmZone` (default 1 = DEVELOPMENT, `World.cpp:585-586`).
     pub realm_zone: u32,
+    /// `AllowTwoSide.AddFriend` (default false,
+    /// `World.cpp:599`).
+    pub allow_two_side_add_friend: bool,
+    /// `AllowTwoSide.WhoList` (default false, `World.cpp:598`).
+    pub allow_two_side_who_list: bool,
+    /// `AllowTwoSide.Interaction.Chat` (default false,
+    /// `World.cpp:591`).
+    pub allow_two_side_interaction_chat: bool,
+    /// `AllowTwoSide.Interaction.Channel` (default false,
+    /// `World.cpp:592`).
+    pub allow_two_side_interaction_channel: bool,
+    /// `AllowTwoSide.Interaction.Group` (default false,
+    /// `World.cpp:593`).
+    pub allow_two_side_interaction_group: bool,
+    /// `AllowTwoSide.Interaction.Guild` (default false,
+    /// `World.cpp:594`).
+    pub allow_two_side_interaction_guild: bool,
+    /// `Guild.EventLogRecordsCount` (default 100, min
+    /// 100, `World.cpp:793`).
+    pub guild_event_log_count: u32,
+    /// `MinPetitionSigns` (default 9, clamped 0..=9,
+    /// `World.cpp:647`): signatures that complete a
+    /// guild charter petition.
+    pub min_petition_signs: u32,
+    /// `MinCharterName` (default 2, clamped 2..=24,
+    /// `World.cpp:606`).
+    pub min_charter_name: u32,
+    /// `StrictCharterNames` (default 0, `World.cpp:602`).
+    pub strict_charter_names: u32,
+    /// `AllowTwoSide.Interaction.Mail` (default false,
+    /// `World.cpp:597`).
+    pub allow_two_side_interaction_mail: bool,
+    /// `AllowTwoSide.Interaction.Trade` (default false,
+    /// `World.cpp:595`).
+    pub allow_two_side_interaction_trade: bool,
+    /// `MailDeliveryDelay` seconds (default 3600,
+    /// `World.cpp:672`).
+    pub mail_delivery_delay_secs: u32,
+    /// `GM.AllowTrades` (default true, `World.cpp:661`).
+    pub gm_allow_trades: bool,
+    /// `MailSpam.Level` (default 1, `World.cpp:1049`).
+    pub mailspam_level: u32,
+    /// `MailSpam.Money` (default 0, `World.cpp:1050`).
+    pub mailspam_money: u32,
+    /// `MailSpam.Item` (default false, `World.cpp:1051`).
+    pub mailspam_item: bool,
+    /// `MailSpam.ExpireSecs` (default 0, `World.cpp:1047`).
+    pub mailspam_expire_secs: u32,
+    /// `MailSpam.MaxMails` (default 2, `World.cpp:1048`).
+    pub mailspam_max_mails: u32,
+    /// `Mails.COD.ForceTag.MaxLevel` (default 0,
+    /// `World.cpp:1052`).
+    pub cod_force_tag_max_level: u32,
+    /// `AllowTwoSide.Interaction.Auction` (default
+    /// false, `World.cpp:596`).
+    pub allow_two_side_interaction_auction: bool,
+    /// `Progression.UnlinkedAuctionHouses` (default
+    /// true, `World.cpp:1084`): separate house per
+    /// DBC entry before patch 1.9.
+    pub unlinked_auction_houses: bool,
+    /// `Rate.Auction.Time` (default 1.0, `World.cpp:516`).
+    pub rate_auction_time: f32,
+    /// `Rate.Auction.Deposit` (default 1.0, `World.cpp:517`).
+    pub rate_auction_deposit: f32,
+    /// `Rate.Auction.Cut` (default 1.0, `World.cpp:518`).
+    pub rate_auction_cut: f32,
+    /// `Auction.Deposit.Min` (default 0, `World.cpp:519`).
+    pub auction_deposit_min: u32,
+    /// `Auction.AccountConcurrentLimit` (default 0 =
+    /// unlimited, `World.cpp:520`).
+    pub auction_account_concurrent_limit: u32,
+    /// `PlayerCommands` (default true,
+    /// `World.cpp:789`): whether player sessions
+    /// may use dot commands at all.
+    pub player_commands: bool,
+    /// `GM.JoinOppositeFactionChannels` (default false,
+    /// forced false when two-side chat is on,
+    /// `World.cpp:663-665`).
+    pub gm_join_opposite_faction_channels: bool,
+    /// `Channel.SilentlyGMJoin` (default false,
+    /// `World.cpp:734`).
+    pub channel_silently_gm_join: bool,
+    /// `ChannelInvite.MinLevel` (default 10,
+    /// `World.cpp:1016`).
+    pub channel_invite_min_level: u32,
+    /// `WorldChan.MinLevel` (default 0, `World.cpp:1018`).
+    pub world_chan_min_level: u32,
+    /// `ListenRange.Say` (default 25, `World.cpp:538`).
+    pub listen_range_say: f32,
+    /// `ListenRange.Yell` (default 300, `World.cpp:539`).
+    pub listen_range_yell: f32,
+    /// `ListenRange.TextEmote` (default 25, `World.cpp:540`).
+    pub listen_range_text_emote: f32,
+    /// `YellRange.LinearScale.MaxLevel` (default 0 = off).
+    pub yell_range_linear_scale_max_level: u32,
+    /// `YellRange.QuadraticScale.MaxLevel` (default 0 = off).
+    pub yell_range_quadratic_scale_max_level: u32,
+    /// `YellRange.Min` (default 0).
+    pub yell_range_min: u32,
+    /// `GM.InWhoList.Level` (default `SEC_ADMINISTRATOR`,
+    /// `World.cpp:656`): accounts above this security are
+    /// hidden from player who lists.
+    pub gm_level_in_who_list: u8,
     /// `Item.PreventDataMining` (default true).
     pub prevent_item_datamining: bool,
     /// `ActivateWeather` (default true).
@@ -119,15 +245,53 @@ pub struct ServerConfig {
     /// `ChangeWeatherInterval` in milliseconds (default
     /// 600000 = 10 minutes).
     pub change_weather_interval_ms: u32,
+    /// `BotChat.*` (fork `BotChatManager::Load`).
+    pub bot_chat: mangos_bots::chat::ChatConfig,
+    /// `BotService.Enable` (default true).
+    pub bot_service_enable: bool,
+    /// `BotService.Buy.BudgetPerDay` gold (default 200).
+    pub bot_service_buy_budget_gold: u32,
+    /// `RandomBot.*` / `PlayerBot.*` population config.
+    pub bot_population: mangos_bots::population::PopulationConfig,
+    /// `BotDirector.Enable` (default true).
+    pub bot_director_enable: bool,
+    /// `BotDirector.UpdateInterval` ms (default 120000).
+    pub bot_director_interval_ms: u32,
+    /// `GuildBot.*` config.
+    pub guild_bot: mangos_bots::guild_bots::GuildBotConfig,
+    /// `AHBot.*` config.
+    pub ah_bot: mangos_bots::ah_bot::AhBotConfig,
+}
+
+fn bot_chat_config(cfg: &Config) -> mangos_bots::chat::ChatConfig {
+    mangos_bots::chat::ChatConfig {
+        enabled: cfg.bool_default("BotChat.Enable", true),
+        trade_interval_min_s: to_u32(cfg.int_default("BotChat.TradeChat.IntervalMin", 120)),
+        trade_interval_max_s: to_u32(cfg.int_default("BotChat.TradeChat.IntervalMax", 300)),
+        guild_interval_min_s: to_u32(cfg.int_default("BotChat.GuildChat.IntervalMin", 300)),
+        guild_interval_max_s: to_u32(cfg.int_default("BotChat.GuildChat.IntervalMax", 900)),
+        cooldown_trade_s: to_u32(cfg.int_default("BotChat.Cooldown.TradeChat", 300)),
+        cooldown_guild_s: to_u32(cfg.int_default("BotChat.Cooldown.GuildChat", 180)),
+        cooldown_party_s: to_u32(cfg.int_default("BotChat.Cooldown.PartyChat", 30)),
+        cooldown_say_s: to_u32(cfg.int_default("BotChat.Cooldown.SayChat", 120)),
+        cooldown_general_s: to_u32(cfg.int_default("BotChat.Cooldown.GeneralChat", 120)),
+        cooldown_scale_threshold: to_u32(cfg.int_default("BotChat.Cooldown.ScaleThreshold", 30)),
+    }
 }
 
 impl ServerConfig {
     #[must_use]
+    // Flat key-by-key config mirror; length is data, not logic.
+    #[allow(clippy::too_many_lines)]
     pub fn from_config(cfg: &Config) -> Self {
         let mut max_overspeed_pings = to_u32(cfg.int_default("MaxOverspeedPings", 2));
         if max_overspeed_pings == 1 {
             max_overspeed_pings = 2;
         }
+        let bind_ip: IpAddr = cfg
+            .string_default("BindIP", "0.0.0.0")
+            .parse()
+            .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         let player_limit = cfg.int_default("PlayerLimit", 100);
         let player_security_limit = if player_limit <= 0 {
             i64::from(-player_limit).min(i64::from(security::ADMINISTRATOR)) as u8
@@ -137,10 +301,7 @@ impl ServerConfig {
         ServerConfig {
             realm_id: to_u32(cfg.int_default("RealmID", 0)),
             port: to_u32(cfg.int_default("WorldServerPort", 8085)) as u16,
-            bind_ip: cfg
-                .string_default("BindIP", "0.0.0.0")
-                .parse()
-                .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+            bind_ip,
             max_overspeed_pings,
             kick_on_bad_packet: cfg.bool_default("Network.KickOnBadPacket", false),
             no_auth_timeout_secs: to_u32(cfg.int_default("Network.TimeoutSecsIfNoAuth", 10)),
@@ -158,9 +319,134 @@ impl ServerConfig {
             motd: cfg.string_default("Motd", "Welcome to the Massive Network Game Object Server."),
             game_type: to_u32(cfg.int_default("GameType", 0)),
             realm_zone: to_u32(cfg.int_default("RealmZone", 1)),
+            allow_two_side_add_friend: cfg.bool_default("AllowTwoSide.AddFriend", false),
+            allow_two_side_who_list: cfg.bool_default("AllowTwoSide.WhoList", false),
+            allow_two_side_interaction_chat: cfg
+                .bool_default("AllowTwoSide.Interaction.Chat", false),
+            allow_two_side_interaction_channel: cfg
+                .bool_default("AllowTwoSide.Interaction.Channel", false),
+            allow_two_side_interaction_group: cfg
+                .bool_default("AllowTwoSide.Interaction.Group", false),
+            allow_two_side_interaction_guild: cfg
+                .bool_default("AllowTwoSide.Interaction.Guild", false),
+            guild_event_log_count: u32::try_from(
+                cfg.int_default("Guild.EventLogRecordsCount", 100).max(100),
+            )
+            .unwrap_or(100),
+            min_petition_signs: to_u32(cfg.int_default("MinPetitionSigns", 9)).min(9),
+            min_charter_name: to_u32(cfg.int_default("MinCharterName", 2)).clamp(2, 24),
+            strict_charter_names: to_u32(cfg.int_default("StrictCharterNames", 0)),
+            allow_two_side_interaction_mail: cfg
+                .bool_default("AllowTwoSide.Interaction.Mail", false),
+            allow_two_side_interaction_trade: cfg
+                .bool_default("AllowTwoSide.Interaction.Trade", false),
+            mail_delivery_delay_secs: to_u32(cfg.int_default("MailDeliveryDelay", 3600)),
+            gm_allow_trades: cfg.bool_default("GM.AllowTrades", true),
+            mailspam_level: to_u32(cfg.int_default("MailSpam.Level", 1)),
+            mailspam_money: to_u32(cfg.int_default("MailSpam.Money", 0)),
+            mailspam_item: cfg.bool_default("MailSpam.Item", false),
+            mailspam_expire_secs: to_u32(cfg.int_default("MailSpam.ExpireSecs", 0)),
+            mailspam_max_mails: to_u32(cfg.int_default("MailSpam.MaxMails", 2)),
+            cod_force_tag_max_level: to_u32(cfg.int_default("Mails.COD.ForceTag.MaxLevel", 0)),
+            allow_two_side_interaction_auction: cfg
+                .bool_default("AllowTwoSide.Interaction.Auction", false),
+            unlinked_auction_houses: cfg.bool_default("Progression.UnlinkedAuctionHouses", true),
+            rate_auction_time: cfg.float_default("Rate.Auction.Time", 1.0),
+            rate_auction_deposit: cfg.float_default("Rate.Auction.Deposit", 1.0),
+            rate_auction_cut: cfg.float_default("Rate.Auction.Cut", 1.0),
+            auction_deposit_min: to_u32(cfg.int_default("Auction.Deposit.Min", 0)),
+            auction_account_concurrent_limit: to_u32(
+                cfg.int_default("Auction.AccountConcurrentLimit", 0),
+            ),
+            player_commands: cfg.bool_default("PlayerCommands", true),
+            gm_join_opposite_faction_channels: cfg
+                .bool_default("GM.JoinOppositeFactionChannels", false)
+                && !cfg.bool_default("AllowTwoSide.Interaction.Chat", false),
+            channel_silently_gm_join: cfg.bool_default("Channel.SilentlyGMJoin", false),
+            channel_invite_min_level: to_u32(cfg.int_default("ChannelInvite.MinLevel", 10)),
+            world_chan_min_level: to_u32(cfg.int_default("WorldChan.MinLevel", 0)),
+            listen_range_say: cfg.float_default("ListenRange.Say", 25.0),
+            listen_range_yell: cfg.float_default("ListenRange.Yell", 300.0),
+            listen_range_text_emote: cfg.float_default("ListenRange.TextEmote", 25.0),
+            yell_range_linear_scale_max_level: to_u32(
+                cfg.int_default("YellRange.LinearScale.MaxLevel", 0),
+            ),
+            yell_range_quadratic_scale_max_level: to_u32(
+                cfg.int_default("YellRange.QuadraticScale.MaxLevel", 0),
+            ),
+            yell_range_min: to_u32(cfg.int_default("YellRange.Min", 0)),
+            gm_level_in_who_list: to_u32(
+                cfg.int_default("GM.InWhoList.Level", i32::from(security::ADMINISTRATOR)),
+            ) as u8,
             prevent_item_datamining: cfg.bool_default("Item.PreventDataMining", true),
             activate_weather: cfg.bool_default("ActivateWeather", true),
             change_weather_interval_ms: to_u32(cfg.int_default("ChangeWeatherInterval", 600_000)),
+            bot_chat: bot_chat_config(cfg),
+            bot_population: mangos_bots::population::PopulationConfig {
+                enable_random_bots: cfg.bool_default("RandomBot.Enable", false),
+                min_bots: to_u32(cfg.int_default("RandomBot.MinBots", 3)),
+                max_bots: to_u32(cfg.int_default("RandomBot.MaxBots", 10)),
+                refresh_ms: u64::from(to_u32(cfg.int_default("RandomBot.Refresh", 60_000))),
+                update_ms: u64::from(to_u32(cfg.int_default("PlayerBot.UpdateMs", 10_000))),
+                debug: cfg.bool_default("PlayerBot.Debug", false),
+                peak_hour: to_u32(cfg.int_default("RandomBot.PeakHour", 20)),
+                off_peak_percent: to_u32(cfg.int_default("RandomBot.OffPeakPercent", 50)),
+                timezone_offset: cfg.int_default("RandomBot.TimezoneOffset", -4),
+            },
+            ah_bot: mangos_bots::ah_bot::AhBotConfig {
+                enable: cfg.bool_default("AHBot.Enable", false),
+                ah_fid: to_u32(cfg.int_default("AHBot.ah.fid", 120)),
+                item_count: to_u32(cfg.int_default("AHBot.itemcount", 200)),
+                refresh_interval_secs: u64::from(to_u32(
+                    cfg.int_default("AHBot.RefreshInterval", 259_200),
+                )),
+                seller_account_id: to_u32(cfg.int_default("AHBot.SellerAccountId", 99)),
+                seller_count: to_u32(cfg.int_default("AHBot.SellerCount", 12)),
+                quota_min: [
+                    to_u32(cfg.int_default("AHBot.Quota.TradeGoods.Min", 35)),
+                    to_u32(cfg.int_default("AHBot.Quota.Crafting.Min", 15)),
+                    to_u32(cfg.int_default("AHBot.Quota.Consumables.Min", 20)),
+                    to_u32(cfg.int_default("AHBot.Quota.Recipes.Min", 3)),
+                    to_u32(cfg.int_default("AHBot.Quota.Equipment.Min", 5)),
+                    to_u32(cfg.int_default("AHBot.Quota.Leveling.Min", 10)),
+                ],
+                quota_max: [
+                    to_u32(cfg.int_default("AHBot.Quota.TradeGoods.Max", 40)),
+                    to_u32(cfg.int_default("AHBot.Quota.Crafting.Max", 20)),
+                    to_u32(cfg.int_default("AHBot.Quota.Consumables.Max", 25)),
+                    to_u32(cfg.int_default("AHBot.Quota.Recipes.Max", 5)),
+                    to_u32(cfg.int_default("AHBot.Quota.Equipment.Max", 10)),
+                    to_u32(cfg.int_default("AHBot.Quota.Leveling.Max", 15)),
+                ],
+                buyer_interval_secs: u64::from(to_u32(
+                    cfg.int_default("AHBot.Buyer.IntervalSecs", 1800),
+                )),
+                buyer_budget_per_cycle: to_u32(
+                    cfg.int_default("AHBot.Buyer.BudgetPerCycle", 500_000),
+                ),
+            },
+            guild_bot: mangos_bots::guild_bots::GuildBotConfig {
+                enabled: cfg.bool_default("GuildBot.Enable", true),
+                account_id: to_u32(cfg.int_default("GuildBot.AccountId", 98)),
+                presence_enabled: cfg.bool_default("GuildBot.Presence.Enable", true),
+                presence_check_interval_ms: u64::from(to_u32(
+                    cfg.int_default("GuildBot.Presence.CheckInterval", 300),
+                )) * 1000,
+                presence_peak_hour: to_u32(cfg.int_default("GuildBot.Presence.PeakHour", 20)),
+                presence_peak_count: to_u32(cfg.int_default("GuildBot.Presence.PeakCount", 14)),
+                presence_off_peak_count: to_u32(
+                    cfg.int_default("GuildBot.Presence.OffPeakCount", 3),
+                ),
+                presence_timezone_offset: cfg.int_default("GuildBot.Presence.TimezoneOffset", 0),
+            },
+            bot_director_enable: cfg.bool_default("BotDirector.Enable", true),
+            bot_director_interval_ms: to_u32(
+                cfg.int_default("BotDirector.UpdateInterval", 120_000),
+            ),
+            bot_service_enable: cfg.bool_default("BotService.Enable", true),
+            bot_service_buy_budget_gold: to_u32(
+                cfg.int_default("BotService.Buy.BudgetPerDay", 200),
+            ),
         }
     }
 }

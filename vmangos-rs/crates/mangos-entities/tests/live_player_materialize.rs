@@ -93,6 +93,7 @@ fn bench_warrior_materializes() {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
+        skills: None,
     };
     let player = Player::materialize(load, &inputs).expect("materialize");
     let v = player.unit.world.object.values();

@@ -7,12 +7,14 @@ use std::collections::HashMap;
 use mangos_entities::unit::ModelData;
 use mangos_spells::SpellStore;
 use mangos_world_data::areas::AreaStore;
+use mangos_world_data::chat_channels::ChatChannelDbc;
 use mangos_world_data::creature_spells::CreatureSpellsMap;
 use mangos_world_data::creature_template::CreatureTemplates;
 use mangos_world_data::gameobject_template::GameObjectTemplates;
 use mangos_world_data::item_prototype::{ItemPrototypes, ItemPrototypesLite};
 use mangos_world_data::player_info::PlayerInfos;
 use mangos_world_data::reputations::FactionStore;
+use mangos_world_data::skill_info::SkillDbc;
 use mangos_world_data::spawn_support::{
     ClassLevelStats, CreatureAddons, DisplayInfoAddons, EquipmentTemplates,
 };
@@ -48,6 +50,12 @@ pub struct WorldStores {
     pub display_scales: HashMap<u32, f32>,
     /// `UpdateModelData` inputs by display id.
     pub model_data: HashMap<u32, ModelData>,
+    /// Skill DBC tables (`_LoadSkills` validation/fixups).
+    pub skills: SkillDbc,
+    /// Built-in chat channel table (`ChatChannels.dbc`).
+    pub chat_channels: ChatChannelDbc,
+    /// Auction house table (`AuctionHouse.dbc`, Phase 5 B.7).
+    pub auction_houses: mangos_world_data::auction_house::AuctionHouseDbc,
 }
 
 impl WorldStores {
@@ -74,6 +82,9 @@ impl WorldStores {
             scripts: mangos_scripts_engine::ScriptStores::default(),
             display_scales: HashMap::new(),
             model_data: HashMap::new(),
+            skills: SkillDbc::default(),
+            chat_channels: ChatChannelDbc::default(),
+            auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
         }
     }
 

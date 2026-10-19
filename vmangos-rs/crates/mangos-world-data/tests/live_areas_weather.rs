@@ -16,6 +16,7 @@ fn bench_areas_and_weather_load() {
         .call(|conn| Ok((load_areas(conn, 10)?, load_weather_chances(conn)?)))
         .expect("load areas and weather");
     assert!(!areas.is_empty(), "bench area_template must not be empty");
+    assert_eq!(areas.name(14), "Durotar");
     assert!(!weather.is_empty(), "bench game_weather must not be empty");
     assert!(weather.get(0).is_none(), "zone 0 weather is skipped");
 }

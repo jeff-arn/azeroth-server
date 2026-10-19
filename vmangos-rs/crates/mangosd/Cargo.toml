@@ -11,6 +11,7 @@ name = "mangosd"
 path = "src/main.rs"
 
 [dependencies]
+mangos-bots = { path = "../mangos-bots" }
 mangos-build-info = { path = "../mangos-build-info" }
 mangos-config = { path = "../mangos-config" }
 mangos-db = { path = "../mangos-db" }

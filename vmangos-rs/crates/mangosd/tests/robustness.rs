@@ -24,8 +24,12 @@ use mangos_world_data::enum_stores::EnumStores;
 use mangosd::ServerConfig;
 use mangosd::auth::{AuthBackend, WorldAuthAccount};
 use mangosd::char_queries::CharQueries;
+use mangosd::social::SocialWrite;
 use mangosd::socket::{ConnectionDeps, run_connection};
-use mangosd::world_actor::{PresenceWriter, RealmPublisher, SessionId, WorldDeps, spawn_world};
+use mangosd::world_actor::{
+    AuctionStore, GroupStore, GuildStore, MailStore, PetitionStore, PresenceWriter, RealmPublisher,
+    SessionId, SocialStore, TradeStore, WorldDeps, spawn_world,
+};
 
 const SESSIONKEY_HEX: &str = "9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08";
 const CLIENT_SEED: u32 = 0x1122_3344;
@@ -107,6 +111,267 @@ impl CharQueries for FakeCharQueries {
     }
 }
 
+struct FakeGuildStore;
+
+impl GuildStore for FakeGuildStore {
+    fn apply_guild_write(&self, _write: mangosd::guild::GuildWrite) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn guild_candidate(
+        &self,
+        _guid_low: u32,
+    ) -> Result<Option<mangos_db::guild::GuildCandidate>, DbError> {
+        Ok(None)
+    }
+}
+
+struct FakePetitionStore;
+
+impl PetitionStore for FakePetitionStore {
+    fn apply_petition_write(
+        &self,
+        _write: mangosd::petition::PetitionWrite,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn create_charter_item(
+        &self,
+        _owner_low: u32,
+        _petition_id: u32,
+    ) -> Result<Option<u32>, DbError> {
+        Ok(None)
+    }
+
+    fn player_has_item(&self, _owner_low: u32, _item_low: u32) -> Result<bool, DbError> {
+        Ok(false)
+    }
+
+    fn delete_charter_item(&self, _owner_low: u32, _item_low: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn is_reserved_name(&self, _name: &str) -> Result<bool, DbError> {
+        Ok(false)
+    }
+}
+
+struct FakeAuctionStore;
+
+impl AuctionStore for FakeAuctionStore {
+    fn insert_auction(&self, _auction: mangos_db::auction::StoredAuction) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn delete_auction(&self, _auction_id: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn update_bid(
+        &self,
+        _auction_id: u32,
+        _buyer_guid: u32,
+        _last_bid: u32,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn detach_inventory_item(&self, _owner_low: u32, _item_low: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn set_item_owner(&self, _item_low: u32, _new_owner_low: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn delete_item_instance(&self, _item_low: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn account_id_by_guid(&self, _guid_low: u32) -> Result<Option<u32>, DbError> {
+        Ok(None)
+    }
+}
+
+struct FakeTradeStore;
+
+impl TradeStore for FakeTradeStore {
+    fn item_at_pos(
+        &self,
+        _owner_low: u32,
+        _bag: u32,
+        _slot: u32,
+    ) -> Result<Option<mangos_db::mail::StoredInventoryItem>, DbError> {
+        Ok(None)
+    }
+
+    fn inventory_item(
+        &self,
+        _owner_low: u32,
+        _item_low: u32,
+    ) -> Result<Option<mangos_db::mail::StoredInventoryItem>, DbError> {
+        Ok(None)
+    }
+
+    fn free_backpack_slots(&self, _owner_low: u32) -> Result<u32, DbError> {
+        Ok(16)
+    }
+
+    fn first_free_backpack_slot(&self, _owner_low: u32) -> Result<Option<u32>, DbError> {
+        Ok(Some(23))
+    }
+
+    fn move_item(
+        &self,
+        _from_low: u32,
+        _to_low: u32,
+        _item_low: u32,
+        _item_id: u32,
+        _to_slot: u32,
+        _gift_creator_low: Option<u32>,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
+struct FakeMailStore;
+
+impl MailStore for FakeMailStore {
+    fn apply_mail_write(&self, _write: mangosd::mail::MailWrite) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn insert_mail(&self, _mail: mangos_db::mail::NewMail) -> Result<u32, DbError> {
+        Ok(1)
+    }
+
+    fn create_item_text(&self, _text: &str) -> Result<u32, DbError> {
+        Ok(1)
+    }
+
+    fn item_text(&self, _item_text_id: u32) -> Result<String, DbError> {
+        Ok(String::new())
+    }
+
+    fn receiver_by_name(
+        &self,
+        _name: &str,
+    ) -> Result<Option<mangos_db::mail::MailReceiverInfo>, DbError> {
+        Ok(None)
+    }
+
+    fn mail_count(&self, _receiver_low: u32) -> Result<u32, DbError> {
+        Ok(0)
+    }
+
+    fn account_id_by_guid(&self, _guid_low: u32) -> Result<Option<u32>, DbError> {
+        Ok(None)
+    }
+
+    fn account_email_verified(&self, _account_id: u32) -> Result<Option<bool>, DbError> {
+        Ok(Some(true))
+    }
+
+    fn inventory_item(
+        &self,
+        _owner_low: u32,
+        _item_low: u32,
+    ) -> Result<Option<mangos_db::mail::StoredInventoryItem>, DbError> {
+        Ok(None)
+    }
+
+    fn store_mailed_item(
+        &self,
+        _owner_low: u32,
+        _item_low: u32,
+        _item_id: u32,
+    ) -> Result<bool, DbError> {
+        Ok(false)
+    }
+
+    fn create_text_item(
+        &self,
+        _owner_low: u32,
+        _creator_low: u32,
+        _item_text_id: u32,
+    ) -> Result<bool, DbError> {
+        Ok(false)
+    }
+}
+
+struct FakeGroupStore;
+
+impl GroupStore for FakeGroupStore {
+    fn apply_group_write(&self, _write: mangosd::group::GroupWrite) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
+struct FakePlayerbotStore;
+
+impl mangosd::world_actor::PlayerbotStore for FakePlayerbotStore {
+    fn update_chances(&self, _chances: &[(u32, u32)]) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+}
+
+struct FakeAhBotStore;
+
+impl mangosd::world_actor::AhBotStore for FakeAhBotStore {
+    fn load_ah_bot(
+        &self,
+        _seller_account_id: u32,
+        _seller_count: u32,
+    ) -> Result<mangosd::world_actor::InitialAhBot, DbError> {
+        Ok(mangosd::world_actor::InitialAhBot::default())
+    }
+
+    fn save_refresh_time(&self, _now: i64) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn create_ahbot_item(&self, _item_id: u32, _count: u32) -> Result<u32, DbError> {
+        Ok(0)
+    }
+
+    fn delete_item_instance(&self, _item_guid: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
+struct FakeGuildBotStore;
+
+impl mangosd::world_actor::GuildBotStore for FakeGuildBotStore {
+    fn character_level(&self, _guid_low: u32) -> Result<Option<u32>, mangos_db::DbError> {
+        Ok(None)
+    }
+
+    fn set_character_level(&self, _guid_low: u32, _level: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+}
+
+struct FakeSocialStore;
+
+impl SocialStore for FakeSocialStore {
+    fn player_data_by_name(
+        &self,
+        _name: &str,
+    ) -> Result<Option<mangos_db::social::NamedPlayerData>, DbError> {
+        Ok(None)
+    }
+
+    fn apply_social_write(
+        &self,
+        _guid_low: u32,
+        _friend_low: u32,
+        _write: SocialWrite,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
 struct FakePresence;
 
 impl PresenceWriter for FakePresence {
@@ -170,6 +435,24 @@ async fn start_server() -> u16 {
             race_class_dbc: Arc::new(mangos_world_data::player_info::RaceClassDbc::default()),
             respawn_times: mangos_world_data::spawn_support::RespawnTimes::default(),
             presence: Arc::new(FakePresence),
+            social: Arc::new(FakeSocialStore),
+            group: Arc::new(FakeGroupStore),
+            initial_groups: mangos_db::group::LoadedGroups::default(),
+            guild: Arc::new(FakeGuildStore),
+            initial_guilds: mangos_db::guild::LoadedGuilds::default(),
+            petition: Arc::new(FakePetitionStore),
+            initial_petitions: mangos_db::petition::LoadedPetitions::default(),
+            mail: Arc::new(FakeMailStore),
+            trade: Arc::new(FakeTradeStore),
+            auction: Arc::new(FakeAuctionStore),
+            initial_auctions: mangos_db::auction::LoadedAuctions::default(),
+            initial_commands: mangosd::commands::CommandTable::new(),
+            playerbot: Arc::new(FakePlayerbotStore),
+            initial_playerbots: Vec::new(),
+            guild_bot: Arc::new(FakeGuildBotStore),
+            ah_bot: Arc::new(FakeAhBotStore),
+            initial_ah_bot: mangosd::world_actor::InitialAhBot::default(),
+            initial_guild_bots: mangos_db::guild_bots::LoadedGuildBots::default(),
         },
     );
     let backend: Arc<dyn AuthBackend> = Arc::new(FakeBackend::default());

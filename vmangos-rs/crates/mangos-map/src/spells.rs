@@ -238,6 +238,121 @@ impl Map {
     /// (`Player::HasActiveSpell` subset over the
     /// deferred `character_spell` rows; creatures always
     /// pass).
+    /// Bot query: `HasAura`.
+    #[must_use]
+    pub fn bot_has_aura(&self, guid: ObjectGuid, spell_id: u32) -> bool {
+        self.aura_holders(guid)
+            .iter()
+            .any(|h| h.spell_id == spell_id)
+    }
+
+    /// Bot query: `HasAuraType(PERIODIC_HEAL)`.
+    #[must_use]
+    pub fn bot_has_periodic_heal(&self, guid: ObjectGuid) -> bool {
+        self.aura_holders(guid).iter().any(|h| {
+            h.effects
+                .iter()
+                .flatten()
+                .any(|e| e.aura_type == mangos_spells::defines::aura::PERIODIC_HEAL)
+        })
+    }
+
+    /// Bot query: loss-of-control state
+    /// (`UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL`
+    /// approximated by holder aura types:
+    /// `MOD_CONFUSE` 5, `MOD_FEAR` 7, `MOD_STUN`
+    /// 12, `MOD_ROOT` 26).
+    #[must_use]
+    pub fn bot_is_ccd(&self, guid: ObjectGuid) -> bool {
+        self.aura_holders(guid).iter().any(|h| {
+            h.effects
+                .iter()
+                .flatten()
+                .any(|e| matches!(e.aura_type, 5 | 7 | 12 | 26))
+        })
+    }
+
+    /// Bot query: `HasAuraType`.
+    #[must_use]
+    pub fn bot_has_aura_type(&self, guid: ObjectGuid, aura_type: u32) -> bool {
+        self.aura_holders(guid)
+            .iter()
+            .any(|h| h.effects.iter().flatten().any(|e| e.aura_type == aura_type))
+    }
+
+    /// Bot verb: `RemoveSpellsCausingAura(MOD_SHAPESHIFT)`.
+    pub fn bot_remove_shapeshift(&mut self, guid: ObjectGuid) {
+        let spells: Vec<u32> = self
+            .aura_holders(guid)
+            .iter()
+            .filter(|h| h.effects.iter().flatten().any(|e| e.aura_type == 36))
+            .map(|h| h.spell_id)
+            .collect();
+        for spell_id in spells {
+            self.cancel_aura(guid, spell_id);
+        }
+    }
+
+    /// Bot verb: `SetFacingToObject`.
+    pub fn bot_face(&mut self, guid: ObjectGuid, target: ObjectGuid) {
+        let (Some(from), Some(to)) = (self.unit_position(guid), self.unit_position(target)) else {
+            return;
+        };
+        if let Some(unit) = self.unit_base_mut(guid) {
+            unit.world.position.o = (to.y - from.y).atan2(to.x - from.x);
+        }
+    }
+
+    /// Bot verb: `AttackStop` (clears melee victim).
+    pub fn bot_attack_stop(&mut self, guid: ObjectGuid) {
+        if let Some(unit) = self.unit_base_mut(guid) {
+            unit.melee_victim = None;
+        }
+    }
+
+    /// Bot query: melee reach (plain 5y gate; the
+    /// fork subtracts combat reaches via
+    /// `GetCombatDistance`).
+    #[must_use]
+    pub fn bot_can_reach_melee(&self, attacker: ObjectGuid, target: ObjectGuid) -> bool {
+        let (Some(a), Some(b)) = (self.unit_position(attacker), self.unit_position(target)) else {
+            return false;
+        };
+        ((a.x - b.x).powi(2) + (a.y - b.y).powi(2) + (a.z - b.z).powi(2)).sqrt() <= 5.0
+    }
+
+    /// In-progress cast spell id for a caster
+    /// (`GetCurrentSpell` generic+channeled reduced
+    /// to the single active-cast store), for the
+    /// bot situation snapshot.
+    #[must_use]
+    pub fn bot_casting_spell(&self, caster: ObjectGuid) -> Option<u32> {
+        self.casts.get(&caster).map(|cast| cast.spell_id)
+    }
+
+    /// Active spellbook ids for a player (bot
+    /// spell classification input).
+    #[must_use]
+    pub fn bot_spell_ids(&self, guid: ObjectGuid) -> Vec<u32> {
+        self.players.get(&guid).map_or_else(Vec::new, |entry| {
+            entry
+                .player
+                .deferred
+                .spells
+                .iter()
+                .filter(|s| s.active != 0)
+                .map(|s| s.spell)
+                .collect()
+        })
+    }
+
+    /// Known-spell check for Host API consumers
+    /// (`Player::HasSpell` parity helper).
+    #[must_use]
+    pub fn bot_knows_spell(&self, caster: ObjectGuid, spell_id: u32) -> bool {
+        self.player_knows_spell(caster, spell_id)
+    }
+
     fn player_knows_spell(&self, caster: ObjectGuid, spell_id: u32) -> bool {
         if !caster.is_player() {
             return true;

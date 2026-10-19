@@ -514,6 +514,98 @@ impl Map {
             .map_or(0.0, |ai| ai.threat.get_threat(victim, true))
     }
 
+    /// Bot query: units melee-attacking `victim`
+    /// (`GetAttackers` reduced to the melee-victim
+    /// relation the Rust AI maintains).
+    #[must_use]
+    pub fn bot_attackers_of(&self, victim: ObjectGuid) -> Vec<ObjectGuid> {
+        let mut out = Vec::new();
+        for (guid, creature) in &self.creatures {
+            if creature.unit.melee_victim == Some(victim) && creature.unit.is_alive() {
+                out.push(*guid);
+            }
+        }
+        for (guid, entry) in &self.players {
+            if entry.player.unit.melee_victim == Some(victim) && entry.player.unit.is_alive() {
+                out.push(*guid);
+            }
+        }
+        out
+    }
+
+    /// Bot query: `GetIncomingdamage` — reachable
+    /// attackers' average weapon damage.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn bot_incoming_damage(&self, victim: ObjectGuid) -> i32 {
+        let Some(victim_pos) = self.unit_position(victim) else {
+            return 0;
+        };
+        let mut damage = 0i32;
+        for attacker in self.bot_attackers_of(victim) {
+            let Some(pos) = self.unit_position(attacker) else {
+                continue;
+            };
+            let dist = ((pos.x - victim_pos.x).powi(2)
+                + (pos.y - victim_pos.y).powi(2)
+                + (pos.z - victim_pos.z).powi(2))
+            .sqrt();
+            if dist > 5.0 {
+                continue;
+            }
+            let unit = self
+                .creature(attacker)
+                .map(|c| &c.unit)
+                .or_else(|| self.player(attacker).map(|p| &p.unit));
+            if let Some(unit) = unit {
+                let values = unit.world.object.values();
+                let min = values.get_f32(offsets::UNIT_FIELD_MINDAMAGE);
+                let max = values.get_f32(offsets::UNIT_FIELD_MAXDAMAGE);
+                damage += f32::midpoint(min, max) as i32;
+            }
+        }
+        damage
+    }
+
+    /// Bot query: alive hostile creatures within
+    /// `radius` of `center` (player<->creature
+    /// hostility, matching `is_hostile_pair`).
+    #[must_use]
+    pub fn bot_hostile_count_around(&self, center: ObjectGuid, radius: f32) -> u8 {
+        let Some(center_pos) = self.unit_position(center) else {
+            return 0;
+        };
+        let mut count = 0u8;
+        for (guid, creature) in &self.creatures {
+            if !creature.unit.is_alive() || *guid == center {
+                continue;
+            }
+            let pos = creature.unit.world.position();
+            let dist = ((pos.x - center_pos.x).powi(2)
+                + (pos.y - center_pos.y).powi(2)
+                + (pos.z - center_pos.z).powi(2))
+            .sqrt();
+            if dist <= radius {
+                count = count.saturating_add(1);
+            }
+        }
+        count
+    }
+
+    /// Bot query: any alive hostile creature
+    /// within `radius` of a point (formation
+    /// slot/flee safety scans).
+    #[must_use]
+    pub fn bot_hostiles_near_point(&self, x: f32, y: f32, z: f32, radius: f32) -> bool {
+        self.creatures.values().any(|creature| {
+            if !creature.unit.is_alive() {
+                return false;
+            }
+            let pos = creature.unit.world.position();
+            ((pos.x - x).powi(2) + (pos.y - y).powi(2) + (pos.z - z).powi(2)).sqrt() <= radius
+        })
+    }
+
     /// AI combat state probe (tests).
     #[must_use]
     pub fn ai_in_combat(&self, creature: ObjectGuid) -> bool {

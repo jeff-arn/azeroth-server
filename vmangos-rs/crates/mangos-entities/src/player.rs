@@ -16,8 +16,7 @@
 //!
 //! Deferred, with the raw rows retained in
 //! [`Player::deferred`] (recorded in `PHASE4-PROGRESS.md`):
-//! auras (Slice 5), spells/talents (Slice 5), skills field
-//! layout (needs `SkillLine.dbc` ordering), quests, real
+//! auras (Slice 5), spells/talents (Slice 5), quests, real
 //! Item objects and their stat bonuses (so max health/mana
 //! are the naked values until Slice 5), reputation
 //! internals, rest-bonus accrual, transport/taxi-flight and
@@ -26,8 +25,8 @@
 
 use mangos_db::character_load::{
     ActionRow, AuraRow, BgDataRow, BoundInstanceRow, CharacterLoad, ForgottenSkillRow, HonorCpRow,
-    ItemLootRow, MailRow, MailedItemRow, QuestStatusRow, ReputationRow, SkillRow, SpellCooldownRow,
-    SpellRow,
+    ItemLootRow, MailRow, MailedItemRow, QuestStatusRow, ReputationRow, SkillRow, SocialRow,
+    SpellCooldownRow, SpellRow,
 };
 use mangos_db::characters::AccountDataEntry;
 use mangos_guid::{HighGuid, ObjectGuid, TypeId};
@@ -36,6 +35,7 @@ use mangos_protocol::update_data::ObjectUpdateFlags;
 use mangos_protocol::update_field_table::{PLAYER_END, offsets};
 use mangos_protocol::update_fields::TypeMask;
 use mangos_world_data::player_info::{PlayerInfos, RaceDbc};
+use mangos_world_data::skill_info::{SkillDbc, SkillRange};
 use mangos_world_data::spawns::WorldLocation;
 
 use crate::object::ObjectBase;
@@ -108,6 +108,10 @@ pub struct MaterializeInputs<'a> {
     pub max_money: u32,
     /// `time(nullptr)` at load.
     pub now_unix: u64,
+    /// Skill DBC tables for `_LoadSkills` validation and
+    /// range fixups; `None` in DBC-free tests writes the
+    /// saved rows verbatim.
+    pub skills: Option<&'a SkillDbc>,
 }
 
 /// Load rows retained verbatim for later slices.
@@ -128,6 +132,10 @@ pub struct DeferredLoad {
     pub bound_instances: Vec<BoundInstanceRow>,
     pub bg_data: Option<BgDataRow>,
     pub account_data: Vec<AccountDataEntry>,
+    /// Live friend/ignore list (`PlayerSocial` rows): loaded
+    /// here, mutated by the mangosd social handlers
+    /// (Phase 5 Slice A), written back per change.
+    pub social: Vec<SocialRow>,
 }
 
 /// Homebind location (`m_homebind*` + recall position seed).
@@ -275,9 +283,11 @@ impl Player {
                 bound_instances: std::mem::take(&mut load.bound_instances),
                 bg_data: load.bg_data.take(),
                 account_data: std::mem::take(&mut load.account_data),
+                social: std::mem::take(&mut load.social),
             },
         };
         player.init_identity_values(&load, inputs);
+        player.load_skill_fields(inputs);
         player.init_position(&load, &create_info, inputs);
         player.init_stats_for_level(inputs);
         player.init_combat_percentages();
@@ -412,7 +422,75 @@ fn parse_u32_words(data: &str) -> Vec<u32> {
         .collect()
 }
 
+/// `PLAYER_MAX_SKILLS` (`Player.h:69`).
+const PLAYER_MAX_SKILLS: usize = 127;
+
 impl Player {
+    /// `_LoadSkills` (`Player.cpp:20285-20371`) field
+    /// population: `PLAYER_SKILL_INFO_1_1` triplets
+    /// (id, `MAKE_SKILL_VALUE(value, max)`, bonus 0) for
+    /// the saved `character_skills` rows, with the C++
+    /// existence/race-class validation and range fixups.
+    /// Deviations: invalid/zero rows are skipped without
+    /// the C++ corrective DB writes (character save is
+    /// Phase 6), `UpdateSkillTrainedSpells` is not run
+    /// (login spells come from `character_spell` plus
+    /// creation defaults), and no skill-status save
+    /// tracking is kept. Without skill DBC inputs the
+    /// rows are written verbatim.
+    fn load_skill_fields(&mut self, inputs: &MaterializeInputs<'_>) {
+        let race = u32::from(self.unit.race());
+        let class = u32::from(self.unit.class());
+        // `GetSkillMaxForLevel` (`SpellCaster.h:320`).
+        let max_for_level = u16::try_from(self.unit.level() * 5).unwrap_or(u16::MAX);
+        let mut entries: Vec<(u32, u16, u16)> = Vec::new();
+        for row in &self.deferred.skills {
+            if entries.len() >= PLAYER_MAX_SKILLS {
+                break;
+            }
+            // C++ reads `GetUInt16` (truncating).
+            #[allow(clippy::cast_possible_truncation)]
+            let (mut value, mut max) = (row.value as u16, row.max as u16);
+            if let Some(dbc) = inputs.skills {
+                let Some(category) = dbc.category(row.skill) else {
+                    continue;
+                };
+                let Some(rc) = dbc.race_class_info(row.skill, race, class) else {
+                    continue;
+                };
+                match dbc.range_type(category, rc) {
+                    SkillRange::Language => {
+                        value = 300;
+                        max = 300;
+                    }
+                    SkillRange::Mono => {
+                        value = 1;
+                        max = 1;
+                    }
+                    SkillRange::Level => {
+                        max = max_for_level;
+                    }
+                    SkillRange::Rank => {}
+                }
+            }
+            if value == 0 {
+                continue;
+            }
+            entries.push((row.skill, value, max));
+        }
+        let v = self.unit.world.object.values_mut();
+        for slot in 0..PLAYER_MAX_SKILLS {
+            let base = offsets::PLAYER_SKILL_INFO_1_1 + (slot as u16) * 3;
+            let (skill, packed) = match entries.get(slot) {
+                Some((skill, value, max)) => (*skill, u32::from(*value) | (u32::from(*max) << 16)),
+                None => (0, 0),
+            };
+            v.set_u32(base, skill);
+            v.set_u32(base + 1, packed);
+            v.set_u32(base + 2, 0);
+        }
+    }
+
     /// Homebind + saved-position resolution
     /// (`Player.cpp:14615-14772` continent subset).
     fn init_position(
@@ -584,7 +662,7 @@ impl Player {
 
     /// `UpdateMaxHealth`/`UpdateMaxPower` (zero aura
     /// modifiers). `UpdateSkillsForLevel` and
-    /// `InitDataForForm` are deferred (skill fields stay 0;
+    /// `InitDataForForm` is deferred (form data is aura-driven;
     /// form data is aura-driven).
     fn init_stats_for_level(&mut self, inputs: &MaterializeInputs<'_>) {
         let race = u32::from(self.unit.race());

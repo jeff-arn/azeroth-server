@@ -646,6 +646,7 @@ name = "mangosd"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "mangos-bots",
  "mangos-build-info",
  "mangos-config",
  "mangos-db",

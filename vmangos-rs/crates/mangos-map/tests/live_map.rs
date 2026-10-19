@@ -126,6 +126,9 @@ fn bench_map_visibility_and_relay() {
                     scripts: mangos_scripts_engine::ScriptStores::default(),
                     display_scales: HashMap::new(),
                     model_data: HashMap::new(),
+                    skills: mangos_world_data::skill_info::SkillDbc::default(),
+                    chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
+                    auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
                 },
                 dbc,
             ))
@@ -149,6 +152,7 @@ fn bench_map_visibility_and_relay() {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
+        skills: None,
     };
     let player1 = Player::materialize(load.clone(), &inputs).expect("player1");
     let guid1 = player1.unit.guid();

@@ -83,6 +83,7 @@ else
 fi
 if [ -n "${TEST_MYSQL_URL_CHARACTERS:-}" ]; then
   cargo test -p mangos-db --test live_characters -- --ignored
+  cargo test -p mangos-db --test live_social -- --ignored
 else
   echo "TEST_MYSQL_URL_CHARACTERS unset -- skipping live character tests"
 fi
