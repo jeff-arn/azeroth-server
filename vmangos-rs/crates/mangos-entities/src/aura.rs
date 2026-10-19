@@ -42,6 +42,7 @@ impl AuraEffectState {
                 self.aura_type,
                 mangos_spells::defines::aura::PERIODIC_DAMAGE
                     | mangos_spells::defines::aura::PERIODIC_HEAL
+                    | mangos_spells::defines::aura::PERIODIC_ENERGIZE
                     | mangos_spells::defines::aura::PERIODIC_DAMAGE_PERCENT
             )
     }
@@ -112,4 +113,34 @@ impl AuraHolder {
         }
         flags
     }
+}
+
+/// Save-side aura snapshot (`AuraSaveStruct`):
+/// the `character_aura` row shape without the
+/// owner guid. Kept here (not in `mangos-db`) so
+/// `mangos-map` can produce it without a DB
+/// dependency; `mangosd` converts to the DB row.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SavableAura {
+    pub caster_guid: u64,
+    pub item_guid: u32,
+    pub spell: u32,
+    pub stacks: i32,
+    pub charges: i32,
+    pub base_points: [f32; 3],
+    pub periodic_time: [i32; 3],
+    pub max_duration: i32,
+    pub duration: i32,
+    pub effect_index_mask: u8,
+}
+
+/// Save-side cooldown snapshot (one
+/// `character_spell_cooldown` row sans guid).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CooldownSnapshot {
+    pub spell: u32,
+    pub spell_expire_time: i64,
+    pub category: u32,
+    pub category_expire_time: i64,
+    pub item_id: u32,
 }

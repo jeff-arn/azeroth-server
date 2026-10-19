@@ -187,7 +187,9 @@ impl Map {
 
     /// `IsConditionSatisfied` (target/source as guids;
     /// `None` = null object).
-    pub(crate) fn condition_satisfied(
+    /// `IsConditionSatisfied` (actor-facing wrapper).
+    #[must_use]
+    pub fn condition_satisfied(
         &self,
         condition_id: u32,
         target: Option<ObjectGuid>,
@@ -1920,6 +1922,7 @@ impl Map {
                 );
                 self.events.push(MapEvent::ClearCreatureRespawn {
                     guid_low: src.counter(),
+                    instance_id: self.creature_respawn_key(src.counter()),
                 });
                 false
             }
@@ -2169,6 +2172,7 @@ impl Map {
                 guid_low: guid.counter(),
                 respawn_time: when,
                 map_id: self.map_id,
+                instance_id: self.creature_respawn_key(guid.counter()),
             });
         }
     }
@@ -2455,7 +2459,7 @@ impl Map {
         } else {
             CastTarget::Unit(target)
         };
-        self.cast_spell(
+        let outcome = self.cast_spell(
             source,
             spell_id,
             cast_target,
@@ -2463,7 +2467,8 @@ impl Map {
                 triggered,
                 skip_known: true,
             },
-        ) == CastOutcome::Started
+        );
+        outcome == CastOutcome::Started
     }
 
     /// `Creature::DoFlee` / `DoFleeToGetAssistance`

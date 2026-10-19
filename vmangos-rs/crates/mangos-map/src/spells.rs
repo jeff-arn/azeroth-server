@@ -22,6 +22,7 @@
 use mangos_entities::aura::{
     AuraEffectState, AuraHolder, MAX_AURAS, MAX_POSITIVE_AURAS, NULL_AURA_SLOT,
 };
+use mangos_entities::aura::{CooldownSnapshot, SavableAura};
 use mangos_entities::unit::{DeathState, UnitBase};
 use mangos_guid::ObjectGuid;
 use mangos_movement::movement_info::Position;
@@ -117,6 +118,8 @@ struct PeriodicTick {
     aura_type: u32,
     amount: i32,
     effect_index: u32,
+    /// `EffectMiscValue` (power type for energize).
+    misc_value: i32,
 }
 
 impl Map {
@@ -614,6 +617,18 @@ impl Map {
             );
             let current = self.unit_power(caster, spell.power_type);
             self.unit_set_power(caster, spell.power_type, current.saturating_sub(power_cost));
+            // `Spell::TakePower` five-second timer
+            // (`Spell.cpp:5252-5255`): a positive mana
+            // spend without
+            // `SPELL_ATTR_EX2_DONT_BLOCK_MANA_REGEN`
+            // (0x02000000) arms `SetLastManaUse`.
+            if spell.power_type as usize == mangos_entities::unit::POWER_MANA
+                && power_cost > 0
+                && spell.attributes_ex2 & 0x0200_0000 == 0
+                && let Some(u) = self.unit_base_mut(caster)
+            {
+                u.set_last_mana_use(spell.id);
+            }
             if spell.start_recovery_time > 0 {
                 let until = self.now_ms + spell.start_recovery_time;
                 if let Some(u) = self.unit_base_mut(caster) {
@@ -765,6 +780,47 @@ impl Map {
                         self.heal_unit(victim, amount);
                     }
                 }
+                // `Spell::EffectEnergize` +
+                // `Unit::EnergizeBySpell`: direct power
+                // gain (the SMSG_SPELL_ENERGIZE_LOG rides
+                // the same deferral as heal's log here).
+                effect::ENERGIZE => {
+                    let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                    if value > 0.0
+                        && let Ok(power_type) = u32::try_from(eff.misc_value)
+                        && power_type < 5
+                    {
+                        let amount = mangos_spells::ditheru(value, self.spell_rng());
+                        let max_power = self.unit_max_power(victim, power_type);
+                        if max_power > 0 {
+                            let current = self.unit_power(victim, power_type);
+                            self.unit_set_power(
+                                victim,
+                                power_type,
+                                (current + amount).min(max_power),
+                            );
+                        }
+                    }
+                }
+                // `Spell::EffectTriggerSpell`: cast the
+                // triggered spell at the effect's victim
+                // through the triggered pipeline (no cost,
+                // GCD, cooldown, or known checks; the
+                // parent cast already left `casts`, so the
+                // nested cast can start and complete here).
+                effect::TRIGGER_SPELL => {
+                    if eff.trigger_spell != 0 {
+                        self.cast_spell(
+                            caster,
+                            eff.trigger_spell,
+                            CastTarget::Unit(victim),
+                            CastOptions {
+                                triggered: true,
+                                skip_known: true,
+                            },
+                        );
+                    }
+                }
                 effect::APPLY_AURA | effect::APPLY_AREA_AURA_PARTY => {
                     self.apply_spell_aura(caster, spell, victim);
                     break; // all effects ride one holder
@@ -772,54 +828,70 @@ impl Map {
                 // SPELL_EFFECT_SUMMON / SUMMON_WILD /
                 // SUMMON_GUARDIAN (Slice 7).
                 28 | 41 | 42 if eff.misc_value > 0 => {
-                    let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    let amount = if value > 0.0 {
-                        (value as u32).clamp(1, 16)
-                    } else {
-                        1
-                    };
-                    let duration = spell.calculate_duration_ms(&self.stores.spells.tables);
-                    #[allow(clippy::cast_sign_loss)]
-                    let duration_ms = if duration > 0 { duration as u32 } else { 0 };
-                    let kind = match eff.effect {
-                        41 => {
-                            if duration_ms == 0 {
-                                7 // TEMPSUMMON_DEAD_DESPAWN
-                            } else {
-                                11 // TEMPSUMMON_TIMED_DEATH_AND_DEAD_DESPAWN
-                            }
-                        }
-                        42 => {
-                            if duration_ms == 0 {
-                                7
-                            } else {
-                                1 // TEMPSUMMON_TIMED_OR_DEAD_DESPAWN
-                            }
-                        }
-                        _ => {
-                            if duration_ms == 0 {
-                                7
-                            } else {
-                                3 // TEMPSUMMON_TIMED_DESPAWN
-                            }
-                        }
-                    };
-                    let center = self
-                        .unit_position(victim)
-                        .or_else(|| self.unit_position(caster))
-                        .unwrap_or_default();
-                    for n in 0..amount {
-                        let pos = if n == 0 {
-                            center
-                        } else {
-                            self.random_point(center, 3.0).unwrap_or(center)
-                        };
-                        self.summon_creature(eff.misc_value as u32, pos, caster, kind, duration_ms);
-                    }
+                    self.summon_effect(caster, caster_level, spell, victim, i);
                 }
                 _ => {}
             }
+        }
+    }
+
+    /// `Spell::EffectSummonType` for `SUMMON` /
+    /// `SUMMON_WILD` / `SUMMON_GUARDIAN`: temp-summon kind
+    /// from effect + duration, scattered around the
+    /// victim (caster fallback).
+    fn summon_effect(
+        &mut self,
+        caster: ObjectGuid,
+        caster_level: u32,
+        spell: &SpellEntry,
+        victim: ObjectGuid,
+        i: usize,
+    ) {
+        let eff = spell.effects[i];
+        let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let amount = if value > 0.0 {
+            (value as u32).clamp(1, 16)
+        } else {
+            1
+        };
+        let duration = spell.calculate_duration_ms(&self.stores.spells.tables);
+        #[allow(clippy::cast_sign_loss)]
+        let duration_ms = if duration > 0 { duration as u32 } else { 0 };
+        let kind = match eff.effect {
+            41 => {
+                if duration_ms == 0 {
+                    7 // TEMPSUMMON_DEAD_DESPAWN
+                } else {
+                    11 // TEMPSUMMON_TIMED_DEATH_AND_DEAD_DESPAWN
+                }
+            }
+            42 => {
+                if duration_ms == 0 {
+                    7
+                } else {
+                    1 // TEMPSUMMON_TIMED_OR_DEAD_DESPAWN
+                }
+            }
+            _ => {
+                if duration_ms == 0 {
+                    7
+                } else {
+                    3 // TEMPSUMMON_TIMED_DESPAWN
+                }
+            }
+        };
+        let center = self
+            .unit_position(victim)
+            .or_else(|| self.unit_position(caster))
+            .unwrap_or_default();
+        for n in 0..amount {
+            let pos = if n == 0 {
+                center
+            } else {
+                self.random_point(center, 3.0).unwrap_or(center)
+            };
+            self.summon_creature(eff.misc_value as u32, pos, caster, kind, duration_ms);
         }
     }
 
@@ -1099,6 +1171,7 @@ impl Map {
                     guid_low: victim.counter(),
                     respawn_time: when,
                     map_id: self.map_id,
+                    instance_id: self.creature_respawn_key(victim.counter()),
                 });
             }
         }
@@ -1126,6 +1199,7 @@ impl Map {
             self.spawn_creature(guid.counter(), &RespawnTimes::default());
             self.events.push(MapEvent::ClearCreatureRespawn {
                 guid_low: guid.counter(),
+                instance_id: self.creature_respawn_key(guid.counter()),
             });
         }
     }
@@ -1141,6 +1215,129 @@ impl Map {
         self.creatures
             .get(&guid)
             .map_or_else(Vec::new, |c| c.unit.auras.clone())
+    }
+
+    /// Savable aura rows for one player (`SaveAura`
+    /// filter, `Player.cpp:16503`): passive and
+    /// channeled holders and not-own single-target
+    /// holders are skipped, as are the sight/charm
+    /// aura types. Deviations: the
+    /// leave/enter-world interrupt-flag gate needs
+    /// `AuraInterruptFlags`, which the spell stores do
+    /// not parse yet; cast-item guid and proc charges
+    /// are unmodeled and written 0; area-aura holders
+    /// are unmodeled (no `IsAreaAura`).
+    #[must_use]
+    pub fn player_savable_auras(&self, guid: ObjectGuid) -> Vec<SavableAura> {
+        self.savable_auras_from(guid, self.aura_holders(guid))
+    }
+
+    /// Savable auras for a player currently outside a
+    /// map (forced logout save during far teleport).
+    #[must_use]
+    pub fn savable_auras_for_player(
+        &self,
+        player: &mangos_entities::player::Player,
+    ) -> Vec<SavableAura> {
+        self.savable_auras_from(player.unit.guid(), player.unit.auras.clone())
+    }
+
+    fn savable_auras_from(&self, guid: ObjectGuid, holders: Vec<AuraHolder>) -> Vec<SavableAura> {
+        // `SPELL_ATTR_PASSIVE`, `SPELL_ATTR_EX_CHANNELED_*`.
+        const ATTR_PASSIVE: u32 = 0x0000_0040;
+        const ATTR_EX_CHANNELED: u32 = 0x0000_0004 | 0x4000_0000;
+        let mut rows = Vec::new();
+        for holder in holders {
+            let Some(spell) = self.stores.spells.get(holder.spell_id) else {
+                continue;
+            };
+            if spell.attributes & ATTR_PASSIVE != 0 || spell.attributes_ex & ATTR_EX_CHANNELED != 0
+            {
+                continue;
+            }
+            let single_target = spell
+                .effects
+                .iter()
+                .any(|e| e.effect != 0 && e.implicit_target_a == 1);
+            if single_target && holder.caster != guid {
+                continue;
+            }
+            let mut base_points = [0.0f32; 3];
+            let mut periodic_time = [0i32; 3];
+            let mut mask = 0u8;
+            let mut skipped = false;
+            for (i, eff) in spell.effects.iter().enumerate() {
+                if matches!(eff.apply_aura_name, 1 | 2 | 6 | 76 | 177) {
+                    skipped = true;
+                    break;
+                }
+                if let Some(state) = &holder.effects[i] {
+                    #[allow(clippy::cast_precision_loss)]
+                    {
+                        base_points[i] = state.amount as f32;
+                    }
+                    #[allow(clippy::cast_possible_wrap)]
+                    {
+                        periodic_time[i] = state.period_ms as i32;
+                    }
+                    mask |= 1u8 << i;
+                }
+            }
+            if skipped || mask == 0 {
+                continue;
+            }
+            #[allow(clippy::cast_possible_wrap)]
+            rows.push(SavableAura {
+                caster_guid: holder.caster.raw(),
+                item_guid: 0,
+                spell: holder.spell_id,
+                stacks: holder.stack as i32,
+                charges: 0,
+                base_points,
+                periodic_time,
+                max_duration: holder.max_duration_ms,
+                duration: holder.duration_ms,
+                effect_index_mask: mask,
+            });
+        }
+        rows
+    }
+
+    /// Live cooldown rows for one player
+    /// (`_SaveSpellCooldowns`): split spell/category
+    /// keys merge into the fork's per-spell
+    /// `CooldownData` shape; expiries convert from map
+    /// time to epoch seconds. Item cooldowns are
+    /// unmodeled (`item_id` 0).
+    #[must_use]
+    pub fn player_cooldown_rows(&self, guid: ObjectGuid, now_unix: i64) -> Vec<CooldownSnapshot> {
+        let to_epoch = |expiry_ms: u32| -> i64 {
+            now_unix + i64::from(expiry_ms.saturating_sub(self.now_ms)) / 1000
+        };
+        let mut rows = Vec::new();
+        for ((caster, key), expiry) in &self.cooldowns {
+            if *caster != guid || *expiry <= self.now_ms || *key & 0x8000_0000 != 0 {
+                continue;
+            }
+            let category = self.stores.spells.get(*key).map_or(0, |s| s.category);
+            let category_expire_time = if category != 0 {
+                self.cooldowns
+                    .get(&(guid, category | 0x8000_0000))
+                    .filter(|e| **e > self.now_ms)
+                    .map_or(0, |e| to_epoch(*e))
+            } else {
+                0
+            };
+            rows.push(CooldownSnapshot {
+                spell: *key,
+                spell_expire_time: to_epoch(*expiry),
+                category,
+                category_expire_time,
+                item_id: 0,
+            });
+        }
+        rows.sort_by_key(|r| r.spell);
+        rows
     }
 
     fn send_aura_duration(&mut self, target: ObjectGuid, slot: u8, duration_ms: i32) {
@@ -1371,6 +1568,7 @@ impl Map {
                 eff.apply_aura_name,
                 aura_type::PERIODIC_DAMAGE
                     | aura_type::PERIODIC_HEAL
+                    | aura_type::PERIODIC_ENERGIZE
                     | aura_type::PERIODIC_DAMAGE_PERCENT
             );
             let period_ms = if periodic { eff.amplitude } else { 0 };
@@ -1525,6 +1723,7 @@ impl Map {
                             aura_type: state.aura_type,
                             amount: state.amount,
                             effect_index: effect_idx,
+                            misc_value: state.misc_value,
                         });
                     }
                 }
@@ -1569,6 +1768,32 @@ impl Map {
                     if tick.amount > 0 {
                         #[allow(clippy::cast_possible_truncation)]
                         self.heal_unit(tick.target, tick.amount as u32);
+                    }
+                }
+                // `Aura::PeriodicTick` PERIODIC_ENERGIZE
+                // (`SpellAuras.cpp:6158`): gain capped at
+                // max power. The periodic aura log packet
+                // and 0.5x threat assist ride the same
+                // deferral as periodic heal's here.
+                aura_type::PERIODIC_ENERGIZE => {
+                    if tick.amount <= 0 {
+                        continue;
+                    }
+                    let Ok(power_type) = u32::try_from(tick.misc_value) else {
+                        continue;
+                    };
+                    if power_type >= 5 {
+                        continue;
+                    }
+                    let max_power = self.unit_max_power(tick.target, power_type);
+                    if max_power == 0 {
+                        continue;
+                    }
+                    let current = self.unit_power(tick.target, power_type);
+                    #[allow(clippy::cast_sign_loss)]
+                    let gain = (tick.amount as u32).min(max_power - current);
+                    if gain > 0 {
+                        self.unit_set_power(tick.target, power_type, current + gain);
                     }
                 }
                 aura_type::PERIODIC_DAMAGE_PERCENT => {

@@ -14,6 +14,7 @@ pub mod auth;
 pub mod channels;
 pub mod char_enum;
 pub mod char_queries;
+pub mod character_save;
 pub mod chat;
 pub mod commands;
 pub mod group;
@@ -201,6 +202,10 @@ pub struct ServerConfig {
     pub rate_auction_deposit: f32,
     /// `Rate.Auction.Cut` (default 1.0, `World.cpp:518`).
     pub rate_auction_cut: f32,
+    /// `Instance.IgnoreLevel`.
+    pub instance_ignore_level: bool,
+    /// `Rate.InstanceResetTime`.
+    pub rate_instance_reset_time: f32,
     /// `Auction.Deposit.Min` (default 0, `World.cpp:519`).
     pub auction_deposit_min: u32,
     /// `Auction.AccountConcurrentLimit` (default 0 =
@@ -261,6 +266,18 @@ pub struct ServerConfig {
     pub guild_bot: mangos_bots::guild_bots::GuildBotConfig,
     /// `AHBot.*` config.
     pub ah_bot: mangos_bots::ah_bot::AhBotConfig,
+    /// `PlayerSave.Interval` milliseconds (default
+    /// 15 minutes, `World.cpp:565`).
+    pub player_save_interval_ms: u32,
+    /// `PlayerSave.Stats.MinLevel` (default 0,
+    /// clamped from the C++ config range).
+    pub player_save_stats_min_level: u32,
+    /// `PlayerSave.Stats.SaveOnlyOnLogout`
+    /// (default true, `World.cpp:567`).
+    pub player_save_stats_only_on_logout: bool,
+    /// `PlayerBot.AllowSaving` (default false,
+    /// `PlayerBotMgr.cpp:56`).
+    pub player_bot_allow_saving: bool,
 }
 
 fn bot_chat_config(cfg: &Config) -> mangos_bots::chat::ChatConfig {
@@ -354,6 +371,8 @@ impl ServerConfig {
             rate_auction_time: cfg.float_default("Rate.Auction.Time", 1.0),
             rate_auction_deposit: cfg.float_default("Rate.Auction.Deposit", 1.0),
             rate_auction_cut: cfg.float_default("Rate.Auction.Cut", 1.0),
+            rate_instance_reset_time: cfg.float_default("Rate.InstanceResetTime", 1.0),
+            instance_ignore_level: cfg.bool_default("Instance.IgnoreLevel", false),
             auction_deposit_min: to_u32(cfg.int_default("Auction.Deposit.Min", 0)),
             auction_account_concurrent_limit: to_u32(
                 cfg.int_default("Auction.AccountConcurrentLimit", 0),
@@ -447,6 +466,11 @@ impl ServerConfig {
             bot_service_buy_budget_gold: to_u32(
                 cfg.int_default("BotService.Buy.BudgetPerDay", 200),
             ),
+            player_save_interval_ms: to_u32(cfg.int_default("PlayerSave.Interval", 900_000)),
+            player_save_stats_min_level: to_u32(cfg.int_default("PlayerSave.Stats.MinLevel", 0)),
+            player_save_stats_only_on_logout: cfg
+                .bool_default("PlayerSave.Stats.SaveOnlyOnLogout", true),
+            player_bot_allow_saving: cfg.bool_default("PlayerBot.AllowSaving", false),
         }
     }
 }

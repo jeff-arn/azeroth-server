@@ -214,7 +214,21 @@ impl Heights {
         match self.grid(x, y) {
             Some(grid) => {
                 let h = grid.height(x, y);
-                if h > INVALID_HEIGHT { h } else { z_hint }
+                // Fork `GetHeightStatic` prefers the vmap
+                // height near the hint when the query is
+                // under the `.map` surface (`z < mapHeight`
+                // arm) — dungeons sit under outdoor terrain,
+                // so the raw grid height there is the surface
+                // far above. The vmap manager is not ported
+                // yet; until it lands, a grid height more
+                // than `DEFAULT_HEIGHT_SEARCH` (10) above the
+                // hint is treated as not applicable and the
+                // hint (navmesh/spawn Z) stands.
+                if h > INVALID_HEIGHT && h <= z_hint + 10.0 {
+                    h
+                } else {
+                    z_hint
+                }
             }
             None => z_hint,
         }
@@ -563,6 +577,53 @@ impl Map {
     /// teleport packet train.
     pub fn teleport_unit_within_map(&mut self, guid: ObjectGuid, position: Position) {
         self.relocate_unit(guid, position);
+    }
+
+    /// Player near teleport (`Player::ExecuteTeleportNear`
+    /// plus `SendTeleportToController`/`ToObservers`):
+    /// relocate now, push the pending TELEPORT change,
+    /// `MSG_MOVE_TELEPORT_ACK` (packed guid + counter +
+    /// server-side movement info at the destination) to
+    /// the controller and `MSG_MOVE_TELEPORT` (no
+    /// counter) to observers.
+    pub fn teleport_player_in_map(&mut self, guid: ObjectGuid, position: Position) {
+        self.relocate_unit(guid, position);
+        let now_ms = self.now_ms;
+        let Some((counter, mut info)) = self.unit_base_mut(guid).map(|unit| {
+            let counter = unit.movement_counter_and_inc();
+            unit.pending_movement_changes
+                .push_back(mangos_entities::unit::PendingMovementChange {
+                    movement_counter: counter,
+                    change_type: mangos_entities::unit::MOVEMENT_CHANGE_TELEPORT,
+                    new_value: 0.0,
+                    apply: false,
+                });
+            let mut info = unit.world.movement_info;
+            info.set_as_server_side(now_ms);
+            info.change_position(position);
+            unit.world.movement_info = info;
+            (counter, info)
+        }) else {
+            return;
+        };
+        info.change_position(position);
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&Self::packed_guid_bytes(guid));
+        payload.write_u32_le(counter);
+        info.write(&mut payload);
+        let packet = WorldPacket::with_body(
+            mangos_protocol::opcode_table::opcode_id::MSG_MOVE_TELEPORT_ACK,
+            payload.into_vec(),
+        );
+        self.events.push(MapEvent::Packet { to: guid, packet });
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&Self::packed_guid_bytes(guid));
+        info.write(&mut payload);
+        let packet = WorldPacket::with_body(
+            mangos_protocol::opcode_table::opcode_id::MSG_MOVE_TELEPORT,
+            payload.into_vec(),
+        );
+        self.broadcast_movement_except(guid, &packet, guid);
     }
 
     /// Relocates a unit, moving its cell index entry.

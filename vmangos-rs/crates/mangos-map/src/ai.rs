@@ -1179,7 +1179,19 @@ impl Map {
     /// (`level/2 + strength/20`); players 0 (no shield).
     fn unit_block_value(&self, guid: ObjectGuid) -> u32 {
         if guid.is_player() {
-            return 0;
+            // `Player::GetShieldBlockValue`
+            // (`Player.cpp:5178-5185`) at pct identity:
+            // flat group + strength / 20 - 1, floored.
+            let Some(entry) = self.players.get(&guid) else {
+                return 0;
+            };
+            let value = entry.player.shield_block_flat
+                + entry.player.unit.stat(mangos_entities::unit::STAT_STRENGTH) / 20.0
+                - 1.0;
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            {
+                return if value < 0.0 { 0 } else { value as u32 };
+            }
         }
         #[allow(clippy::cast_possible_truncation)]
         {
@@ -2439,7 +2451,28 @@ impl Map {
     /// Recompute the `UNIT_FIELD_MINDAMAGE` family from
     /// the base ranges and the current AP factor
     /// (`Creature::UpdateDamagePhysical` AP-scale arm).
+    /// Players take the fork player arm instead
+    /// (`Player::UpdateDamagePhysical` over the stored
+    /// weapon ranges and total attack power; offhand
+    /// only with the dual-wield passive and an offhand
+    /// weapon, melee AP mods never touch ranged).
     pub(crate) fn refresh_weapon_damage_fields(&mut self, guid: ObjectGuid) {
+        if let Some(entry) = self.players.get(&guid) {
+            let offhand = entry.player.has_offhand_weapon && self.bot_knows_spell(guid, 674);
+            let Some(u) = self.unit_base_mut(guid) else {
+                return;
+            };
+            let (min, max) = u.calculate_min_max_damage(0);
+            let off = offhand.then(|| u.calculate_min_max_damage(1));
+            let v = u.values();
+            v.set_f32(offsets::UNIT_FIELD_MINDAMAGE, min);
+            v.set_f32(offsets::UNIT_FIELD_MAXDAMAGE, max);
+            if let Some((omin, omax)) = off {
+                v.set_f32(offsets::UNIT_FIELD_MINOFFHANDDAMAGE, omin);
+                v.set_f32(offsets::UNIT_FIELD_MAXOFFHANDDAMAGE, omax);
+            }
+            return;
+        }
         let Some(u) = self.unit_base_mut(guid) else {
             return;
         };

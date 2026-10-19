@@ -465,6 +465,76 @@ pub fn motd_lines(motd: &str, wow_patch: u32) -> Vec<String> {
         .collect()
 }
 
+/// `SMSG_TRANSFER_PENDING` (`Player::ExecuteTeleportFar`).
+#[must_use]
+pub fn build_transfer_pending(map_id: u32) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    writer.write_u32_le(map_id);
+    let mut packet = WorldPacket::new(opcode_id::SMSG_TRANSFER_PENDING);
+    packet.take_writer(writer);
+    packet
+}
+
+/// `SMSG_NEW_WORLD` (`Player::ExecuteTeleportFar`).
+#[must_use]
+pub fn build_new_world(
+    map_id: u32,
+    position: mangos_movement::movement_info::Position,
+) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    writer.write_u32_le(map_id);
+    writer.write_f32_le(position.x);
+    writer.write_f32_le(position.y);
+    writer.write_f32_le(position.z);
+    writer.write_f32_le(position.o);
+    let mut packet = WorldPacket::new(opcode_id::SMSG_NEW_WORLD);
+    packet.take_writer(writer);
+    packet
+}
+
+/// `SMSG_INSTANCE_SAVE_CREATED` (always 0 in the fork).
+#[must_use]
+pub fn build_instance_save_created() -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    writer.write_u32_le(0);
+    let mut packet = WorldPacket::new(opcode_id::SMSG_INSTANCE_SAVE_CREATED);
+    packet.take_writer(writer);
+    packet
+}
+
+/// `SMSG_UPDATE_INSTANCE_OWNERSHIP` (has any permanent bind).
+#[must_use]
+pub fn build_update_instance_ownership(has_permanent: bool) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    writer.write_u32_le(u32::from(has_permanent));
+    let mut packet = WorldPacket::new(opcode_id::SMSG_UPDATE_INSTANCE_OWNERSHIP);
+    packet.take_writer(writer);
+    packet
+}
+
+/// `SMSG_UPDATE_LAST_INSTANCE` (one per permanent bind).
+#[must_use]
+pub fn build_update_last_instance(map_id: u32) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    writer.write_u32_le(map_id);
+    let mut packet = WorldPacket::new(opcode_id::SMSG_UPDATE_LAST_INSTANCE);
+    packet.take_writer(writer);
+    packet
+}
+
+/// `SMSG_AREA_TRIGGER_MESSAGE`: u32 length + text + NUL.
+#[must_use]
+pub fn build_area_trigger_message(text: &str) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    #[allow(clippy::cast_possible_truncation)]
+    writer.write_u32_le(text.len() as u32 + 1);
+    writer.write_bytes(text.as_bytes());
+    writer.write_u8(0);
+    let mut packet = WorldPacket::new(opcode_id::SMSG_AREA_TRIGGER_MESSAGE);
+    packet.take_writer(writer);
+    packet
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -530,6 +600,7 @@ mod tests {
             world_phase_mask: 0,
             create_time: 0,
             instance: 0,
+            zone: 0,
         }
     }
 

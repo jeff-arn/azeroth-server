@@ -56,6 +56,15 @@ pub struct WorldStores {
     pub chat_channels: ChatChannelDbc,
     /// Auction house table (`AuctionHouse.dbc`, Phase 5 B.7).
     pub auction_houses: mangos_world_data::auction_house::AuctionHouseDbc,
+    /// `map_template` rows (`sMapStorage`, Phase 6 Slice 0).
+    pub maps: mangos_world_data::map_template::MapStore,
+    /// Area triggers + teleports (Phase 6 Slice 0).
+    pub area_triggers: mangos_world_data::area_trigger::AreaTriggerStore,
+    /// Quest template subset for load/save parity
+    /// (Phase 6 Slice 1b).
+    pub quests: mangos_world_data::quest_template::QuestTemplatesLite,
+    /// `areatrigger_tavern` ids (Phase 6 Slice 1b rest).
+    pub tavern_triggers: std::collections::HashSet<u32>,
 }
 
 impl WorldStores {
@@ -83,6 +92,10 @@ impl WorldStores {
             display_scales: HashMap::new(),
             model_data: HashMap::new(),
             skills: SkillDbc::default(),
+            maps: mangos_world_data::map_template::MapStore::default(),
+            area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
+            quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
+            tavern_triggers: std::collections::HashSet::new(),
             chat_channels: ChatChannelDbc::default(),
             auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
         }

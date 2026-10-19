@@ -162,7 +162,11 @@ fn dump_progression(load: &CharacterLoad, out: &mut Vec<String>) {
             ],
         ));
     }
-    for s in &load.spells {
+    // Both load queries leave spell order unspecified;
+    // canonicalize this section before comparing.
+    let mut spells = load.spells.clone();
+    spells.sort_by_key(|row| row.spell);
+    for s in &spells {
         out.push(line(
             "spell",
             &[

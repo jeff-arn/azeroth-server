@@ -1001,6 +1001,12 @@ fn load_respawn_table(
     spawn_maps: &HashMap<u32, u32>,
     map_ids: &HashSet<u32>,
 ) -> Result<HashMap<(u32, u32), RespawnEntry>, DbError> {
+    // Fork loader cleanup: outdated rows are deleted
+    // before the load (`LoadCreatureRespawnTimes`).
+    conn.exec_drop(
+        format!("DELETE FROM `{table}` WHERE `respawn_time` <= ?"),
+        (now_unix,),
+    )?;
     // Table names are fixed internal constants, never user input.
     let sql = format!(
         "SELECT `guid`, `respawn_time`, `{table}`.`map`, `instance`, `reset_time` \

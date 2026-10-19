@@ -269,6 +269,10 @@ pub struct UnitBase {
     /// (player combat-drop approximation of
     /// `m_combatTimer`, Slice 6).
     pub last_combat_ms: u32,
+    /// `m_lastManaUseTimer` (five-second rule countdown).
+    pub last_mana_use_timer_ms: u32,
+    /// `m_lastManaUseSpellId`.
+    pub last_mana_use_spell: u32,
     /// Class-level base attack power before aura mods
     /// (creature `pCLS->attack_power`; player: the
     /// materialized `UNIT_FIELD_ATTACK_POWER`). Drives
@@ -276,6 +280,15 @@ pub struct UnitBase {
     pub base_attack_power: f32,
     /// `m_unitState` bits (`UnitDefines.h` `UnitState`).
     pub unit_state: u32,
+    /// Base weapon damage ranges per attack type
+    /// ([mainhand, offhand, ranged]; `m_weaponDamage`
+    /// damage row 0 — rows 1+ join multi-damage swing
+    /// summation, the update fields only carry row 0
+    /// in C++ too). Fists (`BASE_MINDAMAGE`/
+    /// `BASE_MAXDAMAGE`) until item mods apply.
+    /// Creatures keep their template ranges on the
+    /// `Creature` aggregate; this field serves players.
+    pub base_weapon_damage: [(f32, f32); 3],
 }
 
 impl UnitBase {
@@ -302,8 +315,11 @@ impl UnitBase {
             attack_timers: [0, 0],
             melee_victim: None,
             last_combat_ms: 0,
+            last_mana_use_timer_ms: 0,
+            last_mana_use_spell: 0,
             base_attack_power: 0.0,
             unit_state: 0,
+            base_weapon_damage: [(1.0, 2.0); 3],
         }
     }
 
@@ -600,6 +616,193 @@ impl UnitBase {
     pub fn is_alive(&self) -> bool {
         matches!(self.death_state, DeathState::Alive | DeathState::JustAlived)
     }
+
+    /// `GetStandState`: `UNIT_FIELD_BYTES_1` byte 0.
+    #[must_use]
+    pub fn stand_state(&self) -> u8 {
+        self.world
+            .object
+            .values()
+            .get_byte(offsets::UNIT_FIELD_BYTES_1, 0)
+    }
+
+    /// `IsStandingUp` (`Unit.cpp:9351`): STAND (0) or
+    /// DEAD (7).
+    #[must_use]
+    pub fn is_standing_up(&self) -> bool {
+        matches!(self.stand_state(), 0 | 7)
+    }
+
+    /// `IsInCombat`: `UNIT_FLAG_IN_COMBAT` (0x00080000)
+    /// in `UNIT_FIELD_FLAGS`.
+    #[must_use]
+    pub fn is_in_combat(&self) -> bool {
+        self.world
+            .object
+            .values()
+            .get_u32(offsets::UNIT_FIELD_FLAGS)
+            & 0x0008_0000
+            != 0
+    }
+
+    /// `SetLastManaUse` (`Unit.h:874`): arms the
+    /// five-second timer.
+    pub fn set_last_mana_use(&mut self, spell_id: u32) {
+        self.last_mana_use_timer_ms = 5000;
+        self.last_mana_use_spell = spell_id;
+    }
+
+    /// `IsUnderLastManaUseEffect` (`Unit.h:879`).
+    #[must_use]
+    pub fn is_under_last_mana_use_effect(&self) -> bool {
+        self.last_mana_use_timer_ms != 0
+    }
+
+    /// The `m_lastManaUseTimer` countdown in
+    /// `Unit::Update` (`Unit.cpp:229-248`). The
+    /// still-channeling exception (patch 1.7.0 arm)
+    /// joins channeled casts; no channeled spell can
+    /// be active in the current spell engine, so the
+    /// timer clears on expiry exactly as the fork's
+    /// non-channeling path does.
+    pub fn update_last_mana_use(&mut self, diff_ms: u32) {
+        if self.last_mana_use_timer_ms == 0 {
+            return;
+        }
+        if diff_ms >= self.last_mana_use_timer_ms {
+            self.last_mana_use_timer_ms = 0;
+            self.last_mana_use_spell = 0;
+        } else {
+            self.last_mana_use_timer_ms -= diff_ms;
+        }
+    }
+
+    /// `GetRegenHPPerSpirit` (`Unit.cpp:6403-6442`):
+    /// health per 2-second tick by class. Class ids:
+    /// warrior 1, paladin 2, hunter 3, rogue 4, priest
+    /// 5, shaman 7, mage 8, warlock 9, druid 11.
+    #[must_use]
+    pub fn regen_hp_per_spirit(&self) -> f32 {
+        let spirit = self.stat(STAT_SPIRIT);
+        let regen = match self.class() {
+            11 | 8 => spirit * 0.11 + 1.0,
+            3 => spirit * 0.43 - 5.5,
+            2 => spirit * 0.25,
+            5 => spirit * 0.15 + 1.4,
+            4 => spirit * 0.84 - 13.0,
+            7 => spirit * 0.28 - 3.6,
+            9 => spirit * 0.12 + 1.5,
+            1 => spirit * 1.26 - 22.6,
+            _ => 0.0,
+        };
+        regen.max(0.0)
+    }
+
+    /// `GetRegenMPPerSpirit` (`Unit.cpp:6444-6478`):
+    /// mana per second (the per-tick values are halved
+    /// in C++). Classes without a case return 0.
+    #[must_use]
+    pub fn regen_mp_per_spirit(&self) -> f32 {
+        let spirit = self.stat(STAT_SPIRIT);
+        let addvalue = match self.class() {
+            11 | 3 | 2 | 9 => spirit / 5.0 + 15.0,
+            8 | 5 => spirit / 4.0 + 12.5,
+            7 => spirit / 5.0 + 17.0,
+            _ => 0.0,
+        };
+        addvalue / 2.0
+    }
+
+    /// `GetAttackPowerFromStrengthAndAgility`
+    /// (`StatSystem.cpp:195-306`) over the current stat
+    /// fields. Shapeshift-form arms take their default
+    /// (caster-form) branches: no form state exists in
+    /// the Rust aggregates yet.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)] // C++ converts identically
+    pub fn attack_power_from_stats(&self, ranged: bool) -> f32 {
+        let strength = self.stat(STAT_STRENGTH);
+        let agility = self.stat(STAT_AGILITY);
+        let level = self.level() as f32;
+        if ranged {
+            match self.class() {
+                // hunter
+                3 => level * 2.0 + agility * 2.0 - 10.0,
+                // rogue, warrior
+                4 | 1 => level + agility - 10.0,
+                // druid caster form and everyone else
+                _ => agility - 10.0,
+            }
+        } else {
+            match self.class() {
+                // warrior, paladin
+                1 | 2 => level * 3.0 + strength * 2.0 - 20.0,
+                // rogue, hunter
+                4 | 3 => level * 2.0 + strength + agility - 20.0,
+                // shaman
+                7 => level * 2.0 + strength * 2.0 - 20.0,
+                // druid caster form
+                11 => strength * 2.0 - 20.0,
+                // mage, priest, warlock
+                8 | 5 | 9 => strength - 10.0,
+                _ => 0.0,
+            }
+        }
+    }
+
+    /// `GetTotalAttackPowerValue` (`Unit.cpp:8137-8168`):
+    /// base field + signed mod halves, floored at 0,
+    /// scaled by `1 + multiplier`. `att` indexes
+    /// `WeaponAttackType` (0 main, 1 off, 2 ranged);
+    /// offhand shares the melee fields as in C++.
+    #[must_use]
+    pub fn total_attack_power(&self, att: usize) -> f32 {
+        let v = self.world.object.values();
+        let (index, index_mod, index_mult) = if att == 2 {
+            (
+                offsets::UNIT_FIELD_RANGED_ATTACK_POWER,
+                offsets::UNIT_FIELD_RANGED_ATTACK_POWER_MODS,
+                offsets::UNIT_FIELD_RANGED_ATTACK_POWER_MULTIPLIER,
+            )
+        } else {
+            (
+                offsets::UNIT_FIELD_ATTACK_POWER,
+                offsets::UNIT_FIELD_ATTACK_POWER_MODS,
+                offsets::UNIT_FIELD_ATTACK_POWER_MULTIPLIER,
+            )
+        };
+        let ap = v.get_i32(index)
+            + i32::from(v.get_i16(index_mod, 0))
+            + i32::from(v.get_i16(index_mod, 1));
+        if ap < 0 {
+            return 0.0;
+        }
+        #[allow(clippy::cast_precision_loss)] // C++ converts identically
+        let ap = ap as f32;
+        ap * (1.0 + v.get_f32(index_mult))
+    }
+
+    /// `CalculateMinMaxDamage(att, normalized=false)`
+    /// at identity damage modifier groups
+    /// (`StatSystem.cpp:359-446`): the aura-fed pct/
+    /// flat groups, shapeshift weapon override, and
+    /// the ranged ammo-DPS term (`_ApplyAmmoBonuses`
+    /// unported) contribute their no-aura identities.
+    /// `att` as in [`Self::total_attack_power`].
+    #[must_use]
+    pub fn calculate_min_max_damage(&self, att: usize) -> (f32, f32) {
+        let v = self.world.object.values();
+        let attack_time_ms = match att {
+            1 => v.get_f32(offsets::UNIT_FIELD_BASEATTACKTIME + 1),
+            2 => v.get_f32(offsets::UNIT_FIELD_RANGEDATTACKTIME),
+            _ => v.get_f32(offsets::UNIT_FIELD_BASEATTACKTIME),
+        };
+        // `GetAPMultiplier` non-normalized arm.
+        let att_speed = attack_time_ms / 1000.0;
+        let base_value = self.total_attack_power(att) / 14.0 * att_speed;
+        let (weapon_min, weapon_max) = self.base_weapon_damage[att.min(2)];
+        (base_value + weapon_min, base_value + weapon_max)
+    }
 }
 
 /// Model data for `UpdateModelData` (`Unit.cpp:9414-9445`),
@@ -649,5 +852,67 @@ impl UnitBase {
     pub fn set_native_display_id(&mut self, display_id: u32) {
         self.values()
             .set_u32(offsets::UNIT_FIELD_NATIVEDISPLAYID, display_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{STAT_SPIRIT, UnitBase, WorldObjectBase};
+    use crate::object::ObjectBase;
+    use mangos_guid::TypeId;
+    use mangos_protocol::update_data::ObjectUpdateFlags;
+    use mangos_protocol::update_field_table::{UNIT_END, offsets};
+    use mangos_protocol::update_fields::TypeMask;
+
+    fn unit_with(class: u8, spirit: i32) -> UnitBase {
+        let object = ObjectBase::new(
+            TypeId::Player,
+            TypeMask::OBJECT.union(TypeMask::UNIT),
+            ObjectUpdateFlags(ObjectUpdateFlags::ALL),
+            UNIT_END,
+        );
+        let mut unit = UnitBase::new(WorldObjectBase::new(object));
+        unit.values()
+            .set_byte(offsets::UNIT_FIELD_BYTES_0, 1, class);
+        unit.set_stat(STAT_SPIRIT, spirit);
+        unit
+    }
+
+    #[test]
+    fn spirit_regen_matches_unit_cpp_tables() {
+        // Priest (5): HP 0.15*spirit+1.4 per tick;
+        // MP (spirit/4+12.5)/2 per second.
+        let priest = unit_with(5, 100);
+        assert!((priest.regen_hp_per_spirit() - 16.4).abs() < 1e-5);
+        assert!((priest.regen_mp_per_spirit() - 18.75).abs() < 1e-5);
+        // Warrior (1): HP 1.26*spirit-22.6, no MP case.
+        let warrior = unit_with(1, 100);
+        assert!((warrior.regen_hp_per_spirit() - 103.4).abs() < 1e-4);
+        assert!(warrior.regen_mp_per_spirit().abs() < 1e-6);
+        // Rogue (4) HP floors at 0 for low spirit.
+        let rogue = unit_with(4, 10);
+        assert!(rogue.regen_hp_per_spirit().abs() < 1e-6);
+        // Shaman (7) MP uses +17: (100/5+17)/2.
+        let shaman = unit_with(7, 100);
+        assert!((shaman.regen_mp_per_spirit() - 18.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn five_second_timer_arms_counts_and_clears() {
+        let mut unit = unit_with(8, 50);
+        assert!(!unit.is_under_last_mana_use_effect());
+        unit.set_last_mana_use(12345);
+        assert!(unit.is_under_last_mana_use_effect());
+        assert_eq!(unit.last_mana_use_spell, 12345);
+        unit.update_last_mana_use(4999);
+        assert!(unit.is_under_last_mana_use_effect());
+        assert_eq!(unit.last_mana_use_timer_ms, 1);
+        unit.update_last_mana_use(1);
+        assert!(!unit.is_under_last_mana_use_effect());
+        assert_eq!(unit.last_mana_use_spell, 0);
+        // A diff overshooting the remainder also clears.
+        unit.set_last_mana_use(7);
+        unit.update_last_mana_use(6000);
+        assert_eq!(unit.last_mana_use_timer_ms, 0);
     }
 }

@@ -21,7 +21,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use mangos_db::DbError;
-use mangos_db::character_load::CharacterLoad;
+use mangos_db::character_load::{ActionRow, CharacterLoad, HomebindRow};
+use mangos_db::character_save::{CharacterSaveBundle, CharacterStatsRow};
 use mangos_db::characters::{CharEnumRow, NameQueryRow};
 use mangos_entities::player::{MAX_MONEY_AMOUNT, MaterializeError, MaterializeInputs, Player};
 use mangos_guid::ObjectGuid;
@@ -43,6 +44,10 @@ use crate::auth::AcceptedAuth;
 use crate::channels::{ChannelActor, ChannelMgr, ChannelOut, not_on_packet, notify};
 use crate::char_enum::build_char_enum;
 use crate::char_queries::CharQueries;
+use crate::character_save::{
+    SaveContext, build_action_writes, build_save_bundle, homebind_row, rebaseline,
+    rebaseline_actions,
+};
 use crate::chat::{
     build_chat_packet, build_player_not_found, build_wrong_faction, chat_msg, language,
     language_allowed, language_spell, parse_message_chat, yell_range,
@@ -225,6 +230,7 @@ pub struct WorldDeps {
     /// Phase 4 write-register statements (presence + respawn
     /// clears; owner-approved 2026-10-19).
     pub presence: Arc<dyn PresenceWriter>,
+    pub character_saver: Arc<dyn CharacterSaver>,
     /// Characters-DB social service (Phase 5 Slice A).
     pub social: Arc<dyn SocialStore>,
     /// Characters-DB group service (Phase 5 Slice B.3).
@@ -269,6 +275,10 @@ pub struct WorldDeps {
     pub ah_bot: Arc<dyn AhBotStore>,
     /// Boot-loaded AH bot data, consumed at spawn.
     pub initial_ah_bot: InitialAhBot,
+    /// Instance binding persistence.
+    pub instance: Arc<dyn InstanceStore>,
+    /// Boot-loaded instances + binds, consumed at spawn.
+    pub initial_instances: mangos_db::instance::LoadedInstances,
 }
 
 /// Boot-loaded AH bot rows (`AuctionHouseBotMgr::Load`
@@ -278,6 +288,191 @@ pub struct InitialAhBot {
     pub items: Vec<mangos_db::auction::AhBotItemRow>,
     pub sellers: Vec<(u32, String)>,
     pub last_refresh_s: i64,
+}
+
+/// One simulated map instance (`MapID`): continent
+/// and non-instanceable maps run as instance 0.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct MapKey {
+    pub map_id: u32,
+    pub instance_id: u32,
+}
+
+impl MapKey {
+    /// The shared (instance 0) key for a map.
+    #[must_use]
+    pub fn shared(map_id: u32) -> Self {
+        Self {
+            map_id,
+            instance_id: 0,
+        }
+    }
+}
+
+/// Instance binding persistence
+/// (`MapPersistentStateMgr` write side).
+pub trait InstanceStore: Send + Sync {
+    /// `DungeonPersistentState::SaveToDB`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn insert_instance(
+        &self,
+        instance_id: u32,
+        map_id: u32,
+        reset_time: i64,
+    ) -> Result<(), DbError>;
+
+    /// `Player::BindToInstance` insert arm.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn insert_character_bind(
+        &self,
+        guid_low: u32,
+        instance_id: u32,
+        permanent: bool,
+    ) -> Result<(), DbError>;
+
+    /// `Player::BindToInstance` update arm.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn update_character_bind(
+        &self,
+        guid_low: u32,
+        old_instance_id: u32,
+        new_instance_id: u32,
+        permanent: bool,
+    ) -> Result<(), DbError>;
+
+    /// `Player::UnbindInstance` (non-unload path).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn delete_character_bind(&self, guid_low: u32, instance_id: u32) -> Result<(), DbError>;
+
+    /// `Group::BindToInstance` insert arm.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn insert_group_bind(
+        &self,
+        leader_low: u32,
+        instance_id: u32,
+        permanent: bool,
+    ) -> Result<(), DbError>;
+}
+
+/// `(instance_id, permanent)` bind by map.
+type BindMap = std::collections::HashMap<u32, (u32, bool)>;
+
+/// Live instance/binding state
+/// (`MapPersistentStateManager` subset: allocation +
+/// binds; reset scheduling lands later).
+#[derive(Clone, Debug, Default)]
+pub struct InstanceRuntime {
+    next_instance_id: u32,
+    /// instance id -> map id.
+    instance_maps: std::collections::HashMap<u32, u32>,
+    /// character guid low -> binds by map.
+    char_binds: std::collections::HashMap<u32, BindMap>,
+    /// group leader guid low -> binds by map.
+    group_binds: std::collections::HashMap<u32, BindMap>,
+}
+
+impl InstanceRuntime {
+    fn from_loaded(loaded: &mangos_db::instance::LoadedInstances) -> Self {
+        let instance_maps: std::collections::HashMap<u32, u32> = loaded
+            .instances
+            .iter()
+            .map(|row| (row.id, row.map_id))
+            .collect();
+        let mut char_binds: std::collections::HashMap<u32, BindMap> =
+            std::collections::HashMap::new();
+        for bind in &loaded.character_binds {
+            if let Some(map_id) = instance_maps.get(&bind.instance_id) {
+                char_binds
+                    .entry(bind.guid_low)
+                    .or_default()
+                    .insert(*map_id, (bind.instance_id, bind.permanent));
+            }
+        }
+        let mut group_binds: std::collections::HashMap<u32, BindMap> =
+            std::collections::HashMap::new();
+        for bind in &loaded.group_binds {
+            if let Some(map_id) = instance_maps.get(&bind.instance_id) {
+                group_binds
+                    .entry(bind.guid_low)
+                    .or_default()
+                    .insert(*map_id, (bind.instance_id, bind.permanent));
+            }
+        }
+        Self {
+            next_instance_id: loaded.max_instance_id,
+            instance_maps,
+            char_binds,
+            group_binds,
+        }
+    }
+
+    fn allocate(&mut self, map_id: u32) -> u32 {
+        self.next_instance_id = self.next_instance_id.saturating_add(1);
+        self.instance_maps.insert(self.next_instance_id, map_id);
+        self.next_instance_id
+    }
+
+    fn char_bind(&self, guid_low: u32, map_id: u32) -> Option<(u32, bool)> {
+        self.char_binds
+            .get(&guid_low)
+            .and_then(|binds| binds.get(&map_id))
+            .copied()
+    }
+
+    fn group_bind(&self, leader_low: u32, map_id: u32) -> Option<(u32, bool)> {
+        self.group_binds
+            .get(&leader_low)
+            .and_then(|binds| binds.get(&map_id))
+            .copied()
+    }
+
+    fn set_char_bind(&mut self, guid_low: u32, map_id: u32, bind: (u32, bool)) {
+        self.char_binds
+            .entry(guid_low)
+            .or_default()
+            .insert(map_id, bind);
+    }
+
+    fn set_group_bind(&mut self, leader_low: u32, map_id: u32, bind: (u32, bool)) {
+        self.group_binds
+            .entry(leader_low)
+            .or_default()
+            .insert(map_id, bind);
+    }
+
+    fn remove_char_bind(&mut self, guid_low: u32, map_id: u32) -> Option<(u32, bool)> {
+        self.char_binds
+            .get_mut(&guid_low)
+            .and_then(|binds| binds.remove(&map_id))
+    }
+}
+
+/// A player extracted from its old map mid-teleport
+/// (`Player::ExecuteTeleportFar` between `SMSG_NEW_WORLD`
+/// and the worldport ACK).
+struct PendingTeleport {
+    player: mangos_entities::player::Player,
+    source_key: MapKey,
+    key: MapKey,
+    /// Fresh permanent personal bind granted at entry:
+    /// `SMSG_INSTANCE_SAVE_CREATED` is sent by
+    /// `InstanceMap::Add`, i.e. at worldport-ACK finish.
+    granted: bool,
 }
 
 /// World+characters AH bot service.
@@ -646,6 +841,53 @@ pub trait GroupStore: Send + Sync {
     fn apply_group_write(&self, write: GroupWrite) -> Result<(), DbError>;
 }
 
+/// Phase 6 character persistence (`Player::SaveToDB`,
+/// `MasterPlayer::SaveActions`, and synthesized
+/// homebind insertion). Implementations execute each
+/// bundle atomically with respect to other calls on
+/// the characters DB actor, mirroring the fork's
+/// per-character delayed-transaction lane.
+pub trait CharacterSaver: Send + Sync {
+    /// Save the `Player::SaveToDB` bundle and, when
+    /// present, its post-commit `_SaveStats` row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn save_character(
+        &self,
+        bundle: CharacterSaveBundle,
+        stats: Option<CharacterStatsRow>,
+    ) -> Result<(), DbError>;
+
+    /// `MasterPlayer::SaveActions`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn save_actions(
+        &self,
+        guid_low: u32,
+        inserts: Vec<ActionRow>,
+        updates: Vec<ActionRow>,
+        deletes: Vec<u8>,
+    ) -> Result<(), DbError>;
+
+    /// Insert a homebind synthesized by `_LoadHomeBind`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn insert_homebind(&self, guid_low: u32, row: HomebindRow) -> Result<(), DbError>;
+
+    /// `SetHomeBind` row update.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn update_homebind(&self, guid_low: u32, row: HomebindRow) -> Result<(), DbError>;
+}
+
 /// Characters-DB writes from the Phase 4 write register.
 pub trait PresenceWriter: Send + Sync {
     /// `UPDATE characters SET online = ? WHERE guid = ?`.
@@ -655,18 +897,17 @@ pub trait PresenceWriter: Send + Sync {
     /// Returns [`DbError`] on driver failure.
     fn set_character_online(&self, guid_low: u32, online: bool) -> Result<(), DbError>;
 
-    /// `DELETE FROM creature_respawn WHERE guid = ? AND instance = 0`
-    /// (expired row consumed at spawn; `SaveCreatureRespawnTime(0)`
-    /// clears the row in this tree's saver shape for instance 0 —
-    /// see the progress record).
+    /// `DELETE FROM creature_respawn WHERE guid = ? AND instance = ?`
+    /// (`MapPersistentState::SaveCreatureRespawnTime` clear arm;
+    /// the instance is the map's persistent-state id).
     ///
     /// # Errors
     ///
     /// Returns [`DbError`] on driver failure.
-    fn clear_creature_respawn(&self, guid_low: u32) -> Result<(), DbError>;
+    fn clear_creature_respawn(&self, guid_low: u32, instance_id: u32) -> Result<(), DbError>;
 
     /// `REPLACE INTO creature_respawn (guid, respawn_time, instance, map)
-    /// VALUES (?, ?, 0, ?)` — `SaveCreatureRespawnTime` future-time arm
+    /// VALUES (?, ?, ?, ?)` — `SaveCreatureRespawnTime` future-time arm
     /// (owner-approved write register, 2026-10-19).
     ///
     /// # Errors
@@ -677,14 +918,15 @@ pub trait PresenceWriter: Send + Sync {
         guid_low: u32,
         respawn_time: u64,
         map_id: u32,
+        instance_id: u32,
     ) -> Result<(), DbError>;
 
-    /// `DELETE FROM gameobject_respawn WHERE guid = ? AND instance = 0`.
+    /// `DELETE FROM gameobject_respawn WHERE guid = ? AND instance = ?`.
     ///
     /// # Errors
     ///
     /// Returns [`DbError`] on driver failure.
-    fn clear_gameobject_respawn(&self, guid_low: u32) -> Result<(), DbError>;
+    fn clear_gameobject_respawn(&self, guid_low: u32, instance_id: u32) -> Result<(), DbError>;
 }
 
 /// Characters-DB social service: the name lookup and the
@@ -858,6 +1100,19 @@ struct SessionEntry {
     player_loading: bool,
     /// The entered character, once login completed.
     player_guid: Option<u32>,
+    /// Wall-clock anchor for `Player::Update` played
+    /// time accumulation (whole seconds).
+    played_last_tick: Instant,
+    /// Last level observed by played-time accounting;
+    /// a change mirrors `GiveLevel` resetting
+    /// `PLAYED_TIME_LEVEL`.
+    played_level: u32,
+    /// Next periodic `SaveToDB` instant, randomized on
+    /// login like fork `m_nextSave`.
+    next_player_save: Option<Instant>,
+    /// Last in-map zone (`GetCachedZoneId`), retained
+    /// for forced saves while a far teleport is pending.
+    cached_zone: u32,
     /// The read-only snapshot backing the empty-world session.
     #[allow(dead_code)] // consumed as handlers grow past stubs
     character_load: Option<CharacterLoad>,
@@ -893,11 +1148,19 @@ struct World {
     #[allow(dead_code)] // read by handlers landing in later slices
     strings: MangosStrings,
     deps: WorldDeps,
-    /// Simulated continent maps by map id (instance 0 only
-    /// in Slice 3).
-    maps: HashMap<u32, Map>,
-    /// Player guid low -> map id.
-    player_map: HashMap<u32, u32>,
+    /// Simulated maps by (map id, instance id);
+    /// continents run as instance 0.
+    maps: HashMap<MapKey, Map>,
+    /// Player guid low -> map key.
+    player_map: HashMap<u32, MapKey>,
+    /// Instance allocation + binds (Phase 6 Slice 0).
+    instances: InstanceRuntime,
+    /// Far teleports waiting for `MSG_MOVE_WORLDPORT_ACK`
+    /// (bot sessions finish inline).
+    pending_teleports: HashMap<SessionId, PendingTeleport>,
+    /// Per-map area-trigger script cooldowns
+    /// (`m_areaTriggerCooldowns`, unix seconds).
+    area_trigger_cooldowns: HashMap<(MapKey, u32), i64>,
     /// Player guid low -> session.
     player_session: HashMap<u32, SessionId>,
     /// Boot instant for the server ms clock.
@@ -1412,6 +1675,7 @@ pub fn spawn_world(
         pending_bot_logins,
         guild_bot_core,
     ) = bot_spawn_cores(&config, &mut deps, &log);
+    let instances = InstanceRuntime::from_loaded(&deps.initial_instances);
     let mut world = World {
         config,
         log,
@@ -1455,6 +1719,9 @@ pub fn spawn_world(
         guild_bots_bootstrapped: false,
         next_bot_session: 1 << 62,
         maps: HashMap::new(),
+        instances,
+        pending_teleports: HashMap::new(),
+        area_trigger_cooldowns: HashMap::new(),
         player_map: HashMap::new(),
         player_session: HashMap::new(),
         started: Instant::now(),
@@ -1597,9 +1864,11 @@ impl World {
         loop {
             tokio::select! {
                 message = rx.recv() => {
-                    match message {
-                        Some(message) => self.handle(message),
-                        None => break,
+                    if let Some(message) = message {
+                        self.handle(message);
+                    } else {
+                        self.save_all_players();
+                        break;
                     }
                 }
                 _ = tick.tick() => {
@@ -1609,6 +1878,7 @@ impl World {
                     self.update_ah_bot(false);
                     self.update_bots();
                     self.update_maps();
+                    self.update_player_saves();
                 }
             }
         }
@@ -1642,6 +1912,10 @@ impl World {
                         in_queue: false,
                         player_loading: false,
                         player_guid: None,
+                        played_last_tick: Instant::now(),
+                        played_level: 0,
+                        next_player_save: None,
+                        cached_zone: 0,
                         character_load: None,
                         chat_tag: 0,
                         afk_msg: String::new(),
@@ -1683,6 +1957,10 @@ impl World {
     }
 
     fn remove(&mut self, id: SessionId) {
+        if self.pending_teleports.contains_key(&id) {
+            self.save_pending_player(id, true);
+        }
+        self.pending_teleports.remove(&id);
         if let Some(bot_low) = self.bot_sessions.remove(&id) {
             self.bots.remove(&bot_low);
         }
@@ -2168,12 +2446,12 @@ impl World {
             .get(&guid_low)
             .and_then(|key| self.groups.get(key))
             .is_some_and(|group| group.is_leader(guid_low));
-        let Some(map_id) = self.player_map.get(&guid_low).copied() else {
+        let Some(map_key) = self.player_map.get(&guid_low).copied() else {
             return;
         };
         if let Some(player) = self
             .maps
-            .get_mut(&map_id)
+            .get_mut(&map_key)
             .and_then(|map| map.player_mut(player_guid(guid_low)))
         {
             let values = player.unit.values();
@@ -8297,6 +8575,10 @@ impl World {
                 in_queue: false,
                 player_loading: true,
                 player_guid: None,
+                played_last_tick: Instant::now(),
+                played_level: 0,
+                next_player_save: None,
+                cached_zone: 0,
                 character_load: None,
                 chat_tag: 0,
                 afk_msg: String::new(),
@@ -8354,23 +8636,23 @@ impl World {
     /// Bot activation once the login train put the
     /// player in a map: motion master + tick from
     /// here.
-    fn on_bot_entered_world(&mut self, session: SessionId, guid_low: u32, map_id: u32) {
+    fn on_bot_entered_world(&mut self, session: SessionId, guid_low: u32, map_key: MapKey) {
         if !self.bot_sessions.contains_key(&session) {
             return;
         }
         let guid = player_guid(guid_low);
-        let resolved = self.maps.get(&map_id).and_then(|map| {
+        let resolved = self.maps.get(&map_key).and_then(|map| {
             let player = map.player(guid)?;
             let class_id = player.unit.class();
             let level = player.unit.level();
             let known = self.bot_known_spells(map, guid);
             Some((class_id, level, known))
         });
-        if let Some(map) = self.maps.get_mut(&map_id) {
+        if let Some(map) = self.maps.get_mut(&map_key) {
             map.motion_initialize_player(guid);
         }
         self.bot_population.on_login(guid_low);
-        self.apply_director_assignment(guid_low, map_id);
+        self.apply_director_assignment(guid_low, map_key);
         if let Some(bot) = self.bots.get_mut(&guid_low) {
             bot.in_world = true;
             bot.next_tick = Instant::now() + std::time::Duration::from_millis(500);
@@ -8623,6 +8905,62 @@ impl World {
             mangos_bots::role_config::build_behavior_set(bot.class_id, bot.role, false, is_party);
     }
 
+    /// `.goname <leader>` catch-up: returns true when a
+    /// teleport was issued (fork clears the formation
+    /// trail and stops motion; the teleport paths
+    /// re-seat motion on landing).
+    fn bot_catch_up_to_leader(&mut self, guid_low: u32) -> bool {
+        let Some(leader_low) = self.bots.get(&guid_low).and_then(|bot| bot.leader_low) else {
+            return false;
+        };
+        if leader_low == guid_low {
+            return false;
+        }
+        let Some(&bot_key) = self.player_map.get(&guid_low) else {
+            return false;
+        };
+        let Some(&leader_key) = self.player_map.get(&leader_low) else {
+            return false;
+        };
+        let Some((leader_pos, leader_alive)) = self.maps.get(&leader_key).and_then(|map| {
+            map.player(player_guid(leader_low))
+                .map(|p| (p.unit.world.position(), p.unit.is_alive()))
+        }) else {
+            return false;
+        };
+        if !leader_alive {
+            return false;
+        }
+        if leader_key == bot_key {
+            let within = self.maps.get(&bot_key).is_some_and(|map| {
+                map.player(player_guid(guid_low)).is_some_and(|me| {
+                    let pos = me.unit.world.position();
+                    let dx = pos.x - leader_pos.x;
+                    let dy = pos.y - leader_pos.y;
+                    let dz = pos.z - leader_pos.z;
+                    dx * dx + dy * dy + dz * dz <= 100.0 * 100.0
+                })
+            });
+            if within {
+                return false;
+            }
+        }
+        let Some(session) = self
+            .bot_sessions
+            .iter()
+            .find(|(_, low)| **low == guid_low)
+            .map(|(id, _)| *id)
+        else {
+            return false;
+        };
+        self.formations
+            .formation(player_guid(leader_low))
+            .trail
+            .clear();
+        self.teleport_player(session, leader_key.map_id, leader_pos);
+        true
+    }
+
     fn bot_follow_master(&mut self, guid_low: u32, master_low: u32) {
         if let Some(bot) = self.bots.get_mut(&guid_low) {
             bot.leader_low = Some(master_low);
@@ -8657,6 +8995,17 @@ impl World {
             self.bot_acquire_target(guid_low);
             self.bot_wander(guid_low);
             let ctx = self.evaluate_bot_situation(guid_low);
+            // Fork party-bot catch-up (`PartyBotAI`
+            // out-of-combat arm): leader beyond 100 yd
+            // (or on another map/instance) teleports the
+            // bot to the leader and ends the tick. The
+            // duel gate has no Rust duel system yet.
+            if !ctx.in_combat && self.bot_catch_up_to_leader(guid_low) {
+                if let Some(bot) = self.bots.get_mut(&guid_low) {
+                    bot.next_tick = now + std::time::Duration::from_millis(500);
+                }
+                continue;
+            }
             let in_combat_set = ctx.current_target.is_some() || ctx.in_combat;
             self.bot_party_events(guid_low, &ctx, in_combat_set);
             let (mut behaviors, kit, debug_enabled, opener_blocked) = {
@@ -8768,22 +9117,22 @@ impl World {
             return;
         };
         let me = player_guid(guid_low);
-        let Some(map_id) = self.player_map.get(&guid_low).copied() else {
+        let Some(map_key) = self.player_map.get(&guid_low).copied() else {
             return;
         };
-        let best = self.bot_best_target(guid_low, map_id, leader_low, &focus_marks);
+        let best = self.bot_best_target(guid_low, map_key, leader_low, &focus_marks);
         let current = self
             .maps
-            .get(&map_id)
+            .get(&map_key)
             .and_then(|map| map.player(me).and_then(|p| p.unit.melee_victim));
         let current_valid = current.is_some_and(|victim| {
             self.maps
-                .get(&map_id)
+                .get(&map_key)
                 .is_some_and(|map| self.bot_valid_hostile(map, me, victim))
         });
         if !current_valid {
             if current.is_some() {
-                if let Some(map) = self.maps.get_mut(&map_id) {
+                if let Some(map) = self.maps.get_mut(&map_key) {
                     map.attack_stop(me);
                 }
             }
@@ -8792,7 +9141,7 @@ impl World {
             }
         } else if let Some(target) = best {
             if Some(target) != current {
-                if let Some(map) = self.maps.get_mut(&map_id) {
+                if let Some(map) = self.maps.get_mut(&map_key) {
                     map.attack_stop(me);
                 }
                 self.bot_attack_start(guid_low, target);
@@ -8804,12 +9153,12 @@ impl World {
     fn bot_best_target(
         &self,
         guid_low: u32,
-        map_id: u32,
+        map_key: MapKey,
         leader_low: u32,
         focus_marks: &[u8],
     ) -> Option<ObjectGuid> {
         let me = player_guid(guid_low);
-        let map = self.maps.get(&map_id)?;
+        let map = self.maps.get(&map_key)?;
         let player = map.player(me)?;
         if !player.unit.is_alive() {
             return None;
@@ -8910,11 +9259,11 @@ impl World {
     fn bot_attack_start(&mut self, guid_low: u32, target: ObjectGuid) {
         use mangos_spells::SpellRng as _;
         let me = player_guid(guid_low);
-        let Some(map_id) = self.player_map.get(&guid_low).copied() else {
+        let Some(map_key) = self.player_map.get(&guid_low).copied() else {
             return;
         };
         let (role, was_in_combat) = {
-            let Some(map) = self.maps.get_mut(&map_id) else {
+            let Some(map) = self.maps.get_mut(&map_key) else {
                 return;
             };
             let was = map
@@ -8979,10 +9328,10 @@ impl World {
         if bot.wander_at.is_some_and(|at| now < at) {
             return;
         }
-        let Some(map_id) = self.player_map.get(&guid_low).copied() else {
+        let Some(map_key) = self.player_map.get(&guid_low).copied() else {
             return;
         };
-        if map_id != assignment.target_map {
+        if map_key.map_id != assignment.target_map {
             return;
         }
         let me = player_guid(guid_low);
@@ -8995,7 +9344,7 @@ impl World {
             z: assignment.target_z,
             o: 0.0,
         };
-        if let Some(map) = self.maps.get_mut(&map_id) {
+        if let Some(map) = self.maps.get_mut(&map_key) {
             let alive = map
                 .player(me)
                 .is_some_and(|p| p.unit.is_alive() && p.unit.melee_victim.is_none());
@@ -9754,16 +10103,16 @@ impl World {
     /// assigned crowd bots spawn inside their zone
     /// (same-map teleport; cross-map assignment
     /// waits for player map transfer).
-    fn apply_director_assignment(&mut self, guid_low: u32, map_id: u32) {
+    fn apply_director_assignment(&mut self, guid_low: u32, map_key: MapKey) {
         let Some(assignment) = self.bot_director.assignment(guid_low) else {
             return;
         };
-        if assignment.target_map != map_id {
+        if assignment.target_map != map_key.map_id {
             self.log.out(
                 Level::Detail,
                 &format!(
-                    "[BotDirector] bot {guid_low} assignment map {} != spawn map {map_id}; relocation deferred",
-                    assignment.target_map
+                    "[BotDirector] bot {guid_low} assignment map {} != spawn map {}; relocation deferred",
+                    assignment.target_map, map_key.map_id
                 ),
             );
             return;
@@ -9775,7 +10124,7 @@ impl World {
             z: assignment.target_z,
             o: 0.0,
         };
-        if let Some(map) = self.maps.get_mut(&map_id) {
+        if let Some(map) = self.maps.get_mut(&map_key) {
             map.teleport_unit_within_map(guid, target);
         }
         self.drain_map_events();
@@ -11260,12 +11609,12 @@ impl World {
         {
             return;
         }
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         if request.lang != language::UNIVERSAL
             && request.lang != language::ADDON
-            && !self.knows_language(map_id, guid, request.lang)
+            && !self.knows_language(map_key, guid, request.lang)
         {
             return;
         }
@@ -11312,7 +11661,7 @@ impl World {
                 if request.text.is_empty() {
                     return;
                 }
-                let Some((alive, level)) = self.maps.get(&map_id).and_then(|map| {
+                let Some((alive, level)) = self.maps.get(&map_key).and_then(|map| {
                     map.player(guid)
                         .map(|player| (player.unit.is_alive(), player.unit.level()))
                 }) else {
@@ -11339,7 +11688,7 @@ impl World {
                 };
                 let packet =
                     build_chat_packet(request.msg_type, &request.text, out_lang, chat_tag, guid);
-                if let Some(map) = self.maps.get_mut(&map_id) {
+                if let Some(map) = self.maps.get_mut(&map_key) {
                     map.broadcast_packet_in_range(guid, range, own_team_only, &packet);
                 }
                 self.drain_map_events();
@@ -11351,7 +11700,7 @@ impl World {
             }
             chat_msg::WHISPER => {
                 if !request.text.is_empty() {
-                    self.on_whisper(id, map_id, guid, chat_tag, &request);
+                    self.on_whisper(id, map_key, guid, chat_tag, &request);
                 }
             }
             chat_msg::PARTY | chat_msg::RAID | chat_msg::RAID_LEADER | chat_msg::RAID_WARNING => {
@@ -11426,11 +11775,11 @@ impl World {
     /// `Player::KnowsLanguage`: the mask is built from
     /// known language spells — stored active spells plus
     /// the race/class defaults merged at login.
-    fn knows_language(&self, map_id: u32, guid: ObjectGuid, lang: u32) -> bool {
+    fn knows_language(&self, map_key: MapKey, guid: ObjectGuid, lang: u32) -> bool {
         let Some(spell) = language_spell(lang) else {
             return false;
         };
-        let Some(player) = self.maps.get(&map_id).and_then(|map| map.player(guid)) else {
+        let Some(player) = self.maps.get(&map_key).and_then(|map| map.player(guid)) else {
             return false;
         };
         if player
@@ -11484,7 +11833,7 @@ impl World {
     fn on_whisper(
         &mut self,
         id: SessionId,
-        map_id: u32,
+        map_key: MapKey,
         sender_guid: ObjectGuid,
         sender_tag: u8,
         request: &crate::chat::ChatRequest,
@@ -11499,7 +11848,7 @@ impl World {
             .map_or(security::PLAYER, |entry| entry.auth.security);
         let Some(sender_race) = self
             .maps
-            .get(&map_id)
+            .get(&map_key)
             .and_then(|map| map.player(sender_guid))
             .map(|player| player.unit.race())
         else {
@@ -12042,13 +12391,13 @@ impl World {
         let Some(name) = normalize_player_name(&raw_name) else {
             return;
         };
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         let my_guid = guid.counter();
         let Some(my_race) = self
             .maps
-            .get(&map_id)
+            .get(&map_key)
             .and_then(|map| map.player(guid))
             .map(|player| player.unit.race())
         else {
@@ -12076,7 +12425,7 @@ impl World {
 
         let already = self
             .maps
-            .get(&map_id)
+            .get(&map_key)
             .and_then(|map| map.player(guid))
             .is_some_and(|player| has_flag(&player.deferred.social, friend_low, flag));
 
@@ -12103,7 +12452,7 @@ impl World {
         };
         let write = self
             .maps
-            .get_mut(&map_id)
+            .get_mut(&map_key)
             .and_then(|map| map.player_mut(guid))
             .and_then(|player| add_to_social_list(&mut player.deferred.social, friend_low, ignore));
         match write {
@@ -12131,13 +12480,13 @@ impl World {
             return;
         };
         let friend_low = ObjectGuid::from_raw(raw_guid).counter();
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         let my_guid = guid.counter();
         let write = self
             .maps
-            .get_mut(&map_id)
+            .get_mut(&map_key)
             .and_then(|map| map.player_mut(guid))
             .and_then(|player| {
                 remove_from_social_list(&mut player.deferred.social, friend_low, ignore)
@@ -12439,8 +12788,9 @@ impl World {
             build_ignore_list(&load.social),
         ];
         let load_group_id = load.group_id;
+        let loaded_zone = load.row.zone;
         let load_guild_id = load.guild.as_ref().map(|guild| guild.guild_id);
-        let player = match self.materialize_player(load) {
+        let mut player = match self.materialize_player(load) {
             Ok(player) => player,
             Err(e) => {
                 self.log.out(
@@ -12452,6 +12802,19 @@ impl World {
                 return;
             }
         };
+        if player.homebind.synthesized && self.character_saving_allowed(id) {
+            match self
+                .deps
+                .character_saver
+                .insert_homebind(guid_low, homebind_row(&player))
+            {
+                Ok(()) => player.homebind.synthesized = false,
+                Err(e) => self.log.out(
+                    Level::Error,
+                    &format!("synthesized homebind insert failed for guid {guid_low}: {e}"),
+                ),
+            }
+        }
         let verify_position = player.unit.world.position();
         let map_id = player.unit.world.map_id;
         let bindpoint_packet =
@@ -12484,6 +12847,9 @@ impl World {
                 &player.deferred.reputation,
             ));
         self.enter_map(id, player);
+        if let Some(entry) = self.sessions.get_mut(&id) {
+            entry.cached_zone = loaded_zone;
+        }
 
         let mut packets = vec![
             build_login_verify_world_at(map_id, verify_position),
@@ -12583,8 +12949,9 @@ impl World {
         // Mail tracking seed (login-time
         // `UpdateNextMailTimeAndUnreads`).
         let tracker = self
-            .maps
-            .get(&map_id)
+            .player_map
+            .get(&guid_low)
+            .and_then(|key| self.maps.get(key))
             .and_then(|map| map.player(player_guid(guid_low)))
             .map_or_else(MailTracker::default, |player| {
                 MailTracker::recompute(&player.deferred.mails, unix_now_i64())
@@ -12600,7 +12967,60 @@ impl World {
 
     /// `Player::LoadFromDB` aggregate construction with the
     /// boot-resolved DBC inputs.
-    fn materialize_player(&self, load: CharacterLoad) -> Result<Player, MaterializeError> {
+    #[allow(clippy::approx_constant)] // fork Naxxramas exit orientation literal
+    fn materialize_player(&self, mut load: CharacterLoad) -> Result<Player, MaterializeError> {
+        // Fork `_LoadFromDB` instance branch: an unbound
+        // in-dungeon save relocates to the go-back
+        // trigger destination (homebind below only when
+        // no go-back trigger exists).
+        if self.deps.world_stores.maps.is_instance_map(load.row.map) {
+            // `GetBoundInstanceSaveForSelfOrGroup`: the
+            // saved position survives only when a personal
+            // or group bind still names the saved instance.
+            let personal_matches = load
+                .bound_instances
+                .iter()
+                .any(|bind| bind.id == Some(load.row.instance) && bind.map == Some(load.row.map));
+            let group_matches = self
+                .group_leader_of(load.row.guid)
+                .and_then(|leader| self.instances.group_bind(leader, load.row.map))
+                .is_some_and(|(instance_id, _)| instance_id == load.row.instance);
+            if !personal_matches && !group_matches {
+                let go_back = self
+                    .deps
+                    .world_stores
+                    .maps
+                    .get(load.row.map)
+                    .and_then(|entry| {
+                        self.deps
+                            .world_stores
+                            .area_triggers
+                            .go_back_trigger(load.row.map, entry.ghost_entrance_map)
+                    })
+                    .map(|(_, tele)| {
+                        (
+                            tele.dest_map_id,
+                            tele.dest_x,
+                            tele.dest_y,
+                            tele.dest_z,
+                            tele.dest_o,
+                        )
+                    })
+                    // Fork Naxxramas special case: no exit
+                    // trigger; hardcoded Eastern Kingdoms exit.
+                    .or_else(|| {
+                        (load.row.map == 533).then_some((0, 3362.15, -3379.35, 144.782, 6.28319))
+                    });
+                if let Some((map, x, y, z, o)) = go_back {
+                    load.row.map = map;
+                    load.row.position_x = x;
+                    load.row.position_y = y;
+                    load.row.position_z = z;
+                    load.row.orientation = o;
+                    load.row.instance = 0;
+                }
+            }
+        }
         let race = self
             .deps
             .race_class_dbc
@@ -12632,32 +13052,692 @@ impl World {
             power_type,
             display_scale: self.deps.world_stores.scale_for_display(display_id),
             model: self.deps.world_stores.model_for_display(display_id),
-            saved_map_known: true,
-            saved_map_is_instance: false,
+            saved_map_known: self.deps.world_stores.maps.known(load.row.map),
+            // Fork login keeps the saved in-instance
+            // position only when a bound instance still
+            // matches the saved instance id; the go-back
+            // rewrite above already relocated unbound
+            // saves, so anything still flagged here (no
+            // go-back trigger) falls back to homebind in
+            // the materialize position gate.
+            saved_map_is_instance: self.deps.world_stores.maps.is_instance_map(load.row.map)
+                && !load.bound_instances.iter().any(|bind| {
+                    bind.id == Some(load.row.instance) && bind.map == Some(load.row.map)
+                }),
             max_money: MAX_MONEY_AMOUNT,
             now_unix: unix_now(),
             skills: Some(&self.deps.world_stores.skills),
+            item_prototypes: Some(&self.deps.world_stores.item_prototypes),
+            quest_templates: Some(&self.deps.world_stores.quests),
         };
         Player::materialize(load, &inputs)
     }
 
-    /// Creates (if needed) and enters the continent map.
+    /// Group leader guid low for a player (boot groups
+    /// are keyed before `player_group` is seeded at
+    /// login, so fall back to a membership scan).
+    fn group_leader_of(&self, guid_low: u32) -> Option<u32> {
+        if let Some(key) = self.player_group.get(&guid_low)
+            && let Some(group) = self.groups.get(key)
+        {
+            return Some(group.leader_low());
+        }
+        self.groups
+            .values()
+            .find(|group| group.is_member(guid_low))
+            .map(crate::group::Group::leader_low)
+    }
+
+    /// Map-entry instance resolution (`CreateMap` +
+    /// `InstanceMap::Add` binding subset): bound
+    /// instance for self-or-group, else a fresh
+    /// allocation with the fork entry binds.
+    /// Returns the dest key plus whether this entry
+    /// granted a fresh permanent personal bind
+    /// (`SMSG_INSTANCE_SAVE_CREATED`).
+    fn resolve_map_key(&mut self, guid_low: u32, map_id: u32, player: &Player) -> (MapKey, bool) {
+        if !self.deps.world_stores.maps.is_instance_map(map_id) {
+            return (MapKey::shared(map_id), false);
+        }
+        self.seed_char_binds(guid_low, &player.deferred.bound_instances);
+        self.resolve_dest_key(guid_low, map_id)
+    }
+
+    /// Fresh instance allocation + entry binds (the
+    /// no-bound-state arm of `resolve_map_key`).
+    fn allocate_instance_for(&mut self, guid_low: u32, map_id: u32, leader: Option<u32>) -> MapKey {
+        let instance_id = self.instances.allocate(map_id);
+        let is_raid = self
+            .deps
+            .world_stores
+            .maps
+            .get(map_id)
+            .is_some_and(mangos_world_data::map_template::MapEntry::is_raid);
+        let reset_time = if is_raid {
+            0
+        } else {
+            unix_now_i64().saturating_add(2 * 3600)
+        };
+        if let Err(e) = self
+            .deps
+            .instance
+            .insert_instance(instance_id, map_id, reset_time)
+        {
+            self.log
+                .out(Level::Error, &format!("instance insert failed: {e}"));
+        }
+        if let Some(leader) = leader {
+            self.instances
+                .set_group_bind(leader, map_id, (instance_id, false));
+            if let Err(e) = self
+                .deps
+                .instance
+                .insert_group_bind(leader, instance_id, false)
+            {
+                self.log
+                    .out(Level::Error, &format!("group bind insert failed: {e}"));
+            }
+            // Other members' non-permanent personal
+            // binds for this map are dropped.
+            let members: Vec<u32> = self
+                .groups
+                .values()
+                .find(|group| group.leader_low() == leader)
+                .map_or_else(Vec::new, |group| {
+                    group.members().iter().map(|slot| slot.guid_low).collect()
+                });
+            for member in members {
+                if member != guid_low
+                    && let Some((old_id, false)) = self.instances.char_bind(member, map_id)
+                {
+                    self.instances.remove_char_bind(member, map_id);
+                    if let Err(e) = self.deps.instance.delete_character_bind(member, old_id) {
+                        self.log
+                            .out(Level::Error, &format!("instance unbind delete failed: {e}"));
+                    }
+                }
+            }
+        } else {
+            self.instances
+                .set_char_bind(guid_low, map_id, (instance_id, false));
+            if let Err(e) = self
+                .deps
+                .instance
+                .insert_character_bind(guid_low, instance_id, false)
+            {
+                self.log
+                    .out(Level::Error, &format!("instance bind insert failed: {e}"));
+            }
+        }
+        MapKey {
+            map_id,
+            instance_id,
+        }
+    }
+
+    /// `Player::SendSavedInstances` (permanent binds only).
+    fn send_saved_instances(&mut self, id: SessionId, guid_low: u32) {
+        use crate::player_login::{build_update_instance_ownership, build_update_last_instance};
+        let permanent_maps: Vec<u32> = self
+            .instances
+            .char_binds
+            .get(&guid_low)
+            .map(|binds| {
+                binds
+                    .iter()
+                    .filter(|(_, (_, perm))| *perm)
+                    .map(|(map_id, _)| *map_id)
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.reply_packet(
+            id,
+            build_update_instance_ownership(!permanent_maps.is_empty()),
+        );
+        for map_id in permanent_maps {
+            self.reply_packet(id, build_update_last_instance(map_id));
+        }
+    }
+
+    /// `Player::TeleportTo` subset (area-trigger driven):
+    /// same-instance teleports relocate in place;
+    /// cross-instance teleports run the far transfer
+    /// (`SMSG_TRANSFER_PENDING`/`SMSG_NEW_WORLD`, completed by the
+    /// worldport ACK; bot sessions finish inline).
+    /// Death/transport/duel side effects of the fork
+    /// entry checks land with their systems.
+    fn teleport_player(
+        &mut self,
+        id: SessionId,
+        dest_map_id: u32,
+        dest: mangos_movement::movement_info::Position,
+    ) {
+        let Some(guid_low) = self.sessions.get(&id).and_then(|entry| entry.player_guid) else {
+            return;
+        };
+        if self.pending_teleports.contains_key(&id) {
+            return;
+        }
+        let Some(&current_key) = self.player_map.get(&guid_low) else {
+            return;
+        };
+        let guid = player_guid(guid_low);
+        // Peek the player for bind seeding, then resolve.
+        let (dest_key, granted) = {
+            let Some(player_ref) = self
+                .maps
+                .get(&current_key)
+                .and_then(|map| map.player(guid))
+                .map(|p| {
+                    // resolve_map_key only reads deferred
+                    // binds; pass through a temporary by
+                    // resolving with the live reference is
+                    // impossible while &mut self is held
+                    // elsewhere, so snapshot the rows.
+                    p.deferred.bound_instances.clone()
+                })
+            else {
+                return;
+            };
+            self.seed_char_binds(guid_low, &player_ref);
+            self.resolve_dest_key(guid_low, dest_map_id)
+        };
+        if dest_key == current_key {
+            if let Some(map) = self.maps.get_mut(&current_key) {
+                map.teleport_player_in_map(guid, dest);
+            }
+            self.drain_map_events();
+            return;
+        }
+        // Far transfer.
+        let Some(mut player) = self
+            .maps
+            .get_mut(&current_key)
+            .and_then(|map| map.remove_player(guid))
+        else {
+            return;
+        };
+        self.drain_map_events();
+        self.player_map.remove(&guid_low);
+        player.unit.world.map_id = dest_map_id;
+        player.unit.world.relocate(dest);
+        player.unit.world.movement_info.pos = dest;
+        if let Some(entry) = self.sessions.get_mut(&id) {
+            entry.core.set_player_state(true, false);
+        }
+        // Fork order: TRANSFER_PENDING (TeleportTo),
+        // NEW_WORLD then SendSavedInstances (SendNewWorld).
+        self.reply_packet(id, crate::player_login::build_transfer_pending(dest_map_id));
+        self.reply_packet(id, crate::player_login::build_new_world(dest_map_id, dest));
+        self.send_saved_instances(id, guid_low);
+        self.pending_teleports.insert(
+            id,
+            PendingTeleport {
+                player,
+                source_key: current_key,
+                key: dest_key,
+                granted,
+            },
+        );
+        if self.bot_sessions.contains_key(&id) {
+            self.finish_teleport(id);
+        }
+    }
+
+    /// Seeds runtime binds from a character-load
+    /// `bound_instances` snapshot.
+    fn seed_char_binds(
+        &mut self,
+        guid_low: u32,
+        rows: &[mangos_db::character_load::BoundInstanceRow],
+    ) {
+        for bind in rows {
+            if let (Some(instance_id), Some(bind_map)) = (bind.id, bind.map)
+                && self.instances.char_bind(guid_low, bind_map).is_none()
+            {
+                self.instances.set_char_bind(
+                    guid_low,
+                    bind_map,
+                    (instance_id, bind.permanent != 0),
+                );
+            }
+        }
+    }
+
+    /// Bound-or-fresh dest key (the `resolve_map_key`
+    /// tail without the load-time seeding).
+    fn resolve_dest_key(&mut self, guid_low: u32, map_id: u32) -> (MapKey, bool) {
+        if !self.deps.world_stores.maps.is_instance_map(map_id) {
+            return (MapKey::shared(map_id), false);
+        }
+        let leader = self.group_leader_of(guid_low);
+        let personal = self.instances.char_bind(guid_low, map_id);
+        let grouped = leader.and_then(|l| self.instances.group_bind(l, map_id));
+        if let Some((instance_id, _)) = personal.or(grouped) {
+            let mut granted = false;
+            if personal.is_none()
+                && let Some((_, true)) = grouped
+            {
+                granted = true;
+                self.instances
+                    .set_char_bind(guid_low, map_id, (instance_id, true));
+                if let Err(e) =
+                    self.deps
+                        .instance
+                        .insert_character_bind(guid_low, instance_id, true)
+                {
+                    self.log
+                        .out(Level::Error, &format!("instance bind insert failed: {e}"));
+                }
+            }
+            return (
+                MapKey {
+                    map_id,
+                    instance_id,
+                },
+                granted,
+            );
+        }
+        (self.allocate_instance_for(guid_low, map_id, leader), false)
+    }
+
+    /// `HandleMoveWorldportAckOpcode` completion.
+    fn finish_teleport(&mut self, id: SessionId) {
+        let Some(pending) = self.pending_teleports.remove(&id) else {
+            return;
+        };
+        self.add_player_to_map(id, pending.player, pending.key, false);
+        if pending.granted {
+            self.reply_packet(id, crate::player_login::build_instance_save_created());
+        }
+        if let Some(entry) = self.sessions.get_mut(&id) {
+            entry.core.set_player_state(true, true);
+        }
+        self.drain_map_events();
+    }
+
     fn enter_map(&mut self, session: SessionId, player: Player) {
         let map_id = player.unit.world.map_id;
         let guid_low = player.unit.guid().counter();
+        let (map_key, granted) = self.resolve_map_key(guid_low, map_id, &player);
+        self.add_player_to_map(session, player, map_key, true);
+        if granted {
+            self.reply_packet(session, crate::player_login::build_instance_save_created());
+        }
+        // Fork sends saved instances only from
+        // `SendNewWorld` (far teleport), never at login.
+    }
+
+    /// `PlayerBot.AllowSaving` gate. Non-bot sessions
+    /// always save; bot sessions save only when the
+    /// fork config explicitly allows it.
+    fn character_saving_allowed(&self, session_id: SessionId) -> bool {
+        !self.bot_sessions.contains_key(&session_id) || self.config.player_bot_allow_saving
+    }
+
+    fn initial_player_save_instant(&self, guid_low: u32) -> Option<Instant> {
+        let interval = self.config.player_save_interval_ms;
+        if interval == 0 {
+            return None;
+        }
+        // Fork: urand(interval / 2, interval * 3 / 2).
+        // A splitmix64 stagger keeps the actor free of
+        // an RNG dependency while preserving the range.
+        let mut state = u64::from(guid_low) ^ unix_now().wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        state = (state ^ (state >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        state = (state ^ (state >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        state ^= state >> 31;
+        let delay = u64::from(interval / 2) + state % (u64::from(interval) + 1);
+        Some(Instant::now() + Duration::from_millis(delay))
+    }
+
+    fn should_save_stats(&self, level: u32, logout: bool) -> bool {
+        let min_level = self.config.player_save_stats_min_level;
+        min_level > 0
+            && level >= min_level
+            && (logout || !self.config.player_save_stats_only_on_logout)
+    }
+
+    /// Fork played-time tick: both counters gain whole
+    /// in-world seconds; an observed level change first
+    /// resets the level segment (`GiveLevel`).
+    fn advance_played_time(&mut self, guid_low: u32) {
+        let Some(session_id) = self.player_session.get(&guid_low).copied() else {
+            return;
+        };
+        let now = Instant::now();
+        let (elapsed, observed_level) = {
+            let Some(entry) = self.sessions.get(&session_id) else {
+                return;
+            };
+            (
+                now.saturating_duration_since(entry.played_last_tick)
+                    .as_secs(),
+                entry.played_level,
+            )
+        };
+        if elapsed == 0 {
+            return;
+        }
+        let Some(map_key) = self.player_map.get(&guid_low).copied() else {
+            if let Some(entry) = self.sessions.get_mut(&session_id) {
+                entry.played_last_tick = now;
+            }
+            return;
+        };
+        let guid = player_guid(guid_low);
+        if let Some(player) = self
+            .maps
+            .get_mut(&map_key)
+            .and_then(|map| map.player_mut(guid))
+        {
+            if player.unit.level() != observed_level {
+                player.played_time_level = 0;
+            }
+            #[allow(clippy::cast_possible_truncation)]
+            let seconds = elapsed as u32;
+            player.played_time_total = player.played_time_total.saturating_add(seconds);
+            player.played_time_level = player.played_time_level.saturating_add(seconds);
+            let level = player.unit.level();
+            if let Some(entry) = self.sessions.get_mut(&session_id) {
+                entry.played_level = level;
+                entry.played_last_tick += Duration::from_secs(elapsed);
+            }
+        }
+    }
+
+    fn advance_pending_played_time(&mut self, session_id: SessionId) {
+        let now = Instant::now();
+        let (elapsed, observed_level) = {
+            let Some(entry) = self.sessions.get(&session_id) else {
+                return;
+            };
+            (
+                now.saturating_duration_since(entry.played_last_tick)
+                    .as_secs(),
+                entry.played_level,
+            )
+        };
+        if elapsed == 0 {
+            return;
+        }
+        if let Some(pending) = self.pending_teleports.get_mut(&session_id) {
+            if pending.player.unit.level() != observed_level {
+                pending.player.played_time_level = 0;
+            }
+            #[allow(clippy::cast_possible_truncation)]
+            let seconds = elapsed as u32;
+            pending.player.played_time_total =
+                pending.player.played_time_total.saturating_add(seconds);
+            pending.player.played_time_level =
+                pending.player.played_time_level.saturating_add(seconds);
+            let level = pending.player.unit.level();
+            if let Some(entry) = self.sessions.get_mut(&session_id) {
+                entry.played_level = level;
+                entry.played_last_tick += Duration::from_secs(elapsed);
+            }
+        }
+    }
+
+    /// `Player::SaveToDB` for an in-map player.
+    /// Returns true when the saver accepted the bundle.
+    fn save_player(&mut self, guid_low: u32, online: bool, logout: bool) -> bool {
+        let Some(session_id) = self.player_session.get(&guid_low).copied() else {
+            return false;
+        };
+        if !self.character_saving_allowed(session_id) {
+            return false;
+        }
+        if self.pending_teleports.contains_key(&session_id) {
+            return logout && self.save_pending_player(session_id, logout);
+        }
+        if let Some(entry) = self.sessions.get_mut(&session_id)
+            && self.config.player_save_interval_ms > 0
+        {
+            entry.next_player_save = Some(
+                Instant::now()
+                    + Duration::from_millis(u64::from(self.config.player_save_interval_ms)),
+            );
+        }
+        self.advance_played_time(guid_low);
+        let Some(map_key) = self.player_map.get(&guid_low).copied() else {
+            return false;
+        };
+        let guid = player_guid(guid_low);
+        let now_unix = unix_now();
+        let can_speak = self
+            .sessions
+            .get(&session_id)
+            .is_none_or(|entry| entry.auth.mutetime <= now_unix);
+        let Some((auras, cooldowns, zone, level)) = self.maps.get(&map_key).map(|map| {
+            (
+                map.player_savable_auras(guid),
+                map.player_cooldown_rows(guid, unix_now_i64()),
+                map.player_zone_id(guid),
+                map.player(guid).map_or(0, |player| player.unit.level()),
+            )
+        }) else {
+            return false;
+        };
+        if let Some(entry) = self.sessions.get_mut(&session_id) {
+            entry.cached_zone = zone;
+        }
+        let ctx = SaveContext {
+            map_id: map_key.map_id,
+            instance_id: map_key.instance_id,
+            zone,
+            online,
+            logout_time: now_unix,
+            save_stats: self.should_save_stats(level, logout),
+            can_speak,
+        };
+        let Some((bundle, stats, action_writes, projected_quests)) = self
+            .maps
+            .get(&map_key)
+            .and_then(|map| map.player(guid))
+            .map(|player| {
+                let action_writes = logout.then(|| build_action_writes(player));
+                let (bundle, stats, projected_quests) =
+                    build_save_bundle(player, auras, cooldowns, &ctx);
+                (bundle, stats, action_writes, projected_quests)
+            })
+        else {
+            return false;
+        };
+        if let Err(e) = self.deps.character_saver.save_character(bundle, stats) {
+            self.log.out(
+                Level::Error,
+                &format!("character save failed for guid {guid_low}: {e}"),
+            );
+            return false;
+        }
+        let actions_saved = action_writes.is_none_or(|(inserts, updates, deletes)| {
+            match self
+                .deps
+                .character_saver
+                .save_actions(guid_low, inserts, updates, deletes)
+            {
+                Ok(()) => true,
+                Err(e) => {
+                    self.log.out(
+                        Level::Error,
+                        &format!("character action save failed for guid {guid_low}: {e}"),
+                    );
+                    false
+                }
+            }
+        });
+        if let Some(player) = self
+            .maps
+            .get_mut(&map_key)
+            .and_then(|map| map.player_mut(guid))
+        {
+            rebaseline(player, now_unix, projected_quests);
+            if actions_saved {
+                rebaseline_actions(player);
+            }
+        }
+        true
+    }
+
+    /// Forced `SaveToDB` while far teleport is pending:
+    /// destination map/position with instance 0, per fork.
+    fn save_pending_player(&mut self, session_id: SessionId, logout: bool) -> bool {
+        if !self.character_saving_allowed(session_id) {
+            return false;
+        }
+        self.advance_pending_played_time(session_id);
+        let Some((guid_low, dest_key, source_key, level)) =
+            self.pending_teleports.get(&session_id).map(|pending| {
+                (
+                    pending.player.unit.guid().counter(),
+                    pending.key,
+                    pending.source_key,
+                    pending.player.unit.level(),
+                )
+            })
+        else {
+            return false;
+        };
+        let now_unix = unix_now();
+        let can_speak = self
+            .sessions
+            .get(&session_id)
+            .is_none_or(|entry| entry.auth.mutetime <= now_unix);
+        let zone = self
+            .sessions
+            .get(&session_id)
+            .map_or(0, |entry| entry.cached_zone);
+        let guid = player_guid(guid_low);
+        let (auras, cooldowns) = match (
+            self.pending_teleports.get(&session_id),
+            self.maps.get(&source_key),
+        ) {
+            (Some(pending), Some(map)) => (
+                map.savable_auras_for_player(&pending.player),
+                map.player_cooldown_rows(guid, unix_now_i64()),
+            ),
+            _ => (Vec::new(), Vec::new()),
+        };
+        let ctx = SaveContext {
+            map_id: dest_key.map_id,
+            instance_id: 0,
+            zone,
+            online: false,
+            logout_time: now_unix,
+            save_stats: self.should_save_stats(level, logout),
+            can_speak,
+        };
+        let Some((bundle, stats, action_writes, projected_quests)) =
+            self.pending_teleports.get(&session_id).map(|pending| {
+                let action_writes = logout.then(|| build_action_writes(&pending.player));
+                let (bundle, stats, projected_quests) =
+                    build_save_bundle(&pending.player, auras, cooldowns, &ctx);
+                (bundle, stats, action_writes, projected_quests)
+            })
+        else {
+            return false;
+        };
+        if let Err(e) = self.deps.character_saver.save_character(bundle, stats) {
+            self.log.out(
+                Level::Error,
+                &format!("character save failed for guid {guid_low}: {e}"),
+            );
+            return false;
+        }
+        let actions_saved = action_writes.is_none_or(|(inserts, updates, deletes)| {
+            match self
+                .deps
+                .character_saver
+                .save_actions(guid_low, inserts, updates, deletes)
+            {
+                Ok(()) => true,
+                Err(e) => {
+                    self.log.out(
+                        Level::Error,
+                        &format!("character action save failed for guid {guid_low}: {e}"),
+                    );
+                    false
+                }
+            }
+        });
+        if let Some(pending) = self.pending_teleports.get_mut(&session_id) {
+            rebaseline(&mut pending.player, now_unix, projected_quests);
+            if actions_saved {
+                rebaseline_actions(&mut pending.player);
+            }
+        }
+        true
+    }
+
+    fn update_player_saves(&mut self) {
+        let now = Instant::now();
+        let players: Vec<(SessionId, u32, bool)> = self
+            .sessions
+            .iter()
+            .filter_map(|(id, entry)| {
+                entry.player_guid.map(|guid_low| {
+                    (
+                        *id,
+                        guid_low,
+                        entry.next_player_save.is_some_and(|next| next <= now),
+                    )
+                })
+            })
+            .collect();
+        for (_id, guid_low, due) in players {
+            self.advance_played_time(guid_low);
+            if due {
+                self.save_player(guid_low, true, false);
+            }
+        }
+    }
+
+    fn save_all_players(&mut self) {
+        let guids: Vec<u32> = self.player_session.keys().copied().collect();
+        for guid_low in guids {
+            self.save_player(guid_low, false, true);
+        }
+        let pending_sessions: Vec<SessionId> = self.pending_teleports.keys().copied().collect();
+        for session_id in pending_sessions {
+            if !self
+                .sessions
+                .get(&session_id)
+                .and_then(|entry| entry.player_guid)
+                .is_some_and(|guid_low| self.player_session.contains_key(&guid_low))
+            {
+                self.save_pending_player(session_id, true);
+            }
+        }
+    }
+
+    /// Shared map-entry body (login + teleport finish).
+    fn add_player_to_map(
+        &mut self,
+        session: SessionId,
+        player: Player,
+        map_key: MapKey,
+        apply_auras: bool,
+    ) {
+        let map_id = map_key.map_id;
+        let guid_low = player.unit.guid().counter();
+        let player_level = player.unit.level();
+        let initial_player_save = self.initial_player_save_instant(guid_low);
         let now_ms = self.server_ms();
         let now_unix = unix_now();
         let maps_dir = self.deps.maps_dir.clone();
         let navmesh_dir = self.deps.mmaps_dir.clone();
         let map_config = MapConfig {
+            // `IsPvPRealm()`: REALM_TYPE_PVP (1), RPPVP (8), FFA_PVP (16).
+            pvp_realm: matches!(self.config.game_type, 1 | 8 | 16),
             activate_weather: self.config.activate_weather,
             change_weather_interval_ms: self.config.change_weather_interval_ms,
             ..MapConfig::default()
         };
-        let map = self.maps.entry(map_id).or_insert_with(|| {
+        let map = self.maps.entry(map_key).or_insert_with(|| {
             let mut map = Map::new(
                 map_id,
-                0,
+                map_key.instance_id,
                 map_config,
                 Arc::clone(&self.deps.world_stores),
                 WorldRng::from_entropy(),
@@ -12667,22 +13747,35 @@ impl World {
             map
         });
         map.add_player(player, &self.deps.respawn_times, now_unix, now_ms);
-        // Saved auras land after the player is in the
-        // map (`Player::_LoadAuras` at login completion).
-        map.apply_saved_auras(ObjectGuid::with_entry(
-            mangos_guid::HighGuid::PLAYER,
-            0,
-            guid_low,
-        ));
-        self.player_map.insert(guid_low, map_id);
+        if apply_auras {
+            // Saved auras land after the player is in
+            // the map (`Player::_LoadAuras` at login
+            // completion; teleports keep live auras).
+            map.apply_saved_auras(ObjectGuid::with_entry(
+                mangos_guid::HighGuid::PLAYER,
+                0,
+                guid_low,
+            ));
+        }
+        self.player_map.insert(guid_low, map_key);
         self.player_session.insert(guid_low, session);
-        self.on_bot_entered_world(session, guid_low, map_id);
+        if let Some(entry) = self.sessions.get_mut(&session) {
+            entry.played_last_tick = Instant::now();
+            if entry.next_player_save.is_none() {
+                entry.played_level = player_level;
+                entry.next_player_save = initial_player_save;
+            }
+        }
+        self.on_bot_entered_world(session, guid_low, map_key);
     }
 
     /// Removes the session's player from its map (logout
     /// and disconnect share this; character save is
     /// Phase 6).
     fn leave_map(&mut self, guid_low: u32) {
+        // `LogoutPlayer`: save while the aggregate is
+        // still in its map, then remove it.
+        self.save_player(guid_low, false, true);
         // `Player::~Player` / logout `TradeCancel`.
         self.trade_cancel(guid_low, true, crate::trade::status::TRADE_CANCELED);
         if let Some(map_id) = self.player_map.remove(&guid_low) {
@@ -12704,6 +13797,7 @@ impl World {
 
     /// Routes queued [`MapEvent`]s: packets to sessions,
     /// respawn clears to the characters DB.
+    #[allow(clippy::too_many_lines)] // flat MapEvent dispatcher
     fn drain_map_events(&mut self) {
         let mut events: Vec<MapEvent> = Vec::new();
         for map in self.maps.values_mut() {
@@ -12720,8 +13814,15 @@ impl World {
                         dead.push(id);
                     }
                 }
-                MapEvent::ClearCreatureRespawn { guid_low } => {
-                    if let Err(e) = self.deps.presence.clear_creature_respawn(guid_low) {
+                MapEvent::ClearCreatureRespawn {
+                    guid_low,
+                    instance_id,
+                } => {
+                    if let Err(e) = self
+                        .deps
+                        .presence
+                        .clear_creature_respawn(guid_low, instance_id)
+                    {
                         self.log
                             .out(Level::Error, &format!("creature respawn clear failed: {e}"));
                     }
@@ -12730,12 +13831,14 @@ impl World {
                     guid_low,
                     respawn_time,
                     map_id,
+                    instance_id,
                 } => {
-                    if let Err(e) =
-                        self.deps
-                            .presence
-                            .store_creature_respawn(guid_low, respawn_time, map_id)
-                    {
+                    if let Err(e) = self.deps.presence.store_creature_respawn(
+                        guid_low,
+                        respawn_time,
+                        map_id,
+                        instance_id,
+                    ) {
                         self.log
                             .out(Level::Error, &format!("creature respawn store failed: {e}"));
                     }
@@ -12792,8 +13895,15 @@ impl World {
                         ),
                     );
                 }
-                MapEvent::ClearGameObjectRespawn { guid_low } => {
-                    if let Err(e) = self.deps.presence.clear_gameobject_respawn(guid_low) {
+                MapEvent::ClearGameObjectRespawn {
+                    guid_low,
+                    instance_id,
+                } => {
+                    if let Err(e) = self
+                        .deps
+                        .presence
+                        .clear_gameobject_respawn(guid_low, instance_id)
+                    {
                         self.log.out(
                             Level::Error,
                             &format!("gameobject respawn clear failed: {e}"),
@@ -12826,7 +13936,7 @@ impl World {
         u32::try_from(self.started.elapsed().as_millis() & 0xFFFF_FFFF).unwrap_or(0)
     }
 
-    fn player_map_guid(&self, id: SessionId) -> Option<(u32, ObjectGuid)> {
+    fn player_map_guid(&self, id: SessionId) -> Option<(MapKey, ObjectGuid)> {
         let entry = self.sessions.get(&id)?;
         let guid_low = entry.player_guid?;
         let &map_id = self.player_map.get(&guid_low)?;
@@ -12842,7 +13952,7 @@ impl World {
     /// drop silently like the unknown-spell arm.
     fn on_cast_spell(&mut self, id: SessionId, packet: &WorldPacket) {
         use mangos_map::spells::{CastOptions, CastTarget};
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         let body = packet.body();
@@ -12863,7 +13973,7 @@ impl World {
         } else {
             return; // item/GO/location targets unsupported
         };
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         map.cast_spell(guid, spell_id, target, CastOptions::default());
@@ -12872,14 +13982,14 @@ impl World {
 
     /// `HandleCancelCastOpcode` subset.
     fn on_cancel_cast(&mut self, id: SessionId, packet: &WorldPacket) {
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         if packet.body().len() < 4 {
             self.bad_packet(id, packet.opcode());
             return;
         }
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         map.cancel_cast(guid, false);
@@ -12888,7 +13998,7 @@ impl World {
 
     /// `HandleCancelAuraOpcode` subset.
     fn on_cancel_aura(&mut self, id: SessionId, packet: &WorldPacket) {
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         let body = packet.body();
@@ -12897,7 +14007,7 @@ impl World {
             return;
         }
         let spell_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         map.cancel_aura(guid, spell_id);
@@ -12907,7 +14017,7 @@ impl World {
     /// `HandleAttackSwingOpcode`: raw target guid; the
     /// map starts melee when the target is attackable.
     fn on_attack_swing(&mut self, id: SessionId, packet: &WorldPacket) {
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         let body = packet.body();
@@ -12917,7 +14027,7 @@ impl World {
         }
         let target =
             ObjectGuid::from_raw(u64::from_le_bytes(body[..8].try_into().expect("8 bytes")));
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         map.attack_start(guid, target);
@@ -12926,20 +14036,144 @@ impl World {
 
     /// `HandleAttackStopOpcode` (empty body).
     fn on_attack_stop(&mut self, id: SessionId) {
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         map.attack_stop(guid);
         self.drain_map_events();
     }
 
+    fn on_set_action_bar_toggles(&mut self, id: SessionId, packet: &WorldPacket) {
+        let body = packet.body();
+        if body.is_empty() {
+            self.bad_packet(id, packet.opcode());
+            return;
+        }
+        if let Some((map_key, guid)) = self.player_map_guid(id)
+            && let Some(player) = self
+                .maps
+                .get_mut(&map_key)
+                .and_then(|map| map.player_mut(guid))
+        {
+            player.unit.world.object.values_mut().set_byte(
+                mangos_protocol::update_field_table::offsets::PLAYER_FIELD_BYTES,
+                2,
+                body[0],
+            );
+        }
+    }
+
+    fn on_played_time(&mut self, id: SessionId) {
+        let Some(guid_low) = self.sessions.get(&id).and_then(|e| e.player_guid) else {
+            return;
+        };
+        self.advance_played_time(guid_low);
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        let Some((total, level)) = self.maps.get(&map_key).and_then(|map| {
+            map.player(guid)
+                .map(|player| (player.played_time_total, player.played_time_level))
+        }) else {
+            return;
+        };
+        let mut writer = PacketWriter::new();
+        writer.write_u32_le(total);
+        writer.write_u32_le(level);
+        let mut response = WorldPacket::new(opcode_id::SMSG_PLAYED_TIME);
+        response.take_writer(writer);
+        if let Some(entry) = self.sessions.get(&id)
+            && !send_packet(entry, response)
+        {
+            self.disconnect(id);
+        }
+    }
+
+    /// `HandleSetActionButtonOpcode`
+    /// (`MiscHandler.cpp:944`): update the live action
+    /// rows; persistence happens at logout through
+    /// `MasterPlayer::SaveActions`.
+    fn on_set_action_button(&mut self, id: SessionId, packet: &WorldPacket) {
+        match packet.opcode() {
+            opcode_id::CMSG_SET_ACTIONBAR_TOGGLES => {
+                return self.on_set_action_bar_toggles(id, packet);
+            }
+            opcode_id::CMSG_PLAYED_TIME => return self.on_played_time(id),
+            _ => {}
+        }
+        let body = packet.body();
+        if body.len() < 5 {
+            self.bad_packet(id, packet.opcode());
+            return;
+        }
+        let button = body[0];
+        let packet_data = u32::from_le_bytes(body[1..5].try_into().expect("4 bytes"));
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        let Some(map) = self.maps.get_mut(&map_key) else {
+            return;
+        };
+        let Some(player) = map.player_mut(guid) else {
+            return;
+        };
+        if packet_data == 0 {
+            player.deferred.actions.retain(|row| row.button != button);
+            return;
+        }
+        let action = packet_data & 0x00FF_FFFF;
+        #[allow(clippy::cast_possible_truncation)]
+        let kind = (packet_data >> 24) as u8;
+        if !matches!(kind, 0x00 | 0x40 | 0x41 | 0x80) || button >= 120 {
+            return;
+        }
+        let valid = match kind {
+            0x00 => self
+                .deps
+                .world_stores
+                .spells
+                .get(action)
+                .is_some_and(|spell| {
+                    spell.attributes & 0x0000_0040 == 0
+                        && player.deferred.spells.iter().any(|row| row.spell == action)
+                }),
+            0x80 => self.deps.world_stores.item_prototypes.get(action).is_some(),
+            _ => true,
+        };
+        if !valid {
+            return;
+        }
+        if let Some(row) = player
+            .deferred
+            .actions
+            .iter_mut()
+            .find(|row| row.button == button)
+        {
+            row.action = action;
+            row.kind = kind;
+        } else {
+            let pos = player
+                .deferred
+                .actions
+                .partition_point(|row| row.button < button);
+            player.deferred.actions.insert(
+                pos,
+                ActionRow {
+                    button,
+                    action,
+                    kind,
+                },
+            );
+        }
+    }
+
     /// `HandleSetSelectionOpcode`: raw guid into
     /// `UNIT_FIELD_TARGET`.
     fn on_set_selection(&mut self, id: SessionId, packet: &WorldPacket) {
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         let body = packet.body();
@@ -12949,7 +14183,7 @@ impl World {
         }
         let target =
             ObjectGuid::from_raw(u64::from_le_bytes(body[..8].try_into().expect("8 bytes")));
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         if let Some(player) = map.player_mut(guid) {
@@ -12965,7 +14199,7 @@ impl World {
     /// emotes (0 = none, 3 = oneshot wave) pass, as in
     /// C++; mute/anim-cancel gates are not modeled.
     fn on_emote(&mut self, id: SessionId, packet: &WorldPacket) {
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         let body = packet.body();
@@ -12977,7 +14211,7 @@ impl World {
         if emote != 0 && emote != 3 {
             return;
         }
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         map.handle_emote_command(guid, emote);
@@ -12987,7 +14221,7 @@ impl World {
     /// `HandleTextEmoteOpcode`: textEmote + emoteNum +
     /// target guid.
     fn on_text_emote(&mut self, id: SessionId, packet: &WorldPacket) {
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         let body = packet.body();
@@ -12999,7 +14233,7 @@ impl World {
         let emote_num = u32::from_le_bytes(body[4..8].try_into().expect("4 bytes"));
         let target =
             ObjectGuid::from_raw(u64::from_le_bytes(body[8..16].try_into().expect("8 bytes")));
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         map.player_text_emote(guid, text_emote, emote_num, target);
@@ -13008,7 +14242,7 @@ impl World {
 
     /// `HandleGameObjectUseOpcode`: one gameobject guid.
     fn on_gameobj_use(&mut self, id: SessionId, packet: &WorldPacket) {
-        let Some((map_id, guid)) = self.player_map_guid(id) else {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
         let body = packet.body();
@@ -13018,11 +14252,181 @@ impl World {
         }
         let target =
             ObjectGuid::from_raw(u64::from_le_bytes(body[..8].try_into().expect("8 bytes")));
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         map.gameobject_use(guid, target);
         self.drain_map_events();
+    }
+
+    /// `WorldSession::SendAreaTriggerMessage`.
+    fn send_area_trigger_message(&mut self, id: SessionId, text: &str) {
+        self.reply_packet(id, crate::player_login::build_area_trigger_message(text));
+    }
+
+    /// `HandleAreaTriggerOpcode` (`MiscHandler.cpp:675-851`)
+    /// subset: script gate evaluation (execution is a
+    /// recorded deviation — no DB-script engine and the
+    /// C++ `OnAreaTrigger` content scripts are unported),
+    /// quest-explore credit (deviation: no quest
+    /// progression system yet), tavern rest flag
+    /// (rest-type/bonus-rate distinction lands with
+    /// rest accrual), ghost-dungeon message (fork
+    /// teleports the ghost in when the corpse lies in
+    /// the dungeon chain; corpse tracking is unported,
+    /// so all ghosts are refused), level/condition
+    /// gates, teleport. Unported fork branches whose
+    /// state does not exist yet: cheat-option and
+    /// taxi-flight early-outs, battleground entrance /
+    /// in-BG / zone-script handling (no BG subsystem),
+    /// localized teleport messages.
+    #[allow(clippy::too_many_lines)]
+    fn on_area_trigger(&mut self, id: SessionId, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let Ok(trigger_id) = reader.read_u32_le() else {
+            self.bad_packet(id, opcode_id::CMSG_AREATRIGGER);
+            return;
+        };
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        let guid_low = guid.counter();
+        let stores = &self.deps.world_stores;
+        let Some(trigger) = stores.area_triggers.get(trigger_id).cloned() else {
+            return;
+        };
+        let Some((alive, level, position, is_gm)) = self.maps.get(&map_key).and_then(|map| {
+            map.player(guid).map(|player| {
+                (
+                    player.unit.is_alive(),
+                    player.unit.level(),
+                    player.unit.world.position(),
+                    player.extra_flags & 0x0000_0001 != 0,
+                )
+            })
+        }) else {
+            return;
+        };
+        if !trigger.contains(map_key.map_id, position.x, position.y, position.z, 5.0) {
+            return;
+        }
+        // Tavern triggers (`areatrigger_tavern`): the fork
+        // puts the player into tavern rest and stops
+        // (`HandleAreaTriggerOpcode`).
+        if stores.tavern_triggers.contains(&trigger_id) {
+            if let Some(map) = self.maps.get_mut(&map_key) {
+                map.set_player_rest_tavern(guid, trigger_id);
+            }
+            return;
+        }
+        // Script gate (`StartAreaTriggerScript` head):
+        // condition + per-map cooldown; execution of DB
+        // and C++ trigger scripts is unported.
+        if trigger.has_script() {
+            let condition_ok = trigger.condition_id == 0
+                || self.maps.get(&map_key).is_some_and(|map| {
+                    map.condition_satisfied(trigger.condition_id, Some(guid), Some(guid))
+                });
+            if condition_ok {
+                let now = unix_now_i64();
+                let cooling = trigger.cooldown != 0
+                    && self
+                        .area_trigger_cooldowns
+                        .get(&(map_key, trigger_id))
+                        .is_some_and(|until| *until > now);
+                if !cooling {
+                    if trigger.cooldown != 0 {
+                        self.area_trigger_cooldowns.insert(
+                            (map_key, trigger_id),
+                            now.saturating_add(i64::from(trigger.cooldown)),
+                        );
+                    }
+                    self.log.out(
+                        Level::Detail,
+                        &format!(
+                            "area trigger {trigger_id} script (id {}, name '{}') not executed: trigger scripts unported",
+                            trigger.script_id, trigger.script_name
+                        ),
+                    );
+                }
+            }
+        }
+        // Quest explore credit: progression system absent.
+        let quest_id = stores.area_triggers.quest_for_trigger(trigger_id);
+        if quest_id != 0 && alive {
+            self.log.out(
+                Level::Detail,
+                &format!(
+                    "area trigger {trigger_id} quest {quest_id} explore credit skipped: quest progression unported"
+                ),
+            );
+        }
+        // Tavern rest: flag only (rested-XP accrual
+        // lands with character save).
+        if stores.area_triggers.is_tavern(trigger_id) {
+            if let Some(map) = self.maps.get_mut(&map_key)
+                && let Some(player) = map.player_mut(guid)
+            {
+                use mangos_protocol::update_field_table::offsets;
+                player
+                    .unit
+                    .world
+                    .object
+                    .values_mut()
+                    .set_flag(offsets::PLAYER_FLAGS, 0x0000_0020);
+            }
+            return;
+        }
+        let Some(teleport) = stores.area_triggers.teleport(trigger_id).cloned() else {
+            return;
+        };
+        let Some(target_entry) = stores.maps.get(teleport.dest_map_id) else {
+            return;
+        };
+        if !alive && target_entry.is_dungeon() {
+            let text = format!(
+                "You cannot enter {} while in ghost form.",
+                target_entry.name
+            );
+            self.send_area_trigger_message(id, &text);
+            return;
+        }
+        if !is_gm {
+            let level_check = level < u32::from(teleport.required_level)
+                && !self.config.instance_ignore_level
+                // `WOW_PATCH_104` = 2 on the 0..10 patch scale.
+                && self.config.wow_patch >= 2;
+            let condition_check = teleport.required_condition != 0
+                && !self.maps.get(&map_key).is_some_and(|map| {
+                    map.condition_satisfied(teleport.required_condition, Some(guid), Some(guid))
+                });
+            if level_check || condition_check {
+                if teleport.message.is_empty() {
+                    if level_check {
+                        let template = self
+                            .strings
+                            .get(49)
+                            .map_or("You must be level %u to enter.", |entry| entry.text(0));
+                        let text = template.replacen("%u", &teleport.required_level.to_string(), 1);
+                        self.send_area_trigger_message(id, &text);
+                    }
+                } else {
+                    self.send_area_trigger_message(id, &teleport.message.clone());
+                }
+                return;
+            }
+        }
+        let _ = guid_low;
+        self.teleport_player(
+            id,
+            teleport.dest_map_id,
+            mangos_movement::movement_info::Position::new(
+                teleport.dest_x,
+                teleport.dest_y,
+                teleport.dest_z,
+                teleport.dest_o,
+            ),
+        );
     }
 
     /// `HandleMovementOpcodes` relay half: parse with the
@@ -13035,12 +14439,12 @@ impl World {
         let Some(guid_low) = entry.player_guid else {
             return;
         };
-        let Some(&map_id) = self.player_map.get(&guid_low) else {
+        let Some(&map_key) = self.player_map.get(&guid_low) else {
             return;
         };
         let guid = ObjectGuid::with_entry(mangos_guid::HighGuid::PLAYER, 0, guid_low);
         let server_ms = self.server_ms();
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         let Some(player) = map.player_mut(guid) else {
@@ -13088,12 +14492,12 @@ impl World {
         let Some(guid_low) = entry.player_guid else {
             return;
         };
-        let Some(&map_id) = self.player_map.get(&guid_low) else {
+        let Some(&map_key) = self.player_map.get(&guid_low) else {
             return;
         };
         let guid = ObjectGuid::with_entry(mangos_guid::HighGuid::PLAYER, 0, guid_low);
         let server_ms = self.server_ms();
-        let Some(map) = self.maps.get_mut(&map_id) else {
+        let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         let opcode = packet.opcode();
@@ -13316,9 +14720,12 @@ impl World {
         let mut attack_swing_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut attack_stop_packets: Vec<SessionId> = Vec::new();
         let mut set_selection_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut action_button_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut emote_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut text_emote_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut gameobj_use_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut areatrigger_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut worldport_packets: Vec<SessionId> = Vec::new();
         let mut logout_requests: Vec<SessionId> = Vec::new();
 
         for (id, entry) in &mut self.sessions {
@@ -13544,11 +14951,27 @@ impl World {
                     Dispatch::Execute if meta.handler_name == "HandleSetSelectionOpcode" => {
                         set_selection_packets.push((*id, packet));
                     }
+                    Dispatch::Execute
+                        if matches!(
+                            meta.handler_name,
+                            "HandleSetActionButtonOpcode"
+                                | "HandleSetActionBarTogglesOpcode"
+                                | "HandlePlayedTime"
+                        ) =>
+                    {
+                        action_button_packets.push((*id, packet));
+                    }
                     Dispatch::Execute if meta.handler_name == "HandleEmoteOpcode" => {
                         emote_packets.push((*id, packet));
                     }
                     Dispatch::Execute if meta.handler_name == "HandleTextEmoteOpcode" => {
                         text_emote_packets.push((*id, packet));
+                    }
+                    Dispatch::Execute if meta.handler_name == "HandleAreaTriggerOpcode" => {
+                        areatrigger_packets.push((*id, packet));
+                    }
+                    Dispatch::Execute if meta.handler_name == "HandleMoveWorldportAckOpcode" => {
+                        worldport_packets.push(*id);
                     }
                     Dispatch::Execute if meta.handler_name == "HandleGameObjectUseOpcode" => {
                         gameobj_use_packets.push((*id, packet));
@@ -13672,11 +15095,20 @@ impl World {
         for (id, packet) in set_selection_packets {
             self.on_set_selection(id, &packet);
         }
+        for (id, packet) in action_button_packets {
+            self.on_set_action_button(id, &packet);
+        }
         for (id, packet) in emote_packets {
             self.on_emote(id, &packet);
         }
         for (id, packet) in text_emote_packets {
             self.on_text_emote(id, &packet);
+        }
+        for (id, packet) in areatrigger_packets {
+            self.on_area_trigger(id, &packet);
+        }
+        for id in worldport_packets {
+            self.finish_teleport(id);
         }
         for (id, packet) in gameobj_use_packets {
             self.on_gameobj_use(id, &packet);
@@ -13728,7 +15160,7 @@ struct ActorBotHost<'a> {
 }
 
 impl ActorBotHost<'_> {
-    fn map_id(&self) -> Option<u32> {
+    fn map_key(&self) -> Option<MapKey> {
         self.world.player_map.get(&self.bot_low).copied()
     }
 
@@ -13787,7 +15219,7 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
     }
 
     fn unit(&self, guid: ObjectGuid) -> Option<mangos_bots::UnitView> {
-        let map = self.map_id().and_then(|id| self.world.maps.get(&id))?;
+        let map = self.map_key().and_then(|id| self.world.maps.get(&id))?;
         let casting = map.bot_casting_spell(guid).is_some();
         if let Some(player) = map.player(guid) {
             return Some(Self::unit_view(&player.unit, guid, true, casting));
@@ -13817,7 +15249,7 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
         // (full range/LoS/power/cooldown checks join
         // the behaviours that need them): known
         // spell, alive self, alive target.
-        let Some(map) = self.map_id().and_then(|id| self.world.maps.get(&id)) else {
+        let Some(map) = self.map_key().and_then(|id| self.world.maps.get(&id)) else {
             return false;
         };
         if !map.bot_knows_spell(self.me(), spell_id) {
@@ -13838,7 +15270,7 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
         spell_id: u32,
     ) -> mangos_bots::CastOutcome {
         let me = self.me();
-        let Some(map) = self.map_id().and_then(|id| self.world.maps.get_mut(&id)) else {
+        let Some(map) = self.map_key().and_then(|id| self.world.maps.get_mut(&id)) else {
             return mangos_bots::CastOutcome::Failed(0);
         };
         let target = match target {
@@ -13869,7 +15301,7 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
 
     fn move_chase(&mut self, target: ObjectGuid, distance: f32, angle: f32) {
         let me = self.me();
-        if let Some(map) = self.map_id().and_then(|id| self.world.maps.get_mut(&id)) {
+        if let Some(map) = self.map_key().and_then(|id| self.world.maps.get_mut(&id)) {
             map.creature_move_chase(me, target, distance, angle);
         }
     }
@@ -13880,7 +15312,7 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
 
     fn move_point(&mut self, x: f32, y: f32, z: f32) {
         let me = self.me();
-        if let Some(map) = self.map_id().and_then(|id| self.world.maps.get_mut(&id)) {
+        if let Some(map) = self.map_key().and_then(|id| self.world.maps.get_mut(&id)) {
             let dest = mangos_movement::movement_info::Position { x, y, z, o: 0.0 };
             map.creature_move_point(me, 0, dest, 0, 0.0, -10.0);
         }
@@ -13888,14 +15320,14 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
 
     fn stop_moving(&mut self) {
         let me = self.me();
-        if let Some(map) = self.map_id().and_then(|id| self.world.maps.get_mut(&id)) {
+        if let Some(map) = self.map_key().and_then(|id| self.world.maps.get_mut(&id)) {
             map.stop_moving(me);
         }
     }
 
     fn set_target(&mut self, target: Option<ObjectGuid>) {
         let me = self.me();
-        if let Some(map) = self.map_id().and_then(|id| self.world.maps.get_mut(&id)) {
+        if let Some(map) = self.map_key().and_then(|id| self.world.maps.get_mut(&id)) {
             map.bot_set_target(me, target.unwrap_or(ObjectGuid::EMPTY));
         }
     }
@@ -13909,38 +15341,38 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
     }
 
     fn attackers_of(&self, guid: ObjectGuid) -> Vec<ObjectGuid> {
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .map_or_else(Vec::new, |map| map.bot_attackers_of(guid))
     }
 
     fn has_aura(&self, guid: ObjectGuid, spell_id: u32) -> bool {
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .is_some_and(|map| map.bot_has_aura(guid, spell_id))
     }
 
     fn has_periodic_heal_aura(&self, guid: ObjectGuid) -> bool {
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .is_some_and(|map| map.bot_has_periodic_heal(guid))
     }
 
     fn knows_spell(&self, spell_id: u32) -> bool {
         let me = self.me();
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .is_some_and(|map| map.bot_knows_spell(me, spell_id))
     }
 
     fn hostile_count_around(&self, center: ObjectGuid, radius: f32) -> u8 {
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .map_or(0, |map| map.bot_hostile_count_around(center, radius))
     }
 
     fn incoming_damage(&self, guid: ObjectGuid) -> i32 {
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .map_or(0, |map| map.bot_incoming_damage(guid))
     }
@@ -13966,7 +15398,7 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
     }
 
     fn threat_of(&self, enemy: ObjectGuid, who: ObjectGuid) -> f32 {
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .map_or(0.0, |map| map.threat_on(enemy, who))
     }
@@ -13974,7 +15406,7 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
     fn motion_kind(&self) -> mangos_bots::MotionKind {
         let me = self.me();
         let motion_type = self
-            .map_id()
+            .map_key()
             .and_then(|id| self.world.maps.get(&id))
             .map_or(0, |map| map.motion_type_of(me));
         match motion_type {
@@ -13987,14 +15419,14 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
 
     fn attack_stop(&mut self) {
         let me = self.me();
-        if let Some(map) = self.map_id().and_then(|id| self.world.maps.get_mut(&id)) {
+        if let Some(map) = self.map_key().and_then(|id| self.world.maps.get_mut(&id)) {
             map.bot_attack_stop(me);
         }
     }
 
     fn can_reach_melee(&self, target: ObjectGuid) -> bool {
         let me = self.me();
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .is_some_and(|map| map.bot_can_reach_melee(me, target))
     }
@@ -14064,7 +15496,7 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
     }
 
     fn is_ccd(&self, guid: ObjectGuid) -> bool {
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .is_some_and(|map| map.bot_is_ccd(guid))
     }
@@ -14074,21 +15506,21 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
     }
 
     fn has_aura_type(&self, guid: ObjectGuid, aura_type: u32) -> bool {
-        self.map_id()
+        self.map_key()
             .and_then(|id| self.world.maps.get(&id))
             .is_some_and(|map| map.bot_has_aura_type(guid, aura_type))
     }
 
     fn cancel_aura(&mut self, spell_id: u32) {
         let me = self.me();
-        if let Some(map) = self.map_id().and_then(|id| self.world.maps.get_mut(&id)) {
+        if let Some(map) = self.map_key().and_then(|id| self.world.maps.get_mut(&id)) {
             map.cancel_aura(me, spell_id);
         }
     }
 
     fn remove_shapeshift(&mut self) {
         let me = self.me();
-        if let Some(map) = self.map_id().and_then(|id| self.world.maps.get_mut(&id)) {
+        if let Some(map) = self.map_key().and_then(|id| self.world.maps.get_mut(&id)) {
             map.bot_remove_shapeshift(me);
         }
     }
@@ -14129,7 +15561,7 @@ impl mangos_bots::BotHost for ActorBotHost<'_> {
 
     fn face(&mut self, target: ObjectGuid) {
         let me = self.me();
-        if let Some(map) = self.map_id().and_then(|id| self.world.maps.get_mut(&id)) {
+        if let Some(map) = self.map_key().and_then(|id| self.world.maps.get_mut(&id)) {
             map.bot_face(me, target);
         }
     }

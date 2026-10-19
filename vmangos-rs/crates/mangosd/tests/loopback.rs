@@ -200,6 +200,7 @@ impl CharQueries for FakeCharQueries {
                 world_phase_mask: 0,
                 create_time: 0,
                 instance: 0,
+                zone: 0,
             },
             group_id: None,
             bound_instances: vec![],
@@ -257,6 +258,51 @@ struct FakePlayerbotStore;
 
 impl mangosd::world_actor::PlayerbotStore for FakePlayerbotStore {
     fn update_chances(&self, _chances: &[(u32, u32)]) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+}
+
+struct FakeInstanceStore;
+
+impl mangosd::world_actor::InstanceStore for FakeInstanceStore {
+    fn insert_instance(
+        &self,
+        _instance_id: u32,
+        _map_id: u32,
+        _reset_time: i64,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn insert_character_bind(
+        &self,
+        _guid_low: u32,
+        _instance_id: u32,
+        _permanent: bool,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn update_character_bind(
+        &self,
+        _guid_low: u32,
+        _old_instance_id: u32,
+        _new_instance_id: u32,
+        _permanent: bool,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn delete_character_bind(&self, _guid_low: u32, _instance_id: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn insert_group_bind(
+        &self,
+        _leader_low: u32,
+        _instance_id: u32,
+        _permanent: bool,
+    ) -> Result<(), DbError> {
         Ok(())
     }
 }
@@ -650,6 +696,44 @@ impl GroupStore for FakeGroupStore {
     }
 }
 
+struct FakeCharacterSaver;
+
+impl mangosd::world_actor::CharacterSaver for FakeCharacterSaver {
+    fn save_character(
+        &self,
+        _bundle: mangos_db::character_save::CharacterSaveBundle,
+        _stats: Option<mangos_db::character_save::CharacterStatsRow>,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn save_actions(
+        &self,
+        _guid_low: u32,
+        _inserts: Vec<mangos_db::character_load::ActionRow>,
+        _updates: Vec<mangos_db::character_load::ActionRow>,
+        _deletes: Vec<u8>,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn insert_homebind(
+        &self,
+        _guid_low: u32,
+        _row: mangos_db::character_load::HomebindRow,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn update_homebind(
+        &self,
+        _guid_low: u32,
+        _row: mangos_db::character_load::HomebindRow,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
 struct FakePresence;
 
 impl PresenceWriter for FakePresence {
@@ -657,7 +741,7 @@ impl PresenceWriter for FakePresence {
         Ok(())
     }
 
-    fn clear_creature_respawn(&self, _guid_low: u32) -> Result<(), DbError> {
+    fn clear_creature_respawn(&self, _guid_low: u32, _instance_id: u32) -> Result<(), DbError> {
         Ok(())
     }
     fn store_creature_respawn(
@@ -665,11 +749,12 @@ impl PresenceWriter for FakePresence {
         _guid_low: u32,
         _respawn_time: u64,
         _map_id: u32,
+        _instance_id: u32,
     ) -> Result<(), DbError> {
         Ok(())
     }
 
-    fn clear_gameobject_respawn(&self, _guid_low: u32) -> Result<(), DbError> {
+    fn clear_gameobject_respawn(&self, _guid_low: u32, _instance_id: u32) -> Result<(), DbError> {
         Ok(())
     }
 }
@@ -819,6 +904,7 @@ async fn start_server(backend: Arc<FakeBackend>) -> u16 {
             race_class_dbc: Arc::new(fake_race_class_dbc()),
             respawn_times: mangos_world_data::spawn_support::RespawnTimes::default(),
             presence: Arc::new(FakePresence),
+            character_saver: Arc::new(FakeCharacterSaver),
             social: Arc::new(FakeSocialStore),
             group: Arc::new(FakeGroupStore),
             initial_groups: mangos_db::group::LoadedGroups::default(),
@@ -836,6 +922,8 @@ async fn start_server(backend: Arc<FakeBackend>) -> u16 {
             guild_bot: Arc::new(FakeGuildBotStore),
             ah_bot: Arc::new(FakeAhBotStore),
             initial_ah_bot: mangosd::world_actor::InitialAhBot::default(),
+            instance: Arc::new(FakeInstanceStore),
+            initial_instances: mangos_db::instance::LoadedInstances::default(),
             initial_guild_bots: mangos_db::guild_bots::LoadedGuildBots::default(),
         },
     );

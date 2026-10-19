@@ -86,6 +86,10 @@ pub struct PopulationCore {
     entries: Vec<BotEntry>,
     by_guid: HashMap<u32, usize>,
     total_chance: u32,
+    /// `m_stats.totalBots`: load-time roster size,
+    /// snapshotted in step 7 and never refreshed
+    /// (manual adds do not move it).
+    total_bots: u32,
     update_deadline_ms: u64,
     refresh_deadline_ms: u64,
 }
@@ -125,6 +129,7 @@ impl PopulationCore {
             entries,
             by_guid,
             total_chance,
+            total_bots: total,
             update_deadline_ms: 0,
             refresh_deadline_ms: 0,
         }
@@ -133,7 +138,7 @@ impl PopulationCore {
     #[must_use]
     pub fn stats(&self) -> PopulationStats {
         let mut stats = PopulationStats {
-            total_bots: u32::try_from(self.entries.len()).unwrap_or(u32::MAX),
+            total_bots: self.total_bots,
             conf_max_online: self.config.max_bots,
             conf_min_online: self.config.min_bots,
             ..PopulationStats::default()
@@ -345,5 +350,29 @@ impl PopulationCore {
     fn entry_mut(&mut self, guid: u32) -> Option<&mut BotEntry> {
         let idx = *self.by_guid.get(&guid)?;
         self.entries.get_mut(idx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PopulationConfig, PopulationCore};
+
+    #[test]
+    fn total_bots_is_the_load_time_snapshot() {
+        // Fork `m_stats.totalBots = m_bots.size()` runs
+        // once in `Load` step 7; a manual add of a
+        // non-roster guid creates an entry but must not
+        // move the reported total.
+        let mut core = PopulationCore::load(
+            PopulationConfig::default(),
+            vec![(10, 5, String::new()), (11, 5, String::new())],
+        );
+        assert_eq!(core.stats().total_bots, 2);
+        core.mark_manual_add(99);
+        assert_eq!(core.stats().total_bots, 2);
+        assert_eq!(core.stats().loading_count, 1);
+        core.on_logout(99);
+        assert_eq!(core.stats().total_bots, 2);
+        assert_eq!(core.stats().loading_count, 0);
     }
 }

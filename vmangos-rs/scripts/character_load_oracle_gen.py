@@ -134,7 +134,7 @@ def main() -> None:
         vals = [fbits(v) if i in (5, 6, 7) else v for i, v in enumerate(r)]
         emit(lines, "aura", list(zip(keys, vals)))
 
-    for r in query(f"SELECT spell, active, disabled FROM character_spell WHERE guid={guid}"):
+    for r in query(f"SELECT spell, active, disabled FROM character_spell WHERE guid={guid} ORDER BY spell"):
         emit(lines, "spell", list(zip(["spell", "active", "disabled"], r)))
 
     for r in query(

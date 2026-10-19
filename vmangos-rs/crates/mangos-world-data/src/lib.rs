@@ -8,6 +8,7 @@
 //! yet are still logged as deferred by the binary, never
 //! silently skipped.
 
+pub mod area_trigger;
 pub mod areas;
 pub mod assets_check;
 pub mod auction_house;
@@ -18,7 +19,9 @@ pub mod enum_stores;
 pub mod gameobject_template;
 pub mod item_prototype;
 pub mod load_report;
+pub mod map_template;
 pub mod player_info;
+pub mod quest_template;
 pub mod reputations;
 pub mod script_engine;
 pub mod skill_info;

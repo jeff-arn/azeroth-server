@@ -32,6 +32,7 @@ impl AreaEntry {
 #[derive(Clone, Debug, Default)]
 pub struct AreaStore {
     by_flag_and_map: HashMap<(u32, u32), AreaEntry>,
+    by_id: HashMap<u32, AreaEntry>,
     linked_zone_by_map: HashMap<u32, u32>,
     name_by_id: HashMap<u32, String>,
 }
@@ -52,6 +53,14 @@ impl AreaStore {
     #[must_use]
     pub fn name(&self, area_id: u32) -> &str {
         self.name_by_id.get(&area_id).map_or("", String::as_str)
+    }
+
+    /// The template row for an area/zone id
+    /// (`sAreaStore.LookupEntry`), for zone-flag reads
+    /// such as `AREA_FLAG_CAPITAL` in `UpdateZone`.
+    #[must_use]
+    pub fn entry(&self, area_id: u32) -> Option<&AreaEntry> {
+        self.by_id.get(&area_id)
     }
 
     #[must_use]
@@ -82,7 +91,9 @@ impl AreaStore {
         linked_zones: impl IntoIterator<Item = (u32, u32)>,
         names: impl IntoIterator<Item = (u32, String)>,
     ) -> Self {
+        let entries: Vec<AreaEntry> = entries.into_iter().collect();
         Self {
+            by_id: entries.iter().map(|entry| (entry.id, *entry)).collect(),
             by_flag_and_map: entries
                 .into_iter()
                 .map(|entry| ((entry.explore_flag, entry.map_id), entry))

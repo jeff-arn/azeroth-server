@@ -182,6 +182,8 @@ pub struct MapConfig {
     pub compression: CompressionConfig,
     /// `ActivateWeather` (true).
     pub activate_weather: bool,
+    /// `IsPvPRealm()` for the `UpdateZone` rest branch.
+    pub pvp_realm: bool,
     /// `ChangeWeatherInterval` in milliseconds (10 min).
     pub change_weather_interval_ms: u32,
 }
@@ -200,6 +202,7 @@ impl Default for MapConfig {
             creature_rates: CreatureRates::default(),
             compression: CompressionConfig::default(),
             activate_weather: true,
+            pvp_realm: false,
             change_weather_interval_ms: 600_000,
         }
     }
@@ -215,9 +218,9 @@ pub enum MapEvent {
     Packet { to: ObjectGuid, packet: WorldPacket },
     /// Persist `respawn_time = 0` for a creature spawn
     /// (expired row consumed at spawn).
-    ClearCreatureRespawn { guid_low: u32 },
+    ClearCreatureRespawn { guid_low: u32, instance_id: u32 },
     /// Persist `respawn_time = 0` for a gameobject spawn.
-    ClearGameObjectRespawn { guid_low: u32 },
+    ClearGameObjectRespawn { guid_low: u32, instance_id: u32 },
     /// Persist a future creature respawn time
     /// (`REPLACE INTO creature_respawn`, death in
     /// Slice 5).
@@ -225,6 +228,7 @@ pub enum MapEvent {
         guid_low: u32,
         respawn_time: u64,
         map_id: u32,
+        instance_id: u32,
     },
     /// A unit died (Slice 5 damage; threat/loot are
     /// Slice 6 consumers).
@@ -436,6 +440,30 @@ impl Map {
     #[must_use]
     pub fn instance_id(&self) -> u32 {
         self.instance_id
+    }
+
+    /// Persistent-state instance key for respawn rows
+    /// (`MapPersistentState::m_instanceid`): dungeon
+    /// maps scope rows to this instance; other maps
+    /// keep the spawn's instanciated-continent id
+    /// (0 when continents are not instanciated).
+    pub(crate) fn respawn_instance_key(&self, continent_instance_id: u32) -> u32 {
+        if self.stores.maps.is_instance_map(self.map_id) {
+            self.instance_id
+        } else {
+            continent_instance_id
+        }
+    }
+
+    /// Respawn instance key for a DB creature spawn
+    /// guid (death/despawn store paths).
+    pub(crate) fn creature_respawn_key(&self, guid_low: u32) -> u32 {
+        let continent_id = self
+            .stores
+            .spawns
+            .creature(guid_low)
+            .map_or(0, |data| data.instanciated_continent_instance_id);
+        self.respawn_instance_key(continent_id)
     }
 
     #[must_use]
@@ -652,9 +680,16 @@ impl Map {
     /// Refreshes one player's zone/area and, on a zone
     /// change (or forced first entry), queues
     /// `SMSG_INIT_WORLD_STATES` and the current
-    /// `SMSG_WEATHER` — the packet half of
-    /// `Player::UpdateZone`. PvP/rest/duel side effects of
-    /// `UpdateZone` remain with their own systems.
+    /// The packet half of `Player::UpdateZone` plus its
+    /// rest-type branch (`Player.cpp:6792-6806`): a capital
+    /// zone that is not PvP-enforced for this player puts
+    /// them in `REST_TYPE_IN_CITY`; any other zone change
+    /// clears rest unless they are inn-resting (tavern
+    /// exit is the areatrigger box check, still unported —
+    /// tavern rest therefore survives zone changes exactly
+    /// as in the fork, but is not cleared on foot within
+    /// the zone). PvP/duel side effects of `UpdateZone`
+    /// remain with their own systems.
     pub fn update_player_zone(&mut self, guid: ObjectGuid, force: bool) {
         let Some(position) = self
             .players
@@ -676,6 +711,7 @@ impl Map {
         if !zone_changed {
             return;
         }
+        self.update_rest_for_zone(guid, zone_id);
 
         self.events.push(MapEvent::Packet {
             to: guid,
@@ -690,6 +726,65 @@ impl Map {
                 .or_insert_with(|| crate::weather::ZoneWeather::new(chances, interval));
             let packet = weather.packet();
             self.events.push(MapEvent::Packet { to: guid, packet });
+        }
+    }
+
+    /// Tavern areatrigger entry (`HandleAreaTriggerOpcode`
+    /// tavern branch): `SetRestType(REST_TYPE_IN_TAVERN)`.
+    pub fn set_player_rest_tavern(&mut self, guid: ObjectGuid, trigger_id: u32) {
+        let now_ms = u64::from(self.now_ms);
+        if let Some(entry) = self.players.get_mut(&guid) {
+            entry.player.set_rest_type(
+                mangos_entities::player::RestType::InTavern,
+                trigger_id,
+                now_ms,
+            );
+        }
+    }
+
+    fn update_rest_for_zone(&mut self, guid: ObjectGuid, zone_id: u32) {
+        use mangos_entities::player::RestType;
+        use mangos_entities::unit::Team;
+        // `AREA_FLAG_CAPITAL` (AreaTable flags).
+        const AREA_FLAG_CAPITAL: u32 = 0x100;
+        // `AREATEAM_ALLY` / `AREATEAM_HORDE` (`DBCEnums.h:48-50`).
+        const AREATEAM_ALLY: u32 = 2;
+        const AREATEAM_HORDE: u32 = 4;
+        let Some(zone) = self.stores.areas.entry(zone_id).copied() else {
+            return;
+        };
+        let Some(entry) = self.players.get_mut(&guid) else {
+            return;
+        };
+        let player = &mut entry.player;
+        let capital = zone.flags & AREA_FLAG_CAPITAL != 0;
+        let pvp_enforced = match zone.team {
+            AREATEAM_ALLY => player.team != Team::Alliance && (self.config.pvp_realm || capital),
+            AREATEAM_HORDE => player.team != Team::Horde && (self.config.pvp_realm || capital),
+            0 => self.config.pvp_realm,
+            _ => false,
+        };
+        let now_ms = u64::from(self.now_ms);
+        if capital && !pvp_enforced {
+            player.set_rest_type(RestType::InCity, 0, now_ms);
+        } else if player.rest_type != RestType::InTavern && player.rest_type != RestType::No {
+            player.set_rest_type(RestType::No, 0, now_ms);
+        } else if player.rest_type == RestType::No {
+            // Fork: `HasFlag(RESTING) && restType != IN_TAVERN`
+            // clears a load-restored resting flag whose rest
+            // type never engaged (e.g. saved resting
+            // outdoors).
+            let resting = player
+                .unit
+                .world
+                .object
+                .values()
+                .get_u32(mangos_protocol::update_field_table::offsets::PLAYER_FLAGS)
+                & 0x20
+                != 0;
+            if resting {
+                player.set_rest_type(RestType::No, 0, now_ms);
+            }
         }
     }
 
@@ -805,7 +900,10 @@ impl Map {
     ) -> Option<ObjectGuid> {
         let data = self.stores.spawns.creature(guid_low).cloned()?;
         let respawn_time = respawns
-            .creature(data.instanciated_continent_instance_id, guid_low)
+            .creature(
+                self.respawn_instance_key(data.instanciated_continent_instance_id),
+                guid_low,
+            )
             .map_or(0, |e| e.respawn_time);
         let addon = self.stores.creature_addons.get(guid_low).cloned();
         self.materialize_creature(guid_low, &data, addon.as_ref(), respawn_time)
@@ -865,8 +963,10 @@ impl Map {
         creature.unit.world.object.set_is_new_object(true);
         creature.unit.world.object.add_to_world();
         if creature.respawn_row_expired {
-            self.events
-                .push(MapEvent::ClearCreatureRespawn { guid_low });
+            self.events.push(MapEvent::ClearCreatureRespawn {
+                guid_low,
+                instance_id: self.respawn_instance_key(data.instanciated_continent_instance_id),
+            });
         }
         let guid = creature.unit.guid();
         // Re-materialization (respawn) replaces a corpse
@@ -1000,7 +1100,10 @@ impl Map {
         let data = self.stores.spawns.gameobject(guid_low).cloned()?;
 
         let respawn_time = respawns
-            .gameobject(data.instanciated_continent_instance_id, guid_low)
+            .gameobject(
+                self.respawn_instance_key(data.instanciated_continent_instance_id),
+                guid_low,
+            )
             .map_or(0, |e| e.respawn_time);
         let now_unix = self.now_unix;
         let force_active = self.config.force_active_objects;
@@ -1019,8 +1122,10 @@ impl Map {
         go.world.object.set_is_new_object(true);
         go.world.object.add_to_world();
         if go.respawn_row_expired {
-            self.events
-                .push(MapEvent::ClearGameObjectRespawn { guid_low });
+            self.events.push(MapEvent::ClearGameObjectRespawn {
+                guid_low,
+                instance_id: self.respawn_instance_key(data.instanciated_continent_instance_id),
+            });
         }
         let guid = go.world.object.object_guid();
         if self.gameobjects.contains_key(&guid) {
@@ -1447,7 +1552,9 @@ impl Map {
             }
             let accumulated = self.players_timer.current();
             debug_assert!(accumulated >= diff_ms);
-            let _ = accumulated; // handed onward when player updates exist
+            // `UpdatePlayers` -> `Player::Update` with
+            // the accumulated gate diff (regen arm).
+            self.update_players(accumulated);
             self.players_timer.reset();
             let due: Vec<ObjectGuid> = self
                 .players

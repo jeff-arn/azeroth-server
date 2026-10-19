@@ -17,6 +17,8 @@ pub mod effect {
     pub const RESURRECT_NEW: u32 = 113;
     pub const ATTACK_ME: u32 = 114;
     pub const PERSISTENT_AREA_AURA: u32 = 27;
+    pub const ENERGIZE: u32 = 30;
+    pub const TRIGGER_SPELL: u32 = 64;
     pub const APPLY_AREA_AURA_PARTY: u32 = 35;
     pub const WEAPON_DAMAGE: u32 = 58;
     /// No handler registered at 1.12.1 (null table slot);
@@ -30,7 +32,9 @@ pub mod effect {
 pub mod aura {
     pub const NONE: u32 = 0;
     pub const PERIODIC_DAMAGE: u32 = 3;
+    pub const MOD_CONFUSE: u32 = 5;
     pub const PERIODIC_HEAL: u32 = 8;
+    pub const PERIODIC_ENERGIZE: u32 = 24;
     pub const MOD_TAUNT: u32 = 11;
     pub const MOD_STUN: u32 = 12;
     pub const MOD_ROOT: u32 = 26;
@@ -38,9 +42,18 @@ pub mod aura {
     pub const MOD_INCREASE_SPEED: u32 = 31;
     pub const MOD_DECREASE_SPEED: u32 = 33;
     pub const MOD_INCREASE_HEALTH: u32 = 34;
+    pub const TRANSFORM: u32 = 56;
+    pub const MOD_REGEN: u32 = 84;
+    pub const MOD_POWER_REGEN: u32 = 85;
+    pub const MOD_HEALTH_REGEN_PERCENT: u32 = 88;
     pub const PERIODIC_DAMAGE_PERCENT: u32 = 89;
+    pub const INTERRUPT_REGEN: u32 = 94;
     pub const MOD_ATTACK_POWER: u32 = 99;
+    pub const MOD_POWER_REGEN_PERCENT: u32 = 110;
+    pub const MOD_REGEN_DURING_COMBAT: u32 = 116;
     pub const MOD_INCREASE_HEALTH_PERCENT: u32 = 133;
+    pub const MOD_MANA_REGEN_INTERRUPT: u32 = 134;
+    pub const MOD_HEALTH_REGEN_IN_COMBAT: u32 = 161;
     pub const MOD_ATTACK_POWER_PCT: u32 = 166;
     /// True for the periodic family whose zero amplitude
     /// defaults to 5000 at load (`SpellMgr::LoadSpell`

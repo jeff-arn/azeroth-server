@@ -14,6 +14,7 @@ pub mod ai;
 pub mod content;
 pub mod map;
 pub mod motion;
+pub mod regen;
 pub mod scripts;
 pub mod spells;
 pub mod stores;

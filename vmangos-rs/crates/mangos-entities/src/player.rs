@@ -34,15 +34,17 @@ use mangos_movement::movement_info::{Position, is_valid_map_coord};
 use mangos_protocol::update_data::ObjectUpdateFlags;
 use mangos_protocol::update_field_table::{PLAYER_END, offsets};
 use mangos_protocol::update_fields::TypeMask;
+use mangos_world_data::item_prototype::ItemPrototypes;
 use mangos_world_data::player_info::{PlayerInfos, RaceDbc};
+use mangos_world_data::quest_template::QuestTemplatesLite;
 use mangos_world_data::skill_info::{SkillDbc, SkillRange};
 use mangos_world_data::spawns::WorldLocation;
 
 use crate::object::ObjectBase;
 use crate::unit::{
     DeathState, MAX_POWERS, MAX_SPELL_SCHOOL, MAX_STATS, ModelData, POWER_ENERGY, POWER_FOCUS,
-    POWER_HAPPINESS, POWER_MANA, POWER_RAGE, STAT_AGILITY, STAT_INTELLECT, STAT_STAMINA, Team,
-    UnitBase, WorldObjectBase, check_valid_scale,
+    POWER_HAPPINESS, POWER_MANA, POWER_RAGE, STAT_AGILITY, STAT_INTELLECT, STAT_SPIRIT,
+    STAT_STAMINA, STAT_STRENGTH, Team, UnitBase, WorldObjectBase, check_valid_scale,
 };
 
 /// `MAX_MONEY_AMOUNT` (`Player.h:656`).
@@ -71,6 +73,7 @@ const UNIT_BYTE2_FLAG_PVP: u8 = 0x01;
 const UNIT_FLAG_PLAYER_CONTROLLED: u32 = 0x0000_0008;
 const UNIT_FLAG_NOT_ATTACKABLE_1: u32 = 0x0000_0080;
 const REST_STATE_NORMAL: u8 = 0x02;
+const REST_STATE_RESTED: u8 = 0x01;
 
 const PLAYER_FLAGS_GHOST: u32 = 0x0000_0010;
 const PLAYER_FLAGS_RESTING: u32 = 0x0000_0020;
@@ -112,6 +115,15 @@ pub struct MaterializeInputs<'a> {
     /// range fixups; `None` in DBC-free tests writes the
     /// saved rows verbatim.
     pub skills: Option<&'a SkillDbc>,
+    /// Full item prototypes for equipped-item stat
+    /// application (`_ApplyItemMods` at load); `None` in
+    /// prototype-free tests keeps the zero-item totals.
+    pub item_prototypes: Option<&'a ItemPrototypes>,
+    /// Quest template subset for the load-time timer
+    /// conversion and `AdjustQuestReqItemCount` recount;
+    /// `None` in template-free tests keeps quest rows
+    /// verbatim (no timer conversion, no recount churn).
+    pub quest_templates: Option<&'a QuestTemplatesLite>,
 }
 
 /// Load rows retained verbatim for later slices.
@@ -150,6 +162,80 @@ pub struct Homebind {
     pub synthesized: bool,
 }
 
+/// As-loaded copies of the save-diffed row sets
+/// (Phase 6 Slice 1): fork tracks per-entry
+/// `uState`; the Rust aggregate diffs live rows
+/// against this baseline at save time and then
+/// re-baselines, mirroring `uState = UNCHANGED`.
+/// Inventory rows are also retained here: items are
+/// DB-backed by the service layer today, so the
+/// save-side item queue derives from this set until
+/// runtime item state lands.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SavedBaseline {
+    pub spells: Vec<mangos_db::character_load::SpellRow>,
+    pub skills: Vec<mangos_db::character_load::SkillRow>,
+    pub quest_status: Vec<mangos_db::character_load::QuestStatusRow>,
+    pub reputation: Vec<mangos_db::character_load::ReputationRow>,
+    pub inventory: Vec<mangos_db::character_load::InventoryRow>,
+    pub honor_cp: Vec<mangos_db::character_load::HonorCpRow>,
+    pub actions: Vec<mangos_db::character_load::ActionRow>,
+}
+
+/// `RestType` (`Player.h:575-580`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RestType {
+    #[default]
+    No = 0,
+    InTavern = 1,
+    InCity = 2,
+}
+
+/// Per-quest live timer state converted at load
+/// (`_LoadQuestStatus`): `m_timer` remaining
+/// milliseconds for timed quests, 0 for all others.
+/// Save writes `now + remaining/1000`
+/// (`_SaveQuestStatus`), so the baseline keeps the
+/// stored absolute value while this carries the fork's
+/// live remainder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct QuestTimerState {
+    pub remaining_ms_at_load: u32,
+    /// In `m_timedquests` (timed template, not yet
+    /// rewarded, status not NONE): the fork marks
+    /// these `QUEST_CHANGED` on every tick, so every
+    /// save rewrites them.
+    pub timed_active: bool,
+}
+
+/// `ComputeRest` offline/online share (`Player.cpp:8393`):
+/// seconds × next-level XP / 1152000, rates at the
+/// fork defaults of 1.0 (the `Rate.Rest.*` config reads
+/// are not wired yet, like the other `Rate.*` values).
+#[must_use]
+pub fn compute_rest(seconds: u64, next_level_xp: u32, offline: bool, in_rest_place: bool) -> f32 {
+    #[allow(clippy::cast_precision_loss)]
+    let mut bonus = seconds as f32 * (next_level_xp as f32 / 1_152_000.0);
+    if offline && !in_rest_place {
+        bonus /= 4.0;
+    }
+    bonus
+}
+
+/// `SetRestBonus` value rules (`Player.cpp:17940`):
+/// zero at max level, floored at 0, capped at
+/// next-level XP × 1.5 / 2.
+#[must_use]
+pub fn capped_rest_bonus(value: f32, next_level_xp: u32, level: u32, max_level: u32) -> f32 {
+    if level >= max_level {
+        return 0.0;
+    }
+    let value = if value < 0.0 { 0.0 } else { value };
+    #[allow(clippy::cast_precision_loss)]
+    let max = next_level_xp as f32 * 1.5 / 2.0;
+    if value > max { max } else { value }
+}
+
 /// The Player aggregate.
 #[derive(Clone, Debug)]
 pub struct Player {
@@ -163,16 +249,51 @@ pub struct Player {
     /// `m_playedTime[PLAYED_TIME_LEVEL]`.
     pub played_time_level: u32,
     pub create_time: u64,
+    /// `HonorMgr` stored scalars (manager unmodeled:
+    /// loaded and saved verbatim until honor updates
+    /// land).
+    pub honor_rank_points: f32,
+    pub honor_highest_rank: i32,
+    pub honor_standing: i32,
+    pub honor_last_week_hk: i32,
+    pub honor_last_week_cp: f32,
+    pub honor_stored_hk: i32,
+    pub honor_stored_dk: i32,
     pub logout_time: u64,
     pub drunk: u16,
-    /// `m_restBonus` (saved value; offline accrual deferred).
+    /// `m_restBonus`, with the offline accrual of
+    /// `LoadFromDB` applied at materialize.
     pub rest_bonus: f32,
+    /// `m_restType` (starts `REST_TYPE_NO`; the map's
+    /// zone/tavern logic drives it from there).
+    pub rest_type: RestType,
+    /// `m_innTriggerId` while `InTavern`.
+    pub inn_trigger_id: u32,
+    /// Map-time milliseconds when rest (re)started
+    /// (`m_timeInnEnter`, fork `time_t` seconds; the
+    /// online grant consumes whole seconds exactly as
+    /// the fork's second-resolution clock does).
+    pub inn_enter_ms: Option<u64>,
+    /// `time(nullptr)` at materialize: the epoch the
+    /// quest timers' remainders are anchored to.
+    pub load_now_unix: u64,
+    /// Live quest timer remainders by quest id
+    /// (see [`QuestTimerState`]).
+    pub quest_timers: std::collections::HashMap<u32, QuestTimerState>,
+    /// Quests `AdjustQuestReqItemCount` marked
+    /// `QUEST_CHANGED` at load; cleared when a save
+    /// re-baselines (fork `uState = QUEST_UNCHANGED`).
+    pub quest_load_changed: std::collections::HashSet<u32>,
     pub stable_slots: u8,
     pub death_expire_time: u64,
     pub reset_talents_multiplier: u32,
     pub reset_talents_time: u64,
     /// `m_taxi` known-node mask words (`LoadTaxiMask` parse).
     pub taxi_mask: Vec<u32>,
+    /// Loaded `PlayerTaxi` destinations. Taxi flight
+    /// itself is unmodeled, but retaining the list keeps
+    /// `current_taxi_path` persistence fork-shaped.
+    pub taxi_destinations: Vec<u32>,
     pub homebind: Homebind,
     /// `SaveRecallPosition` snapshot after the final
     /// relocation of `LoadFromDB`.
@@ -180,7 +301,23 @@ pub struct Player {
     pub guild_id: u32,
     pub guild_rank: u8,
     pub group_id: Option<u32>,
+    /// `m_regenTimer` (`Unit.h:354`, int32; only the
+    /// player 2000 ms cadence is driven from it here —
+    /// creature regen keeps its AI-side timer).
+    pub regen_timer_ms: i32,
+    /// `m_carryHealthRegen` (`Player.h:1456`).
+    pub carry_health_regen: f32,
+    /// Item-fed `m_auraBaseMod[SHIELD_BLOCK_VALUE][FLAT_MOD]`
+    /// sum (equipped prototypes' `Block`); the aura-fed
+    /// part joins the shield-block aura handlers.
+    pub shield_block_flat: f32,
+    /// `HaveOffhandWeapon` at materialize (gates the
+    /// offhand damage-field writes exactly as in
+    /// `UpdateAttackPowerAndDamage`).
+    pub has_offhand_weapon: bool,
     pub deferred: DeferredLoad,
+    /// Save-diff baseline (see [`SavedBaseline`]).
+    pub saved: SavedBaseline,
 }
 
 /// Why materialization refused the character (C++ returns
@@ -207,6 +344,166 @@ pub fn mana_bonus_from_intellect(intellect: f32) -> f32 {
     base + (intellect - base) * 15.0
 }
 
+/// Item-fed modifier-group `BASE_VALUE` sums plus
+/// weapon state, accumulated exactly as
+/// `_ApplyItemMods`/`_ApplyItemBonuses` do per equipped
+/// item (`Player.cpp:6916-7100`).
+struct EquippedBonuses {
+    /// `UNIT_MOD_STAT_*` `BASE_VALUE` per stat index.
+    stat_base: [f32; MAX_STATS],
+    /// `PLAYER_FIELD_POSSTAT0` accumulations.
+    pos_stat: [f32; MAX_STATS],
+    /// `PLAYER_FIELD_NEGSTAT0` accumulations (negative).
+    neg_stat: [f32; MAX_STATS],
+    /// `UNIT_MOD_HEALTH` `BASE_VALUE`.
+    health_base: f32,
+    /// `UNIT_MOD_MANA` `BASE_VALUE`.
+    mana_base: f32,
+    /// `UNIT_MOD_ARMOR` `BASE_VALUE`.
+    armor_base: f32,
+    /// `UNIT_MOD_RESISTANCE_*` `BASE_VALUE` by school.
+    resist_base: [f32; MAX_SPELL_SCHOOL],
+    /// `SHIELD_BLOCK_VALUE` flat sum.
+    block_flat: f32,
+    /// Damage row 0 per attack type (fists default).
+    weapon_damage: [(f32, f32); 3],
+    /// Attack times per attack type (`BASE_ATTACK_TIME`
+    /// 2000 until a weapon delay applies).
+    attack_time_ms: [f32; 3],
+    /// `HaveOffhandWeapon`.
+    has_offhand_weapon: bool,
+}
+
+impl Default for EquippedBonuses {
+    fn default() -> Self {
+        Self {
+            stat_base: [0.0; MAX_STATS],
+            pos_stat: [0.0; MAX_STATS],
+            neg_stat: [0.0; MAX_STATS],
+            health_base: 0.0,
+            mana_base: 0.0,
+            armor_base: 0.0,
+            resist_base: [0.0; MAX_SPELL_SCHOOL],
+            block_flat: 0.0,
+            weapon_damage: [(1.0, 2.0); 3],
+            attack_time_ms: [2000.0; 3],
+            has_offhand_weapon: false,
+        }
+    }
+}
+
+impl EquippedBonuses {
+    /// `HandleStatModifier(UNIT_MOD_STAT_*, BASE_VALUE)`
+    /// + `ApplyStatBuffMod` (field picked by sign).
+    fn add_stat(&mut self, stat: usize, val: f32) {
+        self.stat_base[stat] += val;
+        if val > 0.0 {
+            self.pos_stat[stat] += val;
+        } else {
+            self.neg_stat[stat] += val;
+        }
+    }
+}
+
+/// The load-time equipped-item accumulation
+/// (`_LoadInventory` applying `_ApplyItemMods` per
+/// equipped slot). Broken items (`IsBroken`: max
+/// durability > 0 with durability 0) contribute
+/// nothing, as in C++.
+fn equipped_bonuses(load: &CharacterLoad, items: Option<&ItemPrototypes>) -> EquippedBonuses {
+    let mut out = EquippedBonuses::default();
+    let Some(items) = items else {
+        return out;
+    };
+    for inv in &load.inventory {
+        if inv.bag != 0 || inv.slot >= EQUIPMENT_SLOT_END {
+            continue;
+        }
+        let Some(proto) = items.get(inv.item.item_id) else {
+            continue;
+        };
+        if proto.max_durability > 0 && inv.item.durability == 0 {
+            continue;
+        }
+        for stat in &proto.stats {
+            if stat.value == 0 {
+                continue;
+            }
+            #[allow(clippy::cast_precision_loss)] // C++ converts identically
+            let val = stat.value as f32;
+            match stat.stat_type {
+                // ITEM_MOD_MANA / ITEM_MOD_HEALTH
+                0 => out.mana_base += val,
+                1 => out.health_base += val,
+                // ITEM_MOD_AGILITY / STRENGTH / INTELLECT /
+                // SPIRIT / STAMINA
+                3 => out.add_stat(STAT_AGILITY, val),
+                4 => out.add_stat(STAT_STRENGTH, val),
+                5 => out.add_stat(STAT_INTELLECT, val),
+                6 => out.add_stat(STAT_SPIRIT, val),
+                7 => out.add_stat(STAT_STAMINA, val),
+                _ => {}
+            }
+        }
+        if proto.armor != 0 {
+            #[allow(clippy::cast_precision_loss)] // C++ converts identically
+            let armor = proto.armor as f32;
+            out.armor_base += armor;
+        }
+        if proto.block != 0 {
+            #[allow(clippy::cast_precision_loss)] // C++ converts identically
+            let block = proto.block as f32;
+            out.block_flat += block;
+        }
+        // Schools: holy 1, fire 2, nature 3, frost 4,
+        // shadow 5, arcane 6.
+        for (school, res) in [
+            (1, proto.holy_res),
+            (2, proto.fire_res),
+            (3, proto.nature_res),
+            (4, proto.frost_res),
+            (5, proto.shadow_res),
+            (6, proto.arcane_res),
+        ] {
+            if res != 0 {
+                #[allow(clippy::cast_precision_loss)] // C++ converts identically
+                let val = res as f32;
+                out.resist_base[school] += val;
+            }
+        }
+        // `proto->IsWeapon()` (`ITEM_CLASS_WEAPON`).
+        if proto.class == 2 {
+            // Attack-type selection in `_ApplyItemBonuses`
+            // (ranged slot only counts for ranged weapons;
+            // `IsRangedWeapon` keys on inventory type
+            // 15/25/26).
+            let ranged_weapon = matches!(proto.inventory_type, 15 | 25 | 26);
+            let att = match inv.slot {
+                17 if ranged_weapon => 2,
+                16 => 1,
+                _ => 0,
+            };
+            if proto.damages[0].max != 0.0 {
+                out.weapon_damage[att] = (proto.damages[0].min, proto.damages[0].max);
+            }
+            if inv.slot == 16 {
+                out.has_offhand_weapon = true;
+            }
+            if proto.delay > 0 {
+                #[allow(clippy::cast_precision_loss)] // C++ converts identically
+                let delay = proto.delay as f32;
+                match inv.slot {
+                    15 => out.attack_time_ms[0] = delay,
+                    16 => out.attack_time_ms[1] = delay,
+                    17 => out.attack_time_ms[2] = delay,
+                    _ => {}
+                }
+            }
+        }
+    }
+    out
+}
+
 impl Player {
     /// Materializes a player from its read-only load. The
     /// account-match / transfer-lock / name gates belong to
@@ -216,6 +513,7 @@ impl Player {
     ///
     /// [`MaterializeError::InvalidRaceClass`] when the pair
     /// has no create info.
+    #[allow(clippy::too_many_lines)]
     pub fn materialize(
         load: CharacterLoad,
         inputs: &MaterializeInputs<'_>,
@@ -254,19 +552,46 @@ impl Player {
             played_time_total: row.played_time_total,
             played_time_level: row.played_time_level,
             create_time: row.create_time,
+            honor_rank_points: row.honor_rank_points,
+            honor_highest_rank: row.honor_highest_rank,
+            honor_standing: row.honor_standing,
+            honor_last_week_hk: row.honor_last_week_hk,
+            honor_last_week_cp: row.honor_last_week_cp,
+            honor_stored_hk: row.honor_stored_hk,
+            honor_stored_dk: row.honor_stored_dk,
             logout_time: row.logout_time,
             drunk: row.drunk,
             rest_bonus: row.rest_bonus,
+            rest_type: RestType::No,
+            inn_trigger_id: 0,
+            inn_enter_ms: None,
+            load_now_unix: inputs.now_unix,
+            quest_timers: std::collections::HashMap::new(),
+            quest_load_changed: std::collections::HashSet::new(),
             stable_slots: 0,
             death_expire_time: row.death_expire_time,
             reset_talents_multiplier: row.reset_talents_multiplier,
             reset_talents_time: row.reset_talents_time,
             taxi_mask: parse_u32_words(&row.known_taxi_mask),
+            taxi_destinations: parse_u32_words(&row.current_taxi_path),
             homebind: Homebind::default(),
             recall: WorldLocation::default(),
             guild_id: 0,
             guild_rank: 0,
             group_id: load.group_id,
+            regen_timer_ms: 0,
+            carry_health_regen: 0.0,
+            shield_block_flat: 0.0,
+            has_offhand_weapon: false,
+            saved: SavedBaseline {
+                spells: load.spells.clone(),
+                skills: load.skills.clone(),
+                quest_status: load.quest_status.clone(),
+                reputation: load.reputation.clone(),
+                inventory: load.inventory.clone(),
+                honor_cp: load.honor_cp.clone(),
+                actions: load.actions.clone(),
+            },
             deferred: DeferredLoad {
                 auras: std::mem::take(&mut load.auras),
                 spells: std::mem::take(&mut load.spells),
@@ -289,9 +614,11 @@ impl Player {
         player.init_identity_values(&load, inputs);
         player.load_skill_fields(inputs);
         player.init_position(&load, &create_info, inputs);
-        player.init_stats_for_level(inputs);
+        player.init_stats_for_level(&load, inputs);
         player.init_combat_percentages();
         player.restore_health_powers(&load);
+        player.apply_offline_rest(inputs);
+        player.convert_quest_timers(inputs);
         Ok(player)
     }
 
@@ -625,13 +952,9 @@ impl Player {
         let class = u32::from(self.unit.class());
         #[allow(clippy::cast_precision_loss)]
         let level = self.unit.level() as f32;
-        let agility = f32::from_bits(
-            self.unit
-                .world
-                .object
-                .values()
-                .get_u32(offsets::UNIT_FIELD_STAT0 + 1),
-        );
+        // `GetStat(STAT_AGILITY)` (unsigned word cast to
+        // float, `Unit.h:390`) — not a bit reinterpret.
+        let agility = self.unit.stat(STAT_AGILITY);
         let interp = |(lvl1, lvl60): (f32, f32)| {
             if lvl1 == 0.0 && lvl60 == 0.0 {
                 0.0
@@ -660,11 +983,16 @@ impl Player {
         v.set_f32(offsets::PLAYER_RANGED_CRIT_PERCENTAGE, crit);
     }
 
-    /// `UpdateMaxHealth`/`UpdateMaxPower` (zero aura
-    /// modifiers). `UpdateSkillsForLevel` and
-    /// `InitDataForForm` is deferred (form data is aura-driven;
-    /// form data is aura-driven).
-    fn init_stats_for_level(&mut self, inputs: &MaterializeInputs<'_>) {
+    /// `InitStatsForLevel` + the load-time
+    /// `_ApplyItemMods` accumulation (`_LoadInventory`
+    /// end state at zero aura modifiers: pct groups 1,
+    /// total groups 0). Enchantments, random-property
+    /// stats, item sets, and equip spells join the
+    /// item domain; aura-fed modifier groups join aura
+    /// stat application. `UpdateSkillsForLevel` and
+    /// `InitDataForForm` stay deferred (form data is
+    /// aura-driven).
+    fn init_stats_for_level(&mut self, load: &CharacterLoad, inputs: &MaterializeInputs<'_>) {
         let race = u32::from(self.unit.race());
         let class = u32::from(self.unit.class());
         let level = self.unit.level();
@@ -682,13 +1010,9 @@ impl Player {
             v.set_f32(offsets::UNIT_FIELD_BASEATTACKTIME, 2000.0);
             v.set_f32(offsets::UNIT_FIELD_BASEATTACKTIME + 1, 2000.0);
             v.set_f32(offsets::UNIT_FIELD_RANGEDATTACKTIME, 2000.0);
-            // Unarmed base weapon damage (`BASE_MINDAMAGE`/
-            // `BASE_MAXDAMAGE` through `UpdateDamagePhysical`
-            // at identity modifiers; Slice 6 melee consumes
-            // these fields). Item-stat projection replaces
-            // them when inventory stats land.
-            v.set_f32(offsets::UNIT_FIELD_MINDAMAGE, 1.0);
-            v.set_f32(offsets::UNIT_FIELD_MAXDAMAGE, 2.0);
+            // Weapon damage fields are written by the
+            // equipped-weapon arm below
+            // (`UpdateDamagePhysical`).
             for i in 0..MAX_SPELL_SCHOOL as u16 {
                 v.set_i32(offsets::PLAYER_FIELD_MOD_DAMAGE_DONE_NEG + i, 0);
                 v.set_u32(offsets::PLAYER_FIELD_MOD_DAMAGE_DONE_POS + i, 0);
@@ -700,34 +1024,36 @@ impl Player {
             v.set_flag(offsets::UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
             v.set_u32(offsets::PLAYER_FIELD_BYTES2, 0);
         }
-        // Create stats + current stats (SetCreateStat/SetStat).
+        // Create stats (SetCreateStat); the SetStat
+        // totals land after the item accumulation.
         if let Some(info) = level_info {
             for i in 0..MAX_STATS {
                 #[allow(clippy::cast_precision_loss)]
                 {
                     self.unit.create_stats[i] = f32::from(info.stats[i]);
                 }
-                self.unit.set_stat(i, i32::from(info.stats[i]));
             }
         }
         if let Some(info) = class_info {
             self.unit.create_health = u32::from(info.basehealth);
             self.unit.create_mana = u32::from(info.basemana);
         }
-        // Armor = agility * 2, twice in C++ (idempotent).
-        let armor = (self.unit.create_stats[STAT_AGILITY] * 2.0) as i32;
-        self.unit.set_armor(armor);
-        for school in 1..MAX_SPELL_SCHOOL {
-            self.unit.set_resistance(school, 0);
-        }
+        let bonuses = equipped_bonuses(load, inputs.item_prototypes);
+        self.apply_stat_bonuses(&bonuses);
         // Max powers/health, then InitStatsForLevel's refill
         // (health/mana/energy to max, rage clamped, focus and
         // happiness zeroed) — restore_health_powers then
         // overwrites with the saved values like LoadFromDB.
-        self.update_max_health_naked();
+        self.update_max_health(bonuses.health_base);
         for power in 0..MAX_POWERS {
-            self.update_max_power_naked(power);
+            let base = if power == POWER_MANA {
+                bonuses.mana_base
+            } else {
+                0.0
+            };
+            self.update_max_power(power, base);
         }
+        self.apply_weapon_state(&bonuses);
         let max_health = self.unit.max_health();
         self.unit.set_health(max_health);
         let max_mana = self.unit.max_power(POWER_MANA);
@@ -751,30 +1077,128 @@ impl Player {
         }
     }
 
-    /// `UpdateMaxHealth` with the modifier groups at their
-    /// zero-aura defaults (BASE 0, `BASE_PCT` 1, TOTAL 0,
-    /// `TOTAL_PCT` 1).
-    fn update_max_health_naked(&mut self) {
+    /// `UpdateMaxHealth` with the modifier groups at
+    /// their zero-aura defaults (`BASE_PCT` 1, TOTAL 0,
+    /// `TOTAL_PCT` 1); `health_base` is the item-fed
+    /// `UNIT_MOD_HEALTH` `BASE_VALUE` sum.
+    fn update_max_health(&mut self, health_base: f32) {
         #[allow(clippy::cast_precision_loss)]
-        let value = self.unit.create_health as f32
+        let value = health_base
+            + self.unit.create_health as f32
             + health_bonus_from_stamina(self.unit.stat(STAT_STAMINA));
         // `std::max(1, int(value))`: float->int truncates.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let max = if value < 1.0 { 1 } else { value as u32 };
         self.unit.set_max_health(max);
     }
 
-    /// `UpdateMaxPower` at zero-aura modifier defaults.
-    fn update_max_power_naked(&mut self, power: usize) {
+    /// `UpdateMaxPower` at zero-aura modifier defaults;
+    /// `base_value` is the item-fed group `BASE_VALUE`
+    /// (only mana has an item source in 1.12 stats).
+    fn update_max_power(&mut self, power: usize, base_value: f32) {
         let create = self.unit.create_power(power);
-        #[allow(clippy::cast_precision_loss)]
         let bonus = if power == POWER_MANA && create > 0 {
             mana_bonus_from_intellect(self.unit.stat(STAT_INTELLECT))
         } else {
             0.0
         };
         #[allow(clippy::cast_precision_loss)]
-        let value = create as f32 + bonus;
-        self.unit.set_max_power(power, value as u32);
+        let value = base_value + create as f32 + bonus;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let max = value as u32;
+        self.unit.set_max_power(power, max);
+    }
+
+    /// The derived-stat writes from the accumulated
+    /// item bonuses: `UpdateStats` totals at identity
+    /// pct/total groups, the `ApplyStatBuffMod` display
+    /// halves (float fields), `UpdateArmor`, and
+    /// `UpdateResistances` (holy is written 0 in C++).
+    fn apply_stat_bonuses(&mut self, bonuses: &EquippedBonuses) {
+        for i in 0..MAX_STATS {
+            let total = bonuses.stat_base[i] + self.unit.create_stats[i];
+            #[allow(clippy::cast_possible_truncation)] // C++ truncates identically
+            self.unit.set_stat(i, total as i32);
+        }
+        {
+            let v = self.unit.world.object.values_mut();
+            for i in 0..MAX_STATS {
+                #[allow(clippy::cast_possible_truncation)]
+                let idx = i as u16;
+                v.set_f32(offsets::PLAYER_FIELD_POSSTAT0 + idx, bonuses.pos_stat[i]);
+                v.set_f32(offsets::PLAYER_FIELD_NEGSTAT0 + idx, bonuses.neg_stat[i]);
+            }
+        }
+        #[allow(clippy::cast_possible_truncation)] // C++ truncates identically
+        let armor = (bonuses.armor_base + self.unit.stat(STAT_AGILITY) * 2.0) as i32;
+        self.unit.set_armor(armor);
+        for school in 1..MAX_SPELL_SCHOOL {
+            #[allow(clippy::cast_possible_truncation)] // C++ truncates identically
+            let value = if school == 1 {
+                0
+            } else {
+                bonuses.resist_base[school] as i32
+            };
+            self.unit.set_resistance(school, value);
+        }
+        self.shield_block_flat = bonuses.block_flat;
+        self.has_offhand_weapon = bonuses.has_offhand_weapon;
+    }
+
+    /// Weapon base ranges + attack times
+    /// (`SetBaseWeaponDamage`/`SetAttackTime`), then
+    /// `UpdateAttackPowerAndDamage` for both arms with
+    /// its `UpdateDamagePhysical` writes (offhand only
+    /// with the dual-wield passive 674 and an offhand
+    /// weapon).
+    fn apply_weapon_state(&mut self, bonuses: &EquippedBonuses) {
+        self.unit.base_weapon_damage = bonuses.weapon_damage;
+        {
+            let v = self.unit.world.object.values_mut();
+            v.set_f32(
+                offsets::UNIT_FIELD_BASEATTACKTIME,
+                bonuses.attack_time_ms[0],
+            );
+            v.set_f32(
+                offsets::UNIT_FIELD_BASEATTACKTIME + 1,
+                bonuses.attack_time_ms[1],
+            );
+            v.set_f32(
+                offsets::UNIT_FIELD_RANGEDATTACKTIME,
+                bonuses.attack_time_ms[2],
+            );
+        }
+        let melee_ap = self.unit.attack_power_from_stats(false);
+        let ranged_ap = self.unit.attack_power_from_stats(true);
+        self.unit.base_attack_power = melee_ap;
+        {
+            let v = self.unit.world.object.values_mut();
+            #[allow(clippy::cast_possible_truncation)] // C++ truncates identically
+            v.set_i32(offsets::UNIT_FIELD_ATTACK_POWER, melee_ap as i32);
+            #[allow(clippy::cast_possible_truncation)] // C++ truncates identically
+            v.set_i32(offsets::UNIT_FIELD_RANGED_ATTACK_POWER, ranged_ap as i32);
+        }
+        let (min_d, max_d) = self.unit.calculate_min_max_damage(0);
+        let (rmin_d, rmax_d) = self.unit.calculate_min_max_damage(2);
+        let dual_wield = self
+            .deferred
+            .spells
+            .iter()
+            .any(|s| s.spell == 674 && s.active != 0);
+        let offhand = if dual_wield && bonuses.has_offhand_weapon {
+            Some(self.unit.calculate_min_max_damage(1))
+        } else {
+            None
+        };
+        let v = self.unit.world.object.values_mut();
+        v.set_f32(offsets::UNIT_FIELD_MINDAMAGE, min_d);
+        v.set_f32(offsets::UNIT_FIELD_MAXDAMAGE, max_d);
+        v.set_f32(offsets::UNIT_FIELD_MINRANGEDDAMAGE, rmin_d);
+        v.set_f32(offsets::UNIT_FIELD_MAXRANGEDDAMAGE, rmax_d);
+        if let Some((omin_d, omax_d)) = offhand {
+            v.set_f32(offsets::UNIT_FIELD_MINOFFHANDDAMAGE, omin_d);
+            v.set_f32(offsets::UNIT_FIELD_MAXOFFHANDDAMAGE, omax_d);
+        }
     }
 
     /// Saved health/powers clamped to max
@@ -790,6 +1214,137 @@ impl Player {
             self.unit.set_power(power, value.min(max));
         }
         self.project_visible_equipment(load);
+    }
+
+    /// `SetRestBonus` (`Player.cpp:17940`): value rules
+    /// plus the rest-state byte side effect (>10 rested,
+    /// <=1 normal, unchanged in between).
+    pub fn apply_rest_bonus(&mut self, value: f32, max_level: u32) {
+        let next_xp = self
+            .unit
+            .world
+            .object
+            .values()
+            .get_u32(offsets::PLAYER_NEXT_LEVEL_XP);
+        self.rest_bonus = capped_rest_bonus(value, next_xp, self.unit.level(), max_level);
+        let v = self.unit.world.object.values_mut();
+        if self.rest_bonus > 10.0 {
+            v.set_byte(offsets::PLAYER_BYTES_2, 3, REST_STATE_RESTED);
+        } else if self.rest_bonus <= 1.0 {
+            v.set_byte(offsets::PLAYER_BYTES_2, 3, REST_STATE_NORMAL);
+        }
+    }
+
+    /// Offline rest accrual (`LoadFromDB`,
+    /// `Player.cpp:15081-15085`): the stored bonus plus
+    /// `ComputeRest(logout elapsed, offline, was resting)`,
+    /// applied only when time actually passed.
+    fn apply_offline_rest(&mut self, inputs: &MaterializeInputs<'_>) {
+        // Fork `time_t` difference; accrual only runs
+        // when time actually passed.
+        if inputs.now_unix <= self.logout_time {
+            return;
+        }
+        let time_diff = inputs.now_unix - self.logout_time;
+        let next_xp = self
+            .unit
+            .world
+            .object
+            .values()
+            .get_u32(offsets::PLAYER_NEXT_LEVEL_XP);
+        let in_rest_place = self.character_flags & CHARACTER_FLAG_RESTING != 0;
+        let gain = compute_rest(time_diff, next_xp, true, in_rest_place);
+        let bonus = self.rest_bonus + gain;
+        self.apply_rest_bonus(bonus, inputs.infos.max_player_level());
+    }
+
+    /// `SetRestType` (`Player.cpp:21181`): flag + inn
+    /// bookkeeping. `now_ms` is the caller's map clock.
+    pub fn set_rest_type(&mut self, rest_type: RestType, area_trigger_id: u32, now_ms: u64) {
+        self.rest_type = rest_type;
+        let v = self.unit.world.object.values_mut();
+        if rest_type == RestType::No {
+            v.remove_flag(offsets::PLAYER_FLAGS, PLAYER_FLAGS_RESTING);
+            self.inn_trigger_id = 0;
+            self.inn_enter_ms = None;
+        } else {
+            v.set_flag(offsets::PLAYER_FLAGS, PLAYER_FLAGS_RESTING);
+            self.inn_trigger_id = area_trigger_id;
+            self.inn_enter_ms = Some(now_ms);
+        }
+    }
+
+    /// Load-time quest timer conversion
+    /// (`_LoadQuestStatus`, `Player.cpp:15864-15876`)
+    /// plus the post-inventory `AdjustQuestReqItemCount`
+    /// pass (`Player.cpp:15125-15131` + `13948`): the
+    /// fork recounts deliver-item objectives from live
+    /// inventory and marks those quests changed
+    /// unconditionally, so the next save rewrites them
+    /// (timer included). Quests with no template are
+    /// skipped exactly as the fork skips them.
+    fn convert_quest_timers(&mut self, inputs: &MaterializeInputs<'_>) {
+        let Some(templates) = inputs.quest_templates else {
+            return;
+        };
+        let now = inputs.now_unix;
+        // `GetItemCount(item, checkInBank=true)`: every
+        // character_inventory row (equipped, bags, bank).
+        let mut counts: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        for inv in &self.saved.inventory {
+            *counts.entry(inv.item.item_id).or_default() += inv.item.count;
+        }
+        for row in &mut self.deferred.quest_status {
+            let Some(tmpl) = templates.get(row.quest) else {
+                continue;
+            };
+            let timed_active = tmpl.is_timed() && row.rewarded == 0 && row.status != 0;
+            let remaining_ms_at_load = if timed_active {
+                if row.timer <= now {
+                    1
+                } else {
+                    // Fork truncates through `uint32(diff) * IN_MILLISECONDS`.
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        ((row.timer - now) as u32).wrapping_mul(1000)
+                    }
+                }
+            } else {
+                0
+            };
+            self.quest_timers.insert(
+                row.quest,
+                QuestTimerState {
+                    remaining_ms_at_load,
+                    timed_active,
+                },
+            );
+            if tmpl.is_deliver() {
+                let mut marked = false;
+                for idx in 0..4 {
+                    let req_id = tmpl.req_item_ids[idx];
+                    let mut req_count = tmpl.req_item_counts[idx];
+                    // Quest load zeroes the count when the
+                    // item prototype does not exist
+                    // (`ObjectMgr.cpp:5610`).
+                    if req_id != 0
+                        && inputs
+                            .item_prototypes
+                            .is_some_and(|protos| protos.get(req_id).is_none())
+                    {
+                        req_count = 0;
+                    }
+                    if req_count != 0 {
+                        let cur = counts.get(&req_id).copied().unwrap_or(0);
+                        row.item_count[idx] = cur.min(req_count);
+                        marked = true;
+                    }
+                }
+                if marked {
+                    self.quest_load_changed.insert(row.quest);
+                }
+            }
+        }
     }
 
     /// `_LoadInventory` visible half for bag-0 equipment:

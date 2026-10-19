@@ -78,6 +78,7 @@ pub struct CharacterRow {
     pub world_phase_mask: u32,
     pub create_time: u64,
     pub instance: u32,
+    pub zone: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -351,6 +352,7 @@ fn map_character_row(f: &Fields) -> CharacterRow {
         world_phase_mask: f.u32(55),
         create_time: f.u64(56),
         instance: f.u32(57),
+        zone: f.u32(58),
     }
 }
 
@@ -372,7 +374,7 @@ fn map_item_instance(f: &Fields, base: usize) -> ItemInstanceRow {
     }
 }
 
-const LOADFROM_SQL: &str = "SELECT `guid`, `account`, `name`, `race`, `class`, `gender`, `level`, `xp`, `money`, `skin`, `face`, `hair_style`, `hair_color`, `facial_hair`, `bank_bag_slots`, `character_flags`, `position_x`, `position_y`, `position_z`, `map`, `orientation`, `known_taxi_mask`, `played_time_total`, `played_time_level`, `rest_bonus`, `logout_time`, `reset_talents_multiplier`, `reset_talents_time`, `transport_guid`, `transport_x`, `transport_y`, `transport_z`, `transport_o`, `extra_flags`, `stable_slots`, `death_expire_time`, `current_taxi_path`, `honor_rank_points`, `honor_highest_rank`, `honor_standing`, `honor_last_week_hk`, `honor_last_week_cp`, `honor_stored_hk`, `honor_stored_dk`, `watched_faction`, `drunk`, `health`, `power1`, `power2`, `power3`, `power4`, `power5`, `explored_zones`, `ammo_id`, `action_bars`, `world_phase_mask`, `create_time`, `instance` FROM `characters` WHERE `guid` = ?";
+const LOADFROM_SQL: &str = "SELECT `guid`, `account`, `name`, `race`, `class`, `gender`, `level`, `xp`, `money`, `skin`, `face`, `hair_style`, `hair_color`, `facial_hair`, `bank_bag_slots`, `character_flags`, `position_x`, `position_y`, `position_z`, `map`, `orientation`, `known_taxi_mask`, `played_time_total`, `played_time_level`, `rest_bonus`, `logout_time`, `reset_talents_multiplier`, `reset_talents_time`, `transport_guid`, `transport_x`, `transport_y`, `transport_z`, `transport_o`, `extra_flags`, `stable_slots`, `death_expire_time`, `current_taxi_path`, `honor_rank_points`, `honor_highest_rank`, `honor_standing`, `honor_last_week_hk`, `honor_last_week_cp`, `honor_stored_hk`, `honor_stored_dk`, `watched_faction`, `drunk`, `health`, `power1`, `power2`, `power3`, `power4`, `power5`, `explored_zones`, `ammo_id`, `action_bars`, `world_phase_mask`, `create_time`, `instance`, `zone` FROM `characters` WHERE `guid` = ?";
 
 /// Run the holder's 21 queries on one connection, in holder
 /// order. `Ok(None)` when the `characters` row does not exist

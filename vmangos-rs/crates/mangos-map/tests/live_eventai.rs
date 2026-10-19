@@ -272,6 +272,10 @@ fn bench_eventai_pillager() {
                     skills: mangos_world_data::skill_info::SkillDbc::default(),
                     chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
                     auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
+                    maps: mangos_world_data::map_template::MapStore::default(),
+                    area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
+                    quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
+                    tavern_triggers: std::collections::HashSet::new(),
                 },
                 pillager_spawn.expect("pillager spawn"),
                 oracle,
@@ -308,6 +312,8 @@ fn bench_eventai_pillager() {
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
         skills: None,
+        item_prototypes: None,
+        quest_templates: None,
     };
     let player = Player::materialize(load, &inputs).expect("player");
     let player_guid: ObjectGuid = player.unit.guid();

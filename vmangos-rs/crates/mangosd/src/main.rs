@@ -22,6 +22,8 @@ use tokio::net::TcpListener;
 
 use mangos_config::Config;
 use mangos_db::actor::DbActor;
+use mangos_db::character_load::{ActionRow, HomebindRow};
+use mangos_db::character_save::{CharacterSaveBundle, CharacterStatsRow};
 use mangos_db::characters::{AccountDataEntry, CharEnumRow, NameQueryRow};
 use mangos_db::migrations::{MigrationDb, check_required_migrations};
 use mangos_db::{CharacterDb, ConnectionInfo, DbError, WorldAuthDb};
@@ -42,9 +44,9 @@ use mangosd::petition::PetitionWrite;
 use mangosd::social::SocialWrite;
 use mangosd::socket::{ConnectionDeps, default_server_addresses, run_connection};
 use mangosd::world_actor::{
-    AhBotStore, AuctionStore, GroupStore, GuildBotStore, GuildStore, InitialAhBot, MailStore,
-    PetitionStore, PlayerbotStore, PresenceWriter, RealmPublisher, SessionId, SocialStore,
-    TradeStore, WorldDeps, spawn_world,
+    AhBotStore, AuctionStore, CharacterSaver, GroupStore, GuildBotStore, GuildStore, InitialAhBot,
+    InstanceStore, MailStore, PetitionStore, PlayerbotStore, PresenceWriter, RealmPublisher,
+    SessionId, SocialStore, TradeStore, WorldDeps, spawn_world,
 };
 use mangosd::{ERROR_EXIT_CODE, RESTART_EXIT_CODE, SHUTDOWN_EXIT_CODE, ServerConfig};
 
@@ -635,6 +637,50 @@ impl TradeStore for MysqlTradeStore {
     }
 }
 
+struct MysqlCharacterSaver {
+    characters: Arc<CharacterDb>,
+}
+
+impl CharacterSaver for MysqlCharacterSaver {
+    fn save_character(
+        &self,
+        bundle: CharacterSaveBundle,
+        stats: Option<CharacterStatsRow>,
+    ) -> Result<(), DbError> {
+        self.characters.actor().call(move |conn| {
+            mangos_db::character_save::save_to_db(conn, &bundle)?;
+            if let Some(stats) = &stats {
+                mangos_db::character_save::save_stats(conn, bundle.row.guid, stats)?;
+            }
+            Ok(())
+        })
+    }
+
+    fn save_actions(
+        &self,
+        guid_low: u32,
+        inserts: Vec<ActionRow>,
+        updates: Vec<ActionRow>,
+        deletes: Vec<u8>,
+    ) -> Result<(), DbError> {
+        self.characters.actor().call(move |conn| {
+            mangos_db::character_save::save_actions(conn, guid_low, &inserts, &updates, &deletes)
+        })
+    }
+
+    fn insert_homebind(&self, guid_low: u32, row: HomebindRow) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::character_save::insert_homebind(conn, guid_low, &row))
+    }
+
+    fn update_homebind(&self, guid_low: u32, row: HomebindRow) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::character_save::update_homebind(conn, guid_low, &row))
+    }
+}
+
 struct MysqlAuctionStore {
     characters: Arc<CharacterDb>,
 }
@@ -699,11 +745,11 @@ impl PresenceWriter for MysqlPresenceWriter {
         })
     }
 
-    fn clear_creature_respawn(&self, guid_low: u32) -> Result<(), DbError> {
+    fn clear_creature_respawn(&self, guid_low: u32, instance_id: u32) -> Result<(), DbError> {
         self.db.actor().call(move |conn| {
             conn.exec_drop(
-                "DELETE FROM `creature_respawn` WHERE `guid` = ? AND `instance` = 0",
-                (guid_low,),
+                "DELETE FROM `creature_respawn` WHERE `guid` = ? AND `instance` = ?",
+                (guid_low, instance_id),
             )
             .map_err(DbError::Driver)?;
             Ok(())
@@ -715,22 +761,23 @@ impl PresenceWriter for MysqlPresenceWriter {
         guid_low: u32,
         respawn_time: u64,
         map_id: u32,
+        instance_id: u32,
     ) -> Result<(), DbError> {
         self.db.actor().call(move |conn| {
             conn.exec_drop(
-                "REPLACE INTO `creature_respawn` (`guid`, `respawn_time`, `instance`, `map`) VALUES (?, ?, 0, ?)",
-                (guid_low, respawn_time, map_id),
+                "REPLACE INTO `creature_respawn` (`guid`, `respawn_time`, `instance`, `map`) VALUES (?, ?, ?, ?)",
+                (guid_low, respawn_time, instance_id, map_id),
             )
             .map_err(DbError::Driver)?;
             Ok(())
         })
     }
 
-    fn clear_gameobject_respawn(&self, guid_low: u32) -> Result<(), DbError> {
+    fn clear_gameobject_respawn(&self, guid_low: u32, instance_id: u32) -> Result<(), DbError> {
         self.db.actor().call(move |conn| {
             conn.exec_drop(
-                "DELETE FROM `gameobject_respawn` WHERE `guid` = ? AND `instance` = 0",
-                (guid_low,),
+                "DELETE FROM `gameobject_respawn` WHERE `guid` = ? AND `instance` = ?",
+                (guid_low, instance_id),
             )
             .map_err(DbError::Driver)?;
             Ok(())
@@ -1055,6 +1102,8 @@ struct InitialWorldSettings {
     initial_guild_bots: mangos_db::guild_bots::LoadedGuildBots,
     /// Boot-loaded AH bot rows (Slice F).
     initial_ah_bot: InitialAhBot,
+    /// Boot-loaded instances + binds (Phase 6 Slice 0).
+    initial_instances: mangos_db::instance::LoadedInstances,
 }
 
 fn load_initial_world_settings(
@@ -1190,6 +1239,7 @@ fn load_initial_world_settings(
         initial_playerbots: load_initial_playerbots(&databases.characters, server_config, log),
         initial_guild_bots: load_initial_guild_bots(&databases.characters, server_config, log),
         initial_ah_bot: load_initial_ah_bot(databases, server_config, log),
+        initial_instances: load_initial_instances(&databases.characters, log),
     })
 }
 
@@ -1383,6 +1433,7 @@ fn read_auction_house_dbc(
 fn load_world_db_stores(
     databases: &Databases,
     wow_patch: u32,
+    reset_rate: f32,
 ) -> Result<
     (
         mangos_world_data::creature_template::CreatureTemplates,
@@ -1395,22 +1446,29 @@ fn load_world_db_stores(
         mangos_world_data::item_prototype::ItemPrototypesLite,
         mangos_world_data::reputations::FactionStore,
         mangos_world_data::areas::AreaStore,
+        mangos_world_data::map_template::MapStore,
+        mangos_world_data::area_trigger::AreaTriggerStore,
         mangos_world_data::weather::WeatherChanceStore,
         mangos_world_data::waypoints::WaypointStore,
         std::collections::HashMap<u32, mangos_spells::SpellEntry>,
         mangos_world_data::creature_spells::CreatureSpellsMap,
         mangos_scripts_engine::ScriptStores,
+        mangos_world_data::quest_template::QuestTemplatesLite,
+        std::collections::HashSet<u32>,
         std::collections::HashSet<u32>,
         Vec<(&'static str, mangos_world_data::load_report::LoadReport)>,
     ),
     DbError,
 > {
+    use mangos_world_data::area_trigger::load_area_triggers;
     use mangos_world_data::areas::load_areas;
     use mangos_world_data::creature_spells::load_creature_spells;
     use mangos_world_data::creature_template::{TemplateValidation, load_creature_templates};
     use mangos_world_data::gameobject_template::{GameObjectValidation, load_gameobject_templates};
     use mangos_world_data::item_prototype::load_item_prototypes_lite;
     use mangos_world_data::load_report::LoadReport;
+    use mangos_world_data::map_template::load_map_templates;
+    use mangos_world_data::quest_template::{load_quest_templates_lite, load_tavern_triggers};
     use mangos_world_data::reputations::load_factions;
     use mangos_world_data::script_engine::load_script_stores;
     use mangos_world_data::spawn_support::{
@@ -1444,6 +1502,10 @@ fn load_world_db_stores(
         let items = load_item_prototypes_lite(conn, wow_patch)?;
         let factions = load_factions(conn)?;
         let areas = load_areas(conn, wow_patch)?;
+        let maps = load_map_templates(conn, wow_patch, reset_rate)?;
+        let area_triggers = load_area_triggers(conn, wow_patch, &|m| maps.known(m))?;
+        let quests = load_quest_templates_lite(conn)?;
+        let tavern_triggers = load_tavern_triggers(conn)?;
         let weather_chances = load_weather_chances(conn)?;
         let inv_types = items.inventory_types();
         let (equipment, r6) = load_equipment_templates(conn, wow_patch, Some(&inv_types))?;
@@ -1485,11 +1547,15 @@ fn load_world_db_stores(
             items,
             factions,
             areas,
+            maps,
+            area_triggers,
             weather_chances,
             waypoints,
             spell_entries,
             creature_spells,
             script_stores,
+            quests,
+            tavern_triggers,
             map_ids,
             reports_all,
         ))
@@ -1567,7 +1633,18 @@ fn log_loaded_counts(
     gameobject_templates: &mangos_world_data::gameobject_template::GameObjectTemplates,
     spawns: &mangos_world_data::spawns::SpawnData,
     waypoints: &mangos_world_data::waypoints::WaypointStore,
+    maps: &mangos_world_data::map_template::MapStore,
+    area_triggers: &mangos_world_data::area_trigger::AreaTriggerStore,
 ) {
+    log.out(
+        Level::Minimal,
+        &format!(
+            ">> Loaded {} map templates, {} area triggers, {} area trigger teleport definitions",
+            maps.len(),
+            area_triggers.trigger_count(),
+            area_triggers.teleport_count()
+        ),
+    );
     log.out(
         Level::Minimal,
         &format!(
@@ -1664,14 +1741,18 @@ fn load_phase4_stores(
         items,
         factions,
         areas,
+        maps,
+        area_triggers,
         weather_chances,
         waypoints,
         spell_entries,
         creature_spells,
         script_stores,
+        quests,
+        tavern_triggers,
         map_ids,
         reports,
-    ) = match load_world_db_stores(databases, wow_patch) {
+    ) = match load_world_db_stores(databases, wow_patch, server_config.rate_instance_reset_time) {
         Ok(v) => v,
         Err(e) => {
             log.out(Level::Error, &format!("world store load failed: {e}"));
@@ -1710,6 +1791,8 @@ fn load_phase4_stores(
         &gameobject_templates,
         &spawns,
         &waypoints,
+        &maps,
+        &area_triggers,
     );
     let spell_tables = load_spell_tables(data_dir, log)?;
     log.out(
@@ -1791,6 +1874,10 @@ fn load_phase4_stores(
         skills: skill_dbc,
         chat_channels,
         auction_houses,
+        maps,
+        area_triggers,
+        quests,
+        tavern_triggers,
     });
 
     let respawn_times = load_persisted_respawns(databases, &stores, map_ids, log)?;
@@ -2187,6 +2274,9 @@ fn build_world_deps(
         presence: Arc::new(MysqlPresenceWriter {
             db: Arc::clone(&databases.characters),
         }),
+        character_saver: Arc::new(MysqlCharacterSaver {
+            characters: Arc::clone(&databases.characters),
+        }),
         social: Arc::new(MysqlSocialStore {
             db: Arc::clone(&databases.characters),
         }),
@@ -2228,6 +2318,10 @@ fn build_world_deps(
             characters: Arc::clone(&databases.characters),
         }),
         initial_ah_bot: std::mem::take(&mut initial.initial_ah_bot),
+        instance: Arc::new(MysqlInstanceStore {
+            characters: Arc::clone(&databases.characters),
+        }),
+        initial_instances: std::mem::take(&mut initial.initial_instances),
     }
 }
 
@@ -2246,6 +2340,99 @@ impl GuildBotStore for MysqlGuildBotStore {
         self.db
             .actor()
             .call(move |conn| mangos_db::guild_bots::set_character_level(conn, guid_low, level))
+    }
+}
+
+struct MysqlInstanceStore {
+    characters: Arc<CharacterDb>,
+}
+
+impl InstanceStore for MysqlInstanceStore {
+    fn insert_instance(
+        &self,
+        instance_id: u32,
+        map_id: u32,
+        reset_time: i64,
+    ) -> Result<(), DbError> {
+        self.characters.actor().call(move |conn| {
+            mangos_db::instance::insert_instance(conn, instance_id, map_id, reset_time, "")
+        })
+    }
+
+    fn insert_character_bind(
+        &self,
+        guid_low: u32,
+        instance_id: u32,
+        permanent: bool,
+    ) -> Result<(), DbError> {
+        self.characters.actor().call(move |conn| {
+            mangos_db::instance::insert_character_bind(conn, guid_low, instance_id, permanent)
+        })
+    }
+
+    fn update_character_bind(
+        &self,
+        guid_low: u32,
+        old_instance_id: u32,
+        new_instance_id: u32,
+        permanent: bool,
+    ) -> Result<(), DbError> {
+        self.characters.actor().call(move |conn| {
+            mangos_db::instance::update_character_bind(
+                conn,
+                guid_low,
+                old_instance_id,
+                new_instance_id,
+                permanent,
+            )
+        })
+    }
+
+    fn delete_character_bind(&self, guid_low: u32, instance_id: u32) -> Result<(), DbError> {
+        self.characters.actor().call(move |conn| {
+            mangos_db::instance::delete_character_bind(conn, guid_low, instance_id)
+        })
+    }
+
+    fn insert_group_bind(
+        &self,
+        leader_low: u32,
+        instance_id: u32,
+        permanent: bool,
+    ) -> Result<(), DbError> {
+        self.characters.actor().call(move |conn| {
+            mangos_db::instance::insert_group_bind(conn, leader_low, instance_id, permanent)
+        })
+    }
+}
+
+/// Instance/binding boot read (`MapManager::InitMaxInstanceId`
+/// + saved states).
+fn load_initial_instances(
+    characters: &CharacterDb,
+    log: &Log,
+) -> mangos_db::instance::LoadedInstances {
+    match characters.actor().call(mangos_db::instance::load_instances) {
+        Ok(loaded) => {
+            log.out(
+                Level::Minimal,
+                &format!(
+                    ">> Loaded {} instances, {} character binds, {} group binds (max id {})",
+                    loaded.instances.len(),
+                    loaded.character_binds.len(),
+                    loaded.group_binds.len(),
+                    loaded.max_instance_id
+                ),
+            );
+            loaded
+        }
+        Err(e) => {
+            log.out(Level::Error, &format!("instances load failed: {e}"));
+            mangos_db::instance::LoadedInstances {
+                max_instance_id: mangos_db::instance::RESERVED_INSTANCES_LAST,
+                ..mangos_db::instance::LoadedInstances::default()
+            }
+        }
     }
 }
 

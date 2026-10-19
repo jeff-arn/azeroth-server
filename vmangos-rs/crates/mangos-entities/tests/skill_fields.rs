@@ -73,6 +73,7 @@ fn orc_warrior_load(skills: Vec<SkillRow>) -> CharacterLoad {
             world_phase_mask: 0,
             create_time: 0,
             instance: 0,
+            zone: 0,
         },
         group_id: None,
         bound_instances: vec![],
@@ -223,6 +224,8 @@ fn skill_fields_load_with_cpp_fixups() {
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
         skills: Some(&dbc),
+        item_prototypes: None,
+        quest_templates: None,
     };
     let player = Player::materialize(load, &inputs).expect("materialize");
 

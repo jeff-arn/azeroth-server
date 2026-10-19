@@ -94,6 +94,8 @@ fn bench_warrior_materializes() {
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
         skills: None,
+        item_prototypes: None,
+        quest_templates: None,
     };
     let player = Player::materialize(load, &inputs).expect("materialize");
     let v = player.unit.world.object.values();

@@ -145,6 +145,13 @@ fn bench_respawn_times_load_read_only() {
             conn.query_drop("START TRANSACTION")
                 .map_err(mangos_db::DbError::Driver)?;
             let seed = |conn: &mut mysql::Conn| -> Result<(), mangos_db::DbError> {
+                // Bench servers accumulate real respawn rows;
+                // clear them only inside this rolled-back
+                // transaction so the seeded rows are isolated.
+                conn.exec_drop("DELETE FROM `creature_respawn`", ())
+                    .map_err(mangos_db::DbError::Driver)?;
+                conn.exec_drop("DELETE FROM `gameobject_respawn`", ())
+                    .map_err(mangos_db::DbError::Driver)?;
                 conn.exec_drop(
                     "INSERT INTO `creature_respawn` (`guid`, `respawn_time`, `instance`, `map`) \
                      VALUES (2294, 1792196641, 0, 0), (2299, 100, 0, 0)",
