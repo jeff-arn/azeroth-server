@@ -157,6 +157,28 @@ pub fn build_init_world_states(map_id: u32, zone_id: u32) -> WorldPacket {
     packet.take_writer(writer);
     packet
 }
+/// `Rate.XP.Kill` / `.Kill.Elite` / `.Quest` /
+/// `.Explore` (`World.cpp:506-509`, all default 1.0;
+/// production runs Kill/Quest/Explore at 1.4).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct XpRates {
+    pub kill: f32,
+    pub kill_elite: f32,
+    pub quest: f32,
+    pub explore: f32,
+}
+
+impl Default for XpRates {
+    fn default() -> Self {
+        Self {
+            kill: 1.0,
+            kill_elite: 1.0,
+            quest: 1.0,
+            explore: 1.0,
+        }
+    }
+}
+
 /// Map tuning (`mangosd.conf` values with their tree
 /// defaults).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -182,6 +204,11 @@ pub struct MapConfig {
     pub compression: CompressionConfig,
     /// `ActivateWeather` (true).
     pub activate_weather: bool,
+    /// `Rate.XP.*` kill/quest/explore rates (1.0).
+    pub xp_rates: XpRates,
+    /// `Spell.ProcDelay` batching window (ms; fork
+    /// code default 400).
+    pub proc_delay_ms: u32,
     /// `IsPvPRealm()` for the `UpdateZone` rest branch.
     pub pvp_realm: bool,
     /// `ChangeWeatherInterval` in milliseconds (10 min).
@@ -202,6 +229,8 @@ impl Default for MapConfig {
             creature_rates: CreatureRates::default(),
             compression: CompressionConfig::default(),
             activate_weather: true,
+            xp_rates: XpRates::default(),
+            proc_delay_ms: 400,
             pvp_realm: false,
             change_weather_interval_ms: 600_000,
         }
@@ -276,6 +305,40 @@ pub(crate) struct PlayerEntry {
 }
 
 /// One simulated map instance.
+/// One cooldown entry (`CooldownData` subset):
+/// expiry on the map ms clock, the item that created
+/// it (0 for spell casts), and the permanent hold of
+/// `SPELL_ATTR_COOLDOWN_ON_EVENT` spells (never
+/// expires, never saved; converted to a timed entry
+/// when the aura fades).
+#[derive(Clone, Copy)]
+pub(crate) struct CooldownEntry {
+    pub expiry_ms: u32,
+    pub item_id: u32,
+    pub permanent: bool,
+}
+
+impl CooldownEntry {
+    pub(crate) fn timed(expiry_ms: u32) -> Self {
+        Self {
+            expiry_ms,
+            item_id: 0,
+            permanent: false,
+        }
+    }
+}
+
+/// One loaded `character_spell_cooldown` row in
+/// remaining-time form (`Player::_LoadSpellCooldowns`
+/// output), seeded into the map at login.
+pub struct LoadedCooldown {
+    pub spell: u32,
+    pub item_id: u32,
+    pub category: u32,
+    pub spell_remaining_ms: u32,
+    pub category_remaining_ms: u32,
+}
+
 pub struct Map {
     #[allow(clippy::struct_field_names)] // mirrors C++ GetId()
     pub(crate) map_id: u32,
@@ -314,10 +377,17 @@ pub struct Map {
     pub(crate) ai: HashMap<ObjectGuid, crate::ai::CreatureAi>,
     /// In-progress casts by caster (Slice 5).
     pub(crate) casts: HashMap<ObjectGuid, crate::spells::ActiveCast>,
-    /// Spell + category cooldown expiries (map ms clock):
+    /// Spell + category cooldowns (map ms clock):
     /// (caster, spell id) and (caster, category) share
     /// one map via the high-bit tag on the id.
-    pub(crate) cooldowns: HashMap<(ObjectGuid, u32), u32>,
+    pub(crate) cooldowns: HashMap<(ObjectGuid, u32), CooldownEntry>,
+    /// Delayed proc checks (`m_pendingProcChecks`,
+    /// dealer-side queue flushed when due).
+    pub(crate) pending_procs: Vec<crate::procs::PendingProc>,
+    /// True while `cast_spell` runs for a proc
+    /// handler (marks the cast aura-triggered for
+    /// proc-chain gating).
+    pub(crate) in_proc_cast: bool,
     /// Dead creatures awaiting respawn: guid -> respawn
     /// unix time (Slice 5 death handling).
     pub(crate) respawns_due: HashMap<ObjectGuid, u64>,
@@ -410,6 +480,8 @@ impl Map {
             ai: HashMap::new(),
             casts: HashMap::new(),
             cooldowns: HashMap::new(),
+            pending_procs: Vec::new(),
+            in_proc_cast: false,
             respawns_due: HashMap::new(),
             script_schedule: std::collections::BTreeMap::new(),
             script_seq: 0,
@@ -614,15 +686,21 @@ impl Map {
         Some(player)
     }
 
-    /// `WorldObject::GetZoneAndAreaId` over the `GridMap`
+    /// `TerrainInfo::GetAreaFlag` over the `GridMap`
     /// area flags. `VMap` WMO area overrides are deferred
     /// with the rest of the vmap port; a missing grid tile
-    /// falls back to the map's linked zone, as C++ does.
-    pub fn zone_and_area_id(&mut self, position: Position) -> (u32, u32) {
-        let area_flag = match self.heights.grid(position.x, position.y) {
+    /// falls back to the map's linked-area flag
+    /// (`AreaEntry::GetFlagByMapId`), as C++ does.
+    pub(crate) fn area_flag_at(&mut self, position: Position) -> u16 {
+        match self.heights.grid(position.x, position.y) {
             Some(grid) => grid.area(position.x, position.y),
-            None => self.stores.areas.linked_zone(self.map_id) as u16,
-        };
+            None => self.stores.areas.flag_by_map_id(self.map_id) as u16,
+        }
+    }
+
+    /// `WorldObject::GetZoneAndAreaId`.
+    pub fn zone_and_area_id(&mut self, position: Position) -> (u32, u32) {
+        let area_flag = self.area_flag_at(position);
         self.stores
             .areas
             .zone_and_area_by_flag(area_flag, self.map_id)
@@ -1457,12 +1535,18 @@ impl Map {
         ) {
             return false;
         }
-        let (old_cell, new_position) = {
+        let (old_cell, old_position, new_position) = {
             let Some(entry) = self.players.get(&guid) else {
                 return false;
             };
-            (Self::cell_of(entry.player.unit.world.position()), info.pos)
+            let position = entry.player.unit.world.position();
+            (Self::cell_of(position), position, info.pos)
         };
+        // Fork `positionChanged`: exact float compares.
+        #[allow(clippy::float_cmp)]
+        let position_changed = old_position.x != new_position.x
+            || old_position.y != new_position.y
+            || old_position.z != new_position.z;
         let new_cell = Self::cell_of(new_position);
         // Moving interrupts a timed cast
         // (`Spell::CheckAllowedToMove` subset — no
@@ -1490,6 +1574,12 @@ impl Map {
                 c.players.remove(&guid);
             }
             self.cells.entry(new_cell).or_default().players.insert(guid);
+        }
+        if position_changed {
+            // `CheckAreaExploreAndOutdoor` on relocation
+            // (discovery arm; fork delays only under a
+            // nonzero `Movement.RelocationVmapsCheckDelay`).
+            self.check_area_explore(guid);
         }
         if relocation_due {
             if let Some(entry) = self.players.get_mut(&guid) {
@@ -1539,6 +1629,71 @@ impl Map {
         true
     }
 
+    /// Forced heartbeat after an anticheat reject
+    /// (`Unit::SendHeartBeat(true)` + the flag-test
+    /// `RemoveUnitMovementFlag`): strip `remove_flags`
+    /// from the stored info, restamp, and send
+    /// `MSG_MOVE_HEARTBEAT` to the mover and watchers.
+    pub fn send_forced_heartbeat(&mut self, guid: ObjectGuid, remove_flags: u32) {
+        let Some(entry) = self.players.get_mut(&guid) else {
+            return;
+        };
+        let info = &mut entry.player.unit.world.movement_info;
+        info.flags.remove(remove_flags);
+        info.update_time(self.now_ms);
+        let info = *info;
+        let mut guid_bytes = Vec::new();
+        guid.write_packed(&mut guid_bytes);
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&guid_bytes);
+        info.write(&mut payload);
+        let packet = WorldPacket::with_body(
+            mangos_protocol::opcode_table::opcode_id::MSG_MOVE_HEARTBEAT,
+            payload.into_vec(),
+        );
+        self.events.push(MapEvent::Packet {
+            to: guid,
+            packet: packet.clone(),
+        });
+        let viewers: Vec<ObjectGuid> = self
+            .players
+            .iter()
+            .filter(|(g, e)| **g != guid && e.visible.contains(&guid))
+            .map(|(g, _)| *g)
+            .collect();
+        for viewer in viewers {
+            self.events.push(MapEvent::Packet {
+                to: viewer,
+                packet: packet.clone(),
+            });
+        }
+    }
+
+    /// Zone + area ids at a position (anticheat
+    /// transport-area test; explore resolution path).
+    pub fn zone_area_at(&mut self, position: Position) -> (u32, u32) {
+        let flag = self.area_flag_at(position);
+        if flag == 0xffff {
+            return (0, 0);
+        }
+        self.stores.areas.zone_and_area_by_flag(flag, self.map_id)
+    }
+
+    /// Claimed transport exists, is a transport, and
+    /// is within 70 yd (fake-transport check).
+    #[must_use]
+    pub fn claimed_transport_ok(&self, t_guid: ObjectGuid, pos: Position) -> bool {
+        let Some(go) = self.gameobject(t_guid) else {
+            return false;
+        };
+        if go.info.go_type != 11 {
+            return false;
+        }
+        let gp = go.world.position();
+        let d2 = (gp.x - pos.x).powi(2) + (gp.y - pos.y).powi(2) + (gp.z - pos.z).powi(2);
+        d2 < 70.0 * 70.0
+    }
+
     /// One map tick (`Map::Update` subset). `diff_ms` is
     /// real elapsed milliseconds.
     pub fn tick(&mut self, diff_ms: u32, now_ms: u32, now_unix: u64) {
@@ -1580,6 +1735,7 @@ impl Map {
         // Slice 5: casts finish, auras tick/expire, dead
         // creatures respawn.
         self.update_casts(diff_ms);
+        self.process_pending_procs();
         // Slice 6b: due generic script steps
         // (`ScriptsProcess` inside `Map::Update`).
         self.scripts_process();
@@ -1605,21 +1761,28 @@ impl Map {
 
     /// `SendObjectUpdates`: values blocks for updated
     /// objects to every viewer that sees them; masks clear
-    /// afterwards (`clear_update_mask(false)`).
+    /// afterwards (`clear_update_mask(false)`). The fork
+    /// queues objects through `MarkForClientUpdate`'s
+    /// delayed mark; here writers mostly write the raw
+    /// `Values` store, so a non-empty mirror diff also
+    /// queues the object (same outbound set either way).
     fn send_object_updates(&mut self) {
+        fn queued(object: &mangos_entities::object::ObjectBase) -> bool {
+            object.is_object_updated() || object.values().has_changes()
+        }
         let mut updated: Vec<ObjectGuid> = Vec::new();
         for (guid, entry) in &self.players {
-            if entry.player.unit.world.object.is_object_updated() {
+            if queued(&entry.player.unit.world.object) {
                 updated.push(*guid);
             }
         }
         for (guid, creature) in &self.creatures {
-            if creature.unit.world.object.is_object_updated() {
+            if queued(&creature.unit.world.object) {
                 updated.push(*guid);
             }
         }
         for (guid, go) in &self.gameobjects {
-            if go.world.object.is_object_updated() {
+            if queued(&go.world.object) {
                 updated.push(*guid);
             }
         }

@@ -10,34 +10,63 @@
 //! respawn scheduling.
 //!
 //! Recorded subset deviations: no projectile delay
-//! (speed > 0 spells fail), no spell mods/talents, no
+//! (speed > 0 spells fail), spell mods are implemented
+//! for the wired ops (damage/dot, duration, range,
+//! crit chance/bonus, casting time, cost, cooldown,
+//! GCD, pushback resist; remaining ops pending), no
 //! bonus coefficients (spell power system not built —
 //! `SpellDamageBonusDone/Taken` at their no-aura
-//! identity), no dodge/parry/block on melee spells, no
-//! LOS/facing checks (vmaps not wired), no pushback,
-//! no channeled spells, no combos/area/container
-//! targets, corpse stays until respawn (no decay),
-//! player death is state-only (no ghost flow).
+//! identity apart from the spellmod step), no
+//! dodge/parry/block on melee spells, no
+//! LOS/facing checks (vmaps not wired), cast pushback
+//! and single-target channeling (with
+//! `DelayedChannel`) are implemented
+//! (persistent-area/dynamic-object channels pending),
+//! no combos/area/container targets, corpse stays
+//! until respawn (no decay), player death is
+//! state-only (no ghost flow).
 
 use mangos_entities::aura::{
     AuraEffectState, AuraHolder, MAX_AURAS, MAX_POSITIVE_AURAS, NULL_AURA_SLOT,
 };
 use mangos_entities::aura::{CooldownSnapshot, SavableAura};
-use mangos_entities::unit::{DeathState, UnitBase};
+use mangos_entities::unit::{
+    DeathState, MAX_STATS, StatModKind, UnitBase, apply_percent_mod_float_var,
+};
+
+/// `STAT_STAMINA` as an aura miscvalue.
+const STAT_STAMINA_I32: i32 = 2;
 use mangos_guid::ObjectGuid;
 use mangos_movement::movement_info::Position;
 use mangos_protocol::buffer::PacketWriter;
 use mangos_protocol::opcode_table::opcode_id as op;
 use mangos_protocol::update_field_table::offsets;
 use mangos_protocol::world::WorldPacket;
-use mangos_spells::SpellEntry;
+/// `UNIT_FLAG_*` loss-of-control bits in
+/// `UNIT_FIELD_FLAGS` (fork UnitDefines.h:558-568),
+/// holder-derived by `refresh_cc_flags`.
+const UNIT_FLAG_SILENCED: u32 = 0x0000_2000;
+const UNIT_FLAG_PACIFIED: u32 = 0x0002_0000;
+const UNIT_FLAG_STUNNED: u32 = 0x0004_0000;
+const UNIT_FLAG_CONFUSED: u32 = 0x0040_0000;
+const UNIT_FLAG_FLEEING: u32 = 0x0080_0000;
+const UNIT_FLAG_CC_MASK: u32 = UNIT_FLAG_SILENCED
+    | UNIT_FLAG_PACIFIED
+    | UNIT_FLAG_STUNNED
+    | UNIT_FLAG_CONFUSED
+    | UNIT_FLAG_FLEEING;
+
 use mangos_spells::defines::{
-    aura as aura_type, cast_result, dmg_class, effect, power, school, target as tgt,
+    aura as aura_type, aura_interrupt_flag, cast_result, dmg_class, effect, power, proc_ex,
+    proc_flag, school, spell_interrupt_flag, spellmod, target as tgt,
 };
+
+use crate::procs::{ProcArgs, ProcRaiseCtx, att_type as proc_att_type};
+use mangos_spells::{SpellEntry, spell_mod_apply};
 
 use mangos_world_data::spawn_support::RespawnTimes;
 
-use crate::map::{Map, MapEvent};
+use crate::map::{CooldownEntry, LoadedCooldown, Map, MapEvent};
 
 /// `UNIT_FLAG_IN_COMBAT`.
 const UNIT_FLAG_IN_COMBAT: u32 = 0x0008_0000;
@@ -53,6 +82,8 @@ const ATTR_EX3_ALWAYS_HIT: u32 = 0x0004_0000;
 const ATTR_EX4_IGNORE_RESISTANCES: u32 = 0x0000_0001;
 /// `SPELL_ATTR_NO_AURA_CANCEL` (Attributes bit 31).
 const ATTR_NO_AURA_CANCEL: u32 = 0x8000_0000;
+/// `SPELL_ATTR_COOLDOWN_ON_EVENT` (Attributes bit 25).
+const ATTR_COOLDOWN_ON_EVENT: u32 = 0x0200_0000;
 /// `SPELL_EFFECT_INTERRUPT_CAST` / `SPELL_EFFECT_KNOCK_BACK`
 /// for the binary-spell rule.
 const EFFECT_INTERRUPT_CAST: u32 = 68;
@@ -86,6 +117,7 @@ pub struct CastOptions {
 }
 
 /// One in-progress cast (`Spell` object subset).
+#[allow(clippy::struct_excessive_bools)] // fork Spell flag set
 pub struct ActiveCast {
     pub spell_id: u32,
     pub cast_counter: u8,
@@ -93,6 +125,30 @@ pub struct ActiveCast {
     pub remaining_ms: i32,
     pub total_ms: u32,
     pub triggered: bool,
+    /// Pushback counter (`m_delayAtDamageCount`).
+    pub delay_count: u8,
+    /// The spell is channeled (`m_channeled`).
+    pub channeled: bool,
+    /// Channel has started (`SPELL_STATE_CASTING`);
+    /// false during a cast-time preparing phase.
+    pub channeling: bool,
+    /// Per-second channel cost timer
+    /// (holder `m_timeCla`, one per channel here).
+    pub channel_cost_ms: i32,
+    /// Charged spell modifiers already dropped for
+    /// this cast (`m_appliedMods`): (source spell,
+    /// effect index) keys.
+    pub applied_mods: Vec<(u32, u8)>,
+    /// Proc flags computed at prepare
+    /// (`m_procAttacker`/`m_procVictim`).
+    pub proc_attacker_flags: u32,
+    pub proc_victim_flags: u32,
+    /// This cast may raise proc events
+    /// (`GetCaster()->CanTriggerProcs` subset).
+    pub can_trigger_procs: bool,
+    /// Cast by a proc handler
+    /// (`m_triggeredByAuraSpell`).
+    pub from_proc: bool,
     /// Original caster position (movement interrupts —
     /// handled by `apply_movement` cancellation, kept
     /// for diagnostics).
@@ -120,6 +176,19 @@ struct PeriodicTick {
     effect_index: u32,
     /// `EffectMiscValue` (power type for energize).
     misc_value: i32,
+}
+
+/// `GetNextDelayAtDamageMsTime` (`Spell.h:512`):
+/// 1000/800/600/400/200 as the counter advances below
+/// 5, then 200.
+fn next_delay_at_damage_ms(count: &mut u8) -> i32 {
+    if *count < 5 {
+        let delay = 1000 - i32::from(*count) * 200;
+        *count += 1;
+        delay
+    } else {
+        200
+    }
 }
 
 impl Map {
@@ -210,30 +279,327 @@ impl Map {
         self.send_to_player(caster, packet);
     }
 
-    fn has_cooldown(&self, caster: ObjectGuid, spell: &SpellEntry) -> bool {
+    pub(crate) fn has_cooldown(&self, caster: ObjectGuid, spell: &SpellEntry) -> bool {
+        // `IsSpellCDExpired`/`IsCatCDExpired`: a
+        // permanent (cooldown-on-event) hold never
+        // expires until converted.
         let now = self.now_ms;
-        let spell_cd = self
-            .cooldowns
-            .get(&(caster, spell.id))
-            .is_some_and(|&until| until > now);
+        let active = |e: &CooldownEntry| e.permanent || e.expiry_ms > now;
+        let spell_cd = self.cooldowns.get(&(caster, spell.id)).is_some_and(active);
         let cat_cd = spell.category != 0
             && self
                 .cooldowns
                 .get(&(caster, spell.category | 0x8000_0000))
-                .is_some_and(|&until| until > now);
+                .is_some_and(active);
         spell_cd || cat_cd
     }
 
-    fn add_cooldowns(&mut self, caster: ObjectGuid, spell: &SpellEntry) {
+    fn add_cooldowns(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        applied_mods: &mut Vec<(u32, u8)>,
+    ) {
+        // `SPELLMOD_COOLDOWN` on both recovery fields
+        // (`Player.cpp:22252-54`).
+        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+        let modded = |this: &mut Self, raw: u32, applied: &mut Vec<(u32, u8)>| -> u32 {
+            this.apply_spell_mod(
+                caster,
+                spell,
+                spellmod::COOLDOWN,
+                raw as f32,
+                true,
+                Some(applied),
+            )
+            .max(0.0) as u32
+        };
+        // `SPELL_ATTR_COOLDOWN_ON_EVENT` spells enter
+        // a permanent hold at cast (`Spell.cpp:4173`
+        // passes `permanent`); the timed cooldown only
+        // starts when the aura fades (conversion in
+        // `remove_aura_at`). Fork still records the
+        // would-be expiry.
+        let permanent = spell.attributes & ATTR_COOLDOWN_ON_EVENT != 0;
         if spell.recovery_time > 0 {
-            self.cooldowns
-                .insert((caster, spell.id), self.now_ms + spell.recovery_time);
+            let recovery = modded(self, spell.recovery_time, applied_mods);
+            if recovery > 0 {
+                self.cooldowns.insert(
+                    (caster, spell.id),
+                    CooldownEntry {
+                        expiry_ms: self.now_ms + recovery,
+                        item_id: 0,
+                        permanent,
+                    },
+                );
+            }
         }
         if spell.category != 0 && spell.category_recovery_time > 0 {
+            let recovery = modded(self, spell.category_recovery_time, applied_mods);
+            if recovery > 0 {
+                self.cooldowns.insert(
+                    (caster, spell.category | 0x8000_0000),
+                    CooldownEntry {
+                        expiry_ms: self.now_ms + recovery,
+                        item_id: 0,
+                        permanent,
+                    },
+                );
+            }
+        }
+    }
+
+    /// Convert a permanent cooldown-on-event hold
+    /// into the timed cooldown (`AddCooldown` at
+    /// aura fade, `SpellAuras.cpp` holder cleanup):
+    /// fresh recovery from now, spellmod applied
+    /// with the fork null spell pointer (value
+    /// applies, no charge drop). No-op without a
+    /// permanent spell-key hold.
+    fn start_event_cooldown(&mut self, caster: ObjectGuid, spell: &SpellEntry) {
+        let held = self
+            .cooldowns
+            .get(&(caster, spell.id))
+            .is_some_and(|e| e.permanent);
+        if !held {
+            return;
+        }
+        self.cooldowns.remove(&(caster, spell.id));
+        if spell.category != 0 {
+            self.cooldowns
+                .remove(&(caster, spell.category | 0x8000_0000));
+        }
+        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+        let recovery = self
+            .apply_spell_mod(
+                caster,
+                spell,
+                spellmod::COOLDOWN,
+                spell.recovery_time as f32,
+                true,
+                None,
+            )
+            .max(0.0) as u32;
+        if recovery > 0 {
             self.cooldowns.insert(
-                (caster, spell.category | 0x8000_0000),
-                self.now_ms + spell.category_recovery_time,
+                (caster, spell.id),
+                CooldownEntry::timed(self.now_ms + recovery),
             );
+        }
+        if spell.category != 0 && spell.category_recovery_time > 0 {
+            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+            let cat_recovery = self
+                .apply_spell_mod(
+                    caster,
+                    spell,
+                    spellmod::COOLDOWN,
+                    spell.category_recovery_time as f32,
+                    true,
+                    None,
+                )
+                .max(0.0) as u32;
+            if cat_recovery > 0 {
+                self.cooldowns.insert(
+                    (caster, spell.category | 0x8000_0000),
+                    CooldownEntry::timed(self.now_ms + cat_recovery),
+                );
+            }
+        }
+    }
+
+    /// Seed loaded cooldown rows at login
+    /// (`Player::_LoadSpellCooldowns` enforcement
+    /// half: the client packet is built session-side;
+    /// without this the server would not block).
+    pub fn seed_cooldowns(&mut self, caster: ObjectGuid, rows: &[LoadedCooldown]) {
+        for row in rows {
+            if row.spell_remaining_ms > 0 {
+                self.cooldowns.insert(
+                    (caster, row.spell),
+                    CooldownEntry {
+                        expiry_ms: self.now_ms + row.spell_remaining_ms,
+                        item_id: row.item_id,
+                        permanent: false,
+                    },
+                );
+            }
+            if row.category != 0 && row.category_remaining_ms > 0 {
+                self.cooldowns.insert(
+                    (caster, row.category | 0x8000_0000),
+                    CooldownEntry::timed(self.now_ms + row.category_remaining_ms),
+                );
+            }
+        }
+    }
+
+    /// `Player::ApplySpellMod` (`Player.cpp:22465`,
+    /// players only as `HandleAddModifier` gates):
+    /// collect the caster's
+    /// `ADD_FLAT_MODIFIER`/`ADD_PCT_MODIFIER`
+    /// effects for `op`, filter by family name +
+    /// affect mask (`IsAffectedOnSpell`), compose in
+    /// fork order, and drop charges once per cast
+    /// (`applied` dedupe = fork `m_appliedMods`;
+    /// `None` mirrors a null spell pointer: applies
+    /// but never drops and ignores the exhausted
+    /// gate). Modifier state lives on the holder
+    /// effects, so removal is inherently reversible.
+    #[allow(
+        clippy::float_cmp, // fork compares basevalue to T(0) exactly
+        clippy::cast_precision_loss
+    )]
+    pub(crate) fn apply_spell_mod(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        op: u32,
+        base: f32,
+        drop_charge: bool,
+        applied: Option<&mut Vec<(u32, u8)>>,
+    ) -> f32 {
+        // SPELL_ATTR_EX3_IGNORE_CASTER_MODIFIERS.
+        if !self.players.contains_key(&caster) || spell.attributes_ex3 & 0x2000_0000 != 0 {
+            return base;
+        }
+        // (holder index, source spell, effect index,
+        // is_pct, value, charges)
+        let mut hits: Vec<(usize, u32, u8, bool, i32, i32)> = Vec::new();
+        for (holder_idx, holder) in self.aura_holders(caster).iter().enumerate() {
+            let Some(source) = self.stores.spells.get(holder.spell_id) else {
+                continue;
+            };
+            if source.spell_family_name != spell.spell_family_name {
+                continue;
+            }
+            for (eff_idx, eff) in holder.effects.iter().enumerate() {
+                let Some(state) = eff else { continue };
+                let is_pct = match state.aura_type {
+                    aura_type::ADD_FLAT_MODIFIER => false,
+                    aura_type::ADD_PCT_MODIFIER => true,
+                    _ => continue,
+                };
+                if u32::try_from(state.misc_value) != Ok(op) {
+                    continue;
+                }
+                if spell.spell_family_flags & source.effects[eff_idx].item_type == 0 {
+                    continue;
+                }
+                #[allow(clippy::cast_possible_truncation)]
+                hits.push((
+                    holder_idx,
+                    holder.spell_id,
+                    eff_idx as u8,
+                    is_pct,
+                    state.amount,
+                    state.mod_charges,
+                ));
+            }
+        }
+        if hits.is_empty() {
+            return base;
+        }
+        let mut applied = applied;
+        let mut total_flat = 0.0f32;
+        let mut total_pct = 0.0f32;
+        let mut drops: Vec<(usize, u8)> = Vec::new();
+        for (holder_idx, source_id, eff_idx, is_pct, value, charges) in hits {
+            let key = (source_id, eff_idx);
+            // Exhausted mods only still affect the cast
+            // that consumed them.
+            if charges == -1
+                && let Some(list) = &applied
+                && !list.contains(&key)
+            {
+                continue;
+            }
+            if is_pct {
+                if base == 0.0 {
+                    continue;
+                }
+                // Instant-cast mods never apply to
+                // 10 s+ casts.
+                if op == spellmod::CASTING_TIME && base >= 10_000.0 && value <= -100 {
+                    continue;
+                }
+                total_pct += value as f32;
+            } else {
+                total_flat += value as f32;
+            }
+            if drop_charge
+                && charges > 0
+                && let Some(list) = &mut applied
+                && !list.contains(&key)
+            {
+                list.push(key);
+                drops.push((holder_idx, eff_idx));
+            }
+            // A -100% casting-time mod zeroes the cast
+            // outright (fork Barkskin/Swiftness fix).
+            if op == spellmod::CASTING_TIME && is_pct && value == -100 {
+                total_pct = -100.0;
+                total_flat = 0.0;
+                break;
+            }
+        }
+        if !drops.is_empty()
+            && let Some(unit) = self.unit_base_mut(caster)
+        {
+            for (holder_idx, eff_idx) in drops {
+                if let Some(state) = unit
+                    .auras
+                    .get_mut(holder_idx)
+                    .and_then(|h| h.effects[usize::from(eff_idx)].as_mut())
+                    && state.mod_charges > 0
+                {
+                    state.mod_charges -= 1;
+                    if state.mod_charges == 0 {
+                        state.mod_charges = -1;
+                    }
+                }
+            }
+        }
+        spell_mod_apply(base, total_flat, total_pct)
+    }
+
+    /// `Player::RemoveSpellMods` subset: holders whose
+    /// modifier this cast exhausted are removed.
+    fn remove_exhausted_spell_mods(&mut self, caster: ObjectGuid, applied: &[(u32, u8)]) {
+        let mut sources: Vec<u32> = Vec::new();
+        for (source, _) in applied {
+            if !sources.contains(source) {
+                sources.push(*source);
+            }
+        }
+        for source in sources {
+            let exhausted = self
+                .aura_holders(caster)
+                .iter()
+                .filter(|h| h.spell_id == source)
+                .any(|h| h.effects.iter().flatten().any(|e| e.mod_charges == -1));
+            if exhausted {
+                self.cancel_aura(caster, source);
+            }
+        }
+    }
+
+    /// Spell duration with `SPELLMOD_DURATION`
+    /// applied (positive durations only; a modded
+    /// result <= 0 suppresses the aura where the fork
+    /// would expire it on the first update).
+    fn modded_duration_ms(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        applied: Option<&mut Vec<(u32, u8)>>,
+    ) -> i32 {
+        let raw = spell.calculate_duration_ms(&self.stores.spells.tables);
+        if raw <= 0 {
+            return raw;
+        }
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        {
+            self.apply_spell_mod(caster, spell, spellmod::DURATION, raw as f32, true, applied)
+                as i32
         }
     }
 
@@ -373,6 +739,7 @@ impl Map {
     /// `Unit::CastSpell` + `Spell::prepare` subset.
     /// Starts the cast (instant spells complete inside
     /// this call, like C++ update(0) chaining).
+    #[allow(clippy::too_many_lines)] // one prepare() port
     pub fn cast_spell(
         &mut self,
         caster: ObjectGuid,
@@ -396,6 +763,27 @@ impl Map {
         if !alive && !options.triggered {
             return fail(self, cast_result::FAILED_CASTER_DEAD);
         }
+        // Cast prevention by loss-of-control flags
+        // (fork Spell.cpp:6826-6838; mechanic-immunity
+        // and stun-interrupt-flag nuances unmodeled).
+        {
+            let flags = self.unit_value_u32(caster, offsets::UNIT_FIELD_FLAGS);
+            if flags & UNIT_FLAG_STUNNED != 0 {
+                return fail(self, cast_result::FAILED_STUNNED);
+            }
+            if flags & UNIT_FLAG_CONFUSED != 0 {
+                return fail(self, cast_result::FAILED_CONFUSED);
+            }
+            if flags & UNIT_FLAG_FLEEING != 0 {
+                return fail(self, cast_result::FAILED_FLEEING);
+            }
+            if spell.prevention_type == 1 && flags & UNIT_FLAG_SILENCED != 0 {
+                return fail(self, cast_result::FAILED_SILENCED);
+            }
+            if spell.prevention_type == 2 && flags & UNIT_FLAG_PACIFIED != 0 {
+                return fail(self, cast_result::FAILED_PACIFIED);
+            }
+        }
         if !options.skip_known && !self.player_knows_spell(caster, spell_id) {
             return fail(self, cast_result::FAILED_UNKNOWN);
         }
@@ -406,6 +794,9 @@ impl Map {
         if spell.speed > 0.0 {
             return fail(self, cast_result::FAILED_UNKNOWN);
         }
+        // Charged spell modifiers dropped for this
+        // cast (`m_appliedMods`).
+        let mut applied_mods: Vec<(u32, u8)> = Vec::new();
         if !options.triggered {
             let now = self.now_ms;
             let gcd = self
@@ -419,20 +810,47 @@ impl Map {
                 self.unit_max_power(caster, spell.power_type),
                 self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
             );
+            // `SPELLMOD_COST` at the power check never
+            // drops a charge (the take site does).
+            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+            let cost = self
+                .apply_spell_mod(
+                    caster,
+                    &spell,
+                    spellmod::COST,
+                    cost as f32,
+                    false,
+                    Some(&mut applied_mods),
+                )
+                .max(0.0) as u32;
             if self.unit_power(caster, spell.power_type) < cost {
                 return fail(self, cast_result::FAILED_NO_POWER);
             }
         }
         // Target validation (subset of CheckCast target
         // rules driven by effect 0's implicit target).
-        if let CastOutcome::Failed(reason) = self.check_target(caster, &spell, target) {
+        if let CastOutcome::Failed(reason) =
+            self.check_target(caster, &spell, target, &mut applied_mods)
+        {
             return fail(self, reason);
         }
 
         let cast_time = if options.triggered {
             0
         } else {
-            spell.cast_time_ms(&self.stores.spells.tables)
+            let raw = spell.cast_time_ms(&self.stores.spells.tables);
+            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+            {
+                self.apply_spell_mod(
+                    caster,
+                    &spell,
+                    spellmod::CASTING_TIME,
+                    raw as f32,
+                    true,
+                    Some(&mut applied_mods),
+                )
+                .max(0.0) as u32
+            }
         };
         let counter = self.unit_base_mut(caster).map_or(0, |u| {
             let c = u.cast_counter;
@@ -440,6 +858,9 @@ impl Map {
             c
         });
         let position = self.unit_position(caster).unwrap_or_default();
+        let from_proc = self.in_proc_cast;
+        let (proc_attacker_flags, proc_victim_flags, can_trigger_procs) =
+            crate::procs::spell_proc_context(&spell, options.triggered, from_proc);
         let cast = ActiveCast {
             spell_id,
             cast_counter: counter,
@@ -447,6 +868,15 @@ impl Map {
             remaining_ms: i32::try_from(cast_time).unwrap_or(i32::MAX),
             total_ms: cast_time,
             triggered: options.triggered,
+            delay_count: 0,
+            channeled: spell.is_channeled(),
+            channeling: false,
+            channel_cost_ms: 1000,
+            applied_mods,
+            proc_attacker_flags,
+            proc_victim_flags,
+            can_trigger_procs,
+            from_proc,
             position,
         };
         if cast_time > 0 && !options.triggered {
@@ -460,18 +890,21 @@ impl Map {
     }
 
     fn check_target(
-        &self,
+        &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         target: CastTarget,
+        applied_mods: &mut Vec<(u32, u8)>,
     ) -> CastOutcome {
         let mode = spell
             .effects
             .iter()
             .find(|e| e.effect != effect::NONE)
             .map_or(tgt::UNIT_CASTER, |e| e.implicit_target_a);
+        // Target mode 0 (NONE in DBC) behaves as
+        // caster-targeted for check purposes.
         match mode {
-            tgt::UNIT_CASTER
+            0 | tgt::UNIT_CASTER
             | tgt::ENUM_UNITS_PARTY_WITHIN_CASTER_RANGE
             | tgt::UNIT_PARTY
             | tgt::UNIT_FRIEND_AND_PARTY
@@ -484,7 +917,7 @@ impl Map {
             // target slot).
             | tgt::LOCATION_CASTER_DEST
             | tgt::LOCATION_CASTER_SRC => CastOutcome::Started,
-            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND => {
+            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT => {
                 let CastTarget::Unit(victim) = target else {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_IMPLICIT_TARGETS);
                 };
@@ -509,8 +942,16 @@ impl Map {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS);
                 }
                 let cpos = self.unit_position(caster).unwrap_or_default();
-                let range = spell.range_max(&self.stores.spells.tables)
-                    + self.bounding_radius_of(caster)
+                // `SPELLMOD_RANGE` (`CheckRange`; range
+                // checks never drop charges).
+                let range = self.apply_spell_mod(
+                    caster,
+                    spell,
+                    spellmod::RANGE,
+                    spell.range_max(&self.stores.spells.tables),
+                    false,
+                    Some(applied_mods),
+                ) + self.bounding_radius_of(caster)
                     + self.bounding_radius_of(victim);
                 let dist = ((cpos.x - vpos.x).powi(2) + (cpos.y - vpos.y).powi(2)).sqrt();
                 if dist > range {
@@ -557,6 +998,13 @@ impl Map {
     /// `InterruptSpell` + cancel-cast: emits the failure
     /// packets for timed casts.
     pub fn cancel_cast(&mut self, caster: ObjectGuid, interrupted: bool) {
+        // Channel interrupt closes the bar via
+        // `MSG_CHANNEL_UPDATE(0)` in `end_channel`
+        // (no SPELL_FAILURE family).
+        if self.casts.get(&caster).is_some_and(|c| c.channeling) {
+            self.end_channel(caster, true);
+            return;
+        }
         let Some(cast) = self.casts.remove(&caster) else {
             return;
         };
@@ -582,8 +1030,215 @@ impl Map {
         self.broadcast_movement(caster, &packet);
     }
 
+    /// The shared pushback resist total
+    /// (`GetTotalAuraModifier(SPELL_AURA_RESIST_PUSHBACK)`;
+    /// the fork adds it to the spellmod-adjusted 100
+    /// then subtracts 100, and spell mods are identity
+    /// in this subset).
+    fn pushback_resist_chance(&self, victim: ObjectGuid) -> i32 {
+        self.aura_holders(victim)
+            .iter()
+            .flat_map(|h| h.effects.iter().flatten())
+            .filter(|e| e.aura_type == aura_type::RESIST_PUSHBACK)
+            .map(|e| e.amount)
+            .sum()
+    }
+
+    /// The fork pushback resist roll shared by
+    /// `Delayed`/`DelayedChannel`: 100 through
+    /// `SPELLMOD_NOT_LOSE_CASTING_TIME`, plus the
+    /// `RESIST_PUSHBACK` aura total, minus 100,
+    /// vs `irand(0, 99)`.
+    fn pushback_resisted(&mut self, victim: ObjectGuid, spell: &SpellEntry) -> bool {
+        let mut applied = self
+            .casts
+            .get_mut(&victim)
+            .map_or_else(Vec::new, |c| std::mem::take(&mut c.applied_mods));
+        #[allow(clippy::cast_possible_truncation)]
+        let modded = self.apply_spell_mod(
+            victim,
+            spell,
+            spellmod::NOT_LOSE_CASTING_TIME,
+            100.0,
+            true,
+            Some(&mut applied),
+        ) as i32;
+        if let Some(c) = self.casts.get_mut(&victim) {
+            c.applied_mods = applied;
+        }
+        let resist_chance = modded + self.pushback_resist_chance(victim) - 100;
+        resist_chance > self.spell_rng().irand(0, 99)
+    }
+
+    /// Damage-taken cast interference (the
+    /// `DealDamage` current-spell loop, `Unit.cpp`
+    /// ~896): channeled casts take the
+    /// `DelayedChannel`/channel-cancel arm; preparing
+    /// player casts take `Spell::Delayed`
+    /// (`Spell.cpp:7686`) — `DAMAGE_CANCELS` interrupts,
+    /// otherwise pushback gated by `DAMAGE_PUSHBACK`
+    /// and the resist roll. The fork delayed-state arm
+    /// is unreachable (no projectile delay), and
+    /// creature casts are never pushed.
+    fn delay_spell_at_damage(&mut self, attacker: ObjectGuid, victim: ObjectGuid) {
+        let Some((spell_id, channeling)) =
+            self.casts.get(&victim).map(|c| (c.spell_id, c.channeling))
+        else {
+            return;
+        };
+        if channeling {
+            let Some(spell) = self.stores.spells.get(spell_id) else {
+                return;
+            };
+            let cflags = spell.channel_interrupt_flags;
+            if cflags & aura_interrupt_flag::DAMAGE_CHANNEL_DURATION != 0 {
+                // Self-damage never shortens a channel,
+                // and `DelayedChannel` is players-only.
+                if attacker != victim && self.players.contains_key(&victim) {
+                    self.delay_channel(victim);
+                }
+            } else if cflags & aura_interrupt_flag::DAMAGE_CANCELS != 0 {
+                self.end_channel(victim, true);
+            }
+            return;
+        }
+        if !self.players.contains_key(&victim) {
+            return;
+        }
+        let Some(spell) = self.stores.spells.get(spell_id).cloned() else {
+            return;
+        };
+        let flags = spell.interrupt_flags;
+        if flags & spell_interrupt_flag::DAMAGE_CANCELS != 0 {
+            self.cancel_cast(victim, true);
+            return;
+        }
+        if flags & spell_interrupt_flag::DAMAGE_PUSHBACK == 0 {
+            return;
+        }
+        if self.pushback_resisted(victim, &spell) {
+            return;
+        }
+        let Some(cast) = self.casts.get_mut(&victim) else {
+            return;
+        };
+        let mut delay_ms = next_delay_at_damage_ms(&mut cast.delay_count);
+        #[allow(clippy::cast_possible_wrap)]
+        let total_ms = cast.total_ms as i32;
+        if cast.remaining_ms + delay_ms > total_ms {
+            delay_ms = total_ms - cast.remaining_ms;
+            cast.remaining_ms = total_ms;
+        } else {
+            cast.remaining_ms += delay_ms;
+        }
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&Self::packed_guid_bytes(victim));
+        #[allow(clippy::cast_sign_loss)]
+        payload.write_u32_le(delay_ms as u32);
+        let packet = WorldPacket::with_body(op::SMSG_SPELL_DELAYED, payload.into_vec());
+        self.send_to_player(victim, packet);
+    }
+
+    /// `Spell::DelayedChannel` (`Spell.cpp:7725`):
+    /// shorten the channel and its holders by the
+    /// scheduled delay, then refresh the client bar
+    /// (or interrupt when nothing remains).
+    fn delay_channel(&mut self, victim: ObjectGuid) {
+        let Some(spell_id) = self.casts.get(&victim).map(|c| c.spell_id) else {
+            return;
+        };
+        let Some(spell) = self.stores.spells.get(spell_id).cloned() else {
+            return;
+        };
+        if self.pushback_resisted(victim, &spell) {
+            return;
+        }
+        let Some((spell_id, target, remaining_ms, delay_ms)) =
+            self.casts.get_mut(&victim).map(|cast| {
+                let mut delay_ms = next_delay_at_damage_ms(&mut cast.delay_count);
+                if cast.remaining_ms < delay_ms {
+                    delay_ms = cast.remaining_ms;
+                    cast.remaining_ms = 0;
+                } else {
+                    cast.remaining_ms -= delay_ms;
+                }
+                (cast.spell_id, cast.target, cast.remaining_ms, delay_ms)
+            })
+        else {
+            return;
+        };
+        if let CastTarget::Unit(unit) = target
+            && unit != victim
+        {
+            self.delay_aura_holders(unit, spell_id, victim, delay_ms);
+        }
+        self.delay_aura_holders(victim, spell_id, victim, delay_ms);
+        if remaining_ms <= 0 {
+            self.end_channel(victim, true);
+        } else {
+            let mut payload = PacketWriter::new();
+            #[allow(clippy::cast_sign_loss)]
+            payload.write_u32_le(remaining_ms as u32);
+            let packet = WorldPacket::with_body(op::MSG_CHANNEL_UPDATE, payload.into_vec());
+            self.send_to_player(victim, packet);
+        }
+    }
+
+    /// `Unit::DelaySpellAuraHolder` +
+    /// `RefreshAuraPeriodicTimers`/`UpdatePeriodicTimer`:
+    /// shorten matching holders and realign their
+    /// periodic timers to the new duration so the
+    /// remaining tick count still divides evenly.
+    fn delay_aura_holders(
+        &mut self,
+        victim: ObjectGuid,
+        spell_id: u32,
+        caster: ObjectGuid,
+        delay_ms: i32,
+    ) {
+        let mut duration_packets: Vec<(u8, i32)> = Vec::new();
+        if let Some(unit) = self.unit_base_mut(victim) {
+            for holder in &mut unit.auras {
+                if holder.spell_id != spell_id || holder.caster != caster || holder.duration_ms <= 0
+                {
+                    continue;
+                }
+                holder.duration_ms = if holder.duration_ms < delay_ms {
+                    0
+                } else {
+                    holder.duration_ms - delay_ms
+                };
+                for eff in holder.effects.iter_mut().flatten() {
+                    if !eff.is_periodic() || eff.period_ms == 0 {
+                        continue;
+                    }
+                    #[allow(clippy::cast_possible_wrap)]
+                    let period = eff.period_ms as i32;
+                    let mut timer = if holder.duration_ms > period {
+                        holder.duration_ms % period
+                    } else {
+                        holder.duration_ms
+                    };
+                    if timer == 0 {
+                        timer = period;
+                    }
+                    eff.periodic_timer = timer;
+                }
+                duration_packets.push((holder.slot, holder.duration_ms));
+            }
+        }
+        for (slot, duration) in duration_packets {
+            self.send_aura_duration(victim, slot, duration);
+        }
+    }
+
     /// `Spell::update` + `Spell::cast` subset.
+    #[allow(clippy::too_many_lines)] // one cast() port
     pub(crate) fn update_cast(&mut self, caster: ObjectGuid, diff_ms: u32) {
+        if self.casts.get(&caster).is_some_and(|c| c.channeling) {
+            self.update_channel(caster, diff_ms);
+            return;
+        }
         let done = match self.casts.get_mut(&caster) {
             Some(cast) => {
                 cast.remaining_ms -= i32::try_from(diff_ms).unwrap_or(i32::MAX);
@@ -594,7 +1249,7 @@ impl Map {
         if !done {
             return;
         }
-        let Some(cast) = self.casts.remove(&caster) else {
+        let Some(mut cast) = self.casts.remove(&caster) else {
             return;
         };
         let Some(spell) = self.stores.spells.get(cast.spell_id).cloned() else {
@@ -615,6 +1270,17 @@ impl Map {
                 self.unit_max_power(caster, spell.power_type),
                 self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
             );
+            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+            let power_cost = self
+                .apply_spell_mod(
+                    caster,
+                    &spell,
+                    spellmod::COST,
+                    power_cost as f32,
+                    true,
+                    Some(&mut cast.applied_mods),
+                )
+                .max(0.0) as u32;
             let current = self.unit_power(caster, spell.power_type);
             self.unit_set_power(caster, spell.power_type, current.saturating_sub(power_cost));
             // `Spell::TakePower` five-second timer
@@ -630,12 +1296,23 @@ impl Map {
                 u.set_last_mana_use(spell.id);
             }
             if spell.start_recovery_time > 0 {
-                let until = self.now_ms + spell.start_recovery_time;
+                #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                let gcd = self
+                    .apply_spell_mod(
+                        caster,
+                        &spell,
+                        spellmod::GLOBAL_COOLDOWN,
+                        spell.start_recovery_time as f32,
+                        true,
+                        Some(&mut cast.applied_mods),
+                    )
+                    .max(0.0) as u32;
+                let until = self.now_ms + gcd;
                 if let Some(u) = self.unit_base_mut(caster) {
                     u.gcd_until_ms = until;
                 }
             }
-            self.add_cooldowns(caster, &spell);
+            self.add_cooldowns(caster, &spell, &mut cast.applied_mods);
         }
 
         let victims = Self::collect_targets(caster, &spell, cast.target);
@@ -670,10 +1347,252 @@ impl Map {
         }
 
         self.send_spell_go(caster, &cast, &spell, &hits, &misses);
+        // Cast-end proc raise (fork raises it in
+        // `cast()` before effect application).
+        if cast.can_trigger_procs {
+            let main_target = victims.first().copied();
+            let ex = if main_target.is_none_or(|t| hit_victims.contains(&t)) {
+                proc_ex::CAST_END | proc_ex::NORMAL_HIT
+            } else {
+                proc_ex::CAST_END | proc_ex::MISS
+            };
+            let args = ProcArgs {
+                target: main_target,
+                attacker_flags: cast.proc_attacker_flags,
+                victim_flags: proc_flag::NONE,
+                proc_ex: ex,
+                amount: 1,
+                original_amount: 1,
+                att_type: if spell.dmg_class == dmg_class::RANGED {
+                    proc_att_type::RANGED
+                } else {
+                    proc_att_type::BASE
+                },
+                proc_spell_id: Some(spell.id),
+                triggered_by_aura: cast.from_proc,
+                proc_time_ms: self.now_ms,
+                applied_mods: &cast.applied_mods,
+            };
+            self.proc_damage_and_spell(caster, args);
+        }
+        let ctx = ProcRaiseCtx {
+            attacker_flags: cast.proc_attacker_flags,
+            victim_flags: cast.proc_victim_flags,
+            can_trigger: cast.can_trigger_procs,
+            triggered_by_aura: cast.from_proc,
+            att_type: if spell.dmg_class == dmg_class::RANGED {
+                proc_att_type::RANGED
+            } else {
+                proc_att_type::BASE
+            },
+            applied_mods: cast.applied_mods.clone(),
+        };
         for victim in hit_victims {
-            self.apply_effects(caster, caster_level, &spell, victim);
+            self.apply_effects(
+                caster,
+                caster_level,
+                &spell,
+                victim,
+                Some(&mut cast.applied_mods),
+                Some(&ctx),
+            );
         }
         let _ = caster_level;
+        // Start channeling (the `handle_immediate`
+        // tail). Effects are already applied in this
+        // subset, so `MSG_CHANNEL_START` follows their
+        // packets where the fork sends it first.
+        if cast.channeled && !cast.channeling {
+            self.start_channel(caster, cast, &spell, &hits);
+        } else {
+            self.remove_exhausted_spell_mods(caster, &cast.applied_mods);
+        }
+    }
+
+    /// `SendChannelStart` + channel state entry
+    /// (`Spell.cpp:4002-4012, 5138`): fields, direct
+    /// start packet to a player caster, cast retained
+    /// with the channel duration as its timer.
+    fn start_channel(
+        &mut self,
+        caster: ObjectGuid,
+        mut cast: ActiveCast,
+        spell: &SpellEntry,
+        hits: &[ObjectGuid],
+    ) {
+        let duration = self.modded_duration_ms(caster, spell, Some(&mut cast.applied_mods));
+        if duration <= 0 || !self.unit_is_alive(caster) {
+            return;
+        }
+        let channel_target = hits.iter().copied().find(|g| *g != caster);
+        cast.channeling = true;
+        cast.remaining_ms = duration;
+        #[allow(clippy::cast_sign_loss)]
+        {
+            cast.total_ms = duration as u32;
+        }
+        cast.channel_cost_ms = 1000;
+        if let Some(u) = self.unit_base_mut(caster) {
+            let values = u.values();
+            values.set_u64(
+                offsets::UNIT_FIELD_CHANNEL_OBJECT,
+                channel_target.map_or(0, ObjectGuid::raw),
+            );
+            values.set_u32(offsets::UNIT_CHANNEL_SPELL, spell.id);
+        }
+        if self.players.contains_key(&caster) {
+            let mut payload = PacketWriter::new();
+            payload.write_u32_le(spell.id);
+            #[allow(clippy::cast_sign_loss)]
+            payload.write_u32_le(duration as u32);
+            let packet = WorldPacket::with_body(op::MSG_CHANNEL_START, payload.into_vec());
+            self.send_to_player(caster, packet);
+        }
+        let applied = cast.applied_mods.clone();
+        self.casts.insert(caster, cast);
+        // Fork sweeps exhausted mods right after
+        // `SendChannelStart`.
+        self.remove_exhausted_spell_mods(caster, &applied);
+    }
+
+    /// Channeled tick (`Spell::update` CASTING arm +
+    /// the holder `UpdateHolder` cost/range arms,
+    /// folded into the cast because holder ticking
+    /// itself stays in `update_auras` here).
+    fn update_channel(&mut self, caster: ObjectGuid, diff_ms: u32) {
+        let Some((spell_id, target)) = self.casts.get(&caster).map(|c| (c.spell_id, c.target))
+        else {
+            return;
+        };
+        let Some(spell) = self.stores.spells.get(spell_id).cloned() else {
+            self.end_channel(caster, true);
+            return;
+        };
+        // Target validity + range (single-target
+        // subset of `HasValidUnitPresentInTargetList`
+        // and the holder range removal).
+        if let CastTarget::Unit(victim) = target
+            && victim != caster
+        {
+            if !self.unit_is_alive(victim) || self.unit_position(victim).is_none() {
+                self.end_channel(caster, true);
+                return;
+            }
+            let mut max_range = spell.range_max(&self.stores.spells.tables);
+            if Self::is_hostile_pair(caster, victim) {
+                max_range *= 1.33;
+            } else {
+                max_range += 1.25;
+            }
+            let cpos = self.unit_position(caster).unwrap_or_default();
+            let vpos = self.unit_position(victim).unwrap_or_default();
+            let dist = ((cpos.x - vpos.x).powi(2) + (cpos.y - vpos.y).powi(2)).sqrt();
+            if dist > max_range {
+                self.end_channel(caster, true);
+                return;
+            }
+        }
+        // Per-second drain (holder `m_timeCla`).
+        let drain_due = match self.casts.get_mut(&caster) {
+            Some(cast) => {
+                cast.channel_cost_ms -= i32::try_from(diff_ms).unwrap_or(i32::MAX);
+                if cast.channel_cost_ms <= 0 {
+                    cast.channel_cost_ms = 1000;
+                    true
+                } else {
+                    false
+                }
+            }
+            None => return,
+        };
+        if drain_due {
+            #[allow(clippy::cast_possible_wrap)]
+            let amount = spell.mana_per_second as i32
+                + spell.mana_per_second_per_level as i32 * self.unit_level(caster) as i32;
+            if amount > 0 {
+                #[allow(clippy::cast_sign_loss)]
+                let amount = amount as u32;
+                let current = self.unit_power(caster, spell.power_type);
+                // Health-cost channels never pay the
+                // last point (fork funnel guard).
+                let can_pay = if spell.power_type == power::HEALTH {
+                    current > amount
+                } else {
+                    current >= amount
+                };
+                if can_pay {
+                    self.unit_set_power(caster, spell.power_type, current - amount);
+                } else {
+                    self.end_channel(caster, true);
+                    if self.players.contains_key(&caster) {
+                        self.send_cast_result(caster, spell_id, cast_result::FAILED_FIZZLE);
+                    }
+                    return;
+                }
+            }
+        }
+        let done = match self.casts.get_mut(&caster) {
+            Some(cast) => {
+                cast.remaining_ms -= i32::try_from(diff_ms).unwrap_or(i32::MAX);
+                cast.remaining_ms <= 0
+            }
+            None => return,
+        };
+        if done {
+            self.end_channel(caster, false);
+        }
+    }
+
+    /// Remove one caster's holders of a spell from a
+    /// unit (`RemoveAurasByCasterSpell`).
+    fn remove_auras_by_caster_spell(
+        &mut self,
+        victim: ObjectGuid,
+        spell_id: u32,
+        caster: ObjectGuid,
+    ) {
+        loop {
+            let index = self.unit_base_mut(victim).and_then(|u| {
+                u.auras
+                    .iter()
+                    .rposition(|h| h.spell_id == spell_id && h.caster == caster)
+            });
+            let Some(index) = index else { return };
+            self.remove_aura_at(victim, index);
+        }
+    }
+
+    /// Channel end (`SendChannelUpdate(0)` + field
+    /// reset). Interrupted channels strip their
+    /// holders now; a natural finish leaves them for
+    /// `update_auras` later this tick so the final
+    /// periodic tick still lands (the fork updates
+    /// holders inside the spell update first). The
+    /// fork's 1 s delayed field reset on natural
+    /// finish is an immediate clear here.
+    fn end_channel(&mut self, caster: ObjectGuid, interrupted: bool) {
+        let Some(cast) = self.casts.remove(&caster) else {
+            return;
+        };
+        if interrupted {
+            if let CastTarget::Unit(victim) = cast.target
+                && victim != caster
+            {
+                self.remove_auras_by_caster_spell(victim, cast.spell_id, caster);
+            }
+            self.remove_auras_by_caster_spell(caster, cast.spell_id, caster);
+        }
+        if let Some(u) = self.unit_base_mut(caster) {
+            let values = u.values();
+            values.set_u64(offsets::UNIT_FIELD_CHANNEL_OBJECT, 0);
+            values.set_u32(offsets::UNIT_CHANNEL_SPELL, 0);
+        }
+        if self.players.contains_key(&caster) {
+            let mut payload = PacketWriter::new();
+            payload.write_u32_le(0);
+            let packet = WorldPacket::with_body(op::MSG_CHANNEL_UPDATE, payload.into_vec());
+            self.send_to_player(caster, packet);
+        }
     }
 
     fn collect_targets(
@@ -687,7 +1606,7 @@ impl Map {
             .find(|e| e.effect != effect::NONE)
             .map_or(tgt::UNIT_CASTER, |e| e.implicit_target_a);
         match mode {
-            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND => match target {
+            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT => match target {
                 CastTarget::Unit(g) => vec![g],
                 CastTarget::SelfCast => vec![caster],
             },
@@ -736,12 +1655,15 @@ impl Map {
     }
 
     #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)] // one DoAllEffectOnTarget port
     fn apply_effects(
         &mut self,
         caster: ObjectGuid,
         caster_level: u32,
         spell: &SpellEntry,
         victim: ObjectGuid,
+        mut applied_mods: Option<&mut Vec<(u32, u8)>>,
+        proc_ctx: Option<&ProcRaiseCtx>,
     ) {
         // EventAI SpellHit hooks (Slice 6b), once per
         // hit target as in `DoAllEffectOnTarget`.
@@ -767,17 +1689,221 @@ impl Map {
                 continue;
             }
             match eff.effect {
+                // `EffectInstaKill` (fork
+                // SpellEffects.cpp:265): direct damage
+                // equal to current health, no armor.
+                // `EffectDispel` (fork
+                // SpellEffects.cpp:2402): candidates
+                // are holders whose spell dispel type
+                // is in the effect's mask; for MAGIC/
+                // POISON, positive auras stay on
+                // friendly targets and negative on
+                // hostile. Removes up to the effect
+                // value (fork picks randomly with a
+                // level-based resist roll; stored
+                // order + no resist here, recorded).
+                effect::DISPEL => {
+                    let dispel_mask: u32 = if eff.misc_value < 0 || eff.misc_value == 7 {
+                        0x3FE
+                    } else if eff.misc_value < 31 {
+                        1u32 << eff.misc_value
+                    } else {
+                        0
+                    };
+                    let friendly = !Self::is_hostile_pair(caster, victim);
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let count =
+                        spell.calculate_effect_value(i, caster_level, 0, self.spell_rng()) as usize;
+                    let mut remove: Vec<usize> = Vec::new();
+                    let holders = self.aura_holders(victim);
+                    {
+                        for (idx, holder) in holders.iter().enumerate() {
+                            if remove.len() >= count {
+                                break;
+                            }
+                            let Some(entry) = self.stores.spells.get(holder.spell_id) else {
+                                continue;
+                            };
+                            if entry.dispel >= 32 || (1u32 << entry.dispel) & dispel_mask == 0 {
+                                continue;
+                            }
+                            if matches!(entry.dispel, 1 | 4) && holder.positive == friendly {
+                                continue;
+                            }
+                            remove.push(idx);
+                        }
+                    }
+                    for idx in remove.into_iter().rev() {
+                        self.remove_aura_at(victim, idx);
+                    }
+                }
+                // `EffectLearnSpell` (fork
+                // SpellEffects.cpp): teach the
+                // trigger spell to a player victim.
+                // Runtime set = `deferred.spells`,
+                // which the save diff persists as
+                // `character_spell` inserts; pet
+                // branch unmodeled (no pet runtime).
+                effect::LEARN_SPELL => {
+                    if victim.is_player() && eff.trigger_spell != 0 {
+                        let learned = eff.trigger_spell;
+                        let fresh = self
+                            .players
+                            .get_mut(&victim)
+                            .is_some_and(|entry| entry.player.learn_spell(learned));
+                        if fresh {
+                            let mut payload = PacketWriter::new();
+                            payload.write_u32_le(learned);
+                            let packet =
+                                WorldPacket::with_body(op::SMSG_LEARNED_SPELL, payload.into_vec());
+                            self.send_to_player(victim, packet);
+                        }
+                    }
+                }
+                effect::INSTAKILL => {
+                    let hp = self.unit_value_u32(victim, offsets::UNIT_FIELD_HEALTH);
+                    if hp > 0 {
+                        self.deal_damage(caster, victim, hp, false);
+                    }
+                }
+                // `EffectThreat` (fork
+                // SpellEffects.cpp:3432): flat threat
+                // from the effect value on the victim's
+                // threat list.
+                effect::THREAT => {
+                    if victim.is_creature() {
+                        let value =
+                            spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                        self.add_threat(victim, caster, value);
+                    }
+                }
                 effect::SCHOOL_DAMAGE => {
                     let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
                     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                     let base = mangos_spells::ditheru(value, self.spell_rng()) as i32;
-                    self.school_damage(caster, spell, victim, base, i as u32, None);
+                    self.school_damage(
+                        caster,
+                        spell,
+                        victim,
+                        base,
+                        i as u32,
+                        None,
+                        applied_mods.as_deref_mut(),
+                        proc_ctx,
+                    );
+                }
+                // `EffectWeaponDmg` (fork SpellEffects.cpp:3321):
+                // bonus = sum of WEAPON_DAMAGE / NOSCHOOL /
+                // NORMALIZED effect values; WEAPON_PERCENT
+                // multiplies the whole swing; only the first
+                // weapon effect executes (one swing per cast).
+                // Deviations: main-hand only; AP
+                // normalization unmodeled (unit fields bake
+                // AP/speed already); avoidance rides the
+                // spell hit roll, not the melee table.
+                effect::WEAPON_DAMAGE
+                | effect::WEAPON_DAMAGE_NOSCHOOL
+                | effect::WEAPON_PERCENT_DAMAGE
+                | effect::NORMALIZED_WEAPON_DMG => {
+                    let is_weapon = |e: u32| {
+                        matches!(
+                            e,
+                            effect::WEAPON_DAMAGE
+                                | effect::WEAPON_DAMAGE_NOSCHOOL
+                                | effect::WEAPON_PERCENT_DAMAGE
+                                | effect::NORMALIZED_WEAPON_DMG
+                        )
+                    };
+                    if !spell.effects[..i].iter().any(|e| is_weapon(e.effect)) {
+                        let mut bonus = 0.0f32;
+                        let mut pct = 1.0f32;
+                        for (j, e) in spell.effects.iter().enumerate() {
+                            let v =
+                                spell.calculate_effect_value(j, caster_level, 0, self.spell_rng());
+                            match e.effect {
+                                effect::WEAPON_DAMAGE
+                                | effect::WEAPON_DAMAGE_NOSCHOOL
+                                | effect::NORMALIZED_WEAPON_DMG => bonus += v,
+                                effect::WEAPON_PERCENT_DAMAGE => pct *= v / 100.0,
+                                _ => {}
+                            }
+                        }
+                        let min_dmg = f32::from_bits(
+                            self.unit_value_u32(caster, offsets::UNIT_FIELD_MINDAMAGE),
+                        );
+                        let max_dmg = f32::from_bits(
+                            self.unit_value_u32(caster, offsets::UNIT_FIELD_MAXDAMAGE),
+                        );
+                        let (lo, hi) = if min_dmg > max_dmg {
+                            (max_dmg, min_dmg)
+                        } else {
+                            (min_dmg, max_dmg)
+                        };
+                        let swing = self
+                            .rng
+                            .frand(lo.max(0.0), if hi == 0.0 { 5.0 } else { hi });
+                        #[allow(clippy::cast_possible_wrap)]
+                        let damage = mangos_spells::ditheru(
+                            ((swing + bonus) * pct).max(0.0),
+                            self.spell_rng(),
+                        ) as i32;
+                        if damage > 0 {
+                            self.school_damage(
+                                caster,
+                                spell,
+                                victim,
+                                damage,
+                                i as u32,
+                                None,
+                                applied_mods.as_deref_mut(),
+                                proc_ctx,
+                            );
+                        }
+                    }
                 }
                 effect::HEAL => {
                     let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                    // `SpellHealingBonusDone` applies
+                    // SPELLMOD_DAMAGE to direct heals.
+                    let value = self.apply_spell_mod(
+                        caster,
+                        spell,
+                        spellmod::DAMAGE,
+                        value,
+                        true,
+                        applied_mods.as_deref_mut(),
+                    );
+                    // `MOD_HEALING_DONE` flat + pct
+                    // (`SpellHealingBonusDone`; flat at
+                    // coefficient 1 in this subset).
+                    #[allow(clippy::cast_possible_wrap)]
+                    let heal_mask = 1i32 << spell.school;
+                    #[allow(clippy::cast_precision_loss)]
+                    let value = (value
+                        + self.total_aura_modifier(
+                            caster,
+                            aura_type::MOD_HEALING_DONE,
+                            Some(heal_mask),
+                        ) as f32)
+                        * self.total_aura_multiplier(
+                            caster,
+                            aura_type::MOD_HEALING_DONE_PERCENT,
+                            None,
+                        );
                     if value > 0.0 {
                         let amount = mangos_spells::ditheru(value, self.spell_rng());
                         self.heal_unit(victim, amount);
+                        if let Some(ctx) = proc_ctx {
+                            self.raise_damage_procs(
+                                caster,
+                                victim,
+                                Some(spell.id),
+                                ctx,
+                                proc_ex::NORMAL_HIT,
+                                amount,
+                                amount,
+                            );
+                        }
                     }
                 }
                 // `Spell::EffectEnergize` +
@@ -822,7 +1948,7 @@ impl Map {
                     }
                 }
                 effect::APPLY_AURA | effect::APPLY_AREA_AURA_PARTY => {
-                    self.apply_spell_aura(caster, spell, victim);
+                    self.apply_spell_aura(caster, spell, victim, applied_mods.as_deref_mut());
                     break; // all effects ride one holder
                 }
                 // SPELL_EFFECT_SUMMON / SUMMON_WILD /
@@ -899,7 +2025,13 @@ impl Map {
     /// `SpellNonMeleeDamageLog` + health application.
     /// `aura_holder` is Some for periodic ticks
     /// (PERIODICAURALOG instead of NONMELEE log).
-    #[allow(clippy::cast_precision_loss, clippy::cast_possible_wrap)]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_wrap,
+        clippy::too_many_arguments,
+        clippy::needless_option_as_deref // reborrows of the applied-mods list
+    )]
+    #[allow(clippy::too_many_lines)] // one CalculateDamage port
     pub(crate) fn school_damage(
         &mut self,
         caster: ObjectGuid,
@@ -908,6 +2040,8 @@ impl Map {
         base_damage: i32,
         _eff_index: u32,
         aura_holder: Option<u32>,
+        mut applied_mods: Option<&mut Vec<(u32, u8)>>,
+        proc_ctx: Option<&ProcRaiseCtx>,
     ) {
         if base_damage <= 0 {
             return;
@@ -928,16 +2062,80 @@ impl Map {
             base_damage
         };
 
+        // `SPELLMOD_DAMAGE` / `SPELLMOD_DOT` (the
+        // `SpellDamageBonusDone` tail; spell-power
+        // terms are identity in this subset).
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            damage = self.apply_spell_mod(
+                caster,
+                spell,
+                if aura_holder.is_some() {
+                    spellmod::DOT
+                } else {
+                    spellmod::DAMAGE
+                },
+                damage as f32,
+                true,
+                applied_mods.as_deref_mut(),
+            ) as i32;
+        }
+
+        // Aura damage modifiers (`SpellDamageBonusDone/
+        // Taken` flat+pct terms; the fork routes flat
+        // through spell coefficients — spell power is
+        // unmodeled in this subset, so flat lands at
+        // coefficient 1 on direct damage only, percent
+        // on both; recorded). Skipped entirely for
+        // `IGNORE_CASTER_MODIFIERS` spells (fork head
+        // return).
+        if spell.attributes_ex3 & 0x2000_0000 == 0 {
+            #[allow(clippy::cast_possible_wrap)]
+            let school_mask = 1i32 << spell.school;
+            if aura_holder.is_none() {
+                damage +=
+                    self.total_aura_modifier(caster, aura_type::MOD_DAMAGE_DONE, Some(school_mask));
+                damage += self.total_aura_modifier(
+                    victim,
+                    aura_type::MOD_DAMAGE_TAKEN,
+                    Some(school_mask),
+                );
+            }
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                let pct = self.total_aura_multiplier(
+                    caster,
+                    aura_type::MOD_DAMAGE_PERCENT_DONE,
+                    Some(school_mask),
+                ) * self.total_aura_multiplier(
+                    victim,
+                    aura_type::MOD_DAMAGE_PERCENT_TAKEN,
+                    Some(school_mask),
+                );
+                damage = (damage as f32 * pct) as i32;
+            }
+        }
+
         // Crit: direct magic damage only (periodic ticks
         // never crit in 1.12.1). Bonus is +50% for magic
-        // (`SpellCriticalDamageBonus` default arm).
+        // (`SpellCriticalDamageBonus` default arm, with
+        // `SPELLMOD_CRIT_DAMAGE_BONUS` on the bonus).
         let mut crit = false;
         if aura_holder.is_none() && spell.dmg_class == dmg_class::MAGIC && damage > 0 {
-            let crit_chance = self.spell_crit_percent(caster);
+            let crit_chance = self.spell_crit_percent(caster, spell, applied_mods.as_deref_mut());
             let roll = self.spell_rng().frand01() * 100.0;
             if roll < crit_chance {
                 crit = true;
-                damage += damage / 2;
+                #[allow(clippy::cast_possible_truncation)]
+                let bonus = self.apply_spell_mod(
+                    caster,
+                    spell,
+                    spellmod::CRIT_DAMAGE_BONUS,
+                    (damage / 2) as f32,
+                    true,
+                    applied_mods.as_deref_mut(),
+                ) as i32;
+                damage += bonus;
             }
         }
 
@@ -987,7 +2185,33 @@ impl Map {
             aura_holder,
         );
         if final_damage > 0 {
-            self.deal_damage(caster, victim, final_damage);
+            self.deal_damage_school(
+                caster,
+                victim,
+                final_damage,
+                aura_holder.is_some(),
+                spell.school,
+            );
+        }
+        // Proc raise for the landed hit (fork raises in
+        // `DealDamage` with the spell's proc info).
+        if let Some(ctx) = proc_ctx {
+            let ex = if final_damage == 0 {
+                proc_ex::MISS
+            } else if crit {
+                proc_ex::CRITICAL_HIT
+            } else {
+                proc_ex::NORMAL_HIT
+            };
+            self.raise_damage_procs(
+                caster,
+                victim,
+                Some(spell.id),
+                ctx,
+                ex,
+                final_damage,
+                final_damage + final_resisted,
+            );
         }
     }
 
@@ -1052,8 +2276,30 @@ impl Map {
     }
 
     /// Health application + combat flag + death
-    /// (`Unit::DealDamage` subset).
-    pub(crate) fn deal_damage(&mut self, attacker: ObjectGuid, victim: ObjectGuid, damage: u32) {
+    /// (`Unit::DealDamage` subset). `is_dot` is the
+    /// fork `DamageEffectType::DOT` arm (periodic ticks
+    /// never push back or cancel casts).
+    pub(crate) fn deal_damage(
+        &mut self,
+        attacker: ObjectGuid,
+        victim: ObjectGuid,
+        damage: u32,
+        is_dot: bool,
+    ) {
+        self.deal_damage_school(attacker, victim, damage, is_dot, 0);
+    }
+
+    /// `deal_damage` with the damage school (absorb
+    /// mask matching); melee/script paths use NORMAL.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn deal_damage_school(
+        &mut self,
+        attacker: ObjectGuid,
+        victim: ObjectGuid,
+        damage: u32,
+        is_dot: bool,
+        school_id: u32,
+    ) {
         if damage == 0 {
             return;
         }
@@ -1075,6 +2321,46 @@ impl Map {
                 return;
             }
         }
+        // `SPELL_AURA_SCHOOL_ABSORB` pools (fork
+        // absorbs inside `DealDamage` before health;
+        // a holder drops when its pool is spent).
+        let absorbed_full;
+        {
+            #[allow(clippy::cast_possible_wrap)]
+            let mask = 1i32 << school_id;
+            let mut spent_holders: Vec<u32> = Vec::new();
+            if let Some(u) = self.unit_base_mut(victim) {
+                for holder in &mut u.auras {
+                    if damage == 0 {
+                        break;
+                    }
+                    for eff in holder.effects.iter_mut().flatten() {
+                        if eff.aura_type == aura_type::SCHOOL_ABSORB
+                            && eff.misc_value & mask != 0
+                            && eff.amount > 0
+                        {
+                            #[allow(clippy::cast_possible_truncation)]
+                            let take = damage.min(eff.amount as u32);
+                            #[allow(clippy::cast_possible_wrap)]
+                            {
+                                eff.amount -= take as i32;
+                            }
+                            damage -= take;
+                            if eff.amount == 0 {
+                                spent_holders.push(holder.spell_id);
+                            }
+                            if damage == 0 {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            absorbed_full = damage == 0;
+            for spell_id in spent_holders {
+                self.remove_auras_due_to_spell(victim, spell_id);
+            }
+        }
         let now = self.now_ms;
         for guid in [attacker, victim] {
             if let Some(u) = self.unit_base_mut(guid) {
@@ -1088,6 +2374,20 @@ impl Map {
         let new_health = current.saturating_sub(damage);
         if let Some(u) = self.unit_base_mut(victim) {
             u.set_health(new_health);
+        }
+        if absorbed_full {
+            // Fully absorbed: combat + pushback above
+            // still apply in the fork; no kill/threat.
+            if !is_dot {
+                self.delay_spell_at_damage(attacker, victim);
+            }
+            return;
+        }
+        // Damage taken while casting (`DealDamage`
+        // player arm): DAMAGE_CANCELS interrupts, else
+        // `Spell::Delayed` pushback.
+        if !is_dot {
+            self.delay_spell_at_damage(attacker, victim);
         }
         if new_health == 0 {
             self.kill_unit(victim, Some(attacker));
@@ -1115,6 +2415,12 @@ impl Map {
     /// (`Kill`/`setDeathState(JUST_DIED)` subset).
     pub(crate) fn kill_unit(&mut self, victim: ObjectGuid, killer: Option<ObjectGuid>) {
         let is_creature = victim.is_creature();
+        if let Some(killer) = killer
+            && self.unit_is_alive(victim)
+            && killer != victim
+        {
+            self.raise_kill_proc(killer, victim);
+        }
         if let Some(u) = self.unit_base_mut(victim) {
             if !u.is_alive() {
                 return;
@@ -1125,6 +2431,11 @@ impl Map {
                 DeathState::Dead
             };
             u.set_health(0);
+        }
+        // Kill XP (`Unit::Kill` rewards precede the
+        // AI death hooks in the fork as well).
+        if is_creature {
+            self.reward_kill_xp(victim, killer);
         }
         // EventAI death/kill hooks run while the AI
         // state still exists (`JustDied`/`KilledUnit`).
@@ -1141,7 +2452,24 @@ impl Map {
                 );
             }
         }
-        self.casts.remove(&victim);
+        // Death ends a channel: strip the target-side
+        // holders and clear the channel fields (no
+        // channel packets to the dead; own holders go
+        // with `remove_all_auras` below).
+        if let Some(cast) = self.casts.remove(&victim)
+            && cast.channeling
+        {
+            if let CastTarget::Unit(target) = cast.target
+                && target != victim
+            {
+                self.remove_auras_by_caster_spell(target, cast.spell_id, victim);
+            }
+            if let Some(u) = self.unit_base_mut(victim) {
+                let values = u.values();
+                values.set_u64(offsets::UNIT_FIELD_CHANNEL_OBJECT, 0);
+                values.set_u32(offsets::UNIT_CHANNEL_SPELL, 0);
+            }
+        }
         self.attack_stop(victim);
         self.ai.remove(&victim);
         self.remove_all_auras(victim);
@@ -1243,16 +2571,14 @@ impl Map {
     }
 
     fn savable_auras_from(&self, guid: ObjectGuid, holders: Vec<AuraHolder>) -> Vec<SavableAura> {
-        // `SPELL_ATTR_PASSIVE`, `SPELL_ATTR_EX_CHANNELED_*`.
+        // `SPELL_ATTR_PASSIVE`, channeled spells.
         const ATTR_PASSIVE: u32 = 0x0000_0040;
-        const ATTR_EX_CHANNELED: u32 = 0x0000_0004 | 0x4000_0000;
         let mut rows = Vec::new();
         for holder in holders {
             let Some(spell) = self.stores.spells.get(holder.spell_id) else {
                 continue;
             };
-            if spell.attributes & ATTR_PASSIVE != 0 || spell.attributes_ex & ATTR_EX_CHANNELED != 0
-            {
+            if spell.attributes & ATTR_PASSIVE != 0 || spell.is_channeled() {
                 continue;
             }
             let single_target = spell
@@ -1307,33 +2633,41 @@ impl Map {
     /// (`_SaveSpellCooldowns`): split spell/category
     /// keys merge into the fork's per-spell
     /// `CooldownData` shape; expiries convert from map
-    /// time to epoch seconds. Item cooldowns are
-    /// unmodeled (`item_id` 0).
+    /// time to epoch seconds. Item-created rows keep
+    /// their `item_id` (seeded at login; no item-use
+    /// runtime creates new ones yet).
     #[must_use]
     pub fn player_cooldown_rows(&self, guid: ObjectGuid, now_unix: i64) -> Vec<CooldownSnapshot> {
         let to_epoch = |expiry_ms: u32| -> i64 {
             now_unix + i64::from(expiry_ms.saturating_sub(self.now_ms)) / 1000
         };
         let mut rows = Vec::new();
-        for ((caster, key), expiry) in &self.cooldowns {
-            if *caster != guid || *expiry <= self.now_ms || *key & 0x8000_0000 != 0 {
+        for ((caster, key), entry) in &self.cooldowns {
+            // Permanent holds are never saved
+            // (`_SaveSpellCooldowns` skips
+            // `IsPermanent()`).
+            if *caster != guid
+                || entry.permanent
+                || entry.expiry_ms <= self.now_ms
+                || *key & 0x8000_0000 != 0
+            {
                 continue;
             }
             let category = self.stores.spells.get(*key).map_or(0, |s| s.category);
             let category_expire_time = if category != 0 {
                 self.cooldowns
                     .get(&(guid, category | 0x8000_0000))
-                    .filter(|e| **e > self.now_ms)
-                    .map_or(0, |e| to_epoch(*e))
+                    .filter(|e| !e.permanent && e.expiry_ms > self.now_ms)
+                    .map_or(0, |e| to_epoch(e.expiry_ms))
             } else {
                 0
             };
             rows.push(CooldownSnapshot {
                 spell: *key,
-                spell_expire_time: to_epoch(*expiry),
+                spell_expire_time: to_epoch(entry.expiry_ms),
                 category,
                 category_expire_time,
-                item_id: 0,
+                item_id: entry.item_id,
             });
         }
         rows.sort_by_key(|r| r.spell);
@@ -1411,19 +2745,173 @@ impl Map {
 
     fn aura_effect_apply(unit: &mut UnitBase, holder: &AuraHolder, apply: bool) {
         for eff in holder.effects.iter().flatten() {
-            if eff.aura_type == aura_type::MOD_ATTACK_POWER {
-                Self::apply_attack_power_mod(unit, holder.positive, eff.amount, apply);
+            match eff.aura_type {
+                aura_type::MOD_ATTACK_POWER => {
+                    Self::apply_attack_power_mod(unit, holder.positive, eff.amount, apply);
+                }
+                aura_type::MOD_STAT
+                | aura_type::MOD_PERCENT_STAT
+                | aura_type::MOD_TOTAL_STAT_PERCENTAGE => {
+                    Self::apply_stat_aura_mod(unit, eff, apply);
+                }
+                // `HandleModScale`: multiplicative
+                // object-scale change, inverted on
+                // removal (fork apply/unapply pair).
+                aura_type::MOD_SCALE => {
+                    #[allow(clippy::cast_precision_loss)]
+                    let factor = (100.0 + eff.amount as f32) / 100.0;
+                    if factor > 0.0 {
+                        let cur = unit.world.object.object_scale();
+                        let next = if apply { cur * factor } else { cur / factor };
+                        unit.world.object.set_object_scale(next);
+                    }
+                }
+                // Other aura types are state-only in the
+                // slice (periodic handled by the tick loop;
+                // speed/root/stun recorded as pending).
+                _ => {}
             }
-            // Other aura types are state-only in the
-            // slice (periodic handled by the tick loop;
-            // stat/speed/root/stun recorded as pending).
         }
+    }
+
+    /// `ApplyModSignedFloatValue` on one pos/neg display
+    /// field.
+    fn apply_stat_buff_mod(unit: &mut UnitBase, stat: usize, amount: f32, apply: bool) {
+        #[allow(clippy::cast_possible_truncation)]
+        let idx = stat as u16;
+        let field = if amount > 0.0 {
+            offsets::PLAYER_FIELD_POSSTAT0 + idx
+        } else {
+            offsets::PLAYER_FIELD_NEGSTAT0 + idx
+        };
+        let values = unit.values();
+        let cur = values.get_f32(field);
+        values.set_f32(field, if apply { cur + amount } else { cur - amount });
+    }
+
+    /// `ApplyStatPercentBuffMod`: percent-scale both
+    /// display halves.
+    fn apply_stat_percent_buff_mod(unit: &mut UnitBase, stat: usize, amount: f32, apply: bool) {
+        #[allow(clippy::cast_possible_truncation)]
+        let idx = stat as u16;
+        let values = unit.values();
+        for field in [
+            offsets::PLAYER_FIELD_POSSTAT0 + idx,
+            offsets::PLAYER_FIELD_NEGSTAT0 + idx,
+        ] {
+            let mut cur = values.get_f32(field);
+            apply_percent_mod_float_var(&mut cur, amount, apply);
+            values.set_f32(field, cur);
+        }
+    }
+
+    /// Fork miscvalue stat selection (negative = all).
+    fn stat_matches(misc_value: i32, stat: usize) -> bool {
+        #[allow(clippy::cast_possible_wrap)]
+        {
+            misc_value < 0 || misc_value == stat as i32
+        }
+    }
+
+    /// `HandleAuraModStat` / `HandleModPercentStat` /
+    /// `HandleModTotalPercentStat` register writes (the
+    /// `Update*` dispatch is `refresh_derived_stats` in
+    /// the add/remove wrappers). The Scorpid Sting
+    /// override-class-script branch of `HandleAuraModStat`
+    /// is deferred with spell mods.
+    fn apply_stat_aura_mod(
+        unit: &mut UnitBase,
+        eff: &mangos_entities::aura::AuraEffectState,
+        apply: bool,
+    ) {
+        let is_player = unit.guid().is_player();
+        #[allow(clippy::cast_precision_loss)]
+        let amount = eff.amount as f32;
+        match eff.aura_type {
+            aura_type::MOD_STAT => {
+                if !(-2..=4).contains(&eff.misc_value) {
+                    return;
+                }
+                for stat in 0..MAX_STATS {
+                    if Self::stat_matches(eff.misc_value, stat) {
+                        unit.handle_stat_modifier(stat, StatModKind::TotalValue, amount, apply);
+                        if is_player {
+                            Self::apply_stat_buff_mod(unit, stat, amount, apply);
+                        }
+                    }
+                }
+            }
+            aura_type::MOD_PERCENT_STAT => {
+                // Only players have base stats.
+                if !is_player || !(-1..=4).contains(&eff.misc_value) {
+                    return;
+                }
+                for stat in 0..MAX_STATS {
+                    if Self::stat_matches(eff.misc_value, stat) {
+                        unit.handle_stat_modifier(stat, StatModKind::BasePct, amount, apply);
+                    }
+                }
+            }
+            aura_type::MOD_TOTAL_STAT_PERCENTAGE => {
+                if !(-1..=4).contains(&eff.misc_value) {
+                    return;
+                }
+                for stat in 0..MAX_STATS {
+                    if Self::stat_matches(eff.misc_value, stat) {
+                        unit.handle_stat_modifier(stat, StatModKind::TotalPct, amount, apply);
+                        if is_player {
+                            Self::apply_stat_percent_buff_mod(unit, stat, amount, apply);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn holder_has_stat_mod(holder: &AuraHolder) -> bool {
+        holder.effects.iter().flatten().any(|e| {
+            matches!(
+                e.aura_type,
+                aura_type::MOD_STAT
+                    | aura_type::MOD_PERCENT_STAT
+                    | aura_type::MOD_TOTAL_STAT_PERCENTAGE
+            )
+        })
+    }
+
+    /// The HP-ratio preservation of
+    /// `HandleModTotalPercentStat`: stamina-misc percent
+    /// mods on `Attributes & 0x10` spells.
+    fn hp_ratio_preserve(&self, holder: &AuraHolder) -> bool {
+        let has = holder.effects.iter().flatten().any(|e| {
+            e.aura_type == aura_type::MOD_TOTAL_STAT_PERCENTAGE && e.misc_value == STAT_STAMINA_I32
+        });
+        has && self
+            .stores
+            .spells
+            .get(holder.spell_id)
+            .is_some_and(|s| s.attributes & 0x10 != 0)
+    }
+
+    /// `HandleStatModifier`'s derived-stat dispatch after
+    /// a stat-aura register change.
+    fn refresh_derived_stats(&mut self, guid: ObjectGuid) {
+        if let Some(entry) = self.players.get_mut(&guid) {
+            entry.player.refresh_derived_stats();
+            return;
+        }
+        if let Some(creature) = self.creatures.get_mut(&guid) {
+            creature.refresh_derived_stats();
+        }
+        self.refresh_weapon_damage_fields(guid);
     }
 
     /// Add a holder: slot allocation (positive slots
     /// 0..32, negative 32..48 — `GetAuraSlot` ranges),
     /// field writes, modifier application.
     fn add_aura_holder(&mut self, victim: ObjectGuid, mut holder: AuraHolder) {
+        holder.apply_time_ms = self.now_ms;
         let slot = {
             let range = if holder.positive {
                 0..MAX_POSITIVE_AURAS
@@ -1449,35 +2937,204 @@ impl Map {
             .iter()
             .flatten()
             .any(|e| e.aura_type == aura_type::MOD_ATTACK_POWER);
+        let has_stat = Self::holder_has_stat_mod(&holder);
+        let hp_before = if has_stat && self.hp_ratio_preserve(&holder) {
+            self.unit_base_mut(victim)
+                .filter(|u| u.is_alive())
+                .map(|u| (u.health(), u.max_health()))
+        } else {
+            None
+        };
         if let Some(unit) = self.unit_base_mut(victim) {
             Self::aura_effect_apply(unit, &holder, true);
             Self::write_aura_slot(unit, &holder, false);
             unit.auras.push(holder);
         }
+        if has_stat {
+            self.refresh_derived_stats(victim);
+            if let Some((cur, max)) = hp_before
+                && max > 0
+                && let Some(unit) = self.unit_base_mut(victim)
+            {
+                #[allow(clippy::cast_possible_truncation)]
+                let scaled =
+                    (u64::from(unit.max_health()) * u64::from(cur) / u64::from(max)) as u32;
+                unit.set_health(scaled);
+            }
+        }
         if has_ap {
             self.refresh_weapon_damage_fields(victim);
         }
         self.send_aura_duration(victim, duration_packet.0, duration_packet.1);
+        self.refresh_speed(victim);
+        self.refresh_cc_flags(victim);
+    }
+
+    /// Holder-derived `UNIT_FIELD_FLAGS` CC bits
+    /// (fork aura handlers `HandleModStun` etc. set
+    /// these directly; recomputation is equivalent
+    /// and removal-safe). Movement generators for
+    /// fear/confuse are not modeled; the flags feed
+    /// the cast-prevention gate and client display.
+    pub(crate) fn refresh_cc_flags(&mut self, guid: ObjectGuid) {
+        let holders = self.aura_holders(guid);
+        let mut bits = 0u32;
+        for e in holders.iter().flat_map(|h| h.effects.iter().flatten()) {
+            bits |= match e.aura_type {
+                aura_type::MOD_STUN => UNIT_FLAG_STUNNED,
+                aura_type::MOD_CONFUSE => UNIT_FLAG_CONFUSED,
+                aura_type::MOD_FEAR => UNIT_FLAG_FLEEING,
+                aura_type::MOD_SILENCE => UNIT_FLAG_SILENCED,
+                aura_type::MOD_PACIFY => UNIT_FLAG_PACIFIED,
+                aura_type::MOD_PACIFY_SILENCE => UNIT_FLAG_PACIFIED | UNIT_FLAG_SILENCED,
+                _ => 0,
+            };
+        }
+        if let Some(unit) = self.unit_base_mut(guid) {
+            let values = unit.world.object.values_mut();
+            let cur = values.get_u32(offsets::UNIT_FIELD_FLAGS);
+            let next = (cur & !UNIT_FLAG_CC_MASK) | bits;
+            if next != cur {
+                values.set_u32(offsets::UNIT_FIELD_FLAGS, next);
+            }
+        }
+    }
+
+    /// `Unit::UpdateSpeed` aura factor (fork
+    /// `Unit.cpp:7195`), run + swim subset:
+    /// main mod = max-positive increase; bonus =
+    /// max(not-stack, always-multiplier); strongest
+    /// slow multiplies last. Mounted/normalization/
+    /// ghost arms unmodeled (no mount runtime).
+    pub(crate) fn refresh_speed(&mut self, guid: ObjectGuid) {
+        let (base_run, base_swim) = {
+            let Some(unit) = self.unit_base_mut(guid) else {
+                return;
+            };
+            (
+                unit.base_speed_rate[mangos_entities::unit::MOVE_RUN],
+                unit.base_speed_rate[3],
+            )
+        };
+        let holders = self.aura_holders(guid);
+        let max_pos = |kind: u32| -> i32 {
+            holders
+                .iter()
+                .flat_map(|h| h.effects.iter().flatten())
+                .filter(|e| e.aura_type == kind && e.amount > 0)
+                .map(|e| e.amount)
+                .max()
+                .unwrap_or(0)
+        };
+        let max_neg = |kind: u32| -> i32 {
+            holders
+                .iter()
+                .flat_map(|h| h.effects.iter().flatten())
+                .filter(|e| e.aura_type == kind && e.amount < 0)
+                .map(|e| e.amount)
+                .min()
+                .unwrap_or(0)
+        };
+        #[allow(clippy::cast_precision_loss)]
+        let factor = |increase_kind: u32, with_stack: bool| -> f32 {
+            let main_mod = max_pos(increase_kind);
+            let (stack, non_stack) = if with_stack {
+                (
+                    self.total_aura_multiplier(guid, aura_type::MOD_SPEED_ALWAYS, None),
+                    (100.0 + max_pos(aura_type::MOD_SPEED_NOT_STACK) as f32) / 100.0,
+                )
+            } else {
+                (1.0, 1.0)
+            };
+            let bonus = stack.max(non_stack);
+            let mut speed = if main_mod != 0 {
+                bonus * (100.0 + main_mod as f32) / 100.0
+            } else {
+                bonus
+            };
+            let slow = max_neg(aura_type::MOD_DECREASE_SPEED);
+            if slow != 0 {
+                speed *= (100.0 + slow as f32) / 100.0;
+            }
+            speed
+        };
+        let run = base_run * factor(aura_type::MOD_INCREASE_SPEED, true);
+        let swim = base_swim * factor(aura_type::MOD_INCREASE_SWIM_SPEED, false);
+        self.set_speed_rate(guid, mangos_entities::unit::MOVE_RUN, run);
+        self.set_speed_rate(guid, 3, swim);
     }
 
     fn remove_aura_at(&mut self, victim: ObjectGuid, index: usize) {
         let mut has_ap = false;
+        let mut has_stat = false;
+        let mut hp_before = None;
+        let peek = self.unit_base_mut(victim).and_then(|u| {
+            u.auras.get(index).map(|h| {
+                (
+                    h.spell_id,
+                    h.effects.iter().flatten().any(|e| {
+                        e.aura_type == aura_type::MOD_TOTAL_STAT_PERCENTAGE
+                            && e.misc_value == STAT_STAMINA_I32
+                    }),
+                )
+            })
+        });
+        let preserve = peek.is_some_and(|(spell_id, stamina)| {
+            stamina
+                && self
+                    .stores
+                    .spells
+                    .get(spell_id)
+                    .is_some_and(|s| s.attributes & 0x10 != 0)
+        });
+        if preserve {
+            hp_before = self
+                .unit_base_mut(victim)
+                .filter(|u| u.is_alive())
+                .map(|u| (u.health(), u.max_health()));
+        }
+        let mut removed_holder: Option<(ObjectGuid, u32)> = None;
         if let Some(unit) = self.unit_base_mut(victim) {
             if index >= unit.auras.len() {
                 return;
             }
             let holder = unit.auras.remove(index);
+            removed_holder = Some((holder.caster, holder.spell_id));
             has_ap = holder
                 .effects
                 .iter()
                 .flatten()
                 .any(|e| e.aura_type == aura_type::MOD_ATTACK_POWER);
+            has_stat = Self::holder_has_stat_mod(&holder);
             Self::aura_effect_apply(unit, &holder, false);
             Self::write_aura_slot(unit, &holder, true);
+        }
+        if has_stat {
+            self.refresh_derived_stats(victim);
+            if let Some((cur, max)) = hp_before
+                && max > 0
+                && let Some(unit) = self.unit_base_mut(victim)
+            {
+                #[allow(clippy::cast_possible_truncation)]
+                let scaled =
+                    (u64::from(unit.max_health()) * u64::from(cur) / u64::from(max)) as u32;
+                unit.set_health(scaled);
+            }
         }
         if has_ap {
             self.refresh_weapon_damage_fields(victim);
         }
+        // Cooldown-on-event conversion: the timed
+        // cooldown starts when the aura fades
+        // (`SpellAuras.cpp` holder cleanup).
+        if let Some((caster, spell_id)) = removed_holder
+            && let Some(spell) = self.stores.spells.get(spell_id).cloned()
+            && spell.attributes & ATTR_COOLDOWN_ON_EVENT != 0
+        {
+            self.start_event_cooldown(caster, &spell);
+        }
+        self.refresh_speed(victim);
+        self.refresh_cc_flags(victim);
     }
 
     pub(crate) fn remove_all_auras(&mut self, victim: ObjectGuid) {
@@ -1487,6 +3144,20 @@ impl Map {
                 return;
             }
             self.remove_aura_at(victim, len - 1);
+        }
+    }
+
+    /// `RemoveAurasDueToSpell` (no cancelable gate;
+    /// proc charge exhaustion path).
+    pub(crate) fn remove_auras_due_to_spell(&mut self, victim: ObjectGuid, spell_id: u32) {
+        loop {
+            let found = self
+                .unit_base_mut(victim)
+                .and_then(|u| u.auras.iter().position(|h| h.spell_id == spell_id));
+            match found {
+                Some(i) => self.remove_aura_at(victim, i),
+                None => return,
+            }
         }
     }
 
@@ -1519,14 +3190,32 @@ impl Map {
         victim: ObjectGuid,
     ) {
         if let Some(spell) = self.stores.spells.get(spell_id).cloned() {
-            self.apply_spell_aura(caster, &spell, victim);
+            self.apply_spell_aura(caster, &spell, victim, None);
         }
     }
 
-    fn apply_spell_aura(&mut self, caster: ObjectGuid, spell: &SpellEntry, victim: ObjectGuid) {
-        let tables = &self.stores.spells.tables;
-        let duration = spell.calculate_duration_ms(tables);
-        let duration = if duration == 0 { -1 } else { duration };
+    #[allow(clippy::too_many_lines)] // one EffectApplyAura port
+    fn apply_spell_aura(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        victim: ObjectGuid,
+        applied_mods: Option<&mut Vec<(u32, u8)>>,
+    ) {
+        let raw_duration = spell.calculate_duration_ms(&self.stores.spells.tables);
+        // 0 and -1 are the permanent shapes; only
+        // positive durations take the spellmod.
+        let duration = match raw_duration.cmp(&0) {
+            std::cmp::Ordering::Equal => -1,
+            std::cmp::Ordering::Less => raw_duration,
+            std::cmp::Ordering::Greater => {
+                let modded = self.modded_duration_ms(caster, spell, applied_mods);
+                if modded <= 0 {
+                    return;
+                }
+                modded
+            }
+        };
 
         let refreshed = self.unit_base_mut(victim).and_then(|unit| {
             unit.auras
@@ -1553,6 +3242,10 @@ impl Map {
             positive,
             cancelable,
         );
+        #[allow(clippy::cast_possible_wrap)]
+        {
+            holder.proc_charges = spell.proc_charges as i32;
+        }
         for i in 0..3 {
             let eff = spell.effects[i];
             if eff.effect != effect::APPLY_AURA && eff.effect != effect::APPLY_AREA_AURA_PARTY {
@@ -1569,11 +3262,33 @@ impl Map {
                 aura_type::PERIODIC_DAMAGE
                     | aura_type::PERIODIC_HEAL
                     | aura_type::PERIODIC_ENERGIZE
+                    | aura_type::PERIODIC_TRIGGER_SPELL
                     | aura_type::PERIODIC_DAMAGE_PERCENT
             );
             let period_ms = if periodic { eff.amplitude } else { 0 };
             #[allow(clippy::cast_possible_wrap)]
             let timer = period_ms as i32;
+            // `HandleAddModifier` charge seeding:
+            // proc charges, infinite when the source
+            // stacks, custom 1 for Shadow Trance /
+            // Netherwind Focus.
+            let mod_charges = if matches!(
+                eff.apply_aura_name,
+                aura_type::ADD_FLAT_MODIFIER | aura_type::ADD_PCT_MODIFIER
+            ) {
+                if matches!(spell.id, 17941 | 22008) {
+                    1
+                } else if spell.stack_amount > 1 {
+                    0
+                } else {
+                    #[allow(clippy::cast_possible_wrap)]
+                    {
+                        spell.proc_charges as i32
+                    }
+                }
+            } else {
+                0
+            };
             holder.effects[i] = Some(AuraEffectState {
                 aura_type: eff.apply_aura_name,
                 amount,
@@ -1582,6 +3297,7 @@ impl Map {
                 periodic_timer: timer,
                 periodic_ticks: 0,
                 misc_value: eff.misc_value,
+                mod_charges,
             });
         }
         if holder.effects.iter().all(Option::is_none) {
@@ -1639,6 +3355,12 @@ impl Map {
             {
                 holder.stack = row.stacks.max(1) as u32;
             }
+            // Saved charges are written 0 today; reseed
+            // like a fresh application (see mod charges).
+            #[allow(clippy::cast_possible_wrap)]
+            {
+                holder.proc_charges = spell.proc_charges as i32;
+            }
             for i in 0..3 {
                 if row.effect_index_mask & (1u8 << i) == 0 {
                     continue;
@@ -1654,6 +3376,27 @@ impl Map {
                 } else {
                     0
                 };
+                // Saved rows carry no live mod charges
+                // (save writes 0); a surviving modifier
+                // aura therefore reseeds like a fresh
+                // application.
+                let mod_charges = if matches!(
+                    eff.apply_aura_name,
+                    aura_type::ADD_FLAT_MODIFIER | aura_type::ADD_PCT_MODIFIER
+                ) {
+                    if matches!(spell.id, 17941 | 22008) {
+                        1
+                    } else if spell.stack_amount > 1 {
+                        0
+                    } else {
+                        #[allow(clippy::cast_possible_wrap)]
+                        {
+                            spell.proc_charges as i32
+                        }
+                    }
+                } else {
+                    0
+                };
                 holder.effects[i] = Some(AuraEffectState {
                     aura_type: eff.apply_aura_name,
                     amount,
@@ -1663,6 +3406,7 @@ impl Map {
                     periodic_timer: period_ms as i32,
                     periodic_ticks: 0,
                     misc_value: eff.misc_value,
+                    mod_charges,
                 });
             }
             if holder.effects.iter().all(Option::is_none) {
@@ -1743,9 +3487,43 @@ impl Map {
         }
     }
 
+    #[allow(clippy::too_many_lines)] // one periodic-tick drain port
     fn process_periodic_ticks(&mut self, ticks: Vec<PeriodicTick>) {
         for tick in ticks {
             match tick.aura_type {
+                // `Aura::TriggerSpell` generic arm: cast
+                // the effect's trigger spell at the aura
+                // target (wearer casts with
+                // `SPELL_ATTR_WEARER_CASTS_PROC_TRIGGER`).
+                // The fork's per-spell trigger customs
+                // are not ported.
+                aura_type::PERIODIC_TRIGGER_SPELL => {
+                    let Some(spell) = self.stores.spells.get(tick.spell_id).cloned() else {
+                        continue;
+                    };
+                    #[allow(clippy::cast_possible_truncation)]
+                    let trigger_id = spell.effects[tick.effect_index as usize].trigger_spell;
+                    if trigger_id == 0 || !self.unit_is_alive(tick.target) {
+                        continue;
+                    }
+                    let caster = if spell.attributes & 0x0000_0800 != 0 {
+                        tick.target
+                    } else {
+                        tick.caster
+                    };
+                    if !self.unit_is_alive(caster) {
+                        continue;
+                    }
+                    self.cast_spell(
+                        caster,
+                        trigger_id,
+                        CastTarget::Unit(tick.target),
+                        CastOptions {
+                            triggered: true,
+                            skip_known: true,
+                        },
+                    );
+                }
                 aura_type::PERIODIC_DAMAGE => {
                     let Some(spell) = self.stores.spells.get(tick.spell_id).cloned() else {
                         continue;
@@ -1762,12 +3540,36 @@ impl Map {
                         tick.amount,
                         tick.effect_index,
                         Some(tick.spell_id),
+                        None,
+                        Some(&ProcRaiseCtx {
+                            attacker_flags: proc_flag::DEAL_HARMFUL_PERIODIC,
+                            victim_flags: proc_flag::TAKE_HARMFUL_PERIODIC,
+                            can_trigger: true,
+                            triggered_by_aura: false,
+                            att_type: 0,
+                            applied_mods: Vec::new(),
+                        }),
                     );
                 }
                 aura_type::PERIODIC_HEAL => {
                     if tick.amount > 0 {
-                        #[allow(clippy::cast_possible_truncation)]
-                        self.heal_unit(tick.target, tick.amount as u32);
+                        // `SpellHealingBonusDone` DOT arm.
+                        #[allow(clippy::cast_precision_loss)]
+                        let amount = match self.stores.spells.get(tick.spell_id).cloned() {
+                            Some(spell) => self.apply_spell_mod(
+                                tick.caster,
+                                &spell,
+                                spellmod::DOT,
+                                tick.amount as f32,
+                                true,
+                                None,
+                            ),
+                            None => tick.amount as f32,
+                        };
+                        if amount > 0.0 {
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            self.heal_unit(tick.target, amount as u32);
+                        }
                     }
                 }
                 // `Aura::PeriodicTick` PERIODIC_ENERGIZE
@@ -1815,6 +3617,15 @@ impl Map {
                         amount,
                         tick.effect_index,
                         Some(tick.spell_id),
+                        None,
+                        Some(&ProcRaiseCtx {
+                            attacker_flags: proc_flag::DEAL_HARMFUL_PERIODIC,
+                            victim_flags: proc_flag::TAKE_HARMFUL_PERIODIC,
+                            can_trigger: true,
+                            triggered_by_aura: false,
+                            att_type: 0,
+                            applied_mods: Vec::new(),
+                        }),
                     );
                 }
                 _ => {}
@@ -1861,7 +3672,50 @@ impl Map {
 
     pub(crate) fn unit_resistance(&self, guid: ObjectGuid, school_id: u32) -> i32 {
         let index = offsets::UNIT_FIELD_RESISTANCES + school_id as u16;
+        // `MOD_RESISTANCE` auras fold in at read (the
+        // client resistance field is not refreshed
+        // with them in this subset; recorded).
         i32::from_ne_bytes(self.unit_value_u32(guid, index).to_ne_bytes())
+            + self.total_aura_modifier(guid, aura_type::MOD_RESISTANCE, Some(1 << school_id))
+    }
+
+    /// `GetTotalAuraModifier(ByMiscMask)`: sum of
+    /// holder effect amounts for one aura type,
+    /// optionally filtered by misc-value bitmask
+    /// (school masks for the damage family).
+    pub(crate) fn total_aura_modifier(
+        &self,
+        guid: ObjectGuid,
+        aura_type_id: u32,
+        misc_mask: Option<i32>,
+    ) -> i32 {
+        self.aura_holders(guid)
+            .iter()
+            .flat_map(|h| h.effects.iter().flatten())
+            .filter(|e| {
+                e.aura_type == aura_type_id && misc_mask.is_none_or(|mask| e.misc_value & mask != 0)
+            })
+            .map(|e| e.amount)
+            .sum()
+    }
+
+    /// `GetTotalAuraMultiplier(ByMiscMask)`: product
+    /// of `(100 + amount) / 100`.
+    #[allow(clippy::cast_precision_loss)]
+    pub(crate) fn total_aura_multiplier(
+        &self,
+        guid: ObjectGuid,
+        aura_type_id: u32,
+        misc_mask: Option<i32>,
+    ) -> f32 {
+        self.aura_holders(guid)
+            .iter()
+            .flat_map(|h| h.effects.iter().flatten())
+            .filter(|e| {
+                e.aura_type == aura_type_id && misc_mask.is_none_or(|mask| e.misc_value & mask != 0)
+            })
+            .map(|e| (100.0 + e.amount as f32) / 100.0)
+            .product()
     }
 
     /// `MagicSpellHitChance` returned as a percent
@@ -1921,10 +3775,15 @@ impl Map {
         100.0 - miss.clamp(0.0, 60.0)
     }
 
-    /// `GetSpellCritFromIntellect` (no aura mods;
-    /// creatures flat 5%).
+    /// `GetSpellCritFromIntellect` (creatures flat
+    /// 5%) with `SPELLMOD_CRITICAL_CHANCE` applied.
     #[allow(clippy::cast_precision_loss)]
-    fn spell_crit_percent(&self, caster: ObjectGuid) -> f32 {
+    fn spell_crit_percent(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        applied_mods: Option<&mut Vec<(u32, u8)>>,
+    ) -> f32 {
         // crit_data {base, rate0, rate1} per class
         // (`Unit.cpp:2833`).
         const CRIT_DATA: [[f32; 3]; 12] = [
@@ -1941,7 +3800,7 @@ impl Map {
             [0.0, 0.0, 10.0],
             [3.33, 12.41, 0.79],
         ];
-        if caster.is_player() {
+        let base = if caster.is_player() {
             let class = self.unit_value_u32(caster, offsets::UNIT_FIELD_BYTES_0) >> 8 & 0xFF;
             let idx = (class as usize).min(11);
             let intellect = self.unit_stat(caster, 3);
@@ -1950,7 +3809,17 @@ impl Map {
             (CRIT_DATA[idx][0] + intellect / ratio).max(0.0)
         } else {
             5.0
-        }
+        };
+        let modded = self.apply_spell_mod(
+            caster,
+            spell,
+            spellmod::CRITICAL_CHANCE,
+            base,
+            true,
+            applied_mods,
+        );
+        // `MOD_CRIT_PERCENT` aura term.
+        modded + self.total_aura_modifier(caster, aura_type::MOD_CRIT_PERCENT, None) as f32
     }
 
     fn unit_stat(&self, guid: ObjectGuid, stat: u16) -> f32 {
@@ -2074,4 +3943,19 @@ fn resist_multiplier_outcome(
         0.0
     };
     if negative { -resist_cnt } else { resist_cnt }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_delay_at_damage_ms;
+
+    #[test]
+    fn pushback_delay_schedule_matches_fork() {
+        let mut count = 0u8;
+        let schedule: Vec<i32> = (0..7)
+            .map(|_| next_delay_at_damage_ms(&mut count))
+            .collect();
+        assert_eq!(schedule, [1000, 800, 600, 400, 200, 200, 200]);
+        assert_eq!(count, 5, "counter stops advancing at 5");
+    }
 }

@@ -64,6 +64,13 @@ impl Values {
         &self.mirror
     }
 
+    /// Any word differs from its mirror (a values block
+    /// would be non-empty).
+    #[must_use]
+    pub fn has_changes(&self) -> bool {
+        self.words != self.mirror
+    }
+
     /// `ClearUpdateMask` mirror half (`Object.cpp:942-954`): copy
     /// words over the mirror. The client-update-list removal half
     /// belongs to the entity layer.

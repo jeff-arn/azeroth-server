@@ -37,6 +37,8 @@ use mangos_world_data::creature_spells::CreatureSpellEntry;
 
 use mangos_entities::creature::SpawnRng;
 
+use mangos_spells::defines::proc_ex;
+
 use crate::map::Map;
 use crate::motion::CHASE_MOTION_TYPE;
 use crate::spells::{CastOptions, CastOutcome, CastTarget};
@@ -1391,6 +1393,7 @@ impl Map {
 
         match outcome {
             MeleeOutcome::Miss => {
+                self.raise_melee_procs(attacker, victim, proc_ex::MISS, 0);
                 self.send_attacker_state(
                     attacker,
                     victim,
@@ -1402,6 +1405,7 @@ impl Map {
                 return;
             }
             MeleeOutcome::Dodge => {
+                self.raise_melee_procs(attacker, victim, proc_ex::DODGE, 0);
                 self.send_attacker_state(
                     attacker,
                     victim,
@@ -1413,6 +1417,7 @@ impl Map {
                 return;
             }
             MeleeOutcome::Parry => {
+                self.raise_melee_procs(attacker, victim, proc_ex::PARRY, 0);
                 self.send_attacker_state(
                     attacker,
                     victim,
@@ -1487,9 +1492,60 @@ impl Map {
             _ => {}
         }
 
+        // Melee percent damage auras
+        // (`MeleeDamageBonusDone/Taken` pct terms,
+        // NORMAL school mask).
         if total > 0 {
-            self.deal_damage(attacker, victim, total);
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            {
+                let pct = self.total_aura_multiplier(
+                    attacker,
+                    mangos_spells::defines::aura::MOD_DAMAGE_PERCENT_DONE,
+                    Some(1),
+                ) * self.total_aura_multiplier(
+                    victim,
+                    mangos_spells::defines::aura::MOD_DAMAGE_PERCENT_TAKEN,
+                    Some(1),
+                );
+                total = (total as f32 * pct) as u32;
+            }
         }
+        if total > 0 {
+            self.deal_damage(attacker, victim, total, false);
+            // `TriggerDamageShields` (fork
+            // Unit.cpp:1714): victim's DAMAGE_SHIELD
+            // auras reflect their amount to the
+            // attacker (spell hit/immunity rolls and
+            // damage-done bonuses unmodeled).
+            let shields: Vec<(u32, i32)> = self
+                .aura_holders(victim)
+                .iter()
+                .flat_map(|h| {
+                    h.effects
+                        .iter()
+                        .flatten()
+                        .filter(|e| e.aura_type == mangos_spells::defines::aura::DAMAGE_SHIELD)
+                        .map(move |e| (h.spell_id, e.amount))
+                })
+                .collect();
+            for (spell_id, amount) in shields {
+                if amount > 0 && self.unit_is_alive(victim) {
+                    let school_id = self.stores.spells.get(spell_id).map_or(0, |s| s.school);
+                    #[allow(clippy::cast_sign_loss)]
+                    self.deal_damage_school(victim, attacker, amount as u32, false, school_id);
+                }
+            }
+        }
+        let swing_ex = match outcome {
+            MeleeOutcome::Crit => proc_ex::CRITICAL_HIT,
+            MeleeOutcome::Block => proc_ex::BLOCK,
+            _ => proc_ex::NORMAL_HIT,
+        };
+        self.raise_melee_procs(attacker, victim, swing_ex, total);
         self.send_attacker_state(
             attacker,
             victim,

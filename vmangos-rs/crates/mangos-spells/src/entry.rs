@@ -54,6 +54,10 @@ pub struct SpellEffectData {
     pub multiple_value: f32,
     /// `EffectChainTarget[]` (fields[104]).
     pub chain_target: u32,
+    /// `EffectItemType[]` (fields[107]); for modifier
+    /// auras this is the spell-family affect mask
+    /// (`SpellMgr::GetSpellAffectMask`).
+    pub item_type: u64,
     /// `EffectMiscValue[]` (fields[110]).
     pub misc_value: i32,
     /// `EffectTriggerSpell[]` (fields[113]).
@@ -91,6 +95,10 @@ pub struct SpellEntry {
     pub recovery_time: u32,
     /// fields[21].
     pub category_recovery_time: u32,
+    /// fields[22..25] (`SpellMgr.cpp:3801-3803`).
+    pub interrupt_flags: u32,
+    pub aura_interrupt_flags: u32,
+    pub channel_interrupt_flags: u32,
     /// fields[25..28].
     pub proc_flags: u32,
     pub proc_chance: u32,
@@ -346,6 +354,15 @@ pub fn armor_reduced_damage(damage: f32, victim_armor: i32, attacker_level: u32)
     if new_damage > 1.0 { new_damage } else { 1.0 }
 }
 
+/// The `Player::ApplySpellMod` composition
+/// (`Player.cpp:22510`): flat sums add to the base,
+/// then the percent sum scales the sum —
+/// `base + ((base + flat) * pct / 100 + flat)`.
+#[must_use]
+pub fn spell_mod_apply(base: f32, flat: f32, pct: f32) -> f32 {
+    base + ((base + flat) * pct / 100.0 + flat)
+}
+
 /// `Spells::IsPositiveTarget` (`SpellEntry.h:210`).
 #[must_use]
 pub fn is_positive_target(target_a: u32, target_b: u32) -> bool {
@@ -427,6 +444,14 @@ impl SpellEntry {
     pub fn is_positive_spell(&self) -> bool {
         (0..3).all(|i| self.effects[i].effect == 0 || self.is_positive_effect(i))
     }
+
+    /// `IsChanneledSpell` (`SpellEntry.h:1071`):
+    /// `SPELL_ATTR_EX_IS_CHANNELED` (0x04) or
+    /// `SPELL_ATTR_EX_IS_SELF_CHANNELED` (0x40).
+    #[must_use]
+    pub fn is_channeled(&self) -> bool {
+        self.attributes_ex & (0x0000_0004 | 0x0000_0040) != 0
+    }
 }
 
 /// All loaded spells by id.
@@ -434,6 +459,25 @@ impl SpellEntry {
 pub struct SpellStore {
     pub spells: HashMap<u32, SpellEntry>,
     pub tables: SpellDbcTables,
+    /// `spell_proc_event` rows by aura spell id
+    /// (rank-filled at load).
+    pub proc_events: HashMap<u32, ProcEventEntry>,
+}
+
+/// One `spell_proc_event` row (`SpellProcEventEntry`,
+/// `SpellMgr.h:43`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ProcEventEntry {
+    pub school_mask: u32,
+    pub spell_family_name: u32,
+    pub spell_family_mask: [u64; 3],
+    pub proc_flags: u32,
+    pub proc_ex: u32,
+    pub ppm_rate: f32,
+    pub custom_chance: f32,
+    /// Hidden cooldown applied to the *triggered*
+    /// spell (ms).
+    pub cooldown: u32,
 }
 
 impl SpellStore {
@@ -450,5 +494,21 @@ impl SpellStore {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.spells.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::spell_mod_apply;
+
+    #[test]
+    #[allow(clippy::float_cmp)] // exact binary fractions under test
+    fn spell_mod_composition_matches_fork() {
+        // Flat adds before percent scales the sum.
+        assert_eq!(spell_mod_apply(100.0, 10.0, 20.0), 132.0);
+        // Nature's Swiftness shape: -100% cast time.
+        assert_eq!(spell_mod_apply(1500.0, 0.0, -100.0), 0.0);
+        // Identity at no mods.
+        assert_eq!(spell_mod_apply(42.0, 0.0, 0.0), 42.0);
     }
 }

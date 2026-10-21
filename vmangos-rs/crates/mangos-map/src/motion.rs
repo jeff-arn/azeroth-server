@@ -660,6 +660,12 @@ impl Map {
                 entry.scan_due = true;
             }
         }
+        // Server-side player relocation shares the fork
+        // `Player::SetPosition` discovery check.
+        #[allow(clippy::float_cmp)]
+        if guid.is_player() && (old.x != position.x || old.y != position.y || old.z != position.z) {
+            self.check_area_explore(guid);
+        }
     }
 
     /// `Map::GetHeight` (`GridMap` subset).

@@ -68,6 +68,23 @@ impl AreaStore {
         self.linked_zone_by_map.get(&map_id).copied().unwrap_or(0)
     }
 
+    /// `AreaEntry::GetByAreaFlagAndMap`.
+    #[must_use]
+    pub fn by_flag_and_map(&self, area_flag: u16, map_id: u32) -> Option<AreaEntry> {
+        self.by_flag_and_map
+            .get(&(u32::from(area_flag), map_id))
+            .copied()
+    }
+
+    /// `AreaEntry::GetFlagByMapId`: the explore flag of
+    /// the map's linked area (0 when unknown), the
+    /// `GetAreaFlag` fallback for points with no grid.
+    #[must_use]
+    pub fn flag_by_map_id(&self, map_id: u32) -> u32 {
+        self.entry(self.linked_zone(map_id))
+            .map_or(0, |entry| entry.explore_flag)
+    }
+
     /// `TerrainManager::GetZoneAndAreaIdByAreaFlag`.
     #[must_use]
     pub fn zone_and_area_by_flag(&self, area_flag: u16, map_id: u32) -> (u32, u32) {

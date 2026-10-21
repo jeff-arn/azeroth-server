@@ -82,7 +82,8 @@ COLS = [
     "entry", "school", "category", "dispel", "mechanic",
     "attributes", "attributesEx", "attributesEx2", "attributesEx3",
     "attributesEx4", "targets", "castingTimeIndex", "recoveryTime",
-    "categoryRecoveryTime", "maxLevel", "baseLevel", "spellLevel",
+    "categoryRecoveryTime", "interruptFlags", "auraInterruptFlags",
+    "channelInterruptFlags", "maxLevel", "baseLevel", "spellLevel",
     "durationIndex", "powerType", "manaCost", "manCostPerLevel",
     "rangeIndex", "speed", "stackAmount",
 ]
@@ -95,7 +96,7 @@ for group in [
     "effectImplicitTargetB{0}", "effectRadiusIndex{0}",
     "effectApplyAuraName{0}", "effectAmplitude{0}",
     "effectMultipleValue{0}", "effectChainTarget{0}",
-    "effectMiscValue{0}", "effectTriggerSpell{0}",
+    "effectItemType{0}", "effectMiscValue{0}", "effectTriggerSpell{0}",
     "effectPointsPerComboPoint{0}", "dmgMultiplier{0}",
 ]:
     EFF_COLS.append([group.format(i) for i in (1, 2, 3)])
@@ -215,6 +216,7 @@ def main():
                 f"amplitude: {e['effectAmplitude']}, "
                 f"multiple_value: {float(e['effectMultipleValue'])}_f32, "
                 f"chain_target: {e['effectChainTarget']}, "
+                f"item_type: {e['effectItemType']}, "
                 f"misc_value: {e['effectMiscValue']}, "
                 f"trigger_spell: {e['effectTriggerSpell']}, "
                 f"points_per_combo_point: {float(e['effectPointsPerComboPoint'])}_f32, "
@@ -233,6 +235,11 @@ def main():
         lines.append(
             f"                targets: {row['targets']}, casting_time_index: {row['castingTimeIndex']}, "
             f"recovery_time: {row['recoveryTime']}, category_recovery_time: {row['categoryRecoveryTime']},"
+        )
+        lines.append(
+            f"                interrupt_flags: {row['interruptFlags']}, "
+            f"aura_interrupt_flags: {row['auraInterruptFlags']}, "
+            f"channel_interrupt_flags: {row['channelInterruptFlags']},"
         )
         lines.append("                proc_flags: 0, proc_chance: 0, proc_charges: 0,")
         lines.append(

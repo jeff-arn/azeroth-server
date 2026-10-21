@@ -37,7 +37,8 @@ use mangos_world_data::spawns::{
 use crate::object::ObjectBase;
 use crate::unit::{
     DeathState, MAX_SPELL_SCHOOL, MAX_STATS, MOVE_RUN, MOVE_WALK, ModelData, POWER_ENERGY,
-    POWER_MANA, POWER_RAGE, UnitBase, WorldObjectBase, check_valid_scale,
+    POWER_MANA, POWER_RAGE, STAT_INTELLECT, STAT_STAMINA, UnitBase, WorldObjectBase,
+    check_valid_scale,
 };
 
 /// `urand(min, max)` inclusive, as the C++ global. The map
@@ -174,6 +175,11 @@ pub struct Creature {
     pub is_active_object: bool,
     /// `m_visibilityModifier`.
     pub visibility_modifier: f32,
+    /// `SelectLevel` rolled maxima before aura stat
+    /// deltas (the fork's `UNIT_MOD_HEALTH` /
+    /// `UNIT_MOD_POWER_MANA` `BASE_VALUE` registers).
+    pub spawn_max_health: u32,
+    pub spawn_max_mana: u32,
     /// `m_defaultMovementType` (spawn row wins over
     /// template).
     pub default_movement_type: u32,
@@ -335,6 +341,8 @@ impl Creature {
             corpse_delay: 0,
             is_active_object: false,
             visibility_modifier: 0.0,
+            spawn_max_health: 0,
+            spawn_max_mana: 0,
             default_movement_type: 0,
             react_state: REACT_DEFENSIVE,
             default_running: false,
@@ -435,6 +443,7 @@ impl Creature {
         } else {
             self.info.speed_run
         };
+        self.unit.base_speed_rate = self.unit.speed_rate;
     }
 
     /// `SelectLevel` (level already rolled by the caller,
@@ -500,6 +509,7 @@ impl Creature {
         #[allow(clippy::cast_precision_loss)]
         let base_health = round_u32(health_mod * stats.base_health as f32).max(1);
         self.unit.create_health = base_health;
+        self.spawn_max_health = health;
         self.unit.set_max_health(health);
         if percent_health == 100.0 {
             self.unit.set_health(health);
@@ -509,6 +519,7 @@ impl Creature {
         #[allow(clippy::cast_precision_loss)]
         let mana = round_u32(stats.mana as f32 * self.info.mana_multiplier);
         self.unit.create_mana = stats.base_mana as u32;
+        self.spawn_max_mana = mana;
         self.unit.set_max_power(POWER_MANA, mana);
         if percent_mana == 100.0 {
             self.unit.set_power(POWER_MANA, mana);
@@ -566,6 +577,31 @@ impl Creature {
                 *slot = value as f32;
             }
         }
+    }
+
+    /// The `HandleStatModifier` update dispatch for aura
+    /// stat changes: `Creature::UpdateStats` fields plus
+    /// `UpdateMaxHealth` / `UpdateMaxPower(MANA)` at
+    /// identity health/power modifier groups (spawn
+    /// maxima carry the spawn-time `BASE_VALUE`).
+    pub fn refresh_derived_stats(&mut self) {
+        for i in 0..MAX_STATS {
+            #[allow(clippy::cast_possible_truncation)]
+            let total = self.unit.total_stat_value(i, 0.0) as i32;
+            self.unit.set_stat(i, total);
+        }
+        #[allow(clippy::cast_precision_loss)]
+        let health = self.spawn_max_health as f32
+            + (self.unit.stat(STAT_STAMINA) - self.unit.create_stats[STAT_STAMINA]) * 10.0;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let max_health = if health < 1.0 { 1 } else { health as u32 };
+        self.unit.set_max_health(max_health);
+        #[allow(clippy::cast_precision_loss)]
+        let mana = self.spawn_max_mana as f32
+            + (self.unit.stat(STAT_INTELLECT) - self.unit.create_stats[STAT_INTELLECT]) * 15.0;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let max_mana = if mana < 0.0 { 0 } else { mana as u32 };
+        self.unit.set_max_power(POWER_MANA, max_mana);
     }
 
     /// The `UpdateEntry` tail after `SelectLevel` (resists,

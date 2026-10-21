@@ -9,6 +9,7 @@
 
 pub mod account_data;
 pub mod addon_info;
+pub mod anticheat;
 pub mod auction;
 pub mod auth;
 pub mod channels;
@@ -206,6 +207,20 @@ pub struct ServerConfig {
     pub instance_ignore_level: bool,
     /// `Rate.InstanceResetTime`.
     pub rate_instance_reset_time: f32,
+    /// `Rate.XP.Kill` (default 1.0, `World.cpp:506`;
+    /// production conf runs 1.4).
+    pub rate_xp_kill: f32,
+    /// `Rate.XP.Kill.Elite` (default 1.0, `World.cpp:507`).
+    pub rate_xp_kill_elite: f32,
+    /// `Rate.XP.Quest` (default 1.0, `World.cpp:508`).
+    pub rate_xp_quest: f32,
+    /// `Rate.XP.Explore` (default 1.0, `World.cpp:509`).
+    pub rate_xp_explore: f32,
+    /// `Spell.ProcDelay` batching window in ms (fork
+    /// code default 400; example conf ships 800).
+    pub spell_proc_delay_ms: u32,
+    /// `Anticheat.*` movement-anticheat family.
+    pub anticheat: crate::anticheat::AnticheatConfig,
     /// `Auction.Deposit.Min` (default 0, `World.cpp:519`).
     pub auction_deposit_min: u32,
     /// `Auction.AccountConcurrentLimit` (default 0 =
@@ -372,6 +387,12 @@ impl ServerConfig {
             rate_auction_deposit: cfg.float_default("Rate.Auction.Deposit", 1.0),
             rate_auction_cut: cfg.float_default("Rate.Auction.Cut", 1.0),
             rate_instance_reset_time: cfg.float_default("Rate.InstanceResetTime", 1.0),
+            rate_xp_kill: cfg.float_default("Rate.XP.Kill", 1.0),
+            rate_xp_kill_elite: cfg.float_default("Rate.XP.Kill.Elite", 1.0),
+            rate_xp_quest: cfg.float_default("Rate.XP.Quest", 1.0),
+            rate_xp_explore: cfg.float_default("Rate.XP.Explore", 1.0),
+            spell_proc_delay_ms: to_u32(cfg.int_default("Spell.ProcDelay", 400)),
+            anticheat: crate::anticheat::AnticheatConfig::from_config(cfg),
             instance_ignore_level: cfg.bool_default("Instance.IgnoreLevel", false),
             auction_deposit_min: to_u32(cfg.int_default("Auction.Deposit.Min", 0)),
             auction_account_concurrent_limit: to_u32(

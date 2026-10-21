@@ -31,7 +31,7 @@ use mangos_scripts_engine::{
 
 use mangos_entities::creature::SpawnRng;
 
-use crate::map::{Map, MapEvent};
+use crate::map::{CooldownEntry, Map, MapEvent};
 use crate::spells::{CastOptions, CastOutcome, CastTarget};
 
 /// One scheduled generic-script step (`ScriptAction`).
@@ -1792,7 +1792,7 @@ impl Map {
                 } else {
                     d[0]
                 };
-                self.deal_damage(src, src, damage);
+                self.deal_damage(src, src, damage, false);
                 false
             }
             command::ZONE_COMBAT_PULSE => {
@@ -1855,7 +1855,7 @@ impl Map {
             command::ADD_SPELL_COOLDOWN => {
                 let Some(src) = src_unit else { return abort };
                 self.cooldowns
-                    .insert((src, d[0]), self.now_ms + d[1] * 1000);
+                    .insert((src, d[0]), CooldownEntry::timed(self.now_ms + d[1] * 1000));
                 false
             }
             command::REMOVE_SPELL_COOLDOWN => {

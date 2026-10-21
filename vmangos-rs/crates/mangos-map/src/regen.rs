@@ -386,6 +386,7 @@ mod tests {
             periodic_timer: 0,
             periodic_ticks: 0,
             misc_value,
+            mod_charges: 0,
         }
     }
 

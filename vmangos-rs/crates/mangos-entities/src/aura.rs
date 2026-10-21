@@ -32,6 +32,11 @@ pub struct AuraEffectState {
     pub periodic_ticks: u32,
     /// `m_miscvalue`.
     pub misc_value: i32,
+    /// `SpellModifier::charges` for
+    /// `ADD_FLAT_MODIFIER`/`ADD_PCT_MODIFIER`
+    /// effects (0 = infinite, -1 = exhausted);
+    /// unused (0) for other types.
+    pub mod_charges: i32,
 }
 
 impl AuraEffectState {
@@ -43,6 +48,7 @@ impl AuraEffectState {
                 mangos_spells::defines::aura::PERIODIC_DAMAGE
                     | mangos_spells::defines::aura::PERIODIC_HEAL
                     | mangos_spells::defines::aura::PERIODIC_ENERGIZE
+                    | mangos_spells::defines::aura::PERIODIC_TRIGGER_SPELL
                     | mangos_spells::defines::aura::PERIODIC_DAMAGE_PERCENT
             )
     }
@@ -68,6 +74,12 @@ pub struct AuraHolder {
     pub positive: bool,
     pub cancelable: bool,
     pub effects: [Option<AuraEffectState>; 3],
+    /// Remaining proc charges (`m_procCharges`; 0 =
+    /// uncharged holder, never charge-gated).
+    pub proc_charges: i32,
+    /// Map-clock apply time (`GetAuraApplyTime`),
+    /// stamped by `add_aura_holder`.
+    pub apply_time_ms: u32,
 }
 
 impl AuraHolder {
@@ -91,6 +103,8 @@ impl AuraHolder {
             positive,
             cancelable,
             effects: [None, None, None],
+            proc_charges: 0,
+            apply_time_ms: 0,
         }
     }
 

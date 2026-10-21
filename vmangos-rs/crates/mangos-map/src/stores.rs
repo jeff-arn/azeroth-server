@@ -65,6 +65,8 @@ pub struct WorldStores {
     pub quests: mangos_world_data::quest_template::QuestTemplatesLite,
     /// `areatrigger_tavern` ids (Phase 6 Slice 1b rest).
     pub tavern_triggers: std::collections::HashSet<u32>,
+    /// `exploration_basexp` (depth Slice 1b).
+    pub exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp,
 }
 
 impl WorldStores {
@@ -96,6 +98,7 @@ impl WorldStores {
             area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
             quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
             tavern_triggers: std::collections::HashSet::new(),
+            exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(),
             chat_channels: ChatChannelDbc::default(),
             auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
         }

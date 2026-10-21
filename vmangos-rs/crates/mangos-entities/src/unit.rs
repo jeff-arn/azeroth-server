@@ -221,6 +221,47 @@ impl WorldObjectBase {
     }
 }
 
+/// One `m_auraModifiersGroup` row: the four
+/// `UnitModifierType` registers (pct rows start at 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StatModGroup {
+    pub base_value: f32,
+    pub base_pct: f32,
+    pub total_value: f32,
+    pub total_pct: f32,
+}
+
+impl Default for StatModGroup {
+    fn default() -> Self {
+        Self {
+            base_value: 0.0,
+            base_pct: 1.0,
+            total_value: 0.0,
+            total_pct: 1.0,
+        }
+    }
+}
+
+/// `UnitModifierType` subset for stat groups.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StatModKind {
+    BaseValue,
+    BasePct,
+    TotalValue,
+    TotalPct,
+}
+
+/// `ApplyPercentModFloatVar` (`Util.h:176`).
+pub fn apply_percent_mod_float_var(var: &mut f32, val: f32, apply: bool) {
+    #[allow(clippy::float_cmp)]
+    let val = if val == -100.0 { -99.99 } else { val };
+    if apply {
+        *var *= (100.0 + val) / 100.0;
+    } else {
+        *var *= 100.0 / (100.0 + val);
+    }
+}
+
 /// `Unit` state shared by players and creatures.
 #[derive(Clone, Debug)]
 pub struct UnitBase {
@@ -234,6 +275,10 @@ pub struct UnitBase {
     /// `m_speed_rate[MAX_MOVE_TYPE]` (multiplies
     /// [`BASE_MOVE_SPEED`]).
     pub speed_rate: [f32; MAX_MOVE_TYPE],
+    /// Aura-free speed rate (creature template/display
+    /// rates; 1.0 for players). `UpdateSpeed` aura
+    /// factors multiply this base.
+    pub base_speed_rate: [f32; MAX_MOVE_TYPE],
     /// Display-addon walk/run speed rates for creatures
     /// (1.0 for players; `Creature::GetSpeedRate` inputs).
     pub display_speed_walk: f32,
@@ -255,6 +300,10 @@ pub struct UnitBase {
     /// `m_attackPowerMods[MELEE]` flat pos/neg sums
     /// (multiplier lands with percentage auras).
     pub attack_power_mods: [f32; 2],
+    /// Aura-fed `m_auraModifiersGroup[UNIT_MOD_STAT_*]`
+    /// rows (item stats compose separately as their own
+    /// `BASE_VALUE` aggregate on players).
+    pub stat_mods: [StatModGroup; MAX_STATS],
     /// `m_castCounter` (per-unit cast sequence byte).
     pub cast_counter: u8,
     /// Global cooldown expiry on the map ms clock
@@ -300,6 +349,7 @@ impl UnitBase {
             create_health: 0,
             create_mana: 0,
             speed_rate: [1.0; MAX_MOVE_TYPE],
+            base_speed_rate: [1.0; MAX_MOVE_TYPE],
             display_speed_walk: 1.0,
             display_speed_run: 1.0,
             model_collision_height: 2.0,
@@ -310,6 +360,7 @@ impl UnitBase {
             pending_movement_changes: std::collections::VecDeque::new(),
             auras: Vec::new(),
             attack_power_mods: [0.0, 0.0],
+            stat_mods: [StatModGroup::default(); MAX_STATS],
             cast_counter: 0,
             gcd_until_ms: 0,
             attack_timers: [0, 0],
@@ -492,14 +543,19 @@ impl UnitBase {
             .get_u32(offsets::UNIT_FIELD_MAXHEALTH)
     }
 
-    /// `SetHealth` (clamps nothing; callers clamp like C++).
+    /// `SetHealth` (caps at max health, as in C++).
     pub fn set_health(&mut self, value: u32) {
+        let value = value.min(self.max_health());
         self.values().set_u32(offsets::UNIT_FIELD_HEALTH, value);
     }
 
-    /// `SetMaxHealth`.
+    /// `SetMaxHealth` (clamps current health down to a
+    /// shrunken max, as the C++ tail does).
     pub fn set_max_health(&mut self, value: u32) {
         self.values().set_u32(offsets::UNIT_FIELD_MAXHEALTH, value);
+        if self.health() > value {
+            self.set_health(value);
+        }
     }
 
     #[must_use]
@@ -524,10 +580,14 @@ impl UnitBase {
             .set_u32(offsets::UNIT_FIELD_POWER1 + power as u16, value);
     }
 
-    /// `SetMaxPower`.
+    /// `SetMaxPower` (clamps current power down to a
+    /// shrunken max, as the C++ tail does).
     pub fn set_max_power(&mut self, power: usize, value: u32) {
         self.values()
             .set_u32(offsets::UNIT_FIELD_MAXPOWER1 + power as u16, value);
+        if self.power(power) > value {
+            self.set_power(power, value);
+        }
     }
 
     /// `GetCreatePowers` for a player-shaped unit
@@ -561,6 +621,47 @@ impl UnitBase {
     pub fn set_stat(&mut self, stat: usize, value: i32) {
         self.values()
             .set_stat_i32(offsets::UNIT_FIELD_STAT0 + stat as u16, value);
+    }
+
+    /// The register half of `HandleStatModifier`
+    /// (`Unit.cpp:8022`) for one stat group; the
+    /// `Update*` dispatch is the caller's derived-stat
+    /// refresh (map-side, mirroring the attack-power
+    /// mod pattern).
+    pub fn handle_stat_modifier(
+        &mut self,
+        stat: usize,
+        kind: StatModKind,
+        amount: f32,
+        apply: bool,
+    ) {
+        let group = &mut self.stat_mods[stat];
+        match kind {
+            StatModKind::BaseValue => group.base_value += if apply { amount } else { -amount },
+            StatModKind::TotalValue => group.total_value += if apply { amount } else { -amount },
+            StatModKind::BasePct => apply_percent_mod_float_var(&mut group.base_pct, amount, apply),
+            StatModKind::TotalPct => {
+                apply_percent_mod_float_var(&mut group.total_pct, amount, apply);
+            }
+        }
+    }
+
+    /// `GetTotalStatValue` (`Unit.cpp:8118`) with the
+    /// item-fed `BASE_VALUE` aggregate passed separately
+    /// (players; creatures pass 0):
+    /// `((create + base) * base_pct + total) * total_pct`,
+    /// 0 when the total pct register is non-positive.
+    #[must_use]
+    pub fn total_stat_value(&self, stat: usize, item_base: f32) -> f32 {
+        let group = &self.stat_mods[stat];
+        if group.total_pct <= 0.0 {
+            return 0.0;
+        }
+        let mut value = self.create_stats[stat] + item_base + group.base_value;
+        value *= group.base_pct;
+        value += group.total_value;
+        value *= group.total_pct;
+        value
     }
 
     /// `SetArmor` (`Unit.h:392`): resistance school 0 through
@@ -895,6 +996,37 @@ mod tests {
         // Shaman (7) MP uses +17: (100/5+17)/2.
         let shaman = unit_with(7, 100);
         assert!((shaman.regen_mp_per_spirit() - 18.5).abs() < 1e-5);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn stat_mod_registers_compose_like_fork() {
+        use super::{STAT_STAMINA, StatModKind, apply_percent_mod_float_var};
+        let mut unit = unit_with(1, 0);
+        unit.create_stats[STAT_STAMINA] = 42.0;
+        // Identity groups: create + item base only.
+        assert_eq!(unit.total_stat_value(STAT_STAMINA, 6.0), 48.0);
+        // MOD_STAT flat (TOTAL_VALUE) adds after base pct.
+        unit.handle_stat_modifier(STAT_STAMINA, StatModKind::TotalValue, 10.0, true);
+        assert_eq!(unit.total_stat_value(STAT_STAMINA, 6.0), 58.0);
+        // MOD_PERCENT_STAT (BASE_PCT +10%): (48)*1.1 + 10.
+        unit.handle_stat_modifier(STAT_STAMINA, StatModKind::BasePct, 10.0, true);
+        assert!((unit.total_stat_value(STAT_STAMINA, 6.0) - 62.8).abs() < 1e-4);
+        // Resurrection Sickness shape replaces the buffs:
+        // TOTAL_PCT -75% over the naked (42+6).
+        unit.handle_stat_modifier(STAT_STAMINA, StatModKind::TotalValue, 10.0, false);
+        unit.handle_stat_modifier(STAT_STAMINA, StatModKind::BasePct, 10.0, false);
+        unit.handle_stat_modifier(STAT_STAMINA, StatModKind::TotalPct, -75.0, true);
+        assert_eq!(unit.total_stat_value(STAT_STAMINA, 6.0), 12.0);
+        unit.handle_stat_modifier(STAT_STAMINA, StatModKind::TotalPct, -75.0, false);
+        assert_eq!(unit.total_stat_value(STAT_STAMINA, 6.0), 48.0);
+        // TOTAL_PCT <= 0 reads 0; -100 clamps to -99.99
+        // in the percent helper, so the register stays > 0.
+        let mut v = 200.0f32;
+        apply_percent_mod_float_var(&mut v, -100.0, true);
+        assert!((v - 0.02).abs() < 1e-4);
+        apply_percent_mod_float_var(&mut v, -100.0, false);
+        assert!((v - 200.0).abs() < 1e-2);
     }
 
     #[test]

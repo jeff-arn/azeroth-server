@@ -1107,6 +1107,16 @@ struct SessionEntry {
     /// a change mirrors `GiveLevel` resetting
     /// `PLAYED_TIME_LEVEL`.
     played_level: u32,
+    /// `m_clientMoverGuid` (empty until
+    /// `CMSG_SET_ACTIVE_MOVER`).
+    client_mover_guid: Option<ObjectGuid>,
+    /// `m_moveRejectTime` on the server-ms clock:
+    /// movement packets at or before it drop.
+    move_reject_until_ms: u32,
+    /// Movement anticheat state + finalize timer
+    /// (server-ms of the last 4 s finalize).
+    anticheat: crate::anticheat::MovementAnticheat,
+    anticheat_last_ms: u32,
     /// Next periodic `SaveToDB` instant, randomized on
     /// login like fork `m_nextSave`.
     next_player_save: Option<Instant>,
@@ -1914,6 +1924,10 @@ impl World {
                         player_guid: None,
                         played_last_tick: Instant::now(),
                         played_level: 0,
+                        client_mover_guid: None,
+                        move_reject_until_ms: 0,
+                        anticheat: crate::anticheat::MovementAnticheat::default(),
+                        anticheat_last_ms: 0,
                         next_player_save: None,
                         cached_zone: 0,
                         character_load: None,
@@ -2485,6 +2499,29 @@ impl World {
         }
     }
 
+    /// Mirror the actor's membership into the map
+    /// entity's `group_id` (DB group id, the namespace
+    /// materialize loads): map-local systems such as
+    /// group kill XP read membership from the entity,
+    /// which otherwise only reflects login-time state.
+    /// Uncreated invite shells (`db_id == 0`) read as
+    /// no group, matching the fork (no group exists
+    /// until `Group::Create`).
+    fn sync_entity_group(&mut self, guid_low: u32) {
+        let db_id = self
+            .player_group
+            .get(&guid_low)
+            .and_then(|key| self.groups.get(key))
+            .map(Group::db_id)
+            .filter(|id| *id != 0);
+        if let Some(&map_key) = self.player_map.get(&guid_low)
+            && let Some(map) = self.maps.get_mut(&map_key)
+            && let Some(player) = map.player_mut(player_guid(guid_low))
+        {
+            player.group_id = db_id;
+        }
+    }
+
     /// Removes a group and every index pointing at it
     /// (`ObjectMgr::RemoveGroup` + `delete group`).
     fn destroy_group(&mut self, key: u64) {
@@ -2502,6 +2539,7 @@ impl World {
         self.player_group.retain(|_, k| *k != key);
         self.player_group_invite.retain(|_, k| *k != key);
         for guid in members {
+            self.sync_entity_group(guid);
             self.guild_bot_removed_from_group(guid);
         }
     }
@@ -2575,6 +2613,7 @@ impl World {
             self.destroy_group(key);
         } else {
             self.player_group.remove(&guid_low);
+            self.sync_entity_group(guid_low);
         }
         self.apply_group_fx(fx);
         self.guild_bot_removed_from_group(guid_low);
@@ -2825,6 +2864,7 @@ impl World {
             };
             self.group_by_db_id.insert(db_id, key);
             self.player_group.insert(leader_low, key);
+            self.sync_entity_group(leader_low);
             self.apply_group_fx(fx);
         }
         let Some((actor_name, _)) = self.player_name_race_of(actor_low) else {
@@ -2837,6 +2877,7 @@ impl World {
         };
         if let Some(fx) = group.add_member(actor_low, &actor_name, &view) {
             self.player_group.insert(actor_low, key);
+            self.sync_entity_group(actor_low);
             self.apply_group_fx(fx);
         }
     }
@@ -8577,6 +8618,10 @@ impl World {
                 player_guid: None,
                 played_last_tick: Instant::now(),
                 played_level: 0,
+                client_mover_guid: None,
+                move_reject_until_ms: 0,
+                anticheat: crate::anticheat::MovementAnticheat::default(),
+                anticheat_last_ms: 0,
                 next_player_save: None,
                 cached_zone: 0,
                 character_load: None,
@@ -12666,6 +12711,24 @@ impl World {
     }
 
     fn disconnect(&mut self, id: SessionId) {
+        // Fork finalizes anticheat counts on disconnect
+        // (`Player::OnDisconnected`); a kick action here
+        // is moot (already leaving) but still logs.
+        if self.config.anticheat.enabled
+            && let Some(entry) = self.sessions.get_mut(&id)
+            && entry.player_guid.is_some()
+        {
+            let (action, reason, _, _) = entry.anticheat.finalize(&self.config.anticheat);
+            if action != 0 {
+                self.log.out(
+                    Level::Error,
+                    &format!(
+                        "MovementAnticheat: account {} Cheat: {reason} Action: {action} (disconnect)",
+                        entry.account_id
+                    ),
+                );
+            }
+        }
         if let Some(entry) = self.sessions.get(&id) {
             let _ = entry.control.try_send(SessionControl::Disconnect);
         }
@@ -13730,8 +13793,15 @@ impl World {
         let map_config = MapConfig {
             // `IsPvPRealm()`: REALM_TYPE_PVP (1), RPPVP (8), FFA_PVP (16).
             pvp_realm: matches!(self.config.game_type, 1 | 8 | 16),
+            xp_rates: mangos_map::map::XpRates {
+                kill: self.config.rate_xp_kill,
+                kill_elite: self.config.rate_xp_kill_elite,
+                quest: self.config.rate_xp_quest,
+                explore: self.config.rate_xp_explore,
+            },
             activate_weather: self.config.activate_weather,
             change_weather_interval_ms: self.config.change_weather_interval_ms,
+            proc_delay_ms: self.config.spell_proc_delay_ms,
             ..MapConfig::default()
         };
         let map = self.maps.entry(map_key).or_insert_with(|| {
@@ -13746,16 +13816,36 @@ impl World {
             map.set_mmaps_dir(navmesh_dir);
             map
         });
+        // Loaded cooldowns seed after saved auras
+        // (fork `_LoadSpellCooldowns` order: some
+        // cooldowns may already be set at aura load).
+        let loaded_cooldowns: Vec<mangos_map::map::LoadedCooldown> = if apply_auras {
+            initial_spell_cooldowns(
+                &player.deferred.spell_cooldowns,
+                unix_now(),
+                |spell| self.deps.world_stores.spells.spells.contains_key(&spell),
+                |item| self.deps.world_stores.items.get(item).is_some(),
+            )
+            .iter()
+            .map(|c| mangos_map::map::LoadedCooldown {
+                spell: c.spell_id,
+                item_id: c.item_id,
+                category: u32::from(c.category),
+                spell_remaining_ms: c.cooldown_ms,
+                category_remaining_ms: c.category_cooldown_ms,
+            })
+            .collect()
+        } else {
+            Vec::new()
+        };
         map.add_player(player, &self.deps.respawn_times, now_unix, now_ms);
         if apply_auras {
             // Saved auras land after the player is in
             // the map (`Player::_LoadAuras` at login
             // completion; teleports keep live auras).
-            map.apply_saved_auras(ObjectGuid::with_entry(
-                mangos_guid::HighGuid::PLAYER,
-                0,
-                guid_low,
-            ));
+            let player_guid = ObjectGuid::with_entry(mangos_guid::HighGuid::PLAYER, 0, guid_low);
+            map.apply_saved_auras(player_guid);
+            map.seed_cooldowns(player_guid, &loaded_cooldowns);
         }
         self.player_map.insert(guid_low, map_key);
         self.player_session.insert(guid_low, session);
@@ -14432,37 +14522,202 @@ impl World {
     /// `HandleMovementOpcodes` relay half: parse with the
     /// player's seeded movement info (jump latch), forward
     /// to the map. Anticheat/ack opcodes are Slice 4.
+    #[allow(clippy::too_many_lines)] // one HandleMovementOpcodes port
     fn on_movement_packet(&mut self, id: SessionId, packet: &WorldPacket) {
-        let Some(entry) = self.sessions.get(&id) else {
-            return;
+        use crate::anticheat::{MoveFacts, MoveVerdict};
+        use mangos_entities::unit::{
+            MOVEMENT_CHANGE_FEATHER_FALL, MOVEMENT_CHANGE_ROOT, MOVEMENT_CHANGE_SET_HOVER,
+            MOVEMENT_CHANGE_WATER_WALK,
         };
-        let Some(guid_low) = entry.player_guid else {
-            return;
-        };
-        let Some(&map_key) = self.player_map.get(&guid_low) else {
-            return;
-        };
-        let guid = ObjectGuid::with_entry(mangos_guid::HighGuid::PLAYER, 0, guid_low);
+        use mangos_movement::movement_info::MovementFlags;
+        use mangos_spells::defines::aura as aura_type;
+
+        let opcode = packet.opcode();
         let server_ms = self.server_ms();
-        let Some(map) = self.maps.get_mut(&map_key) else {
-            return;
-        };
-        let Some(player) = map.player_mut(guid) else {
-            return;
-        };
-        // Server is moving the unit: client movement is
-        // dropped until the spline completes
-        // (`HasPendingSplineDone` / not-finalized gates).
-        if player.unit.pending_spline_done || !player.unit.spline.finalized() {
-            return;
+        {
+            let Some(entry) = self.sessions.get_mut(&id) else {
+                return;
+            };
+            let Some(guid_low) = entry.player_guid else {
+                return;
+            };
+            let guid = ObjectGuid::with_entry(mangos_guid::HighGuid::PLAYER, 0, guid_low);
+            if opcode == opcode_id::CMSG_SET_ACTIVE_MOVER {
+                // `HandleSetActiveMoverOpcode`: the only
+                // mover in this slice is the player (no
+                // possession runtime), so a non-empty
+                // mismatch logs and snaps back to self.
+                let Ok((mover, _)) = ObjectGuid::read_packed(packet.body()) else {
+                    self.bad_packet(id, opcode);
+                    return;
+                };
+                if !mover.is_empty() && mover != guid {
+                    self.log.out(
+                        Level::Error,
+                        &format!(
+                            "HandleSetActiveMover: Incorrect mover guid {mover:?}, should be {guid:?}"
+                        ),
+                    );
+                    entry.client_mover_guid = Some(guid);
+                    return;
+                }
+                entry.client_mover_guid = (!mover.is_empty()).then_some(mover);
+                return;
+            }
+            // Reject window + confirmed-mover gate
+            // (`HandleMovementOpcodes` head). Packet
+            // time is the actor server-ms at intake.
+            if server_ms <= entry.move_reject_until_ms {
+                return;
+            }
+            if entry.client_mover_guid != Some(guid) {
+                return;
+            }
+            let Some(&map_key) = self.player_map.get(&guid_low) else {
+                return;
+            };
+            let security = u32::from(entry.auth.security);
+            let latency = entry.latency;
+            let account_id = entry.account_id;
+            let being_teleported = self.pending_teleports.contains_key(&id);
+            let Some(map) = self.maps.get_mut(&map_key) else {
+                return;
+            };
+            // Extract unit facts, then release the
+            // player borrow for map-level queries.
+            let Some(unit_facts) = map.player_mut(guid).map(|player| {
+                (
+                    player.unit.pending_spline_done || !player.unit.spline.finalized(),
+                    player.unit.world.movement_info,
+                    player.unit.world.position(),
+                    player.unit.speeds(),
+                    player.unit.speed_rate,
+                    player
+                        .unit
+                        .has_pending_movement_change(Some(MOVEMENT_CHANGE_ROOT)),
+                    player
+                        .unit
+                        .has_pending_movement_change(Some(MOVEMENT_CHANGE_WATER_WALK)),
+                    player
+                        .unit
+                        .has_pending_movement_change(Some(MOVEMENT_CHANGE_FEATHER_FALL)),
+                    player
+                        .unit
+                        .has_pending_movement_change(Some(MOVEMENT_CHANGE_SET_HOVER)),
+                )
+            }) else {
+                return;
+            };
+            let (
+                spline_blocked,
+                last,
+                server_pos,
+                speeds,
+                speed_rates,
+                pending_root,
+                pending_water_walk,
+                pending_feather_fall,
+                pending_hover,
+            ) = unit_facts;
+            // Server is moving the unit: client movement is
+            // dropped until the spline completes
+            // (`HasPendingSplineDone` / not-finalized gates).
+            if spline_blocked {
+                return;
+            }
+            let mut info: MovementInfo = last;
+            let mut reader = packet.reader();
+            if info.read(&mut reader, server_ms).is_err() {
+                self.bad_packet(id, opcode);
+                return;
+            }
+            if !info.verify() {
+                return;
+            }
+            info.source_session_guid = account_id;
+            if self.config.anticheat.enabled {
+                let cfg = &self.config.anticheat;
+                let holders = map.aura_holders(guid);
+                let has_aura = |t: u32| {
+                    holders
+                        .iter()
+                        .any(|h| h.effects.iter().flatten().any(|e| e.aura_type == t))
+                };
+                #[allow(clippy::cast_possible_wrap)]
+                let client_diff = info.client_time.wrapping_sub(last.client_time) as i32;
+                let extrapolated = if client_diff >= 0 {
+                    #[allow(clippy::cast_sign_loss)]
+                    crate::anticheat::extrapolate(
+                        &last,
+                        client_diff as u32,
+                        &speeds,
+                        entry.anticheat.jump_initial_speed,
+                        |x, y, z| map.ground_z(x, y, z),
+                    )
+                } else {
+                    None
+                };
+                let (zone, area) = map.zone_area_at(server_pos);
+                let facts = MoveFacts {
+                    security,
+                    server_pos: (server_pos.x, server_pos.y, server_pos.z),
+                    speeds,
+                    speed_rates,
+                    pending_root,
+                    pending_water_walk,
+                    pending_feather_fall,
+                    pending_hover,
+                    rooted_or_stunned: has_aura(aura_type::MOD_ROOT)
+                        || has_aura(aura_type::MOD_STUN),
+                    has_water_walk_aura: has_aura(aura_type::WATER_WALK),
+                    has_ghost_aura: has_aura(aura_type::GHOST),
+                    has_feather_fall_aura: has_aura(aura_type::FEATHER_FALL),
+                    has_hover_aura: has_aura(aura_type::HOVER),
+                    on_transport_server: !last.transport_guid.is_empty(),
+                    being_teleported,
+                    spline_finalized: true,
+                    in_transport_area: (zone == 1497 && area == 1497)
+                        || zone == 2257
+                        || (zone == 400 && area == 485),
+                    claimed_transport_ok: map.claimed_transport_ok(info.transport_guid, server_pos),
+                    extrapolated,
+                };
+                let (verdict, remove_flags) = entry
+                    .anticheat
+                    .flag_tests(cfg, &facts, &last, &mut info, opcode);
+                let verdict = match verdict {
+                    MoveVerdict::Reject => Some(remove_flags),
+                    MoveVerdict::Accept => {
+                        let (v, _) = entry
+                            .anticheat
+                            .position_tests(cfg, &facts, &last, &info, opcode, account_id);
+                        match v {
+                            MoveVerdict::Reject => Some(MovementFlags::MASK_XZ),
+                            MoveVerdict::Accept => None,
+                        }
+                    }
+                };
+                if let Some(mask) = verdict {
+                    entry.move_reject_until_ms = server_ms + 100 + latency.min(1000);
+                    if let Some(map) = self.maps.get_mut(&map_key) {
+                        map.send_forced_heartbeat(guid, mask);
+                    }
+                    self.drain_map_events();
+                    return;
+                }
+                // Jump initial speed latch (post-test in fork).
+                match opcode {
+                    opcode_id::MSG_MOVE_JUMP => {
+                        entry.anticheat.jump_initial_speed = 7.957_973_3;
+                    }
+                    opcode_id::MSG_MOVE_FALL_LAND => {
+                        entry.anticheat.jump_initial_speed = -9.645;
+                    }
+                    _ => {}
+                }
+            }
+            map.apply_movement(guid, opcode, info, &self.deps.respawn_times);
         }
-        let mut info: MovementInfo = player.unit.world.movement_info;
-        let mut reader = packet.reader();
-        if info.read(&mut reader, server_ms).is_err() {
-            self.bad_packet(id, packet.opcode());
-            return;
-        }
-        map.apply_movement(guid, packet.opcode(), info, &self.deps.respawn_times);
         self.drain_map_events();
     }
 
@@ -14558,6 +14813,10 @@ impl World {
             return;
         }
 
+        let security = self
+            .sessions
+            .get(&id)
+            .map_or(0, |e| u32::from(e.auth.security));
         let wrong_ack = |log: &Log, what: &str| {
             log.out(
                 Level::Error,
@@ -14583,6 +14842,10 @@ impl World {
                     .find_pending_speed_change(value, counter, move_type)
                 {
                     wrong_ack(&self.log, "HandleForceSpeedChangeAck");
+                    if let Some(e) = self.sessions.get_mut(&id) {
+                        e.anticheat
+                            .on_wrong_ack_data(&self.config.anticheat, security);
+                    }
                     return;
                 }
                 // Speed applies before relocation.
@@ -14609,6 +14872,10 @@ impl World {
                     .find_pending_flag_change(change_type, counter, apply)
                 {
                     wrong_ack(&self.log, "HandleMovementFlagChangeToggleAck");
+                    if let Some(e) = self.sessions.get_mut(&id) {
+                        e.anticheat
+                            .on_wrong_ack_data(&self.config.anticheat, security);
+                    }
                     return;
                 }
                 map.relocate_from_client(guid, info, &self.deps.respawn_times);
@@ -14625,6 +14892,10 @@ impl World {
                     .find_pending_flag_change(MOVEMENT_CHANGE_ROOT, counter, apply)
                 {
                     wrong_ack(&self.log, "HandleMoveRootAck");
+                    if let Some(e) = self.sessions.get_mut(&id) {
+                        e.anticheat
+                            .on_wrong_ack_data(&self.config.anticheat, security);
+                    }
                     return;
                 }
                 // 1.14-client root-on-landing workaround
@@ -14638,6 +14909,10 @@ impl World {
             AckKind::KnockBack | AckKind::Teleport => {
                 // No senders yet: nothing can be pending.
                 wrong_ack(&self.log, "HandleMoveAck(no sender)");
+                if let Some(e) = self.sessions.get_mut(&id) {
+                    e.anticheat
+                        .on_wrong_ack_data(&self.config.anticheat, security);
+                }
                 return;
             }
             AckKind::SplineDone => unreachable!("handled above"),
@@ -14681,7 +14956,74 @@ impl World {
     /// One `World::UpdateSessions` pass over sessions with work,
     /// plus the character-screen idle kick.
     #[allow(clippy::too_many_lines)] // one dispatch pass, mirrors ProcessPackets
+    /// `WorldSession::ProcessAnticheatAction` subset:
+    /// log the sanction; kick (ban bits degrade to a
+    /// kick — the account-ban write path is not
+    /// ported). Returns true when the session was
+    /// disconnected.
+    fn process_anticheat_action(&mut self, id: SessionId, reason: &str, action: u32) -> bool {
+        use crate::anticheat::{ACTION_BAN_ACCOUNT, ACTION_BAN_IP_ACCOUNT, ACTION_KICK};
+        if action == 0 {
+            return false;
+        }
+        let who = self.sessions.get(&id).map_or_else(
+            || "<gone>".to_owned(),
+            |e| format!("account {} guid {:?}", e.account_id, e.player_guid),
+        );
+        self.log.out(
+            Level::Error,
+            &format!("MovementAnticheat: {who} Cheat: {reason} Action: {action}"),
+        );
+        if action & (ACTION_KICK | ACTION_BAN_ACCOUNT | ACTION_BAN_IP_ACCOUNT) != 0 {
+            self.disconnect(id);
+            return true;
+        }
+        false
+    }
+
+    /// Anticheat finalize tick (`Player::Update` ->
+    /// `MovementAnticheat::Update`, 4 s combine).
+    fn anticheat_tick(&mut self) {
+        if !self.config.anticheat.enabled {
+            return;
+        }
+        let now_ms = self.server_ms();
+        let ids: Vec<SessionId> = self
+            .sessions
+            .iter()
+            .filter(|(_, e)| e.player_guid.is_some())
+            .map(|(id, _)| *id)
+            .collect();
+        for id in ids {
+            let outcome = {
+                let Some(entry) = self.sessions.get_mut(&id) else {
+                    continue;
+                };
+                if entry.anticheat_last_ms == 0 {
+                    entry.anticheat_last_ms = now_ms;
+                    continue;
+                }
+                let diff = now_ms.wrapping_sub(entry.anticheat_last_ms);
+                entry.anticheat_last_ms = now_ms;
+                entry.anticheat.update(&self.config.anticheat, diff)
+            };
+            if let Some((action, reason, desync, dist)) = outcome {
+                if self.config.anticheat.log_data {
+                    self.log.out(
+                        Level::Basic,
+                        &format!(
+                            "MovementAnticheat data: DesyncMs {desync} DesyncDist {dist} Cheats {reason}"
+                        ),
+                    );
+                }
+                self.process_anticheat_action(id, &reason, action);
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_lines)] // session pump: dispatch + periodic work
     fn update_sessions(&mut self) {
+        self.anticheat_tick();
         // Undelivered-mail due notices
         // (`MasterPlayer::Update`).
         let now_unix = unix_now_i64();
@@ -14926,7 +15268,10 @@ impl World {
                     {
                         auction_packets.push((*id, packet));
                     }
-                    Dispatch::Execute if meta.handler_name == "HandleMovementOpcodes" => {
+                    Dispatch::Execute
+                        if meta.handler_name == "HandleMovementOpcodes"
+                            || meta.handler_name == "HandleSetActiveMoverOpcode" =>
+                    {
                         movement_packets.push((*id, packet));
                     }
                     Dispatch::Execute if ack_kind(meta.handler_name).is_some() => {

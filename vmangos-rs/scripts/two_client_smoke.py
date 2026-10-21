@@ -61,6 +61,7 @@ from phase3_scripted_login import Client, bench_password  # noqa: E402
 
 CMSG_CHAR_ENUM = 55
 SMSG_CHAR_ENUM = 59
+CMSG_SET_ACTIVE_MOVER = 618
 CMSG_PLAYER_LOGIN = 61
 CMSG_LOGOUT_REQUEST = 75
 SMSG_LOGOUT_COMPLETE = 77
@@ -240,6 +241,10 @@ def login_client(account: str, account_id: int, guid: int) -> tuple[Client, tupl
     map_id, x, y, z, orientation = struct.unpack("<Iffff", verify)
     if not any(op in (SMSG_UPDATE_OBJECT, SMSG_COMPRESSED_UPDATE_OBJECT) for op, _ in packets):
         raise AssertionError(f"{account}: no update burst in {[op for op, _ in packets]}")
+    # The real client confirms itself as mover on
+    # entering the world; movement packets are gated
+    # on it server-side.
+    client.send_packet(CMSG_SET_ACTIVE_MOVER, pack_guid(guid))
     print(f"LOGIN-OK account={account} guid={guid} map={map_id} pos=({x:.2f},{y:.2f},{z:.2f})")
     return client, (x, y, z, orientation)
 

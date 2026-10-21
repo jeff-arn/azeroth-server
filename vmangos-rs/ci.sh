@@ -72,6 +72,7 @@ if [ -n "${TEST_MYSQL_URL_WORLD:-}" ] && [ -n "${TEST_MYSQL_URL_CHARACTERS:-}" ]
   cargo test -p mangos-map --test live_ai -- --ignored
   cargo test -p mangos-map --test live_eventai -- --ignored
   cargo test -p mangos-map --test live_deadmines -- --ignored
+  cargo test -p mangos-map --test live_xp -- --ignored
 else
   echo "entity/map live env unset -- skipping live aggregate/map tests"
 fi

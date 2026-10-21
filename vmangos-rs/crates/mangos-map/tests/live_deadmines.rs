@@ -247,10 +247,13 @@ fn bench_deadmines_slice() {
                     item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
                     factions: mangos_world_data::reputations::FactionStore::default(),
                     areas: mangos_world_data::areas::AreaStore::default(),
+                    exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(
+                    ),
                     weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore {
                         spells: spell_entries,
+                        proc_events: std::collections::HashMap::new(),
                         tables: mangos_spells::load_spell_dbc_tables(std::path::Path::new(
                             &std::env::var("MANGOS_DBC_DIR").expect("MANGOS_DBC_DIR"),
                         ))

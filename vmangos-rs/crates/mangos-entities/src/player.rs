@@ -25,8 +25,8 @@
 
 use mangos_db::character_load::{
     ActionRow, AuraRow, BgDataRow, BoundInstanceRow, CharacterLoad, ForgottenSkillRow, HonorCpRow,
-    ItemLootRow, MailRow, MailedItemRow, QuestStatusRow, ReputationRow, SkillRow, SocialRow,
-    SpellCooldownRow, SpellRow,
+    InventoryRow, ItemLootRow, MailRow, MailedItemRow, QuestStatusRow, ReputationRow, SkillRow,
+    SocialRow, SpellCooldownRow, SpellRow,
 };
 use mangos_db::characters::AccountDataEntry;
 use mangos_guid::{HighGuid, ObjectGuid, TypeId};
@@ -77,6 +77,16 @@ const REST_STATE_RESTED: u8 = 0x01;
 
 const PLAYER_FLAGS_GHOST: u32 = 0x0000_0010;
 const PLAYER_FLAGS_RESTING: u32 = 0x0000_0020;
+/// `PLAYER_FLAGS_PARTIAL_PLAY_TIME` (`Player.h:330`).
+const PLAYER_FLAGS_PARTIAL_PLAY_TIME: u32 = 0x0000_1000;
+/// `PLAYER_FLAGS_NO_PLAY_TIME` (`Player.h:331`).
+const PLAYER_FLAGS_NO_PLAY_TIME: u32 = 0x0000_2000;
+/// `SKILL_FLAG_ALWAYS_MAX_VALUE` (`DBCEnums.h:176`,
+/// `SkillRaceClassInfo` flags).
+const SKILL_FLAG_ALWAYS_MAX_VALUE: u32 = 0x10;
+/// `GetConfigMaxSkillValue` tree default
+/// (`MaxSkillValue` config, 300).
+const MAX_SKILL_VALUE: u32 = 300;
 const PLAYER_FLAGS_PVP_DESIRED: u32 = 0x0000_0200;
 const PLAYER_FLAGS_HIDE_HELM: u32 = 0x0000_0400;
 const PLAYER_FLAGS_HIDE_CLOAK: u32 = 0x0000_0800;
@@ -236,6 +246,37 @@ pub fn capped_rest_bonus(value: f32, next_level_xp: u32, level: u32, max_level: 
     if value > max { max } else { value }
 }
 
+/// `CalculateTalentsPoints` (`Player.cpp:20549`) at
+/// the `Rate.Talent` 1.0 default: one point per level
+/// from 10.
+#[must_use]
+pub fn talent_points_for_level(level: u32) -> u32 {
+    if level < 10 { 0 } else { level - 9 }
+}
+
+/// One `SMSG_LEVELUP_INFO` payload (`GiveLevel`,
+/// `Player.cpp:3230`): deltas against the create-stat
+/// baseline of the previous level.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LevelUpInfo {
+    pub level: u32,
+    pub health_gain: u32,
+    /// Zero unless the class power is mana (fork
+    /// writes the mana delta only for `POWER_MANA`).
+    pub mana_gain: u32,
+    pub stat_gains: [i32; MAX_STATS],
+}
+
+/// What one [`Player::give_xp`] granted: the
+/// `SendLogXPGain` amounts plus each level gained.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct XpGainOutcome {
+    /// XP without the rested bonus.
+    pub given_xp: u32,
+    pub rest_xp: u32,
+    pub level_ups: Vec<LevelUpInfo>,
+}
+
 /// The Player aggregate.
 #[derive(Clone, Debug)]
 pub struct Player {
@@ -311,6 +352,9 @@ pub struct Player {
     /// sum (equipped prototypes' `Block`); the aura-fed
     /// part joins the shield-block aura handlers.
     pub shield_block_flat: f32,
+    /// Item-fed modifier aggregates retained for
+    /// aura-time derived-stat refreshes.
+    equipped: EquippedBonuses,
     /// `HaveOffhandWeapon` at materialize (gates the
     /// offhand damage-field writes exactly as in
     /// `UpdateAttackPowerAndDamage`).
@@ -348,6 +392,7 @@ pub fn mana_bonus_from_intellect(intellect: f32) -> f32 {
 /// weapon state, accumulated exactly as
 /// `_ApplyItemMods`/`_ApplyItemBonuses` do per equipped
 /// item (`Player.cpp:6916-7100`).
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct EquippedBonuses {
     /// `UNIT_MOD_STAT_*` `BASE_VALUE` per stat index.
     stat_base: [f32; MAX_STATS],
@@ -411,11 +456,23 @@ impl EquippedBonuses {
 /// durability > 0 with durability 0) contribute
 /// nothing, as in C++.
 fn equipped_bonuses(load: &CharacterLoad, items: Option<&ItemPrototypes>) -> EquippedBonuses {
+    equipped_bonuses_from_rows(&load.inventory, items)
+}
+
+/// The row-set form of [`equipped_bonuses`]: level-up
+/// recomputes from the retained inventory rows (items
+/// are DB-backed by the service layer, so the loaded
+/// rows remain the equipped set for stat purposes,
+/// exactly as at materialize).
+fn equipped_bonuses_from_rows(
+    inventory: &[InventoryRow],
+    items: Option<&ItemPrototypes>,
+) -> EquippedBonuses {
     let mut out = EquippedBonuses::default();
     let Some(items) = items else {
         return out;
     };
-    for inv in &load.inventory {
+    for inv in inventory {
         if inv.bag != 0 || inv.slot >= EQUIPMENT_SLOT_END {
             continue;
         }
@@ -582,6 +639,7 @@ impl Player {
             regen_timer_ms: 0,
             carry_health_regen: 0.0,
             shield_block_flat: 0.0,
+            equipped: EquippedBonuses::default(),
             has_offhand_weapon: false,
             saved: SavedBaseline {
                 spells: load.spells.clone(),
@@ -753,6 +811,25 @@ fn parse_u32_words(data: &str) -> Vec<u32> {
 const PLAYER_MAX_SKILLS: usize = 127;
 
 impl Player {
+    /// `LearnSpell` bookkeeping subset: record the
+    /// spell in the runtime spell set
+    /// (`deferred.spells`, persisted by the save
+    /// diff as a `character_spell` insert).
+    /// Returns true when newly learned. Dependent
+    /// spells (lower ranks, skill abilities) are
+    /// not expanded here.
+    pub fn learn_spell(&mut self, spell_id: u32) -> bool {
+        if self.deferred.spells.iter().any(|r| r.spell == spell_id) {
+            return false;
+        }
+        self.deferred.spells.push(SpellRow {
+            spell: spell_id,
+            active: 1,
+            disabled: 0,
+        });
+        true
+    }
+
     /// `_LoadSkills` (`Player.cpp:20285-20371`) field
     /// population: `PLAYER_SKILL_INFO_1_1` triplets
     /// (id, `MAKE_SKILL_VALUE(value, max)`, bonus 0) for
@@ -766,6 +843,14 @@ impl Player {
     /// tracking is kept. Without skill DBC inputs the
     /// rows are written verbatim.
     fn load_skill_fields(&mut self, inputs: &MaterializeInputs<'_>) {
+        self.write_skill_fields(inputs.skills);
+    }
+
+    /// Project `deferred.skills` into the
+    /// `PLAYER_SKILL_INFO_1_1` fields (the
+    /// [`Player::load_skill_fields`] body, also re-run
+    /// after a level-up skill-max update).
+    fn write_skill_fields(&mut self, skills: Option<&SkillDbc>) {
         let race = u32::from(self.unit.race());
         let class = u32::from(self.unit.class());
         // `GetSkillMaxForLevel` (`SpellCaster.h:320`).
@@ -778,7 +863,7 @@ impl Player {
             // C++ reads `GetUInt16` (truncating).
             #[allow(clippy::cast_possible_truncation)]
             let (mut value, mut max) = (row.value as u16, row.max as u16);
-            if let Some(dbc) = inputs.skills {
+            if let Some(dbc) = skills {
                 let Some(category) = dbc.category(row.skill) else {
                     continue;
                 };
@@ -1039,11 +1124,31 @@ impl Player {
             self.unit.create_mana = u32::from(info.basemana);
         }
         let bonuses = equipped_bonuses(load, inputs.item_prototypes);
-        self.apply_stat_bonuses(&bonuses);
-        // Max powers/health, then InitStatsForLevel's refill
-        // (health/mana/energy to max, rage clamped, focus and
-        // happiness zeroed) — restore_health_powers then
+        self.equipped = bonuses;
+        // Refill included; restore_health_powers then
         // overwrites with the saved values like LoadFromDB.
+        self.recompute_derived_stats(&bonuses, true);
+        // Pet-loyalty byte for rage/mana classes.
+        let power_type = self.unit.power_type();
+        if power_type == POWER_RAGE as u8 || power_type == POWER_MANA as u8 {
+            self.unit
+                .world
+                .object
+                .values_mut()
+                .set_byte(offsets::UNIT_FIELD_BYTES_1, 1, 0xEE);
+        }
+    }
+
+    /// `UpdateAllStats` + refill at the zero-aura
+    /// modifier defaults: derived stats from the item
+    /// bonuses, max health/powers, weapon state, then
+    /// health/mana/energy to max, rage clamped, focus
+    /// and happiness zeroed (the `InitStatsForLevel`
+    /// and `GiveLevel` tails are the same writes; both
+    /// call sites are alive-player contexts, matching
+    /// `GiveLevel`'s `IsAlive()` health gate).
+    fn recompute_derived_stats(&mut self, bonuses: &EquippedBonuses, seed_pos_neg: bool) {
+        self.apply_stat_bonuses(bonuses, seed_pos_neg);
         self.update_max_health(bonuses.health_base);
         for power in 0..MAX_POWERS {
             let base = if power == POWER_MANA {
@@ -1053,7 +1158,7 @@ impl Player {
             };
             self.update_max_power(power, base);
         }
-        self.apply_weapon_state(&bonuses);
+        self.apply_weapon_state(bonuses);
         let max_health = self.unit.max_health();
         self.unit.set_health(max_health);
         let max_mana = self.unit.max_power(POWER_MANA);
@@ -1066,15 +1171,26 @@ impl Player {
         }
         self.unit.set_power(POWER_FOCUS, 0);
         self.unit.set_power(POWER_HAPPINESS, 0);
-        // Pet-loyalty byte for rage/mana classes.
-        let power_type = self.unit.power_type();
-        if power_type == POWER_RAGE as u8 || power_type == POWER_MANA as u8 {
-            self.unit
-                .world
-                .object
-                .values_mut()
-                .set_byte(offsets::UNIT_FIELD_BYTES_1, 1, 0xEE);
+    }
+
+    /// The `HandleStatModifier` update dispatch for aura
+    /// stat changes: stat totals, max health/powers, and
+    /// weapon state from the retained item aggregates and
+    /// the live aura registers. No refill; shrunken
+    /// maxima clamp currents in the setters, as in C++.
+    pub fn refresh_derived_stats(&mut self) {
+        let bonuses = self.equipped;
+        self.apply_stat_bonuses(&bonuses, false);
+        self.update_max_health(bonuses.health_base);
+        for power in 0..MAX_POWERS {
+            let base = if power == POWER_MANA {
+                bonuses.mana_base
+            } else {
+                0.0
+            };
+            self.update_max_power(power, base);
         }
+        self.apply_weapon_state(&bonuses);
     }
 
     /// `UpdateMaxHealth` with the modifier groups at
@@ -1110,17 +1226,20 @@ impl Player {
     }
 
     /// The derived-stat writes from the accumulated
-    /// item bonuses: `UpdateStats` totals at identity
-    /// pct/total groups, the `ApplyStatBuffMod` display
-    /// halves (float fields), `UpdateArmor`, and
-    /// `UpdateResistances` (holy is written 0 in C++).
-    fn apply_stat_bonuses(&mut self, bonuses: &EquippedBonuses) {
+    /// item bonuses composed with the aura stat
+    /// registers (`UpdateStats` via `GetTotalStatValue`),
+    /// `UpdateArmor`, and `UpdateResistances` (holy is
+    /// written 0 in C++). The `ApplyStatBuffMod` display
+    /// halves are seeded from the item split only at
+    /// load (`seed_pos_neg`); aura handlers adjust them
+    /// incrementally afterwards, as in C++.
+    fn apply_stat_bonuses(&mut self, bonuses: &EquippedBonuses, seed_pos_neg: bool) {
         for i in 0..MAX_STATS {
-            let total = bonuses.stat_base[i] + self.unit.create_stats[i];
+            let total = self.unit.total_stat_value(i, bonuses.stat_base[i]);
             #[allow(clippy::cast_possible_truncation)] // C++ truncates identically
             self.unit.set_stat(i, total as i32);
         }
-        {
+        if seed_pos_neg {
             let v = self.unit.world.object.values_mut();
             for i in 0..MAX_STATS {
                 #[allow(clippy::cast_possible_truncation)]
@@ -1233,6 +1352,261 @@ impl Player {
         } else if self.rest_bonus <= 1.0 {
             v.set_byte(offsets::PLAYER_BYTES_2, 3, REST_STATE_NORMAL);
         }
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        v.set_u32(
+            offsets::PLAYER_REST_STATE_EXPERIENCE,
+            self.rest_bonus as u32,
+        );
+    }
+
+    /// `GetXPRestBonus` (`Player.cpp:8380`): consume up
+    /// to `xp` rested points (the total gain caps at
+    /// 200%).
+    fn xp_rest_bonus(&mut self, xp: u32, max_level: u32) -> u32 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let rested = (self.rest_bonus as u32).min(xp);
+        #[allow(clippy::cast_precision_loss)]
+        self.apply_rest_bonus(self.rest_bonus - rested as f32, max_level);
+        rested
+    }
+
+    /// `GiveXP` (`Player.cpp:3062`), returning what the
+    /// session must be told (`SendLogXPGain` amounts,
+    /// then one [`LevelUpInfo`] per level gained, in
+    /// fork send order); `None` when the fork returns
+    /// before `SendLogXPGain`. `is_kill` is the fork's
+    /// `victim != nullptr` (rest bonus applies to kill
+    /// XP only). Fork deltas: the personal XP rate is
+    /// its constructor default −1 (no loader sets it in
+    /// the Rust runtime either, so the multiply is the
+    /// same no-op), and trial restrictions are
+    /// session-side and unmodeled.
+    /// The `PLAYER_EXPLORED_ZONES_1 + flag/32` bit test
+    /// from `CheckAreaExploreAndOutdoor` (out-of-range
+    /// flags read as explored so callers skip them like
+    /// the fork's error return).
+    #[must_use]
+    pub fn has_explored_flag(&self, area_flag: u16) -> bool {
+        let offset = u32::from(area_flag) / 32;
+        if offset >= EXPLORED_ZONES_SIZE {
+            return true;
+        }
+        let word = self
+            .unit
+            .world
+            .object
+            .values()
+            .get_u32(offsets::PLAYER_EXPLORED_ZONES_1 + offset as u16);
+        word & (1u32 << (u32::from(area_flag) % 32)) != 0
+    }
+
+    /// Sets the explored bit for `area_flag`
+    /// (`SetUInt32Value(PLAYER_EXPLORED_ZONES_1 +
+    /// offset, curr | val)`).
+    pub fn set_explored_flag(&mut self, area_flag: u16) {
+        let offset = u32::from(area_flag) / 32;
+        if offset >= EXPLORED_ZONES_SIZE {
+            return;
+        }
+        let index = offsets::PLAYER_EXPLORED_ZONES_1 + offset as u16;
+        let values = self.unit.world.object.values_mut();
+        let word = values.get_u32(index);
+        values.set_u32(index, word | (1u32 << (u32::from(area_flag) % 32)));
+    }
+
+    pub fn give_xp(
+        &mut self,
+        mut xp: u32,
+        is_kill: bool,
+        infos: &PlayerInfos,
+        items: Option<&ItemPrototypes>,
+        skills: Option<&SkillDbc>,
+    ) -> Option<XpGainOutcome> {
+        {
+            let flags = self
+                .unit
+                .world
+                .object
+                .values()
+                .get_u32(offsets::PLAYER_FLAGS);
+            // SUPPORTED_CLIENT_BUILD 5875 > 1.7.1.
+            if flags & PLAYER_FLAGS_NO_PLAY_TIME != 0 {
+                return None;
+            }
+            if flags & PLAYER_FLAGS_PARTIAL_PLAY_TIME != 0 {
+                xp /= 2;
+            }
+        }
+        if xp < 1 || !self.unit.is_alive() {
+            return None;
+        }
+        let max_level = infos.max_player_level();
+        let mut level = self.unit.level();
+        if level >= max_level {
+            return None;
+        }
+        let rest_xp = if is_kill {
+            self.xp_rest_bonus(xp, max_level)
+        } else {
+            0
+        };
+        let (mut new_xp, mut next_lvl_xp) = {
+            let v = self.unit.world.object.values();
+            (
+                v.get_u32(offsets::PLAYER_XP) + xp + rest_xp,
+                v.get_u32(offsets::PLAYER_NEXT_LEVEL_XP),
+            )
+        };
+        let mut level_ups = Vec::new();
+        // A zero threshold means an empty xp table; the
+        // fork would spin, real data never does this.
+        while next_lvl_xp > 0 && new_xp >= next_lvl_xp && level < max_level {
+            new_xp -= next_lvl_xp;
+            level_ups.push(self.give_level(level + 1, infos, items, skills));
+            level = self.unit.level();
+            next_lvl_xp = self
+                .unit
+                .world
+                .object
+                .values()
+                .get_u32(offsets::PLAYER_NEXT_LEVEL_XP);
+        }
+        self.unit
+            .world
+            .object
+            .values_mut()
+            .set_u32(offsets::PLAYER_XP, new_xp);
+        Some(XpGainOutcome {
+            given_xp: xp,
+            rest_xp,
+            level_ups,
+        })
+    }
+
+    /// `GiveLevel` (`Player.cpp:3115`) minus its
+    /// logging/GM-alert and battleground-queue sides
+    /// (BGs are out of this goal's scope) and the pet
+    /// level sync (no pet runtime yet; Slice 3). The
+    /// caller owns `PLAYER_XP`, as in the fork.
+    /// Talent points move by the `CalculateTalentsPoints`
+    /// delta: the used-point count is untracked until
+    /// a talent DBC store and learn handler land, so
+    /// the loaded free/used split is preserved rather
+    /// than recomputed (`Rate.Talent` at its 1.0
+    /// default, like the other unwired `Rate.*`).
+    fn give_level(
+        &mut self,
+        level: u32,
+        infos: &PlayerInfos,
+        items: Option<&ItemPrototypes>,
+        skills: Option<&SkillDbc>,
+    ) -> LevelUpInfo {
+        let old_level = self.unit.level();
+        let race = u32::from(self.unit.race());
+        let class = u32::from(self.unit.class());
+        let level_info = infos.level_info(race, class, level);
+        let class_info = infos.class_level_info(class, level);
+        // Deltas against the create baseline, computed
+        // before it is re-based (fork sends the packet
+        // before applying the new level).
+        let create_stamina = self.unit.create_stats[STAT_STAMINA];
+        let create_intellect = self.unit.create_stats[STAT_INTELLECT];
+        #[allow(clippy::cast_possible_wrap)]
+        let health_gain = match (level_info, class_info) {
+            (Some(info), Some(class)) => {
+                (i32::from(class.basehealth) - self.unit.create_health as i32)
+                    + (health_bonus_from_stamina(f32::from(info.stats[STAT_STAMINA]))
+                        - health_bonus_from_stamina(create_stamina)) as i32
+            }
+            _ => 0,
+        };
+        #[allow(clippy::cast_possible_wrap)]
+        let mana_gain = match (level_info, class_info) {
+            (Some(info), Some(class)) => {
+                (i32::from(class.basemana) - self.unit.create_mana as i32)
+                    + (mana_bonus_from_intellect(f32::from(info.stats[STAT_INTELLECT]))
+                        - mana_bonus_from_intellect(create_intellect)) as i32
+            }
+            _ => 0,
+        };
+        let mut stat_gains = [0i32; MAX_STATS];
+        if let Some(info) = level_info {
+            for (i, gain) in stat_gains.iter_mut().enumerate() {
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    *gain = i32::from(info.stats[i]) - self.unit.create_stats[i] as i32;
+                }
+            }
+        }
+        {
+            let v = self.unit.world.object.values_mut();
+            v.set_u32(offsets::PLAYER_NEXT_LEVEL_XP, infos.xp_for_level(level));
+            v.set_u32(offsets::UNIT_FIELD_LEVEL, level);
+            let points = v.get_u32(offsets::PLAYER_CHARACTER_POINTS1)
+                + talent_points_for_level(level)
+                - talent_points_for_level(old_level);
+            v.set_u32(offsets::PLAYER_CHARACTER_POINTS1, points);
+        }
+        self.played_time_level = 0;
+        self.update_skills_for_level(skills);
+        if let Some(info) = level_info {
+            for i in 0..MAX_STATS {
+                self.unit.create_stats[i] = f32::from(info.stats[i]);
+            }
+        }
+        if let Some(class) = class_info {
+            self.unit.create_health = u32::from(class.basehealth);
+            self.unit.create_mana = u32::from(class.basemana);
+        }
+        let bonuses = equipped_bonuses_from_rows(&self.saved.inventory, items);
+        self.equipped = bonuses;
+        self.recompute_derived_stats(&bonuses, false);
+        LevelUpInfo {
+            level,
+            #[allow(clippy::cast_sign_loss)]
+            health_gain: health_gain as u32,
+            mana_gain: if self.unit.power_type() == POWER_MANA as u8 {
+                #[allow(clippy::cast_sign_loss)]
+                {
+                    mana_gain as u32
+                }
+            } else {
+                0
+            },
+            stat_gains,
+        }
+    }
+
+    /// `UpdateSkillsForLevel` (`Player.cpp:5613`) over
+    /// the retained skill rows: level-range skills get
+    /// the new `level * 5` max (always-max race/class
+    /// skills also gain the value; `AlwaysMaxSkill`
+    /// config is at its false default), then the
+    /// fields are re-projected.
+    fn update_skills_for_level(&mut self, skills: Option<&SkillDbc>) {
+        if let Some(dbc) = skills {
+            let race = u32::from(self.unit.race());
+            let class = u32::from(self.unit.class());
+            let max_skill = self.unit.level() * 5;
+            for row in &mut self.deferred.skills {
+                let Some(category) = dbc.category(row.skill) else {
+                    continue;
+                };
+                let Some(rc) = dbc.race_class_info(row.skill, race, class) else {
+                    continue;
+                };
+                if dbc.range_type(category, rc) != SkillRange::Level || row.max == 1 {
+                    continue;
+                }
+                if rc.flags & SKILL_FLAG_ALWAYS_MAX_VALUE != 0 {
+                    row.value = max_skill;
+                    row.max = max_skill;
+                } else if row.max != MAX_SKILL_VALUE {
+                    row.max = max_skill;
+                }
+            }
+        }
+        self.write_skill_fields(skills);
     }
 
     /// Offline rest accrual (`LoadFromDB`,

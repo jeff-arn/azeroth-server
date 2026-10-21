@@ -1430,6 +1430,7 @@ fn read_auction_house_dbc(
 
 /// The world-DB half of the Phase 4 stores (one actor call).
 #[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_lines)]
 fn load_world_db_stores(
     databases: &Databases,
     wow_patch: u32,
@@ -1446,6 +1447,7 @@ fn load_world_db_stores(
         mangos_world_data::item_prototype::ItemPrototypesLite,
         mangos_world_data::reputations::FactionStore,
         mangos_world_data::areas::AreaStore,
+        mangos_world_data::exploration::ExplorationBaseXp,
         mangos_world_data::map_template::MapStore,
         mangos_world_data::area_trigger::AreaTriggerStore,
         mangos_world_data::weather::WeatherChanceStore,
@@ -1502,6 +1504,7 @@ fn load_world_db_stores(
         let items = load_item_prototypes_lite(conn, wow_patch)?;
         let factions = load_factions(conn)?;
         let areas = load_areas(conn, wow_patch)?;
+        let exploration_base_xp = mangos_world_data::exploration::load_exploration_base_xp(conn)?;
         let maps = load_map_templates(conn, wow_patch, reset_rate)?;
         let area_triggers = load_area_triggers(conn, wow_patch, &|m| maps.known(m))?;
         let quests = load_quest_templates_lite(conn)?;
@@ -1547,6 +1550,7 @@ fn load_world_db_stores(
             items,
             factions,
             areas,
+            exploration_base_xp,
             maps,
             area_triggers,
             weather_chances,
@@ -1741,6 +1745,7 @@ fn load_phase4_stores(
         items,
         factions,
         areas,
+        exploration_base_xp,
         maps,
         area_triggers,
         weather_chances,
@@ -1781,6 +1786,17 @@ fn load_phase4_stores(
         }
         Err(e) => {
             log.out(Level::Error, &format!("player info load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    let proc_events = match databases
+        .world
+        .actor
+        .call(|conn| mangos_world_data::proc_events::load_spell_proc_events(conn, 5875))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            log.out(Level::Error, &format!("spell proc event load failed: {e}"));
             return Err(ExitCode::from(ERROR_EXIT_CODE));
         }
     };
@@ -1866,6 +1882,7 @@ fn load_phase4_stores(
         spells: mangos_spells::SpellStore {
             spells: spell_entries,
             tables: spell_tables,
+            proc_events,
         },
         creature_spells,
         scripts: script_stores,
@@ -1878,6 +1895,7 @@ fn load_phase4_stores(
         area_triggers,
         quests,
         tavern_triggers,
+        exploration_base_xp,
     });
 
     let respawn_times = load_persisted_respawns(databases, &stores, map_ids, log)?;

@@ -148,6 +148,8 @@ fn bench_creatures_move() {
                     item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
                     factions: mangos_world_data::reputations::FactionStore::default(),
                     areas: mangos_world_data::areas::AreaStore::default(),
+                    exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(
+                    ),
                     weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore::default(),
