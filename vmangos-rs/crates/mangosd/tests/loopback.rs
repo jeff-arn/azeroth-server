@@ -233,6 +233,7 @@ impl CharQueries for FakeCharQueries {
             mails: loopback_mail_seed(),
             mailed_items: vec![],
             forgotten_skills: vec![],
+            pets: Vec::new(),
         }))
     }
 
@@ -466,6 +467,63 @@ fn loopback_petition_seed() -> mangos_db::petition::LoadedPetitions {
             account_id: 99,
         }],
         next_petition_id: 6,
+    }
+}
+
+struct FakePetStore;
+
+impl mangosd::world_actor::PetStore for FakePetStore {
+    fn save_pet(&self, _row: mangos_db::pet::PetRow, _mode: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn delete_pet(&self, _pet_id: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn promote_pet(&self, _owner_low: u32, _pet_id: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn rename_pet(
+        &self,
+        _owner_low: u32,
+        _pet_id: u32,
+        _name: String,
+    ) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+}
+
+struct FakeQuestRewardStore;
+
+impl mangosd::world_actor::QuestRewardStore for FakeQuestRewardStore {
+    fn create_reward_item(
+        &self,
+        _owner_low: u32,
+        _item_id: u32,
+        _count: u32,
+        _bag: u32,
+        _slot: u32,
+        _creator_low: u32,
+    ) -> Result<u32, mangos_db::DbError> {
+        Ok(990_001)
+    }
+
+    fn set_item_count(&self, _item_guid: u32, _count: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn set_item_charges(
+        &self,
+        _item_guid: u32,
+        _charges: String,
+    ) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn set_item_flags(&self, _item_guid: u32, _flags: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
     }
 }
 
@@ -913,6 +971,8 @@ async fn start_server(backend: Arc<FakeBackend>) -> u16 {
             petition: Arc::new(FakePetitionStore),
             initial_petitions: loopback_petition_seed(),
             mail: Arc::new(FakeMailStore),
+            pets: Arc::new(FakePetStore),
+            quest_reward: Arc::new(FakeQuestRewardStore),
             trade: Arc::new(FakeTradeStore),
             auction: Arc::new(FakeAuctionStore),
             initial_auctions: mangos_db::auction::LoadedAuctions::default(),

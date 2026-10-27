@@ -433,6 +433,8 @@ pub struct MoveFacts {
     /// Server-side transport presence (`m_transport`).
     pub on_transport_server: bool,
     pub being_teleported: bool,
+    /// `Player::IsLaunched` (knockback in flight).
+    pub launched: bool,
     pub spline_finalized: bool,
     /// Undercity/Deeprun/Thousand Needles lift areas.
     pub in_transport_area: bool,
@@ -456,6 +458,10 @@ pub struct MovementAnticheat {
     /// jump/land in the movement handler).
     pub jump_initial_speed: f32,
     knock_back: bool,
+    /// `Player::m_launched` (session-side mirror):
+    /// set by `on_knock_back`, cleared on fall-end
+    /// opcodes by the movement handler.
+    pub launched: bool,
     jump_count: u32,
     jump_flag_count: u32,
     jump_flag_time: u32,
@@ -528,6 +534,18 @@ impl MovementAnticheat {
         self.jump_count = 0;
         self.jump_flag_count = 0;
         self.jump_flag_time = 0;
+    }
+
+    /// `MovementAnticheat::OnKnockBack` +
+    /// `Player::SetLaunched(true)` +
+    /// `Unit::SetJumpInitialSpeed`: launched state
+    /// with jump counters reset.
+    pub fn on_knock_back(&mut self, vertical_speed: f32) {
+        self.knock_back = true;
+        self.launched = true;
+        self.jump_flag_count = 0;
+        self.jump_flag_time = 0;
+        self.jump_initial_speed = vertical_speed;
     }
 
     #[must_use]
@@ -927,6 +945,12 @@ impl MovementAnticheat {
         last: &MovementInfo,
         info: &MovementInfo,
     ) -> bool {
+        // `CheckTeleport` head: launched or being
+        // teleported players pass wholesale (the
+        // taxi arm has no system behind it yet).
+        if facts.launched || facts.being_teleported {
+            return false;
+        }
         // IsTeleportAllowed3D.
         if !facts.on_transport_server && !info.flags.has(MovementFlags::ON_TRANSPORT) {
             let d = ((facts.server_pos.0 - info.pos.x).powi(2)

@@ -262,6 +262,7 @@ fn load() -> CharacterLoad {
         mails: vec![],
         mailed_items: vec![],
         forgotten_skills: vec![],
+        pets: Vec::new(),
     }
 }
 

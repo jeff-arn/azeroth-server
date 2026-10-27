@@ -16,7 +16,7 @@ use mangos_world_data::item_prototype::{ItemPrototype, ItemPrototypes};
 use mangos_world_data::player_info::{
     PlayerClassLevelInfo, PlayerCreateInfo, PlayerInfos, PlayerLevelInfo,
 };
-use mangos_world_data::quest_template::{QuestTemplateLite, QuestTemplatesLite};
+use mangos_world_data::quest_template::{QuestTemplate, QuestTemplates};
 
 const NOW: u64 = 1_700_000_000;
 
@@ -131,22 +131,28 @@ fn quest_row(quest: u32, status: i32, rewarded: u8, timer: u64) -> QuestStatusRo
     }
 }
 
-fn templates() -> QuestTemplatesLite {
-    let deliver = QuestTemplateLite {
+fn templates() -> QuestTemplates {
+    let deliver = QuestTemplate {
+        entry: 100,
         req_item_ids: [182, 0, 0, 0],
         req_item_counts: [4, 0, 0, 0],
-        limit_time: 0,
+        ..QuestTemplate::default()
     };
-    let plain = QuestTemplateLite {
-        req_item_ids: [0; 4],
-        req_item_counts: [0; 4],
-        limit_time: 0,
+    let plain = QuestTemplate {
+        entry: 101,
+        ..QuestTemplate::default()
     };
-    let timed = QuestTemplateLite {
+    let timed = QuestTemplate {
+        entry: 102,
         limit_time: 600,
-        ..plain
+        ..QuestTemplate::default()
     };
-    QuestTemplatesLite::from_entries([(100, deliver), (101, plain), (102, timed), (103, timed)])
+    let timed2 = QuestTemplate {
+        entry: 103,
+        limit_time: 600,
+        ..QuestTemplate::default()
+    };
+    QuestTemplates::from_entries([deliver, plain, timed, timed2])
 }
 
 fn load() -> CharacterLoad {
@@ -196,6 +202,7 @@ fn load() -> CharacterLoad {
         mails: vec![],
         mailed_items: vec![],
         forgotten_skills: vec![],
+        pets: Vec::new(),
     }
 }
 

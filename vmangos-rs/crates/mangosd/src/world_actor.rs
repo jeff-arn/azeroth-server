@@ -250,6 +250,8 @@ pub struct WorldDeps {
     pub initial_petitions: mangos_db::petition::LoadedPetitions,
     /// Mail service (Phase 5 Slice B.5).
     pub mail: Arc<dyn MailStore>,
+    /// Quest reward item rows (Tier 1 Slice 1b).
+    pub quest_reward: Arc<dyn QuestRewardStore>,
     /// Trade item-move service (Phase 5 Slice B.6).
     pub trade: Arc<dyn TradeStore>,
     /// Auction persistence (Phase 5 Slice B.7).
@@ -275,6 +277,8 @@ pub struct WorldDeps {
     pub ah_bot: Arc<dyn AhBotStore>,
     /// Boot-loaded AH bot data, consumed at spawn.
     pub initial_ah_bot: InitialAhBot,
+    /// Pet persistence (Tier 1 Slice 2).
+    pub pets: Arc<dyn PetStore>,
     /// Instance binding persistence.
     pub instance: Arc<dyn InstanceStore>,
     /// Boot-loaded instances + binds, consumed at spawn.
@@ -604,6 +608,52 @@ pub trait PetitionStore: Send + Sync {
     ///
     /// Returns [`DbError`] on driver failure.
     fn is_reserved_name(&self, name: &str) -> Result<bool, DbError>;
+}
+
+/// Quest reward service: the DB-row half of
+/// `StoreNewItem` / `DestroyItemCount` for quest
+/// turn-in rewards (Tier 1 Slice 1b). Synchronous
+/// because `RewardQuest` sequences grants and the
+/// required-item destruction in one handler.
+pub trait QuestRewardStore: Send + Sync {
+    /// Creates one reward item stack at the given
+    /// inventory position; returns the new item guid.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn create_reward_item(
+        &self,
+        owner_low: u32,
+        item_id: u32,
+        count: u32,
+        bag: u32,
+        slot: u32,
+        creator_low: u32,
+    ) -> Result<u32, DbError>;
+
+    /// Sets a stack count (0 deletes both rows).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn set_item_count(&self, item_guid: u32, count: u32) -> Result<(), DbError>;
+
+    /// Persists one item's charges text
+    /// (`TakeCastItem` write-back).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn set_item_charges(&self, item_guid: u32, charges: String) -> Result<(), DbError>;
+
+    /// Persists one item's dynamic flags
+    /// (bind-on-use stamp).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn set_item_flags(&self, item_guid: u32, flags: u32) -> Result<(), DbError>;
 }
 
 /// Mail service: the `mail`-family statements, item
@@ -957,6 +1007,41 @@ pub trait SocialStore: Send + Sync {
         friend_low: u32,
         write: SocialWrite,
     ) -> Result<(), DbError>;
+}
+
+/// Characters-DB pet service (Tier 1 Slice 2): the
+/// `character_pet` writes `Pet::SavePetToDB` /
+/// `DeleteFromDB` / load promotion / rename issue at
+/// the fork's trigger points. The map produces row
+/// snapshots; statement choice lives in `mangos_db::pet`.
+pub trait PetStore: Send + Sync {
+    /// `Pet::SavePetToDB` (`mode` = slot to write).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn save_pet(&self, row: mangos_db::pet::PetRow, mode: u32) -> Result<(), DbError>;
+
+    /// `Pet::DeleteFromDB`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn delete_pet(&self, pet_id: u32) -> Result<(), DbError>;
+
+    /// The `LoadPetFromDB` slot-promotion UPDATE pair.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn promote_pet(&self, owner_low: u32, pet_id: u32) -> Result<(), DbError>;
+
+    /// The `HandlePetRename` name UPDATE.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn rename_pet(&self, owner_low: u32, pet_id: u32, name: String) -> Result<(), DbError>;
 }
 
 /// Login-DB writes the world performs at admission
@@ -1771,6 +1856,783 @@ fn write_guid(writer: &mut PacketWriter, guid: ObjectGuid) {
     writer.write_u64_le(guid.raw());
 }
 
+// ---- Tier 1 Slice 1 quest checks + packets ----
+// Fork anchors: Objects/Player.cpp Satisfy*/Can*
+// family, GossipDef.cpp builders. Status ids:
+// QUEST_STATUS NONE 0, COMPLETE 1, UNAVAILABLE 2,
+// INCOMPLETE 3, AVAILABLE 4, FAILED 5.
+
+use mangos_world_data::quest_template::{QuestTemplate, QuestTemplates};
+
+const DIALOG_STATUS_NONE: u8 = 0;
+const DIALOG_STATUS_UNAVAILABLE: u8 = 1;
+const DIALOG_STATUS_CHAT: u8 = 2;
+const DIALOG_STATUS_INCOMPLETE: u8 = 3;
+const DIALOG_STATUS_REWARD_REP: u8 = 4;
+const DIALOG_STATUS_AVAILABLE: u8 = 5;
+const DIALOG_STATUS_REWARD2: u8 = 7;
+
+const QUEST_STATUS_COMPLETE: i32 = 1;
+const QUEST_STATUS_INCOMPLETE: i32 = 3;
+
+// Fork config defaults (`World.cpp` setConfig);
+// the `Quests.*HideDiff` keys are not read yet.
+const QUEST_LOW_LEVEL_HIDE_DIFF: u32 = 4;
+const QUEST_HIGH_LEVEL_HIDE_DIFF: u32 = 7;
+
+fn quest_rewarded(player: &Player, quest_id: u32) -> bool {
+    player.quest_row(quest_id).is_some_and(|r| r.rewarded != 0)
+}
+
+fn quest_standing(player: &Player, faction: u32) -> i32 {
+    player
+        .deferred
+        .reputation
+        .iter()
+        .find(|r| r.faction == faction)
+        .map_or(0, |r| r.standing)
+}
+
+/// `Player::SendEquipError` (`Player.cpp:11464`):
+/// result byte alone for OK, else the required
+/// level (level errors only), two item GUIDs, and
+/// a zero byte.
+fn equip_error_packet(result: u8, item: ObjectGuid, required_level: u32) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    writer.write_u8(result);
+    if result != 0 {
+        if result == 1 {
+            writer.write_u32_le(required_level);
+        }
+        write_guid(&mut writer, item);
+        write_guid(&mut writer, ObjectGuid::EMPTY);
+        writer.write_u8(0);
+    }
+    let mut packet = WorldPacket::new(opcode_id::SMSG_INVENTORY_CHANGE_FAILURE);
+    packet.take_writer(writer);
+    packet
+}
+
+/// `ReputationMgr::PointsInRank`.
+const POINTS_IN_RANK: [i32; 8] = [36000, 3000, 3000, 3000, 6000, 12000, 21000, 1000];
+
+/// `ReputationMgr::GetRank` over the baseline:
+/// base reputation for the player's race/class fit
+/// plus standing, through `ReputationToRank`.
+fn reputation_rank(
+    player: &Player,
+    factions: &mangos_world_data::reputations::FactionStore,
+    faction: u32,
+) -> u32 {
+    let Some(entry) = factions.get(faction) else {
+        return 3; // unknown faction: reputation 0 -> Neutral
+    };
+    let race_mask = 1u32 << u32::from(player.unit.race().saturating_sub(1));
+    let class_mask = 1u32 << u32::from(player.unit.class().saturating_sub(1));
+    let base = entry
+        .index_fit_to(race_mask, class_mask)
+        .map_or(0, |idx| entry.base_values[idx]);
+    let reputation = base + quest_standing(player, faction);
+    let mut limit = 43_000i32; // Reputation_Cap + 1
+    for rank in (0..8u32).rev() {
+        limit -= POINTS_IN_RANK[rank as usize];
+        if reputation >= limit {
+            return rank;
+        }
+    }
+    0
+}
+
+/// `Player::GetQuestLevelForPlayer`.
+fn quest_level_for_player(q: &QuestTemplate, player_level: u32) -> u32 {
+    if q.quest_level > 0 {
+        q.quest_level
+    } else {
+        player_level
+    }
+}
+
+/// The non-status, non-level `Satisfy*` gates shared
+/// by `CanSeeStartQuest` (class, race, skill,
+/// exclusive group, reputation, previous-quest and
+/// breadcrumb chains; `SatisfyQuestCondition` has
+/// no condition store and reads true).
+fn quest_satisfy_gates(player: &Player, q: &QuestTemplate, templates: &QuestTemplates) -> bool {
+    if q.exclusive_group != 0
+        && templates.iter().any(|other| {
+            other.exclusive_group == q.exclusive_group
+                && other.entry != q.entry
+                && (player.quest_status(other.entry) == QUEST_STATUS_INCOMPLETE
+                    || player.quest_status(other.entry) == QUEST_STATUS_COMPLETE
+                    || quest_rewarded(player, other.entry))
+        })
+    {
+        return false;
+    }
+    if !quest_satisfy_prev(player, q, templates) {
+        return false;
+    }
+    if q.breadcrumb_for_quest_id != 0
+        && (player.quest_status(q.breadcrumb_for_quest_id) != 0
+            || quest_rewarded(player, q.breadcrumb_for_quest_id))
+    {
+        return false;
+    }
+    if q.required_classes != 0
+        && q.required_classes & (1u32 << (player.unit.class().saturating_sub(1))) == 0
+    {
+        return false;
+    }
+    if q.required_races != 0
+        && q.required_races & (1u32 << (player.unit.race().saturating_sub(1))) == 0
+    {
+        return false;
+    }
+    if q.required_skill != 0 {
+        let value = player
+            .deferred
+            .skills
+            .iter()
+            .find(|s| s.skill == q.required_skill)
+            .map_or(0, |s| s.value);
+        if value < q.required_skill_value {
+            return false;
+        }
+    }
+    if q.required_min_rep_faction != 0
+        && quest_standing(player, q.required_min_rep_faction) < q.required_min_rep_value
+    {
+        return false;
+    }
+    if q.required_max_rep_faction != 0
+        && quest_standing(player, q.required_max_rep_faction) >= q.required_max_rep_value
+    {
+        return false;
+    }
+    true
+}
+
+fn quest_satisfy_prev(player: &Player, q: &QuestTemplate, templates: &QuestTemplates) -> bool {
+    // Single-Value prev-chain subset: the fork
+    // derives prevQuests from PrevQuestId plus
+    // NextQuestInChain back-references; the
+    // back-reference set is rebuilt here by scan.
+    let mut prev_ids: Vec<i32> = Vec::new();
+    if q.prev_quest_id != 0 {
+        prev_ids.push(q.prev_quest_id);
+    }
+    for other in templates.iter() {
+        if other.next_quest_in_chain == q.entry && other.entry != q.entry {
+            #[allow(clippy::cast_possible_wrap)]
+            prev_ids.push(other.entry as i32);
+        }
+    }
+    if prev_ids.is_empty() {
+        return true;
+    }
+    // Multiple signed ids require one from each
+    // sign group; single-value rows reduce to the
+    // fork's PrevQuestId rule.
+    let mut have_positive = false;
+    let mut need_positive = false;
+    let mut have_negative = false;
+    let mut need_negative = false;
+    for prev in prev_ids {
+        if prev > 0 {
+            need_positive = true;
+            #[allow(clippy::cast_sign_loss)]
+            let id = prev as u32;
+            if player.quest_status(id) == QUEST_STATUS_COMPLETE || quest_rewarded(player, id) {
+                have_positive = true;
+            }
+        } else {
+            need_negative = true;
+            #[allow(clippy::cast_sign_loss)]
+            let id = prev.unsigned_abs();
+            if !quest_rewarded(player, id) {
+                have_negative = true;
+            }
+        }
+    }
+    (!need_positive || have_positive) && (!need_negative || have_negative)
+}
+
+/// `Player::CanTakeQuest` (+ `CanAddQuest` log and
+/// timed arms). `reason` receives the fork
+/// `INVALIDREASON_*` on failure. Skill/condition
+/// systems read the loaded rows; the scripted
+/// `CanTakeQuest` override and group-share timer
+/// escort arm are unmodeled.
+#[allow(clippy::too_many_lines)]
+fn quest_can_take(
+    player: &Player,
+    q: &QuestTemplate,
+    templates: &QuestTemplates,
+    skip_status: bool,
+    reason: &mut u32,
+) -> bool {
+    let level = player.unit.level();
+    // SatisfyQuestStatus (+ repeatable); skipped
+    // whole under the fork's `skipStatusCheck`
+    // (the auto-complete arm of `CanRewardQuest`).
+    if !skip_status {
+        let status = player.quest_status(q.entry);
+        if !(status == 0 || status == 4 || (status == QUEST_STATUS_COMPLETE && q.is_repeatable())) {
+            *reason = 13; // ALREADY_ON (in-quest/ineligible read)
+            return false;
+        }
+        if quest_rewarded(player, q.entry) && !q.is_repeatable() {
+            *reason = 2;
+            return false;
+        }
+    }
+    // SatisfyQuestExclusiveGroup.
+    if q.exclusive_group != 0 {
+        let taken = templates.iter().any(|other| {
+            other.exclusive_group == q.exclusive_group
+                && other.entry != q.entry
+                && (player.quest_status(other.entry) == QUEST_STATUS_INCOMPLETE
+                    || player.quest_status(other.entry) == QUEST_STATUS_COMPLETE
+                    || quest_rewarded(player, other.entry))
+        });
+        if taken {
+            *reason = 2;
+            return false;
+        }
+    }
+    if !quest_satisfy_prev(player, q, templates) {
+        *reason = 2;
+        return false;
+    }
+    if q.breadcrumb_for_quest_id != 0
+        && (player.quest_status(q.breadcrumb_for_quest_id) != 0
+            || quest_rewarded(player, q.breadcrumb_for_quest_id))
+    {
+        *reason = 2;
+        return false;
+    }
+    // Class / race (fork masks: 1 << (id - 1)).
+    if q.required_classes != 0
+        && q.required_classes & (1u32 << (player.unit.class().saturating_sub(1))) == 0
+    {
+        *reason = 2;
+        return false;
+    }
+    if q.required_races != 0
+        && q.required_races & (1u32 << (player.unit.race().saturating_sub(1))) == 0
+    {
+        *reason = 6; // WRONG_RACE
+        return false;
+    }
+    if !(q.min_level == 0 || level >= q.min_level) {
+        *reason = 1; // FAILED_LOW_LEVEL
+        return false;
+    }
+    if q.quest_level != 0 && level < q.quest_level.saturating_sub(4) {
+        *reason = 1;
+        return false;
+    }
+    if q.max_level != 0 && level > q.max_level {
+        *reason = 2;
+        return false;
+    }
+    if q.required_skill != 0 {
+        let value = player
+            .deferred
+            .skills
+            .iter()
+            .find(|s| s.skill == q.required_skill)
+            .map_or(0, |s| s.value);
+        if value < q.required_skill_value {
+            *reason = 2;
+            return false;
+        }
+    }
+    if q.required_min_rep_faction != 0
+        && quest_standing(player, q.required_min_rep_faction) < q.required_min_rep_value
+    {
+        *reason = 2;
+        return false;
+    }
+    if q.required_max_rep_faction != 0
+        && quest_standing(player, q.required_max_rep_faction) >= q.required_max_rep_value
+    {
+        *reason = 2;
+        return false;
+    }
+    // No required-money gate at take time: the fork
+    // checks the purse only in `CanRewardQuest`.
+    // CanAddQuest: only one timed quest at a time.
+    if q.limit_time != 0 && !player.quest_timers.is_empty() {
+        *reason = 12; // ONLY_ONE_TIMED
+        return false;
+    }
+    true
+}
+
+/// `Player::CanRewardQuest` (both overloads; the
+/// `msg` error packets are dropped except the
+/// required-money arm, which the fork sends
+/// unconditionally — it surfaces here as
+/// `*reason = 22` for the caller to emit).
+/// Auto-complete quests gate on
+/// `CanTakeQuest(skipStatusCheck)`, normal quests
+/// need status COMPLETE; already-rewarded or
+/// missing deliver items fail. The reward
+/// overload's item-space check is unmodeled (the
+/// DB-row grant drops on a full backpack), and an
+/// empty choice slot passes, as in the fork.
+fn quest_can_reward(
+    player: &Player,
+    q: &QuestTemplate,
+    templates: &QuestTemplates,
+    reason: &mut u32,
+) -> bool {
+    if q.is_auto_complete() {
+        if !quest_can_take(player, q, templates, true, &mut 0) {
+            return false;
+        }
+    } else if player.quest_status(q.entry) != QUEST_STATUS_COMPLETE {
+        return false;
+    }
+    if quest_rewarded(player, q.entry) {
+        return false;
+    }
+    if q.is_deliver() {
+        for i in 0..4 {
+            if q.req_item_counts[i] != 0
+                && player.quest_item_count(q.req_item_ids[i]) < q.req_item_counts[i]
+            {
+                return false;
+            }
+        }
+    }
+    if q.rew_or_req_money < 0 {
+        use mangos_protocol::update_field_table::offsets;
+        let money = player
+            .unit
+            .world
+            .object
+            .values()
+            .get_u32(offsets::PLAYER_FIELD_COINAGE);
+        if money < q.rew_or_req_money.unsigned_abs() {
+            *reason = 22; // QUEST_FAILED_NOT_ENOUGH_MONEY
+            return false;
+        }
+    }
+    true
+}
+
+/// `Player::CanCompleteRepeatableQuest`.
+fn quest_can_complete_repeatable(
+    player: &Player,
+    q: &QuestTemplate,
+    templates: &QuestTemplates,
+    reason: &mut u32,
+) -> bool {
+    if !quest_can_take(player, q, templates, false, &mut 0) {
+        return false;
+    }
+    if q.is_deliver() {
+        for i in 0..4 {
+            if q.req_item_ids[i] != 0
+                && q.req_item_counts[i] != 0
+                && player.quest_item_count(q.req_item_ids[i]) < q.req_item_counts[i]
+            {
+                return false;
+            }
+        }
+    }
+    quest_can_reward(player, q, templates, reason)
+}
+
+/// `Player::CanSeeStartQuest`: the `Satisfy*` gates
+/// plus `IsActive`, then the high-level hide window
+/// against `MinLevel` (`GetLevel() + diff >=
+/// MinLevel`; the negative-config arm is unreachable
+/// with the built-in default).
+fn quest_can_see_start(player: &Player, q: &QuestTemplate, templates: &QuestTemplates) -> bool {
+    if !q.is_active() || !quest_satisfy_gates(player, q, templates) {
+        return false;
+    }
+    player.unit.level() + QUEST_HIGH_LEVEL_HIDE_DIFF >= q.min_level
+}
+
+/// `Player::PrepareQuestMenu`: (quest id, dialog
+/// icon) pairs for one questgiver; ender relations
+/// first, then starters gated on status NONE +
+/// `CanTakeQuest` (auto-complete quests show as
+/// reward). The fork's `exceptQuestId` exclusion
+/// has no caller here.
+fn quest_prepare_menu(
+    player: &Player,
+    starts: &[u32],
+    ends: &[u32],
+    templates: &QuestTemplates,
+) -> Vec<(u32, u8)> {
+    let mut menu: Vec<(u32, u8)> = Vec::new();
+    for quest_id in ends {
+        let Some(q) = templates.get(*quest_id) else {
+            continue;
+        };
+        if !q.is_active() {
+            continue;
+        }
+        let status = player.quest_status(*quest_id);
+        if status == QUEST_STATUS_COMPLETE && !quest_rewarded(player, *quest_id) {
+            menu.push((*quest_id, DIALOG_STATUS_REWARD_REP));
+        } else if status == QUEST_STATUS_INCOMPLETE {
+            menu.push((*quest_id, DIALOG_STATUS_INCOMPLETE));
+        } else if status == 4 {
+            // QUEST_STATUS_AVAILABLE
+            menu.push((*quest_id, DIALOG_STATUS_CHAT));
+        }
+    }
+    for quest_id in starts {
+        let Some(q) = templates.get(*quest_id) else {
+            continue;
+        };
+        if !q.is_active() {
+            continue;
+        }
+        if q.is_auto_complete() && quest_can_take(player, q, templates, false, &mut 0) {
+            menu.push((*quest_id, DIALOG_STATUS_REWARD_REP));
+        } else if player.quest_status(*quest_id) == 0
+            && quest_can_take(player, q, templates, false, &mut 0)
+        {
+            menu.push((*quest_id, DIALOG_STATUS_AVAILABLE));
+        }
+    }
+    menu
+}
+
+/// `WorldSession::GetDialogStatus` (creature arm,
+/// `defstatus = DIALOG_STATUS_NONE` as the status
+/// -query caller passes it; the script-manager
+/// status call and gameobject arm are unmodeled).
+fn quest_dialog_status(
+    player: &Player,
+    starts: &[u32],
+    ends: &[u32],
+    templates: &QuestTemplates,
+) -> u8 {
+    let level = player.unit.level();
+    let mut result = DIALOG_STATUS_NONE;
+    for quest_id in ends {
+        let Some(q) = templates.get(*quest_id) else {
+            continue;
+        };
+        if !q.is_active() {
+            continue;
+        }
+        let status = player.quest_status(*quest_id);
+        let new = if (status == QUEST_STATUS_COMPLETE && !quest_rewarded(player, *quest_id))
+            || (q.is_auto_complete() && quest_can_take(player, q, templates, false, &mut 0))
+        {
+            if q.is_auto_complete() && q.is_repeatable() {
+                DIALOG_STATUS_REWARD_REP
+            } else {
+                DIALOG_STATUS_REWARD2
+            }
+        } else if status == QUEST_STATUS_INCOMPLETE {
+            DIALOG_STATUS_INCOMPLETE
+        } else {
+            DIALOG_STATUS_NONE
+        };
+        result = result.max(new);
+    }
+    for quest_id in starts {
+        let Some(q) = templates.get(*quest_id) else {
+            continue;
+        };
+        if !q.is_active() {
+            continue;
+        }
+        if player.quest_status(*quest_id) != 0 {
+            continue;
+        }
+        if !quest_can_see_start(player, q, templates) {
+            continue;
+        }
+        // `SatisfyQuestLevel` is `level >= MinLevel`.
+        let new = if level >= q.min_level {
+            if q.is_auto_complete()
+                || (q.is_repeatable()
+                    && q.quest_flags & 0x0000_0100 == 0 // QUEST_FLAGS_UNK2
+                    && quest_rewarded(player, *quest_id))
+            {
+                DIALOG_STATUS_REWARD_REP
+            } else if level <= quest_level_for_player(q, level) + QUEST_LOW_LEVEL_HIDE_DIFF {
+                DIALOG_STATUS_AVAILABLE
+            } else {
+                DIALOG_STATUS_CHAT
+            }
+        } else {
+            DIALOG_STATUS_UNAVAILABLE
+        };
+        result = result.max(new);
+    }
+    result
+}
+
+fn quest_display_id(
+    items: &mangos_world_data::item_prototype::ItemPrototypes,
+    item_id: u32,
+) -> u32 {
+    items.get(item_id).map_or(0, |p| p.display_id)
+}
+
+/// `PlayerTalkClass::SendQuestGiverQuestList`.
+fn build_quest_list(
+    npc_guid: ObjectGuid,
+    title: &str,
+    menu: &[(u32, u8)],
+    templates: &QuestTemplates,
+) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    write_guid(&mut writer, npc_guid);
+    writer.write_cstring(title);
+    writer.write_u32_le(0); // emote delay
+    writer.write_u32_le(0); // emote
+    #[allow(clippy::cast_possible_truncation)]
+    writer.write_u8(menu.len() as u8);
+    for (quest_id, icon) in menu {
+        let Some(q) = templates.get(*quest_id) else {
+            continue;
+        };
+        writer.write_u32_le(*quest_id);
+        writer.write_u32_le(u32::from(*icon));
+        writer.write_u32_le(q.quest_level);
+        writer.write_cstring(&q.title);
+    }
+    let mut packet = WorldPacket::new(opcode_id::SMSG_QUESTGIVER_QUEST_LIST);
+    packet.take_writer(writer);
+    packet
+}
+
+/// `PlayerTalkClass::SendQuestGiverQuestDetails`.
+fn build_quest_details(
+    npc_guid: ObjectGuid,
+    q: &QuestTemplate,
+    activate_accept: bool,
+    items: &mangos_world_data::item_prototype::ItemPrototypes,
+    rate_drop_money: f32,
+) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    write_guid(&mut writer, npc_guid);
+    writer.write_u32_le(q.entry);
+    writer.write_cstring(&q.title);
+    writer.write_cstring(&q.details);
+    writer.write_cstring(&q.objectives);
+    writer.write_u32_le(u32::from(activate_accept));
+    if q.quest_flags & 0x0200 != 0 {
+        // QUEST_FLAGS_HIDDEN_REWARDS: three zero u32s.
+        writer.write_u32_le(0);
+        writer.write_u32_le(0);
+        writer.write_u32_le(0);
+    } else {
+        // The fork iterates the leading `count` slots
+        // (count = nonzero tally), writing any zero
+        // slot among them verbatim.
+        #[allow(clippy::cast_possible_truncation)]
+        writer.write_u32_le(q.rew_choice_items_count() as u32);
+        for i in 0..q.rew_choice_items_count() {
+            writer.write_u32_le(q.rew_choice_item_ids[i]);
+            writer.write_u32_le(q.rew_choice_item_counts[i]);
+            writer.write_u32_le(quest_display_id(items, q.rew_choice_item_ids[i]));
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        writer.write_u32_le(q.rew_items_count() as u32);
+        for i in 0..q.rew_items_count() {
+            writer.write_u32_le(q.rew_item_ids[i]);
+            writer.write_u32_le(q.rew_item_counts[i]);
+            writer.write_u32_le(quest_display_id(items, q.rew_item_ids[i]));
+        }
+        #[allow(clippy::cast_sign_loss)]
+        writer.write_u32_le(q.rew_or_req_money(rate_drop_money) as u32);
+    }
+    writer.write_u32_le(q.rew_spell);
+    writer.write_u32_le(4); // QUEST_EMOTE_COUNT
+    for i in 0..4 {
+        writer.write_u32_le(q.details_emotes[i]);
+        writer.write_u32_le(q.details_emote_delays[i]);
+    }
+    let mut packet = WorldPacket::new(opcode_id::SMSG_QUESTGIVER_QUEST_DETAILS);
+    packet.take_writer(writer);
+    packet
+}
+
+/// `PlayerTalkClass::SendQuestGiverOfferReward`.
+fn build_quest_offer_reward(
+    npc_guid: ObjectGuid,
+    q: &QuestTemplate,
+    enable_next: bool,
+    items: &mangos_world_data::item_prototype::ItemPrototypes,
+    rate_drop_money: f32,
+) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    write_guid(&mut writer, npc_guid);
+    writer.write_u32_le(q.entry);
+    writer.write_cstring(&q.title);
+    writer.write_cstring(&q.offer_reward_text);
+    writer.write_u32_le(u32::from(enable_next));
+    // Emote count stops at the first nonpositive
+    // emote (fork compares as signed).
+    #[allow(clippy::cast_possible_wrap)]
+    let emote_count = q
+        .offer_reward_emotes
+        .iter()
+        .take_while(|e| **e as i32 > 0)
+        .count();
+    #[allow(clippy::cast_possible_truncation)]
+    writer.write_u32_le(emote_count as u32);
+    for i in 0..emote_count {
+        writer.write_u32_le(q.offer_reward_emote_delays[i]);
+        writer.write_u32_le(q.offer_reward_emotes[i]);
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    writer.write_u32_le(q.rew_choice_items_count() as u32);
+    for i in 0..q.rew_choice_items_count() {
+        writer.write_u32_le(q.rew_choice_item_ids[i]);
+        writer.write_u32_le(q.rew_choice_item_counts[i]);
+        writer.write_u32_le(quest_display_id(items, q.rew_choice_item_ids[i]));
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    writer.write_u32_le(q.rew_items_count() as u32);
+    for i in 0..q.rew_items_count() {
+        writer.write_u32_le(q.rew_item_ids[i]);
+        writer.write_u32_le(q.rew_item_counts[i]);
+        writer.write_u32_le(quest_display_id(items, q.rew_item_ids[i]));
+    }
+    #[allow(clippy::cast_sign_loss)]
+    writer.write_u32_le(q.rew_or_req_money(rate_drop_money) as u32);
+    writer.write_u32_le(0); // unused
+    writer.write_u32_le(q.rew_spell);
+    let mut packet = WorldPacket::new(opcode_id::SMSG_QUESTGIVER_OFFER_REWARD);
+    packet.take_writer(writer);
+    packet
+}
+
+/// `PlayerTalkClass::SendQuestGiverRequestItems`.
+/// `None` mirrors the fork's delegation: empty
+/// request text, or no required items while
+/// completable, sends the offer-reward packet
+/// instead (the caller builds it with
+/// `EnableNext = true`).
+fn build_quest_request_items(
+    npc_guid: ObjectGuid,
+    q: &QuestTemplate,
+    completable: bool,
+    close_on_cancel: bool,
+    items: &mangos_world_data::item_prototype::ItemPrototypes,
+    rate_drop_money: f32,
+) -> Option<WorldPacket> {
+    let req_count = q.req_item_ids.iter().filter(|id| **id != 0).count();
+    if q.request_items_text.is_empty() || (req_count == 0 && completable) {
+        return None;
+    }
+    let mut writer = PacketWriter::new();
+    write_guid(&mut writer, npc_guid);
+    writer.write_u32_le(q.entry);
+    writer.write_cstring(&q.title);
+    writer.write_cstring(&q.request_items_text);
+    writer.write_u32_le(0); // emote delay
+    writer.write_u32_le(if completable {
+        q.complete_emote
+    } else {
+        q.incomplete_emote
+    });
+    writer.write_u32_le(u32::from(close_on_cancel));
+    let scaled = q.rew_or_req_money(rate_drop_money);
+    writer.write_u32_le(if scaled < 0 { scaled.unsigned_abs() } else { 0 });
+    #[allow(clippy::cast_possible_truncation)]
+    writer.write_u32_le(req_count as u32);
+    for i in 0..4 {
+        if q.req_item_ids[i] == 0 {
+            continue;
+        }
+        writer.write_u32_le(q.req_item_ids[i]);
+        writer.write_u32_le(q.req_item_counts[i]);
+        writer.write_u32_le(quest_display_id(items, q.req_item_ids[i]));
+    }
+    writer.write_u32_le(0x02);
+    writer.write_u32_le(if completable { 0x03 } else { 0x00 });
+    writer.write_u32_le(0x04);
+    writer.write_u32_le(0x08);
+    let mut packet = WorldPacket::new(opcode_id::SMSG_QUESTGIVER_REQUEST_ITEMS);
+    packet.take_writer(writer);
+    Some(packet)
+}
+
+/// `WorldSession::HandleQuestQueryOpcode` body
+/// (`SMSG_QUEST_QUERY_RESPONSE`).
+fn build_quest_query_response(q: &QuestTemplate) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    writer.write_u32_le(q.entry);
+    writer.write_u32_le(q.method);
+    writer.write_u32_le(q.quest_level);
+    writer.write_u32_le(q.zone_or_sort as u32);
+    writer.write_u32_le(q.quest_type);
+    writer.write_u32_le(q.rep_objective_faction);
+    writer.write_u32_le(q.rep_objective_value as u32);
+    writer.write_u32_le(0);
+    writer.write_u32_le(0);
+    writer.write_u32_le(q.next_quest_in_chain);
+    if q.quest_flags & 0x0200 != 0 {
+        writer.write_u32_le(0);
+    } else {
+        writer.write_u32_le(q.rew_or_req_money(1.0).max(0) as u32);
+    }
+    writer.write_u32_le(q.rew_money_max_level);
+    writer.write_u32_le(q.rew_spell);
+    writer.write_u32_le(q.src_item_id);
+    writer.write_u32_le(q.quest_flags);
+    if q.quest_flags & 0x0200 != 0 {
+        for _ in 0..10 {
+            writer.write_u32_le(0);
+            writer.write_u32_le(0);
+        }
+    } else {
+        for i in 0..4 {
+            writer.write_u32_le(q.rew_item_ids[i]);
+            writer.write_u32_le(q.rew_item_counts[i]);
+        }
+        for i in 0..6 {
+            writer.write_u32_le(q.rew_choice_item_ids[i]);
+            writer.write_u32_le(q.rew_choice_item_counts[i]);
+        }
+    }
+    writer.write_u32_le(q.point_map_id);
+    writer.write_f32_le(q.point_x);
+    writer.write_f32_le(q.point_y);
+    writer.write_u32_le(q.point_opt);
+    writer.write_cstring(&q.title);
+    writer.write_cstring(&q.objectives);
+    writer.write_cstring(&q.details);
+    writer.write_cstring(&q.end_text);
+    for i in 0..4 {
+        let id = q.req_creature_or_go_ids[i];
+        let wire = if id < 0 {
+            (id.unsigned_abs()) | 0x8000_0000
+        } else {
+            #[allow(clippy::cast_sign_loss)]
+            {
+                id as u32
+            }
+        };
+        writer.write_u32_le(wire);
+        writer.write_u32_le(q.req_creature_or_go_counts[i]);
+        writer.write_u32_le(q.req_item_ids[i]);
+        writer.write_u32_le(q.req_item_counts[i]);
+    }
+    for text in &q.objective_texts {
+        writer.write_cstring(text);
+    }
+    let mut packet = WorldPacket::new(opcode_id::SMSG_QUEST_QUERY_RESPONSE);
+    packet.take_writer(writer);
+    packet
+}
+
 /// `SMSG_PETITION_SHOW_SIGNATURES` + `BuildSignatureData`.
 fn show_signatures_packet(
     item_guid: ObjectGuid,
@@ -1865,6 +2727,140 @@ fn inventory_full_packet() -> WorldPacket {
     let mut packet = WorldPacket::new(opcode_id::SMSG_INVENTORY_CHANGE_FAILURE);
     packet.take_writer(writer);
     packet
+}
+
+/// `Player::SendNewItem` (`Player.cpp:11854`) for a
+/// created item: received + created + showInChat,
+/// bag slot byte (255 for the backpack), then the
+/// slot — or `0xFFFF_FFFF` when the grant stacked
+/// onto (or split across) existing stacks.
+fn new_item_packet(
+    player: ObjectGuid,
+    bag_slot: u8,
+    slot: u32,
+    item_id: u32,
+    count: u32,
+) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    write_guid(&mut writer, player);
+    writer.write_u32_le(1); // received
+    writer.write_u32_le(1); // created
+    writer.write_u32_le(1); // showInChat
+    writer.write_u8(bag_slot);
+    writer.write_u32_le(slot);
+    writer.write_u32_le(item_id);
+    writer.write_u32_le(0); // suffix factor
+    writer.write_u32_le(0); // random property id
+    writer.write_u32_le(count);
+    let mut packet = WorldPacket::new(opcode_id::SMSG_ITEM_PUSH_RESULT);
+    packet.take_writer(writer);
+    packet
+}
+
+/// One `ItemPosCount` destination from the
+/// `CanStoreNewItem` subset below.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StoreDest {
+    Merge {
+        item_guid: u32,
+        add: u32,
+        new_count: u32,
+    },
+    New {
+        bag: u32,
+        slot: u32,
+        count: u32,
+    },
+}
+
+/// `Player::_CanStoreItem(NULL_BAG, NULL_SLOT, ...)`
+/// destination plan over the row baseline:
+/// unique `max_count` cap first
+/// (`_CanTakeMoreSimilarItems` count arm; bank
+/// rows count), then stack merges, then free
+/// slots — each pass walking the backpack
+/// (slots 23..39) before equipped bags
+/// (19..23) in order. Recorded subset: no
+/// keyring priority, no `BagFamily`
+/// specialization, no unique-equipped checks.
+fn plan_store_new_item(
+    inv: &[mangos_db::character_load::InventoryRow],
+    proto: &mangos_world_data::item_prototype::ItemPrototype,
+    mut count: u32,
+    prototypes: &mangos_world_data::item_prototype::ItemPrototypes,
+) -> Vec<StoreDest> {
+    let item_id = proto.item_id;
+    let stackable = proto.stackable.max(1);
+    if proto.max_count > 0 {
+        let carried: u32 = inv
+            .iter()
+            .filter(|row| row.item.item_id == item_id)
+            .map(|row| row.item.count)
+            .sum();
+        count = count.min(proto.max_count.saturating_sub(carried));
+    }
+    // (container bag key, slot range) in fork walk order.
+    let mut containers: Vec<(u32, Vec<u32>)> = vec![(0, (23..39).collect())];
+    for bag_slot in 19..23u8 {
+        let Some(bag_row) = inv.iter().find(|row| row.bag == 0 && row.slot == bag_slot) else {
+            continue;
+        };
+        let capacity = prototypes
+            .get(bag_row.item.item_id)
+            .map_or(0, |bag_proto| bag_proto.container_slots);
+        if capacity > 0 {
+            containers.push((bag_row.item.item_guid, (0..capacity).collect()));
+        }
+    }
+    let mut dest = Vec::new();
+    if stackable > 1 {
+        for (bag_key, slots) in &containers {
+            for slot in slots {
+                if count == 0 {
+                    break;
+                }
+                let Some(row) = inv.iter().find(|row| {
+                    row.bag == *bag_key
+                        && u32::from(row.slot) == *slot
+                        && row.item.item_id == item_id
+                }) else {
+                    continue;
+                };
+                let room = stackable.saturating_sub(row.item.count);
+                if room == 0 {
+                    continue;
+                }
+                let add = count.min(room);
+                dest.push(StoreDest::Merge {
+                    item_guid: row.item.item_guid,
+                    add,
+                    new_count: row.item.count + add,
+                });
+                count -= add;
+            }
+        }
+    }
+    for (bag_key, slots) in &containers {
+        for slot in slots {
+            if count == 0 {
+                break;
+            }
+            if inv
+                .iter()
+                .any(|row| row.bag == *bag_key && u32::from(row.slot) == *slot)
+            {
+                continue;
+            }
+            let take = count.min(stackable);
+            dest.push(StoreDest::New {
+                bag: *bag_key,
+                slot: *slot,
+                count: take,
+            });
+            count -= take;
+        }
+    }
+    dest
 }
 
 impl World {
@@ -3716,6 +4712,41 @@ impl World {
             opcode_id::CMSG_GUILD_DEL_RANK => self.on_guild_del_rank(id, actor_low),
             opcode_id::CMSG_GUILD_INFO_TEXT => self.on_guild_info_text(id, actor_low, packet),
             opcode_id::MSG_SAVE_GUILD_EMBLEM => self.on_guild_emblem(id, actor_low, packet),
+            opcode_id::CMSG_QUESTGIVER_STATUS_QUERY => {
+                self.on_questgiver_status_query(id, actor_low, packet);
+            }
+            opcode_id::CMSG_QUESTGIVER_HELLO => self.on_questgiver_hello(id, actor_low, packet),
+            opcode_id::CMSG_QUESTGIVER_QUERY_QUEST => {
+                self.on_questgiver_query_quest(id, actor_low, packet);
+            }
+            opcode_id::CMSG_QUEST_QUERY => self.on_quest_query(id, actor_low, packet),
+            opcode_id::CMSG_QUESTGIVER_ACCEPT_QUEST => {
+                self.on_questgiver_accept_quest(id, actor_low, packet);
+            }
+            opcode_id::CMSG_QUESTGIVER_COMPLETE_QUEST => {
+                self.on_questgiver_complete_quest(id, actor_low, packet);
+            }
+            opcode_id::CMSG_QUESTGIVER_REQUEST_REWARD => {
+                self.on_questgiver_request_reward(id, actor_low, packet);
+            }
+            opcode_id::CMSG_QUESTGIVER_CHOOSE_REWARD => {
+                self.on_questgiver_choose_reward(id, actor_low, packet);
+            }
+            opcode_id::CMSG_QUESTLOG_REMOVE_QUEST => {
+                self.on_questlog_remove_quest(id, actor_low, packet);
+            }
+            opcode_id::CMSG_QUESTLOG_SWAP_QUEST => {
+                self.on_questlog_swap_quest(id, actor_low, packet);
+            }
+            opcode_id::CMSG_PET_ACTION => self.on_pet_action(actor_low, packet),
+            opcode_id::CMSG_PET_ABANDON => self.on_pet_abandon(actor_low, packet),
+            opcode_id::CMSG_PET_RENAME => self.on_pet_rename(id, actor_low, packet),
+            opcode_id::CMSG_PET_NAME_QUERY => self.on_pet_name_query(id, actor_low, packet),
+            opcode_id::CMSG_PET_SET_ACTION => self.on_pet_set_action(actor_low, packet),
+            opcode_id::CMSG_PET_CAST_SPELL => self.on_pet_cast_spell(actor_low, packet),
+            opcode_id::CMSG_PET_STOP_ATTACK => self.on_pet_stop_attack(actor_low, packet),
+            opcode_id::CMSG_PET_SPELL_AUTOCAST => self.on_pet_spell_autocast(actor_low, packet),
+            opcode_id::CMSG_PET_CANCEL_AURA => self.on_pet_cancel_aura(actor_low, packet),
             opcode_id::CMSG_PETITION_SHOWLIST => self.on_petition_showlist(id, actor_low, packet),
             opcode_id::CMSG_PETITION_BUY => self.on_petition_buy(id, actor_low, packet),
             opcode_id::CMSG_PETITION_SHOW_SIGNATURES => {
@@ -3729,6 +4760,225 @@ impl World {
             opcode_id::CMSG_TURN_IN_PETITION => self.on_turn_in_petition(id, actor_low, packet),
             _ => {}
         }
+    }
+
+    /// Map + owner guid for pet handlers.
+    fn pet_context(&mut self, actor_low: u32) -> Option<(&mut mangos_map::map::Map, ObjectGuid)> {
+        let map_key = self.player_map.get(&actor_low).copied()?;
+        let map = self.maps.get_mut(&map_key)?;
+        Some((map, player_guid(actor_low)))
+    }
+
+    /// `HandlePetAction` (command / reaction / spell
+    /// arms; charmed-player arm unmodeled with charm).
+    fn on_pet_action(&mut self, actor_low: u32, packet: &WorldPacket) {
+        use mangos_map::pets::{ACT_COMMAND, ACT_REACTION};
+        let mut reader = packet.reader();
+        let (Ok(pet_raw), Ok(data), Ok(target_raw)) = (
+            reader.read_u64_le(),
+            reader.read_u32_le(),
+            reader.read_u64_le(),
+        ) else {
+            return;
+        };
+        let pet = ObjectGuid::from_wire_raw(pet_raw);
+        let target = ObjectGuid::from_wire_raw(target_raw);
+        let action = data & 0x00FF_FFFF;
+        let flag = data >> 24;
+        let Some((map, owner)) = self.pet_context(actor_low) else {
+            return;
+        };
+        if map.pet_owner(pet).is_none() {
+            return;
+        }
+        match flag {
+            ACT_COMMAND => {
+                #[allow(clippy::cast_possible_truncation)]
+                map.pet_command(
+                    owner,
+                    pet,
+                    action as u8,
+                    (target != ObjectGuid::EMPTY).then_some(target),
+                );
+            }
+            ACT_REACTION => {
+                #[allow(clippy::cast_possible_truncation)]
+                map.pet_set_react(owner, pet, action as u8);
+            }
+            // ACT_DISABLED / ACT_PASSIVE / ACT_ENABLED:
+            // spell cast through the bar.
+            _ => {
+                map.pet_cast_spell(
+                    owner,
+                    pet,
+                    action,
+                    (target != ObjectGuid::EMPTY).then_some(target),
+                );
+            }
+        }
+        self.drain_map_events();
+    }
+
+    /// `HandlePetAbandon`: hunter pets are deleted,
+    /// summoned pets dismissed (kept `NOT_IN_SLOT`).
+    fn on_pet_abandon(&mut self, actor_low: u32, packet: &WorldPacket) {
+        let Ok(guid_raw) = packet.reader().read_u64_le() else {
+            return;
+        };
+        let pet = ObjectGuid::from_wire_raw(guid_raw);
+        let Some((map, owner)) = self.pet_context(actor_low) else {
+            return;
+        };
+        map.pet_abandon(owner, pet);
+        self.drain_map_events();
+    }
+
+    /// `HandlePetRename` (validation subset:
+    /// length/alphabetic; reserved/profane lists and
+    /// strict-language masks unmodeled — the fork's
+    /// `SMSG_PET_NAME_INVALID` body is empty).
+    fn on_pet_rename(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let Ok(guid_raw) = reader.read_u64_le() else {
+            return;
+        };
+        let name = reader.read_cstring();
+        let pet = ObjectGuid::from_wire_raw(guid_raw);
+        let valid =
+            (1..=12).contains(&name.chars().count()) && name.chars().all(char::is_alphabetic);
+        if !valid {
+            self.reply_packet(
+                id,
+                WorldPacket::with_body(opcode_id::SMSG_PET_NAME_INVALID, Vec::new()),
+            );
+            return;
+        }
+        let Some((map, owner)) = self.pet_context(actor_low) else {
+            return;
+        };
+        map.pet_rename(owner, pet, name);
+        self.drain_map_events();
+    }
+
+    /// `HandlePetNameQueryOpcode` + `SendPetNameQuery`.
+    fn on_pet_name_query(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let (Ok(pet_number), Ok(guid_raw)) = (reader.read_u32_le(), reader.read_u64_le()) else {
+            return;
+        };
+        let pet = ObjectGuid::from_wire_raw(guid_raw);
+        let Some(map_key) = self.player_map.get(&actor_low).copied() else {
+            return;
+        };
+        let Some(map) = self.maps.get(&map_key) else {
+            return;
+        };
+        let Some((name, timestamp, number)) = map.pet_name_query(pet) else {
+            return;
+        };
+        if number != pet_number {
+            return;
+        }
+        let mut payload = mangos_protocol::buffer::PacketWriter::new();
+        payload.write_u32_le(pet_number);
+        payload.write_cstring(&name);
+        payload.write_u32_le(timestamp);
+        self.reply_packet(
+            id,
+            WorldPacket::with_body(opcode_id::SMSG_PET_NAME_QUERY_RESPONSE, payload.into_vec()),
+        );
+    }
+
+    /// `HandlePetSetAction` (1-2 position/data pairs;
+    /// the fork derives the count from packet size).
+    fn on_pet_set_action(&mut self, actor_low: u32, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let Ok(guid_raw) = reader.read_u64_le() else {
+            return;
+        };
+        let pet = ObjectGuid::from_wire_raw(guid_raw);
+        let count = if packet.body().len() == 24 { 2 } else { 1 };
+        let mut updates: Vec<(u32, u32)> = Vec::new();
+        for _ in 0..count {
+            let (Ok(position), Ok(data)) = (reader.read_u32_le(), reader.read_u32_le()) else {
+                return;
+            };
+            updates.push((position, data));
+        }
+        let Some((map, owner)) = self.pet_context(actor_low) else {
+            return;
+        };
+        map.pet_set_action(owner, pet, &updates);
+        self.drain_map_events();
+    }
+
+    /// `HandlePetCastSpellOpcode` (unit-target subset
+    /// of `SpellCastTargets`, same layout as the
+    /// player cast path).
+    fn on_pet_cast_spell(&mut self, actor_low: u32, packet: &WorldPacket) {
+        let body = packet.body();
+        if body.len() < 14 {
+            return;
+        }
+        let pet =
+            ObjectGuid::from_wire_raw(u64::from_le_bytes(body[0..8].try_into().unwrap_or([0; 8])));
+        let spell_id = u32::from_le_bytes([body[8], body[9], body[10], body[11]]);
+        let mask = u16::from_le_bytes([body[12], body[13]]);
+        let target = if mask & 0x0002 != 0 {
+            ObjectGuid::read_packed(&body[14..]).ok().map(|(g, _)| g)
+        } else {
+            None
+        };
+        let Some((map, owner)) = self.pet_context(actor_low) else {
+            return;
+        };
+        map.pet_cast_spell(owner, pet, spell_id, target);
+        self.drain_map_events();
+    }
+
+    /// `HandlePetStopAttack`.
+    fn on_pet_stop_attack(&mut self, actor_low: u32, packet: &WorldPacket) {
+        let Ok(guid_raw) = packet.reader().read_u64_le() else {
+            return;
+        };
+        let pet = ObjectGuid::from_wire_raw(guid_raw);
+        let Some((map, owner)) = self.pet_context(actor_low) else {
+            return;
+        };
+        map.pet_stop_attack(owner, pet);
+        self.drain_map_events();
+    }
+
+    /// `HandlePetSpellAutocastOpcode`.
+    fn on_pet_spell_autocast(&mut self, actor_low: u32, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let (Ok(guid_raw), Ok(spell_id), Ok(state)) =
+            (reader.read_u64_le(), reader.read_u32_le(), reader.read_u8())
+        else {
+            return;
+        };
+        let pet = ObjectGuid::from_wire_raw(guid_raw);
+        let Some((map, owner)) = self.pet_context(actor_low) else {
+            return;
+        };
+        map.pet_set_autocast(owner, pet, spell_id, state != 0);
+        self.drain_map_events();
+    }
+
+    /// `HandlePetCancelAura` (guid + spell).
+    fn on_pet_cancel_aura(&mut self, actor_low: u32, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let (Ok(guid_raw), Ok(spell_id)) = (reader.read_u64_le(), reader.read_u32_le()) else {
+            return;
+        };
+        let pet = ObjectGuid::from_wire_raw(guid_raw);
+        let Some((map, owner)) = self.pet_context(actor_low) else {
+            return;
+        };
+        if map.pet_owner(pet) == Some(owner) {
+            map.cancel_aura(pet, spell_id);
+        }
+        self.drain_map_events();
     }
 
     /// Applies one mail persistence intent.
@@ -4578,6 +5828,7 @@ impl World {
                         mangos_map::spells::CastOptions {
                             triggered: true,
                             skip_known: true,
+                            cast_item: None,
                         },
                     );
                 }
@@ -7018,6 +8269,1110 @@ impl World {
                 self.guild_stats_of(guid_low)
             }
         }
+    }
+
+    // ---- Tier 1 Slice 1: questgiver runtime ----
+    // Fork references: Handlers/QuestHandler.cpp,
+    // GossipDef.cpp packet builders, Player quest
+    // checks in Objects/Player.cpp. Subsets and
+    // deviations are recorded in
+    // docs/rust-migration-evidence/TIER1-PROGRESS.md.
+
+    /// Creature questgiver resolution
+    /// (`GetNPCIfCanInteractWith` subset): exists on
+    /// the player's map, alive, within interaction
+    /// reach (fork `INTERACTION_DISTANCE` + radii;
+    /// a flat 10 yd bound here). Returns the
+    /// creature entry + template name.
+    fn quest_creature(&self, actor_low: u32, npc_guid: ObjectGuid) -> Option<(u32, String)> {
+        let map = self
+            .player_map
+            .get(&actor_low)
+            .and_then(|map_id| self.maps.get(map_id))?;
+        let creature = map.creature(npc_guid)?;
+        if !creature.unit.is_alive() {
+            return None;
+        }
+        let player = map.player(player_guid(actor_low))?;
+        let a = player.unit.world.position();
+        let b = creature.unit.world.position();
+        let dist_sq = (a.x - b.x).powi(2) + (a.y - b.y).powi(2) + (a.z - b.z).powi(2);
+        if dist_sq > 100.0 {
+            return None;
+        }
+        Some((creature.original_entry, creature.info.name.clone()))
+    }
+
+    fn on_questgiver_status_query(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        let Ok(npc_guid) = packet.reader().read_u64_le().map(ObjectGuid::from_wire_raw) else {
+            return;
+        };
+        let Some((entry, _name)) = self.quest_creature(actor_low, npc_guid) else {
+            return;
+        };
+        let stores = &self.deps.world_stores;
+        let starts = stores.quest_relations.creature_starts(entry);
+        let ends = stores.quest_relations.creature_ends(entry);
+        let Some(map) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+        else {
+            return;
+        };
+        let Some(player) = map.player(player_guid(actor_low)) else {
+            return;
+        };
+        let status = quest_dialog_status(player, starts, ends, &stores.quest_templates);
+        let mut writer = PacketWriter::new();
+        write_guid(&mut writer, npc_guid);
+        // Fork `SendQuestGiverStatus` writes a u32.
+        writer.write_u32_le(u32::from(status));
+        let mut reply = WorldPacket::new(opcode_id::SMSG_QUESTGIVER_STATUS);
+        reply.take_writer(writer);
+        self.reply_packet(id, reply);
+    }
+
+    fn on_questgiver_hello(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        let Ok(npc_guid) = packet.reader().read_u64_le().map(ObjectGuid::from_wire_raw) else {
+            return;
+        };
+        let Some((entry, name)) = self.quest_creature(actor_low, npc_guid) else {
+            return;
+        };
+        let stores = &self.deps.world_stores;
+        let starts = stores.quest_relations.creature_starts(entry);
+        let ends = stores.quest_relations.creature_ends(entry);
+        let Some(map) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+        else {
+            return;
+        };
+        let Some(player) = map.player(player_guid(actor_low)) else {
+            return;
+        };
+        // No gossip system: HELLO goes straight to
+        // the quest list (fork reaches it through
+        // PrepareGossipMenu when no gossip text
+        // applies). Title = creature name (npc_text
+        // greetings unmodeled).
+        let menu = quest_prepare_menu(player, starts, ends, &stores.quest_templates);
+        let reply = build_quest_list(npc_guid, &name, &menu, &stores.quest_templates);
+        self.reply_packet(id, reply);
+    }
+
+    /// `SMSG_QUESTGIVER_QUEST_INVALID`
+    /// (`SendCanTakeQuestResponse` wire shape).
+    fn quest_invalid(&mut self, id: SessionId, reason: u32) {
+        let mut writer = PacketWriter::new();
+        writer.write_u32_le(reason);
+        let mut reply = WorldPacket::new(opcode_id::SMSG_QUESTGIVER_QUEST_INVALID);
+        reply.take_writer(writer);
+        self.reply_packet(id, reply);
+    }
+
+    fn on_questgiver_query_quest(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let (Ok(npc_raw), Ok(quest_id)) = (reader.read_u64_le(), reader.read_u32_le()) else {
+            return;
+        };
+        let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
+        // Fork: the object must start or end the
+        // quest, else `CloseGossip` (gameobject and
+        // item questgivers unmodeled).
+        let stores = &self.deps.world_stores;
+        let involved = self
+            .quest_creature(actor_low, npc_guid)
+            .is_some_and(|(entry, _)| {
+                stores
+                    .quest_relations
+                    .creature_starts(entry)
+                    .contains(&quest_id)
+                    || stores
+                        .quest_relations
+                        .creature_ends(entry)
+                        .contains(&quest_id)
+            });
+        if !involved {
+            self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
+            return;
+        }
+        let Some(q) = stores.quest_templates.get(quest_id) else {
+            return;
+        };
+        let reply = build_quest_details(
+            npc_guid,
+            q,
+            true,
+            &stores.item_prototypes,
+            self.config.rate_drop_money,
+        );
+        self.reply_packet(id, reply);
+    }
+
+    /// First free inventory position in fork store
+    /// order: backpack slots 23..39, then each
+    /// equipped bag (slots 19..23) in order up to
+    /// its prototype capacity. Stack-merging onto
+    /// partial stacks is unmodeled (Slice 3).
+    fn quest_free_slot(&self, actor_low: u32) -> Option<(u32, u32)> {
+        let player = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+            .and_then(|map| map.player(player_guid(actor_low)))?;
+        let inv = &player.saved.inventory;
+        for slot in 23..39u8 {
+            if !inv.iter().any(|row| row.bag == 0 && row.slot == slot) {
+                return Some((0, u32::from(slot)));
+            }
+        }
+        let prototypes = &self.deps.world_stores.item_prototypes;
+        for bag_slot in 19..23u8 {
+            let Some(bag_row) = inv.iter().find(|row| row.bag == 0 && row.slot == bag_slot) else {
+                continue;
+            };
+            let capacity = prototypes
+                .get(bag_row.item.item_id)
+                .map_or(0, |proto| proto.container_slots);
+            for slot in 0..capacity {
+                #[allow(clippy::cast_possible_truncation)]
+                if !inv
+                    .iter()
+                    .any(|row| row.bag == bag_row.item.item_guid && row.slot == slot as u8)
+                {
+                    return Some((bag_row.item.item_guid, slot));
+                }
+            }
+        }
+        None
+    }
+
+    /// DB-row item grant + in-memory baseline
+    /// append (quest src/reward items; petition
+    /// precedent — the live `SendNewItem` push
+    /// joins with Slice 3's item runtime).
+    fn quest_grant_item(&mut self, actor_low: u32, item_id: u32, count: u32) -> bool {
+        let Some((bag, slot)) = self.quest_free_slot(actor_low) else {
+            return false;
+        };
+        let item_guid = match self
+            .deps
+            .quest_reward
+            .create_reward_item(actor_low, item_id, count, bag, slot, 0)
+        {
+            Ok(guid) => guid,
+            Err(e) => {
+                self.log
+                    .out(Level::Error, &format!("quest item grant failed: {e}"));
+                return false;
+            }
+        };
+        let Some(player) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid(actor_low)))
+        else {
+            return false;
+        };
+        player
+            .saved
+            .inventory
+            .push(mangos_db::character_load::InventoryRow {
+                item: mangos_db::character_load::ItemInstanceRow {
+                    creator_guid: 0,
+                    gift_creator_guid: 0,
+                    count,
+                    duration: 0,
+                    charges: "0 0 0 0 0 ".to_string(),
+                    flags: 0,
+                    enchantments: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0".to_string(),
+                    random_property_id: 0,
+                    durability: 0,
+                    text: 0,
+                    item_guid,
+                    item_id,
+                    generated_loot: 0,
+                },
+                bag,
+                #[allow(clippy::cast_possible_truncation)]
+                slot: slot as u8,
+            });
+        true
+    }
+
+    /// `Spell::DoCreateItem` store half
+    /// (`MapEvent::CreateItem` consumer): plan over
+    /// the baseline, DB writes, baseline mutation
+    /// in lockstep, then `SendNewItem`. Overflow
+    /// past the plan is silently dropped, exactly
+    /// as the fork's `numToAdd -= noSpace` arm.
+    #[allow(clippy::too_many_lines)] // one DoCreateItem store port
+    fn store_created_item(&mut self, actor_low: u32, item_id: u32, count: u32) {
+        let prototypes = &self.deps.world_stores.item_prototypes;
+        let Some(proto) = prototypes.get(item_id) else {
+            return;
+        };
+        // `ItemPrototype::HasSignature`: the
+        // "Crafted by ..." creator stamp.
+        let creator_low = if proto.stackable == 1
+            && proto.class != 0
+            && proto.class != 12
+            && proto.flags & 0x0002_0000 == 0
+            && item_id != 6948
+        {
+            actor_low
+        } else {
+            0
+        };
+        let snapshot = {
+            let Some(player) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get(&map_id))
+                .and_then(|map| map.player(player_guid(actor_low)))
+            else {
+                return;
+            };
+            player.saved.inventory.clone()
+        };
+        let plan = plan_store_new_item(&snapshot, proto, count, prototypes);
+        if plan.is_empty() {
+            return;
+        }
+        // Bag-slot byte for `SendNewItem` from the
+        // first destination (255 = backpack).
+        let bag_slot_of = |bag_key: u32| -> u8 {
+            if bag_key == 0 {
+                return 255;
+            }
+            snapshot
+                .iter()
+                .find(|row| row.item.item_guid == bag_key)
+                .map_or(255, |row| row.slot)
+        };
+        let mut granted = 0u32;
+        let mut merges: Vec<(u32, u32)> = Vec::new();
+        let mut new_rows: Vec<mangos_db::character_load::InventoryRow> = Vec::new();
+        let mut first: Option<(u8, u32)> = None;
+        for dest in &plan {
+            match *dest {
+                StoreDest::Merge {
+                    item_guid,
+                    add,
+                    new_count,
+                } => {
+                    if let Err(e) = self.deps.quest_reward.set_item_count(item_guid, new_count) {
+                        self.log
+                            .out(Level::Error, &format!("created item merge failed: {e}"));
+                        continue;
+                    }
+                    if first.is_none() {
+                        let bag_key = snapshot
+                            .iter()
+                            .find(|row| row.item.item_guid == item_guid)
+                            .map_or(0, |row| row.bag);
+                        first = Some((bag_slot_of(bag_key), u32::MAX));
+                    }
+                    merges.push((item_guid, new_count));
+                    granted += add;
+                }
+                StoreDest::New { bag, slot, count } => {
+                    let item_guid = match self.deps.quest_reward.create_reward_item(
+                        actor_low,
+                        item_id,
+                        count,
+                        bag,
+                        slot,
+                        creator_low,
+                    ) {
+                        Ok(guid) => guid,
+                        Err(e) => {
+                            self.log
+                                .out(Level::Error, &format!("created item grant failed: {e}"));
+                            continue;
+                        }
+                    };
+                    if first.is_none() {
+                        first = Some((bag_slot_of(bag), slot));
+                    }
+                    new_rows.push(mangos_db::character_load::InventoryRow {
+                        item: mangos_db::character_load::ItemInstanceRow {
+                            creator_guid: creator_low,
+                            gift_creator_guid: 0,
+                            count,
+                            duration: 0,
+                            charges: "0 0 0 0 0 ".to_string(),
+                            flags: 0,
+                            enchantments: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0".to_string(),
+                            random_property_id: 0,
+                            durability: 0,
+                            text: 0,
+                            item_guid,
+                            item_id,
+                            generated_loot: 0,
+                        },
+                        bag,
+                        #[allow(clippy::cast_possible_truncation)]
+                        slot: slot as u8,
+                    });
+                    granted += count;
+                }
+            }
+        }
+        if granted == 0 {
+            return;
+        }
+        if let Some(player) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid(actor_low)))
+        {
+            for (item_guid, new_count) in merges {
+                if let Some(row) = player
+                    .saved
+                    .inventory
+                    .iter_mut()
+                    .find(|row| row.item.item_guid == item_guid)
+                {
+                    row.item.count = new_count;
+                }
+            }
+            player.saved.inventory.extend(new_rows);
+        }
+        // The fork writes the real slot only when the
+        // first destination item holds the whole grant.
+        let (bag_slot, slot_field) = match (first, plan.first()) {
+            (Some((bag_slot, slot)), Some(StoreDest::New { count, .. })) if *count == granted => {
+                (bag_slot, slot)
+            }
+            (Some((bag_slot, _)), _) => (bag_slot, u32::MAX),
+            _ => (255, u32::MAX),
+        };
+        if let Some(session_id) = self.player_session.get(&actor_low).copied() {
+            self.reply_packet(
+                session_id,
+                new_item_packet(
+                    player_guid(actor_low),
+                    bag_slot,
+                    slot_field,
+                    item_id,
+                    granted,
+                ),
+            );
+        }
+    }
+
+    /// `DestroyItemCount` over the DB-row inventory
+    /// (stack walk; DB writes + baseline mutation
+    /// in lockstep).
+    fn quest_destroy_item_count(&mut self, actor_low: u32, item_id: u32, mut count: u32) {
+        // Plan the stack walk off a snapshot, then
+        // apply DB writes, then the in-memory edits.
+        let plan: Vec<(u32, u32)> = {
+            let Some(player) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get(&map_id))
+                .and_then(|map| map.player(player_guid(actor_low)))
+            else {
+                return;
+            };
+            // Fork walk order/scope (backpack,
+            // keyring, inventory bags; never bank or
+            // equipped rows).
+            let mut plan = Vec::new();
+            for (item_guid, stack) in player.quest_destroy_candidates(item_id) {
+                if count == 0 {
+                    break;
+                }
+                let take = stack.min(count);
+                plan.push((item_guid, stack - take));
+                count -= take;
+            }
+            plan
+        };
+        for (item_guid, new_count) in &plan {
+            if let Err(e) = self
+                .deps
+                .quest_reward
+                .set_item_count(*item_guid, *new_count)
+            {
+                self.log
+                    .out(Level::Error, &format!("quest item destroy failed: {e}"));
+            }
+        }
+        if let Some(player) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid(actor_low)))
+        {
+            for (item_guid, new_count) in &plan {
+                if let Some(inv) = player
+                    .saved
+                    .inventory
+                    .iter_mut()
+                    .find(|inv| inv.item.item_guid == *item_guid)
+                {
+                    inv.item.count = *new_count;
+                }
+            }
+            player.saved.inventory.retain(|inv| inv.item.count != 0);
+        }
+    }
+
+    /// `CompleteQuest` transition + client packet.
+    fn quest_complete_and_notify(&mut self, id: SessionId, actor_low: u32, quest_id: u32) {
+        let transitioned = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid(actor_low)))
+            .is_some_and(|player| player.complete_quest(quest_id));
+        if transitioned {
+            let mut writer = PacketWriter::new();
+            writer.write_u32_le(quest_id);
+            let mut reply = WorldPacket::new(opcode_id::SMSG_QUESTUPDATE_COMPLETE);
+            reply.take_writer(writer);
+            self.reply_packet(id, reply);
+        }
+    }
+
+    /// `Player::AddQuest` (script hooks, announce,
+    /// and group-share arms unmodeled).
+    fn quest_add(&mut self, id: SessionId, actor_low: u32, q: &QuestTemplate) -> bool {
+        use mangos_protocol::update_field_table::offsets as uoff;
+        let stores_templates = &self.deps.world_stores.quest_templates;
+        // Free log slot first (CanAddQuest).
+        let free_slot = {
+            let Some(player) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get(&map_id))
+                .and_then(|map| map.player(player_guid(actor_low)))
+            else {
+                return false;
+            };
+            let v = player.unit.world.object.values();
+            (0..20u16).find(|&slot| v.get_u32(uoff::PLAYER_QUEST_LOG_1_1 + slot * 3) == 0)
+        };
+        let Some(slot) = free_slot else {
+            let reply = WorldPacket::new(opcode_id::SMSG_QUESTLOG_FULL);
+            self.reply_packet(id, reply);
+            return false;
+        };
+        // Exclusive group: others become UNAVAILABLE.
+        if q.exclusive_group != 0
+            && let Some(player) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get_mut(&map_id))
+                .and_then(|map| map.player_mut(player_guid(actor_low)))
+        {
+            let others: Vec<u32> = stores_templates
+                .iter()
+                .filter(|o| o.exclusive_group == q.exclusive_group && o.entry != q.entry)
+                .map(|o| o.entry)
+                .collect();
+            for other in others {
+                player.set_quest_status(other, 2);
+            }
+        }
+        // Source item / spell.
+        if q.src_item_id != 0 {
+            self.quest_grant_item(actor_low, q.src_item_id, q.src_item_count.max(1));
+        }
+        let Some(player) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid(actor_low)))
+        else {
+            return false;
+        };
+        {
+            let row = player.quest_row_or_insert(q.entry);
+            row.status = QUEST_STATUS_INCOMPLETE;
+            row.rewarded = 0;
+            row.explored = 0;
+            row.mob_count = [0; 4];
+            row.item_count = [0; 4];
+        }
+        if q.limit_time != 0 {
+            player.quest_timers.insert(
+                q.entry,
+                mangos_entities::player::QuestTimerState {
+                    remaining_ms_at_load: q.limit_time.saturating_mul(1000),
+                    timed_active: true,
+                },
+            );
+        }
+        player.set_quest_slot(slot, q.entry, q.limit_time);
+        player.adjust_quest_item_counts(q);
+        if q.src_spell != 0 {
+            let caster = player_guid(actor_low);
+            if let Some(map) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get_mut(&map_id))
+            {
+                map.cast_spell(
+                    caster,
+                    q.src_spell,
+                    mangos_map::spells::CastTarget::SelfCast,
+                    mangos_map::spells::CastOptions {
+                        triggered: true,
+                        skip_known: true,
+                        cast_item: None,
+                    },
+                );
+            }
+        }
+        // Fork: autocomplete/objective-met quests
+        // complete at accept.
+        let completable = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid(actor_low)))
+            .is_some_and(|player| player.can_complete_quest(q));
+        if completable {
+            self.quest_complete_and_notify(id, actor_low, q.entry);
+        }
+        true
+    }
+
+    fn on_questgiver_accept_quest(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let (Ok(npc_raw), Ok(quest_id)) = (reader.read_u64_le(), reader.read_u32_le()) else {
+            return;
+        };
+        let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
+        let Some((entry, _name)) = self.quest_creature(actor_low, npc_guid) else {
+            return;
+        };
+        let stores = &self.deps.world_stores;
+        let Some(q) = stores.quest_templates.get(quest_id).cloned() else {
+            return;
+        };
+        if !stores
+            .quest_relations
+            .creature_starts(entry)
+            .contains(&quest_id)
+        {
+            return;
+        }
+        let mut reason = 0u32;
+        let can_take = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+            .and_then(|map| map.player(player_guid(actor_low)))
+            .is_some_and(|player| {
+                quest_can_take(player, &q, &stores.quest_templates, false, &mut reason)
+            });
+        if !can_take {
+            let mut writer = PacketWriter::new();
+            writer.write_u32_le(reason);
+            let mut reply = WorldPacket::new(opcode_id::SMSG_QUESTGIVER_QUEST_INVALID);
+            reply.take_writer(writer);
+            self.reply_packet(id, reply);
+            return;
+        }
+        self.quest_add(id, actor_low, &q);
+    }
+
+    /// `HandleQuestgiverCompleteQuest`: the fork
+    /// resolves no NPC here — the guid is echoed
+    /// into the reply unverified. Completable is
+    /// `CanRewardQuest` (or
+    /// `CanCompleteRepeatableQuest` for a
+    /// repeatable quest not yet COMPLETE);
+    /// `CloseOnCancel = false`.
+    fn on_questgiver_complete_quest(
+        &mut self,
+        id: SessionId,
+        actor_low: u32,
+        packet: &WorldPacket,
+    ) {
+        let mut reader = packet.reader();
+        let (Ok(npc_raw), Ok(quest_id)) = (reader.read_u64_le(), reader.read_u32_le()) else {
+            return;
+        };
+        let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
+        let stores = self.deps.world_stores.clone();
+        let Some(q) = stores.quest_templates.get(quest_id).cloned() else {
+            return;
+        };
+        let mut reason = 0u32;
+        let completable = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+            .and_then(|map| map.player(player_guid(actor_low)))
+            .is_some_and(|player| {
+                if player.quest_status(quest_id) != QUEST_STATUS_COMPLETE && q.is_repeatable() {
+                    quest_can_complete_repeatable(player, &q, &stores.quest_templates, &mut reason)
+                } else {
+                    quest_can_reward(player, &q, &stores.quest_templates, &mut reason)
+                }
+            });
+        if reason != 0 {
+            self.quest_invalid(id, reason);
+        }
+        let items = &stores.item_prototypes;
+        let rate = self.config.rate_drop_money;
+        let reply = build_quest_request_items(npc_guid, &q, completable, false, items, rate)
+            .unwrap_or_else(|| build_quest_offer_reward(npc_guid, &q, true, items, rate));
+        self.reply_packet(id, reply);
+    }
+
+    /// `HandleQuestgiverRequestRewardOpcode`:
+    /// complete the quest if completable, then
+    /// require COMPLETE and offer the reward. The
+    /// fork's dead-player arm (quest enders visible
+    /// only to the dead, q3912) is unmodeled: a
+    /// dead player is refused outright.
+    fn on_questgiver_request_reward(
+        &mut self,
+        id: SessionId,
+        actor_low: u32,
+        packet: &WorldPacket,
+    ) {
+        let mut reader = packet.reader();
+        let (Ok(npc_raw), Ok(quest_id)) = (reader.read_u64_le(), reader.read_u32_le()) else {
+            return;
+        };
+        let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
+        let Some((entry, _name)) = self.quest_creature(actor_low, npc_guid) else {
+            return;
+        };
+        let stores = self.deps.world_stores.clone();
+        if !stores
+            .quest_relations
+            .creature_ends(entry)
+            .contains(&quest_id)
+        {
+            return;
+        }
+        let alive = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+            .and_then(|map| map.player(player_guid(actor_low)))
+            .is_some_and(|player| player.unit.is_alive());
+        if !alive {
+            return;
+        }
+        let Some(q) = stores.quest_templates.get(quest_id).cloned() else {
+            return;
+        };
+        let can_complete = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid(actor_low)))
+            .is_some_and(|player| player.can_complete_quest(&q));
+        if can_complete {
+            self.quest_complete_and_notify(id, actor_low, quest_id);
+            // AUTO_REWARDED pays inside the fork's
+            // CompleteQuest (announce=false); here it
+            // pays on this transition only — map-layer
+            // completions pay at their next
+            // request-reward instead.
+            if q.quest_flags & 0x0400 != 0 {
+                self.quest_reward(id, actor_low, npc_guid, &q, 0, false);
+                return;
+            }
+        }
+        let status = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+            .and_then(|map| map.player(player_guid(actor_low)))
+            .map_or(0, |player| player.quest_status(quest_id));
+        if status != QUEST_STATUS_COMPLETE {
+            return;
+        }
+        let reply = build_quest_offer_reward(
+            npc_guid,
+            &q,
+            true,
+            &stores.item_prototypes,
+            self.config.rate_drop_money,
+        );
+        self.reply_packet(id, reply);
+    }
+
+    /// `HandleQuestgiverChooseRewardOpcode`: on
+    /// `CanRewardQuest` success pay out and chain
+    /// the next quest's details (`GetNextQuest`);
+    /// on failure resend the offer (after the
+    /// fork's unconditional not-enough-money
+    /// packet when that arm failed).
+    fn on_questgiver_choose_reward(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let (Ok(npc_raw), Ok(quest_id), Ok(choice)) = (
+            reader.read_u64_le(),
+            reader.read_u32_le(),
+            reader.read_u32_le(),
+        ) else {
+            return;
+        };
+        if choice >= 6 {
+            return;
+        }
+        let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
+        let Some((entry, _name)) = self.quest_creature(actor_low, npc_guid) else {
+            return;
+        };
+        let stores = self.deps.world_stores.clone();
+        if !stores
+            .quest_relations
+            .creature_ends(entry)
+            .contains(&quest_id)
+        {
+            return;
+        }
+        let alive = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+            .and_then(|map| map.player(player_guid(actor_low)))
+            .is_some_and(|player| player.unit.is_alive());
+        if !alive {
+            return;
+        }
+        let Some(q) = stores.quest_templates.get(quest_id).cloned() else {
+            return;
+        };
+        let mut reason = 0u32;
+        let can_reward = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+            .and_then(|map| map.player(player_guid(actor_low)))
+            .is_some_and(|player| {
+                quest_can_reward(player, &q, &stores.quest_templates, &mut reason)
+            });
+        let items = &stores.item_prototypes;
+        let rate = self.config.rate_drop_money;
+        if !can_reward {
+            if reason != 0 {
+                self.quest_invalid(id, reason);
+            }
+            let reply = build_quest_offer_reward(npc_guid, &q, true, items, rate);
+            self.reply_packet(id, reply);
+            return;
+        }
+        self.quest_reward(id, actor_low, npc_guid, &q, choice, true);
+        // GetNextQuest: the chain successor, only
+        // when this NPC also starts it.
+        let next_id = q.next_quest_in_chain;
+        if next_id != 0
+            && stores
+                .quest_relations
+                .creature_starts(entry)
+                .contains(&next_id)
+            && let Some(next) = stores.quest_templates.get(next_id)
+        {
+            let reply = build_quest_details(npc_guid, next, true, items, rate);
+            self.reply_packet(id, reply);
+        }
+    }
+
+    /// `Player::RewardQuest` payout body (callers
+    /// gate with `quest_can_reward`; mail and
+    /// script hooks unmodeled; item space pre-check
+    /// folded into the grant's full-backpack drop).
+    /// `announce` mirrors the fork flag: the
+    /// quest-complete packet is suppressed for the
+    /// `AUTO_REWARDED` completion path.
+    #[allow(clippy::too_many_lines)]
+    fn quest_reward(
+        &mut self,
+        id: SessionId,
+        actor_low: u32,
+        npc_guid: ObjectGuid,
+        q: &QuestTemplate,
+        choice: u32,
+        announce: bool,
+    ) {
+        // Destroy required items.
+        for i in 0..4 {
+            if q.req_item_ids[i] != 0 && q.req_item_counts[i] != 0 {
+                self.quest_destroy_item_count(actor_low, q.req_item_ids[i], q.req_item_counts[i]);
+            }
+        }
+        // Choice + fixed reward items (an empty
+        // choice slot grants nothing, fork shape).
+        if q.rew_choice_items_count() > 0 && q.rew_choice_item_ids[choice as usize] != 0 {
+            self.quest_grant_item(
+                actor_low,
+                q.rew_choice_item_ids[choice as usize],
+                q.rew_choice_item_counts[choice as usize].max(1),
+            );
+        }
+        for i in 0..4 {
+            if q.rew_item_ids[i] != 0 {
+                self.quest_grant_item(actor_low, q.rew_item_ids[i], q.rew_item_counts[i].max(1));
+            }
+        }
+        let player_guid = player_guid(actor_low);
+        let mut xp_shown = 0u32;
+        let mut money_given: i64 = 0;
+        let level = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get(&map_id))
+            .and_then(|map| map.player(player_guid))
+            .map_or(0, |player| player.unit.level());
+        // Reputation rows (client fields refresh on
+        // relog; no runtime reputation manager).
+        if let Some(player) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid))
+        {
+            for i in 0..5 {
+                if q.rew_rep_factions[i] != 0 && q.rew_rep_values[i] != 0 {
+                    match player
+                        .deferred
+                        .reputation
+                        .iter_mut()
+                        .find(|r| r.faction == q.rew_rep_factions[i])
+                    {
+                        Some(row) => row.standing += q.rew_rep_values[i],
+                        None => player.deferred.reputation.push(
+                            mangos_db::character_load::ReputationRow {
+                                faction: q.rew_rep_factions[i],
+                                standing: q.rew_rep_values[i],
+                                flags: 0,
+                            },
+                        ),
+                    }
+                }
+            }
+            // Log slot + timers + status.
+            if let Some(slot) = player.find_quest_slot(q.entry) {
+                player.set_quest_slot(slot, 0, 0);
+            }
+            player.quest_timers.remove(&q.entry);
+            let row = player.quest_row_or_insert(q.entry);
+            row.rewarded = 1;
+            // Fork stores the chosen item id, not
+            // the choice index (`m_reward_choice`).
+            #[allow(clippy::cast_possible_wrap)]
+            {
+                row.reward_choice = q.rew_choice_item_ids[choice as usize] as i32;
+            }
+            row.status = if q.is_repeatable() {
+                0
+            } else {
+                QUEST_STATUS_COMPLETE
+            };
+        }
+        // XP or XP-to-money at level cap (60).
+        if level >= 60 {
+            #[allow(clippy::cast_precision_loss)]
+            let converted = (q.rew_money_max_level as f32 * self.config.rate_drop_money) as i64;
+            money_given += converted;
+        } else {
+            let raw = q.xp_value(level);
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            let scaled = (raw as f32 * self.config.rate_xp_quest) as u32;
+            xp_shown = scaled;
+            if let Some(map) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get_mut(&map_id))
+            {
+                map.reward_quest_xp(player_guid, scaled);
+            }
+        }
+        let money_reward = i64::from(q.rew_or_req_money(self.config.rate_drop_money));
+        money_given += money_reward;
+        self.modify_money(actor_low, money_given);
+        // SendQuestReward packet (fork layout:
+        // quest, 0x03, XP, money, fixed-reward count,
+        // then that many leading (id, count) slots —
+        // zero slots among them are written as 0,0).
+        if announce {
+            let mut writer = PacketWriter::new();
+            writer.write_u32_le(q.entry);
+            writer.write_u32_le(0x03);
+            writer.write_u32_le(xp_shown);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            writer.write_u32_le(money_given as u32);
+            #[allow(clippy::cast_possible_truncation)]
+            writer.write_u32_le(q.rew_items_count() as u32);
+            for i in 0..q.rew_items_count() {
+                writer.write_u32_le(q.rew_item_ids[i]);
+                writer.write_u32_le(q.rew_item_counts[i]);
+            }
+            let mut reply = WorldPacket::new(opcode_id::SMSG_QUESTGIVER_QUEST_COMPLETE);
+            reply.take_writer(writer);
+            self.reply_packet(id, reply);
+        }
+        // Reward spell (questgiver-cast variant when
+        // RewSpellCast is set, else self-cast).
+        if q.rew_spell_cast != 0 {
+            if let Some(map) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get_mut(&map_id))
+            {
+                map.cast_spell(
+                    npc_guid,
+                    q.rew_spell_cast,
+                    mangos_map::spells::CastTarget::Unit(player_guid),
+                    mangos_map::spells::CastOptions {
+                        triggered: true,
+                        skip_known: true,
+                        cast_item: None,
+                    },
+                );
+            }
+        } else if q.rew_spell != 0
+            && let Some(map) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get_mut(&map_id))
+        {
+            map.cast_spell(
+                player_guid,
+                q.rew_spell,
+                mangos_map::spells::CastTarget::SelfCast,
+                mangos_map::spells::CastOptions {
+                    triggered: true,
+                    skip_known: true,
+                    cast_item: None,
+                },
+            );
+        }
+        // Next-quest chaining lives in the choose
+        // handler (`GetNextQuest`), as in the fork.
+    }
+
+    fn on_questlog_remove_quest(&mut self, _id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        use mangos_protocol::update_field_table::offsets as uoff;
+        let Ok(slot) = packet.reader().read_u8() else {
+            return;
+        };
+        let Some(player) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid(actor_low)))
+        else {
+            return;
+        };
+        if slot >= 20 {
+            return;
+        }
+        let quest_id = player
+            .unit
+            .world
+            .object
+            .values()
+            .get_u32(uoff::PLAYER_QUEST_LOG_1_1 + u16::from(slot) * 3);
+        if quest_id == 0 {
+            return;
+        }
+        // AbandonQuest subset: status cleared, timer
+        // dropped, slot cleared (quest source-item
+        // cleanup unmodeled).
+        player.set_quest_status(quest_id, 0);
+        player.quest_timers.remove(&quest_id);
+        if let Some(row) = player
+            .deferred
+            .quest_status
+            .iter_mut()
+            .find(|r| r.quest == quest_id)
+        {
+            row.mob_count = [0; 4];
+            row.item_count = [0; 4];
+            row.explored = 0;
+        }
+        player.set_quest_slot(u16::from(slot), 0, 0);
+    }
+
+    fn on_questlog_swap_quest(&mut self, _id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        use mangos_protocol::update_field_table::offsets as uoff;
+        let mut reader = packet.reader();
+        let (Ok(slot1), Ok(slot2)) = (reader.read_u8(), reader.read_u8()) else {
+            return;
+        };
+        if slot1 >= 20 || slot2 >= 20 || slot1 == slot2 {
+            return;
+        }
+        let Some(player) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.player_mut(player_guid(actor_low)))
+        else {
+            return;
+        };
+        let base1 = uoff::PLAYER_QUEST_LOG_1_1 + u16::from(slot1) * 3;
+        let base2 = uoff::PLAYER_QUEST_LOG_1_1 + u16::from(slot2) * 3;
+        let v = player.unit.world.object.values_mut();
+        for off in 0..3u16 {
+            let a = v.get_u32(base1 + off);
+            let b = v.get_u32(base2 + off);
+            v.set_u32(base1 + off, b);
+            v.set_u32(base2 + off, a);
+        }
+    }
+
+    fn on_quest_query(&mut self, id: SessionId, _actor_low: u32, packet: &WorldPacket) {
+        let Ok(quest_id) = packet.reader().read_u32_le() else {
+            return;
+        };
+        let stores = &self.deps.world_stores;
+        let Some(q) = stores.quest_templates.get(quest_id) else {
+            return;
+        };
+        let reply = build_quest_query_response(q);
+        self.reply_packet(id, reply);
     }
 
     /// `GetNPCIfCanInteractWith` reduced to the checks
@@ -13131,7 +15486,7 @@ impl World {
             now_unix: unix_now(),
             skills: Some(&self.deps.world_stores.skills),
             item_prototypes: Some(&self.deps.world_stores.item_prototypes),
-            quest_templates: Some(&self.deps.world_stores.quests),
+            quest_templates: Some(&self.deps.world_stores.quest_templates),
         };
         Player::materialize(load, &inputs)
     }
@@ -13312,7 +15667,12 @@ impl World {
             self.drain_map_events();
             return;
         }
-        // Far transfer.
+        // Far transfer: the pet reloads on the new map
+        // from its refreshed row (live transfer of the
+        // pet aggregate is Slice 5 territory).
+        if let Some(map) = self.maps.get_mut(&current_key) {
+            map.unsummon_owner_pet(guid, mangos_db::pet::PET_SAVE_AS_CURRENT);
+        }
         let Some(mut player) = self
             .maps
             .get_mut(&current_key)
@@ -13839,6 +16199,11 @@ impl World {
             Vec::new()
         };
         map.add_player(player, &self.deps.respawn_times, now_unix, now_ms);
+        // `Player::LoadPet` (current pet) once the
+        // player is in the map; far-teleport re-entry
+        // reloads from the rows the old map's unsummon
+        // refreshed.
+        map.load_current_pet(player_guid(guid_low));
         if apply_auras {
             // Saved auras land after the player is in
             // the map (`Player::_LoadAuras` at login
@@ -13863,6 +16228,13 @@ impl World {
     /// and disconnect share this; character save is
     /// Phase 6).
     fn leave_map(&mut self, guid_low: u32) {
+        // Logout `RemovePet(PET_SAVE_AS_CURRENT)` while
+        // the pet is still live in the map.
+        if let Some(map_id) = self.player_map.get(&guid_low).copied()
+            && let Some(map) = self.maps.get_mut(&map_id)
+        {
+            map.unsummon_owner_pet(player_guid(guid_low), mangos_db::pet::PET_SAVE_AS_CURRENT);
+        }
         // `LogoutPlayer`: save while the aggregate is
         // still in its map, then remove it.
         self.save_player(guid_low, false, true);
@@ -13985,6 +16357,71 @@ impl World {
                         ),
                     );
                 }
+                MapEvent::SavePet { row, mode } => {
+                    if let Err(e) = self.deps.pets.save_pet(*row, mode) {
+                        self.log.out(Level::Error, &format!("pet save failed: {e}"));
+                    }
+                }
+                MapEvent::DeletePet { pet_id } => {
+                    if let Err(e) = self.deps.pets.delete_pet(pet_id) {
+                        self.log
+                            .out(Level::Error, &format!("pet delete failed: {e}"));
+                    }
+                }
+                MapEvent::PromotePet { owner_low, pet_id } => {
+                    if let Err(e) = self.deps.pets.promote_pet(owner_low, pet_id) {
+                        self.log
+                            .out(Level::Error, &format!("pet promote failed: {e}"));
+                    }
+                }
+                MapEvent::RenamePet {
+                    owner_low,
+                    pet_id,
+                    name,
+                } => {
+                    if let Err(e) = self.deps.pets.rename_pet(owner_low, pet_id, name) {
+                        self.log
+                            .out(Level::Error, &format!("pet rename failed: {e}"));
+                    }
+                }
+                MapEvent::CreateItem {
+                    player,
+                    item_id,
+                    count,
+                } => {
+                    self.store_created_item(player.counter(), item_id, count);
+                }
+                MapEvent::TeleportPlayer {
+                    player,
+                    map_id,
+                    position,
+                } => {
+                    if let Some(id) = self.player_session.get(&player.counter()).copied() {
+                        self.teleport_player(id, map_id, position);
+                    }
+                }
+                MapEvent::KnockBack {
+                    player,
+                    vertical_speed,
+                } => {
+                    if let Some(id) = self.player_session.get(&player.counter()).copied()
+                        && let Some(entry) = self.sessions.get_mut(&id)
+                    {
+                        entry.anticheat.on_knock_back(vertical_speed);
+                    }
+                }
+                MapEvent::SetItemCount { item_guid, count } => {
+                    if let Err(e) = self.deps.quest_reward.set_item_count(item_guid, count) {
+                        self.log
+                            .out(Level::Error, &format!("item count write failed: {e}"));
+                    }
+                }
+                MapEvent::SetItemCharges { item_guid, charges } => {
+                    if let Err(e) = self.deps.quest_reward.set_item_charges(item_guid, charges) {
+                        self.log
+                            .out(Level::Error, &format!("item charges write failed: {e}"));
+                    }
+                }
                 MapEvent::ClearGameObjectRespawn {
                     guid_low,
                     instance_id,
@@ -14040,8 +16477,66 @@ impl World {
     /// `SpellCastTargets` (u16 mask; SELF=0 or UNIT
     /// packed guid). Unknown/unsupported target forms
     /// drop silently like the unknown-spell arm.
+    /// `SpellCastTargets::Read` subset: u16 mask,
+    /// unit packed GUID, then source/destination
+    /// locations in fork field order (GO/corpse/item
+    /// GUIDs are skipped over; string targets are
+    /// unsupported). A destination wins over the
+    /// unit target when both are present.
+    fn parse_cast_target(body: &[u8], offset: usize) -> Option<mangos_map::spells::CastTarget> {
+        use mangos_map::spells::CastTarget;
+        let mask = u16::from_le_bytes([*body.get(offset)?, *body.get(offset + 1)?]);
+        let mut pos = offset + 2;
+        let mut unit = None;
+        let mut dest = None;
+        let read_guid = |body: &[u8], pos: &mut usize| -> Option<ObjectGuid> {
+            let (guid, taken) = ObjectGuid::read_packed(body.get(*pos..)?).ok()?;
+            *pos += taken;
+            Some(guid)
+        };
+        if mask & 0x0002 != 0 {
+            unit = Some(read_guid(body, &mut pos)?);
+        }
+        if mask & 0x0800 != 0 {
+            read_guid(body, &mut pos)?; // gameobject
+        }
+        if mask & (0x0200 | 0x8000) != 0 {
+            read_guid(body, &mut pos)?; // corpse
+        }
+        if mask & (0x0010 | 0x1000) != 0 {
+            read_guid(body, &mut pos)?; // item / trade item
+        }
+        if mask & 0x0020 != 0 {
+            pos = pos.checked_add(12).filter(|p| *p <= body.len())?;
+        }
+        if mask & 0x0040 != 0 {
+            let read_f32 = |at: usize| -> Option<f32> {
+                body.get(at..at + 4)
+                    .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            };
+            dest = Some(mangos_movement::movement_info::Position::new(
+                read_f32(pos)?,
+                read_f32(pos + 4)?,
+                read_f32(pos + 8)?,
+                0.0,
+            ));
+        }
+        if mask & 0x2000 != 0 {
+            return None; // string targets unsupported
+        }
+        if let Some(pos) = dest {
+            Some(CastTarget::Dest(pos))
+        } else if let Some(guid) = unit {
+            Some(CastTarget::Unit(guid))
+        } else if mask == 0 {
+            Some(CastTarget::SelfCast)
+        } else {
+            None
+        }
+    }
+
     fn on_cast_spell(&mut self, id: SessionId, packet: &WorldPacket) {
-        use mangos_map::spells::{CastOptions, CastTarget};
+        use mangos_map::spells::CastOptions;
         let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
         };
@@ -14051,22 +16546,258 @@ impl World {
             return;
         }
         let spell_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
-        let mask = u16::from_le_bytes([body[4], body[5]]);
-        let target = if mask == 0 {
-            CastTarget::SelfCast
-        } else if mask & 0x0002 != 0 {
-            let Ok((target_guid, _)) = ObjectGuid::read_packed(&body[6..]) else {
-                self.bad_packet(id, packet.opcode());
-                return;
-            };
-            CastTarget::Unit(target_guid)
-        } else {
-            return; // item/GO/location targets unsupported
+        let Some(target) = Self::parse_cast_target(body, 4) else {
+            self.bad_packet(id, packet.opcode());
+            return;
         };
         let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
         map.cast_spell(guid, spell_id, target, CastOptions::default());
+        self.drain_map_events();
+    }
+
+    /// `WorldSession::HandleUseItemOpcode`
+    /// (`SpellHandler.cpp:36`) + `Player::CastItemUseSpell`:
+    /// fork gates over the inventory baseline, then
+    /// every `ON_USE` prototype spell cast through
+    /// the map with a cast item (first
+    /// non-triggered). Recorded subsets: trade
+    /// state, shapeshift form gate, honor rank,
+    /// proficiency-skill arm, `item_required_target`
+    /// table (no store loaded), item-use aura
+    /// interrupts, and item/GO/location cast
+    /// targets are unmodeled.
+    #[allow(clippy::too_many_lines)] // one HandleUseItemOpcode port
+    fn on_use_item(&mut self, id: SessionId, packet: &WorldPacket) {
+        use mangos_map::spells::{CastItemCtx, CastOptions};
+        // `InventoryResult` subset (ItemDefines.h).
+        const EQUIP_ERR_CANT_EQUIP_LEVEL: u8 = 1;
+        const EQUIP_ERR_CANT_EQUIP_SKILL: u8 = 2;
+        const EQUIP_ERR_NO_PROFICIENCY: u8 = 8;
+        const EQUIP_ERR_NEVER_USE: u8 = 10;
+        const EQUIP_ERR_ITEM_NOT_FOUND: u8 = 23;
+        const EQUIP_ERR_YOU_ARE_DEAD: u8 = 38;
+        const EQUIP_ERR_NOT_IN_COMBAT: u8 = 60;
+        const EQUIP_ERR_CANT_EQUIP_REPUTATION: u8 = 64;
+
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        let body = packet.body();
+        if body.len() < 5 {
+            self.bad_packet(id, packet.opcode());
+            return;
+        }
+        let (bag_index, slot, spell_slot) = (body[0], body[1], body[2]);
+        let actor_low = guid.counter();
+        let fail = |this: &mut Self, result: u8, item: ObjectGuid, required_level: u32| {
+            this.reply_packet(id, equip_error_packet(result, item, required_level));
+        };
+
+        // Resolve the item and player facts in one
+        // baseline snapshot (`GetItemByPos`).
+        let snapshot = {
+            let Some(player) = self
+                .maps
+                .get(&map_key)
+                .and_then(|map| map.player(player_guid(actor_low)))
+            else {
+                return;
+            };
+            let inv = &player.saved.inventory;
+            let row = if bag_index == 255 {
+                inv.iter().find(|r| r.bag == 0 && r.slot == slot)
+            } else {
+                inv.iter()
+                    .find(|r| r.bag == 0 && r.slot == bag_index)
+                    .and_then(|bag_row| {
+                        inv.iter()
+                            .find(|r| r.bag == bag_row.item.item_guid && r.slot == slot)
+                    })
+            }
+            .cloned();
+            (
+                row,
+                player.unit.is_alive(),
+                player.unit.level(),
+                player.unit.class(),
+                player.unit.race(),
+                player.unit.is_in_combat(),
+            )
+        };
+        let (row, alive, level, class, race, in_combat) = snapshot;
+        let Some(row) = row else {
+            fail(self, EQUIP_ERR_ITEM_NOT_FOUND, ObjectGuid::EMPTY, 0);
+            return;
+        };
+        let item_guid = ObjectGuid::with_entry(mangos_guid::HighGuid::ITEM, 0, row.item.item_guid);
+        let Some(proto) = self
+            .deps
+            .world_stores
+            .item_prototypes
+            .get(row.item.item_id)
+            .cloned()
+        else {
+            fail(self, EQUIP_ERR_ITEM_NOT_FOUND, item_guid, 0);
+            return;
+        };
+        if usize::from(spell_slot) >= proto.spells.len()
+            || proto.spells[usize::from(spell_slot)].spell_id == 0
+            || proto.spells[usize::from(spell_slot)].trigger != 0
+        {
+            fail(self, EQUIP_ERR_ITEM_NOT_FOUND, item_guid, 0);
+            return;
+        }
+        let equipped = row.bag == 0 && row.slot < 19;
+        if proto.inventory_type != 0 && !equipped {
+            fail(self, EQUIP_ERR_ITEM_NOT_FOUND, item_guid, 0);
+            return;
+        }
+        // `CanUseItem` subset.
+        if !alive {
+            fail(self, EQUIP_ERR_YOU_ARE_DEAD, item_guid, 0);
+            return;
+        }
+        let class_mask = 1u32 << u32::from(class.saturating_sub(1));
+        let race_mask = 1u32 << u32::from(race.saturating_sub(1));
+        if proto.allowable_class & class_mask == 0 || proto.allowable_race & race_mask == 0 {
+            fail(self, EQUIP_ERR_NEVER_USE, item_guid, 0);
+            return;
+        }
+        let (skill_ok, has_required_spell, rep_rank) = {
+            let Some(player) = self
+                .maps
+                .get(&map_key)
+                .and_then(|map| map.player(player_guid(actor_low)))
+            else {
+                return;
+            };
+            let skill_value = if proto.required_skill == 0 {
+                None
+            } else {
+                Some(
+                    player
+                        .deferred
+                        .skills
+                        .iter()
+                        .find(|s| s.skill == proto.required_skill)
+                        .map_or(0, |s| s.value),
+                )
+            };
+            let has_spell = proto.required_spell == 0
+                || player
+                    .deferred
+                    .spells
+                    .iter()
+                    .any(|s| s.spell == proto.required_spell);
+            let rank = if proto.required_reputation_faction != 0 {
+                reputation_rank(
+                    player,
+                    &self.deps.world_stores.factions,
+                    proto.required_reputation_faction,
+                )
+            } else {
+                0
+            };
+            (skill_value, has_spell, rank)
+        };
+        if let Some(value) = skill_ok {
+            if value == 0 {
+                fail(self, EQUIP_ERR_NO_PROFICIENCY, item_guid, 0);
+                return;
+            }
+            if value < proto.required_skill_rank {
+                fail(self, EQUIP_ERR_CANT_EQUIP_SKILL, item_guid, 0);
+                return;
+            }
+        }
+        if !has_required_spell {
+            fail(self, EQUIP_ERR_NO_PROFICIENCY, item_guid, 0);
+            return;
+        }
+        if level < proto.required_level {
+            fail(
+                self,
+                EQUIP_ERR_CANT_EQUIP_LEVEL,
+                item_guid,
+                proto.required_level,
+            );
+            return;
+        }
+        if proto.required_reputation_faction != 0 && rep_rank < proto.required_reputation_rank {
+            fail(self, EQUIP_ERR_CANT_EQUIP_REPUTATION, item_guid, 0);
+            return;
+        }
+        if in_combat {
+            let non_combat = proto.spells.iter().any(|spell_row| {
+                spell_row.spell_id != 0
+                    && self
+                        .deps
+                        .world_stores
+                        .spells
+                        .get(spell_row.spell_id)
+                        .is_some_and(|entry| entry.attributes & 0x1000_0000 != 0)
+            });
+            if non_combat {
+                fail(self, EQUIP_ERR_NOT_IN_COMBAT, item_guid, 0);
+                return;
+            }
+        }
+        // Bind-on-use family binding
+        // (`ITEM_DYNFLAG_BOUND`, flags bit 0).
+        if matches!(proto.bonding, 1 | 3 | 4) && row.item.flags & 1 == 0 {
+            let new_flags = row.item.flags | 1;
+            if let Some(player) = self
+                .maps
+                .get_mut(&map_key)
+                .and_then(|map| map.player_mut(player_guid(actor_low)))
+                && let Some(baseline) = player
+                    .saved
+                    .inventory
+                    .iter_mut()
+                    .find(|r| r.item.item_guid == row.item.item_guid)
+            {
+                baseline.item.flags = new_flags;
+            }
+            if let Err(e) = self
+                .deps
+                .quest_reward
+                .set_item_flags(row.item.item_guid, new_flags)
+            {
+                self.log
+                    .out(Level::Error, &format!("item bind write failed: {e}"));
+            }
+        }
+        // `SpellCastTargets::ReadForCaster`, same wire
+        // as `on_cast_spell` after the header.
+        let Some(target) = Self::parse_cast_target(body, 3) else {
+            self.bad_packet(id, packet.opcode());
+            return;
+        };
+        let Some(map) = self.maps.get_mut(&map_key) else {
+            return;
+        };
+        let mut count = 0;
+        for spell_row in &proto.spells {
+            if spell_row.spell_id == 0 || spell_row.trigger != 0 {
+                continue;
+            }
+            map.cast_spell(
+                guid,
+                spell_row.spell_id,
+                target,
+                CastOptions {
+                    triggered: count > 0,
+                    skip_known: true,
+                    cast_item: Some(CastItemCtx {
+                        item_guid: row.item.item_guid,
+                        item_entry: row.item.item_id,
+                    }),
+                },
+            );
+            count += 1;
+        }
         self.drain_map_events();
     }
 
@@ -14381,7 +17112,7 @@ impl World {
             return;
         };
         let guid_low = guid.counter();
-        let stores = &self.deps.world_stores;
+        let stores = std::sync::Arc::clone(&self.deps.world_stores);
         let Some(trigger) = stores.area_triggers.get(trigger_id).cloned() else {
             return;
         };
@@ -14441,15 +17172,37 @@ impl World {
                 }
             }
         }
-        // Quest explore credit: progression system absent.
+        // Quest explore credit
+        // (`HandleAreaTrigger` quest arm +
+        // `SetQuestExplored`): mark explored, then
+        // complete if that was the last objective.
         let quest_id = stores.area_triggers.quest_for_trigger(trigger_id);
-        if quest_id != 0 && alive {
-            self.log.out(
-                Level::Detail,
-                &format!(
-                    "area trigger {trigger_id} quest {quest_id} explore credit skipped: quest progression unported"
-                ),
-            );
+        if quest_id != 0
+            && alive
+            && let Some(q) = stores.quest_templates.get(quest_id).cloned()
+            && let Some(map) = self.maps.get_mut(&map_key)
+            && let Some(player) = map.player_mut(guid)
+            && player.quest_status(quest_id) == 3
+            && player.quest_row(quest_id).is_some_and(|r| r.explored == 0)
+        {
+            if let Some(row) = player
+                .deferred
+                .quest_status
+                .iter_mut()
+                .find(|r| r.quest == quest_id)
+            {
+                row.explored = 1;
+            }
+            if let Some(slot) = player.find_quest_slot(quest_id) {
+                player.set_quest_slot_state(slot, 0x01, true);
+            }
+            if player.can_complete_quest(&q) && player.complete_quest(quest_id) {
+                let mut writer = PacketWriter::new();
+                writer.write_u32_le(quest_id);
+                let mut reply = WorldPacket::new(opcode_id::SMSG_QUESTUPDATE_COMPLETE);
+                reply.take_writer(writer);
+                self.reply_packet(id, reply);
+            }
         }
         // Tavern rest: flag only (rested-XP accrual
         // lands with character save).
@@ -14675,6 +17428,7 @@ impl World {
                     has_hover_aura: has_aura(aura_type::HOVER),
                     on_transport_server: !last.transport_guid.is_empty(),
                     being_teleported,
+                    launched: entry.anticheat.launched,
                     spline_finalized: true,
                     in_transport_area: (zone == 1497 && area == 1497)
                         || zone == 2257
@@ -14715,6 +17469,13 @@ impl World {
                     }
                     _ => {}
                 }
+                // Fall-end opcodes clear the launched
+                // state (`MovementHandler.cpp:341`).
+                if opcode == opcode_id::MSG_MOVE_FALL_LAND
+                    || opcode == opcode_id::MSG_MOVE_START_SWIM
+                {
+                    entry.anticheat.launched = false;
+                }
             }
             map.apply_movement(guid, opcode, info, &self.deps.respawn_times);
         }
@@ -14729,9 +17490,9 @@ impl World {
     /// changes must match exactly (counter + type +
     /// value) or the packet is dropped (C++ also feeds
     /// the anticheat wrong-ack counter — no anticheat
-    /// yet, recorded). Knockback/teleport have no
-    /// senders in this slice, so their pending queues
-    /// are always empty and packets drop.
+    /// yet, recorded). Teleport has no sender yet, so
+    /// its pending queue is always empty and packets
+    /// drop; knockback landed in Tier 1 Slice 6.
     #[allow(clippy::too_many_lines)] // one handler family, mirrors MovementHandler.cpp
     fn on_movement_ack(&mut self, id: SessionId, packet: &WorldPacket, kind: AckKind) {
         use mangos_entities::unit::{
@@ -14906,7 +17667,39 @@ impl World {
                 map.set_movement_flag_real(guid, MovementFlags::ROOT, apply);
                 map.send_flag_change_to_observers(guid, MovementFlags::ROOT, apply);
             }
-            AckKind::KnockBack | AckKind::Teleport => {
+            AckKind::KnockBack => {
+                // `HandleMoveKnockBackAck`: pending
+                // match on counter + jump fields, then
+                // relocate and echo to observers. The
+                // fork's flag/position anticheat tests
+                // on the ack itself follow the sibling
+                // arms' precedent (not run here).
+                let (matched, spline_done) = {
+                    let Some(player) = map.player_mut(guid) else {
+                        return;
+                    };
+                    (
+                        player
+                            .unit
+                            .find_pending_knockback_change(&info.jump, counter),
+                        player.unit.pending_spline_done,
+                    )
+                };
+                if !matched {
+                    wrong_ack(&self.log, "HandleMoveKnockBackAck");
+                    if let Some(e) = self.sessions.get_mut(&id) {
+                        e.anticheat
+                            .on_wrong_ack_data(&self.config.anticheat, security);
+                    }
+                    return;
+                }
+                if spline_done || self.pending_teleports.contains_key(&id) {
+                    return;
+                }
+                map.relocate_from_client(guid, info, &self.deps.respawn_times);
+                map.send_knock_back_to_observers(guid);
+            }
+            AckKind::Teleport => {
                 // No senders yet: nothing can be pending.
                 wrong_ack(&self.log, "HandleMoveAck(no sender)");
                 if let Some(e) = self.sessions.get_mut(&id) {
@@ -15057,6 +17850,7 @@ impl World {
         let mut movement_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut ack_packets: Vec<(SessionId, WorldPacket, AckKind)> = Vec::new();
         let mut cast_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut use_item_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut cancel_cast_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut cancel_aura_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut attack_swing_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
@@ -15191,6 +17985,25 @@ impl World {
                                 | opcode_id::MSG_PETITION_DECLINE
                                 | opcode_id::CMSG_OFFER_PETITION
                                 | opcode_id::CMSG_TURN_IN_PETITION
+                                | opcode_id::CMSG_QUESTGIVER_STATUS_QUERY
+                                | opcode_id::CMSG_QUESTGIVER_HELLO
+                                | opcode_id::CMSG_QUESTGIVER_QUERY_QUEST
+                                | opcode_id::CMSG_QUEST_QUERY
+                                | opcode_id::CMSG_QUESTGIVER_ACCEPT_QUEST
+                                | opcode_id::CMSG_QUESTGIVER_COMPLETE_QUEST
+                                | opcode_id::CMSG_QUESTGIVER_REQUEST_REWARD
+                                | opcode_id::CMSG_QUESTGIVER_CHOOSE_REWARD
+                                | opcode_id::CMSG_QUESTLOG_REMOVE_QUEST
+                                | opcode_id::CMSG_QUESTLOG_SWAP_QUEST
+                                | opcode_id::CMSG_PET_ACTION
+                                | opcode_id::CMSG_PET_ABANDON
+                                | opcode_id::CMSG_PET_RENAME
+                                | opcode_id::CMSG_PET_NAME_QUERY
+                                | opcode_id::CMSG_PET_SET_ACTION
+                                | opcode_id::CMSG_PET_CAST_SPELL
+                                | opcode_id::CMSG_PET_STOP_ATTACK
+                                | opcode_id::CMSG_PET_SPELL_AUTOCAST
+                                | opcode_id::CMSG_PET_CANCEL_AURA
                         ) =>
                     {
                         guild_packets.push((*id, packet));
@@ -15280,6 +18093,9 @@ impl World {
                     }
                     Dispatch::Execute if meta.handler_name == "HandleCastSpellOpcode" => {
                         cast_packets.push((*id, packet));
+                    }
+                    Dispatch::Execute if meta.handler_name == "HandleUseItemOpcode" => {
+                        use_item_packets.push((*id, packet));
                     }
                     Dispatch::Execute if meta.handler_name == "HandleCancelCastOpcode" => {
                         cancel_cast_packets.push((*id, packet));
@@ -15424,6 +18240,9 @@ impl World {
         }
         for (id, packet) in cast_packets {
             self.on_cast_spell(id, &packet);
+        }
+        for (id, packet) in use_item_packets {
+            self.on_use_item(id, &packet);
         }
         for (id, packet) in cancel_cast_packets {
             self.on_cancel_cast(id, &packet);
@@ -15957,6 +18776,119 @@ fn execute_stub(log: &Log, entry: &SessionEntry, packet: &WorldPacket) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn inv_row(
+        item_guid: u32,
+        item_id: u32,
+        count: u32,
+        bag: u32,
+        slot: u8,
+    ) -> mangos_db::character_load::InventoryRow {
+        mangos_db::character_load::InventoryRow {
+            item: mangos_db::character_load::ItemInstanceRow {
+                creator_guid: 0,
+                gift_creator_guid: 0,
+                count,
+                duration: 0,
+                charges: String::new(),
+                flags: 0,
+                enchantments: String::new(),
+                random_property_id: 0,
+                durability: 0,
+                text: 0,
+                item_guid,
+                item_id,
+                generated_loot: 0,
+            },
+            bag,
+            slot,
+        }
+    }
+
+    fn test_proto(
+        item_id: u32,
+        stackable: u32,
+    ) -> mangos_world_data::item_prototype::ItemPrototype {
+        mangos_world_data::item_prototype::ItemPrototype {
+            item_id,
+            stackable,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn store_plan_merges_then_fills_free_slots() {
+        let protos = mangos_world_data::item_prototype::ItemPrototypes::default();
+        let inv = vec![inv_row(10, 118, 3, 0, 23)];
+        let plan = plan_store_new_item(&inv, &test_proto(118, 5), 4, &protos);
+        assert_eq!(
+            plan,
+            vec![
+                StoreDest::Merge {
+                    item_guid: 10,
+                    add: 2,
+                    new_count: 5,
+                },
+                StoreDest::New {
+                    bag: 0,
+                    slot: 24,
+                    count: 2,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn store_plan_unique_cap_blocks() {
+        let protos = mangos_world_data::item_prototype::ItemPrototypes::default();
+        let inv = vec![inv_row(10, 6948, 1, 0, 23)];
+        let mut proto = test_proto(6948, 1);
+        proto.max_count = 1;
+        assert!(plan_store_new_item(&inv, &proto, 1, &protos).is_empty());
+    }
+
+    #[test]
+    fn store_plan_spills_into_equipped_bag() {
+        let mut bag_proto = test_proto(4500, 1);
+        bag_proto.container_slots = 2;
+        let protos = mangos_world_data::item_prototype::ItemPrototypes::from_entries_for_tests(
+            std::collections::HashMap::from([(4500, bag_proto)]),
+        );
+        let mut inv: Vec<_> = (23..39u8)
+            .map(|slot| inv_row(100 + u32::from(slot), 999, 1, 0, slot))
+            .collect();
+        inv.push(inv_row(77, 4500, 1, 0, 19));
+        let plan = plan_store_new_item(&inv, &test_proto(118, 5), 1, &protos);
+        assert_eq!(
+            plan,
+            vec![StoreDest::New {
+                bag: 77,
+                slot: 0,
+                count: 1,
+            }]
+        );
+    }
+
+    #[test]
+    fn store_plan_unstackable_uses_one_slot_each() {
+        let protos = mangos_world_data::item_prototype::ItemPrototypes::default();
+        let plan = plan_store_new_item(&[], &test_proto(25, 1), 2, &protos);
+        assert_eq!(
+            plan,
+            vec![
+                StoreDest::New {
+                    bag: 0,
+                    slot: 23,
+                    count: 1,
+                },
+                StoreDest::New {
+                    bag: 0,
+                    slot: 24,
+                    count: 1,
+                },
+            ]
+        );
+    }
 
     #[test]
     fn health_stamp_advances() {

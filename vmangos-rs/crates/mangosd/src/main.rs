@@ -45,8 +45,8 @@ use mangosd::social::SocialWrite;
 use mangosd::socket::{ConnectionDeps, default_server_addresses, run_connection};
 use mangosd::world_actor::{
     AhBotStore, AuctionStore, CharacterSaver, GroupStore, GuildBotStore, GuildStore, InitialAhBot,
-    InstanceStore, MailStore, PetitionStore, PlayerbotStore, PresenceWriter, RealmPublisher,
-    SessionId, SocialStore, TradeStore, WorldDeps, spawn_world,
+    InstanceStore, MailStore, PetStore, PetitionStore, PlayerbotStore, PresenceWriter,
+    QuestRewardStore, RealmPublisher, SessionId, SocialStore, TradeStore, WorldDeps, spawn_world,
 };
 use mangosd::{ERROR_EXIT_CODE, RESTART_EXIT_CODE, SHUTDOWN_EXIT_CODE, ServerConfig};
 
@@ -461,6 +461,82 @@ impl PetitionStore for MysqlPetitionStore {
         self.world
             .actor
             .call(move |conn| mangos_db::petition::is_reserved_name(conn, &name))
+    }
+}
+
+struct MysqlQuestRewardStore {
+    characters: Arc<CharacterDb>,
+}
+
+impl QuestRewardStore for MysqlQuestRewardStore {
+    fn create_reward_item(
+        &self,
+        owner_low: u32,
+        item_id: u32,
+        count: u32,
+        bag: u32,
+        slot: u32,
+        creator_low: u32,
+    ) -> Result<u32, DbError> {
+        self.characters.actor().call(move |conn| {
+            mangos_db::quest_reward::create_reward_item(
+                conn,
+                owner_low,
+                item_id,
+                count,
+                bag,
+                slot,
+                creator_low,
+            )
+        })
+    }
+
+    fn set_item_count(&self, item_guid: u32, count: u32) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::quest_reward::set_item_count(conn, item_guid, count))
+    }
+
+    fn set_item_charges(&self, item_guid: u32, charges: String) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::quest_reward::set_item_charges(conn, item_guid, &charges))
+    }
+
+    fn set_item_flags(&self, item_guid: u32, flags: u32) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::quest_reward::set_item_flags(conn, item_guid, flags))
+    }
+}
+
+struct MysqlPetStore {
+    characters: Arc<CharacterDb>,
+}
+
+impl PetStore for MysqlPetStore {
+    fn save_pet(&self, row: mangos_db::pet::PetRow, mode: u32) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::pet::save_pet(conn, &row, mode))
+    }
+
+    fn delete_pet(&self, pet_id: u32) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::pet::delete_pet(conn, pet_id))
+    }
+
+    fn promote_pet(&self, owner_low: u32, pet_id: u32) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::pet::promote_pet_to_current(conn, owner_low, pet_id))
+    }
+
+    fn rename_pet(&self, owner_low: u32, pet_id: u32, name: String) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::pet::rename_pet(conn, owner_low, pet_id, &name))
     }
 }
 
@@ -1453,10 +1529,14 @@ fn load_world_db_stores(
         mangos_world_data::weather::WeatherChanceStore,
         mangos_world_data::waypoints::WaypointStore,
         std::collections::HashMap<u32, mangos_spells::SpellEntry>,
+        mangos_world_data::spell_target_position::SpellTargetPositions,
         mangos_world_data::creature_spells::CreatureSpellsMap,
         mangos_scripts_engine::ScriptStores,
         mangos_world_data::quest_template::QuestTemplatesLite,
+        mangos_world_data::quest_template::QuestTemplates,
+        mangos_world_data::quest_template::QuestRelations,
         std::collections::HashSet<u32>,
+        mangos_world_data::pet_data::PetStores,
         std::collections::HashSet<u32>,
         Vec<(&'static str, mangos_world_data::load_report::LoadReport)>,
     ),
@@ -1470,7 +1550,9 @@ fn load_world_db_stores(
     use mangos_world_data::item_prototype::load_item_prototypes_lite;
     use mangos_world_data::load_report::LoadReport;
     use mangos_world_data::map_template::load_map_templates;
-    use mangos_world_data::quest_template::{load_quest_templates_lite, load_tavern_triggers};
+    use mangos_world_data::quest_template::{
+        load_quest_relations, load_quest_templates, load_quest_templates_lite, load_tavern_triggers,
+    };
     use mangos_world_data::reputations::load_factions;
     use mangos_world_data::script_engine::load_script_stores;
     use mangos_world_data::spawn_support::{
@@ -1508,6 +1590,8 @@ fn load_world_db_stores(
         let maps = load_map_templates(conn, wow_patch, reset_rate)?;
         let area_triggers = load_area_triggers(conn, wow_patch, &|m| maps.known(m))?;
         let quests = load_quest_templates_lite(conn)?;
+        let quest_templates = load_quest_templates(conn, wow_patch)?;
+        let quest_relations = load_quest_relations(conn)?;
         let tavern_triggers = load_tavern_triggers(conn)?;
         let weather_chances = load_weather_chances(conn)?;
         let inv_types = items.inventory_types();
@@ -1519,10 +1603,38 @@ fn load_world_db_stores(
         let mut r10 = LoadReport::default();
         let spell_entries = load_spell_templates(conn, 5875, &mut r10)?;
         let spell_id_set: std::collections::HashSet<u32> = spell_entries.keys().copied().collect();
+        let spell_target_positions =
+            mangos_world_data::spell_target_position::load_spell_target_positions(
+                conn,
+                5875,
+                &|m| maps.known(m),
+                &|spell_id| {
+                    spell_entries.get(&spell_id).is_some_and(|entry| {
+                        entry
+                            .effects
+                            .iter()
+                            .any(|eff| eff.implicit_target_a == 17 || eff.implicit_target_b == 17)
+                    })
+                },
+            )?;
         let mut r11 = LoadReport::default();
         let creature_spells = load_creature_spells(conn, &spell_id_set, &mut r11)?;
         let template_ids: std::collections::HashSet<u32> =
             creature_templates.iter().map(|(id, _)| *id).collect();
+        let mut r13 = LoadReport::default();
+        let pet_stores = mangos_world_data::pet_data::load_pet_stores(
+            conn,
+            &template_ids,
+            &|entry| {
+                creature_templates
+                    .get(entry)
+                    .map_or(0, |t| t.pet_spell_list_id)
+            },
+            &spell_id_set,
+            wow_patch,
+            60,
+            &mut r13,
+        )?;
         let mut r12 = LoadReport::default();
         let script_stores = load_script_stores(conn, &template_ids, &mut r12)?;
         let mut reports_all: Vec<(&str, LoadReport)> = reports.into_iter().collect();
@@ -1538,6 +1650,7 @@ fn load_world_db_stores(
             ("spell_template", r10),
             ("creature_spells", r11),
             ("script engine", r12),
+            ("pet stores", r13),
         ]);
         Ok((
             creature_templates,
@@ -1556,10 +1669,14 @@ fn load_world_db_stores(
             weather_chances,
             waypoints,
             spell_entries,
+            spell_target_positions,
             creature_spells,
             script_stores,
             quests,
+            quest_templates,
+            quest_relations,
             tavern_triggers,
+            pet_stores,
             map_ids,
             reports_all,
         ))
@@ -1751,10 +1868,14 @@ fn load_phase4_stores(
         weather_chances,
         waypoints,
         spell_entries,
+        spell_target_positions,
         creature_spells,
         script_stores,
         quests,
+        quest_templates,
+        quest_relations,
         tavern_triggers,
+        pet_stores,
         map_ids,
         reports,
     ) = match load_world_db_stores(databases, wow_patch, server_config.rate_instance_reset_time) {
@@ -1884,6 +2005,7 @@ fn load_phase4_stores(
             tables: spell_tables,
             proc_events,
         },
+        spell_target_positions,
         creature_spells,
         scripts: script_stores,
         display_scales,
@@ -1894,10 +2016,29 @@ fn load_phase4_stores(
         maps,
         area_triggers,
         quests,
+        quest_templates,
+        quest_relations,
         tavern_triggers,
         exploration_base_xp,
+        pets: pet_stores,
+        next_pet_number: std::sync::atomic::AtomicU32::new(1),
     });
 
+    // `ObjectMgr::LoadPetNumber` + cache seed: next
+    // free `character_pet.id`.
+    match databases
+        .characters
+        .actor()
+        .call(mangos_db::pet::next_pet_number_seed)
+    {
+        Ok(seed) => stores
+            .next_pet_number
+            .store(seed, std::sync::atomic::Ordering::Relaxed),
+        Err(e) => {
+            log.out(Level::Error, &format!("pet number seed failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    }
     let respawn_times = load_persisted_respawns(databases, &stores, map_ids, log)?;
     Ok((stores, Arc::new(race_class), respawn_times))
 }
@@ -2314,6 +2455,12 @@ fn build_world_deps(
         mail: Arc::new(MysqlMailStore {
             characters: Arc::clone(&databases.characters),
             login: Arc::clone(&databases.login),
+        }),
+        pets: Arc::new(MysqlPetStore {
+            characters: Arc::clone(&databases.characters),
+        }),
+        quest_reward: Arc::new(MysqlQuestRewardStore {
+            characters: Arc::clone(&databases.characters),
         }),
         trade: Arc::new(MysqlTradeStore {
             characters: Arc::clone(&databases.characters),

@@ -653,6 +653,7 @@ mod tests {
             mails: vec![],
             mailed_items: vec![],
             forgotten_skills: vec![],
+            pets: Vec::new(),
         };
         assert_eq!(evaluate_load(Some(&load), 5), LoginGate::Proceed);
         assert_eq!(

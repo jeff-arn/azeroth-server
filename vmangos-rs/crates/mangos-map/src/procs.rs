@@ -517,7 +517,7 @@ impl Map {
             // Cooldown-on-failure auras stop matching
             // while their own spell cools down.
             if aura_spell.attributes_ex2 & ATTR_EX2_PROC_COOLDOWN_ON_FAILURE != 0
-                && self.has_cooldown(owner, &aura_spell)
+                && self.has_cooldown(owner, &aura_spell, None)
             {
                 continue;
             }
@@ -900,7 +900,7 @@ impl Map {
         }
         // `IsSpellReady` on the triggered spell (this
         // is where the proc-event cooldown gates).
-        if self.has_cooldown(owner, &entry) {
+        if self.has_cooldown(owner, &entry, None) {
             return ProcResult::Failed;
         }
         let was_in_proc = self.in_proc_cast;
@@ -912,6 +912,7 @@ impl Map {
             CastOptions {
                 triggered: true,
                 skip_known: true,
+                cast_item: None,
             },
         );
         self.in_proc_cast = was_in_proc;

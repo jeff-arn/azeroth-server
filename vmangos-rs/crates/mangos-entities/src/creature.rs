@@ -34,6 +34,8 @@ use mangos_world_data::spawns::{
     CreatureSpawn, SPAWN_FLAG_ACTIVE, SPAWN_FLAG_DEAD, SPAWN_FLAG_DISABLED,
 };
 
+use mangos_world_data::pet_data::PetLevelInfo;
+
 use crate::object::ObjectBase;
 use crate::unit::{
     DeathState, MAX_SPELL_SCHOOL, MAX_STATS, MOVE_RUN, MOVE_WALK, ModelData, POWER_ENERGY,
@@ -98,10 +100,24 @@ impl CreatureRates {
 }
 
 /// `UNIT_DISPLAY_ID_BOX` placeholder (`UnitDefines.h:862`).
-const UNIT_DISPLAY_ID_BOX: u32 = 4;
+pub const UNIT_DISPLAY_ID_BOX: u32 = 4;
 const UNIT_BYTE2_FLAG_AURAS: u8 = 0x10;
 const UNIT_BYTE2_FLAG_PVP: u8 = 0x01;
 const UNIT_FLAG_PLUS_MOB: u32 = 0x0000_0040;
+/// `UNIT_FLAG_PET_RENAME`.
+pub const UNIT_FLAG_PET_RENAME: u32 = 0x0000_0010;
+/// `UNIT_FLAG_PET_ABANDON`.
+pub const UNIT_FLAG_PET_ABANDON: u32 = 0x0000_0020;
+const UNIT_BYTE2_FLAG_UNK3: u8 = 0x08;
+const UNIT_BYTE2_FLAG_UNK5: u8 = 0x20;
+
+/// `enum PetType` subset carried on the aggregate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PetKind {
+    Summon,
+    Hunter,
+    Guardian,
+}
 const UNIT_DYNFLAG_DEAD: u32 = 0x0000_0020;
 /// `CREATURE_STATIC_FLAG_PVP_ENABLING` (`static_flags1`).
 const STATIC_FLAG_PVP_ENABLING: u32 = 0x0040_0000;
@@ -295,6 +311,283 @@ impl Creature {
             creature.respawn_row_expired = true;
         }
         Ok(creature)
+    }
+
+    /// `Pet::Create(guid, pos, cinfo, petNumber)`:
+    /// creature create with the pet number in the GUID
+    /// entry slot (this fork's `GetHighGuid` is always
+    /// UNIT pre-3.x), followed by
+    /// `Pet::InitStatsForLevel`. Position/map are the
+    /// caller's (`CreatureCreatePos` final point).
+    ///
+    /// # Errors
+    ///
+    /// [`SpawnError`] for the C++ false returns.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_pet(
+        guid_low: u32,
+        pet_number: u32,
+        info: CreatureInfo,
+        kind: PetKind,
+        level: u32,
+        level_info: Option<&PetLevelInfo>,
+        owner_is_player: bool,
+        equipment: &EquipmentTemplates,
+        virtual_items: &dyn Fn(u32) -> Option<VirtualItemPrototype>,
+        cls: &ClassLevelStats,
+        display_addons: &mangos_world_data::spawn_support::DisplayInfoAddons,
+        display: &DisplayResolver<'_>,
+        rates: &CreatureRates,
+        rng: &mut dyn SpawnRng,
+    ) -> Result<Creature, SpawnError> {
+        let mut creature = Creature::create(
+            guid_low,
+            pet_number,
+            info,
+            None,
+            None,
+            equipment,
+            virtual_items,
+            cls,
+            display_addons,
+            display,
+            rates,
+            rng,
+        )?;
+        creature.is_active_object = true; // `m_isActiveObject` in Pet ctor path
+        creature.init_pet_stats_for_level(level, kind, level_info, owner_is_player, cls, rates);
+        Ok(creature)
+    }
+
+    /// `Pet::InitStatsForLevel(petlevel, owner)`
+    /// (player-owner rate arms; creature-owner uses
+    /// the per-rank config rates like the fork's
+    /// `_GetHealthMod/_GetDamageMod`). Also the
+    /// `GivePetLevel` re-init entry: current
+    /// health/power percents survive via the max
+    /// writes the fork's `UpdateAllStats` performs
+    /// (values clamp to the new maxima).
+    #[allow(clippy::cast_precision_loss)]
+    pub fn init_pet_stats_for_level(
+        &mut self,
+        level: u32,
+        kind: PetKind,
+        level_info: Option<&PetLevelInfo>,
+        owner_is_player: bool,
+        cls: &ClassLevelStats,
+        rates: &CreatureRates,
+    ) {
+        {
+            let v = self.unit.world.object.values_mut();
+            match kind {
+                PetKind::Summon => {
+                    v.set_u32(offsets::UNIT_FIELD_FLAGS, 0);
+                }
+                PetKind::Hunter => {
+                    v.set_byte(offsets::UNIT_FIELD_BYTES_0, 1, 1); // CLASS_WARRIOR
+                    v.set_byte(offsets::UNIT_FIELD_BYTES_0, 2, 0); // GENDER_NONE
+                    v.set_byte(offsets::UNIT_FIELD_BYTES_2, 0, 1); // sheath melee
+                    v.set_byte(
+                        offsets::UNIT_FIELD_BYTES_2,
+                        1,
+                        UNIT_BYTE2_FLAG_UNK3 | UNIT_BYTE2_FLAG_AURAS | UNIT_BYTE2_FLAG_UNK5,
+                    );
+                    v.set_flag(offsets::UNIT_FIELD_FLAGS, UNIT_FLAG_PET_ABANDON);
+                }
+                PetKind::Guardian => {}
+            }
+            v.set_u32(offsets::UNIT_FIELD_LEVEL, level);
+            // Attack times from the template (fork
+            // re-asserts them here).
+            v.set_f32(
+                offsets::UNIT_FIELD_BASEATTACKTIME,
+                self.info.base_attack_time as f32,
+            );
+            v.set_f32(
+                offsets::UNIT_FIELD_BASEATTACKTIME + 1,
+                self.info.base_attack_time as f32,
+            );
+            v.set_f32(
+                offsets::UNIT_FIELD_RANGEDATTACKTIME,
+                self.info.ranged_attack_time as f32,
+            );
+            // 1.12 client build: cast speed is the int 0.
+            v.set_i32(offsets::UNIT_MOD_CAST_SPEED, 0);
+        }
+        let stats = cls.get(self.info.unit_class, level);
+        let rank = self.info.rank;
+        let health_mod = if owner_is_player {
+            1.0
+        } else {
+            CreatureRates::by_rank(rates.hp, rank)
+        };
+        let damage_mod = if owner_is_player {
+            1.0
+        } else {
+            CreatureRates::by_rank(rates.damage, rank)
+        };
+        // Power type via the creature arm (fork
+        // `SetInitCreaturePowerType`); hunter pets are
+        // forced to focus by the map layer after stats
+        // (fork does it in CreateBaseAtCreature/load).
+        if stats.mana > 0 {
+            self.unit.world.object.values_mut().set_byte(
+                offsets::UNIT_FIELD_BYTES_0,
+                3,
+                POWER_MANA as u8,
+            );
+        }
+        let create =
+            self.pet_create_values(kind, level, level_info, &stats, health_mod, damage_mod);
+        self.set_pet_base_damage(create.0, create.1);
+        self.create_resistances[0] = create.2;
+        self.set_pet_create_health_mana(create.3, create.4);
+        self.set_pet_create_stats(create.5);
+        // Naked projections (stats/resistances/AP fields)
+        // at the new create values, as `UpdateAllStats`
+        // does after stat init.
+        self.unit.base_attack_power = stats.attack_power as f32;
+        {
+            let v = self.unit.world.object.values_mut();
+            v.set_i32(offsets::UNIT_FIELD_ATTACK_POWER, stats.attack_power);
+            v.set_i32(
+                offsets::UNIT_FIELD_RANGED_ATTACK_POWER,
+                stats.ranged_attack_power,
+            );
+        }
+        self.refresh_derived_stats();
+        for school in 0..MAX_SPELL_SCHOOL {
+            #[allow(clippy::cast_possible_truncation)]
+            let value = self.create_resistances[school] as i32;
+            if school == 0 {
+                self.unit.set_armor(value);
+            } else {
+                self.unit.set_resistance(school, value);
+            }
+        }
+    }
+
+    /// The per-kind create-value computation of
+    /// `Pet::InitStatsForLevel` (split out for the
+    /// clippy line budget): (min dmg, max dmg, armor,
+    /// health, mana, stats).
+    #[allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
+    fn pet_create_values(
+        &self,
+        kind: PetKind,
+        level: u32,
+        level_info: Option<&PetLevelInfo>,
+        stats: &mangos_world_data::spawn_support::CreatureClassLevelStats,
+        health_mod: f32,
+        damage_mod: f32,
+    ) -> (f32, f32, f32, u32, Option<u32>, [f32; MAX_STATS]) {
+        let cls_stats = [
+            stats.strength as f32,
+            stats.agility as f32,
+            stats.stamina as f32,
+            stats.intellect as f32,
+            stats.spirit as f32,
+        ];
+        let variance_damage = || {
+            let avg = stats.melee_damage * self.info.damage_multiplier * damage_mod;
+            let var = avg * self.info.damage_variance;
+            (avg - var, avg + var)
+        };
+        match kind {
+            PetKind::Summon => {
+                let (dmg_min, dmg_max) = if let Some(info) =
+                    level_info.filter(|i| i.dmg_min != 0.0 && i.dmg_max != 0.0)
+                {
+                    (damage_mod * info.dmg_min, damage_mod * info.dmg_max)
+                } else {
+                    variance_damage()
+                };
+                let armor = if let Some(info) = level_info.filter(|i| i.armor != 0) {
+                    f32::from(info.armor)
+                } else {
+                    stats.armor as f32 * self.info.armor_multiplier
+                };
+                let (health, mana, pet_stats) = if let Some(info) = level_info {
+                    (
+                        round_u32(f32::from(info.health) * health_mod),
+                        Some(u32::from(info.mana)),
+                        info.stats.map(f32::from),
+                    )
+                } else {
+                    (
+                        round_u32(stats.health as f32 * self.info.health_multiplier * health_mod),
+                        Some(round_u32(stats.mana as f32 * self.info.mana_multiplier)),
+                        cls_stats,
+                    )
+                };
+                (dmg_min, dmg_max, armor, health, mana, pet_stats)
+            }
+            PetKind::Hunter => {
+                let attack_time = self.info.base_attack_time as f32;
+                let dmg_min = damage_mod * (level as f32 * 1.15 * 1.05) * attack_time / 2000.0;
+                let dmg_max = damage_mod * (level as f32 * 1.45 * 1.05) * attack_time / 2000.0;
+                let (armor, health, pet_stats) = if let Some(info) = level_info {
+                    (
+                        f32::from(info.armor),
+                        round_u32(f32::from(info.health) * health_mod),
+                        info.stats.map(f32::from),
+                    )
+                } else {
+                    (
+                        stats.armor as f32,
+                        round_u32(stats.health as f32 * health_mod),
+                        cls_stats,
+                    )
+                };
+                (dmg_min, dmg_max, armor, health, None, pet_stats)
+            }
+            PetKind::Guardian => {
+                let (dmg_min, dmg_max) = variance_damage();
+                (
+                    dmg_min,
+                    dmg_max,
+                    stats.armor as f32 * self.info.armor_multiplier,
+                    round_u32(stats.health as f32 * self.info.health_multiplier * health_mod),
+                    Some(round_u32(stats.mana as f32 * self.info.mana_multiplier)),
+                    cls_stats,
+                )
+            }
+        }
+    }
+
+    fn set_pet_base_damage(&mut self, min: f32, max: f32) {
+        self.base_weapon_damage[0] = (min, max);
+        self.base_weapon_damage[1] = (min / 2.0, f32::midpoint(min, max));
+        let v = self.unit.world.object.values_mut();
+        v.set_f32(offsets::UNIT_FIELD_MINDAMAGE, min);
+        v.set_f32(offsets::UNIT_FIELD_MAXDAMAGE, max);
+        v.set_f32(offsets::UNIT_FIELD_MINOFFHANDDAMAGE, min / 2.0);
+        v.set_f32(
+            offsets::UNIT_FIELD_MAXOFFHANDDAMAGE,
+            f32::midpoint(min, max),
+        );
+    }
+
+    fn set_pet_create_health_mana(&mut self, health: u32, mana: Option<u32>) {
+        let health = health.max(1);
+        self.unit.create_health = health;
+        self.spawn_max_health = health;
+        self.unit.set_max_health(health);
+        if self.unit.health() > health {
+            self.unit.set_health(health);
+        }
+        if let Some(mana) = mana {
+            self.unit.create_mana = mana;
+            self.spawn_max_mana = mana;
+            self.unit.set_max_power(POWER_MANA, mana);
+            if self.unit.power(POWER_MANA) > mana {
+                self.unit.set_power(POWER_MANA, mana);
+            }
+        }
+    }
+
+    fn set_pet_create_stats(&mut self, stats: [f32; MAX_STATS]) {
+        self.unit.create_stats = stats;
     }
 
     /// `Create` + `CreateFromProto` + `UpdateEntry(entry,
@@ -880,6 +1173,29 @@ fn choose_display(
         }
         None => (UNIT_DISPLAY_ID_BOX, 1.0),
     }
+}
+
+/// `Creature::ChooseDisplayId(template)` without a spawn
+/// addon or game event (mount/transform aura handlers);
+/// returns `(display_id, displayScale)`.
+#[must_use]
+pub fn choose_display_id_for_template(
+    info: &CreatureInfo,
+    display: &DisplayResolver<'_>,
+    rng: &mut dyn SpawnRng,
+) -> (u32, f32) {
+    choose_display(info, None, display, rng)
+}
+
+/// `GetCreatureDisplayInfoRandomGender(display)->display_id`
+/// fallback chain collapsed to the input display.
+#[must_use]
+pub fn random_gender_display(
+    addons: &mangos_world_data::spawn_support::DisplayInfoAddons,
+    display_id: u32,
+    rng: &mut dyn SpawnRng,
+) -> u32 {
+    random_gender_addon(addons, display_id, rng).map_or(display_id, |a| a.display_id)
 }
 
 /// `GetCreatureDisplayInfoRandomGender`: 50% swap to the

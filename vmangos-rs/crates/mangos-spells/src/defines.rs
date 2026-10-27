@@ -10,6 +10,13 @@ pub mod effect {
     pub const THREAT: u32 = 63;
     pub const DISPEL: u32 = 38;
     pub const LEARN_SPELL: u32 = 36;
+    pub const SUMMON_PET: u32 = 56;
+    pub const LEARN_PET_SPELL: u32 = 57;
+    pub const CREATE_ITEM: u32 = 24;
+    pub const TELEPORT_UNITS: u32 = 5;
+    pub const LEAP: u32 = 29;
+    pub const KNOCK_BACK: u32 = 98;
+    pub const PLAYER_PULL: u32 = 124;
     pub const SCHOOL_DAMAGE: u32 = 2;
     pub const DUMMY: u32 = 3;
     pub const APPLY_AURA: u32 = 6;
@@ -67,7 +74,11 @@ pub mod aura {
     pub const MOD_DECREASE_SPEED: u32 = 33;
     pub const MOD_INCREASE_SWIM_SPEED: u32 = 107;
     pub const MOD_SPEED_ALWAYS: u32 = 129;
-    pub const MOD_SPEED_NOT_STACK: u32 = 130;
+    pub const MOD_MOUNTED_SPEED_ALWAYS: u32 = 130;
+    pub const MOD_SPEED_NOT_STACK: u32 = 171;
+    pub const MOD_MOUNTED_SPEED_NOT_STACK: u32 = 172;
+    pub const MOD_INCREASE_MOUNTED_SPEED: u32 = 32;
+    pub const MOUNTED: u32 = 78;
     pub const MOD_FEAR: u32 = 7;
     pub const MOD_INCREASE_HEALTH: u32 = 34;
     pub const TRANSFORM: u32 = 56;
@@ -187,7 +198,9 @@ pub mod spellmod {
 pub mod aura_interrupt_flag {
     pub const DAMAGE_CANCELS: u32 = 0x0000_0002;
     pub const TURNING_CANCELS: u32 = 0x0000_0010;
+    pub const DISMOUNT_CANCELS: u32 = 0x0000_0040;
     pub const DAMAGE_CHANNEL_DURATION: u32 = 0x0000_4000;
+    pub const MOUNT_CANCELS: u32 = 0x0002_0000;
 }
 
 /// `enum SpellTargetType` (`SpellDefines.h:25+`), subset.
@@ -201,7 +214,26 @@ pub mod target {
     pub const UNIT_PARTY: u32 = 35;
     pub const UNIT_FRIEND_AND_PARTY: u32 = 37;
     pub const LOCATION_CASTER_DEST: u32 = 18;
+    pub const LOCATION_UNIT_MINION_POSITION: u32 = 32;
     pub const LOCATION_CASTER_SRC: u32 = 22;
+    pub const ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC: u32 = 15;
+    pub const ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC: u32 = 16;
+    pub const ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOCATION: u32 = 28;
+    pub const ENUM_UNITS_FRIEND_AOE_AT_DYNOBJ_LOCATION: u32 = 29;
+    pub const ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC: u32 = 30;
+    pub const ENUM_UNITS_FRIEND_AOE_AT_DEST_LOC: u32 = 31;
+    pub const ENEMY_AOE_AT_SRC_LOC_SCRIPT: u32 = 7;
+    pub const LOCATION_CASTER_HOME_BIND: u32 = 9;
+    pub const LOCATION_DATABASE: u32 = 17;
+    pub const LOCATION_CASTER_FRONT_RIGHT: u32 = 41;
+    pub const LOCATION_CASTER_BACK_RIGHT: u32 = 42;
+    pub const LOCATION_CASTER_BACK_LEFT: u32 = 43;
+    pub const LOCATION_CASTER_FRONT_LEFT: u32 = 44;
+    pub const LOCATION_CASTER_FRONT: u32 = 47;
+    pub const LOCATION_CASTER_BACK: u32 = 48;
+    pub const LOCATION_CASTER_LEFT: u32 = 49;
+    pub const LOCATION_CASTER_RIGHT: u32 = 50;
+    pub const LOCATION_CASTER_FRONT_LEAP: u32 = 55;
 }
 
 /// `enum Powers` (`SharedDefines.h:152`).
@@ -252,6 +284,7 @@ pub mod cast_result {
     pub const FAILED_IMMUNE: u8 = 34;
     pub const FAILED_LINE_OF_SIGHT: u8 = 42;
     pub const FAILED_NOT_READY: u8 = 60;
+    pub const FAILED_NOT_KNOWN: u8 = 56;
     pub const FAILED_NO_MOUNTS_ALLOWED: u8 = 75;
     pub const FAILED_INTERRUPTED: u8 = 35;
     pub const FAILED_NO_POWER: u8 = 77;

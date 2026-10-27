@@ -214,6 +214,8 @@ pub struct ServerConfig {
     pub rate_xp_kill_elite: f32,
     /// `Rate.XP.Quest` (default 1.0, `World.cpp:508`).
     pub rate_xp_quest: f32,
+    /// `Rate.Drop.Money` (quest money rewards).
+    pub rate_drop_money: f32,
     /// `Rate.XP.Explore` (default 1.0, `World.cpp:509`).
     pub rate_xp_explore: f32,
     /// `Spell.ProcDelay` batching window in ms (fork
@@ -390,6 +392,7 @@ impl ServerConfig {
             rate_xp_kill: cfg.float_default("Rate.XP.Kill", 1.0),
             rate_xp_kill_elite: cfg.float_default("Rate.XP.Kill.Elite", 1.0),
             rate_xp_quest: cfg.float_default("Rate.XP.Quest", 1.0),
+            rate_drop_money: cfg.float_default("Rate.Drop.Money", 1.0),
             rate_xp_explore: cfg.float_default("Rate.XP.Explore", 1.0),
             spell_proc_delay_ms: to_u32(cfg.int_default("Spell.ProcDelay", 400)),
             anticheat: crate::anticheat::AnticheatConfig::from_config(cfg),

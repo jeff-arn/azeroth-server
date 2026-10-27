@@ -7,6 +7,7 @@
 
 pub mod aura;
 pub mod creature;
+pub mod dynobject;
 pub mod gameobject;
 pub mod object;
 pub mod player;
@@ -14,5 +15,9 @@ pub mod unit;
 pub mod update;
 pub mod values;
 
+pub use mangos_db::pet::{
+    PET_SAVE_AS_CURRENT, PET_SAVE_LAST_STABLE_SLOT, PET_SAVE_NOT_IN_SLOT, PET_TYPE_HUNTER,
+    PET_TYPE_SUMMON, PetRow,
+};
 pub use object::{DelayedEffects, MarkEffect, ObjectBase};
 pub use values::Values;

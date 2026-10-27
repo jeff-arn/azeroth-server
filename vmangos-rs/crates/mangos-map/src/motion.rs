@@ -537,6 +537,14 @@ impl Default for SplineLaunch {
 }
 
 impl Map {
+    /// Read access to any unit on the map.
+    pub(crate) fn unit_base(&self, guid: ObjectGuid) -> Option<&UnitBase> {
+        if let Some(entry) = self.players.get(&guid) {
+            return Some(&entry.player.unit);
+        }
+        self.creatures.get(&guid).map(|c| &c.unit)
+    }
+
     /// Mutable access to any unit on the map.
     pub(crate) fn unit_base_mut(&mut self, guid: ObjectGuid) -> Option<&mut UnitBase> {
         if let Some(entry) = self.players.get_mut(&guid) {
@@ -586,6 +594,39 @@ impl Map {
     /// server-side movement info at the destination) to
     /// the controller and `MSG_MOVE_TELEPORT` (no
     /// counter) to observers.
+    /// Creature near teleport (`Unit::NearTeleportTo`
+    /// creature arm): `SendTeleportToObservers`
+    /// (`MSG_MOVE_TELEPORT` with server-side movement
+    /// info at the destination) before **and** after
+    /// `CreatureRelocation`, exactly as the fork
+    /// sends it. Motion-master Interrupt/Reset
+    /// collapses to a stop here (recorded).
+    pub fn teleport_creature_in_map(&mut self, guid: ObjectGuid, position: Position) {
+        self.stop_moving(guid);
+        let packet = {
+            let now_ms = self.now_ms;
+            let Some(mut info) = self.unit_base_mut(guid).map(|unit| {
+                let mut info = unit.world.movement_info;
+                info.set_as_server_side(now_ms);
+                info.change_position(position);
+                info
+            }) else {
+                return;
+            };
+            info.change_position(position);
+            let mut payload = PacketWriter::new();
+            payload.write_bytes(&Self::packed_guid_bytes(guid));
+            info.write(&mut payload);
+            WorldPacket::with_body(
+                mangos_protocol::opcode_table::opcode_id::MSG_MOVE_TELEPORT,
+                payload.into_vec(),
+            )
+        };
+        self.broadcast_movement(guid, &packet);
+        self.relocate_unit(guid, position);
+        self.broadcast_movement(guid, &packet);
+    }
+
     pub fn teleport_player_in_map(&mut self, guid: ObjectGuid, position: Position) {
         self.relocate_unit(guid, position);
         let now_ms = self.now_ms;
@@ -597,6 +638,7 @@ impl Map {
                     change_type: mangos_entities::unit::MOVEMENT_CHANGE_TELEPORT,
                     new_value: 0.0,
                     apply: false,
+                    knockback: None,
                 });
             let mut info = unit.world.movement_info;
             info.set_as_server_side(now_ms);
@@ -2266,6 +2308,7 @@ impl Map {
                     change_type,
                     new_value: flat,
                     apply: false,
+                    knockback: None,
                 });
             let mut payload = PacketWriter::new();
             payload.write_bytes(&Self::packed_guid_bytes(guid));
@@ -2331,6 +2374,35 @@ impl Map {
         self.broadcast_movement_except(guid, &packet, guid);
     }
 
+    /// `MovementPacketSender::SendKnockBackToObservers`:
+    /// `MSG_MOVE_KNOCK_BACK` (packed guid + stored
+    /// movement info + jump fields) to the set
+    /// except the mover. Runs after the ack
+    /// relocation, so the stored info is the ack's.
+    pub fn send_knock_back_to_observers(&mut self, guid: ObjectGuid) {
+        let now_ms = self.now_ms;
+        let Some(info) = self.unit_base_mut(guid).map(|u| {
+            let mut info = u.world.movement_info;
+            info.set_as_server_side(now_ms);
+            u.world.movement_info = info;
+            info
+        }) else {
+            return;
+        };
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&Self::packed_guid_bytes(guid));
+        info.write(&mut payload);
+        payload.write_f32_le(info.jump.cos_angle);
+        payload.write_f32_le(info.jump.sin_angle);
+        payload.write_f32_le(info.jump.xy_speed);
+        payload.write_f32_le(info.jump.z_speed);
+        let packet = WorldPacket::with_body(
+            mangos_protocol::opcode_table::opcode_id::MSG_MOVE_KNOCK_BACK,
+            payload.into_vec(),
+        );
+        self.broadcast_movement_except(guid, &packet, guid);
+    }
+
     /// `Unit::SetWalk(enable, as_default=false)` +
     /// `SendToggleRunWalkToAll`: flag flip + spline
     /// run/walk-mode packet to the set.
@@ -2380,6 +2452,7 @@ impl Map {
                     change_type,
                     new_value: 0.0,
                     apply,
+                    knockback: None,
                 });
             let mut payload = PacketWriter::new();
             payload.write_bytes(&Self::packed_guid_bytes(guid));

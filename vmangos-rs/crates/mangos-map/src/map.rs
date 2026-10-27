@@ -265,6 +265,59 @@ pub enum MapEvent {
         guid: ObjectGuid,
         killer: Option<ObjectGuid>,
     },
+    /// Persist a pet row (`Pet::SavePetToDB` snapshot
+    /// taken by the map at the fork's trigger points;
+    /// `mode` is the slot value to write).
+    SavePet {
+        row: Box<mangos_entities::PetRow>,
+        mode: u32,
+    },
+    /// `Pet::DeleteFromDB` (abandoned hunter pet).
+    DeletePet { pet_id: u32 },
+    /// The `LoadPetFromDB` slot-promotion UPDATE pair.
+    PromotePet { owner_low: u32, pet_id: u32 },
+    /// The `HandlePetRename` immediate name UPDATE.
+    RenamePet {
+        owner_low: u32,
+        pet_id: u32,
+        name: String,
+    },
+    /// `Spell::DoCreateItem` grant request: store
+    /// `count` of `item_id` for `player` (count
+    /// already clamped to one stack by the effect;
+    /// the actor runs the `CanStoreNewItem` subset,
+    /// writes the rows, and sends `SendNewItem`).
+    CreateItem {
+        player: ObjectGuid,
+        item_id: u32,
+        count: u32,
+    },
+    /// Cross-map player transfer request
+    /// (`Player::TeleportTo` far arm of
+    /// `Spell::EffectTeleportUnits`): the actor runs
+    /// its `teleport_player` far-transfer flow.
+    TeleportPlayer {
+        player: ObjectGuid,
+        map_id: u32,
+        position: Position,
+    },
+    /// Knockback launched on a player
+    /// (`MovementAnticheat::OnKnockBack` +
+    /// `Player::SetLaunched`): the actor marks the
+    /// session anticheat launched and seeds the
+    /// jump initial speed.
+    KnockBack {
+        player: ObjectGuid,
+        vertical_speed: f32,
+    },
+    /// Persist one item stack's count
+    /// (`DestroyItemCount` consumption; 0 deletes
+    /// both rows). Baseline already edited by the map.
+    SetItemCount { item_guid: u32, count: u32 },
+    /// Persist one item's charges text
+    /// (`TakeCastItem` write-back). Baseline already
+    /// edited by the map.
+    SetItemCharges { item_guid: u32, charges: String },
     /// `AI()->MovementInform(type, id)` — consumed by the
     /// AI slice; emitted by Point/Waypoint generators.
     MovementInform {
@@ -316,6 +369,12 @@ pub(crate) struct CooldownEntry {
     pub expiry_ms: u32,
     pub item_id: u32,
     pub permanent: bool,
+    /// Effective spell category recorded at add
+    /// time (item spell rows can override the
+    /// spell's own category); only meaningful on
+    /// spell-key entries, where the save snapshot
+    /// reads it.
+    pub category: u32,
 }
 
 impl CooldownEntry {
@@ -324,6 +383,7 @@ impl CooldownEntry {
             expiry_ms,
             item_id: 0,
             permanent: false,
+            category: 0,
         }
     }
 }
@@ -349,6 +409,10 @@ pub struct Map {
     pub(crate) players: HashMap<ObjectGuid, PlayerEntry>,
     pub(crate) creatures: HashMap<ObjectGuid, Creature>,
     pub(crate) gameobjects: HashMap<ObjectGuid, GameObject>,
+    /// Live dynamic objects (Slice 4b).
+    pub(crate) dynobjects: HashMap<ObjectGuid, mangos_entities::dynobject::DynObject>,
+    /// Dynobj affected-pass throttle accumulator.
+    pub(crate) dynobj_tick_ms: u32,
     /// Runtime cell index for units/GOs (guid sets per
     /// cell id) — visibility queries walk these.
     pub(crate) cells: HashMap<u32, CellObjects>,
@@ -416,6 +480,9 @@ pub struct Map {
     pub(crate) despawns_due: HashMap<ObjectGuid, (u64, u32)>,
     /// Temporary summons (Slice 7): guid -> lifecycle.
     pub(crate) summons: HashMap<ObjectGuid, SummonState>,
+    /// Controlled pets (Tier 1 Slice 2): pet guid ->
+    /// charm state.
+    pub(crate) pets: HashMap<ObjectGuid, crate::pets::PetState>,
     /// Local counter for summon guids (DB spawn guids
     /// stay well below this band on the bench).
     pub(crate) summon_counter: u32,
@@ -444,6 +511,7 @@ pub(crate) struct CellObjects {
     pub(crate) players: HashSet<ObjectGuid>,
     pub(crate) creatures: HashSet<ObjectGuid>,
     pub(crate) gameobjects: HashSet<ObjectGuid>,
+    pub(crate) dynobjects: HashSet<ObjectGuid>,
 }
 
 impl Map {
@@ -466,6 +534,8 @@ impl Map {
             players: HashMap::new(),
             creatures: HashMap::new(),
             gameobjects: HashMap::new(),
+            dynobjects: HashMap::new(),
+            dynobj_tick_ms: 0,
             cells: HashMap::new(),
             spawn_cells_loaded: HashSet::new(),
             events: Vec::new(),
@@ -490,6 +560,7 @@ impl Map {
             instance_data64: HashMap::new(),
             despawns_due: HashMap::new(),
             summons: HashMap::new(),
+            pets: HashMap::new(),
             summon_counter: 0x00F0_0000,
             hidden_objects: std::collections::HashSet::new(),
             deadmines: (map_id == 36 && instance_id != 0).then(crate::content::DeadminesState::new),
@@ -1296,6 +1367,7 @@ impl Map {
             candidates.extend(objects.players.iter().copied());
             candidates.extend(objects.creatures.iter().copied());
             candidates.extend(objects.gameobjects.iter().copied());
+            candidates.extend(objects.dynobjects.iter().copied());
         }
         // Objects already visible but outside the cell
         // search (they moved, or the viewer teleported) must
@@ -1417,6 +1489,18 @@ impl Map {
                 self.now_unix,
             );
         }
+        if let Some(target_obj) = self.dynobjects.get(&target) {
+            let dist = visibility::dist2d(view_point, target_obj.world.position());
+            // Fork dynobjects use the object visibility
+            // band (grey object distance).
+            let edge = self.config.visibility_distance
+                + if in_visible_list {
+                    self.config.grey_object
+                } else {
+                    0.0
+                };
+            return dist <= edge;
+        }
         false
     }
 
@@ -1449,6 +1533,17 @@ impl Map {
                 Some(&c.unit.spline),
             );
             build_create_block(&c.unit.world.object, &view, &viewer, data, now_ms, effects);
+            return;
+        }
+        if let Some(obj) = self.dynobjects.get(&target) {
+            let view = ObjectView {
+                movement: MovementSection::HasPosition(obj.world.position()),
+                rewrites: mangos_entities::update::RewriteInputs::default(),
+                melee_victim: None,
+                transport_path_progress: None,
+                is_transport: false,
+            };
+            build_create_block(&obj.world.object, &view, &viewer, data, now_ms, effects);
             return;
         }
         if let Some(go) = self.gameobjects.get(&target) {
@@ -1742,6 +1837,7 @@ impl Map {
         self.process_despawns_due();
         self.update_summons();
         self.instance_update(diff_ms);
+        self.update_dynobjects(diff_ms);
         self.update_auras(diff_ms);
         self.update_respawns();
         self.update_weather(diff_ms);

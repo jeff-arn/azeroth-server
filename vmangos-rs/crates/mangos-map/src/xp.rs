@@ -282,6 +282,9 @@ impl Map {
             .summons
             .get(&victim)
             .is_some_and(|st| st.summoner.is_player())
+            || self
+                .pet_owner(victim)
+                .is_some_and(mangos_guid::ObjectGuid::is_player)
         {
             return;
         }
@@ -296,6 +299,11 @@ impl Map {
             .filter(|g| g.is_player() && self.players.contains_key(g))
         {
             summoner
+        } else if let Some(owner) = self
+            .pet_owner(killer)
+            .filter(|g| g.is_player() && self.players.contains_key(g))
+        {
+            owner
         } else {
             return;
         };
@@ -328,6 +336,21 @@ impl Map {
                 self.config.xp_rates,
             );
             self.grant_kill_xp(reward_player, victim, xp);
+            // Pet XP only when the mob is not grey to
+            // the owner (`RewardSinglePlayerAtKill`).
+            if xp > 0
+                && let Some(pet) = self.pet_of(reward_player)
+            {
+                let pet_xp = creature_xp_gain(
+                    self.unit_level(pet),
+                    mob_level,
+                    &info,
+                    created_by_spell,
+                    non_raid_dungeon,
+                    self.config.xp_rates,
+                );
+                self.give_pet_xp(pet, pet_xp);
+            }
             return;
         };
         self.reward_group_kill_xp(
@@ -408,7 +431,16 @@ impl Map {
                 xp as f32 * rate / 2.0 + 1.0
             };
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            self.grant_kill_xp(guid, victim, member_xp as u32);
+            let member_xp = member_xp as u32;
+            self.grant_kill_xp(guid, victim, member_xp);
+            // Group pet XP: same share as the owner
+            // when the pet is not above the not-gray
+            // max level (`RewardGroupAtKill_helper`).
+            if let Some(pet) = self.pet_of(guid)
+                && self.unit_level(pet) <= not_gray_level
+            {
+                self.give_pet_xp(pet, member_xp);
+            }
         }
     }
 
@@ -424,6 +456,180 @@ impl Map {
         };
         if let Some(outcome) = outcome {
             self.emit_xp_outcome(player, Some(victim), &outcome);
+        }
+    }
+
+    /// Quest kill credit (`KilledMonsterCredit`
+    /// distribution mirroring the XP recipient set;
+    /// raid-group exclusion unmodeled, groups here
+    /// carry no raid flag).
+    pub(crate) fn quest_kill_credit(&mut self, victim: ObjectGuid, killer: Option<ObjectGuid>) {
+        let Some(killer) = killer else {
+            return;
+        };
+        let reward_player = if killer.is_player() && self.players.contains_key(&killer) {
+            killer
+        } else if let Some(summoner) = self
+            .summons
+            .get(&killer)
+            .map(|st| st.summoner)
+            .filter(|g| g.is_player() && self.players.contains_key(g))
+        {
+            summoner
+        } else if let Some(owner) = self
+            .pet_owner(killer)
+            .filter(|g| g.is_player() && self.players.contains_key(g))
+        {
+            owner
+        } else {
+            return;
+        };
+        let Some((entry, info)) = self
+            .creatures
+            .get(&victim)
+            .map(|c| (c.original_entry, c.info.clone()))
+        else {
+            return;
+        };
+        if entry == 0 {
+            return;
+        }
+        // Recipients: solo killer, or same-group
+        // members at group reward distance.
+        let group_id = self
+            .players
+            .get(&reward_player)
+            .and_then(|e| e.player.group_id);
+        let recipients: Vec<ObjectGuid> = match group_id {
+            None => vec![reward_player],
+            Some(group_id) => {
+                let victim_pos = self.unit_position(victim).unwrap_or_default();
+                self.players
+                    .iter()
+                    .filter(|(guid, e)| {
+                        e.player.group_id == Some(group_id)
+                            && e.player.unit.is_alive()
+                            && self.unit_position(**guid).is_some_and(|pos| {
+                                self.at_group_reward_distance(pos, victim_pos, &info)
+                            })
+                    })
+                    .map(|(guid, _)| *guid)
+                    .collect()
+            }
+        };
+        for recipient in recipients {
+            self.quest_kill_credit_one(recipient, victim, entry);
+        }
+    }
+
+    /// One player's `KilledMonsterCredit` body.
+    fn quest_kill_credit_one(&mut self, player_guid: ObjectGuid, victim: ObjectGuid, entry: u32) {
+        use mangos_protocol::buffer::PacketWriter;
+        // Snapshot candidate quests first (borrow
+        // discipline against the stores).
+        let candidates: Vec<u32> = {
+            let Some(entry_rec) = self.players.get(&player_guid) else {
+                return;
+            };
+            entry_rec
+                .player
+                .deferred
+                .quest_status
+                .iter()
+                .filter(|r| r.status == 3)
+                .map(|r| r.quest)
+                .collect()
+        };
+        for quest_id in candidates {
+            let Some(q) = self.stores.quest_templates.get(quest_id).cloned() else {
+                continue;
+            };
+            for idx in 0..4 {
+                if q.req_creature_or_go_ids[idx] <= 0 || q.req_spell_cast[idx] != 0 {
+                    continue;
+                }
+                #[allow(clippy::cast_sign_loss)]
+                if q.req_creature_or_go_ids[idx] as u32 != entry {
+                    continue;
+                }
+                let req = q.req_creature_or_go_counts[idx];
+                let new_count = {
+                    let Some(entry_rec) = self.players.get_mut(&player_guid) else {
+                        return;
+                    };
+                    let player = &mut entry_rec.player;
+                    let Some(row) = player
+                        .deferred
+                        .quest_status
+                        .iter_mut()
+                        .find(|r| r.quest == quest_id)
+                    else {
+                        continue;
+                    };
+                    if row.mob_count[idx] >= req {
+                        continue;
+                    }
+                    row.mob_count[idx] += 1;
+                    let new_count = row.mob_count[idx];
+                    if let Some(slot) = player.find_quest_slot(quest_id) {
+                        #[allow(clippy::cast_possible_truncation)]
+                        player.set_quest_slot_counter(slot, idx as u8, new_count as u8);
+                    }
+                    new_count
+                };
+                let mut writer = PacketWriter::new();
+                writer.write_u32_le(quest_id);
+                writer.write_u32_le(entry);
+                writer.write_u32_le(new_count);
+                writer.write_u32_le(req);
+                writer.write_u64_le(victim.raw());
+                let mut packet = WorldPacket::new(
+                    mangos_protocol::opcode_table::opcode_id::SMSG_QUESTUPDATE_ADD_KILL,
+                );
+                packet.take_writer(writer);
+                self.events.push(MapEvent::Packet {
+                    to: player_guid,
+                    packet,
+                });
+                // Completion transition.
+                let completed = {
+                    let Some(entry_rec) = self.players.get_mut(&player_guid) else {
+                        return;
+                    };
+                    let player = &mut entry_rec.player;
+                    player.can_complete_quest(&q) && player.complete_quest(quest_id)
+                };
+                if completed {
+                    let mut writer = PacketWriter::new();
+                    writer.write_u32_le(quest_id);
+                    let mut packet = WorldPacket::new(
+                        mangos_protocol::opcode_table::opcode_id::SMSG_QUESTUPDATE_COMPLETE,
+                    );
+                    packet.take_writer(writer);
+                    self.events.push(MapEvent::Packet {
+                        to: player_guid,
+                        packet,
+                    });
+                }
+            }
+        }
+    }
+
+    /// Quest reward XP (`GiveXP(xp, nullptr)` from
+    /// `RewardQuest`): no rested bonus (the fork only
+    /// applies it with a victim), no victim in the log.
+    pub fn reward_quest_xp(&mut self, player: ObjectGuid, xp: u32) {
+        let infos = &self.stores.player_infos;
+        let items = Some(&self.stores.item_prototypes);
+        let skills = Some(&self.stores.skills);
+        let outcome = {
+            let Some(entry) = self.players.get_mut(&player) else {
+                return;
+            };
+            entry.player.give_xp(xp, false, infos, items, skills)
+        };
+        if let Some(outcome) = outcome {
+            self.emit_xp_outcome(player, None, &outcome);
         }
     }
 

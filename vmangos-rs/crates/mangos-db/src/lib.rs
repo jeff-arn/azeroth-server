@@ -34,8 +34,10 @@ pub mod instance;
 pub mod login;
 pub mod mail;
 pub mod migrations;
+pub mod pet;
 pub mod petition;
 pub mod playerbot;
+pub mod quest_reward;
 // Field conversions wrap/round like C++ atol/atof by design.
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_precision_loss)]

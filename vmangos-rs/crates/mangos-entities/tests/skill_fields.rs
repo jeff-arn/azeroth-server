@@ -95,6 +95,7 @@ fn orc_warrior_load(skills: Vec<SkillRow>) -> CharacterLoad {
         mails: vec![],
         mailed_items: vec![],
         forgotten_skills: vec![],
+        pets: Vec::new(),
     }
 }
 

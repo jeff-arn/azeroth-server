@@ -92,8 +92,18 @@ pub fn move_type_for_change(change_type: u8) -> Option<usize> {
     }
 }
 
-/// `struct PlayerMovementPendingChange` (`Unit.h:61-79`,
-/// knockback payload deferred with knockback itself).
+/// `PlayerMovementPendingChange::KnockbackInfo`
+/// (`Unit.h:70-76`): wire values as sent in
+/// `SMSG_MOVE_KNOCK_BACK` (`speed_z` negated).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct KnockbackInfo {
+    pub vcos: f32,
+    pub vsin: f32,
+    pub speed_xy: f32,
+    pub speed_z: f32,
+}
+
+/// `struct PlayerMovementPendingChange` (`Unit.h:61-79`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PendingMovementChange {
     pub movement_counter: u32,
@@ -102,6 +112,8 @@ pub struct PendingMovementChange {
     pub new_value: f32,
     /// Apply flag for movement-flag changes.
     pub apply: bool,
+    /// Knockback payload for `KNOCK_BACK` changes.
+    pub knockback: Option<KnockbackInfo>,
 }
 
 /// `baseMoveSpeed[MAX_MOVE_TYPE]` (`Unit.cpp:66-73`).
@@ -294,6 +306,11 @@ pub struct UnitBase {
     pub movement_counter: u32,
     /// `m_pendingMovementChanges`.
     pub pending_movement_changes: std::collections::VecDeque<PendingMovementChange>,
+    /// `m_transformSpell` (0 = untransformed).
+    pub transform_spell: u32,
+    /// Object scale captured on transform entry, restored
+    /// on exit (`SetTransformScale` native base).
+    pub transform_base_scale: Option<f32>,
     /// Applied aura holders (`m_spellAuraHolders`
     /// subset; slot fields are written by the map).
     pub auras: Vec<crate::aura::AuraHolder>,
@@ -358,6 +375,8 @@ impl UnitBase {
             pending_spline_done: false,
             movement_counter: 0,
             pending_movement_changes: std::collections::VecDeque::new(),
+            transform_spell: 0,
+            transform_base_scale: None,
             auras: Vec::new(),
             attack_power_mods: [0.0, 0.0],
             stat_mods: [StatModGroup::default(); MAX_STATS],
@@ -437,6 +456,34 @@ impl UnitBase {
             c.movement_counter == movement_counter
                 && c.change_type == want
                 && (c.new_value - speed_received).abs() <= 0.01
+        });
+        match hit {
+            Some(idx) => {
+                self.pending_movement_changes.remove(idx);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// `FindPendingMovementKnockbackChange`
+    /// (`Unit.cpp:7001`): match counter + `KNOCK_BACK`
+    /// type + all four jump fields within 0.01;
+    /// erase on hit.
+    pub fn find_pending_knockback_change(
+        &mut self,
+        jump: &mangos_movement::movement_info::JumpInfo,
+        movement_counter: u32,
+    ) -> bool {
+        let hit = self.pending_movement_changes.iter().position(|c| {
+            c.movement_counter == movement_counter
+                && c.change_type == MOVEMENT_CHANGE_KNOCK_BACK
+                && c.knockback.is_some_and(|k| {
+                    (k.speed_xy - jump.xy_speed).abs() <= 0.01
+                        && (k.speed_z - jump.z_speed).abs() <= 0.01
+                        && (k.vcos - jump.cos_angle).abs() <= 0.01
+                        && (k.vsin - jump.sin_angle).abs() <= 0.01
+                })
         });
         match hit {
             Some(idx) => {
@@ -977,6 +1024,43 @@ mod tests {
             .set_byte(offsets::UNIT_FIELD_BYTES_0, 1, class);
         unit.set_stat(STAT_SPIRIT, spirit);
         unit
+    }
+
+    #[test]
+    fn knockback_pending_matches_within_tolerance_and_erases() {
+        use super::{KnockbackInfo, MOVEMENT_CHANGE_KNOCK_BACK, PendingMovementChange};
+        use mangos_movement::movement_info::JumpInfo;
+        let mut unit = unit_with(1, 0);
+        unit.pending_movement_changes
+            .push_back(PendingMovementChange {
+                movement_counter: 7,
+                change_type: MOVEMENT_CHANGE_KNOCK_BACK,
+                new_value: 0.0,
+                apply: false,
+                knockback: Some(KnockbackInfo {
+                    vcos: -1.0,
+                    vsin: 0.0,
+                    speed_xy: 2.5,
+                    speed_z: -30.0,
+                }),
+            });
+        let mut jump = JumpInfo {
+            cos_angle: -0.999,
+            sin_angle: 0.005,
+            xy_speed: 2.509,
+            z_speed: -29.995,
+            ..JumpInfo::default()
+        };
+        // Wrong counter: no match, entry retained.
+        assert!(!unit.find_pending_knockback_change(&jump, 8));
+        assert_eq!(unit.pending_movement_changes.len(), 1);
+        // Out-of-tolerance speed: no match.
+        jump.xy_speed = 2.6;
+        assert!(!unit.find_pending_knockback_change(&jump, 7));
+        // In tolerance: match and erase.
+        jump.xy_speed = 2.5;
+        assert!(unit.find_pending_knockback_change(&jump, 7));
+        assert!(unit.pending_movement_changes.is_empty());
     }
 
     #[test]

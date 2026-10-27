@@ -285,6 +285,10 @@ pub struct CharacterLoad {
     pub mails: Vec<MailRow>,
     pub mailed_items: Vec<MailedItemRow>,
     pub forgotten_skills: Vec<ForgottenSkillRow>,
+    /// `character_pet` rows (Tier 1 Slice 2; the fork
+    /// lazy-loads through its pet cache — the runtime
+    /// selects current/by-entry from this set).
+    pub pets: Vec<crate::pet::PetRow>,
 }
 
 fn query_rows(conn: &mut mysql::Conn, sql: &str, guid_low: u32) -> Result<Vec<Fields>, DbError> {
@@ -394,6 +398,7 @@ pub fn load_character(
     let progression = load_progression(conn, guid_low)?;
     let items = load_items_and_actions(conn, guid_low)?;
     let social = load_social_and_mail(conn, guid_low)?;
+    let pets = crate::pet::load_pets(conn, guid_low)?;
     Ok(Some(CharacterLoad {
         row,
         group_id: progression.0,
@@ -416,6 +421,7 @@ pub fn load_character(
         mails: social.4,
         mailed_items: social.5,
         forgotten_skills: social.6,
+        pets,
     }))
 }
 

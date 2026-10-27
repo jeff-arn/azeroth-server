@@ -99,10 +99,25 @@ const MOD_DAMAGE_TAKEN: u32 = 14;
 
 /// Target selector for a cast request (client-parsed
 /// subset of `SpellCastTargets`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CastTarget {
     SelfCast,
     Unit(ObjectGuid),
+    /// Ground destination (`TARGET_FLAG_DEST_LOCATION`;
+    /// mask 0 fills it from the caster in the fork).
+    Dest(Position),
+}
+
+/// The cast item of an item-use cast (`m_CastItem`):
+/// identity needed for the `SPELL_START`/`GO` first
+/// GUID, item cooldown overrides, and
+/// `TakeCastItem` charge consumption.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CastItemCtx {
+    /// `item_instance.guid` of the used stack.
+    pub item_guid: u32,
+    /// Item template entry.
+    pub item_entry: u32,
 }
 
 /// Caller-side overrides (`CastSpell` overloads in C++).
@@ -114,6 +129,9 @@ pub struct CastOptions {
     /// Skip the known-spell check (creature API casts,
     /// login auras).
     pub skip_known: bool,
+    /// Item-use cast (`SetCastItem`): no power cost,
+    /// known check skipped, item cooldown overrides.
+    pub cast_item: Option<CastItemCtx>,
 }
 
 /// One in-progress cast (`Spell` object subset).
@@ -149,6 +167,8 @@ pub struct ActiveCast {
     /// Cast by a proc handler
     /// (`m_triggeredByAuraSpell`).
     pub from_proc: bool,
+    /// Item-use cast context (`m_CastItem`).
+    pub cast_item: Option<CastItemCtx>,
     /// Original caster position (movement interrupts —
     /// handled by `apply_movement` cancellation, kept
     /// for diagnostics).
@@ -262,7 +282,7 @@ impl Map {
         a.is_player() != b.is_player()
     }
 
-    fn send_to_player(&mut self, guid: ObjectGuid, packet: WorldPacket) {
+    pub(crate) fn send_to_player(&mut self, guid: ObjectGuid, packet: WorldPacket) {
         if guid.is_player() {
             self.events.push(MapEvent::Packet { to: guid, packet });
         }
@@ -279,17 +299,98 @@ impl Map {
         self.send_to_player(caster, packet);
     }
 
-    pub(crate) fn has_cooldown(&self, caster: ObjectGuid, spell: &SpellEntry) -> bool {
+    /// `_ItemSpell` row for one spell on an item
+    /// prototype (`pickCooldowns` lookup).
+    fn item_spell_row(
+        &self,
+        item_entry: u32,
+        spell_id: u32,
+    ) -> Option<mangos_world_data::item_prototype::ItemSpell> {
+        self.stores
+            .item_prototypes
+            .get(item_entry)?
+            .spells
+            .iter()
+            .find(|row| row.spell_id == spell_id)
+            .copied()
+    }
+
+    /// `Player::AddCooldown` duration pick: an item
+    /// spell row overrides the category (when
+    /// nonzero), the spell cooldown (when >= 0),
+    /// and the category cooldown (when >= 0).
+    /// Returns (recovery, category,
+    /// `category_recovery`, `item_id`).
+    fn cooldown_durations(
+        &self,
+        spell: &SpellEntry,
+        item_entry: Option<u32>,
+    ) -> (u32, u32, u32, u32) {
+        if let Some(entry) = item_entry
+            && let Some(row) = self.item_spell_row(entry, spell.id)
+        {
+            #[allow(clippy::cast_sign_loss)]
+            return (
+                if row.cooldown >= 0 {
+                    row.cooldown as u32
+                } else {
+                    spell.recovery_time
+                },
+                if row.category != 0 {
+                    row.category
+                } else {
+                    spell.category
+                },
+                if row.category_cooldown >= 0 {
+                    row.category_cooldown as u32
+                } else {
+                    spell.category_recovery_time
+                },
+                entry,
+            );
+        }
+        (
+            spell.recovery_time,
+            spell.category,
+            spell.category_recovery_time,
+            0,
+        )
+    }
+
+    /// `SPELLMOD_COOLDOWN` as a duration.
+    fn modded_cooldown(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        raw: u32,
+        applied: Option<&mut Vec<(u32, u8)>>,
+    ) -> u32 {
+        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+        {
+            self.apply_spell_mod(caster, spell, spellmod::COOLDOWN, raw as f32, true, applied)
+                .max(0.0) as u32
+        }
+    }
+
+    pub(crate) fn has_cooldown(
+        &self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        cast_item: Option<CastItemCtx>,
+    ) -> bool {
         // `IsSpellCDExpired`/`IsCatCDExpired`: a
         // permanent (cooldown-on-event) hold never
         // expires until converted.
         let now = self.now_ms;
         let active = |e: &CooldownEntry| e.permanent || e.expiry_ms > now;
         let spell_cd = self.cooldowns.get(&(caster, spell.id)).is_some_and(active);
-        let cat_cd = spell.category != 0
+        let category = self
+            .cooldown_durations(spell, cast_item.map(|item| item.item_entry))
+            .1;
+        let cat_cd = category != 0
             && self
                 .cooldowns
-                .get(&(caster, spell.category | 0x8000_0000))
+                .get(&(caster, category | 0x8000_0000))
                 .is_some_and(active);
         spell_cd || cat_cd
     }
@@ -300,20 +401,6 @@ impl Map {
         spell: &SpellEntry,
         applied_mods: &mut Vec<(u32, u8)>,
     ) {
-        // `SPELLMOD_COOLDOWN` on both recovery fields
-        // (`Player.cpp:22252-54`).
-        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-        let modded = |this: &mut Self, raw: u32, applied: &mut Vec<(u32, u8)>| -> u32 {
-            this.apply_spell_mod(
-                caster,
-                spell,
-                spellmod::COOLDOWN,
-                raw as f32,
-                true,
-                Some(applied),
-            )
-            .max(0.0) as u32
-        };
         // `SPELL_ATTR_COOLDOWN_ON_EVENT` spells enter
         // a permanent hold at cast (`Spell.cpp:4173`
         // passes `permanent`); the timed cooldown only
@@ -322,7 +409,8 @@ impl Map {
         // would-be expiry.
         let permanent = spell.attributes & ATTR_COOLDOWN_ON_EVENT != 0;
         if spell.recovery_time > 0 {
-            let recovery = modded(self, spell.recovery_time, applied_mods);
+            let recovery =
+                self.modded_cooldown(caster, spell, spell.recovery_time, Some(applied_mods));
             if recovery > 0 {
                 self.cooldowns.insert(
                     (caster, spell.id),
@@ -330,12 +418,18 @@ impl Map {
                         expiry_ms: self.now_ms + recovery,
                         item_id: 0,
                         permanent,
+                        category: spell.category,
                     },
                 );
             }
         }
         if spell.category != 0 && spell.category_recovery_time > 0 {
-            let recovery = modded(self, spell.category_recovery_time, applied_mods);
+            let recovery = self.modded_cooldown(
+                caster,
+                spell,
+                spell.category_recovery_time,
+                Some(applied_mods),
+            );
             if recovery > 0 {
                 self.cooldowns.insert(
                     (caster, spell.category | 0x8000_0000),
@@ -343,9 +437,63 @@ impl Map {
                         expiry_ms: self.now_ms + recovery,
                         item_id: 0,
                         permanent,
+                        category: 0,
                     },
                 );
             }
+        }
+    }
+
+    /// `Player::AddCooldown` with a cast item
+    /// (`Player.cpp:21871`): item duration overrides
+    /// from `cooldown_durations`, `SPELLMOD_COOLDOWN`
+    /// on the spell recovery when nonzero else the
+    /// category recovery, and the spell-key entry
+    /// records the item id + effective category.
+    fn add_cooldowns_item(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        item: CastItemCtx,
+        applied_mods: &mut Vec<(u32, u8)>,
+    ) {
+        let (rec, category, cat_rec, item_id) =
+            self.cooldown_durations(spell, Some(item.item_entry));
+        let (rec, cat_rec) = if rec > 0 {
+            (
+                self.modded_cooldown(caster, spell, rec, Some(applied_mods)),
+                cat_rec,
+            )
+        } else if category != 0 && cat_rec > 0 {
+            (
+                rec,
+                self.modded_cooldown(caster, spell, cat_rec, Some(applied_mods)),
+            )
+        } else {
+            (rec, cat_rec)
+        };
+        let permanent = spell.attributes & ATTR_COOLDOWN_ON_EVENT != 0;
+        if rec > 0 {
+            self.cooldowns.insert(
+                (caster, spell.id),
+                CooldownEntry {
+                    expiry_ms: self.now_ms + rec,
+                    item_id,
+                    permanent,
+                    category,
+                },
+            );
+        }
+        if category != 0 && cat_rec > 0 {
+            self.cooldowns.insert(
+                (caster, category | 0x8000_0000),
+                CooldownEntry {
+                    expiry_ms: self.now_ms + cat_rec,
+                    item_id: 0,
+                    permanent,
+                    category: 0,
+                },
+            );
         }
     }
 
@@ -357,50 +505,47 @@ impl Map {
     /// applies, no charge drop). No-op without a
     /// permanent spell-key hold.
     fn start_event_cooldown(&mut self, caster: ObjectGuid, spell: &SpellEntry) {
-        let held = self
+        let Some(held) = self
             .cooldowns
             .get(&(caster, spell.id))
-            .is_some_and(|e| e.permanent);
-        if !held {
+            .copied()
+            .filter(|e| e.permanent)
+        else {
             return;
-        }
+        };
         self.cooldowns.remove(&(caster, spell.id));
-        if spell.category != 0 {
+        // The fork re-picks item cooldown durations
+        // from the held entry's item when the hold
+        // came from an item cast (`wasPermanent` arm
+        // of `Player::AddCooldown`).
+        let (rec, category, cat_rec, item_id) =
+            self.cooldown_durations(spell, (held.item_id != 0).then_some(held.item_id));
+        let held_category = if held.category != 0 {
+            held.category
+        } else {
+            category
+        };
+        if held_category != 0 {
             self.cooldowns
-                .remove(&(caster, spell.category | 0x8000_0000));
+                .remove(&(caster, held_category | 0x8000_0000));
         }
-        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-        let recovery = self
-            .apply_spell_mod(
-                caster,
-                spell,
-                spellmod::COOLDOWN,
-                spell.recovery_time as f32,
-                true,
-                None,
-            )
-            .max(0.0) as u32;
+        let recovery = self.modded_cooldown(caster, spell, rec, None);
         if recovery > 0 {
             self.cooldowns.insert(
                 (caster, spell.id),
-                CooldownEntry::timed(self.now_ms + recovery),
+                CooldownEntry {
+                    expiry_ms: self.now_ms + recovery,
+                    item_id,
+                    permanent: false,
+                    category,
+                },
             );
         }
-        if spell.category != 0 && spell.category_recovery_time > 0 {
-            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-            let cat_recovery = self
-                .apply_spell_mod(
-                    caster,
-                    spell,
-                    spellmod::COOLDOWN,
-                    spell.category_recovery_time as f32,
-                    true,
-                    None,
-                )
-                .max(0.0) as u32;
+        if category != 0 && cat_rec > 0 {
+            let cat_recovery = self.modded_cooldown(caster, spell, cat_rec, None);
             if cat_recovery > 0 {
                 self.cooldowns.insert(
-                    (caster, spell.category | 0x8000_0000),
+                    (caster, category | 0x8000_0000),
                     CooldownEntry::timed(self.now_ms + cat_recovery),
                 );
             }
@@ -412,6 +557,12 @@ impl Map {
     /// half: the client packet is built session-side;
     /// without this the server would not block).
     pub fn seed_cooldowns(&mut self, caster: ObjectGuid, rows: &[LoadedCooldown]) {
+        // Login reload is authoritative: the fork's
+        // cooldown map lives on the Player and dies
+        // at logout, so any entries a previous
+        // session left in this map are dropped
+        // before seeding from the DB rows.
+        self.cooldowns.retain(|(guid, _), _| *guid != caster);
         for row in rows {
             if row.spell_remaining_ms > 0 {
                 self.cooldowns.insert(
@@ -420,6 +571,7 @@ impl Map {
                         expiry_ms: self.now_ms + row.spell_remaining_ms,
                         item_id: row.item_id,
                         permanent: false,
+                        category: row.category,
                     },
                 );
             }
@@ -722,7 +874,7 @@ impl Map {
         self.player_knows_spell(caster, spell_id)
     }
 
-    fn player_knows_spell(&self, caster: ObjectGuid, spell_id: u32) -> bool {
+    pub(crate) fn player_knows_spell(&self, caster: ObjectGuid, spell_id: u32) -> bool {
         if !caster.is_player() {
             return true;
         }
@@ -784,7 +936,10 @@ impl Map {
                 return fail(self, cast_result::FAILED_PACIFIED);
             }
         }
-        if !options.skip_known && !self.player_knows_spell(caster, spell_id) {
+        if !options.skip_known
+            && options.cast_item.is_none()
+            && !self.player_knows_spell(caster, spell_id)
+        {
             return fail(self, cast_result::FAILED_UNKNOWN);
         }
         if self.casts.contains_key(&caster) {
@@ -802,29 +957,35 @@ impl Map {
             let gcd = self
                 .unit_base_mut(caster)
                 .is_some_and(|u| u.gcd_until_ms > now);
-            if gcd || self.has_cooldown(caster, &spell) {
+            if gcd || self.has_cooldown(caster, &spell, options.cast_item) {
                 return fail(self, cast_result::FAILED_NOT_READY);
             }
-            let cost = spell.power_cost(
-                self.unit_power(caster, spell.power_type),
-                self.unit_max_power(caster, spell.power_type),
-                self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
-            );
-            // `SPELLMOD_COST` at the power check never
-            // drops a charge (the take site does).
-            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-            let cost = self
-                .apply_spell_mod(
-                    caster,
-                    &spell,
-                    spellmod::COST,
-                    cost as f32,
-                    false,
-                    Some(&mut applied_mods),
-                )
-                .max(0.0) as u32;
-            if self.unit_power(caster, spell.power_type) < cost {
-                return fail(self, cast_result::FAILED_NO_POWER);
+            // Item casts are free
+            // (`CalculatePowerCost` returns 0 with a
+            // cast item); GCD + cooldown gates above
+            // still run for them.
+            if options.cast_item.is_none() {
+                let cost = spell.power_cost(
+                    self.unit_power(caster, spell.power_type),
+                    self.unit_max_power(caster, spell.power_type),
+                    self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
+                );
+                // `SPELLMOD_COST` at the power check never
+                // drops a charge (the take site does).
+                #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                let cost = self
+                    .apply_spell_mod(
+                        caster,
+                        &spell,
+                        spellmod::COST,
+                        cost as f32,
+                        false,
+                        Some(&mut applied_mods),
+                    )
+                    .max(0.0) as u32;
+                if self.unit_power(caster, spell.power_type) < cost {
+                    return fail(self, cast_result::FAILED_NO_POWER);
+                }
             }
         }
         // Target validation (subset of CheckCast target
@@ -877,6 +1038,7 @@ impl Map {
             proc_victim_flags,
             can_trigger_procs,
             from_proc,
+            cast_item: options.cast_item,
             position,
         };
         if cast_time > 0 && !options.triggered {
@@ -916,7 +1078,37 @@ impl Map {
             // Slice 5 gap; effects land on the caster
             // target slot).
             | tgt::LOCATION_CASTER_DEST
+            | tgt::LOCATION_UNIT_MINION_POSITION
             | tgt::LOCATION_CASTER_SRC => CastOutcome::Started,
+            // Ground enumerations: destination comes
+            // from the client (or the caster for
+            // scripted casts); range gates to the
+            // destination like the fork's CheckRange.
+            tgt::ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC
+            | tgt::ENUM_UNITS_FRIEND_AOE_AT_DEST_LOC
+            | tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC
+            | tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC
+            | tgt::ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOCATION
+            | tgt::ENUM_UNITS_FRIEND_AOE_AT_DYNOBJ_LOCATION => {
+                if let CastTarget::Dest(pos) = target {
+                    let range = self.apply_spell_mod(
+                        caster,
+                        spell,
+                        spellmod::RANGE,
+                        spell.range_max(&self.stores.spells.tables),
+                        false,
+                        Some(applied_mods),
+                    ) + self.bounding_radius_of(caster);
+                    let Some(cpos) = self.unit_position(caster) else {
+                        return CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS);
+                    };
+                    let dist = ((cpos.x - pos.x).powi(2) + (cpos.y - pos.y).powi(2)).sqrt();
+                    if dist > range {
+                        return CastOutcome::Failed(cast_result::FAILED_OUT_OF_RANGE);
+                    }
+                }
+                CastOutcome::Started
+            }
             tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT => {
                 let CastTarget::Unit(victim) = target else {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_IMPLICIT_TARGETS);
@@ -975,16 +1167,24 @@ impl Map {
                 payload.write_u16_le(0x0002);
                 payload.write_bytes(&Self::packed_guid_bytes(caster));
             }
+            CastTarget::Dest(pos) => {
+                payload.write_u16_le(0x0040); // TARGET_FLAG_DEST_LOCATION
+                payload.write_f32_le(pos.x);
+                payload.write_f32_le(pos.y);
+                payload.write_f32_le(pos.z);
+            }
         }
     }
 
     fn send_spell_start(&mut self, caster: ObjectGuid, cast: &ActiveCast, spell: &SpellEntry) {
         let target_guid = match cast.target {
             CastTarget::Unit(g) => g,
-            CastTarget::SelfCast => caster,
+            CastTarget::SelfCast | CastTarget::Dest(_) => caster,
         };
         let mut payload = PacketWriter::new();
-        payload.write_bytes(&Self::packed_guid_bytes(caster));
+        payload.write_bytes(&Self::packed_guid_bytes(Self::cast_first_guid(
+            caster, cast,
+        )));
         payload.write_bytes(&Self::packed_guid_bytes(target_guid));
         payload.write_u8(cast.cast_counter);
         payload.write_u32_le(spell.id);
@@ -1263,37 +1463,41 @@ impl Map {
         }
 
         // TakePower + GCD + cooldowns at cast()
-        // (StartRecoveryTime).
+        // (StartRecoveryTime). Item casts take no
+        // power (`TakePower` early-returns with a
+        // cast item) but keep GCD + cooldowns.
         if !cast.triggered {
-            let power_cost = spell.power_cost(
-                self.unit_power(caster, spell.power_type),
-                self.unit_max_power(caster, spell.power_type),
-                self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
-            );
-            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-            let power_cost = self
-                .apply_spell_mod(
-                    caster,
-                    &spell,
-                    spellmod::COST,
-                    power_cost as f32,
-                    true,
-                    Some(&mut cast.applied_mods),
-                )
-                .max(0.0) as u32;
-            let current = self.unit_power(caster, spell.power_type);
-            self.unit_set_power(caster, spell.power_type, current.saturating_sub(power_cost));
-            // `Spell::TakePower` five-second timer
-            // (`Spell.cpp:5252-5255`): a positive mana
-            // spend without
-            // `SPELL_ATTR_EX2_DONT_BLOCK_MANA_REGEN`
-            // (0x02000000) arms `SetLastManaUse`.
-            if spell.power_type as usize == mangos_entities::unit::POWER_MANA
-                && power_cost > 0
-                && spell.attributes_ex2 & 0x0200_0000 == 0
-                && let Some(u) = self.unit_base_mut(caster)
-            {
-                u.set_last_mana_use(spell.id);
+            if cast.cast_item.is_none() {
+                let power_cost = spell.power_cost(
+                    self.unit_power(caster, spell.power_type),
+                    self.unit_max_power(caster, spell.power_type),
+                    self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
+                );
+                #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                let power_cost = self
+                    .apply_spell_mod(
+                        caster,
+                        &spell,
+                        spellmod::COST,
+                        power_cost as f32,
+                        true,
+                        Some(&mut cast.applied_mods),
+                    )
+                    .max(0.0) as u32;
+                let current = self.unit_power(caster, spell.power_type);
+                self.unit_set_power(caster, spell.power_type, current.saturating_sub(power_cost));
+                // `Spell::TakePower` five-second timer
+                // (`Spell.cpp:5252-5255`): a positive mana
+                // spend without
+                // `SPELL_ATTR_EX2_DONT_BLOCK_MANA_REGEN`
+                // (0x02000000) arms `SetLastManaUse`.
+                if spell.power_type as usize == mangos_entities::unit::POWER_MANA
+                    && power_cost > 0
+                    && spell.attributes_ex2 & 0x0200_0000 == 0
+                    && let Some(u) = self.unit_base_mut(caster)
+                {
+                    u.set_last_mana_use(spell.id);
+                }
             }
             if spell.start_recovery_time > 0 {
                 #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
@@ -1312,10 +1516,25 @@ impl Map {
                     u.gcd_until_ms = until;
                 }
             }
-            self.add_cooldowns(caster, &spell, &mut cast.applied_mods);
+            if let Some(item) = cast.cast_item {
+                self.add_cooldowns_item(caster, &spell, item, &mut cast.applied_mods);
+            } else {
+                self.add_cooldowns(caster, &spell, &mut cast.applied_mods);
+            }
         }
 
-        let victims = Self::collect_targets(caster, &spell, cast.target);
+        let victims = self.collect_targets(caster, &spell, cast.target);
+        // `EffectPersistentAA` runs once per cast at
+        // the destination (fork executes it from the
+        // location target list, not per unit victim).
+        if let Some(eff_index) = spell
+            .effects
+            .iter()
+            .position(|e| e.effect == effect::PERSISTENT_AREA_AURA)
+        {
+            let dest = self.cast_dest(caster, &spell, cast.target);
+            self.spawn_dynobject(caster, &spell, eff_index, dest);
+        }
         let caster_level = self.unit_level(caster);
         let mut hits: Vec<ObjectGuid> = Vec::new();
         let mut misses: Vec<(ObjectGuid, u8)> = Vec::new();
@@ -1347,6 +1566,17 @@ impl Map {
         }
 
         self.send_spell_go(caster, &cast, &spell, &hits, &misses);
+        // `TakeCastItem` runs in `cast()` right after
+        // `SendSpellGo` (the item must outlive the GO
+        // packet's cast-item GUID); triggered casts
+        // skip it outside trade-item targets, which
+        // are unmodeled.
+        if let Some(item) = cast.cast_item
+            && !cast.triggered
+            && caster.is_player()
+        {
+            self.take_cast_item(caster, item);
+        }
         // Cast-end proc raise (fork raises it in
         // `cast()` before effect application).
         if cast.can_trigger_procs {
@@ -1393,6 +1623,10 @@ impl Map {
                 caster_level,
                 &spell,
                 victim,
+                match cast.target {
+                    CastTarget::Dest(pos) => Some(pos),
+                    _ => None,
+                },
                 Some(&mut cast.applied_mods),
                 Some(&ctx),
             );
@@ -1595,7 +1829,86 @@ impl Map {
         }
     }
 
+    /// Resolved cast destination (`m_targets` dest):
+    /// client destination, unit-target position, or
+    /// the caster position (the fork's mask-0 fill).
+    fn cast_dest(&self, caster: ObjectGuid, spell: &SpellEntry, target: CastTarget) -> Position {
+        if let CastTarget::Dest(pos) = target {
+            return pos;
+        }
+        // `TARGET_LOCATION_DATABASE` fill for
+        // non-teleport effects (`Spell.cpp` target-map
+        // build): the store row supplies the dest when
+        // it is on this map.
+        if spell.effects.iter().any(|e| {
+            e.implicit_target_a == tgt::LOCATION_DATABASE && e.effect != effect::TELEPORT_UNITS
+        }) && let Some(loc) = self.stores.spell_target_positions.get(spell.id)
+            && u32::from(loc.map_id) == self.map_id
+        {
+            return loc.position();
+        }
+        match target {
+            CastTarget::Dest(pos) => pos,
+            CastTarget::Unit(g) => self
+                .unit_position(g)
+                .or_else(|| self.unit_position(caster))
+                .unwrap_or_default(),
+            CastTarget::SelfCast => self.unit_position(caster).unwrap_or_default(),
+        }
+    }
+
+    /// `ComputeEffectRadius` data half: radius entry
+    /// for one effect (spellmod applied by callers
+    /// that need it).
+    pub(crate) fn effect_radius(&self, spell: &SpellEntry, i: usize) -> f32 {
+        self.stores
+            .spells
+            .tables
+            .radii
+            .get(&spell.effects[i].radius_index)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    /// Units within `radius` (2D) of `center`
+    /// hostile (`enemy`) or friendly to `caster`;
+    /// the ground-enumeration victim search.
+    pub(crate) fn units_around(
+        &self,
+        caster: ObjectGuid,
+        center: Position,
+        radius: f32,
+        enemy: bool,
+    ) -> Vec<ObjectGuid> {
+        let mut out = Vec::new();
+        let within = |pos: Position| {
+            (pos.x - center.x).powi(2) + (pos.y - center.y).powi(2) <= radius * radius
+        };
+        for (guid, creature) in &self.creatures {
+            if !creature.unit.is_alive() {
+                continue;
+            }
+            if Self::is_hostile_pair(caster, *guid) == enemy
+                && within(creature.unit.world.position())
+            {
+                out.push(*guid);
+            }
+        }
+        for guid in self.players.keys() {
+            if !self.unit_is_alive(*guid) {
+                continue;
+            }
+            if Self::is_hostile_pair(caster, *guid) == enemy
+                && self.unit_position(*guid).is_some_and(within)
+            {
+                out.push(*guid);
+            }
+        }
+        out
+    }
+
     fn collect_targets(
+        &self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         target: CastTarget,
@@ -1608,8 +1921,24 @@ impl Map {
         match mode {
             tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT => match target {
                 CastTarget::Unit(g) => vec![g],
-                CastTarget::SelfCast => vec![caster],
+                CastTarget::SelfCast | CastTarget::Dest(_) => vec![caster],
             },
+            tgt::ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC | tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC => {
+                let center = if mode == tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC {
+                    self.unit_position(caster).unwrap_or_default()
+                } else {
+                    self.cast_dest(caster, spell, target)
+                };
+                self.units_around(caster, center, self.effect_radius(spell, 0), true)
+            }
+            tgt::ENUM_UNITS_FRIEND_AOE_AT_DEST_LOC | tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC => {
+                let center = if mode == tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC {
+                    self.unit_position(caster).unwrap_or_default()
+                } else {
+                    self.cast_dest(caster, spell, target)
+                };
+                self.units_around(caster, center, self.effect_radius(spell, 0), false)
+            }
             tgt::ENUM_UNITS_PARTY_WITHIN_CASTER_RANGE
             | tgt::UNIT_PARTY
             | tgt::UNIT_FRIEND_AND_PARTY => {
@@ -1631,10 +1960,12 @@ impl Map {
     ) {
         let target_guid = match cast.target {
             CastTarget::Unit(g) => g,
-            CastTarget::SelfCast => caster,
+            CastTarget::SelfCast | CastTarget::Dest(_) => caster,
         };
         let mut payload = PacketWriter::new();
-        payload.write_bytes(&Self::packed_guid_bytes(caster));
+        payload.write_bytes(&Self::packed_guid_bytes(Self::cast_first_guid(
+            caster, cast,
+        )));
         payload.write_bytes(&Self::packed_guid_bytes(target_guid));
         payload.write_u8(cast.cast_counter);
         payload.write_u32_le(spell.id);
@@ -1662,6 +1993,7 @@ impl Map {
         caster_level: u32,
         spell: &SpellEntry,
         victim: ObjectGuid,
+        client_dest: Option<Position>,
         mut applied_mods: Option<&mut Vec<(u32, u8)>>,
         proc_ctx: Option<&ProcRaiseCtx>,
     ) {
@@ -1943,12 +2275,20 @@ impl Map {
                             CastOptions {
                                 triggered: true,
                                 skip_known: true,
+                                cast_item: None,
                             },
                         );
                     }
                 }
                 effect::APPLY_AURA | effect::APPLY_AREA_AURA_PARTY => {
-                    self.apply_spell_aura(caster, spell, victim, applied_mods.as_deref_mut());
+                    // Dynobj-location aura effects (28/29)
+                    // are delivered by the dynamic object
+                    // updater, never directly at cast time.
+                    if eff.implicit_target_a != tgt::ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOCATION
+                        && eff.implicit_target_a != tgt::ENUM_UNITS_FRIEND_AOE_AT_DYNOBJ_LOCATION
+                    {
+                        self.apply_spell_aura(caster, spell, victim, applied_mods.as_deref_mut());
+                    }
                     break; // all effects ride one holder
                 }
                 // SPELL_EFFECT_SUMMON / SUMMON_WILD /
@@ -1956,9 +2296,468 @@ impl Map {
                 28 | 41 | 42 if eff.misc_value > 0 => {
                     self.summon_effect(caster, caster_level, spell, victim, i);
                 }
+                // SPELL_EFFECT_SUMMON_PET (Tier 1 Slice
+                // 2): the fork ignores the effect victim
+                // and summons for the caster; run once
+                // on the caster's own hit.
+                effect::SUMMON_PET if victim == caster => {
+                    #[allow(
+                        clippy::cast_possible_wrap,
+                        clippy::cast_sign_loss,
+                        clippy::cast_possible_truncation
+                    )]
+                    let pet_level = if caster.is_player() {
+                        caster_level
+                    } else {
+                        (caster_level as i32 + eff.multiple_value as i32).max(1) as u32
+                    };
+                    #[allow(clippy::cast_sign_loss)]
+                    self.summon_pet_effect(
+                        caster,
+                        spell.id,
+                        eff.misc_value.max(0) as u32,
+                        pet_level,
+                    );
+                }
+                // SPELL_EFFECT_LEARN_PET_SPELL.
+                effect::LEARN_PET_SPELL
+                    if victim == caster && caster.is_player() && eff.trigger_spell != 0 =>
+                {
+                    self.learn_pet_spell_effect(caster, eff.trigger_spell);
+                }
+                // SPELL_EFFECT_CREATE_ITEM (Tier 1
+                // Slice 3a).
+                effect::CREATE_ITEM if victim.is_player() => {
+                    self.create_item_effect(victim, spell, i, caster_level);
+                }
+                // SPELL_EFFECT_TELEPORT_UNITS /
+                // SPELL_EFFECT_LEAP (Tier 1 Slice 5).
+                effect::TELEPORT_UNITS => {
+                    self.teleport_units_effect(caster, spell, i, victim, client_dest);
+                }
+                effect::LEAP => {
+                    self.leap_effect(caster, spell, i, victim, client_dest);
+                }
+                // SPELL_EFFECT_KNOCK_BACK /
+                // SPELL_EFFECT_PLAYER_PULL (Tier 1
+                // Slice 6). Values: horizontal =
+                // misc/10, vertical = value/10;
+                // PLAYER_PULL pulls toward the caster
+                // with distance-clamped negative
+                // horizontal speed and misc vertical.
+                effect::KNOCK_BACK => {
+                    #[allow(clippy::cast_precision_loss)]
+                    let damage = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                    #[allow(clippy::cast_precision_loss)]
+                    let horizontal = eff.misc_value as f32 / 10.0;
+                    self.remove_auras_due_to_spell(victim, 24778);
+                    self.knock_back_from(victim, caster, horizontal, damage / 10.0);
+                }
+                effect::PLAYER_PULL => {
+                    #[allow(clippy::cast_precision_loss)]
+                    let damage = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                    let dist = match (self.unit_position(victim), self.unit_position(caster)) {
+                        (Some(v), Some(c)) => {
+                            let d = ((v.x - c.x).powi(2) + (v.y - c.y).powi(2)).sqrt();
+                            if damage != 0.0 && d > damage {
+                                damage
+                            } else {
+                                d
+                            }
+                        }
+                        _ => 0.0,
+                    };
+                    #[allow(clippy::cast_precision_loss)]
+                    let vertical = eff.misc_value as f32 / 10.0;
+                    self.knock_back_from(victim, caster, -dist, vertical);
+                }
+                // SPELL_EFFECT_PERSISTENT_AREA_AURA
+                // spawns once per cast in
+                // `finish_cast` (it is not a per-victim
+                // effect; mixed spells like Flamestrike
+                // enumerate direct-hit victims too).
+                // Includes PERSISTENT_AREA_AURA (see
+                // above): no per-victim work.
                 _ => {}
             }
         }
+    }
+
+    /// `Unit::NearTeleportTo` dispatch: players take
+    /// the controller ACK train, creatures the
+    /// observer teleport packets.
+    fn near_teleport_unit(&mut self, victim: ObjectGuid, position: Position) {
+        if victim.is_player() {
+            self.teleport_player_in_map(victim, position);
+        } else {
+            self.teleport_creature_in_map(victim, position);
+        }
+    }
+
+    /// Same-map near teleport or cross-map player
+    /// transfer (`EffectTeleportUnits` location arms;
+    /// creatures are silently skipped cross-map,
+    /// exactly as the fork).
+    fn teleport_to_location(
+        &mut self,
+        victim: ObjectGuid,
+        loc: mangos_world_data::spawns::WorldLocation,
+    ) {
+        if u32::from(loc.map_id) == self.map_id {
+            self.near_teleport_unit(victim, loc.position());
+        } else if victim.is_player() {
+            self.events.push(MapEvent::TeleportPlayer {
+                player: victim,
+                map_id: u32::from(loc.map_id),
+                position: loc.position(),
+            });
+        }
+    }
+
+    /// `Spell::EffectTeleportUnits`
+    /// (`SpellEffects.cpp:1536`), switched on the
+    /// effect's implicit target B. The taxi-flight
+    /// gate has no system behind it yet.
+    fn teleport_units_effect(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        i: usize,
+        victim: ObjectGuid,
+        client_dest: Option<Position>,
+    ) {
+        if self.unit_position(victim).is_none() {
+            return;
+        }
+        match spell.effects[i].implicit_target_b {
+            tgt::LOCATION_CASTER_HOME_BIND => {
+                if !victim.is_player() {
+                    return;
+                }
+                let Some(loc) = self
+                    .players
+                    .get(&victim)
+                    .map(|entry| entry.player.homebind.location)
+                else {
+                    return;
+                };
+                self.teleport_to_location(victim, loc);
+            }
+            tgt::LOCATION_DATABASE | tgt::ENEMY_AOE_AT_SRC_LOC_SCRIPT => {
+                let Some(loc) = self.stores.spell_target_positions.get(spell.id) else {
+                    return;
+                };
+                self.teleport_to_location(victim, loc);
+            }
+            tgt::LOCATION_CASTER_DEST => {
+                let (Some(mut dest), Some(caster_pos)) =
+                    (self.unit_position(victim), self.unit_position(caster))
+                else {
+                    return;
+                };
+                dest.o = caster_pos.o;
+                self.near_teleport_unit(caster, dest);
+            }
+            _ => {
+                let Some(mut dest) = client_dest else {
+                    return;
+                };
+                if let Some(victim_pos) = self.unit_position(victim) {
+                    dest.o = victim_pos.o;
+                }
+                self.near_teleport_unit(victim, dest);
+            }
+        }
+    }
+
+    /// Directional dest-fill angle offset
+    /// (`Spell.cpp` target-map build).
+    fn directional_offset(mode: u32) -> Option<f32> {
+        use std::f32::consts::PI;
+        match mode {
+            tgt::LOCATION_CASTER_FRONT_LEFT | tgt::LOCATION_UNIT_MINION_POSITION => Some(PI * 0.25),
+            tgt::LOCATION_CASTER_BACK_LEFT => Some(PI * 0.75),
+            tgt::LOCATION_CASTER_BACK => Some(PI),
+            tgt::LOCATION_CASTER_BACK_RIGHT => Some(PI * 1.25),
+            tgt::LOCATION_CASTER_FRONT_RIGHT => Some(PI * 1.75),
+            tgt::LOCATION_CASTER_LEFT => Some(PI / 2.0),
+            tgt::LOCATION_CASTER_RIGHT => Some(-PI / 2.0),
+            tgt::LOCATION_CASTER_FRONT | tgt::LOCATION_CASTER_FRONT_LEAP => Some(0.0),
+            _ => None,
+        }
+    }
+
+    /// `GetFirstCollisionPosition` analogue: navmesh
+    /// path end toward `from + dist·angle` (the fork
+    /// runs `PathFinder::calculate(src, dest, false,
+    /// true)` then `LoS` and Z-safety trims; the `LoS` trim
+    /// has no vmap behind it here — recorded).
+    fn first_collision_dest(&mut self, from: Position, angle: f32, dist: f32) -> Position {
+        if dist <= 0.0 {
+            return from;
+        }
+        let end = Position::new(
+            from.x + dist * angle.cos(),
+            from.y + dist * angle.sin(),
+            from.z,
+            from.o,
+        );
+        let result = self.find_path_points(from, end, false, true);
+        result.points.last().copied().unwrap_or(end)
+    }
+
+    /// `Spell::EffectLeapForward`
+    /// (`SpellEffects.cpp:5187`) with the directional
+    /// destination fill from target-map build
+    /// (client dest wins when present, as in the
+    /// fork).
+    fn leap_effect(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        i: usize,
+        victim: ObjectGuid,
+        client_dest: Option<Position>,
+    ) {
+        let dest = if let Some(dest) = client_dest {
+            dest
+        } else {
+            let Some(from) = self.unit_position(caster) else {
+                return;
+            };
+            let eff = spell.effects[i];
+            let offset = Self::directional_offset(eff.implicit_target_b)
+                .or_else(|| Self::directional_offset(eff.implicit_target_a))
+                .unwrap_or(0.0);
+            let radius = if eff.radius_index == 0 {
+                0.0
+            } else {
+                self.effect_radius(spell, i)
+            };
+            self.first_collision_dest(from, from.o + offset, radius)
+        };
+        let mut dest = dest;
+        if let Some(victim_pos) = self.unit_position(victim) {
+            dest.o = victim_pos.o;
+        }
+        self.near_teleport_unit(victim, dest);
+    }
+
+    /// `Unit::KnockBackFrom` + `Unit::KnockBack`
+    /// (`Unit.cpp:9991`): stunned/rooted or
+    /// mid-spline units ignore it; only
+    /// player-moved units launch in this fork
+    /// (creatures and pets are a deliberate no-op —
+    /// see the Slice 6 inventory). The controller
+    /// packet carries negated vertical speed, and
+    /// the pending change stores the wire values.
+    fn knock_back_from(
+        &mut self,
+        victim: ObjectGuid,
+        source: ObjectGuid,
+        horizontal_speed: f32,
+        vertical_speed: f32,
+    ) {
+        use mangos_entities::unit::{
+            KnockbackInfo, MOVEMENT_CHANGE_KNOCK_BACK, PendingMovementChange, UNIT_STATE_ROOT,
+            UNIT_STATE_STUNNED,
+        };
+        let Some(victim_pos) = self.unit_position(victim) else {
+            return;
+        };
+        let blocked = self.unit_base_mut(victim).is_some_and(|unit| {
+            unit.has_unit_state(UNIT_STATE_STUNNED | UNIT_STATE_ROOT) || !unit.spline.finalized()
+        });
+        if blocked {
+            return;
+        }
+        // `InterruptNonMeleeSpells(false)` runs for
+        // every unit kind before the player branch.
+        self.cancel_cast(victim, true);
+        if !victim.is_player() {
+            return;
+        }
+        let angle = if victim == source {
+            victim_pos.o + std::f32::consts::PI
+        } else {
+            let Some(source_pos) = self.unit_position(source) else {
+                return;
+            };
+            (victim_pos.y - source_pos.y).atan2(victim_pos.x - source_pos.x)
+        };
+        let info = KnockbackInfo {
+            vcos: angle.cos(),
+            vsin: angle.sin(),
+            speed_xy: horizontal_speed,
+            speed_z: -vertical_speed,
+        };
+        let Some(counter) = self.unit_base_mut(victim).map(|unit| {
+            let counter = unit.movement_counter_and_inc();
+            unit.pending_movement_changes
+                .push_back(PendingMovementChange {
+                    movement_counter: counter,
+                    change_type: MOVEMENT_CHANGE_KNOCK_BACK,
+                    new_value: 0.0,
+                    apply: false,
+                    knockback: Some(info),
+                });
+            counter
+        }) else {
+            return;
+        };
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&Self::packed_guid_bytes(victim));
+        payload.write_u32_le(counter);
+        payload.write_f32_le(info.vcos);
+        payload.write_f32_le(info.vsin);
+        payload.write_f32_le(info.speed_xy);
+        payload.write_f32_le(info.speed_z);
+        let packet = WorldPacket::with_body(op::SMSG_MOVE_KNOCK_BACK, payload.into_vec());
+        self.events.push(MapEvent::Packet { to: victim, packet });
+        self.events.push(MapEvent::KnockBack {
+            player: victim,
+            vertical_speed,
+        });
+    }
+
+    /// `Player::SendEquipError` (`SMSG_INVENTORY_CHANGE_FAILURE`:
+    /// result byte, two empty item GUIDs, zero byte).
+    fn send_equip_error(&mut self, player: ObjectGuid, result: u8) {
+        let mut payload = PacketWriter::new();
+        payload.write_u8(result);
+        payload.write_u64_le(0);
+        payload.write_u64_le(0);
+        payload.write_u8(0);
+        let packet = WorldPacket::with_body(op::SMSG_INVENTORY_CHANGE_FAILURE, payload.into_vec());
+        self.send_to_player(player, packet);
+    }
+
+    /// `Spell::DoCreateItem` (`SpellEffects.cpp:1820`)
+    /// map half: count from the effect value clamped
+    /// to `[1, Stackable]`; unknown prototypes fail
+    /// with `EQUIP_ERR_ITEM_NOT_FOUND` (23). The
+    /// store itself crosses to the world actor as
+    /// [`MapEvent::CreateItem`] (inventory baseline
+    /// and DB writes live there); battleground-mark
+    /// mail overflow and `UpdateCraftSkill` are
+    /// recorded as unmodeled.
+    fn create_item_effect(
+        &mut self,
+        victim: ObjectGuid,
+        spell: &SpellEntry,
+        i: usize,
+        caster_level: u32,
+    ) {
+        let eff = spell.effects[i];
+        #[allow(clippy::cast_possible_truncation)]
+        let item_id = eff.item_type as u32;
+        let Some(stackable) = self
+            .stores
+            .item_prototypes
+            .get(item_id)
+            .map(|proto| proto.stackable.max(1))
+        else {
+            self.send_equip_error(victim, 23);
+            return;
+        };
+        let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+        let rolled = mangos_spells::ditheru(value, self.spell_rng());
+        let count = rolled.clamp(1, stackable);
+        self.events.push(MapEvent::CreateItem {
+            player: victim,
+            item_id,
+            count,
+        });
+    }
+
+    /// First packed GUID of `SMSG_SPELL_START`/`GO`:
+    /// the cast item for item casts, else the caster
+    /// (`Spell.cpp:4611/4645`).
+    fn cast_first_guid(caster: ObjectGuid, cast: &ActiveCast) -> ObjectGuid {
+        match cast.cast_item {
+            Some(item) => ObjectGuid::with_entry(mangos_guid::HighGuid::ITEM, 0, item.item_guid),
+            None => caster,
+        }
+    }
+
+    /// `Spell::TakeCastItem` (`Spell.cpp:5166`):
+    /// walk every prototype spell with charges —
+    /// negative proto charges mark the item
+    /// expendable, each use steps charges one
+    /// toward 0 (written back only when
+    /// `Stackable < 2`; `withoutCharges` is
+    /// overwritten per charged spell, fork-faithful)
+    /// — and an expendable item out of charges
+    /// loses one count. Baseline edits land here;
+    /// DB writes cross as events.
+    fn take_cast_item(&mut self, caster: ObjectGuid, item: CastItemCtx) {
+        let Some(proto) = self.stores.item_prototypes.get(item.item_entry).cloned() else {
+            return;
+        };
+        let mut events = Vec::new();
+        {
+            let Some(entry) = self.players.get_mut(&caster) else {
+                return;
+            };
+            let inv = &mut entry.player.saved.inventory;
+            let Some(idx) = inv
+                .iter()
+                .position(|row| row.item.item_guid == item.item_guid)
+            else {
+                return;
+            };
+            let mut charges: Vec<i32> = inv[idx]
+                .item
+                .charges
+                .split_whitespace()
+                .map(|token| token.parse().unwrap_or(0))
+                .collect();
+            charges.resize(5, 0);
+            let mut expendable = false;
+            let mut without_charges = false;
+            let mut changed = false;
+            for (i, spell_row) in proto.spells.iter().enumerate() {
+                if spell_row.spell_id == 0 || spell_row.charges == 0 {
+                    continue;
+                }
+                if spell_row.charges < 0 {
+                    expendable = true;
+                }
+                let mut charge = charges[i];
+                if charge != 0 {
+                    charge += if charge > 0 { -1 } else { 1 };
+                    if proto.stackable < 2 {
+                        charges[i] = charge;
+                        changed = true;
+                    }
+                }
+                without_charges = charge == 0;
+            }
+            if changed {
+                let text = format!(
+                    "{} {} {} {} {} ",
+                    charges[0], charges[1], charges[2], charges[3], charges[4]
+                );
+                inv[idx].item.charges.clone_from(&text);
+                events.push(MapEvent::SetItemCharges {
+                    item_guid: item.item_guid,
+                    charges: text,
+                });
+            }
+            if expendable && without_charges {
+                let remaining = inv[idx].item.count.saturating_sub(1);
+                if remaining == 0 {
+                    inv.remove(idx);
+                } else {
+                    inv[idx].item.count = remaining;
+                }
+                events.push(MapEvent::SetItemCount {
+                    item_guid: item.item_guid,
+                    count: remaining,
+                });
+            }
+        }
+        self.events.extend(events);
     }
 
     /// `Spell::EffectSummonType` for `SUMMON` /
@@ -2436,6 +3235,7 @@ impl Map {
         // AI death hooks in the fork as well).
         if is_creature {
             self.reward_kill_xp(victim, killer);
+            self.quest_kill_credit(victim, killer);
         }
         // EventAI death/kill hooks run while the AI
         // state still exists (`JustDied`/`KilledUnit`).
@@ -2479,7 +3279,10 @@ impl Map {
             self.motion.entry(victim).or_insert(master);
         }
         if is_creature {
-            if self.summons.contains_key(&victim) {
+            if self.is_pet(victim) {
+                // Pet corpses persist for revive until
+                // unsummoned (no DB respawn, no decay).
+            } else if self.summons.contains_key(&victim) {
                 // Temp summons never hit the DB respawn
                 // path: the corpse is removed by the
                 // summon lifecycle (Slice 7).
@@ -2634,8 +3437,7 @@ impl Map {
     /// keys merge into the fork's per-spell
     /// `CooldownData` shape; expiries convert from map
     /// time to epoch seconds. Item-created rows keep
-    /// their `item_id` (seeded at login; no item-use
-    /// runtime creates new ones yet).
+    /// their `item_id` and effective category.
     #[must_use]
     pub fn player_cooldown_rows(&self, guid: ObjectGuid, now_unix: i64) -> Vec<CooldownSnapshot> {
         let to_epoch = |expiry_ms: u32| -> i64 {
@@ -2653,7 +3455,11 @@ impl Map {
             {
                 continue;
             }
-            let category = self.stores.spells.get(*key).map_or(0, |s| s.category);
+            let category = if entry.category != 0 {
+                entry.category
+            } else {
+                self.stores.spells.get(*key).map_or(0, |s| s.category)
+            };
             let category_expire_time = if category != 0 {
                 self.cooldowns
                     .get(&(guid, category | 0x8000_0000))
@@ -2674,7 +3480,7 @@ impl Map {
         rows
     }
 
-    fn send_aura_duration(&mut self, target: ObjectGuid, slot: u8, duration_ms: i32) {
+    pub(crate) fn send_aura_duration(&mut self, target: ObjectGuid, slot: u8, duration_ms: i32) {
         if slot >= MAX_AURAS || duration_ms < 0 {
             return;
         }
@@ -2966,6 +3772,7 @@ impl Map {
             self.refresh_weapon_damage_fields(victim);
         }
         self.send_aura_duration(victim, duration_packet.0, duration_packet.1);
+        self.refresh_display(victim);
         self.refresh_speed(victim);
         self.refresh_cc_flags(victim);
     }
@@ -3000,12 +3807,280 @@ impl Map {
         }
     }
 
+    /// `RemoveAurasWithInterruptFlags`.
+    pub(crate) fn remove_auras_with_interrupt_flags(&mut self, victim: ObjectGuid, flags: u32) {
+        let indices: Vec<usize> = self
+            .aura_holders(victim)
+            .iter()
+            .enumerate()
+            .filter(|(_, h)| {
+                self.stores
+                    .spells
+                    .get(h.spell_id)
+                    .is_some_and(|s| s.aura_interrupt_flags & flags != 0)
+            })
+            .map(|(i, _)| i)
+            .collect();
+        for index in indices.into_iter().rev() {
+            self.remove_aura_at(victim, index);
+        }
+    }
+
+    /// `RemoveSpellsCausingAura`.
+    pub(crate) fn remove_spells_causing_aura(&mut self, victim: ObjectGuid, kind: u32) {
+        let indices: Vec<usize> = self
+            .aura_holders(victim)
+            .iter()
+            .enumerate()
+            .filter(|(_, h)| h.effects.iter().flatten().any(|e| e.aura_type == kind))
+            .map(|(i, _)| i)
+            .collect();
+        for index in indices.into_iter().rev() {
+            self.remove_aura_at(victim, index);
+        }
+    }
+
+    fn send_mount_result(&mut self, guid: ObjectGuid, result: u32) {
+        if !self.players.contains_key(&guid) {
+            return;
+        }
+        let mut payload = PacketWriter::new();
+        payload.write_u32_le(result);
+        self.send_to_player(
+            guid,
+            WorldPacket::with_body(op::SMSG_MOUNTRESULT, payload.into_vec()),
+        );
+    }
+
+    fn send_dismount_result(&mut self, guid: ObjectGuid, result: u32) {
+        if !self.players.contains_key(&guid) {
+            return;
+        }
+        let mut payload = PacketWriter::new();
+        payload.write_u32_le(result);
+        self.send_to_player(
+            guid,
+            WorldPacket::with_body(op::SMSG_DISMOUNTRESULT, payload.into_vec()),
+        );
+    }
+
+    /// Holder-derived mount/transform display state
+    /// (fork `HandleAuraMounted`/`HandleAuraTransform`
+    /// Real paths, `SpellAuras.cpp:2151/2533`, as a
+    /// recompute like `refresh_cc_flags`: display ids
+    /// are chosen only on state transitions, matching
+    /// the fork's apply-time rolls; the transform
+    /// winner simulates the fork precedence over
+    /// holders in apply order, which equals its
+    /// removal-time last-negative-else-last re-apply).
+    /// Pet disable/unsummon-at-mount, extra-attack
+    /// reset, shapeshift-display fallback, and the
+    /// channel mount-interrupt are unmodeled (no
+    /// backing state).
+    pub(crate) fn refresh_display(&mut self, guid: ObjectGuid) {
+        use mangos_entities::creature::{
+            DisplayResolver, choose_display_id_for_template, random_gender_display,
+        };
+        let holders = self.aura_holders(guid);
+        let find_effect = |kind: u32| {
+            holders
+                .iter()
+                .flat_map(|h| h.effects.iter().flatten().map(move |e| (h, e)))
+                .find(|(_, e)| e.aura_type == kind)
+        };
+        // ---- MOUNTED (HandleAuraMounted) ----
+        let mounted_now = self.unit_base_mut(guid).map_or(0, |u| {
+            u.values().get_u32(offsets::UNIT_FIELD_MOUNTDISPLAYID)
+        });
+        #[allow(clippy::cast_sign_loss)]
+        let mount_entry = find_effect(aura_type::MOUNTED).map(|(_, e)| e.misc_value as u32);
+        match (mounted_now != 0, mount_entry) {
+            (false, Some(entry)) => {
+                let stores = &self.stores;
+                let resolver = DisplayResolver {
+                    scale_for_display: &|id| stores.scale_for_display(id),
+                    model_for_display: &|id| stores.model_for_display(id),
+                };
+                let display = stores.creature_templates.get(entry).map_or(0, |info| {
+                    let (id, _) = choose_display_id_for_template(info, &resolver, &mut self.rng);
+                    random_gender_display(&stores.display_addons, id, &mut self.rng)
+                });
+                if display == 0 {
+                    // Player::Mount(0): strip + NOTMOUNTABLE.
+                    self.remove_spells_causing_aura(guid, aura_type::MOUNTED);
+                    self.send_mount_result(guid, 3);
+                } else {
+                    if let Some(unit) = self.unit_base_mut(guid) {
+                        unit.values()
+                            .set_u32(offsets::UNIT_FIELD_MOUNTDISPLAYID, display);
+                    }
+                    self.remove_auras_with_interrupt_flags(
+                        guid,
+                        aura_interrupt_flag::MOUNT_CANCELS,
+                    );
+                    self.send_mount_result(guid, 10);
+                }
+            }
+            (true, None) => {
+                if let Some(unit) = self.unit_base_mut(guid) {
+                    unit.values().set_u32(offsets::UNIT_FIELD_MOUNTDISPLAYID, 0);
+                }
+                self.remove_auras_with_interrupt_flags(guid, aura_interrupt_flag::DISMOUNT_CANCELS);
+                self.send_dismount_result(guid, 3);
+            }
+            _ => {}
+        }
+        // ---- TRANSFORM (HandleAuraTransform) ----
+        let mut winner: Option<(u32, i32, bool)> = None;
+        for h in &holders {
+            for e in h.effects.iter().flatten() {
+                if e.aura_type != aura_type::TRANSFORM {
+                    continue;
+                }
+                let wins = match winner {
+                    None => true,
+                    Some((_, _, cur_positive)) => !h.positive || cur_positive,
+                };
+                if wins {
+                    winner = Some((h.spell_id, e.misc_value, h.positive));
+                }
+            }
+        }
+        let current_spell = self.unit_base_mut(guid).map_or(0, |u| u.transform_spell);
+        match winner {
+            None if current_spell != 0 => {
+                let native = self.unit_base_mut(guid).map_or(0, |u| {
+                    u.values().get_u32(offsets::UNIT_FIELD_NATIVEDISPLAYID)
+                });
+                let model = self.stores.model_for_display(native);
+                if let Some(unit) = self.unit_base_mut(guid) {
+                    unit.transform_spell = 0;
+                    if native != 0 {
+                        unit.set_display_id(native, model);
+                    }
+                    if let Some(base) = unit.transform_base_scale.take() {
+                        unit.world.object.set_object_scale(base);
+                    }
+                }
+                if let Some(equip) = self.creatures.get(&guid).map(|c| c.info.equipment_id) {
+                    self.creature_load_equipment(guid, equip);
+                }
+            }
+            Some((spell_id, misc, _)) if spell_id != current_spell => {
+                self.apply_transform_display(guid, spell_id, misc);
+            }
+            _ => {}
+        }
+    }
+
+    /// `HandleAuraTransform` apply half for a winning
+    /// switch (display choice + `SetTransformScale` +
+    /// creature equipment swap).
+    fn apply_transform_display(&mut self, guid: ObjectGuid, spell_id: u32, misc: i32) {
+        use mangos_entities::creature::{
+            DisplayResolver, UNIT_DISPLAY_ID_BOX, choose_display_id_for_template,
+        };
+        let mut display_id = 0u32;
+        let mut mod_x = 1.0f32;
+        let mut equip: Option<u32> = None;
+        if misc == 0 {
+            // Orb of Deception (16739) race/gender table;
+            // other misc-0 spells log-only in the fork.
+            if spell_id == 16739 {
+                let (race, cur_display, native) = self.unit_base_mut(guid).map_or((0, 0, 0), |u| {
+                    (
+                        u.values().get_byte(offsets::UNIT_FIELD_BYTES_0, 0),
+                        u.values().get_u32(offsets::UNIT_FIELD_DISPLAYID),
+                        u.values().get_u32(offsets::UNIT_FIELD_NATIVEDISPLAYID),
+                    )
+                });
+                let male = self
+                    .stores
+                    .display_addons
+                    .creature(cur_display)
+                    .is_none_or(|a| a.gender == 0);
+                let native_scale = self.stores.scale_for_display(native);
+                // Fork race ids: human 1, orc 2, dwarf 3,
+                // nightelf 4, undead 5, tauren 6, gnome 7,
+                // troll 8.
+                let pick = |m: u32, f: u32| if male { m } else { f };
+                match race {
+                    8 => display_id = pick(10135, 10134),
+                    6 => {
+                        display_id = pick(10136, 10147);
+                        if native_scale != 0.0 {
+                            mod_x = 1.15 / native_scale;
+                        }
+                    }
+                    1 => display_id = pick(10137, 10138),
+                    2 => display_id = pick(10139, 10140),
+                    3 => display_id = pick(10141, 10142),
+                    4 => display_id = pick(10143, 10144),
+                    5 => display_id = pick(10146, 10145),
+                    7 => {
+                        display_id = pick(10148, 10149);
+                        if native_scale != 0.0 {
+                            mod_x = if male { 1.35 } else { 1.25 } / native_scale;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            #[allow(clippy::cast_sign_loss)]
+            let entry = misc as u32;
+            let stores = &self.stores;
+            let resolver = DisplayResolver {
+                scale_for_display: &|id| stores.scale_for_display(id),
+                model_for_display: &|id| stores.model_for_display(id),
+            };
+            match stores.creature_templates.get(entry) {
+                None => display_id = UNIT_DISPLAY_ID_BOX,
+                Some(info) => {
+                    let (id, scale) =
+                        choose_display_id_for_template(info, &resolver, &mut self.rng);
+                    display_id = id;
+                    if self.creatures.contains_key(&guid) {
+                        equip = Some(info.equipment_id);
+                        mod_x = scale;
+                    }
+                }
+            }
+        }
+        let model = self.stores.model_for_display(display_id);
+        let native_model_scale = self
+            .unit_base_mut(guid)
+            .map(|u| u.values().get_u32(offsets::UNIT_FIELD_NATIVEDISPLAYID))
+            .and_then(|n| self.stores.model_for_display(n))
+            .map_or(1.0, |m| m.native_scale);
+        if let Some(unit) = self.unit_base_mut(guid) {
+            if display_id != 0 {
+                if unit.transform_base_scale.is_none() {
+                    unit.transform_base_scale = Some(unit.world.object.object_scale());
+                }
+                unit.set_display_id(display_id, model);
+                // SetTransformScale(mod_x): object scale
+                // *= mod_x / native model scale.
+                if mod_x != 0.0 && native_model_scale != 0.0 {
+                    let base = unit.transform_base_scale.unwrap_or(1.0);
+                    unit.world
+                        .object
+                        .set_object_scale(base * mod_x / native_model_scale);
+                }
+            }
+            unit.transform_spell = spell_id;
+        }
+        if let Some(equip_id) = equip {
+            self.creature_load_equipment(guid, equip_id);
+        }
+    }
+
     /// `Unit::UpdateSpeed` aura factor (fork
     /// `Unit.cpp:7195`), run + swim subset:
     /// main mod = max-positive increase; bonus =
     /// max(not-stack, always-multiplier); strongest
-    /// slow multiplies last. Mounted/normalization/
-    /// ghost arms unmodeled (no mount runtime).
+    /// slow multiplies last. Normalization/ghost
+    /// arms unmodeled.
     pub(crate) fn refresh_speed(&mut self, guid: ObjectGuid) {
         let (base_run, base_swim) = {
             let Some(unit) = self.unit_base_mut(guid) else {
@@ -3035,16 +4110,19 @@ impl Map {
                 .min()
                 .unwrap_or(0)
         };
+        // UpdateSpeed mounted arm: on-mount aura kinds.
+        let mounted = self
+            .unit_base_mut(guid)
+            .is_some_and(|u| u.values().get_u32(offsets::UNIT_FIELD_MOUNTDISPLAYID) != 0);
         #[allow(clippy::cast_precision_loss)]
-        let factor = |increase_kind: u32, with_stack: bool| -> f32 {
+        let factor = |increase_kind: u32, stack_kinds: Option<(u32, u32)>| -> f32 {
             let main_mod = max_pos(increase_kind);
-            let (stack, non_stack) = if with_stack {
-                (
-                    self.total_aura_multiplier(guid, aura_type::MOD_SPEED_ALWAYS, None),
-                    (100.0 + max_pos(aura_type::MOD_SPEED_NOT_STACK) as f32) / 100.0,
-                )
-            } else {
-                (1.0, 1.0)
+            let (stack, non_stack) = match stack_kinds {
+                Some((always, not_stack)) => (
+                    self.total_aura_multiplier(guid, always, None),
+                    (100.0 + max_pos(not_stack) as f32) / 100.0,
+                ),
+                None => (1.0, 1.0),
             };
             let bonus = stack.max(non_stack);
             let mut speed = if main_mod != 0 {
@@ -3058,8 +4136,22 @@ impl Map {
             }
             speed
         };
-        let run = base_run * factor(aura_type::MOD_INCREASE_SPEED, true);
-        let swim = base_swim * factor(aura_type::MOD_INCREASE_SWIM_SPEED, false);
+        let (run_kind, run_stack) = if mounted {
+            (
+                aura_type::MOD_INCREASE_MOUNTED_SPEED,
+                (
+                    aura_type::MOD_MOUNTED_SPEED_ALWAYS,
+                    aura_type::MOD_MOUNTED_SPEED_NOT_STACK,
+                ),
+            )
+        } else {
+            (
+                aura_type::MOD_INCREASE_SPEED,
+                (aura_type::MOD_SPEED_ALWAYS, aura_type::MOD_SPEED_NOT_STACK),
+            )
+        };
+        let run = base_run * factor(run_kind, Some(run_stack));
+        let swim = base_swim * factor(aura_type::MOD_INCREASE_SWIM_SPEED, None);
         self.set_speed_rate(guid, mangos_entities::unit::MOVE_RUN, run);
         self.set_speed_rate(guid, 3, swim);
     }
@@ -3133,6 +4225,7 @@ impl Map {
         {
             self.start_event_cooldown(caster, &spell);
         }
+        self.refresh_display(victim);
         self.refresh_speed(victim);
         self.refresh_cc_flags(victim);
     }
@@ -3195,7 +4288,7 @@ impl Map {
     }
 
     #[allow(clippy::too_many_lines)] // one EffectApplyAura port
-    fn apply_spell_aura(
+    pub(crate) fn apply_spell_aura(
         &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
@@ -3248,7 +4341,15 @@ impl Map {
         }
         for i in 0..3 {
             let eff = spell.effects[i];
-            if eff.effect != effect::APPLY_AURA && eff.effect != effect::APPLY_AREA_AURA_PARTY {
+            // `CreateAura` builds an aura for
+            // APPLY_AURA-family and
+            // PERSISTENT_AREA_AURA effects alike
+            // (Flamestrike's periodic damage rides on
+            // the persistent effect itself).
+            if eff.effect != effect::APPLY_AURA
+                && eff.effect != effect::APPLY_AREA_AURA_PARTY
+                && eff.effect != effect::PERSISTENT_AREA_AURA
+            {
                 continue;
             }
             if eff.apply_aura_name == aura_type::NONE {
@@ -3433,6 +4534,45 @@ impl Map {
             .chain(self.creatures.keys())
             .copied()
             .collect();
+        // `PersistentAreaAura::Update` pre-pass: a
+        // holder sourced from a dynamic object is
+        // removed when the object is gone or the
+        // target left its radius; a persistent holder
+        // without a dynobject (reloaded from DB)
+        // removes itself immediately. Whole-holder
+        // removal where the fork removes per-effect is
+        // a recorded divergence.
+        let mut orphaned: Vec<(ObjectGuid, usize)> = Vec::new();
+        for target in &targets {
+            let holders = self.aura_holders(*target);
+            for (index, holder) in holders.iter().enumerate() {
+                let is_persistent = holder.dynobj != ObjectGuid::EMPTY
+                    || self.stores.spells.get(holder.spell_id).is_some_and(|s| {
+                        s.effects
+                            .iter()
+                            .any(|e| e.effect == effect::PERSISTENT_AREA_AURA)
+                    });
+                if !is_persistent {
+                    continue;
+                }
+                let remove = if holder.dynobj == ObjectGuid::EMPTY {
+                    true
+                } else if let Some(dynobj) = self.dynobjects.get(&holder.dynobj) {
+                    self.unit_position(*target).is_none_or(|pos| {
+                        crate::visibility::dist2d(pos, dynobj.world.position()) > dynobj.radius
+                    })
+                } else {
+                    true
+                };
+                if remove {
+                    orphaned.push((*target, index));
+                }
+            }
+        }
+        orphaned.sort_by_key(|&(_, index)| std::cmp::Reverse(index));
+        for (target, index) in orphaned {
+            self.remove_aura_at(target, index);
+        }
         let mut ticks: Vec<PeriodicTick> = Vec::new();
         let mut expired: Vec<(ObjectGuid, usize)> = Vec::new();
         for target in &targets {
@@ -3521,6 +4661,7 @@ impl Map {
                         CastOptions {
                             triggered: true,
                             skip_known: true,
+                            cast_item: None,
                         },
                     );
                 }

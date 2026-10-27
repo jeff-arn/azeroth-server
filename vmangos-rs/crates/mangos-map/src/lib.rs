@@ -12,8 +12,10 @@
 
 pub mod ai;
 pub mod content;
+pub mod dynobjects;
 pub mod map;
 pub mod motion;
+pub mod pets;
 pub mod procs;
 pub mod regen;
 pub mod scripts;

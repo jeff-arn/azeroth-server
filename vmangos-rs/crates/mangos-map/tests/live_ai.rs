@@ -159,6 +159,8 @@ fn bench_creature_ai_and_melee() {
                     areas: mangos_world_data::areas::AreaStore::default(),
                     exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(
                     ),
+                    pets: mangos_world_data::pet_data::PetStores::default(),
+                    next_pet_number: std::sync::atomic::AtomicU32::new(1),
                     weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore {
@@ -169,6 +171,8 @@ fn bench_creature_ai_and_melee() {
                         ))
                         .expect("spell dbc tables"),
                     },
+                    spell_target_positions:
+                        mangos_world_data::spell_target_position::SpellTargetPositions::default(),
                     creature_spells,
                     scripts: mangos_scripts_engine::ScriptStores::default(),
                     display_scales: HashMap::new(),
@@ -179,6 +183,8 @@ fn bench_creature_ai_and_melee() {
                     maps: mangos_world_data::map_template::MapStore::default(),
                     area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
                     quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
+                    quest_templates: mangos_world_data::quest_template::QuestTemplates::default(),
+                    quest_relations: mangos_world_data::quest_template::QuestRelations::default(),
                     tavern_triggers: std::collections::HashSet::new(),
                 },
                 pillager_spawn.expect("pillager spawn"),

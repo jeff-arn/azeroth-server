@@ -40,6 +40,9 @@ pub struct WorldStores {
     pub weather_chances: WeatherChanceStore,
     pub waypoints: WaypointStore,
     pub spells: SpellStore,
+    /// `spell_target_position` destinations
+    /// (Tier 1 Slice 5).
+    pub spell_target_positions: mangos_world_data::spell_target_position::SpellTargetPositions,
     /// `creature_spells` lists by `spell_list_id`
     /// (Slice 6 creature casting).
     pub creature_spells: CreatureSpellsMap,
@@ -63,10 +66,22 @@ pub struct WorldStores {
     /// Quest template subset for load/save parity
     /// (Phase 6 Slice 1b).
     pub quests: mangos_world_data::quest_template::QuestTemplatesLite,
+    /// Full `quest_template` rows for the questgiver
+    /// runtime (Tier 1 Slice 1a).
+    pub quest_templates: mangos_world_data::quest_template::QuestTemplates,
+    /// Questgiver start/end relations (Tier 1 Slice 1a).
+    pub quest_relations: mangos_world_data::quest_template::QuestRelations,
     /// `areatrigger_tavern` ids (Phase 6 Slice 1b rest).
     pub tavern_triggers: std::collections::HashSet<u32>,
     /// `exploration_basexp` (depth Slice 1b).
     pub exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp,
+    /// Pet level stats / create spells / name parts
+    /// (Tier 1 Slice 2a).
+    pub pets: mangos_world_data::pet_data::PetStores,
+    /// `ObjectMgr::m_NextPetNumber` (Tier 1 Slice 2a):
+    /// seeded past `MAX(character_pet.id)` at boot,
+    /// bumped past any loaded row id.
+    pub next_pet_number: std::sync::atomic::AtomicU32,
 }
 
 impl WorldStores {
@@ -89,6 +104,8 @@ impl WorldStores {
             weather_chances: WeatherChanceStore::default(),
             waypoints: WaypointStore::default(),
             spells: SpellStore::default(),
+            spell_target_positions:
+                mangos_world_data::spell_target_position::SpellTargetPositions::default(),
             creature_spells: CreatureSpellsMap::new(),
             scripts: mangos_scripts_engine::ScriptStores::default(),
             display_scales: HashMap::new(),
@@ -97,11 +114,31 @@ impl WorldStores {
             maps: mangos_world_data::map_template::MapStore::default(),
             area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
             quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
+            quest_templates: mangos_world_data::quest_template::QuestTemplates::default(),
+            quest_relations: mangos_world_data::quest_template::QuestRelations::default(),
             tavern_triggers: std::collections::HashSet::new(),
             exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(),
             chat_channels: ChatChannelDbc::default(),
             auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
+            pets: mangos_world_data::pet_data::PetStores::default(),
+            next_pet_number: std::sync::atomic::AtomicU32::new(1),
         }
+    }
+
+    /// `ObjectMgr::GeneratePetNumber` (the fork walks
+    /// its pet cache for the next free id from the
+    /// counter; seeded past the DB max here, so a
+    /// plain fetch-add allocates the same ids).
+    pub fn generate_pet_number(&self) -> u32 {
+        self.next_pet_number
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Keep the counter past a loaded row id (fork
+    /// cache coherence on `GeneratePetNumber`).
+    pub fn observe_pet_number(&self, pet_id: u32) {
+        self.next_pet_number
+            .fetch_max(pet_id + 1, std::sync::atomic::Ordering::Relaxed);
     }
 
     #[must_use]

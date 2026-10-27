@@ -545,6 +545,7 @@ impl Map {
             CastOptions {
                 triggered: false,
                 skip_known: true,
+                cast_item: None,
             },
         ) == CastOutcome::Started
     }

@@ -36,7 +36,7 @@ use mangos_protocol::update_field_table::{PLAYER_END, offsets};
 use mangos_protocol::update_fields::TypeMask;
 use mangos_world_data::item_prototype::ItemPrototypes;
 use mangos_world_data::player_info::{PlayerInfos, RaceDbc};
-use mangos_world_data::quest_template::QuestTemplatesLite;
+use mangos_world_data::quest_template::{QuestTemplate, QuestTemplates};
 use mangos_world_data::skill_info::{SkillDbc, SkillRange};
 use mangos_world_data::spawns::WorldLocation;
 
@@ -133,7 +133,7 @@ pub struct MaterializeInputs<'a> {
     /// conversion and `AdjustQuestReqItemCount` recount;
     /// `None` in template-free tests keeps quest rows
     /// verbatim (no timer conversion, no recount churn).
-    pub quest_templates: Option<&'a QuestTemplatesLite>,
+    pub quest_templates: Option<&'a QuestTemplates>,
 }
 
 /// Load rows retained verbatim for later slices.
@@ -158,6 +158,11 @@ pub struct DeferredLoad {
     /// here, mutated by the mangosd social handlers
     /// (Phase 5 Slice A), written back per change.
     pub social: Vec<SocialRow>,
+    /// `character_pet` rows (Tier 1 Slice 2): the
+    /// map runtime selects/mutates these as pets are
+    /// summoned, loaded, and saved; DB writes leave
+    /// through `MapEvent` save snapshots.
+    pub pets: Vec<mangos_db::pet::PetRow>,
 }
 
 /// Homebind location (`m_homebind*` + recall position seed).
@@ -667,6 +672,7 @@ impl Player {
                 bg_data: load.bg_data.take(),
                 account_data: std::mem::take(&mut load.account_data),
                 social: std::mem::take(&mut load.social),
+                pets: std::mem::take(&mut load.pets),
             },
         };
         player.init_identity_values(&load, inputs);
@@ -1672,7 +1678,7 @@ impl Player {
             let Some(tmpl) = templates.get(row.quest) else {
                 continue;
             };
-            let timed_active = tmpl.is_timed() && row.rewarded == 0 && row.status != 0;
+            let timed_active = tmpl.limit_time != 0 && row.rewarded == 0 && row.status != 0;
             let remaining_ms_at_load = if timed_active {
                 if row.timer <= now {
                     1
@@ -1719,6 +1725,335 @@ impl Player {
                 }
             }
         }
+        self.rebuild_quest_log(templates);
+    }
+
+    /// `GetQuestStatus` over the runtime rows
+    /// (`QUEST_STATUS_NONE` when absent).
+    #[must_use]
+    pub fn quest_status(&self, quest_id: u32) -> i32 {
+        self.deferred
+            .quest_status
+            .iter()
+            .find(|r| r.quest == quest_id)
+            .map_or(0, |r| r.status)
+    }
+
+    #[must_use]
+    pub fn quest_row(&self, quest_id: u32) -> Option<&QuestStatusRow> {
+        self.deferred
+            .quest_status
+            .iter()
+            .find(|r| r.quest == quest_id)
+    }
+
+    /// Mutable row, inserting the fork default
+    /// (status NONE, zeroed counters) when absent.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the index comes from a
+    /// `position` scan (or push) on this same vec.
+    pub fn quest_row_or_insert(&mut self, quest_id: u32) -> &mut QuestStatusRow {
+        let pos = if let Some(pos) = self
+            .deferred
+            .quest_status
+            .iter()
+            .position(|r| r.quest == quest_id)
+        {
+            pos
+        } else {
+            self.deferred.quest_status.push(QuestStatusRow {
+                quest: quest_id,
+                status: 0,
+                rewarded: 0,
+                explored: 0,
+                timer: 0,
+                mob_count: [0; 4],
+                item_count: [0; 4],
+                reward_choice: 0,
+            });
+            self.deferred.quest_status.len() - 1
+        };
+        &mut self.deferred.quest_status[pos]
+    }
+
+    /// `SetQuestStatus` (row created on first touch).
+    pub fn set_quest_status(&mut self, quest_id: u32, status: i32) {
+        self.quest_row_or_insert(quest_id).status = status;
+    }
+
+    /// `FindQuestSlot`: scan the log fields.
+    #[must_use]
+    pub fn find_quest_slot(&self, quest_id: u32) -> Option<u16> {
+        let v = self.unit.world.object.values();
+        (0..20u16).find(|&slot| {
+            v.get_u32(offsets::PLAYER_QUEST_LOG_1_1 + slot * 3) == quest_id && quest_id != 0
+        })
+    }
+
+    /// `SetQuestSlot` (id + zeroed count/state + timer).
+    pub fn set_quest_slot(&mut self, slot: u16, quest_id: u32, timer: u32) {
+        let base = offsets::PLAYER_QUEST_LOG_1_1 + slot * 3;
+        let v = self.unit.world.object.values_mut();
+        v.set_u32(base, quest_id);
+        v.set_u32(base + 1, 0);
+        v.set_u32(base + 2, timer);
+    }
+
+    /// `SetQuestSlotCounter`: 6-bit packed counter.
+    pub fn set_quest_slot_counter(&mut self, slot: u16, counter: u8, count: u8) {
+        let field = offsets::PLAYER_QUEST_LOG_1_1 + slot * 3 + 1;
+        let v = self.unit.world.object.values_mut();
+        let mut val = v.get_u32(field);
+        val &= !(0x3Fu32 << (counter * 6));
+        val |= u32::from(count) << (counter * 6);
+        v.set_u32(field, val);
+    }
+
+    /// `SetQuestSlotState` / `RemoveQuestSlotState`
+    /// (byte 3 of the count/state word).
+    pub fn set_quest_slot_state(&mut self, slot: u16, state: u8, on: bool) {
+        let field = offsets::PLAYER_QUEST_LOG_1_1 + slot * 3 + 1;
+        let v = self.unit.world.object.values_mut();
+        let mut bytes = v.get_u32(field).to_le_bytes();
+        if on {
+            bytes[3] |= state;
+        } else {
+            bytes[3] &= !state;
+        }
+        v.set_u32(field, u32::from_le_bytes(bytes));
+    }
+
+    /// `_LoadQuestStatus` log reconstruction: slots
+    /// for INCOMPLETE/COMPLETE/FAILED rows that are
+    /// unrewarded (or repeatable), counters and
+    /// state flags from the rows, tail cleared.
+    pub fn rebuild_quest_log(&mut self, templates: &QuestTemplates) {
+        let rows: Vec<QuestStatusRow> = self.deferred.quest_status.clone();
+        let mut slot = 0u16;
+        for row in &rows {
+            if slot >= 20 {
+                break;
+            }
+            if !matches!(row.status, 1 | 3 | 5) {
+                continue;
+            }
+            let repeatable = templates
+                .get(row.quest)
+                .is_some_and(QuestTemplate::is_repeatable);
+            if row.rewarded != 0 && !repeatable {
+                continue;
+            }
+            let timer_secs = self
+                .quest_timers
+                .get(&row.quest)
+                .map_or(0, |t| t.remaining_ms_at_load / 1000);
+            self.set_quest_slot(slot, row.quest, timer_secs);
+            if row.explored != 0 || row.status == 1 {
+                self.set_quest_slot_state(slot, 0x01, true);
+            }
+            if row.status == 5 {
+                self.set_quest_slot_state(slot, 0x02, true);
+            }
+            for idx in 0..4u8 {
+                let count = row.mob_count[idx as usize];
+                if count != 0 {
+                    #[allow(clippy::cast_possible_truncation)]
+                    self.set_quest_slot_counter(slot, idx, count as u8);
+                }
+            }
+            slot += 1;
+        }
+        for tail in slot..20u16 {
+            self.set_quest_slot(tail, 0, 0);
+        }
+    }
+
+    /// Container guids of the bags in the four
+    /// inventory bag slots (fork `INVENTORY_SLOT_BAG`
+    /// 19..23). Row `bag` values are container item
+    /// guids; 0 marks a direct character slot.
+    fn inventory_bag_guids(&self) -> Vec<u32> {
+        self.saved
+            .inventory
+            .iter()
+            .filter(|inv| inv.bag == 0 && (19..23).contains(&inv.slot))
+            .map(|inv| inv.item.item_guid)
+            .collect()
+    }
+
+    /// Inventory count of an item
+    /// (`GetItemCount(item, inBankAlso=false)` and
+    /// `HasItemCount` share the slot coverage:
+    /// equipment, backpack, and keyring direct rows
+    /// plus inventory-bag contents; bank rows and
+    /// bank-bag contents excluded. Session grants
+    /// and destroys keep `saved.inventory` in
+    /// lockstep with their DB-row writes. The fork's
+    /// `IsInTrade` exclusion in `HasItemCount` has
+    /// no row flag here.)
+    #[must_use]
+    pub fn quest_item_count(&self, item_id: u32) -> u32 {
+        let bags = self.inventory_bag_guids();
+        self.saved
+            .inventory
+            .iter()
+            .filter(|inv| inv.item.item_id == item_id)
+            .filter(|inv| {
+                if inv.bag == 0 {
+                    inv.slot < 39 || (81..97).contains(&inv.slot)
+                } else {
+                    bags.contains(&inv.bag)
+                }
+            })
+            .map(|inv| inv.item.count)
+            .sum()
+    }
+
+    /// Stacks `DestroyItemCount` walks for an item,
+    /// in fork order (backpack direct rows, keyring
+    /// direct rows, then each inventory bag's
+    /// contents in slot order), as
+    /// (item guid, stack count) pairs. Equipped and
+    /// bank rows are skipped, as in the fork.
+    #[must_use]
+    pub fn quest_destroy_candidates(&self, item_id: u32) -> Vec<(u32, u32)> {
+        let direct = |range: std::ops::Range<u8>| -> Vec<(u32, u32)> {
+            let mut rows: Vec<(u8, u32, u32)> = self
+                .saved
+                .inventory
+                .iter()
+                .filter(|inv| {
+                    inv.bag == 0 && inv.item.item_id == item_id && range.contains(&inv.slot)
+                })
+                .map(|inv| (inv.slot, inv.item.item_guid, inv.item.count))
+                .collect();
+            rows.sort_by_key(|row| row.0);
+            rows.into_iter()
+                .map(|(_, guid, count)| (guid, count))
+                .collect()
+        };
+        let mut out = direct(23..39);
+        out.extend(direct(81..97));
+        let mut bag_slots: Vec<(u8, u32)> = self
+            .saved
+            .inventory
+            .iter()
+            .filter(|inv| inv.bag == 0 && (19..23).contains(&inv.slot))
+            .map(|inv| (inv.slot, inv.item.item_guid))
+            .collect();
+        bag_slots.sort_by_key(|row| row.0);
+        for (_, bag_guid) in bag_slots {
+            let mut rows: Vec<(u8, u32, u32)> = self
+                .saved
+                .inventory
+                .iter()
+                .filter(|inv| inv.bag == bag_guid && inv.item.item_id == item_id)
+                .map(|inv| (inv.slot, inv.item.item_guid, inv.item.count))
+                .collect();
+            rows.sort_by_key(|row| row.0);
+            out.extend(rows.into_iter().map(|(_, guid, count)| (guid, count)));
+        }
+        out
+    }
+
+    /// `AdjustQuestReqItemCount`: recount the item
+    /// objectives from inventory, capped at the
+    /// required counts, for DELIVER quests.
+    pub fn adjust_quest_item_counts(&mut self, q: &QuestTemplate) {
+        if !q.is_deliver() {
+            return;
+        }
+        let counts: [u32; 4] = core::array::from_fn(|i| {
+            if q.req_item_ids[i] == 0 {
+                0
+            } else {
+                self.quest_item_count(q.req_item_ids[i])
+                    .min(q.req_item_counts[i])
+            }
+        });
+        if let Some(row) = self
+            .deferred
+            .quest_status
+            .iter_mut()
+            .find(|r| r.quest == q.entry)
+        {
+            row.item_count = counts;
+        }
+    }
+
+    /// `CanCompleteQuest` (auto-complete verdict
+    /// included). Item objectives are recounted
+    /// first. The fork's timed-quest half-elapsed
+    /// branch and reputation-objective stacking are
+    /// read directly; live timer ticking is
+    /// unmodeled, so an armed timer never blocks.
+    pub fn can_complete_quest(&mut self, q: &QuestTemplate) -> bool {
+        let Some(mut row) = self.quest_row(q.entry).cloned() else {
+            return false;
+        };
+        if row.status != 3 {
+            return false;
+        }
+        if q.is_deliver() {
+            self.adjust_quest_item_counts(q);
+            if let Some(updated) = self.quest_row(q.entry) {
+                row = updated.clone();
+            }
+        }
+        if q.method == 0 {
+            return true;
+        }
+        for i in 0..4 {
+            if q.req_creature_or_go_ids[i] != 0 && row.mob_count[i] < q.req_creature_or_go_counts[i]
+            {
+                return false;
+            }
+            if q.req_item_ids[i] != 0 && row.item_count[i] < q.req_item_counts[i] {
+                return false;
+            }
+            if q.req_source_ids[i] != 0
+                && self.quest_item_count(q.req_source_ids[i]) < q.req_source_counts[i]
+            {
+                return false;
+            }
+        }
+        if q.rep_objective_faction != 0 {
+            let standing = self
+                .deferred
+                .reputation
+                .iter()
+                .find(|r| r.faction == q.rep_objective_faction)
+                .map_or(0, |r| r.standing);
+            if q.rep_objective_value > 0 && standing < q.rep_objective_value {
+                return false;
+            }
+            if q.rep_objective_value < 0 && standing > q.rep_objective_value {
+                return false;
+            }
+        }
+        if q.special_flags & 0x002 != 0 && row.explored == 0 {
+            return false;
+        }
+        true
+    }
+
+    /// `CompleteQuest`: status → COMPLETE + log-slot
+    /// state flag. Returns true on transition (the
+    /// caller sends `SMSG_QUESTUPDATE_COMPLETE`).
+    pub fn complete_quest(&mut self, quest_id: u32) -> bool {
+        let Some(row) = self.quest_row(quest_id) else {
+            return false;
+        };
+        if row.status != 3 {
+            return false;
+        }
+        self.set_quest_status(quest_id, 1);
+        if let Some(slot) = self.find_quest_slot(quest_id) {
+            self.set_quest_slot_state(slot, 0x01, true);
+        }
+        true
     }
 
     /// `_LoadInventory` visible half for bag-0 equipment:

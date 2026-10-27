@@ -143,6 +143,7 @@ fn materialize(level: u8) -> Player {
         mails: vec![],
         mailed_items: vec![],
         forgotten_skills: vec![],
+        pets: Vec::new(),
     };
     let inputs = MaterializeInputs {
         infos: &infos,

@@ -27,8 +27,8 @@ use mangosd::char_queries::CharQueries;
 use mangosd::social::SocialWrite;
 use mangosd::socket::{ConnectionDeps, run_connection};
 use mangosd::world_actor::{
-    AuctionStore, GroupStore, GuildStore, MailStore, PetitionStore, PresenceWriter, RealmPublisher,
-    SessionId, SocialStore, TradeStore, WorldDeps, spawn_world,
+    AuctionStore, GroupStore, GuildStore, MailStore, PetitionStore, PresenceWriter,
+    QuestRewardStore, RealmPublisher, SessionId, SocialStore, TradeStore, WorldDeps, spawn_world,
 };
 
 const SESSIONKEY_HEX: &str = "9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08";
@@ -123,6 +123,63 @@ impl GuildStore for FakeGuildStore {
         _guid_low: u32,
     ) -> Result<Option<mangos_db::guild::GuildCandidate>, DbError> {
         Ok(None)
+    }
+}
+
+struct FakePetStore;
+
+impl mangosd::world_actor::PetStore for FakePetStore {
+    fn save_pet(&self, _row: mangos_db::pet::PetRow, _mode: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn delete_pet(&self, _pet_id: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn promote_pet(&self, _owner_low: u32, _pet_id: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn rename_pet(
+        &self,
+        _owner_low: u32,
+        _pet_id: u32,
+        _name: String,
+    ) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+}
+
+struct FakeQuestRewardStore;
+
+impl QuestRewardStore for FakeQuestRewardStore {
+    fn create_reward_item(
+        &self,
+        _owner_low: u32,
+        _item_id: u32,
+        _count: u32,
+        _bag: u32,
+        _slot: u32,
+        _creator_low: u32,
+    ) -> Result<u32, mangos_db::DbError> {
+        Ok(990_001)
+    }
+
+    fn set_item_count(&self, _item_guid: u32, _count: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn set_item_charges(
+        &self,
+        _item_guid: u32,
+        _charges: String,
+    ) -> Result<(), mangos_db::DbError> {
+        Ok(())
+    }
+
+    fn set_item_flags(&self, _item_guid: u32, _flags: u32) -> Result<(), mangos_db::DbError> {
+        Ok(())
     }
 }
 
@@ -528,6 +585,8 @@ async fn start_server() -> u16 {
             petition: Arc::new(FakePetitionStore),
             initial_petitions: mangos_db::petition::LoadedPetitions::default(),
             mail: Arc::new(FakeMailStore),
+            pets: Arc::new(FakePetStore),
+            quest_reward: Arc::new(FakeQuestRewardStore),
             trade: Arc::new(FakeTradeStore),
             auction: Arc::new(FakeAuctionStore),
             initial_auctions: mangos_db::auction::LoadedAuctions::default(),

@@ -80,6 +80,13 @@ pub struct AuraHolder {
     /// Map-clock apply time (`GetAuraApplyTime`),
     /// stamped by `add_aura_holder`.
     pub apply_time_ms: u32,
+    /// Source dynamic object for persistent area
+    /// auras (`PersistentAreaAura::GetDynObjectGuid`);
+    /// [`ObjectGuid::EMPTY`] otherwise. Not persisted:
+    /// a reloaded persistent holder removes itself on
+    /// its first tick, matching the fork's null
+    /// dynobject behavior.
+    pub dynobj: ObjectGuid,
 }
 
 impl AuraHolder {
@@ -105,6 +112,7 @@ impl AuraHolder {
             effects: [None, None, None],
             proc_charges: 0,
             apply_time_ms: 0,
+            dynobj: ObjectGuid::EMPTY,
         }
     }
 

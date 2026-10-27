@@ -379,7 +379,7 @@ impl Map {
         }
     }
 
-    fn set_in_combat_flag(&mut self, guid: ObjectGuid, on: bool) {
+    pub(crate) fn set_in_combat_flag(&mut self, guid: ObjectGuid, on: bool) {
         if let Some(u) = self.unit_base_mut(guid) {
             let flags = u.values().get_u32(offsets::UNIT_FIELD_FLAGS);
             let next = if on {
@@ -416,6 +416,9 @@ impl Map {
     }
 
     fn can_initiate_attack(&self, creature: ObjectGuid, target: ObjectGuid) -> bool {
+        if self.is_pet(creature) {
+            return false; // pets engage via PetAI only
+        }
         let Some(c) = self.creatures.get(&creature) else {
             return false;
         };
@@ -724,6 +727,13 @@ impl Map {
             return;
         }
         self.ensure_ai(guid);
+        // Controlled pets run the PetAI subset instead
+        // of creature AI (Tier 1 Slice 2).
+        if self.is_pet(guid) {
+            self.regenerate_creature(guid, diff_ms);
+            self.pet_ai_update(guid);
+            return;
+        }
         let kind = self.ai.get(&guid).map_or(AiKind::Null, |ai| ai.kind);
         if kind == AiKind::Null {
             return;
@@ -1056,6 +1066,7 @@ impl Map {
                 CastOptions {
                     triggered,
                     skip_known: true,
+                    cast_item: None,
                 },
             );
             if outcome == CastOutcome::Started {
@@ -1073,7 +1084,7 @@ impl Map {
                 {
                     let script_target = match target {
                         CastTarget::Unit(g) => Some(g),
-                        CastTarget::SelfCast => Some(guid),
+                        CastTarget::SelfCast | CastTarget::Dest(_) => Some(guid),
                     };
                     self.schedule_steps(&steps, Some(guid), script_target);
                 }
