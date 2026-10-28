@@ -53,6 +53,9 @@ pub struct WorldStores {
     pub display_scales: HashMap<u32, f32>,
     /// `UpdateModelData` inputs by display id.
     pub model_data: HashMap<u32, ModelData>,
+    /// `SpellShapeshiftForm.dbc` form → `flags1`
+    /// (`sSpellShapeshiftFormStore` subset).
+    pub shapeshift_forms: HashMap<u32, u32>,
     /// Skill DBC tables (`_LoadSkills` validation/fixups).
     pub skills: SkillDbc,
     /// Built-in chat channel table (`ChatChannels.dbc`).
@@ -110,6 +113,7 @@ impl WorldStores {
             scripts: mangos_scripts_engine::ScriptStores::default(),
             display_scales: HashMap::new(),
             model_data: HashMap::new(),
+            shapeshift_forms: HashMap::new(),
             skills: SkillDbc::default(),
             maps: mangos_world_data::map_template::MapStore::default(),
             area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),

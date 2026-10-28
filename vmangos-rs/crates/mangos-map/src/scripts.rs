@@ -2078,7 +2078,12 @@ impl Map {
         0
     }
 
-    fn modify_threat_percent_of(&mut self, creature: ObjectGuid, victim: ObjectGuid, percent: i32) {
+    pub(crate) fn modify_threat_percent_of(
+        &mut self,
+        creature: ObjectGuid,
+        victim: ObjectGuid,
+        percent: i32,
+    ) {
         let Some(mut ai) = self.ai.remove(&creature) else {
             return;
         };
@@ -2401,7 +2406,12 @@ impl Map {
 
     /// `WorldObject::PlayDirectSound` subset: the
     /// source's viewers, or one player.
-    fn play_direct_sound(&mut self, source: ObjectGuid, sound_id: u32, only: Option<ObjectGuid>) {
+    pub(crate) fn play_direct_sound(
+        &mut self,
+        source: ObjectGuid,
+        sound_id: u32,
+        only: Option<ObjectGuid>,
+    ) {
         let mut payload = PacketWriter::new();
         payload.write_u32_le(sound_id);
         let packet = WorldPacket::with_body(op::SMSG_PLAY_SOUND, payload.into_vec());
@@ -2465,8 +2475,12 @@ impl Map {
             cast_target,
             CastOptions {
                 triggered,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         outcome == CastOutcome::Started

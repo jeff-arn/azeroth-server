@@ -161,6 +161,7 @@ fn bench_creatures_move() {
                     scripts: mangos_scripts_engine::ScriptStores::default(),
                     display_scales: HashMap::new(),
                     model_data: HashMap::new(),
+                    shapeshift_forms: HashMap::new(),
                     skills: mangos_world_data::skill_info::SkillDbc::default(),
                     chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
                     auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),

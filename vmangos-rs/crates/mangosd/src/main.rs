@@ -1321,7 +1321,9 @@ fn load_initial_world_settings(
 
 /// DBC display tables: display id -> (native scale,
 /// collision height).
-type DisplayModelMap = std::collections::HashMap<u32, (f32, Option<f32>)>;
+/// display id → (native scale, collision height,
+/// `CreatureDisplayInfo.ModelId`).
+type DisplayModelMap = std::collections::HashMap<u32, (f32, Option<f32>, u32)>;
 
 /// The DBC half of the world stores.
 struct DbcTables {
@@ -1331,6 +1333,8 @@ struct DbcTables {
     auction_houses: mangos_world_data::auction_house::AuctionHouseDbc,
     display_scales: std::collections::HashMap<u32, f32>,
     display_model: DisplayModelMap,
+    /// `SpellShapeshiftForm.dbc` form → `flags1`.
+    shapeshift_forms: std::collections::HashMap<u32, u32>,
 }
 
 fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode> {
@@ -1394,7 +1398,7 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
         model_scale.insert(uint(&row, 0), (float(&row, 3), Some(float(&row, 4))));
     }
     let mut display_scales: HashMap<u32, f32> = HashMap::new();
-    let mut display_model: HashMap<u32, (f32, Option<f32>)> = HashMap::new();
+    let mut display_model: DisplayModelMap = HashMap::new();
     for row in read_store(formats::CREATURE_DISPLAY_INFO)? {
         let (display_id, model_id, scale) = (uint(&row, 0), uint(&row, 1), float(&row, 3));
         match model_scale.get(&model_id) {
@@ -1402,12 +1406,18 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
                 display_scales.insert(display_id, check_valid_scale(ms * scale));
                 let native = check_valid_scale(ms * scale);
                 let collision = collision.map(|h| if *ms == 0.0 { h } else { h / ms });
-                display_model.insert(display_id, (native, collision));
+                display_model.insert(display_id, (native, collision, model_id));
             }
             None => {
                 display_scales.insert(display_id, check_valid_scale(scale));
             }
         }
+    }
+    // Produced fields of `nxssssssssxiix`: 0 = form
+    // id, 9 = flags1 (fork DBCStructure field 11).
+    let mut shapeshift_forms: HashMap<u32, u32> = HashMap::new();
+    for row in read_store(formats::SPELL_SHAPESHIFT_FORM)? {
+        shapeshift_forms.insert(uint(&row, 0), uint(&row, 9));
     }
     Ok(DbcTables {
         race_class,
@@ -1416,6 +1426,7 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
         auction_houses,
         display_scales,
         display_model,
+        shapeshift_forms,
     })
 }
 
@@ -1796,16 +1807,17 @@ fn load_spell_tables(
 /// Model data join: display-addon bounding/combat reach
 /// with DBC native scale + collision height.
 fn build_model_data(
-    display_model: &std::collections::HashMap<u32, (f32, Option<f32>)>,
+    display_model: &DisplayModelMap,
     display_addons: &mangos_world_data::spawn_support::DisplayInfoAddons,
 ) -> std::collections::HashMap<u32, mangos_entities::unit::ModelData> {
     use mangos_entities::unit::ModelData;
     let mut model_data = std::collections::HashMap::new();
-    for (display_id, (native, collision)) in display_model {
+    for (display_id, (native, collision, model_id)) in display_model {
         if let Some(addon) = display_addons.creature(*display_id) {
             model_data.insert(
                 *display_id,
                 ModelData {
+                    model_id: *model_id,
                     native_scale: *native,
                     bounding_radius: addon.bounding_radius,
                     combat_reach: addon.combat_reach,
@@ -1836,6 +1848,7 @@ fn load_phase4_stores(
         auction_houses,
         display_scales,
         display_model,
+        shapeshift_forms,
     } = read_dbc_tables(data_dir, log)?;
 
     let wow_patch = server_config.wow_patch;
@@ -1918,6 +1931,17 @@ fn load_phase4_stores(
         Ok(v) => v,
         Err(e) => {
             log.out(Level::Error, &format!("spell proc event load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    let cones = match databases
+        .world
+        .actor
+        .call(mangos_world_data::spell_cone::load_spell_cones)
+    {
+        Ok(v) => v,
+        Err(e) => {
+            log.out(Level::Error, &format!("spell cone load failed: {e}"));
             return Err(ExitCode::from(ERROR_EXIT_CODE));
         }
     };
@@ -2004,6 +2028,7 @@ fn load_phase4_stores(
             spells: spell_entries,
             tables: spell_tables,
             proc_events,
+            cones,
         },
         spell_target_positions,
         creature_spells,
@@ -2021,6 +2046,7 @@ fn load_phase4_stores(
         tavern_triggers,
         exploration_base_xp,
         pets: pet_stores,
+        shapeshift_forms,
         next_pet_number: std::sync::atomic::AtomicU32::new(1),
     });
 

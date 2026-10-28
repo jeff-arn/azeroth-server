@@ -544,8 +544,12 @@ impl Map {
             target,
             CastOptions {
                 triggered: false,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         ) == CastOutcome::Started
     }

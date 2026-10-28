@@ -20,6 +20,9 @@ pub struct DynObject {
     pub radius: f32,
     pub alive_ms: i32,
     pub positive: bool,
+    /// `m_channeled` (`IsChanneledSpell` of the
+    /// creating spell).
+    pub channeled: bool,
 }
 
 impl DynObject {
@@ -58,6 +61,7 @@ impl DynObject {
             radius,
             alive_ms: duration_ms,
             positive,
+            channeled: false,
         };
         let bytes: u32 = if spell_id == 1543 { 0x10 } else { 0x1 };
         let field_radius = if bytes == 0x10 { radius * 2.0 } else { radius };

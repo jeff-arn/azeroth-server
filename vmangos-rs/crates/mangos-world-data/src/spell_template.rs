@@ -167,6 +167,7 @@ fn load_spell(f: &Fields, report: &mut LoadReport) -> SpellEntry {
         stack_amount: f.u32(40),
         effects,
         spell_visual: f.u32(119),
+        spell_icon_id: f.u32(121),
         mana_cost_percentage: f.u32(132),
         start_recovery_category: f.u32(133),
         start_recovery_time: f.u32(134),

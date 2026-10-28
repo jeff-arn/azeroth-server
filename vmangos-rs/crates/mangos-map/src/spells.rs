@@ -13,10 +13,10 @@
 //! (speed > 0 spells fail), spell mods are implemented
 //! for the wired ops (damage/dot, duration, range,
 //! crit chance/bonus, casting time, cost, cooldown,
-//! GCD, pushback resist; remaining ops pending), no
-//! bonus coefficients (spell power system not built —
-//! `SpellDamageBonusDone/Taken` at their no-aura
-//! identity apart from the spellmod step), no
+//! GCD, pushback resist, spell bonus damage; remaining
+//! ops pending), spell bonus Done/Taken implemented
+//! for magic-class damage/heals (melee-bonus audit,
+//! totem delegation, wand equipped gates pending), no
 //! dodge/parry/block on melee spells, no
 //! LOS/facing checks (vmaps not wired), cast pushback
 //! and single-target channeling (with
@@ -36,6 +36,16 @@ use mangos_entities::unit::{
 
 /// `STAT_STAMINA` as an aura miscvalue.
 const STAT_STAMINA_I32: i32 = 2;
+
+/// `MAP_HALFSIZE - 0.5` clamp of `NormalizeMapCoord`
+/// (`GridDefines.h:169`); fork `SIZE_OF_GRIDS` is
+/// the f32 literal 533.33333.
+#[allow(clippy::excessive_precision)]
+const MAX_MAP_COORD: f32 = 32.0 * 533.333_33 - 0.5;
+
+/// Druid forms whose apply/remove casts 9033
+/// (`HandleAuraModShapeshift` form switch).
+const DRUID_9033_FORMS: [u8; 7] = [1, 2, 3, 4, 5, 8, 31];
 use mangos_guid::ObjectGuid;
 use mangos_movement::movement_info::Position;
 use mangos_protocol::buffer::PacketWriter;
@@ -126,12 +136,26 @@ pub struct CastOptions {
     /// Triggered cast: skips power/GCD/cooldown/known
     /// checks and the `SPELL_START` packet family changes.
     pub triggered: bool,
+    /// The cast originates from an aura (periodic
+    /// trigger, proc handler): `m_triggeredByAuraSpell`.
+    /// Only these triggered casts skip `TakePower`.
+    pub triggered_by_aura: bool,
     /// Skip the known-spell check (creature API casts,
     /// login auras).
     pub skip_known: bool,
     /// Item-use cast (`SetCastItem`): no power cost,
     /// known check skipped, item cooldown overrides.
     pub cast_item: Option<CastItemCtx>,
+    /// Custom per-effect base points
+    /// (`CastCustomSpell` bp0..2 →
+    /// `m_currentBasePoints`).
+    pub custom_base_points: [Option<i32>; 3],
+    /// Aura spell that triggered this cast
+    /// (`m_triggeredByAuraSpell->Id`; 0 = none).
+    pub triggered_by_aura_spell: u32,
+    /// Spell whose effect triggered this cast
+    /// (`m_triggeredBySpellInfo->Id`; 0 = none).
+    pub triggered_by_spell: u32,
 }
 
 /// One in-progress cast (`Spell` object subset).
@@ -143,6 +167,10 @@ pub struct ActiveCast {
     pub remaining_ms: i32,
     pub total_ms: u32,
     pub triggered: bool,
+    /// Aura-originated cast (`m_triggeredByAuraSpell`):
+    /// skips `TakePower` where a plain triggered cast
+    /// still pays.
+    pub triggered_by_aura: bool,
     /// Pushback counter (`m_delayAtDamageCount`).
     pub delay_count: u8,
     /// The spell is channeled (`m_channeled`).
@@ -169,6 +197,13 @@ pub struct ActiveCast {
     pub from_proc: bool,
     /// Item-use cast context (`m_CastItem`).
     pub cast_item: Option<CastItemCtx>,
+    /// Custom per-effect base points
+    /// (`m_currentBasePoints` overrides).
+    pub custom_base_points: [Option<i32>; 3],
+    /// `m_triggeredByAuraSpell->Id` (0 = none).
+    pub triggered_by_aura_spell: u32,
+    /// `m_triggeredBySpellInfo->Id` (0 = none).
+    pub triggered_by_spell: u32,
     /// Original caster position (movement interrupts —
     /// handled by `apply_movement` cancellation, kept
     /// for diagnostics).
@@ -395,22 +430,49 @@ impl Map {
         spell_cd || cat_cd
     }
 
-    fn add_cooldowns(
+    pub(crate) fn add_cooldowns(
         &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         applied_mods: &mut Vec<(u32, u8)>,
+        forced: Option<u32>,
     ) {
+        // `SendSpellCooldown` never records passives
+        // (the proc forced add calls `AddCooldown`
+        // directly and stays ungated).
+        const ATTR_PASSIVE: u32 = 0x40;
+        if forced.is_none() && spell.attributes & ATTR_PASSIVE != 0 {
+            return;
+        }
+        // Already-existing guard (`Player::AddCooldown`):
+        // an unexpired non-permanent entry (spell or
+        // its recorded category) is left untouched —
+        // a triggered recast executes but does not
+        // refresh its own running cooldown.
+        let now = self.now_ms;
+        if let Some(entry) = self.cooldowns.get(&(caster, spell.id)).copied()
+            && !entry.permanent
+        {
+            let category_active = entry.category != 0
+                && self
+                    .cooldowns
+                    .get(&(caster, entry.category | 0x8000_0000))
+                    .is_some_and(|c| c.permanent || c.expiry_ms > now);
+            if entry.expiry_ms > now || category_active {
+                return;
+            }
+        }
         // `SPELL_ATTR_COOLDOWN_ON_EVENT` spells enter
         // a permanent hold at cast (`Spell.cpp:4173`
         // passes `permanent`); the timed cooldown only
         // starts when the aura fades (conversion in
         // `remove_aura_at`). Fork still records the
-        // would-be expiry.
-        let permanent = spell.attributes & ATTR_COOLDOWN_ON_EVENT != 0;
-        if spell.recovery_time > 0 {
-            let recovery =
-                self.modded_cooldown(caster, spell, spell.recovery_time, Some(applied_mods));
+        // would-be expiry. Forced adds pass
+        // `permanent=false` explicitly.
+        let permanent = forced.is_none() && spell.attributes & ATTR_COOLDOWN_ON_EVENT != 0;
+        let base_recovery = forced.unwrap_or(spell.recovery_time);
+        if base_recovery > 0 {
+            let recovery = self.modded_cooldown(caster, spell, base_recovery, Some(applied_mods));
             if recovery > 0 {
                 self.cooldowns.insert(
                     (caster, spell.id),
@@ -419,6 +481,7 @@ impl Map {
                         item_id: 0,
                         permanent,
                         category: spell.category,
+                        spell_id: spell.id,
                     },
                 );
             }
@@ -438,6 +501,7 @@ impl Map {
                         item_id: 0,
                         permanent,
                         category: 0,
+                        spell_id: spell.id,
                     },
                 );
             }
@@ -450,13 +514,33 @@ impl Map {
     /// on the spell recovery when nonzero else the
     /// category recovery, and the spell-key entry
     /// records the item id + effective category.
-    fn add_cooldowns_item(
+    pub(crate) fn add_cooldowns_item(
         &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         item: CastItemCtx,
         applied_mods: &mut Vec<(u32, u8)>,
     ) {
+        // Same `SendSpellCooldown` passive gate and
+        // already-existing guard as the plain path
+        // (one fork `Player::AddCooldown`).
+        const ATTR_PASSIVE: u32 = 0x40;
+        if spell.attributes & ATTR_PASSIVE != 0 {
+            return;
+        }
+        let now = self.now_ms;
+        if let Some(entry) = self.cooldowns.get(&(caster, spell.id)).copied()
+            && !entry.permanent
+        {
+            let category_active = entry.category != 0
+                && self
+                    .cooldowns
+                    .get(&(caster, entry.category | 0x8000_0000))
+                    .is_some_and(|c| c.permanent || c.expiry_ms > now);
+            if entry.expiry_ms > now || category_active {
+                return;
+            }
+        }
         let (rec, category, cat_rec, item_id) =
             self.cooldown_durations(spell, Some(item.item_entry));
         let (rec, cat_rec) = if rec > 0 {
@@ -481,6 +565,7 @@ impl Map {
                     item_id,
                     permanent,
                     category,
+                    spell_id: spell.id,
                 },
             );
         }
@@ -492,6 +577,7 @@ impl Map {
                     item_id: 0,
                     permanent,
                     category: 0,
+                    spell_id: spell.id,
                 },
             );
         }
@@ -538,6 +624,7 @@ impl Map {
                     item_id,
                     permanent: false,
                     category,
+                    spell_id: spell.id,
                 },
             );
         }
@@ -546,7 +633,10 @@ impl Map {
             if cat_recovery > 0 {
                 self.cooldowns.insert(
                     (caster, category | 0x8000_0000),
-                    CooldownEntry::timed(self.now_ms + cat_recovery),
+                    CooldownEntry {
+                        spell_id: spell.id,
+                        ..CooldownEntry::timed(self.now_ms + cat_recovery)
+                    },
                 );
             }
         }
@@ -572,13 +662,17 @@ impl Map {
                         item_id: row.item_id,
                         permanent: false,
                         category: row.category,
+                        spell_id: row.spell,
                     },
                 );
             }
             if row.category != 0 && row.category_remaining_ms > 0 {
                 self.cooldowns.insert(
                     (caster, row.category | 0x8000_0000),
-                    CooldownEntry::timed(self.now_ms + row.category_remaining_ms),
+                    CooldownEntry {
+                        spell_id: row.spell,
+                        ..CooldownEntry::timed(self.now_ms + row.category_remaining_ms)
+                    },
                 );
             }
         }
@@ -600,6 +694,34 @@ impl Map {
         clippy::float_cmp, // fork compares basevalue to T(0) exactly
         clippy::cast_precision_loss
     )]
+    /// `CalculateSpellEffectValue` + creature-level
+    /// scaling tail (class-1 CLS melee-damage ratio).
+    pub(crate) fn effect_value(
+        &mut self,
+        spell: &SpellEntry,
+        eff_index: usize,
+        caster_level: u32,
+    ) -> f32 {
+        self.effect_value_bp(spell, eff_index, caster_level, None)
+    }
+
+    /// [`Self::effect_value`] with a cast-custom
+    /// base-points override (`m_currentBasePoints`).
+    pub(crate) fn effect_value_bp(
+        &mut self,
+        spell: &SpellEntry,
+        eff_index: usize,
+        caster_level: u32,
+        bp: Option<i32>,
+    ) -> f32 {
+        let value =
+            spell.calculate_effect_value_bp(eff_index, caster_level, 0, self.spell_rng(), bp);
+        let cls = &self.stores.cls;
+        spell.creature_level_scaled(eff_index, value, caster_level, &|level| {
+            cls.get(1, level).melee_damage
+        })
+    }
+
     pub(crate) fn apply_spell_mod(
         &mut self,
         caster: ObjectGuid,
@@ -673,9 +795,15 @@ impl Map {
                 if op == spellmod::CASTING_TIME && base >= 10_000.0 && value <= -100 {
                     continue;
                 }
-                total_pct += value as f32;
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    total_pct += value as f32;
+                }
             } else {
-                total_flat += value as f32;
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    total_flat += value as f32;
+                }
             }
             if drop_charge
                 && charges > 0
@@ -715,7 +843,11 @@ impl Map {
 
     /// `Player::RemoveSpellMods` subset: holders whose
     /// modifier this cast exhausted are removed.
-    fn remove_exhausted_spell_mods(&mut self, caster: ObjectGuid, applied: &[(u32, u8)]) {
+    pub(crate) fn remove_exhausted_spell_mods(
+        &mut self,
+        caster: ObjectGuid,
+        applied: &[(u32, u8)],
+    ) {
         let mut sources: Vec<u32> = Vec::new();
         for (source, _) in applied {
             if !sources.contains(source) {
@@ -942,7 +1074,10 @@ impl Map {
         {
             return fail(self, cast_result::FAILED_UNKNOWN);
         }
-        if self.casts.contains_key(&caster) {
+        // The current-cast slot gate applies only to
+        // non-triggered casts (fork prepare:
+        // `!m_IsTriggeredSpell && IsNonMeleeSpellCasted`).
+        if !options.triggered && self.casts.contains_key(&caster) {
             return fail(self, cast_result::FAILED_SPELL_IN_PROGRESS);
         }
         // Projectile delay is not modeled in the slice.
@@ -996,9 +1131,11 @@ impl Map {
             return fail(self, reason);
         }
 
-        let cast_time = if options.triggered {
-            0
-        } else {
+        // Triggered casts keep their DBC cast time
+        // (fork `CalculateCastTime` has no triggered
+        // zeroing; the spell simply shows no cast bar
+        // and ticks outside the current-cast slot).
+        let cast_time = {
             let raw = spell.cast_time_ms(&self.stores.spells.tables);
             #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
             {
@@ -1029,6 +1166,7 @@ impl Map {
             remaining_ms: i32::try_from(cast_time).unwrap_or(i32::MAX),
             total_ms: cast_time,
             triggered: options.triggered,
+            triggered_by_aura: options.triggered_by_aura,
             delay_count: 0,
             channeled: spell.is_channeled(),
             channeling: false,
@@ -1039,10 +1177,27 @@ impl Map {
             can_trigger_procs,
             from_proc,
             cast_item: options.cast_item,
+            custom_base_points: options.custom_base_points,
+            triggered_by_aura_spell: options.triggered_by_aura_spell,
+            triggered_by_spell: options.triggered_by_spell,
             position,
         };
         if cast_time > 0 && !options.triggered {
             self.send_spell_start(caster, &cast, &spell);
+        }
+        // Slot placement (fork prepare): a triggered
+        // non-channeled cast never occupies the
+        // current-cast slot — timer 0 executes in
+        // this call point, timer > 0 ticks on the
+        // pending list. Channeled casts take the
+        // slot (`SetCurrentCastedSpell`).
+        if options.triggered && !cast.channeled {
+            if cast_time == 0 {
+                self.execute_cast(caster, cast);
+            } else {
+                self.pending_triggered.push((caster, cast));
+            }
+            return CastOutcome::Started;
         }
         self.casts.insert(caster, cast);
         if cast_time == 0 {
@@ -1079,7 +1234,8 @@ impl Map {
             // target slot).
             | tgt::LOCATION_CASTER_DEST
             | tgt::LOCATION_UNIT_MINION_POSITION
-            | tgt::LOCATION_CASTER_SRC => CastOutcome::Started,
+            | tgt::LOCATION_CASTER_SRC
+            | tgt::ENUM_UNITS_ENEMY_IN_CONE => CastOutcome::Started,
             // Ground enumerations: destination comes
             // from the client (or the caster for
             // scripted casts); range gates to the
@@ -1126,6 +1282,20 @@ impl Map {
                         .is_some_and(|p| p.player.unit.is_alive());
                 if !alive {
                     return CastOutcome::Failed(cast_result::FAILED_TARGETS_DEAD);
+                }
+                // Positive-spell immunity gate
+                // (`Spell::CheckTarget`).
+                #[allow(clippy::cast_possible_wrap)]
+                if victim != caster
+                    && spell.is_positive_spell()
+                    && (self.is_immune_to_spell(victim, spell, false)
+                        || self.is_immune_to_damage(
+                            victim,
+                            1i32 << spell.school,
+                            Some(spell),
+                        ))
+                {
+                    return CastOutcome::Failed(cast_result::FAILED_TARGET_AURASTATE);
                 }
                 if mode == tgt::UNIT_ENEMY && !Self::is_hostile_pair(caster, victim) {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS);
@@ -1449,9 +1619,18 @@ impl Map {
         if !done {
             return;
         }
-        let Some(mut cast) = self.casts.remove(&caster) else {
+        let Some(cast) = self.casts.remove(&caster) else {
             return;
         };
+        self.execute_cast(caster, cast);
+    }
+
+    /// The `cast()` execution body for a cast whose
+    /// timer has elapsed (also run inline for
+    /// slot-less triggered casts, fork prepare:
+    /// triggered timer 0 executes in the call point).
+    #[allow(clippy::too_many_lines)] // one cast() port (split from update_cast)
+    fn execute_cast(&mut self, caster: ObjectGuid, mut cast: ActiveCast) {
         let Some(spell) = self.stores.spells.get(cast.spell_id).cloned() else {
             return;
         };
@@ -1462,65 +1641,66 @@ impl Map {
             return;
         }
 
-        // TakePower + GCD + cooldowns at cast()
-        // (StartRecoveryTime). Item casts take no
-        // power (`TakePower` early-returns with a
-        // cast item) but keep GCD + cooldowns.
-        if !cast.triggered {
-            if cast.cast_item.is_none() {
-                let power_cost = spell.power_cost(
-                    self.unit_power(caster, spell.power_type),
-                    self.unit_max_power(caster, spell.power_type),
-                    self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
-                );
-                #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-                let power_cost = self
-                    .apply_spell_mod(
-                        caster,
-                        &spell,
-                        spellmod::COST,
-                        power_cost as f32,
-                        true,
-                        Some(&mut cast.applied_mods),
-                    )
-                    .max(0.0) as u32;
-                let current = self.unit_power(caster, spell.power_type);
-                self.unit_set_power(caster, spell.power_type, current.saturating_sub(power_cost));
-                // `Spell::TakePower` five-second timer
-                // (`Spell.cpp:5252-5255`): a positive mana
-                // spend without
-                // `SPELL_ATTR_EX2_DONT_BLOCK_MANA_REGEN`
-                // (0x02000000) arms `SetLastManaUse`.
-                if spell.power_type as usize == mangos_entities::unit::POWER_MANA
-                    && power_cost > 0
-                    && spell.attributes_ex2 & 0x0200_0000 == 0
-                    && let Some(u) = self.unit_base_mut(caster)
-                {
-                    u.set_last_mana_use(spell.id);
-                }
+        // TakePower + GCD + cooldowns at cast(),
+        // fork split: `TakePower` early-returns only
+        // for cast-item and aura-triggered casts (a
+        // plain triggered cast still pays, unchecked);
+        // GCD is added only for non-triggered casts
+        // (prepare); `SendSpellCooldown` adds the
+        // spell/category cooldown for every cast.
+        if cast.cast_item.is_none() && !cast.triggered_by_aura {
+            let power_cost = spell.power_cost(
+                self.unit_power(caster, spell.power_type),
+                self.unit_max_power(caster, spell.power_type),
+                self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
+            );
+            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+            let power_cost = self
+                .apply_spell_mod(
+                    caster,
+                    &spell,
+                    spellmod::COST,
+                    power_cost as f32,
+                    true,
+                    Some(&mut cast.applied_mods),
+                )
+                .max(0.0) as u32;
+            let current = self.unit_power(caster, spell.power_type);
+            self.unit_set_power(caster, spell.power_type, current.saturating_sub(power_cost));
+            // `Spell::TakePower` five-second timer
+            // (`Spell.cpp:5252-5255`): a positive mana
+            // spend without
+            // `SPELL_ATTR_EX2_DONT_BLOCK_MANA_REGEN`
+            // (0x02000000) arms `SetLastManaUse`.
+            if spell.power_type as usize == mangos_entities::unit::POWER_MANA
+                && power_cost > 0
+                && spell.attributes_ex2 & 0x0200_0000 == 0
+                && let Some(u) = self.unit_base_mut(caster)
+            {
+                u.set_last_mana_use(spell.id);
             }
-            if spell.start_recovery_time > 0 {
-                #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-                let gcd = self
-                    .apply_spell_mod(
-                        caster,
-                        &spell,
-                        spellmod::GLOBAL_COOLDOWN,
-                        spell.start_recovery_time as f32,
-                        true,
-                        Some(&mut cast.applied_mods),
-                    )
-                    .max(0.0) as u32;
-                let until = self.now_ms + gcd;
-                if let Some(u) = self.unit_base_mut(caster) {
-                    u.gcd_until_ms = until;
-                }
+        }
+        if !cast.triggered && spell.start_recovery_time > 0 {
+            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+            let gcd = self
+                .apply_spell_mod(
+                    caster,
+                    &spell,
+                    spellmod::GLOBAL_COOLDOWN,
+                    spell.start_recovery_time as f32,
+                    true,
+                    Some(&mut cast.applied_mods),
+                )
+                .max(0.0) as u32;
+            let until = self.now_ms + gcd;
+            if let Some(u) = self.unit_base_mut(caster) {
+                u.gcd_until_ms = until;
             }
-            if let Some(item) = cast.cast_item {
-                self.add_cooldowns_item(caster, &spell, item, &mut cast.applied_mods);
-            } else {
-                self.add_cooldowns(caster, &spell, &mut cast.applied_mods);
-            }
+        }
+        if let Some(item) = cast.cast_item {
+            self.add_cooldowns_item(caster, &spell, item, &mut cast.applied_mods);
+        } else {
+            self.add_cooldowns(caster, &spell, &mut cast.applied_mods, None);
         }
 
         let victims = self.collect_targets(caster, &spell, cast.target);
@@ -1533,13 +1713,32 @@ impl Map {
             .position(|e| e.effect == effect::PERSISTENT_AREA_AURA)
         {
             let dest = self.cast_dest(caster, &spell, cast.target);
-            self.spawn_dynobject(caster, &spell, eff_index, dest);
+            self.spawn_dynobject(
+                caster,
+                &spell,
+                eff_index,
+                dest,
+                Some(&mut cast.applied_mods),
+            );
         }
         let caster_level = self.unit_level(caster);
         let mut hits: Vec<ObjectGuid> = Vec::new();
         let mut misses: Vec<(ObjectGuid, u8)> = Vec::new();
         let mut hit_victims: Vec<ObjectGuid> = Vec::new();
         for victim in &victims {
+            // Spell-level immunity (`Spell::TakeTarget`
+            // missCondition): damage-immune (hostile
+            // only) or spell-immune -> SPELL_MISS_IMMUNE.
+            #[allow(clippy::cast_possible_wrap)]
+            let school_mask = 1i32 << spell.school;
+            if *victim != caster
+                && ((!spell_is_positive_for_target(&spell)
+                    && self.is_immune_to_damage(*victim, school_mask, Some(&spell)))
+                    || self.is_immune_to_spell(*victim, &spell, false))
+            {
+                misses.push((*victim, 7)); // SPELL_MISS_IMMUNE
+                continue;
+            }
             if spell_meleedamage(spell.dmg_class) {
                 // DoMeleeAttackIfReady-style hit roll.
                 let hit_chance = self.melee_spell_hit_chance(caster, *victim, &spell);
@@ -1629,6 +1828,11 @@ impl Map {
                 },
                 Some(&mut cast.applied_mods),
                 Some(&ctx),
+                cast.custom_base_points,
+                cast.cast_item.is_some(),
+                cast.cast_counter,
+                cast.triggered_by_aura_spell,
+                cast.triggered_by_spell,
             );
         }
         let _ = caster_level;
@@ -1779,7 +1983,7 @@ impl Map {
 
     /// Remove one caster's holders of a spell from a
     /// unit (`RemoveAurasByCasterSpell`).
-    fn remove_auras_by_caster_spell(
+    pub(crate) fn remove_auras_by_caster_spell(
         &mut self,
         victim: ObjectGuid,
         spell_id: u32,
@@ -1821,6 +2025,9 @@ impl Map {
             values.set_u64(offsets::UNIT_FIELD_CHANNEL_OBJECT, 0);
             values.set_u32(offsets::UNIT_CHANNEL_SPELL, 0);
         }
+        // RemoveDynObject(spellId) at channel end
+        // (fork cancel + finish paths).
+        self.remove_dynobjects_by_spell(caster, cast.spell_id);
         if self.players.contains_key(&caster) {
             let mut payload = PacketWriter::new();
             payload.write_u32_le(0);
@@ -1931,6 +2138,32 @@ impl Map {
                 };
                 self.units_around(caster, center, self.effect_radius(spell, 0), true)
             }
+            tgt::ENUM_UNITS_ENEMY_IN_CONE => {
+                // `FillAreaTargets(PUSH_IN_CONE)`:
+                // enemies within radius (effect
+                // radius, else max range) inside the
+                // spell's cone arc (negative arc =
+                // back cone).
+                let center = self.unit_position(caster).unwrap_or_default();
+                let radius = if spell.effects[0].radius_index != 0 {
+                    self.effect_radius(spell, 0)
+                } else {
+                    spell.range_max(&self.stores.spells.tables)
+                };
+                let angle = self.stores.spells.cone_angle(spell.id);
+                self.units_around(caster, center, radius, true)
+                    .into_iter()
+                    .filter(|g| {
+                        if angle > 0.0 {
+                            self.has_in_arc(caster, *g, angle)
+                        } else if angle < 0.0 {
+                            !self.has_in_arc(caster, *g, std::f32::consts::TAU + angle)
+                        } else {
+                            false
+                        }
+                    })
+                    .collect()
+            }
             tgt::ENUM_UNITS_FRIEND_AOE_AT_DEST_LOC | tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC => {
                 let center = if mode == tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC {
                     self.unit_position(caster).unwrap_or_default()
@@ -1948,6 +2181,32 @@ impl Map {
             }
             _ => vec![caster],
         }
+    }
+
+    /// A bare `SendSpellGo` for effect customs that
+    /// re-emit the parent cast's GO (Shrink Ray):
+    /// caster as first guid (cast-item first-guid
+    /// unmodeled here), one hit, unit target.
+    pub(crate) fn send_spell_go_simple(
+        &mut self,
+        caster: ObjectGuid,
+        spell_id: u32,
+        target: ObjectGuid,
+        cast_counter: u8,
+    ) {
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&Self::packed_guid_bytes(caster));
+        payload.write_bytes(&Self::packed_guid_bytes(target));
+        payload.write_u8(cast_counter);
+        payload.write_u32_le(spell_id);
+        payload.write_u32_le(CAST_FLAG_NONE);
+        payload.write_u32_le(self.now_ms);
+        payload.write_u8(1);
+        payload.write_u64_le(target.raw());
+        payload.write_u8(0);
+        Self::targets_write(CastTarget::Unit(target), caster, &mut payload);
+        let packet = WorldPacket::with_body(op::SMSG_SPELL_GO, payload.into_vec());
+        self.broadcast_movement(caster, &packet);
     }
 
     fn send_spell_go(
@@ -1996,6 +2255,11 @@ impl Map {
         client_dest: Option<Position>,
         mut applied_mods: Option<&mut Vec<(u32, u8)>>,
         proc_ctx: Option<&ProcRaiseCtx>,
+        bp: [Option<i32>; 3],
+        has_cast_item: bool,
+        cast_counter: u8,
+        triggered_by_aura_spell: u32,
+        triggered_by_spell: u32,
     ) {
         // EventAI SpellHit hooks (Slice 6b), once per
         // hit target as in `DoAllEffectOnTarget`.
@@ -2015,9 +2279,15 @@ impl Map {
         }
         // In-combat flags (DealDamage side effects land
         // with effects too via combat in ApplyAura).
+        let mut holder_applied = false;
         for i in 0..3 {
             let eff = spell.effects[i];
             if eff.effect == effect::NONE {
+                continue;
+            }
+            // Per-effect immunity (fork strips the
+            // effect from the target's effectMask).
+            if self.is_immune_to_spell_effect(victim, spell, i, victim == caster) {
                 continue;
             }
             match eff.effect {
@@ -2044,8 +2314,7 @@ impl Map {
                     };
                     let friendly = !Self::is_hostile_pair(caster, victim);
                     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    let count =
-                        spell.calculate_effect_value(i, caster_level, 0, self.spell_rng()) as usize;
+                    let count = self.effect_value_bp(spell, i, caster_level, bp[i]) as usize;
                     let mut remove: Vec<usize> = Vec::new();
                     let holders = self.aura_holders(victim);
                     {
@@ -2104,13 +2373,12 @@ impl Map {
                 // threat list.
                 effect::THREAT => {
                     if victim.is_creature() {
-                        let value =
-                            spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                        let value = self.effect_value_bp(spell, i, caster_level, bp[i]);
                         self.add_threat(victim, caster, value);
                     }
                 }
                 effect::SCHOOL_DAMAGE => {
-                    let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                    let value = self.effect_value_bp(spell, i, caster_level, bp[i]);
                     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                     let base = mangos_spells::ditheru(value, self.spell_rng()) as i32;
                     self.school_damage(
@@ -2150,8 +2418,7 @@ impl Map {
                         let mut bonus = 0.0f32;
                         let mut pct = 1.0f32;
                         for (j, e) in spell.effects.iter().enumerate() {
-                            let v =
-                                spell.calculate_effect_value(j, caster_level, 0, self.spell_rng());
+                            let v = self.effect_value_bp(spell, j, caster_level, bp[j]);
                             match e.effect {
                                 effect::WEAPON_DAMAGE
                                 | effect::WEAPON_DAMAGE_NOSCHOOL
@@ -2194,34 +2461,29 @@ impl Map {
                     }
                 }
                 effect::HEAL => {
-                    let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
-                    // `SpellHealingBonusDone` applies
-                    // SPELLMOD_DAMAGE to direct heals.
-                    let value = self.apply_spell_mod(
+                    let value = self.effect_value_bp(spell, i, caster_level, bp[i]);
+                    // `EffectHeal`: HealingBonusDone
+                    // (coefficient on the advertised
+                    // benefit, spellmod tail) then
+                    // HealingBonusTaken.
+                    let value = self.spell_healing_bonus_done(
                         caster,
                         spell,
-                        spellmod::DAMAGE,
+                        i,
                         value,
-                        true,
+                        false,
+                        1,
                         applied_mods.as_deref_mut(),
                     );
-                    // `MOD_HEALING_DONE` flat + pct
-                    // (`SpellHealingBonusDone`; flat at
-                    // coefficient 1 in this subset).
-                    #[allow(clippy::cast_possible_wrap)]
-                    let heal_mask = 1i32 << spell.school;
-                    #[allow(clippy::cast_precision_loss)]
-                    let value = (value
-                        + self.total_aura_modifier(
-                            caster,
-                            aura_type::MOD_HEALING_DONE,
-                            Some(heal_mask),
-                        ) as f32)
-                        * self.total_aura_multiplier(
-                            caster,
-                            aura_type::MOD_HEALING_DONE_PERCENT,
-                            None,
-                        );
+                    let value = self.spell_healing_bonus_taken(
+                        victim,
+                        spell,
+                        i,
+                        value,
+                        false,
+                        1,
+                        applied_mods.as_deref_mut(),
+                    );
                     if value > 0.0 {
                         let amount = mangos_spells::ditheru(value, self.spell_rng());
                         self.heal_unit(victim, amount);
@@ -2243,7 +2505,7 @@ impl Map {
                 // gain (the SMSG_SPELL_ENERGIZE_LOG rides
                 // the same deferral as heal's log here).
                 effect::ENERGIZE => {
-                    let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                    let value = self.effect_value_bp(spell, i, caster_level, bp[i]);
                     if value > 0.0
                         && let Ok(power_type) = u32::try_from(eff.misc_value)
                         && power_type < 5
@@ -2274,8 +2536,12 @@ impl Map {
                             CastTarget::Unit(victim),
                             CastOptions {
                                 triggered: true,
+                                triggered_by_aura: false,
                                 skip_known: true,
                                 cast_item: None,
+                                custom_base_points: [None; 3],
+                                triggered_by_aura_spell: 0,
+                                triggered_by_spell: spell.id,
                             },
                         );
                     }
@@ -2284,17 +2550,28 @@ impl Map {
                     // Dynobj-location aura effects (28/29)
                     // are delivered by the dynamic object
                     // updater, never directly at cast time.
-                    if eff.implicit_target_a != tgt::ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOCATION
+                    // All aura effects ride one holder
+                    // (built once); later non-aura effects
+                    // still execute (fork `HandleEffects`
+                    // walks the full effect mask).
+                    if !holder_applied
+                        && eff.implicit_target_a != tgt::ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOCATION
                         && eff.implicit_target_a != tgt::ENUM_UNITS_FRIEND_AOE_AT_DYNOBJ_LOCATION
                     {
-                        self.apply_spell_aura(caster, spell, victim, applied_mods.as_deref_mut());
+                        self.apply_spell_aura(
+                            caster,
+                            spell,
+                            victim,
+                            applied_mods.as_deref_mut(),
+                            bp,
+                        );
+                        holder_applied = true;
                     }
-                    break; // all effects ride one holder
                 }
                 // SPELL_EFFECT_SUMMON / SUMMON_WILD /
                 // SUMMON_GUARDIAN (Slice 7).
                 28 | 41 | 42 if eff.misc_value > 0 => {
-                    self.summon_effect(caster, caster_level, spell, victim, i);
+                    self.summon_effect(caster, caster_level, spell, victim, i, bp[i]);
                 }
                 // SPELL_EFFECT_SUMMON_PET (Tier 1 Slice
                 // 2): the fork ignores the effect victim
@@ -2328,12 +2605,15 @@ impl Map {
                 // SPELL_EFFECT_CREATE_ITEM (Tier 1
                 // Slice 3a).
                 effect::CREATE_ITEM if victim.is_player() => {
-                    self.create_item_effect(victim, spell, i, caster_level);
+                    self.create_item_effect(victim, spell, i, caster_level, bp[i]);
                 }
                 // SPELL_EFFECT_TELEPORT_UNITS /
                 // SPELL_EFFECT_LEAP (Tier 1 Slice 5).
                 effect::TELEPORT_UNITS => {
                     self.teleport_units_effect(caster, spell, i, victim, client_dest);
+                }
+                effect::TELEPORT_UNITS_FACE_CASTER => {
+                    self.tele_units_face_caster_effect(caster, spell, i, victim, client_dest);
                 }
                 effect::LEAP => {
                     self.leap_effect(caster, spell, i, victim, client_dest);
@@ -2347,7 +2627,7 @@ impl Map {
                 // horizontal speed and misc vertical.
                 effect::KNOCK_BACK => {
                     #[allow(clippy::cast_precision_loss)]
-                    let damage = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                    let damage = self.effect_value_bp(spell, i, caster_level, bp[i]);
                     #[allow(clippy::cast_precision_loss)]
                     let horizontal = eff.misc_value as f32 / 10.0;
                     self.remove_auras_due_to_spell(victim, 24778);
@@ -2355,7 +2635,7 @@ impl Map {
                 }
                 effect::PLAYER_PULL => {
                     #[allow(clippy::cast_precision_loss)]
-                    let damage = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+                    let damage = self.effect_value_bp(spell, i, caster_level, bp[i]);
                     let dist = match (self.unit_position(victim), self.unit_position(caster)) {
                         (Some(v), Some(c)) => {
                             let d = ((v.x - c.x).powi(2) + (v.y - c.y).powi(2)).sqrt();
@@ -2370,6 +2650,27 @@ impl Map {
                     #[allow(clippy::cast_precision_loss)]
                     let vertical = eff.misc_value as f32 / 10.0;
                     self.knock_back_from(victim, caster, -dist, vertical);
+                }
+                // `EffectDummy` / `EffectScriptEffect`:
+                // per-spell customs (customs.rs); the
+                // value is the fork's per-effect
+                // `CalculateDamage` result.
+                effect::DUMMY => {
+                    let damage = self.effect_value_bp(spell, i, caster_level, bp[i]);
+                    self.effect_dummy(
+                        caster,
+                        spell,
+                        victim,
+                        damage,
+                        has_cast_item,
+                        cast_counter,
+                        triggered_by_aura_spell,
+                        triggered_by_spell,
+                    );
+                }
+                effect::SCRIPT_EFFECT => {
+                    let damage = self.effect_value_bp(spell, i, caster_level, bp[i]);
+                    self.effect_script_effect(caster, spell, victim, damage, has_cast_item);
                 }
                 // SPELL_EFFECT_PERSISTENT_AREA_AURA
                 // spawns once per cast in
@@ -2398,7 +2699,7 @@ impl Map {
     /// transfer (`EffectTeleportUnits` location arms;
     /// creatures are silently skipped cross-map,
     /// exactly as the fork).
-    fn teleport_to_location(
+    pub(crate) fn teleport_to_location(
         &mut self,
         victim: ObjectGuid,
         loc: mangos_world_data::spawns::WorldLocation,
@@ -2412,6 +2713,65 @@ impl Map {
                 position: loc.position(),
             });
         }
+    }
+
+    /// `GetObjectBoundingRadius` (the unit field).
+    fn object_bounding_radius(&self, guid: ObjectGuid) -> f32 {
+        self.unit_base(guid).map_or(0.389, |u| {
+            u.world
+                .object
+                .values()
+                .get_f32(offsets::UNIT_FIELD_BOUNDINGRADIUS)
+        })
+    }
+
+    /// `Spell::EffectTeleUnitsFaceCaster`
+    /// (`SpellEffects.cpp` effect 43): teleport the
+    /// victim to the cast destination when the
+    /// target map carries one, else to the caster's
+    /// close point at the effect radius
+    /// (`GetClosePoint` primary position; the
+    /// `ObjectPosSelector` crowding walk and its
+    /// vmap `IsWithinLOS` retries ride the recorded
+    /// vmap-manager remainder), facing
+    /// `-caster orientation` (fork quirk, not
+    /// +π). The `TELE_TO_NOT_LEAVE_COMBAT |
+    /// TELE_TO_NOT_UNSUMMON_PET | TELE_TO_SPELL`
+    /// (self) flags match `near_teleport_unit`'s
+    /// existing behavior. The taxi-flight gate has
+    /// no system behind it yet (same as
+    /// `EffectTeleportUnits`).
+    fn tele_units_face_caster_effect(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        i: usize,
+        victim: ObjectGuid,
+        client_dest: Option<Position>,
+    ) {
+        let Some(caster_pos) = self.unit_position(caster) else {
+            return;
+        };
+        if self.unit_position(victim).is_none() {
+            return;
+        }
+        let mut dest = if let Some(dest) = client_dest {
+            dest
+        } else {
+            let dis = self.effect_radius(spell, i);
+            let reach =
+                self.object_bounding_radius(caster) + self.object_bounding_radius(victim) + dis;
+            // GetNearPoint2D + NormalizeMapCoord.
+            let x =
+                (caster_pos.x + reach * caster_pos.o.cos()).clamp(-MAX_MAP_COORD, MAX_MAP_COORD);
+            let y =
+                (caster_pos.y + reach * caster_pos.o.sin()).clamp(-MAX_MAP_COORD, MAX_MAP_COORD);
+            // searcher == null: UpdateGroundPositionZ
+            let z = self.ground_z(x, y, caster_pos.z);
+            Position::new(x, y, z, caster_pos.o)
+        };
+        dest.o = -caster_pos.o;
+        self.near_teleport_unit(victim, dest);
     }
 
     /// `Spell::EffectTeleportUnits`
@@ -2487,23 +2847,69 @@ impl Map {
         }
     }
 
-    /// `GetFirstCollisionPosition` analogue: navmesh
-    /// path end toward `from + dist·angle` (the fork
-    /// runs `PathFinder::calculate(src, dest, false,
-    /// true)` then `LoS` and Z-safety trims; the `LoS` trim
-    /// has no vmap behind it here — recorded).
+    /// `WorldObject::MovePositionToFirstCollision`
+    /// (`Object.cpp:1999`), `GridMap` subset: navmesh
+    /// path toward `from + dist·angle`
+    /// (`PathFinder::calculate(src, dest, false, true)`,
+    /// back point wins), `UpdateAllowedPositionZ`,
+    /// then the 10-step Z-safety walkback and
+    /// `NormalizeMapCoord`. The two
+    /// `GetLosHitPosition` vmap trims (−1.0f/−0.5f
+    /// collision-height passes) have no runtime
+    /// vmap manager behind them yet — recorded in
+    /// TIER2-PROGRESS Slice 6.1; the water-surface
+    /// arm of `UpdateAllowedPositionZ` rides the
+    /// same `ground_z` approximation as the rest
+    /// of the motion code.
     fn first_collision_dest(&mut self, from: Position, angle: f32, dist: f32) -> Position {
+        /// `ATTACK_DISTANCE` (`ObjectDefines.h:25`).
+        const ATTACK_DISTANCE: f32 = 5.0;
         if dist <= 0.0 {
             return from;
         }
-        let end = Position::new(
-            from.x + dist * angle.cos(),
-            from.y + dist * angle.sin(),
-            from.z,
-            from.o,
-        );
-        let result = self.find_path_points(from, end, false, true);
-        result.points.last().copied().unwrap_or(end)
+        let mut dest_x = from.x + dist * angle.cos();
+        let mut dest_y = from.y + dist * angle.sin();
+        let mut dest_z = from.z;
+        let end = Position::new(dest_x, dest_y, dest_z, from.o);
+        let path = self.find_path_points(from, end, false, true);
+        if let Some(back) = path.points.last() {
+            dest_x = back.x;
+            dest_y = back.y;
+            dest_z = back.z;
+        }
+        dest_z = self.ground_z(dest_x, dest_y, dest_z);
+        // Fork Z-safety probe: step back toward the
+        // source in tenths until the terrain Z is
+        // within ATTACK_DISTANCE of the source Z. A
+        // step-to-step cliff (> ATTACK_DISTANCE/2)
+        // marks the full destination unsafe; a fully
+        // safe probe restores the full destination
+        // (fork overwrites the accepted point with
+        // `tempPos` too).
+        let step = dist / 10.0;
+        let full = (dest_x, dest_y, dest_z);
+        let mut result = from;
+        let mut z_safe = true;
+        for _ in 0..10 {
+            if (from.z - dest_z).abs() <= ATTACK_DISTANCE {
+                result = Position::new(dest_x, dest_y, dest_z, from.o);
+                break;
+            }
+            let previous_z = dest_z;
+            dest_x -= step * angle.cos();
+            dest_y -= step * angle.sin();
+            dest_z = self.ground_z(dest_x, dest_y, dest_z);
+            if (previous_z - dest_z).abs() > ATTACK_DISTANCE * 0.5 {
+                z_safe = false;
+            }
+        }
+        if z_safe {
+            result = Position::new(full.0, full.1, full.2, from.o);
+        }
+        result.x = result.x.clamp(-MAX_MAP_COORD, MAX_MAP_COORD);
+        result.y = result.y.clamp(-MAX_MAP_COORD, MAX_MAP_COORD);
+        result.z = self.ground_z(result.x, result.y, result.z);
+        result
     }
 
     /// `Spell::EffectLeapForward`
@@ -2647,6 +3053,7 @@ impl Map {
         spell: &SpellEntry,
         i: usize,
         caster_level: u32,
+        bp: Option<i32>,
     ) {
         let eff = spell.effects[i];
         #[allow(clippy::cast_possible_truncation)]
@@ -2660,7 +3067,7 @@ impl Map {
             self.send_equip_error(victim, 23);
             return;
         };
-        let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+        let value = self.effect_value_bp(spell, i, caster_level, bp);
         let rolled = mangos_spells::ditheru(value, self.spell_rng());
         let count = rolled.clamp(1, stackable);
         self.events.push(MapEvent::CreateItem {
@@ -2771,9 +3178,10 @@ impl Map {
         spell: &SpellEntry,
         victim: ObjectGuid,
         i: usize,
+        bp: Option<i32>,
     ) {
         let eff = spell.effects[i];
-        let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+        let value = self.effect_value_bp(spell, i, caster_level, bp);
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let amount = if value > 0.0 {
             (value as u32).clamp(1, 16)
@@ -2820,6 +3228,1046 @@ impl Map {
         }
     }
 
+    /// `Unit::GetCreatureTypeMask`: players read as
+    /// humanoid (fork race-table default; shapeshift
+    /// creature types unmodeled).
+    pub(crate) fn creature_type_mask(&self, guid: ObjectGuid) -> i32 {
+        let creature_type = if self.players.contains_key(&guid) {
+            7
+        } else {
+            self.creatures
+                .get(&guid)
+                .map_or(0, |c| c.info.creature_type)
+        };
+        if creature_type == 0 {
+            0
+        } else {
+            #[allow(clippy::cast_possible_wrap)]
+            {
+                1i32 << (creature_type as i32 - 1)
+            }
+        }
+    }
+
+    /// `Aura::IsAffectedOnSpell` non-spellmod arm.
+    fn override_affected(&self, holder: &AuraHolder, eff_idx: usize, spell: &SpellEntry) -> bool {
+        let Some(source) = self.stores.spells.get(holder.spell_id) else {
+            return false;
+        };
+        source.spell_family_name == spell.spell_family_name
+            && spell.spell_family_flags & source.effects[eff_idx].item_type != 0
+    }
+
+    /// `SpellCaster::SpellBonusWithCoeffs`
+    /// (`SpellCaster.cpp:1465`): template coefficient
+    /// wins over the default formula and skips the
+    /// level penalty; custom coefficients next; the
+    /// `SPELL_BONUS_DAMAGE` spellmod scales the
+    /// coefficient through ×100. `mod_subject` is the
+    /// fork `ToUnit()` (caster for Done, victim for
+    /// Taken — fork quirk preserved).
+    #[allow(clippy::too_many_arguments)]
+    fn spell_bonus_with_coeffs(
+        &mut self,
+        mod_subject: ObjectGuid,
+        spell: &SpellEntry,
+        eff_index: usize,
+        total: f32,
+        benefit: f32,
+        dot: bool,
+        done_part: bool,
+        applied_mods: Option<&mut Vec<(u32, u8)>>,
+    ) -> f32 {
+        if benefit == 0.0 {
+            return total;
+        }
+        let tables = &self.stores.spells.tables;
+        let template_coeff = spell.effects[eff_index].bonus_coefficient;
+        let (coeff, lvl_penalty) = if template_coeff >= 0.0 {
+            (template_coeff, 1.0)
+        } else {
+            (
+                spell.default_coefficient(tables, dot),
+                spell.level_penalty(),
+            )
+        };
+        let mut coeff = spell.custom_coefficient(coeff, done_part, 1, None);
+        coeff *= 100.0;
+        coeff = self.apply_spell_mod(
+            mod_subject,
+            spell,
+            spellmod::SPELL_BONUS_DAMAGE,
+            coeff,
+            false,
+            applied_mods,
+        );
+        coeff /= 100.0;
+        total + benefit * coeff * lvl_penalty
+    }
+
+    /// `SpellBaseDamageBonusDone` +
+    /// `MOD_FLAT_SPELL_DAMAGE_VERSUS` (wand equipped-item
+    /// gates unmodeled — no equipped fields on the entry
+    /// subset; pet `GetBonusDamage` unmodeled).
+    fn spell_base_damage_bonus_done(
+        &self,
+        caster: ObjectGuid,
+        school_mask: i32,
+        creature_type_mask: i32,
+    ) -> i32 {
+        let mut benefit =
+            self.total_aura_modifier(caster, aura_type::MOD_DAMAGE_DONE, Some(school_mask));
+        if self.players.contains_key(&caster) {
+            for e in self
+                .aura_holders(caster)
+                .iter()
+                .flat_map(|h| h.effects.iter().flatten())
+                .filter(|e| {
+                    e.aura_type == aura_type::MOD_SPELL_DAMAGE_OF_STAT_PERCENT
+                        && e.misc_value & school_mask != 0
+                })
+            {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+                {
+                    benefit += (self.unit_stat(caster, 4) * e.amount as f32 / 100.0) as i32;
+                }
+            }
+        }
+        benefit
+            + self.total_aura_modifier(
+                caster,
+                aura_type::MOD_FLAT_SPELL_DAMAGE_VERSUS,
+                Some(creature_type_mask),
+            )
+    }
+
+    /// `SpellDamageBonusDone` (`SpellCaster.cpp:1286`)
+    /// magic arm. Totem owner delegation and the
+    /// paladin-seal percent arm are recorded
+    /// exclusions (no totem casters / equipped fields).
+    #[allow(clippy::too_many_arguments, clippy::cast_precision_loss)]
+    pub(crate) fn spell_damage_bonus_done(
+        &mut self,
+        caster: ObjectGuid,
+        victim: ObjectGuid,
+        spell: &SpellEntry,
+        eff_index: usize,
+        damage: f32,
+        dot: bool,
+        stack: u32,
+        mut applied_mods: Option<&mut Vec<(u32, u8)>>,
+    ) -> f32 {
+        const CUSTOM_FIXED_DAMAGE: u32 = 0x10;
+        if spell.custom & CUSTOM_FIXED_DAMAGE != 0 || spell.attributes_ex3 & 0x2000_0000 != 0 {
+            return damage;
+        }
+        // Ignite already includes modifiers (mage family
+        // flag bit 27, CM0 0x08000000).
+        if spell.spell_family_name == 3 && spell.spell_family_flags & 0x0800_0000 != 0 {
+            return damage;
+        }
+        #[allow(clippy::cast_possible_wrap)]
+        let school_mask = 1i32 << spell.school;
+        let creature_type_mask = self.creature_type_mask(victim);
+        let mut done_total_mod = 1.0f32;
+        let mut done_total = 0.0f32;
+        let pet_owner = self.pet_owner(caster);
+        if let Some(creature) = self.creatures.get(&caster)
+            && !pet_owner.is_some_and(|o| self.players.contains_key(&o))
+        {
+            done_total_mod *= self
+                .config
+                .creature_rates
+                .spell_damage_by_rank(creature.info.rank);
+        }
+        done_total_mod *= self.total_aura_multiplier(
+            caster,
+            aura_type::MOD_DAMAGE_PERCENT_DONE,
+            Some(school_mask),
+        );
+        done_total_mod *= self.total_aura_multiplier(
+            caster,
+            aura_type::MOD_DAMAGE_DONE_VERSUS,
+            Some(creature_type_mask),
+        );
+        done_total += self.total_aura_modifier(
+            caster,
+            aura_type::MOD_DAMAGE_DONE_CREATURE,
+            Some(creature_type_mask),
+        ) as f32;
+        // Override class scripts (owner's auras).
+        let script_owner = pet_owner.unwrap_or(caster);
+        for holder in self.aura_holders(script_owner) {
+            for (eff_idx, eff) in holder.effects.iter().enumerate() {
+                let Some(e) = eff else { continue };
+                if e.aura_type != aura_type::OVERRIDE_CLASS_SCRIPTS
+                    || !self.override_affected(&holder, eff_idx, spell)
+                {
+                    continue;
+                }
+                match e.misc_value {
+                    4418 | 4554 => done_total += e.amount as f32,
+                    4555 => {
+                        let divisor = if dot {
+                            100.0 * f32::from(spell.aura_max_ticks(&self.stores.spells.tables))
+                        } else {
+                            800.0
+                        };
+                        if divisor != 0.0 {
+                            done_total += e.amount as f32 * damage / divisor;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // Hunter pet happiness.
+        if self
+            .pets
+            .get(&caster)
+            .is_some_and(super::pets::PetState::is_hunter)
+        {
+            let happiness = self.unit_power(caster, 4);
+            if happiness >= 666_000 {
+                done_total_mod *= 1.25;
+            } else if happiness < 333_000 {
+                done_total_mod *= 0.75;
+            }
+        }
+        let benefit = self.spell_base_damage_bonus_done(caster, school_mask, creature_type_mask);
+        done_total = self.spell_bonus_with_coeffs(
+            caster,
+            spell,
+            eff_index,
+            done_total,
+            benefit as f32,
+            dot,
+            true,
+            applied_mods.as_deref_mut(),
+        );
+        #[allow(clippy::cast_possible_wrap)]
+        let mut out = (damage + done_total * stack as i32 as f32) * done_total_mod;
+        out = self.apply_spell_mod(
+            caster,
+            spell,
+            if dot { spellmod::DOT } else { spellmod::DAMAGE },
+            out,
+            true,
+            applied_mods,
+        );
+        if out > 0.0 { out } else { 0.0 }
+    }
+
+    /// `SpellDamageBonusTaken` (`Unit.cpp:5344`).
+    #[allow(clippy::too_many_arguments, clippy::cast_precision_loss)]
+    pub(crate) fn spell_damage_bonus_taken(
+        &mut self,
+        victim: ObjectGuid,
+        spell: &SpellEntry,
+        eff_index: usize,
+        damage: f32,
+        dot: bool,
+        stack: u32,
+        applied_mods: Option<&mut Vec<(u32, u8)>>,
+    ) -> f32 {
+        const EX4_IGNORE_TAKEN: u32 = 0x0000_0100;
+        if spell.attributes_ex4 & EX4_IGNORE_TAKEN != 0 {
+            return damage;
+        }
+        #[allow(clippy::cast_possible_wrap)]
+        let school_mask = 1i32 << spell.school;
+        let taken_total_mod = self.total_aura_multiplier(
+            victim,
+            aura_type::MOD_DAMAGE_PERCENT_TAKEN,
+            Some(school_mask),
+        );
+        let taken_flat =
+            self.total_aura_modifier(victim, aura_type::MOD_DAMAGE_TAKEN, Some(school_mask));
+        #[allow(clippy::cast_possible_wrap)]
+        let mut taken_flat = self.spell_bonus_with_coeffs(
+            victim,
+            spell,
+            eff_index,
+            0.0,
+            taken_flat as f32,
+            dot,
+            false,
+            applied_mods,
+        ) * stack as i32 as f32;
+        if taken_flat < 0.0 && -taken_flat > damage / 2.0 {
+            taken_flat = -(damage / 2.0);
+        }
+        let out = (damage + taken_flat) * taken_total_mod;
+        if out > 0.0 { out } else { 0.0 }
+    }
+
+    /// `GetMaxPositive/NegativeAuraModifier` over holders.
+    fn max_aura_modifier(&self, guid: ObjectGuid, kind: u32, positive: bool) -> i32 {
+        let holders = self.aura_holders(guid);
+        let amounts = holders
+            .iter()
+            .flat_map(|h| h.effects.iter().flatten())
+            .filter(|e| e.aura_type == kind && (e.amount > 0) == positive && e.amount != 0)
+            .map(|e| e.amount);
+        if positive {
+            amounts.max().unwrap_or(0)
+        } else {
+            amounts.min().unwrap_or(0)
+        }
+    }
+
+    /// `SpellBaseHealingBonusDone` (`SpellCaster.cpp:1255`).
+    fn spell_base_healing_bonus_done(&self, caster: ObjectGuid, school_mask: i32) -> f32 {
+        #[allow(clippy::cast_precision_loss)]
+        let mut benefit =
+            self.total_aura_modifier(caster, aura_type::MOD_HEALING_DONE, Some(school_mask)) as f32;
+        if self.players.contains_key(&caster) {
+            for e in self
+                .aura_holders(caster)
+                .iter()
+                .flat_map(|h| h.effects.iter().flatten())
+                .filter(|e| e.aura_type == aura_type::MOD_SPELL_HEALING_OF_STAT_PERCENT)
+            {
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    benefit += self.unit_stat(caster, 4) * e.amount as f32 / 100.0;
+                }
+            }
+        }
+        benefit
+    }
+
+    /// `SpellHealingBonusDone` (`SpellCaster.cpp:1184`).
+    /// Totem owner delegation recorded (no totem casters).
+    #[allow(clippy::too_many_arguments, clippy::cast_precision_loss)]
+    pub(crate) fn spell_healing_bonus_done(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        eff_index: usize,
+        heal: f32,
+        dot: bool,
+        stack: u32,
+        mut applied_mods: Option<&mut Vec<(u32, u8)>>,
+    ) -> f32 {
+        const CUSTOM_FIXED_DAMAGE: u32 = 0x10;
+        const ATTR_PASSIVE: u32 = 0x40;
+        let gated = (spell.dmg_class == dmg_class::NONE && spell.attributes & ATTR_PASSIVE != 0)
+            || spell.custom & CUSTOM_FIXED_DAMAGE != 0
+            || spell.attributes_ex3 & 0x2000_0000 != 0;
+        if gated {
+            return if heal < 0.0 { 0.0 } else { heal };
+        }
+        let done_total_mod =
+            self.total_aura_multiplier(caster, aura_type::MOD_HEALING_DONE_PERCENT, None);
+        let mut done_total = 0.0f32;
+        let script_owner = self.pet_owner(caster).unwrap_or(caster);
+        for holder in self.aura_holders(script_owner) {
+            for (eff_idx, eff) in holder.effects.iter().enumerate() {
+                let Some(e) = eff else { continue };
+                if e.aura_type != aura_type::OVERRIDE_CLASS_SCRIPTS
+                    || !self.override_affected(&holder, eff_idx, spell)
+                {
+                    continue;
+                }
+                match e.misc_value {
+                    4415 => done_total += e.amount as f32 / 4.0,
+                    3736 => done_total += e.amount as f32,
+                    _ => {}
+                }
+            }
+        }
+        #[allow(clippy::cast_possible_wrap)]
+        let school_mask = 1i32 << spell.school;
+        let benefit = self.spell_base_healing_bonus_done(caster, school_mask);
+        done_total = self.spell_bonus_with_coeffs(
+            caster,
+            spell,
+            eff_index,
+            done_total,
+            benefit,
+            dot,
+            true,
+            applied_mods.as_deref_mut(),
+        );
+        #[allow(clippy::cast_possible_wrap)]
+        let mut out = (heal + done_total * stack as i32 as f32) * done_total_mod;
+        out = self.apply_spell_mod(
+            caster,
+            spell,
+            if dot { spellmod::DOT } else { spellmod::DAMAGE },
+            out,
+            true,
+            applied_mods,
+        );
+        if out < 0.0 { 0.0 } else { out }
+    }
+
+    /// Immunity entries `(spell_id, type)` for one
+    /// fork `m_spellImmune[op]` list, derived from
+    /// holders plus permanent creature entries
+    /// (spell 0) — the `ApplySpellImmune` list as a
+    /// recompute. Ops: 0 damage, 1 dispel, 2 effect,
+    /// 3 mechanic, 4 school, 5 state.
+    fn immune_entries(&self, victim: ObjectGuid, op: u32) -> Vec<(u32, i32)> {
+        let aura_kind = match op {
+            0 => aura_type::DAMAGE_IMMUNITY,
+            1 => aura_type::DISPEL_IMMUNITY,
+            2 => aura_type::EFFECT_IMMUNITY,
+            3 => aura_type::MECHANIC_IMMUNITY,
+            4 => aura_type::SCHOOL_IMMUNITY,
+            _ => aura_type::STATE_IMMUNITY,
+        };
+        let mut out: Vec<(u32, i32)> = self
+            .aura_holders(victim)
+            .iter()
+            .flat_map(|h| {
+                h.effects
+                    .iter()
+                    .flatten()
+                    .filter(move |e| e.aura_type == aura_kind)
+                    .map(move |e| (h.spell_id, e.misc_value))
+            })
+            .collect();
+        // Permanent creature entries (`Creature::UpdateEntry`
+        // tail): type-based, immunity flags, sessile.
+        if let Some(c) = self.creatures.get(&victim) {
+            let info = &c.info;
+            let mut push = |entry_op: u32, ty: i32| {
+                if entry_op == op {
+                    out.push((0, ty));
+                }
+            };
+            if info.creature_type == 9 {
+                push(2, 10);
+                push(2, 67);
+                push(5, 8);
+                push(5, 53);
+            }
+            if matches!(info.creature_type, 9 | 4) {
+                push(1, 3);
+                push(1, 4);
+            }
+            if info.immunity_flags & 0x02 != 0 {
+                push(2, 114);
+                push(5, 11);
+            }
+            if info.immunity_flags & 0x04 != 0 {
+                push(5, 29);
+                push(5, 137);
+            }
+            if info.immunity_flags & 0x08 != 0 {
+                push(5, 65);
+            }
+            if info.immunity_flags & 0x10 != 0 {
+                push(1, 3);
+            }
+            if info.immunity_flags & 0x20 != 0 {
+                push(1, 4);
+            }
+            if info.immunity_flags & 0x40 != 0 {
+                push(1, 2);
+            }
+            if info.static_flags1 & 0x100 != 0 {
+                push(2, 69);
+                push(2, 70);
+                push(2, 98);
+                push(5, 5);
+                push(5, 7);
+                push(5, 26);
+            }
+        }
+        out
+    }
+
+    /// The shared list-entry positivity rule: permanent
+    /// (spell 0) or missing immunity spells always
+    /// block; otherwise block on positivity mismatch
+    /// or EX immunity-to-hostile-and-friendly.
+    fn immune_entry_blocks(&self, immunity_spell_id: u32, incoming_positive: bool) -> bool {
+        let Some(imm) = self.stores.spells.get(immunity_spell_id) else {
+            return true;
+        };
+        if immunity_spell_id == 0 {
+            return true;
+        }
+        imm.is_positive_spell() != incoming_positive || imm.attributes_ex & 0x0001_0000 != 0
+    }
+
+    /// `Unit::IsImmuneToDamage` + creature school-mask
+    /// override (`Unit.cpp:5566`, `Creature.cpp:2323`).
+    pub(crate) fn is_immune_to_damage(
+        &self,
+        victim: ObjectGuid,
+        school_mask: i32,
+        spell: Option<&SpellEntry>,
+    ) -> bool {
+        const NO_IMMUNITIES: u32 = 0x2000_0000;
+        if let Some(spell) = spell
+            && spell.attributes & NO_IMMUNITIES != 0
+        {
+            return false;
+        }
+        if let Some(c) = self.creatures.get(&victim)
+            && c.info.school_immune_mask & school_mask as u32 != 0
+        {
+            return true;
+        }
+        for (_id, ty) in self.immune_entries(victim, 0) {
+            if ty & school_mask != 0 {
+                return true;
+            }
+        }
+        let skip_school = spell.is_some_and(|s| s.attributes_ex2 & 0x0400_0000 != 0);
+        if !skip_school {
+            let incoming_positive = spell.is_some_and(mangos_spells::SpellEntry::is_positive_spell);
+            for (id, ty) in self.immune_entries(victim, 4) {
+                if ty & school_mask != 0 && self.immune_entry_blocks(id, incoming_positive) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// `Unit::IsImmuneToSpell` + creature mask override
+    /// (`Unit.cpp:5602`, `Creature.cpp:2306`). The WSG
+    /// flag-carrier arm is Tier 3 (battlegrounds).
+    pub(crate) fn is_immune_to_spell(
+        &self,
+        victim: ObjectGuid,
+        spell: &SpellEntry,
+        cast_on_self: bool,
+    ) -> bool {
+        const NO_IMMUNITIES: u32 = 0x2000_0000;
+        const PASSIVE: u32 = 0x40;
+        if spell.attributes & NO_IMMUNITIES != 0 {
+            return false;
+        }
+        if !cast_on_self && let Some(c) = self.creatures.get(&victim) {
+            if spell.mechanic != 0
+                && c.info.mechanic_immune_mask & (1u32 << (spell.mechanic - 1)) != 0
+            {
+                return true;
+            }
+            if c.info.school_immune_mask & (1u32 << spell.school) != 0 && !spell.is_positive_spell()
+            {
+                return true;
+            }
+        }
+        let positive = spell.is_positive_spell();
+        if spell.attributes & PASSIVE == 0 {
+            for (id, ty) in self.immune_entries(victim, 1) {
+                #[allow(clippy::cast_possible_wrap)]
+                if ty == spell.dispel as i32 && self.immune_entry_blocks(id, positive) {
+                    return true;
+                }
+            }
+        }
+        #[allow(clippy::cast_possible_wrap)]
+        let school_mask = 1i32 << spell.school;
+        if spell.attributes_ex & 0x8000 == 0 && spell.attributes_ex2 & 0x0400_0000 == 0 {
+            for (id, ty) in self.immune_entries(victim, 4) {
+                if ty & school_mask != 0 && self.immune_entry_blocks(id, positive) {
+                    return true;
+                }
+            }
+        }
+        if spell.mechanic != 0 {
+            #[allow(clippy::cast_possible_wrap)]
+            let mechanic = spell.mechanic as i32;
+            for (id, ty) in self.immune_entries(victim, 3) {
+                if ty == mechanic && self.immune_entry_blocks(id, positive) {
+                    return true;
+                }
+            }
+            let mask = 1i32 << (mechanic - 1);
+            for holder in self.aura_holders(victim) {
+                for e in holder.effects.iter().flatten() {
+                    if e.aura_type == aura_type::MECHANIC_IMMUNITY_MASK
+                        && e.misc_value & mask != 0
+                        && self.immune_entry_blocks(holder.spell_id, positive)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// `Unit::IsImmuneToSpellEffect` + creature
+    /// mechanic-mask override (`Unit.cpp:5706`,
+    /// `Creature.cpp:2334`).
+    pub(crate) fn is_immune_to_spell_effect(
+        &self,
+        victim: ObjectGuid,
+        spell: &SpellEntry,
+        eff_index: usize,
+        cast_on_self: bool,
+    ) -> bool {
+        let eff = &spell.effects[eff_index];
+        if !cast_on_self
+            && eff.mechanic != 0
+            && let Some(c) = self.creatures.get(&victim)
+            && c.info.mechanic_immune_mask & (1u32 << (eff.mechanic - 1)) != 0
+        {
+            return true;
+        }
+        let positive = spell.is_positive_effect(eff_index);
+        #[allow(clippy::cast_possible_wrap)]
+        for (id, ty) in self.immune_entries(victim, 2) {
+            if ty == eff.effect as i32 && self.immune_entry_blocks(id, positive) {
+                return true;
+            }
+        }
+        if eff.mechanic != 0 {
+            #[allow(clippy::cast_possible_wrap)]
+            let mechanic = eff.mechanic as i32;
+            for (id, ty) in self.immune_entries(victim, 3) {
+                if ty == mechanic && self.immune_entry_blocks(id, positive) {
+                    return true;
+                }
+            }
+            let mask = 1i32 << (mechanic - 1);
+            for holder in self.aura_holders(victim) {
+                for e in holder.effects.iter().flatten() {
+                    if e.aura_type == aura_type::MECHANIC_IMMUNITY_MASK
+                        && e.misc_value & mask != 0
+                        && self.immune_entry_blocks(holder.spell_id, positive)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        if eff.apply_aura_name != 0 {
+            #[allow(clippy::cast_possible_wrap)]
+            for (id, ty) in self.immune_entries(victim, 5) {
+                if ty == eff.apply_aura_name as i32 && self.immune_entry_blocks(id, positive) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// `Unit::IsImmuneToSchool` (`Unit.cpp:5791`),
+    /// per-effect positivity, self-immunity skipped.
+    pub(crate) fn is_immune_to_school(
+        &self,
+        victim: ObjectGuid,
+        spell: &SpellEntry,
+        eff_index: usize,
+    ) -> bool {
+        if spell.attributes_ex & 0x8000 != 0 || spell.attributes_ex2 & 0x0400_0000 != 0 {
+            return false;
+        }
+        #[allow(clippy::cast_possible_wrap)]
+        let school_mask = 1i32 << spell.school;
+        let positive = spell.is_positive_effect(eff_index);
+        for (id, ty) in self.immune_entries(victim, 4) {
+            if id == spell.id {
+                continue;
+            }
+            if ty & school_mask != 0 && self.immune_entry_blocks(id, positive) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Mechanic mask of a spell (`HasMechanicMask`):
+    /// spell mechanic bit + effect mechanic bits.
+    pub(crate) fn mechanic_mask(spell: &SpellEntry) -> i32 {
+        let mut mask = 0i32;
+        if spell.mechanic != 0 {
+            mask |= 1i32 << (spell.mechanic - 1);
+        }
+        for e in &spell.effects {
+            if e.mechanic != 0 {
+                mask |= 1i32 << (e.mechanic - 1);
+            }
+        }
+        mask
+    }
+
+    /// Immunity-aura apply side effects (fork handlers
+    /// at `SpellAuras.cpp:3933-4095`): purges gated by
+    /// `EX_IMMUNITY_PURGES_EFFECT`, plus the school
+    /// immunity flag-aura strip. WSG flag-carrier arm
+    /// of effect immunity is Tier 3.
+    pub(crate) fn apply_immunity_purges(&mut self, victim: ObjectGuid, spell: &SpellEntry) {
+        const PURGES: u32 = 0x8000;
+        const NO_IMMUNITIES: u32 = 0x2000_0000;
+        let purges = spell.attributes_ex & PURGES != 0;
+        for e in &spell.effects {
+            match e.apply_aura_name {
+                aura_type::MECHANIC_IMMUNITY if purges && e.misc_value > 0 => {
+                    self.remove_auras_at_mechanic_immunity(
+                        victim,
+                        1i32 << (e.misc_value - 1),
+                        spell.id,
+                        false,
+                    );
+                }
+                aura_type::MECHANIC_IMMUNITY_MASK if purges => {
+                    self.remove_auras_at_mechanic_immunity(victim, e.misc_value, spell.id, false);
+                }
+                aura_type::STATE_IMMUNITY if purges => {
+                    let ids: Vec<u32> = self
+                        .aura_holders(victim)
+                        .iter()
+                        .filter(|h| h.spell_id != spell.id)
+                        .filter(|h| {
+                            h.effects
+                                .iter()
+                                .flatten()
+                                .any(|x| x.aura_type == e.misc_value as u32)
+                        })
+                        .map(|h| h.spell_id)
+                        .collect();
+                    for id in ids {
+                        self.remove_auras_due_to_spell(victim, id);
+                    }
+                }
+                aura_type::SCHOOL_IMMUNITY => {
+                    if spell.is_positive_spell()
+                        && self.players.contains_key(&victim)
+                        && self.pet_owner(victim).is_none()
+                    {
+                        self.remove_auras_with_interrupt_flags(
+                            victim,
+                            aura_interrupt_flag::INVULNERABILITY_BUFF_CANCELS,
+                            0,
+                        );
+                    }
+                    if purges && spell.is_positive_spell() {
+                        let ids: Vec<u32> = self
+                            .aura_holders(victim)
+                            .iter()
+                            .filter(|h| !h.positive && h.spell_id != spell.id)
+                            .filter(|h| {
+                                self.stores.spells.get(h.spell_id).is_some_and(|s| {
+                                    (1i32 << s.school) & e.misc_value != 0
+                                        && s.attributes & NO_IMMUNITIES == 0
+                                })
+                            })
+                            .map(|h| h.spell_id)
+                            .collect();
+                        for id in ids {
+                            self.remove_auras_due_to_spell(victim, id);
+                        }
+                    }
+                }
+                aura_type::DISPEL_IMMUNITY if purges => {
+                    let ids: Vec<u32> = self
+                        .aura_holders(victim)
+                        .iter()
+                        .filter(|h| {
+                            self.stores.spells.get(h.spell_id).is_some_and(|s| {
+                                #[allow(clippy::cast_possible_wrap)]
+                                {
+                                    s.dispel as i32 == e.misc_value
+                                }
+                            })
+                        })
+                        .map(|h| h.spell_id)
+                        .collect();
+                    for id in ids {
+                        self.remove_auras_due_to_spell(victim, id);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// `Unit::RemoveAurasAtMechanicImmunity`.
+    pub(crate) fn remove_auras_at_mechanic_immunity(
+        &mut self,
+        victim: ObjectGuid,
+        mech_mask: i32,
+        except_spell_id: u32,
+        non_positive: bool,
+    ) {
+        const NO_IMMUNITIES: u32 = 0x2000_0000;
+        let ids: Vec<u32> = self
+            .aura_holders(victim)
+            .iter()
+            .filter(|h| h.spell_id != except_spell_id)
+            .filter(|h| !(non_positive && h.positive))
+            .filter(|h| {
+                self.stores.spells.get(h.spell_id).is_some_and(|s| {
+                    s.attributes & NO_IMMUNITIES == 0 && Self::mechanic_mask(s) & mech_mask != 0
+                })
+            })
+            .map(|h| h.spell_id)
+            .collect();
+        for id in ids {
+            self.remove_auras_due_to_spell(victim, id);
+        }
+    }
+
+    /// Holder-derived `UNIT_FLAG_IMMUNE` +
+    /// `UNIT_STATE_ISOLATED` (school-immunity handler
+    /// flag arms as a recompute).
+    pub(crate) fn refresh_immune_state(&mut self, guid: ObjectGuid) {
+        const PURGES: u32 = 0x8000;
+        const UNIT_FLAG_IMMUNE: u32 = 0x8000_0000;
+        let mut immune_flag = false;
+        let mut isolated = false;
+        for holder in self.aura_holders(guid) {
+            let Some(spell) = self.stores.spells.get(holder.spell_id) else {
+                continue;
+            };
+            if spell.attributes_ex & PURGES != 0
+                && spell.is_positive_spell()
+                && holder
+                    .effects
+                    .iter()
+                    .flatten()
+                    .any(|e| e.aura_type == aura_type::SCHOOL_IMMUNITY)
+            {
+                immune_flag = true;
+            }
+            if spell.mechanic == 5 {
+                isolated = true;
+            }
+        }
+        if let Some(unit) = self.unit_base_mut(guid) {
+            let flags = unit.values().get_u32(offsets::UNIT_FIELD_FLAGS);
+            let new_flags = if immune_flag {
+                flags | UNIT_FLAG_IMMUNE
+            } else {
+                flags & !UNIT_FLAG_IMMUNE
+            };
+            if new_flags != flags {
+                unit.values().set_u32(offsets::UNIT_FIELD_FLAGS, new_flags);
+            }
+            if isolated {
+                unit.add_unit_state(mangos_entities::unit::UNIT_STATE_ISOLATED);
+            } else {
+                unit.clear_unit_state(mangos_entities::unit::UNIT_STATE_ISOLATED);
+            }
+        }
+    }
+
+    /// Holder-derived attack-speed percent
+    /// (`ApplyAttackTimePercentMod` as a recompute):
+    /// rewrites the three attack-time fields by
+    /// old→new pct ratio and stores the new pcts.
+    /// Haste factor per amount: positive divides
+    /// (100/(100+v)), negative multiplies
+    /// ((100-v)/100) at build 5875. `SPELLMOD_HASTE`
+    /// applies per holder amount (fork applies it
+    /// once at aura apply).
+    #[allow(clippy::float_cmp)] // exact pct change gate, as in the fork field rewrite
+    pub(crate) fn refresh_attack_speed(&mut self, guid: ObjectGuid) {
+        #[allow(clippy::cast_precision_loss)]
+        let factor = |amount: i32| -> f32 {
+            let v = amount as f32;
+            if v > 0.0 {
+                100.0 / (100.0 + v)
+            } else if v < 0.0 {
+                (100.0 - v) / 100.0
+            } else {
+                1.0
+            }
+        };
+        let mut pct = [1.0f32; 3];
+        for holder in self.aura_holders(guid) {
+            let Some(spell) = self.stores.spells.get(holder.spell_id).cloned() else {
+                continue;
+            };
+            for e in holder.effects.iter().flatten() {
+                let slots: &[usize] = match e.aura_type {
+                    aura_type::MOD_ATTACKSPEED => &[0, 1, 2],
+                    aura_type::MOD_MELEE_HASTE => &[0, 1],
+                    aura_type::MOD_RANGED_HASTE | aura_type::MOD_RANGED_AMMO_HASTE => &[2],
+                    _ => continue,
+                };
+                #[allow(clippy::cast_precision_loss)]
+                let amount = self.apply_spell_mod(
+                    holder.caster,
+                    &spell,
+                    spellmod::HASTE,
+                    e.amount as f32,
+                    false,
+                    None,
+                );
+                #[allow(clippy::cast_possible_truncation)]
+                let f = factor(amount as i32);
+                for &slot in slots {
+                    pct[slot] *= f;
+                }
+            }
+        }
+        if let Some(unit) = self.unit_base_mut(guid) {
+            let old = unit.mod_attack_speed_pct;
+            if old == pct {
+                return;
+            }
+            for slot in 0..3 {
+                if old[slot] == 0.0 || old[slot] == pct[slot] {
+                    continue;
+                }
+                let field = match slot {
+                    0 => offsets::UNIT_FIELD_BASEATTACKTIME,
+                    1 => offsets::UNIT_FIELD_BASEATTACKTIME + 1,
+                    _ => offsets::UNIT_FIELD_RANGEDATTACKTIME,
+                };
+                let cur = unit.values().get_f32(field);
+                if cur != 0.0 {
+                    unit.values().set_f32(field, cur / old[slot] * pct[slot]);
+                }
+            }
+            unit.mod_attack_speed_pct = pct;
+        }
+    }
+
+    /// Holder-derived `PLAYER_SKILL_BONUS` packed
+    /// fields (`ModifySkillBonus` as a recompute):
+    /// temporary `MOD_SKILL` low half, permanent
+    /// `MOD_SKILL_TALENT` high half, keyed by the
+    /// skill id in each slot.
+    pub(crate) fn refresh_skill_bonuses(&mut self, guid: ObjectGuid) {
+        if !self.players.contains_key(&guid) {
+            return;
+        }
+        let mut temp: std::collections::HashMap<u32, i32> = std::collections::HashMap::new();
+        let mut perm: std::collections::HashMap<u32, i32> = std::collections::HashMap::new();
+        for holder in self.aura_holders(guid) {
+            for e in holder.effects.iter().flatten() {
+                let map = match e.aura_type {
+                    aura_type::MOD_SKILL => &mut temp,
+                    aura_type::MOD_SKILL_TALENT => &mut perm,
+                    _ => continue,
+                };
+                #[allow(clippy::cast_sign_loss)]
+                {
+                    *map.entry(e.misc_value as u32).or_insert(0) += e.amount;
+                }
+            }
+        }
+        if let Some(unit) = self.unit_base_mut(guid) {
+            for slot in 0..127u16 {
+                let base = offsets::PLAYER_SKILL_INFO_1_1 + slot * 3;
+                let skill = unit.values().get_u32(base);
+                if skill == 0 {
+                    continue;
+                }
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let packed = |v: i32| (v as i16) as u16 as u32;
+                let bonus = packed(temp.get(&skill).copied().unwrap_or(0))
+                    | (packed(perm.get(&skill).copied().unwrap_or(0)) << 16);
+                if unit.values().get_u32(base + 2) != bonus {
+                    unit.values().set_u32(base + 2, bonus);
+                }
+            }
+        }
+    }
+
+    /// `SendSpellOrDamageImmune` (`SpellCaster.cpp:673`).
+    fn send_spell_or_damage_immune(
+        &mut self,
+        caster: ObjectGuid,
+        victim: ObjectGuid,
+        spell_id: u32,
+    ) {
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&Self::packed_guid_bytes(caster));
+        payload.write_bytes(&Self::packed_guid_bytes(victim));
+        payload.write_u32_le(spell_id);
+        payload.write_u8(0);
+        let packet = WorldPacket::with_body(op::SMSG_SPELLORDAMAGE_IMMUNE, payload.into_vec());
+        self.broadcast_movement(caster, &packet);
+    }
+
+    /// `SpellHealingBonusTaken` (`Unit.cpp:5491`).
+    #[allow(clippy::too_many_arguments, clippy::cast_precision_loss)]
+    pub(crate) fn spell_healing_bonus_taken(
+        &mut self,
+        victim: ObjectGuid,
+        spell: &SpellEntry,
+        eff_index: usize,
+        heal: f32,
+        dot: bool,
+        stack: u32,
+        applied_mods: Option<&mut Vec<(u32, u8)>>,
+    ) -> f32 {
+        let mut taken_total_mod = 1.0f32;
+        let minval = self.max_aura_modifier(victim, aura_type::MOD_HEALING_PCT, false);
+        if minval != 0 {
+            taken_total_mod *= (100.0 + minval as f32) / 100.0;
+        }
+        let maxval = self.max_aura_modifier(victim, aura_type::MOD_HEALING_PCT, true);
+        if maxval != 0 {
+            taken_total_mod *= (100.0 + maxval as f32) / 100.0;
+        }
+        if spell.dmg_class == dmg_class::NONE {
+            let out = heal * taken_total_mod;
+            return if out < 0.0 { 0.0 } else { out };
+        }
+        // Healing Way (29203) dummy for Healing Wave
+        // (shaman family 11, CM0 bit 6).
+        if spell.spell_family_name == 11 && spell.spell_family_flags & 0x40 != 0 {
+            for e in self
+                .aura_holders(victim)
+                .iter()
+                .filter(|h| h.spell_id == 29203)
+                .flat_map(|h| h.effects.iter().flatten())
+                .filter(|e| e.aura_type == aura_type::DUMMY)
+            {
+                taken_total_mod *= (e.amount as f32 + 100.0) / 100.0;
+            }
+        }
+        #[allow(clippy::cast_possible_wrap)]
+        let school_mask = 1i32 << spell.school;
+        let mut taken_flat =
+            self.total_aura_modifier(victim, aura_type::MOD_HEALING, Some(school_mask)) as f32;
+        // Blessing of Light dummies (paladin family 10;
+        // flash bit 13, holy light bit 31, blessings
+        // bit 28, visual 300).
+        if spell.spell_family_name == 10 && spell.spell_family_flags & (0x2000 | 0x8000_0000) != 0 {
+            for holder in self.aura_holders(victim) {
+                let Some(source) = self.stores.spells.get(holder.spell_id) else {
+                    continue;
+                };
+                if source.spell_family_flags & 0x1000_0000 == 0 || source.spell_visual != 300 {
+                    continue;
+                }
+                for (eff_idx, eff) in holder.effects.iter().enumerate() {
+                    let Some(e) = eff else { continue };
+                    if e.aura_type != aura_type::DUMMY {
+                        continue;
+                    }
+                    let holy_light = spell.spell_family_flags & 0x8000_0000 != 0 && eff_idx == 0;
+                    let flash = spell.spell_family_flags & 0x2000 != 0 && eff_idx == 1;
+                    if holy_light || flash {
+                        taken_flat += e.amount as f32;
+                    }
+                }
+            }
+        }
+        #[allow(clippy::cast_possible_wrap)]
+        let mut taken_flat = self.spell_bonus_with_coeffs(
+            victim,
+            spell,
+            eff_index,
+            0.0,
+            taken_flat,
+            dot,
+            false,
+            applied_mods,
+        ) * stack as i32 as f32;
+        if taken_flat < 0.0 && -taken_flat > heal / 2.0 {
+            taken_flat = -(heal / 2.0);
+        }
+        let out = (heal + taken_flat) * taken_total_mod;
+        if out < 0.0 { 0.0 } else { out }
+    }
+
     /// `SpellCaster::CalculateDamage` tail +
     /// `SpellNonMeleeDamageLog` + health application.
     /// `aura_holder` is Some for periodic ticks
@@ -2837,7 +4285,7 @@ impl Map {
         spell: &SpellEntry,
         victim: ObjectGuid,
         base_damage: i32,
-        _eff_index: u32,
+        eff_index: u32,
         aura_holder: Option<u32>,
         mut applied_mods: Option<&mut Vec<(u32, u8)>>,
         proc_ctx: Option<&ProcRaiseCtx>,
@@ -2845,63 +4293,27 @@ impl Map {
         if base_damage <= 0 {
             return;
         }
-        // Armor reduction applies to the NORMAL school
-        // only (`CalcArmorReducedDamage` call site).
-        let mut damage = if spell.school == school::NORMAL {
-            let victim_armor = self.unit_resistance(victim, school::NORMAL);
-            #[allow(clippy::cast_possible_truncation)]
-            {
-                mangos_spells::armor_reduced_damage(
-                    base_damage as f32,
-                    victim_armor,
-                    self.unit_level(caster),
-                ) as i32
-            }
-        } else {
-            base_damage
-        };
-
-        // `SPELLMOD_DAMAGE` / `SPELLMOD_DOT` (the
-        // `SpellDamageBonusDone` tail; spell-power
-        // terms are identity in this subset).
-        #[allow(clippy::cast_possible_truncation)]
-        {
-            damage = self.apply_spell_mod(
+        // Fork `CalculateDamage` order: bonus Done →
+        // Taken → crit → armor → ditheru. Periodic
+        // amounts carry Done from the apply-time
+        // snapshot, so ticks take Taken(DOT) only.
+        // Melee/ranged-class spells keep the pre-slice
+        // math (`MeleeDamageBonus` audit is separate).
+        let dot = aura_holder.is_some();
+        #[allow(clippy::cast_precision_loss)]
+        let mut damage_f = base_damage as f32;
+        if spell_meleedamage(spell.dmg_class) {
+            damage_f = self.apply_spell_mod(
                 caster,
                 spell,
-                if aura_holder.is_some() {
-                    spellmod::DOT
-                } else {
-                    spellmod::DAMAGE
-                },
-                damage as f32,
+                if dot { spellmod::DOT } else { spellmod::DAMAGE },
+                damage_f,
                 true,
                 applied_mods.as_deref_mut(),
-            ) as i32;
-        }
-
-        // Aura damage modifiers (`SpellDamageBonusDone/
-        // Taken` flat+pct terms; the fork routes flat
-        // through spell coefficients — spell power is
-        // unmodeled in this subset, so flat lands at
-        // coefficient 1 on direct damage only, percent
-        // on both; recorded). Skipped entirely for
-        // `IGNORE_CASTER_MODIFIERS` spells (fork head
-        // return).
-        if spell.attributes_ex3 & 0x2000_0000 == 0 {
-            #[allow(clippy::cast_possible_wrap)]
-            let school_mask = 1i32 << spell.school;
-            if aura_holder.is_none() {
-                damage +=
-                    self.total_aura_modifier(caster, aura_type::MOD_DAMAGE_DONE, Some(school_mask));
-                damage += self.total_aura_modifier(
-                    victim,
-                    aura_type::MOD_DAMAGE_TAKEN,
-                    Some(school_mask),
-                );
-            }
-            #[allow(clippy::cast_possible_truncation)]
-            {
+            );
+            if spell.attributes_ex3 & 0x2000_0000 == 0 {
+                #[allow(clippy::cast_possible_wrap)]
+                let school_mask = 1i32 << spell.school;
                 let pct = self.total_aura_multiplier(
                     caster,
                     aura_type::MOD_DAMAGE_PERCENT_DONE,
@@ -2911,32 +4323,91 @@ impl Map {
                     aura_type::MOD_DAMAGE_PERCENT_TAKEN,
                     Some(school_mask),
                 );
-                damage = (damage as f32 * pct) as i32;
+                damage_f *= pct;
             }
+        } else if dot {
+            let stack = aura_holder
+                .and_then(|spell_id| {
+                    self.aura_holders(victim)
+                        .into_iter()
+                        .find(|h| h.spell_id == spell_id && h.caster == caster)
+                        .map(|h| h.stack)
+                })
+                .unwrap_or(1);
+            damage_f = self.spell_damage_bonus_taken(
+                victim,
+                spell,
+                eff_index as usize,
+                damage_f,
+                true,
+                stack,
+                applied_mods.as_deref_mut(),
+            );
+        } else {
+            damage_f = self.spell_damage_bonus_done(
+                caster,
+                victim,
+                spell,
+                eff_index as usize,
+                damage_f,
+                false,
+                1,
+                applied_mods.as_deref_mut(),
+            );
+            damage_f = self.spell_damage_bonus_taken(
+                victim,
+                spell,
+                eff_index as usize,
+                damage_f,
+                false,
+                1,
+                applied_mods.as_deref_mut(),
+            );
         }
 
         // Crit: direct magic damage only (periodic ticks
-        // never crit in 1.12.1). Bonus is +50% for magic
-        // (`SpellCriticalDamageBonus` default arm, with
-        // `SPELLMOD_CRIT_DAMAGE_BONUS` on the bonus).
+        // never crit in 1.12.1); skipped entirely under
+        // EX3 ignore-caster-modifiers (fork gate). Bonus
+        // is +50% for magic (`SpellCriticalDamageBonus`
+        // default arm, spellmod on the bonus).
         let mut crit = false;
-        if aura_holder.is_none() && spell.dmg_class == dmg_class::MAGIC && damage > 0 {
+        if !dot
+            && spell.dmg_class == dmg_class::MAGIC
+            && spell.attributes_ex3 & 0x2000_0000 == 0
+            && damage_f > 0.0
+        {
             let crit_chance = self.spell_crit_percent(caster, spell, applied_mods.as_deref_mut());
             let roll = self.spell_rng().frand01() * 100.0;
             if roll < crit_chance {
                 crit = true;
-                #[allow(clippy::cast_possible_truncation)]
                 let bonus = self.apply_spell_mod(
                     caster,
                     spell,
                     spellmod::CRIT_DAMAGE_BONUS,
-                    (damage / 2) as f32,
+                    damage_f / 2.0,
                     true,
                     applied_mods.as_deref_mut(),
-                ) as i32;
-                damage += bonus;
+                );
+                damage_f += bonus;
             }
         }
+
+        // Armor after bonus+crit (fork mitigation
+        // stage), NORMAL school only, then ditheru.
+        if damage_f > 0.0 && spell.school == school::NORMAL {
+            let victim_armor = self.unit_resistance(victim, school::NORMAL);
+            damage_f = mangos_spells::armor_reduced_damage(
+                damage_f,
+                victim_armor,
+                self.unit_level(caster),
+            );
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let mut damage = if damage_f > 0.0 {
+            mangos_spells::ditheru(damage_f, self.spell_rng()) as i32
+        } else {
+            0
+        };
 
         // Partial resist (`CalculateDamageAbsorbAndResist`):
         // skipped for the NORMAL school, binary spells and
@@ -3090,7 +4561,7 @@ impl Map {
 
     /// `deal_damage` with the damage school (absorb
     /// mask matching); melee/script paths use NORMAL.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub(crate) fn deal_damage_school(
         &mut self,
         attacker: ObjectGuid,
@@ -3100,6 +4571,13 @@ impl Map {
         school_id: u32,
     ) {
         if damage == 0 {
+            return;
+        }
+        // Damage-immunity backstop (melee/script
+        // funnels; spell paths resolve immunity before
+        // their damage logs).
+        #[allow(clippy::cast_possible_wrap)]
+        if self.is_immune_to_damage(victim, 1i32 << school_id, None) {
             return;
         }
         // `SetInvincibilityHpThreshold` floor (Slice 6b).
@@ -3686,6 +5164,184 @@ impl Map {
         })
     }
 
+    /// `UNIT_MOD_HEALTH` / `UNIT_MOD_POWER_*`
+    /// TOTAL-group presence (`MOD_INCREASE_HEALTH`/
+    /// `..._PERCENT`, `MOD_INCREASE_ENERGY`/
+    /// `..._PERCENT`): drives the derived-stat
+    /// refresh and the fork handlers' current-value
+    /// adjustments.
+    fn holder_has_health_energy_mod(holder: &AuraHolder) -> bool {
+        holder.effects.iter().flatten().any(|e| {
+            matches!(
+                e.aura_type,
+                aura_type::MOD_INCREASE_HEALTH
+                    | aura_type::MOD_INCREASE_HEALTH_PERCENT
+                    | aura_type::MOD_INCREASE_ENERGY
+                    | aura_type::MOD_INCREASE_ENERGY_PERCENT
+            )
+        })
+    }
+
+    /// Post-refresh current health/power adjustments
+    /// of `HandleAuraModIncreaseHealth[Percent]` and
+    /// `HandleAuraModIncreaseEnergy[Percent]` for a
+    /// just-applied holder (`SpellAuras.cpp:4723+`).
+    /// `pre` is (health, max health, powers, max
+    /// powers) captured before the holder landed.
+    fn apply_health_energy_adjustments(
+        &mut self,
+        victim: ObjectGuid,
+        holder: &AuraHolder,
+        pre: Option<(u32, u32, [u32; 5], [u32; 5])>,
+    ) {
+        let Some((old_hp, old_max, old_powers, old_max_powers)) = pre else {
+            return;
+        };
+        let flat_health: i32 = holder
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.aura_type == aura_type::MOD_INCREASE_HEALTH)
+            .map(|e| e.amount)
+            .sum();
+        let has_health_pct = holder
+            .effects
+            .iter()
+            .flatten()
+            .any(|e| e.aura_type == aura_type::MOD_INCREASE_HEALTH_PERCENT);
+        if let Some(unit) = self.unit_base_mut(victim).filter(|u| u.is_alive()) {
+            if holder.spell_id == 12976 {
+                // Last Stand: current health follows
+                // the flat amount.
+                let cur = unit.health();
+                #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+                let next = (i64::from(cur) + i64::from(flat_health)).clamp(0, i64::from(u32::MAX));
+                unit.set_health(next as u32);
+            } else if matches!(holder.spell_id, 1178 | 9635) {
+                // Bear form: ceil percent preservation.
+                if old_max > 0 {
+                    #[allow(
+                        clippy::cast_precision_loss,
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss
+                    )]
+                    let next =
+                        (unit.max_health() as f32 * (old_hp as f32 / old_max as f32)).ceil() as u32;
+                    unit.set_health(next);
+                }
+            } else if has_health_pct && old_max > 0 {
+                // SetHealthPercent (truncating).
+                #[allow(
+                    clippy::cast_precision_loss,
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss
+                )]
+                let next = (unit.max_health() as f32 * (old_hp as f32 / old_max as f32)) as u32;
+                unit.set_health(next);
+            }
+            for e in holder.effects.iter().flatten() {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let power = e.misc_value as usize;
+                if power >= 5 {
+                    continue;
+                }
+                match e.aura_type {
+                    aura_type::MOD_INCREASE_ENERGY => {
+                        let cur = i64::from(unit.power(power)) + i64::from(e.amount);
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        let next = cur.clamp(0, i64::from(unit.max_power(power))) as u32;
+                        unit.set_power(power, next);
+                    }
+                    aura_type::MOD_INCREASE_ENERGY_PERCENT => {
+                        // SetPower by preserved percent.
+                        let old_max = old_max_powers[power];
+                        if old_max > 0 {
+                            #[allow(
+                                clippy::cast_precision_loss,
+                                clippy::cast_possible_truncation,
+                                clippy::cast_sign_loss
+                            )]
+                            let next = (unit.max_power(power) as f32
+                                * (old_powers[power] as f32 / old_max as f32))
+                                as u32;
+                            unit.set_power(power, next);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    /// Post-refresh current health/power adjustments
+    /// for a just-removed health/energy holder (the
+    /// remove arms of the same fork handlers; the
+    /// Last Stand pre-adjustment already ran in
+    /// `remove_aura_at`).
+    fn remove_health_energy_adjustments(
+        &mut self,
+        victim: ObjectGuid,
+        holder: &AuraHolder,
+        pre: (u32, u32, [u32; 5], [u32; 5]),
+    ) {
+        let (old_hp, old_max, old_powers, old_max_powers) = pre;
+        let Some(unit) = self.unit_base_mut(victim).filter(|u| u.is_alive()) else {
+            return;
+        };
+        let has_health_pct = holder
+            .effects
+            .iter()
+            .flatten()
+            .any(|e| e.aura_type == aura_type::MOD_INCREASE_HEALTH_PERCENT);
+        if old_max > 0 && matches!(holder.spell_id, 1178 | 9635) {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            let next = (unit.max_health() as f32 * (old_hp as f32 / old_max as f32)).ceil() as u32;
+            unit.set_health(next);
+        } else if old_max > 0 && has_health_pct {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            let next = (unit.max_health() as f32 * (old_hp as f32 / old_max as f32)) as u32;
+            unit.set_health(next);
+        }
+        for e in holder.effects.iter().flatten() {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let power = e.misc_value as usize;
+            if power >= 5 {
+                continue;
+            }
+            match e.aura_type {
+                aura_type::MOD_INCREASE_ENERGY => {
+                    let cur = i64::from(unit.power(power)) - i64::from(e.amount);
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let next = cur.clamp(0, i64::from(unit.max_power(power))) as u32;
+                    unit.set_power(power, next);
+                }
+                aura_type::MOD_INCREASE_ENERGY_PERCENT => {
+                    let old_max_power = old_max_powers[power];
+                    if old_max_power > 0 {
+                        #[allow(
+                            clippy::cast_precision_loss,
+                            clippy::cast_possible_truncation,
+                            clippy::cast_sign_loss
+                        )]
+                        let next = (unit.max_power(power) as f32
+                            * (old_powers[power] as f32 / old_max_power as f32))
+                            as u32;
+                        unit.set_power(power, next);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// The HP-ratio preservation of
     /// `HandleModTotalPercentStat`: stamina-misc percent
     /// mods on `Attributes & 0x10` spells.
@@ -3744,6 +5400,7 @@ impl Map {
             .flatten()
             .any(|e| e.aura_type == aura_type::MOD_ATTACK_POWER);
         let has_stat = Self::holder_has_stat_mod(&holder);
+        let has_health_energy = Self::holder_has_health_energy_mod(&holder);
         let hp_before = if has_stat && self.hp_ratio_preserve(&holder) {
             self.unit_base_mut(victim)
                 .filter(|u| u.is_alive())
@@ -3751,12 +5408,29 @@ impl Map {
         } else {
             None
         };
-        if let Some(unit) = self.unit_base_mut(victim) {
+        let vitals_before = if has_health_energy {
+            self.unit_base_mut(victim)
+                .filter(|u| u.is_alive())
+                .map(|u| {
+                    (
+                        u.health(),
+                        u.max_health(),
+                        core::array::from_fn(|p| u.power(p)),
+                        core::array::from_fn(|p| u.max_power(p)),
+                    )
+                })
+        } else {
+            None
+        };
+        let landed = if let Some(unit) = self.unit_base_mut(victim) {
             Self::aura_effect_apply(unit, &holder, true);
             Self::write_aura_slot(unit, &holder, false);
             unit.auras.push(holder);
-        }
-        if has_stat {
+            true
+        } else {
+            false
+        };
+        if has_stat || has_health_energy {
             self.refresh_derived_stats(victim);
             if let Some((cur, max)) = hp_before
                 && max > 0
@@ -3767,12 +5441,23 @@ impl Map {
                     (u64::from(unit.max_health()) * u64::from(cur) / u64::from(max)) as u32;
                 unit.set_health(scaled);
             }
+            if landed && has_health_energy {
+                // Re-borrow the landed holder (last
+                // pushed) for its effect amounts.
+                let landed_holder = self.unit_base(victim).and_then(|u| u.auras.last().cloned());
+                if let Some(h) = landed_holder {
+                    self.apply_health_energy_adjustments(victim, &h, vitals_before);
+                }
+            }
         }
         if has_ap {
             self.refresh_weapon_damage_fields(victim);
         }
         self.send_aura_duration(victim, duration_packet.0, duration_packet.1);
         self.refresh_display(victim);
+        self.refresh_immune_state(victim);
+        self.refresh_attack_speed(victim);
+        self.refresh_skill_bonuses(victim);
         self.refresh_speed(victim);
         self.refresh_cc_flags(victim);
     }
@@ -3808,16 +5493,25 @@ impl Map {
     }
 
     /// `RemoveAurasWithInterruptFlags`.
-    pub(crate) fn remove_auras_with_interrupt_flags(&mut self, victim: ObjectGuid, flags: u32) {
+    /// `RemoveAurasWithInterruptFlags(flags,
+    /// exceptSpellId)`.
+    pub(crate) fn remove_auras_with_interrupt_flags(
+        &mut self,
+        victim: ObjectGuid,
+        flags: u32,
+        except_spell: u32,
+    ) {
         let indices: Vec<usize> = self
             .aura_holders(victim)
             .iter()
             .enumerate()
             .filter(|(_, h)| {
-                self.stores
-                    .spells
-                    .get(h.spell_id)
-                    .is_some_and(|s| s.aura_interrupt_flags & flags != 0)
+                h.spell_id != except_spell
+                    && self
+                        .stores
+                        .spells
+                        .get(h.spell_id)
+                        .is_some_and(|s| s.aura_interrupt_flags & flags != 0)
             })
             .map(|(i, _)| i)
             .collect();
@@ -3917,16 +5611,23 @@ impl Map {
                     self.remove_auras_with_interrupt_flags(
                         guid,
                         aura_interrupt_flag::MOUNT_CANCELS,
+                        0,
                     );
                     self.send_mount_result(guid, 10);
+                    self.pet_mount_transition(guid, true);
                 }
             }
             (true, None) => {
                 if let Some(unit) = self.unit_base_mut(guid) {
                     unit.values().set_u32(offsets::UNIT_FIELD_MOUNTDISPLAYID, 0);
                 }
-                self.remove_auras_with_interrupt_flags(guid, aura_interrupt_flag::DISMOUNT_CANCELS);
+                self.remove_auras_with_interrupt_flags(
+                    guid,
+                    aura_interrupt_flag::DISMOUNT_CANCELS,
+                    0,
+                );
                 self.send_dismount_result(guid, 3);
+                self.pet_mount_transition(guid, false);
             }
             _ => {}
         }
@@ -3955,6 +5656,10 @@ impl Map {
                 let model = self.stores.model_for_display(native);
                 if let Some(unit) = self.unit_base_mut(guid) {
                     unit.transform_spell = 0;
+                    // The fork restores native here even
+                    // while shapeshifted; the form
+                    // display is gone until re-shift.
+                    unit.shapeshift_display_id = 0;
                     if native != 0 {
                         unit.set_display_id(native, model);
                     }
@@ -3970,6 +5675,269 @@ impl Map {
                 self.apply_transform_display(guid, spell_id, misc);
             }
             _ => {}
+        }
+        // ---- SHAPESHIFT (HandleAuraModShapeshift,
+        // display/form subset) ----
+        self.refresh_shapeshift(guid, &holders);
+    }
+
+    /// `Player::Mount`/`Unmount` pet halves
+    /// (`Player.cpp:18023`): aura mount disables
+    /// the pet, unmount re-enables it (default
+    /// `PetUnsummonAtMount=false` config). The
+    /// config-true temporary-unsummon/resummon
+    /// arms have no temporary-pet state yet —
+    /// recorded in TIER2-PROGRESS Slice 6.2.
+    fn pet_mount_transition(&mut self, guid: ObjectGuid, mounting: bool) {
+        if guid.is_player() {
+            if let Some(pet) = self.pet_of(guid) {
+                self.set_pet_enabled(pet, !mounting);
+            }
+        }
+    }
+
+    /// `Aura::HandleAuraModShapeshift`
+    /// (`SpellAuras.cpp:2321`) holder-derived subset:
+    /// `SetShapeshiftForm` byte, form exclusivity,
+    /// display/scale via `GetShapeshiftDisplayInfo`,
+    /// the 9033 shift casts, the
+    /// `SHAPESHIFTING_CANCELS` strip, and the 23397
+    /// (Nefarian warrior call) → 2458 removal cast.
+    /// Power-type switching, Furor, tactical-mastery
+    /// rage caps, `HandleShapeshiftBoosts`, and
+    /// `InitDataForForm` are recorded in
+    /// TIER2-PROGRESS Slice 6.3 (form-driven stat
+    /// recompute does not exist yet).
+    fn refresh_shapeshift(
+        &mut self,
+        guid: ObjectGuid,
+        holders: &[mangos_entities::aura::AuraHolder],
+    ) {
+        // Winner: last holder carrying MOD_SHAPESHIFT
+        // (application order; the fork strips the
+        // others inside the new form's apply).
+        let mut winner: Option<(u32, u8)> = None;
+        let mut other_forms: Vec<u32> = Vec::new();
+        for h in holders {
+            for e in h.effects.iter().flatten() {
+                if e.aura_type == aura_type::MOD_SHAPESHIFT {
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    let form = e.misc_value as u8;
+                    if let Some((prev, _)) = winner {
+                        if prev != h.spell_id {
+                            other_forms.push(prev);
+                        }
+                    }
+                    winner = Some((h.spell_id, form));
+                }
+            }
+        }
+        let (old_form, old_spell, transformed) =
+            self.unit_base_mut(guid).map_or((0, 0, false), |u| {
+                (
+                    u.values().get_byte(offsets::UNIT_FIELD_BYTES_1, 2),
+                    u.shapeshift_spell,
+                    u.transform_spell != 0,
+                )
+            });
+        let (new_spell, new_form) = winner.unwrap_or((0, 0));
+        // Fork: a form missing from
+        // SpellShapeshiftForm.dbc makes the handler
+        // log and return without touching the form
+        // byte. An unloaded table (test worlds)
+        // treats every form as known.
+        if new_form != 0
+            && !self.stores.shapeshift_forms.is_empty()
+            && !self
+                .stores
+                .shapeshift_forms
+                .contains_key(&u32::from(new_form))
+        {
+            return;
+        }
+        if new_form == old_form && new_spell == old_spell {
+            return;
+        }
+        // State first: nested refreshes from the
+        // removals/casts below must see the
+        // transition as done.
+        if let Some(unit) = self.unit_base_mut(guid) {
+            unit.values()
+                .set_byte(offsets::UNIT_FIELD_BYTES_1, 2, new_form);
+            unit.shapeshift_spell = new_spell;
+        }
+        self.shapeshift_display_transition(guid, old_form, new_form, transformed);
+        // Exclusivity (fork: inside apply).
+        for spell_id in other_forms {
+            self.remove_auras_due_to_spell(guid, spell_id);
+        }
+        // SHAPESHIFTING_CANCELS strip on apply for
+        // non-stance forms.
+        if new_form != 0 {
+            let flags1 = self
+                .stores
+                .shapeshift_forms
+                .get(&u32::from(new_form))
+                .copied()
+                .unwrap_or(0);
+            if flags1 & 1 == 0 {
+                self.remove_auras_with_interrupt_flags(
+                    guid,
+                    aura_interrupt_flag::SHAPESHIFTING_CANCELS,
+                    new_spell,
+                );
+            }
+        }
+        // 9033 (Shapeshift Form Effect) fires on
+        // both apply and remove of the druid forms
+        // in the fork; one cast per transition is
+        // observably identical (idempotent strip).
+        if DRUID_9033_FORMS.contains(&old_form) || DRUID_9033_FORMS.contains(&new_form) {
+            self.cast_spell(
+                guid,
+                9033,
+                CastTarget::Unit(guid),
+                CastOptions {
+                    triggered: true,
+                    triggered_by_aura: false,
+                    skip_known: true,
+                    cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
+                },
+            );
+        }
+        // Removing the Nefarian warrior call (23397)
+        // re-casts regular Berserker Stance.
+        if old_spell == 23397 && new_spell != 23397 {
+            self.cast_spell(
+                guid,
+                2458,
+                CastTarget::Unit(guid),
+                CastOptions {
+                    triggered: true,
+                    triggered_by_aura: false,
+                    skip_known: true,
+                    cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
+                },
+            );
+        }
+    }
+
+    /// Display half of a shapeshift transition
+    /// (fork gates both sides on `!GetTransForm()`).
+    fn shapeshift_display_transition(
+        &mut self,
+        guid: ObjectGuid,
+        old_form: u8,
+        new_form: u8,
+        transformed: bool,
+    ) {
+        if transformed {
+            // Form changed under a transform: fork
+            // display handlers all skip; nothing of
+            // the form is on screen.
+            if let Some(unit) = self.unit_base_mut(guid) {
+                unit.shapeshift_display_id = 0;
+            }
+            return;
+        }
+        let had_display = self
+            .unit_base_mut(guid)
+            .is_some_and(|u| u.shapeshift_display_id != 0);
+        if old_form != 0 && had_display {
+            let native = self.unit_base_mut(guid).map_or(0, |u| {
+                u.values().get_u32(offsets::UNIT_FIELD_NATIVEDISPLAYID)
+            });
+            let model = self.stores.model_for_display(native);
+            if let Some(unit) = self.unit_base_mut(guid) {
+                unit.shapeshift_display_id = 0;
+                if native != 0 {
+                    unit.set_display_id(native, model);
+                }
+                if let Some(base) = unit.transform_base_scale.take() {
+                    unit.world.object.set_object_scale(base);
+                }
+            }
+        }
+        if new_form != 0 {
+            let (display_id, scale_mod) = self.shapeshift_display_info(guid, new_form);
+            if display_id > 0 {
+                let model = self.stores.model_for_display(display_id);
+                let native_model_scale = self
+                    .unit_base_mut(guid)
+                    .map(|u| u.values().get_u32(offsets::UNIT_FIELD_NATIVEDISPLAYID))
+                    .and_then(|n| self.stores.model_for_display(n))
+                    .map_or(1.0, |m| m.native_scale);
+                if let Some(unit) = self.unit_base_mut(guid) {
+                    if unit.transform_base_scale.is_none() {
+                        unit.transform_base_scale = Some(unit.world.object.object_scale());
+                    }
+                    unit.set_display_id(display_id, model);
+                    unit.shapeshift_display_id = display_id;
+                    if scale_mod != 0.0 && native_model_scale != 0.0 {
+                        let base = unit.transform_base_scale.unwrap_or(1.0);
+                        unit.world
+                            .object
+                            .set_object_scale(base * scale_mod / native_model_scale);
+                    }
+                }
+            }
+        }
+    }
+
+    /// `GetShapeshiftDisplayInfo`
+    /// (`SpellAuras.cpp:2217`): (display id,
+    /// transform-scale mod). Team via
+    /// `Player::TeamForRace` on the bytes-0 race.
+    fn shapeshift_display_info(&mut self, guid: ObjectGuid, form: u8) -> (u32, f32) {
+        let (race, native) = self.unit_base_mut(guid).map_or((0, 0), |u| {
+            (
+                u.values().get_byte(offsets::UNIT_FIELD_BYTES_0, 0),
+                u.values().get_u32(offsets::UNIT_FIELD_NATIVEDISPLAYID),
+            )
+        });
+        let horde = matches!(race, 2 | 5 | 6 | 8);
+        let is_player = guid.is_player();
+        match form {
+            // FORM_CAT
+            1 => (if is_player && horde { 8571 } else { 892 }, 0.80),
+            // FORM_TRAVEL
+            3 => (632, 0.80),
+            // FORM_AQUA
+            4 => (2428, 0.80),
+            // FORM_BEAR / FORM_DIREBEAR
+            5 | 8 => (if is_player && horde { 2289 } else { 2281 }, 1.0),
+            // FORM_GHOUL (no IsPlayer check in fork)
+            7 => (if horde { 0 } else { 10045 }, 1.0),
+            // FORM_CREATUREBEAR: native model switch
+            14 => {
+                let model_id = self
+                    .stores
+                    .model_for_display(native)
+                    .map_or(0, |m| m.model_id);
+                let display = match model_id {
+                    // MODEL_NELF_FEMALE/MALE
+                    55 | 56 => 2281,
+                    // MODEL_TAUREN_FEMALE/MALE
+                    59 | 60 => 2289,
+                    _ => 902,
+                };
+                (display, 1.0)
+            }
+            // FORM_GHOSTWOLF
+            16 => (4613, 0.80),
+            // FORM_MOONKIN
+            31 => (if is_player && horde { 15375 } else { 15374 }, 1.0),
+            // FORM_TREE
+            2 => (864, 1.0),
+            // FORM_SPIRITOFREDEMPTION
+            32 => (16031, 1.0),
+            _ => (0, 1.0),
         }
     }
 
@@ -4059,6 +6027,9 @@ impl Map {
                     unit.transform_base_scale = Some(unit.world.object.object_scale());
                 }
                 unit.set_display_id(display_id, model);
+                // The transform owns the display now;
+                // any shapeshift display is displaced.
+                unit.shapeshift_display_id = 0;
                 // SetTransformScale(mod_x): object scale
                 // *= mod_x / native model scale.
                 if mod_x != 0.0 && native_model_scale != 0.0 {
@@ -4156,7 +6127,8 @@ impl Map {
         self.set_speed_rate(guid, 3, swim);
     }
 
-    fn remove_aura_at(&mut self, victim: ObjectGuid, index: usize) {
+    #[allow(clippy::too_many_lines)] // one RemoveAura port
+    pub(crate) fn remove_aura_at(&mut self, victim: ObjectGuid, index: usize) {
         let mut has_ap = false;
         let mut has_stat = false;
         let mut hp_before = None;
@@ -4185,7 +6157,48 @@ impl Map {
                 .filter(|u| u.is_alive())
                 .map(|u| (u.health(), u.max_health()));
         }
+        // Health/energy TOTAL-group removal state
+        // (`HandleAuraModIncreaseHealth[Percent]` /
+        // energy remove arms): Last Stand adjusts
+        // current health *before* the stat removal;
+        // percent forms preserve the ratio across it.
+        let he_peek = self.unit_base(victim).and_then(|u| {
+            u.auras.get(index).and_then(|h| {
+                Self::holder_has_health_energy_mod(h).then(|| {
+                    (
+                        h.clone(),
+                        u.is_alive(),
+                        u.health(),
+                        u.max_health(),
+                        core::array::from_fn(|p| u.power(p)),
+                        core::array::from_fn(|p| u.max_power(p)),
+                    )
+                })
+            })
+        });
+        if let Some((h, alive, hp, _, _, _)) = &he_peek
+            && h.spell_id == 12976
+            && *alive
+        {
+            let flat: i32 = h
+                .effects
+                .iter()
+                .flatten()
+                .filter(|e| e.aura_type == aura_type::MOD_INCREASE_HEALTH)
+                .map(|e| e.amount)
+                .sum();
+            if let Some(unit) = self.unit_base_mut(victim) {
+                let next = if i64::from(*hp) > i64::from(flat) {
+                    i64::from(*hp) - i64::from(flat)
+                } else {
+                    1
+                };
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                unit.set_health(next.clamp(0, i64::from(u32::MAX)) as u32);
+            }
+        }
         let mut removed_holder: Option<(ObjectGuid, u32)> = None;
+        let mut has_health_energy = false;
         if let Some(unit) = self.unit_base_mut(victim) {
             if index >= unit.auras.len() {
                 return;
@@ -4198,10 +6211,11 @@ impl Map {
                 .flatten()
                 .any(|e| e.aura_type == aura_type::MOD_ATTACK_POWER);
             has_stat = Self::holder_has_stat_mod(&holder);
+            has_health_energy = Self::holder_has_health_energy_mod(&holder);
             Self::aura_effect_apply(unit, &holder, false);
             Self::write_aura_slot(unit, &holder, true);
         }
-        if has_stat {
+        if has_stat || has_health_energy {
             self.refresh_derived_stats(victim);
             if let Some((cur, max)) = hp_before
                 && max > 0
@@ -4211,6 +6225,15 @@ impl Map {
                 let scaled =
                     (u64::from(unit.max_health()) * u64::from(cur) / u64::from(max)) as u32;
                 unit.set_health(scaled);
+            }
+            if let Some((h, alive, old_hp, old_max, old_powers, old_max_powers)) = he_peek
+                && alive
+            {
+                self.remove_health_energy_adjustments(
+                    victim,
+                    &h,
+                    (old_hp, old_max, old_powers, old_max_powers),
+                );
             }
         }
         if has_ap {
@@ -4226,6 +6249,9 @@ impl Map {
             self.start_event_cooldown(caster, &spell);
         }
         self.refresh_display(victim);
+        self.refresh_immune_state(victim);
+        self.refresh_attack_speed(victim);
+        self.refresh_skill_bonuses(victim);
         self.refresh_speed(victim);
         self.refresh_cc_flags(victim);
     }
@@ -4283,17 +6309,18 @@ impl Map {
         victim: ObjectGuid,
     ) {
         if let Some(spell) = self.stores.spells.get(spell_id).cloned() {
-            self.apply_spell_aura(caster, &spell, victim, None);
+            self.apply_spell_aura(caster, &spell, victim, None, [None; 3]);
         }
     }
 
-    #[allow(clippy::too_many_lines)] // one EffectApplyAura port
+    #[allow(clippy::too_many_lines, clippy::needless_range_loop)] // one EffectApplyAura port
     pub(crate) fn apply_spell_aura(
         &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         victim: ObjectGuid,
-        applied_mods: Option<&mut Vec<(u32, u8)>>,
+        mut applied_mods: Option<&mut Vec<(u32, u8)>>,
+        bp: [Option<i32>; 3],
     ) {
         let raw_duration = spell.calculate_duration_ms(&self.stores.spells.tables);
         // 0 and -1 are the permanent shapes; only
@@ -4302,7 +6329,7 @@ impl Map {
             std::cmp::Ordering::Equal => -1,
             std::cmp::Ordering::Less => raw_duration,
             std::cmp::Ordering::Greater => {
-                let modded = self.modded_duration_ms(caster, spell, applied_mods);
+                let modded = self.modded_duration_ms(caster, spell, applied_mods.as_deref_mut());
                 if modded <= 0 {
                     return;
                 }
@@ -4355,7 +6382,40 @@ impl Map {
             if eff.apply_aura_name == aura_type::NONE {
                 continue;
             }
-            let value = spell.calculate_effect_value(i, caster_level, 0, self.spell_rng());
+            let mut value = self.effect_value_bp(spell, i, caster_level, bp[i]);
+            // Apply-time Done(DOT) snapshot
+            // (`CalculateDotDamage` / periodic-heal
+            // 1.11 snapshot rule); melee-class periodic
+            // damage routes through MeleeDamageBonus
+            // in the fork — recorded exclusion.
+            if !spell_meleedamage(spell.dmg_class) {
+                match eff.apply_aura_name {
+                    aura_type::PERIODIC_DAMAGE | aura_type::PERIODIC_LEECH => {
+                        value = self.spell_damage_bonus_done(
+                            caster,
+                            victim,
+                            spell,
+                            i,
+                            value,
+                            true,
+                            1,
+                            applied_mods.as_deref_mut(),
+                        );
+                    }
+                    aura_type::PERIODIC_HEAL => {
+                        value = self.spell_healing_bonus_done(
+                            caster,
+                            spell,
+                            i,
+                            value,
+                            true,
+                            1,
+                            applied_mods.as_deref_mut(),
+                        );
+                    }
+                    _ => {}
+                }
+            }
             #[allow(clippy::cast_possible_truncation)]
             let amount = value as i32;
             let periodic = matches!(
@@ -4365,6 +6425,7 @@ impl Map {
                     | aura_type::PERIODIC_ENERGIZE
                     | aura_type::PERIODIC_TRIGGER_SPELL
                     | aura_type::PERIODIC_DAMAGE_PERCENT
+                    | aura_type::PERIODIC_LEECH
             );
             let period_ms = if periodic { eff.amplitude } else { 0 };
             #[allow(clippy::cast_possible_wrap)]
@@ -4411,6 +6472,7 @@ impl Map {
             .map(|e| e.aura_type)
             .collect();
         self.add_aura_holder(victim, holder);
+        self.apply_immunity_purges(victim, spell);
         if victim.is_creature() {
             for aura_type_id in applied_types {
                 self.eventai_on_hit_by_aura(victim, aura_type_id, caster);
@@ -4522,6 +6584,29 @@ impl Map {
         let casters: Vec<ObjectGuid> = self.casts.keys().copied().collect();
         for caster in casters {
             self.update_cast(caster, diff_ms);
+        }
+        // Slot-less triggered casts tick on their
+        // own timers (fork spell events); they are
+        // not pushed back or interrupted by movement.
+        if !self.pending_triggered.is_empty() {
+            let pending = std::mem::take(&mut self.pending_triggered);
+            let mut keep = Vec::new();
+            let mut due = Vec::new();
+            for (caster, mut cast) in pending {
+                if self.unit_base(caster).is_none() {
+                    continue;
+                }
+                cast.remaining_ms -= i32::try_from(diff_ms).unwrap_or(i32::MAX);
+                if cast.remaining_ms <= 0 {
+                    due.push((caster, cast));
+                } else {
+                    keep.push((caster, cast));
+                }
+            }
+            self.pending_triggered = keep;
+            for (caster, cast) in due {
+                self.execute_cast(caster, cast);
+            }
         }
     }
 
@@ -4660,12 +6745,17 @@ impl Map {
                         CastTarget::Unit(tick.target),
                         CastOptions {
                             triggered: true,
+                            triggered_by_aura: true,
                             skip_known: true,
                             cast_item: None,
+                            custom_base_points: [None; 3],
+                            triggered_by_aura_spell: tick.spell_id,
+                            triggered_by_spell: 0,
                         },
                     );
                 }
-                aura_type::PERIODIC_DAMAGE => {
+                aura_type::PERIODIC_DAMAGE | aura_type::PERIODIC_LEECH => {
+                    let is_leech = tick.aura_type == aura_type::PERIODIC_LEECH;
                     let Some(spell) = self.stores.spells.get(tick.spell_id).cloned() else {
                         continue;
                     };
@@ -4674,6 +6764,16 @@ impl Map {
                     if self.unit_position(tick.caster).is_none() {
                         continue;
                     }
+                    #[allow(clippy::cast_possible_wrap)]
+                    if self.is_immune_to_damage(tick.target, 1i32 << spell.school, Some(&spell)) {
+                        self.send_spell_or_damage_immune(tick.caster, tick.target, tick.spell_id);
+                        continue;
+                    }
+                    let health_before = if is_leech {
+                        self.unit_value_u32(tick.target, offsets::UNIT_FIELD_HEALTH)
+                    } else {
+                        0
+                    };
                     self.school_damage(
                         tick.caster,
                         &spell,
@@ -4691,25 +6791,84 @@ impl Map {
                             applied_mods: Vec::new(),
                         }),
                     );
+                    if is_leech {
+                        // Heal the caster for damage
+                        // actually dealt (health delta =
+                        // fork DealDamage result in this
+                        // sequential tick) × multiple value.
+                        let dealt = health_before.saturating_sub(
+                            self.unit_value_u32(tick.target, offsets::UNIT_FIELD_HEALTH),
+                        );
+                        if dealt > 0 {
+                            let mut multiplier =
+                                spell.effects[tick.effect_index as usize].multiple_value;
+                            if multiplier <= 0.0 {
+                                multiplier = 1.0;
+                            }
+                            multiplier = self.apply_spell_mod(
+                                tick.caster,
+                                &spell,
+                                spellmod::MULTIPLE_VALUE,
+                                multiplier,
+                                false,
+                                None,
+                            );
+                            #[allow(
+                                clippy::cast_precision_loss,
+                                clippy::cast_possible_truncation,
+                                clippy::cast_sign_loss
+                            )]
+                            let heal = (dealt as f32 * multiplier) as u32;
+                            if heal > 0 {
+                                self.heal_unit(tick.caster, heal);
+                            }
+                        }
+                    }
                 }
                 aura_type::PERIODIC_HEAL => {
                     if tick.amount > 0 {
-                        // `SpellHealingBonusDone` DOT arm.
+                        // Done snapshotted at apply;
+                        // `SpellHealingBonusTaken`(DOT)
+                        // per tick, then ditheru.
                         #[allow(clippy::cast_precision_loss)]
                         let amount = match self.stores.spells.get(tick.spell_id).cloned() {
-                            Some(spell) => self.apply_spell_mod(
-                                tick.caster,
-                                &spell,
-                                spellmod::DOT,
-                                tick.amount as f32,
-                                true,
-                                None,
-                            ),
+                            Some(spell)
+                                if self.is_immune_to_school(
+                                    tick.target,
+                                    &spell,
+                                    tick.effect_index as usize,
+                                ) =>
+                            {
+                                self.send_spell_or_damage_immune(
+                                    tick.caster,
+                                    tick.target,
+                                    tick.spell_id,
+                                );
+                                0.0
+                            }
+                            Some(spell) => {
+                                let stack = self
+                                    .aura_holders(tick.target)
+                                    .into_iter()
+                                    .find(|h| {
+                                        h.spell_id == tick.spell_id && h.caster == tick.caster
+                                    })
+                                    .map_or(1, |h| h.stack);
+                                self.spell_healing_bonus_taken(
+                                    tick.target,
+                                    &spell,
+                                    tick.effect_index as usize,
+                                    tick.amount as f32,
+                                    true,
+                                    stack,
+                                    None,
+                                )
+                            }
                             None => tick.amount as f32,
                         };
                         if amount > 0.0 {
-                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                            self.heal_unit(tick.target, amount as u32);
+                            let amount = mangos_spells::ditheru(amount, self.spell_rng());
+                            self.heal_unit(tick.target, amount);
                         }
                     }
                 }

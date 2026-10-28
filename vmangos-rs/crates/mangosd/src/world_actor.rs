@@ -5827,8 +5827,12 @@ impl World {
                         mangos_map::spells::CastTarget::SelfCast,
                         mangos_map::spells::CastOptions {
                             triggered: true,
+                            triggered_by_aura: false,
                             skip_known: true,
                             cast_item: None,
+                            custom_base_points: [None; 3],
+                            triggered_by_aura_spell: 0,
+                            triggered_by_spell: 0,
                         },
                     );
                 }
@@ -8754,6 +8758,7 @@ impl World {
 
     /// `Player::AddQuest` (script hooks, announce,
     /// and group-share arms unmodeled).
+    #[allow(clippy::too_many_lines)] // one AddQuest port
     fn quest_add(&mut self, id: SessionId, actor_low: u32, q: &QuestTemplate) -> bool {
         use mangos_protocol::update_field_table::offsets as uoff;
         let stores_templates = &self.deps.world_stores.quest_templates;
@@ -8840,8 +8845,12 @@ impl World {
                     mangos_map::spells::CastTarget::SelfCast,
                     mangos_map::spells::CastOptions {
                         triggered: true,
+                        triggered_by_aura: false,
                         skip_known: true,
                         cast_item: None,
+                        custom_base_points: [None; 3],
+                        triggered_by_aura_spell: 0,
+                        triggered_by_spell: 0,
                     },
                 );
             }
@@ -9263,8 +9272,12 @@ impl World {
                     mangos_map::spells::CastTarget::Unit(player_guid),
                     mangos_map::spells::CastOptions {
                         triggered: true,
+                        triggered_by_aura: false,
                         skip_known: true,
                         cast_item: None,
+                        custom_base_points: [None; 3],
+                        triggered_by_aura_spell: 0,
+                        triggered_by_spell: 0,
                     },
                 );
             }
@@ -9281,8 +9294,12 @@ impl World {
                 mangos_map::spells::CastTarget::SelfCast,
                 mangos_map::spells::CastOptions {
                     triggered: true,
+                    triggered_by_aura: false,
                     skip_known: true,
                     cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
                 },
             );
         }
@@ -16789,11 +16806,15 @@ impl World {
                 target,
                 CastOptions {
                     triggered: count > 0,
+                    triggered_by_aura: false,
                     skip_known: true,
                     cast_item: Some(CastItemCtx {
                         item_guid: row.item.item_guid,
                         item_entry: row.item.item_id,
                     }),
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
                 },
             );
             count += 1;

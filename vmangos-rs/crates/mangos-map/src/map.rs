@@ -375,6 +375,11 @@ pub(crate) struct CooldownEntry {
     /// spell-key entries, where the save snapshot
     /// reads it.
     pub category: u32,
+    /// Originating spell id (the fork's per-spell
+    /// cooldown entry identity; on category-key
+    /// entries this is the spell that started the
+    /// category cooldown, 0 when unknown).
+    pub spell_id: u32,
 }
 
 impl CooldownEntry {
@@ -384,6 +389,7 @@ impl CooldownEntry {
             item_id: 0,
             permanent: false,
             category: 0,
+            spell_id: 0,
         }
     }
 }
@@ -441,6 +447,11 @@ pub struct Map {
     pub(crate) ai: HashMap<ObjectGuid, crate::ai::CreatureAi>,
     /// In-progress casts by caster (Slice 5).
     pub(crate) casts: HashMap<ObjectGuid, crate::spells::ActiveCast>,
+    /// Triggered casts with a cast timer, ticking
+    /// outside the current-cast slot (fork event
+    /// spells; only channeled triggered casts take
+    /// the slot).
+    pub(crate) pending_triggered: Vec<(ObjectGuid, crate::spells::ActiveCast)>,
     /// Spell + category cooldowns (map ms clock):
     /// (caster, spell id) and (caster, category) share
     /// one map via the high-bit tag on the id.
@@ -549,6 +560,7 @@ impl Map {
             navhost: crate::motion::NavHost::new(map_id, None),
             ai: HashMap::new(),
             casts: HashMap::new(),
+            pending_triggered: Vec::new(),
             cooldowns: HashMap::new(),
             pending_procs: Vec::new(),
             in_proc_cast: false,
@@ -1331,14 +1343,77 @@ impl Map {
         }
     }
 
-    /// Viewer context for `viewer` looking at an object.
-    fn viewer_for(is_self: bool) -> Viewer {
+    /// Viewer context for `viewer_guid` looking at
+    /// `target`: the fork `GetUpdateFieldFlagsForTarget`
+    /// grants plus `Player::CanSeeHealthOf`
+    /// (`Player.cpp:2606-2615`, `Object.cpp:974-1033`).
+    /// Owner/charmer resolve from the unit's
+    /// SUMMONEDBY/CHARMEDBY fields, the same stored
+    /// state the fork reads through `GetOwnerGuid` /
+    /// `GetCharmerGuid`.
+    fn viewer_for(&self, viewer_guid: ObjectGuid, target: ObjectGuid) -> Viewer {
+        let is_self = viewer_guid == target;
+        let (owner_guid, charmer_guid) =
+            self.unit_base(target)
+                .map_or((ObjectGuid::EMPTY, ObjectGuid::EMPTY), |unit| {
+                    let values = unit.world.object.values();
+                    (
+                        values.get_guid(
+                            mangos_protocol::update_field_table::offsets::UNIT_FIELD_SUMMONEDBY,
+                        ),
+                        values.get_guid(
+                            mangos_protocol::update_field_table::offsets::UNIT_FIELD_CHARMEDBY,
+                        ),
+                    )
+                });
+        // `GetCharmerOrOwnerPlayerOrPlayerItself`.
+        let charmer_or_owner = if charmer_guid.is_empty() {
+            owner_guid
+        } else {
+            charmer_guid
+        };
+        let owner_player = if charmer_or_owner.is_player() {
+            Some(charmer_or_owner)
+        } else if target.is_player() {
+            Some(target)
+        } else {
+            None
+        };
+        // `IsInSameRaidWith`: self, or one shared group.
+        let same_raid = owner_player.is_some_and(|owner| {
+            owner == viewer_guid
+                || (self
+                    .players
+                    .get(&viewer_guid)
+                    .and_then(|e| e.player.group_id)
+                    .is_some()
+                    && self
+                        .players
+                        .get(&viewer_guid)
+                        .and_then(|e| e.player.group_id)
+                        == self.players.get(&owner).and_then(|e| e.player.group_id))
+        });
+        // Beast Lore: empathy aura on the target cast
+        // by the viewer (`CanSeeSpecialInfoOf` minus the
+        // unmodeled debug-target cheat).
+        let empathy = self.unit_base(target).is_some_and(|unit| {
+            unit.auras.iter().any(|holder| {
+                holder.caster == viewer_guid
+                    && holder
+                        .effects
+                        .iter()
+                        .flatten()
+                        .any(|eff| eff.aura_type == 121)
+            })
+        });
         Viewer {
             is_self,
-            // Default visibility masks everything non-public;
-            // health-percent rules resolve inside the
-            // builder from values + viewer relation.
-            can_see_health: false,
+            owner_or_charmer_is_target: (!owner_guid.is_empty() && owner_guid == viewer_guid)
+                || (!charmer_guid.is_empty() && charmer_guid == viewer_guid),
+            can_see_special_info: empathy,
+            group_only_granted: same_raid,
+            can_see_health: same_raid || empathy,
+            strip_ffa_pvp: owner_player.is_some_and(|owner| owner != viewer_guid) && same_raid,
             ..Viewer::default()
         }
     }
@@ -1511,7 +1586,7 @@ impl Map {
         data: &mut UpdateData,
         effects: &mut BuildEffects,
     ) {
-        let viewer = Self::viewer_for(false);
+        let viewer = self.viewer_for(viewer_guid, target);
         let now_ms = self.now_ms;
         if let Some(p) = self.players.get(&target).map(|e| &e.player) {
             let view = Self::unit_view(
@@ -1576,7 +1651,7 @@ impl Map {
             false,
             Some(&player.unit.spline),
         );
-        let viewer = Self::viewer_for(true);
+        let viewer = self.viewer_for(guid, guid);
         let mut data = UpdateData::new();
         let mut effects = BuildEffects::default();
         build_create_block(
@@ -1898,7 +1973,7 @@ impl Map {
                 if !sees {
                     continue;
                 }
-                let viewer = Self::viewer_for(*target == viewer_guid);
+                let viewer = self.viewer_for(viewer_guid, *target);
                 self.build_values_for(*target, &viewer, &mut data, &mut effects);
             }
             self.send_update_data(viewer_guid, &mut data);

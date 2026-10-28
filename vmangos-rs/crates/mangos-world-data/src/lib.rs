@@ -30,6 +30,7 @@ pub mod script_engine;
 pub mod skill_info;
 pub mod spawn_support;
 pub mod spawns;
+pub mod spell_cone;
 pub mod spell_target_position;
 pub mod spell_template;
 pub mod strings;

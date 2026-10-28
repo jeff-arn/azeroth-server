@@ -265,6 +265,7 @@ fn bench_spells_and_auras() {
                     spells: mangos_spells::SpellStore {
                         spells: spell_entries,
                         proc_events,
+                        cones: std::collections::HashMap::new(),
                         tables: mangos_spells::load_spell_dbc_tables(std::path::Path::new(
                             &std::env::var("MANGOS_DBC_DIR").expect("MANGOS_DBC_DIR"),
                         ))
@@ -276,6 +277,7 @@ fn bench_spells_and_auras() {
                     scripts: mangos_scripts_engine::ScriptStores::default(),
                     display_scales: HashMap::new(),
                     model_data: HashMap::new(),
+                    shapeshift_forms: HashMap::new(),
                     skills: mangos_world_data::skill_info::SkillDbc::default(),
                     chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
                     auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
@@ -406,6 +408,19 @@ fn bench_spells_and_auras() {
     let _ = map.drain_events();
     let target_health0 = map.creature(target).expect("target").unit.health();
     assert!(target_health0 > 100, "target too fragile: {target_health0}");
+    // The visible dummy in the bench world DB is
+    // level 30 vs the level-19 fixture: at the fork
+    // 22% spell-hit floor, cast-landing sections
+    // become dice rolls against the seeded RNG.
+    // Pin the dummy's level field to the player's
+    // (stats/health stay as spawned) so hit rolls
+    // run at the equal-level 96%.
+    let player_level = map.player(player_guid).expect("player").unit.level();
+    map.creature_mut(target)
+        .expect("target")
+        .unit
+        .values()
+        .set_u32(offsets::UNIT_FIELD_LEVEL, player_level);
 
     // --- Rend (DoT) -------------------------------------
     let rend_oracle = oracle[&REND];
@@ -576,8 +591,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: false,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         assert_eq!(outcome, CastOutcome::Started);
@@ -621,8 +640,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(player_guid),
             CastOptions {
                 triggered: false,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         assert_eq!(outcome, CastOutcome::Started);
@@ -683,8 +706,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: false,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         assert_eq!(outcome, CastOutcome::Started);
@@ -808,8 +835,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: false,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         assert_eq!(outcome, CastOutcome::Started);
@@ -884,8 +915,12 @@ fn bench_spells_and_auras() {
         CastTarget::Unit(player_guid),
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     assert_eq!(outcome, CastOutcome::Started);
@@ -905,8 +940,12 @@ fn bench_spells_and_auras() {
         CastTarget::SelfCast,
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     assert_eq!(outcome, CastOutcome::Started);
@@ -936,8 +975,12 @@ fn bench_spells_and_auras() {
         CastTarget::Unit(player_guid),
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     assert_eq!(outcome, CastOutcome::Started);
@@ -1001,8 +1044,12 @@ fn bench_spells_and_auras() {
         CastTarget::SelfCast,
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     assert_eq!(outcome, CastOutcome::Started);
@@ -1104,9 +1151,14 @@ fn bench_spells_and_auras() {
         !lightning_hits.is_empty(),
         "at least one bolt must land: {lightning_gos:?}"
     );
+    // Damage band from the fork pipeline: base 13
+    // (12 + die 1), crit x1.5 -> 19-20, then partial
+    // resists vs the +11-level dummy keep 25/50/75%
+    // (innate level resistance), dither-rounded:
+    // possible dealt values span 3..=20.
     assert!(
-        lightning_hits.iter().all(|&(_, d)| (10..=25).contains(&d)),
-        "trigger damage band (26364 base 12 + die 1, crit headroom): {lightning_hits:?}"
+        lightning_hits.iter().all(|&(_, d)| (3..=20).contains(&d)),
+        "trigger damage band (26364 base 12 + die 1, crit + partials): {lightning_hits:?}"
     );
     for pair in lightning_gos.windows(2) {
         assert!(
@@ -1179,8 +1231,12 @@ fn bench_spells_and_auras() {
         CastTarget::SelfCast,
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     assert_eq!(outcome, CastOutcome::Started);
@@ -1198,8 +1254,12 @@ fn bench_spells_and_auras() {
         CastTarget::SelfCast,
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     assert_ne!(
@@ -1244,8 +1304,12 @@ fn bench_spells_and_auras() {
         CastTarget::SelfCast,
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     assert_ne!(
@@ -1276,8 +1340,12 @@ fn bench_spells_and_auras() {
         CastTarget::Unit(player_guid),
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     assert_ne!(
@@ -1332,8 +1400,12 @@ fn bench_spells_and_auras() {
         CastTarget::Unit(target),
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     tick(&mut map, 40);
@@ -1352,8 +1424,12 @@ fn bench_spells_and_auras() {
         CastTarget::Unit(player_guid),
         CastOptions {
             triggered: false,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     assert_eq!(outcome, CastOutcome::Started);
@@ -1465,8 +1541,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: false,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         assert_ne!(outcome, CastOutcome::UnknownSpell);
@@ -1562,8 +1642,12 @@ fn bench_spells_and_auras() {
                 CastTarget::Unit(target),
                 CastOptions {
                     triggered: false,
+                    triggered_by_aura: false,
                     skip_known: true,
                     cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
                 },
             );
             tick(map, 4);
@@ -1638,8 +1722,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         tick(&mut map, 4);
@@ -1659,8 +1747,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         tick(&mut map, 4);
@@ -1747,8 +1839,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         tick(&mut map, 3);
@@ -1761,8 +1857,12 @@ fn bench_spells_and_auras() {
                 CastTarget::Unit(player_guid),
                 CastOptions {
                     triggered: false,
+                    triggered_by_aura: false,
                     skip_known: true,
                     cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
                 },
             );
             break;
@@ -1790,8 +1890,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         tick(&mut map, 3);
@@ -1803,8 +1907,12 @@ fn bench_spells_and_auras() {
                 CastTarget::Unit(player_guid),
                 CastOptions {
                     triggered: false,
+                    triggered_by_aura: false,
                     skip_known: true,
                     cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
                 },
             );
             break;
@@ -1834,8 +1942,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         tick(&mut map, 3);
@@ -1861,8 +1973,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         tick(&mut map, 3);
@@ -1892,8 +2008,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         tick(&mut map, 3);
@@ -1936,8 +2056,12 @@ fn bench_spells_and_auras() {
             CastTarget::SelfCast,
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         tick(&mut map, 3);
@@ -1977,8 +2101,12 @@ fn bench_spells_and_auras() {
                 CastTarget::SelfCast,
                 CastOptions {
                     triggered: true,
+                    triggered_by_aura: false,
                     skip_known: true,
                     cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
                 },
             );
             tick(&mut map, 3);
@@ -1996,8 +2124,12 @@ fn bench_spells_and_auras() {
                 CastTarget::Unit(player_guid),
                 CastOptions {
                     triggered: true,
+                    triggered_by_aura: false,
                     skip_known: true,
                     cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
                 },
             );
             tick(&mut map, 3);
@@ -2030,6 +2162,15 @@ fn bench_spells_and_auras() {
         assert!(reflected, "shield must reflect melee damage");
         map.cancel_aura(player_guid, DAMAGE_SHIELD_BIG);
     }
+    // The dummy may be dead by now (reflected
+    // damage is real); the remaining sections need
+    // a live target.
+    {
+        let dummy = map.creature_mut(target).expect("target");
+        let max_hp = dummy.unit.max_health();
+        dummy.unit.death_state = mangos_entities::unit::DeathState::Alive;
+        dummy.unit.set_health(max_hp);
+    }
 
     // Mod scale: object scale doubles on apply.
     {
@@ -2048,8 +2189,12 @@ fn bench_spells_and_auras() {
             CastTarget::SelfCast,
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         tick(&mut map, 3);
@@ -2062,6 +2207,401 @@ fn bench_spells_and_auras() {
         println!("SCALE {s0} -> {s1} -> {s2}");
         assert!((s1 - s0 * 2.0).abs() < 0.01, "scale must double");
         assert!((s2 - s0).abs() < 0.01, "scale must restore on cancel");
+    }
+
+    // Shadow Flame cone + script arm (Tier 2
+    // Slice 5 tranche 3): cone enumeration lands
+    // the breath; the script effect casts 22682
+    // per victim unless the 22683 cloak aura is
+    // up. The dummy pool is raised so the direct
+    // damage does not kill before the script
+    // effect resolves (the fork defers damage
+    // past all effects; see TIER2-PROGRESS).
+    {
+        const SHADOW_FLAME: u32 = 22539;
+        const SHADOW_FLAME_DOT: u32 = 22682;
+        const SCALE_CLOAK: u32 = 22683;
+        let triggered_opts = CastOptions {
+            triggered: true,
+            triggered_by_aura: false,
+            skip_known: true,
+            cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
+        };
+        let top_up = |map: &mut Map| {
+            let dummy = map.creature_mut(target).expect("target");
+            dummy.unit.create_health = 200_000;
+            dummy
+                .unit
+                .world
+                .object
+                .values_mut()
+                .set_u32(offsets::UNIT_FIELD_MAXHEALTH, 200_000);
+            dummy.unit.set_health(200_000);
+        };
+        top_up(&mut map);
+        // Stand east of the dummy facing west
+        // (atan2-space orientation).
+        let tpos = map.creature(target).expect("target").unit.world.position();
+        {
+            let mut info = map
+                .player_mut(player_guid)
+                .expect("player")
+                .unit
+                .world
+                .movement_info;
+            info.pos = Position::new(tpos.x + 3.0, tpos.y, tpos.z, std::f32::consts::PI);
+            map.relocate_from_client(player_guid, info, &respawns);
+        }
+        let _ = map.drain_events();
+        // Cloak gate: breath lands, no 22682.
+        map.cast_spell(target, SCALE_CLOAK, CastTarget::SelfCast, triggered_opts);
+        tick(&mut map, 3);
+        let _ = map.drain_events();
+        assert!(
+            map.aura_holders(target)
+                .iter()
+                .any(|h| h.spell_id == SCALE_CLOAK),
+            "cloak aura must be up"
+        );
+        let mut landed = false;
+        for _ in 0..5 {
+            let hp0 = map.creature(target).expect("target").unit.health();
+            map.cast_spell(
+                player_guid,
+                SHADOW_FLAME,
+                CastTarget::SelfCast,
+                triggered_opts,
+            );
+            tick(&mut map, 120);
+            let _ = map.drain_events();
+            if map.creature(target).expect("target").unit.health() < hp0 {
+                landed = true;
+                break;
+            }
+        }
+        assert!(landed, "Shadow Flame cone must hit the dummy");
+        assert!(
+            map.aura_holders(target)
+                .iter()
+                .all(|h| h.spell_id != SHADOW_FLAME_DOT),
+            "cloak aura must block 22682"
+        );
+        map.cancel_aura(target, SCALE_CLOAK);
+        top_up(&mut map);
+        let mut dotted = false;
+        for _ in 0..5 {
+            map.cast_spell(
+                player_guid,
+                SHADOW_FLAME,
+                CastTarget::SelfCast,
+                triggered_opts,
+            );
+            tick(&mut map, 120);
+            let _ = map.drain_events();
+            if map
+                .aura_holders(target)
+                .iter()
+                .any(|h| h.spell_id == SHADOW_FLAME_DOT)
+            {
+                dotted = true;
+                break;
+            }
+        }
+        assert!(dotted, "script effect must cast 22682 on the victim");
+        println!("SHADOWFLAME cone + cloak gate ok");
+        map.cancel_aura(target, SHADOW_FLAME_DOT);
+    }
+
+    // --- Shapeshift (Tier 2 Slice 6.3) --------------
+    // Form byte (BYTES_1[2]), display switch,
+    // exclusivity, 9033 root strip, cancel restore.
+    // Expected displays from the fork table for the
+    // loaded character's race (guid 1 = orc: Horde
+    // bear 2289 / cat 8571; Alliance 2281 / 892).
+    {
+        let opts = CastOptions {
+            triggered: false,
+            triggered_by_aura: false,
+            skip_known: true,
+            cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
+        };
+        // The test world's partial materialize
+        // inputs leave NATIVEDISPLAYID unset; seed
+        // it from the current display as production
+        // materialize does (player.rs create-info
+        // branch).
+        {
+            let unit = &mut map.player_mut(player_guid).expect("player").unit;
+            // No create-info display in this world:
+            // seed display + native as materialize
+            // would (human male display 49).
+            if unit
+                .world
+                .object
+                .values()
+                .get_u32(offsets::UNIT_FIELD_DISPLAYID)
+                == 0
+            {
+                unit.set_display_id(49, None);
+            }
+            unit.set_native_display_id(
+                unit.world
+                    .object
+                    .values()
+                    .get_u32(offsets::UNIT_FIELD_DISPLAYID),
+            );
+        }
+        let (race, native_display) = {
+            let values = map
+                .player(player_guid)
+                .expect("player")
+                .unit
+                .world
+                .object
+                .values();
+            (
+                values.get_byte(offsets::UNIT_FIELD_BYTES_0, 0),
+                values.get_u32(offsets::UNIT_FIELD_NATIVEDISPLAYID),
+            )
+        };
+        assert!(native_display != 0, "native display seeded");
+        let horde = matches!(race, 2 | 5 | 6 | 8);
+        // Entangling Roots (339) on the player from
+        // the dummy: the 9033 strip target.
+        map.creature_mut(target)
+            .expect("target")
+            .unit
+            .set_power(0, 10000);
+        let mut rooted = false;
+        for _ in 0..20 {
+            map.cast_spell(target, 339, CastTarget::Unit(player_guid), opts);
+            tick(&mut map, 40);
+            let _ = map.drain_events();
+            if map
+                .aura_holders(player_guid)
+                .iter()
+                .any(|h| h.spell_id == 339)
+            {
+                rooted = true;
+                break;
+            }
+        }
+        assert!(rooted, "Entangling Roots never landed");
+        map.player_mut(player_guid)
+            .expect("player")
+            .unit
+            .set_power(0, 10000);
+        let outcome = map.cast_spell(player_guid, 5487, CastTarget::Unit(player_guid), opts);
+        assert_eq!(outcome, CastOutcome::Started, "Bear Form cast");
+        tick(&mut map, 3);
+        let _ = map.drain_events();
+        {
+            let values = map
+                .player(player_guid)
+                .expect("player")
+                .unit
+                .world
+                .object
+                .values();
+            assert_eq!(
+                values.get_byte(offsets::UNIT_FIELD_BYTES_1, 2),
+                5,
+                "bear form byte"
+            );
+            assert_eq!(
+                values.get_u32(offsets::UNIT_FIELD_DISPLAYID),
+                if horde { 2289 } else { 2281 },
+                "bear display"
+            );
+        }
+        assert!(
+            map.aura_holders(player_guid)
+                .iter()
+                .all(|h| h.spell_id != 339),
+            "9033 must strip the root on shift-in"
+        );
+        // Bear -> Cat: exclusivity + display swap.
+        tick(&mut map, 32); // outlast the 1.5s GCD
+        let _ = map.drain_events();
+        map.player_mut(player_guid)
+            .expect("player")
+            .unit
+            .set_power(0, 10000);
+        let outcome = map.cast_spell(player_guid, 768, CastTarget::Unit(player_guid), opts);
+        assert_eq!(outcome, CastOutcome::Started, "Cat Form cast");
+        tick(&mut map, 3);
+        let _ = map.drain_events();
+        {
+            let values = map
+                .player(player_guid)
+                .expect("player")
+                .unit
+                .world
+                .object
+                .values();
+            assert_eq!(
+                values.get_byte(offsets::UNIT_FIELD_BYTES_1, 2),
+                1,
+                "cat form byte"
+            );
+            assert_eq!(
+                values.get_u32(offsets::UNIT_FIELD_DISPLAYID),
+                if horde { 8571 } else { 892 },
+                "cat display"
+            );
+        }
+        assert!(
+            map.aura_holders(player_guid)
+                .iter()
+                .all(|h| h.spell_id != 5487),
+            "bear holder must be stripped by cat exclusivity"
+        );
+        // Cancel: byte + native display restored.
+        map.cancel_aura(player_guid, 768);
+        tick(&mut map, 3);
+        let _ = map.drain_events();
+        {
+            let values = map
+                .player(player_guid)
+                .expect("player")
+                .unit
+                .world
+                .object
+                .values();
+            assert_eq!(
+                values.get_byte(offsets::UNIT_FIELD_BYTES_1, 2),
+                0,
+                "form byte cleared"
+            );
+            assert_eq!(
+                values.get_u32(offsets::UNIT_FIELD_DISPLAYID),
+                native_display,
+                "native display restored"
+            );
+        }
+        println!("SHAPESHIFT form byte + display + 9033 ok");
+    }
+
+    // --- TeleUnitsFaceCaster (Tier 2 Slice 6.5) -----
+    // Spell 514: effect 43, radius index 13 =
+    // 10.0y (SpellRadius.dbc). Victim lands at
+    // caster + (bounds+bounds+10) * facing, with
+    // orientation -caster.o.
+    {
+        let opts = CastOptions {
+            triggered: false,
+            triggered_by_aura: false,
+            skip_known: true,
+            cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
+        };
+        tick(&mut map, 32); // outlast the GCD
+        let _ = map.drain_events();
+        let caster_pos = map
+            .player(player_guid)
+            .expect("player")
+            .unit
+            .world
+            .position();
+        let c_bounds = map
+            .player(player_guid)
+            .expect("player")
+            .unit
+            .world
+            .object
+            .values()
+            .get_f32(offsets::UNIT_FIELD_BOUNDINGRADIUS);
+        let v_bounds = map
+            .creature(target)
+            .expect("target")
+            .unit
+            .world
+            .object
+            .values()
+            .get_f32(offsets::UNIT_FIELD_BOUNDINGRADIUS);
+        let outcome = map.cast_spell(player_guid, 514, CastTarget::Unit(target), opts);
+        assert_eq!(outcome, CastOutcome::Started, "514 cast");
+        // No tick: read the teleport result before
+        // the dummy's AI moves it.
+        let tpos = map.creature(target).expect("target").unit.world.position();
+        let reach = c_bounds + v_bounds + 10.0;
+        let expect_x = caster_pos.x + reach * caster_pos.o.cos();
+        let expect_y = caster_pos.y + reach * caster_pos.o.sin();
+        assert!(
+            (tpos.x - expect_x).abs() < 0.1 && (tpos.y - expect_y).abs() < 0.1,
+            "face-caster close point: got ({}, {}), want ({expect_x}, {expect_y})",
+            tpos.x,
+            tpos.y
+        );
+        assert!(
+            (tpos.o - (-caster_pos.o)).abs() < 1e-4,
+            "orientation must be -caster.o: got {}, want {}",
+            tpos.o,
+            -caster_pos.o
+        );
+        let _ = map.drain_events();
+        println!("FACECASTER close point ok");
+    }
+
+    // --- Channeled dynobj (Tier 2 Slice 6.4) --------
+    // Blizzard (10) creates a dynobject; breaking
+    // the channel early must despawn it at channel
+    // end (fork RemoveDynObject), long before its
+    // 8s nominal duration.
+    {
+        let opts = CastOptions {
+            triggered: false,
+            triggered_by_aura: false,
+            skip_known: true,
+            cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
+        };
+        tick(&mut map, 32); // outlast the GCD
+        let _ = map.drain_events();
+        let dest = map.creature(target).expect("target").unit.world.position();
+        map.player_mut(player_guid)
+            .expect("player")
+            .unit
+            .set_power(0, 10000);
+        let outcome = map.cast_spell(player_guid, 10, CastTarget::Dest(dest), opts);
+        assert_eq!(outcome, CastOutcome::Started, "Blizzard cast");
+        tick(&mut map, 4);
+        let _ = map.drain_events();
+        {
+            let values = map
+                .player(player_guid)
+                .expect("player")
+                .unit
+                .world
+                .object
+                .values();
+            assert_eq!(
+                values.get_u32(offsets::UNIT_CHANNEL_SPELL),
+                10,
+                "blizzard channel active"
+            );
+        }
+        map.cancel_cast(player_guid, true);
+        let mut despawn = false;
+        for event in map.drain_events() {
+            if let MapEvent::Packet { packet, .. } = event
+                && packet.opcode() == opcode_id::SMSG_GAMEOBJECT_DESPAWN_ANIM
+            {
+                despawn = true;
+            }
+        }
+        assert!(despawn, "channel break must despawn the blizzard dynobject");
+        println!("CHANNEL-DYNOBJ break cleanup ok");
     }
 
     // Death + respawn event: finish the target off.
@@ -2078,8 +2618,12 @@ fn bench_spells_and_auras() {
         CastTarget::Unit(target),
         CastOptions {
             triggered: true,
+            triggered_by_aura: false,
             skip_known: true,
             cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
         },
     );
     tick(&mut map, 3);
@@ -2112,8 +2656,12 @@ fn bench_spells_and_auras() {
             CastTarget::Unit(target),
             CastOptions {
                 triggered: true,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         for event in map.drain_events() {

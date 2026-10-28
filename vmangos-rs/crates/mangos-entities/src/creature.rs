@@ -58,6 +58,9 @@ pub struct CreatureRates {
     pub hp: [f32; 5],
     /// Damage rates, same order.
     pub damage: [f32; 5],
+    /// Spell-damage rates (`Rate.Creature.*.SpellDamage`,
+    /// `Creature::_GetSpellDamageMod`), same order.
+    pub spell_damage: [f32; 5],
     /// Corpse decay seconds [normal, elite, rareelite,
     /// worldboss, rare].
     pub corpse_decay: [u32; 5],
@@ -70,12 +73,19 @@ impl Default for CreatureRates {
         Self {
             hp: [1.0; 5],
             damage: [1.0; 5],
+            spell_damage: [1.0; 5],
             corpse_decay: [60, 300, 300, 3600, 300],
         }
     }
 }
 
 impl CreatureRates {
+    /// `Creature::_GetSpellDamageMod(rank)`.
+    #[must_use]
+    pub fn spell_damage_by_rank(&self, rank: u32) -> f32 {
+        Self::by_rank(self.spell_damage, rank)
+    }
+
     fn by_rank(rates: [f32; 5], rank: u32) -> f32 {
         // CREATURE_ELITE_NORMAL 0, ELITE 1, RAREELITE 2,
         // WORLDBOSS 3, RARE 4; default arm = elite.
@@ -874,24 +884,31 @@ impl Creature {
 
     /// The `HandleStatModifier` update dispatch for aura
     /// stat changes: `Creature::UpdateStats` fields plus
-    /// `UpdateMaxHealth` / `UpdateMaxPower(MANA)` at
-    /// identity health/power modifier groups (spawn
-    /// maxima carry the spawn-time `BASE_VALUE`).
+    /// `UpdateMaxHealth` / `UpdateMaxPower(MANA)`
+    /// (`StatSystem.cpp:766/781`; spawn maxima carry
+    /// the spawn-time `BASE_VALUE`, aura TOTAL groups
+    /// apply on top).
     pub fn refresh_derived_stats(&mut self) {
         for i in 0..MAX_STATS {
             #[allow(clippy::cast_possible_truncation)]
             let total = self.unit.total_stat_value(i, 0.0) as i32;
             self.unit.set_stat(i, total);
         }
+        let (health_total, health_pct) = self.unit.health_modifier_groups();
         #[allow(clippy::cast_precision_loss)]
-        let health = self.spawn_max_health as f32
-            + (self.unit.stat(STAT_STAMINA) - self.unit.create_stats[STAT_STAMINA]) * 10.0;
+        let health = (self.spawn_max_health as f32
+            + health_total
+            + (self.unit.stat(STAT_STAMINA) - self.unit.create_stats[STAT_STAMINA]) * 10.0)
+            * health_pct;
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let max_health = if health < 1.0 { 1 } else { health as u32 };
         self.unit.set_max_health(max_health);
+        let (mana_total, mana_pct) = self.unit.power_modifier_groups(POWER_MANA);
         #[allow(clippy::cast_precision_loss)]
-        let mana = self.spawn_max_mana as f32
-            + (self.unit.stat(STAT_INTELLECT) - self.unit.create_stats[STAT_INTELLECT]) * 15.0;
+        let mana = (self.spawn_max_mana as f32
+            + mana_total
+            + (self.unit.stat(STAT_INTELLECT) - self.unit.create_stats[STAT_INTELLECT]) * 15.0)
+            * mana_pct;
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let max_mana = if mana < 0.0 { 0 } else { mana as u32 };
         self.unit.set_max_power(POWER_MANA, max_mana);

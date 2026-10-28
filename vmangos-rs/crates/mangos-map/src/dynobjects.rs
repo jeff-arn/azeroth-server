@@ -24,23 +24,35 @@ impl Map {
     /// `Spell::EffectPersistentAA` + `DynamicObject
     /// ::Create` + map add: spawn a ground area object
     /// at the cast destination. Every cast creates a
-    /// new object; single-target replacement in
-    /// `AddDynObject` is not modeled (recorded).
+    /// new object (the fork's single-target
+    /// replacement key `SPELL_CUSTOM_SINGLE_TARGET_AURA`
+    /// is never set on any spell — fork-dead, see
+    /// TIER2-PROGRESS Slice 6.4). The player mod
+    /// owner's `SPELLMOD_RADIUS` applies to the
+    /// radius, as in the fork handler.
     pub(crate) fn spawn_dynobject(
         &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         effect_index: usize,
         dest: Position,
+        applied: Option<&mut Vec<(u32, u8)>>,
     ) {
         let duration = spell.calculate_duration_ms(&self.stores.spells.tables);
         if duration == 0 {
             return;
         }
-        let radius = self.effect_radius(spell, effect_index);
+        let radius = self.apply_spell_mod(
+            caster,
+            spell,
+            mangos_spells::defines::spellmod::RADIUS,
+            self.effect_radius(spell, effect_index),
+            true,
+            applied,
+        );
         self.summon_counter += 1;
         let guid_low = self.summon_counter;
-        let dynobj = DynObject::create(
+        let mut dynobj = DynObject::create(
             guid_low,
             self.map_id,
             caster,
@@ -51,6 +63,7 @@ impl Map {
             radius,
             spell.is_positive_spell(),
         );
+        dynobj.channeled = spell.is_channeled();
         let guid = dynobj.guid();
         let cell = Self::cell_of(dest);
         self.cells.entry(cell).or_default().dynobjects.insert(guid);
@@ -99,10 +112,37 @@ impl Map {
         }
     }
 
+    /// `Unit::GetChannelObjectGuid` (0 → `None`).
+    pub(crate) fn channel_object(&self, caster: ObjectGuid) -> Option<ObjectGuid> {
+        use mangos_protocol::update_field_table::offsets;
+        let raw = self
+            .unit_base(caster)?
+            .world
+            .object
+            .values()
+            .get_u64(offsets::UNIT_FIELD_CHANNEL_OBJECT);
+        (raw != 0).then(|| ObjectGuid::from_raw(raw))
+    }
+
+    /// `SpellCaster::RemoveDynObject(spellId)`: the
+    /// channel-end cleanup (`Spell::cancel` and the
+    /// channel-finish path both call it).
+    pub(crate) fn remove_dynobjects_by_spell(&mut self, caster: ObjectGuid, spell_id: u32) {
+        let doomed: Vec<ObjectGuid> = self
+            .dynobjects
+            .iter()
+            .filter(|(_, d)| d.caster == caster && d.spell_id == spell_id)
+            .map(|(g, _)| *g)
+            .collect();
+        for guid in doomed {
+            self.delete_dynobject(guid);
+        }
+    }
+
     /// Per-tick lifetime countdown + affected pass.
-    /// Caster death deletes the object (channeled
-    /// spells end it through the channel path, which
-    /// is also covered by caster-alive here).
+    /// Caster death deletes the object; channeled
+    /// spells end theirs at channel end via
+    /// `remove_dynobjects_by_spell`.
     pub(crate) fn update_dynobjects(&mut self, diff_ms: u32) {
         if self.dynobjects.is_empty() {
             return;
@@ -115,27 +155,35 @@ impl Map {
         let guids: Vec<ObjectGuid> = self.dynobjects.keys().copied().collect();
         let mut expired: Vec<ObjectGuid> = Vec::new();
         for guid in &guids {
-            let Some(dynobj) = self.dynobjects.get_mut(guid) else {
-                continue;
+            let (spent, caster, channeled) = {
+                let Some(dynobj) = self.dynobjects.get_mut(guid) else {
+                    continue;
+                };
+                #[allow(clippy::cast_possible_wrap)]
+                {
+                    dynobj.alive_ms -= diff_ms as i32;
+                }
+                (dynobj.alive_ms <= 0, dynobj.caster, dynobj.channeled)
             };
-            #[allow(clippy::cast_possible_wrap)]
-            {
-                dynobj.alive_ms -= diff_ms as i32;
-            }
-            let dead = dynobj.alive_ms <= 0;
-            let caster = dynobj.caster;
+            // DynamicObject::Update: expiry at
+            // alive == 0 unless this object is the
+            // caster's current channel object (the
+            // Farsight focus case; channel end
+            // removes spell dynobjects separately).
+            let dead = spent && (!channeled || self.channel_object(caster) != Some(*guid));
             if dead || !self.unit_is_alive(caster) {
                 expired.push(*guid);
             }
         }
+        // Fork order inside Update: the affected
+        // pass runs before the deletion applies.
+        if do_affected {
+            for guid in &guids {
+                self.dynobject_affect(*guid);
+            }
+        }
         for guid in expired {
             self.delete_dynobject(guid);
-        }
-        if do_affected {
-            let live: Vec<ObjectGuid> = self.dynobjects.keys().copied().collect();
-            for guid in live {
-                self.dynobject_affect(guid);
-            }
         }
     }
 
@@ -163,7 +211,7 @@ impl Map {
         };
         let victims = self.units_around(caster, center, radius, !positive);
         for victim in victims {
-            self.apply_spell_aura(caster, &spell, victim, None);
+            self.apply_spell_aura(caster, &spell, victim, None, [None; 3]);
             let adjusted = self.unit_base_mut(victim).and_then(|unit| {
                 unit.auras
                     .iter_mut()

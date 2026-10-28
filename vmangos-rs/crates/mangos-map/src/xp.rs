@@ -523,7 +523,12 @@ impl Map {
     }
 
     /// One player's `KilledMonsterCredit` body.
-    fn quest_kill_credit_one(&mut self, player_guid: ObjectGuid, victim: ObjectGuid, entry: u32) {
+    pub(crate) fn quest_kill_credit_one(
+        &mut self,
+        player_guid: ObjectGuid,
+        victim: ObjectGuid,
+        entry: u32,
+    ) {
         use mangos_protocol::buffer::PacketWriter;
         // Snapshot candidate quests first (borrow
         // discipline against the stores).

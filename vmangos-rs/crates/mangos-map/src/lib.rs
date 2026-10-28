@@ -12,6 +12,7 @@
 
 pub mod ai;
 pub mod content;
+pub mod customs;
 pub mod dynobjects;
 pub mod map;
 pub mod motion;

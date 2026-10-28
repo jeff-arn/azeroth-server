@@ -14,5 +14,5 @@ pub use dbc_tables::load_spell_dbc_tables;
 
 pub use entry::{
     CastTimeEntry, DurationEntry, ProcEventEntry, RangeEntry, SpellDbcTables, SpellEffectData,
-    SpellEntry, SpellRng, SpellStore, armor_reduced_damage, ditheru, spell_mod_apply,
+    SpellEntry, SpellRng, SpellStore, armor_reduced_damage, dither, ditheru, spell_mod_apply,
 };

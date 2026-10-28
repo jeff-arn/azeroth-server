@@ -166,6 +166,7 @@ fn bench_creature_ai_and_melee() {
                     spells: mangos_spells::SpellStore {
                         spells: spell_entries,
                         proc_events: std::collections::HashMap::new(),
+                        cones: std::collections::HashMap::new(),
                         tables: mangos_spells::load_spell_dbc_tables(std::path::Path::new(
                             &std::env::var("MANGOS_DBC_DIR").expect("MANGOS_DBC_DIR"),
                         ))
@@ -177,6 +178,7 @@ fn bench_creature_ai_and_melee() {
                     scripts: mangos_scripts_engine::ScriptStores::default(),
                     display_scales: HashMap::new(),
                     model_data: HashMap::new(),
+                    shapeshift_forms: HashMap::new(),
                     skills: mangos_world_data::skill_info::SkillDbc::default(),
                     chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
                     auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),

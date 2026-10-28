@@ -50,6 +50,7 @@ impl AuraEffectState {
                     | mangos_spells::defines::aura::PERIODIC_ENERGIZE
                     | mangos_spells::defines::aura::PERIODIC_TRIGGER_SPELL
                     | mangos_spells::defines::aura::PERIODIC_DAMAGE_PERCENT
+                    | mangos_spells::defines::aura::PERIODIC_LEECH
             )
     }
 }

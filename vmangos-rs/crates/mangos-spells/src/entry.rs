@@ -127,6 +127,9 @@ pub struct SpellEntry {
     pub effects: [SpellEffectData; 3],
     /// fields[119].
     pub spell_visual: u32,
+    /// fields[121] (`SpellIconID`; dummy-proc and
+    /// proc-event icon gates key on it).
+    pub spell_icon_id: u32,
     /// fields[132].
     pub mana_cost_percentage: u32,
     /// fields[133..135].
@@ -226,6 +229,194 @@ impl SpellEntry {
         if cast_time > 0 { cast_time as u32 } else { 0 }
     }
 
+    /// `IsAreaEffectTarget` (`SpellEntry.h:374`) target set.
+    #[must_use]
+    pub fn is_area_effect_target(target: u32) -> bool {
+        matches!(
+            target,
+            7 | 8 | 15 | 16 | 20 | 24 | 28 | 30 | 31 | 33 | 34 | 37 | 52 | 56 | 61
+        )
+    }
+
+    /// `GetAuraMaxTicks` (`SpellEntry.cpp:752`).
+    #[must_use]
+    pub fn aura_max_ticks(&self, tables: &SpellDbcTables) -> u16 {
+        use crate::defines::{aura as aura_type, effect};
+        let mut dot_duration = self.duration_ms(tables);
+        if dot_duration == 0 {
+            return 1;
+        }
+        if dot_duration > 30000 {
+            dot_duration = 30000;
+        }
+        for eff in &self.effects {
+            if eff.effect == effect::APPLY_AURA
+                && matches!(
+                    eff.apply_aura_name,
+                    aura_type::PERIODIC_DAMAGE
+                        | aura_type::PERIODIC_HEAL
+                        | aura_type::PERIODIC_LEECH
+                )
+            {
+                if eff.amplitude != 0 {
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_possible_wrap,
+                        clippy::cast_sign_loss
+                    )]
+                    return (dot_duration / eff.amplitude as i32) as u16;
+                }
+                break;
+            }
+        }
+        6
+    }
+
+    /// `GetCastTimeForBonus` (`SpellEntry.cpp:514`); `dot`
+    /// is the fork `DamageEffectType == DOT` test.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn cast_time_for_bonus(&self, tables: &SpellDbcTables, dot: bool) -> u32 {
+        use crate::defines::{aura as aura_type, effect};
+        let channeled = self.is_channeled();
+        let mut casting_time: u32 = if channeled {
+            self.duration_ms(tables).max(0) as u32
+        } else {
+            self.cast_time_ms(tables)
+        };
+        casting_time = casting_time.clamp(1500, 7000);
+        if dot && !channeled {
+            casting_time = 3500;
+        }
+        let mut over_time = 0i32;
+        let mut effects = 0u32;
+        let mut direct_damage = false;
+        let area_effect = self.effects.iter().any(|e| {
+            Self::is_area_effect_target(e.implicit_target_a)
+                || Self::is_area_effect_target(e.implicit_target_b)
+        });
+        for eff in &self.effects {
+            match eff.effect {
+                effect::SCHOOL_DAMAGE
+                | effect::POWER_DRAIN
+                | effect::HEALTH_LEECH
+                | effect::ENVIRONMENTAL_DAMAGE
+                | effect::POWER_BURN
+                | effect::HEAL => direct_damage = true,
+                effect::APPLY_AURA => match eff.apply_aura_name {
+                    aura_type::PERIODIC_DAMAGE
+                    | aura_type::PERIODIC_HEAL
+                    | aura_type::PERIODIC_LEECH => {
+                        let d = self.duration_ms(tables);
+                        if d != 0 {
+                            over_time = d;
+                        }
+                    }
+                    aura_type::DUMMY | aura_type::MOD_DECREASE_SPEED => effects += 1,
+                    aura_type::MOD_CONFUSE | aura_type::MOD_STUN | aura_type::MOD_ROOT => {
+                        effects += 2;
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+        if over_time > 0 && casting_time > 0 && direct_damage {
+            let original = self.cast_time_ms(tables).clamp(1500, 7000);
+            let pt_ot = (over_time as f32 / 15000.0)
+                / ((over_time as f32 / 15000.0) + (original as f32 / 3500.0));
+            if dot {
+                casting_time = (casting_time as f32 * pt_ot) as u32;
+            } else if pt_ot < 1.0 {
+                casting_time = (casting_time as f32 * (1.0 - pt_ot)) as u32;
+            } else {
+                casting_time = 0;
+            }
+        }
+        if area_effect {
+            casting_time /= 2;
+        }
+        if self.effects.iter().any(|e| {
+            e.effect == effect::HEALTH_LEECH
+                || (e.effect == effect::APPLY_AURA
+                    && e.apply_aura_name == aura_type::PERIODIC_LEECH)
+        }) {
+            casting_time /= 2;
+        }
+        for _ in 0..effects {
+            casting_time = (casting_time as f32 * 0.95) as u32;
+        }
+        casting_time
+    }
+
+    /// `CalculateDefaultCoefficient` (`SpellEntry.cpp:619`).
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn default_coefficient(&self, tables: &SpellDbcTables, dot: bool) -> f32 {
+        let mut dot_factor = 1.0f32;
+        if dot {
+            if !self.is_channeled() {
+                dot_factor = self.duration_ms(tables) as f32 / 15000.0;
+            }
+            let ticks = self.aura_max_ticks(tables);
+            if ticks != 0 {
+                dot_factor /= f32::from(ticks);
+            }
+        }
+        (self.cast_time_for_bonus(tables, dot) as f32 / 3500.0) * dot_factor
+    }
+
+    /// `CalculateCustomCoefficient` (`SpellEntry.cpp:638`)
+    /// subset: Seal of Command by id; shaman chain scaling
+    /// needs the cast's target count (`chain_targets` <= 1
+    /// leaves coeff unchanged; the fork also applies
+    /// `SPELLMOD_EFFECT_PAST_FIRST` to the multiplier past
+    /// the first target — caller passes the modded
+    /// multiplier via `chain_multiplier` when known).
+    /// Seal of Righteousness needs `SpellIconID`, which
+    /// this entry subset does not carry — recorded.
+    #[must_use]
+    pub fn custom_coefficient(
+        &self,
+        coeff: f32,
+        done_part: bool,
+        chain_targets: u32,
+        chain_multiplier: Option<f32>,
+    ) -> f32 {
+        const FAMILY_PALADIN: u32 = 10;
+        const FAMILY_SHAMAN: u32 = 11;
+        match self.spell_family_name {
+            FAMILY_PALADIN if self.id == 20424 => {
+                if done_part {
+                    0.20
+                } else {
+                    0.29
+                }
+            }
+            FAMILY_SHAMAN if self.spell_family_flags & 0x142 != 0 && chain_targets > 1 => {
+                let multiplier = chain_multiplier.unwrap_or(self.effects[0].dmg_multiplier);
+                let mut out = coeff;
+                for _ in 1..chain_targets {
+                    out *= multiplier;
+                }
+                out
+            }
+            _ => coeff,
+        }
+    }
+
+    /// `SpellCaster::CalculateLevelPenalty`
+    /// (`SpellCaster.cpp:1528`, Nostalrius formula).
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn level_penalty(&self) -> f32 {
+        let spell_level = self.spell_level;
+        if spell_level == 0 || spell_level > 20 {
+            return 1.0;
+        }
+        1.0 - ((20.0 - spell_level as f32) * 0.0375)
+    }
+
     /// Max range from `SpellRange.dbc` (0 when the row is
     /// missing).
     #[must_use]
@@ -267,11 +458,11 @@ impl SpellEntry {
 
     /// `SpellCaster::CalculateSpellEffectValue`
     /// (`SpellCaster.cpp:876`) subset: no spell mods, no
-    /// combo target check beyond the points themselves,
-    /// no creature-level scaling (`custom` scaling
-    /// attribute spells are out of scope and will read
-    /// low — recorded). Returns the float value; C++
-    /// callers truncate for aura amounts.
+    /// combo target check beyond the points themselves;
+    /// creature-level scaling lives in
+    /// `creature_level_scaled` (needs the CLS store).
+    /// Returns the float value; C++ callers truncate
+    /// for aura amounts.
     #[allow(clippy::cast_possible_wrap, clippy::cast_precision_loss)]
     pub fn calculate_effect_value(
         &self,
@@ -279,6 +470,23 @@ impl SpellEntry {
         caster_level: u32,
         combo_points: u8,
         rng: &mut dyn SpellRng,
+    ) -> f32 {
+        self.calculate_effect_value_bp(effect_index, caster_level, combo_points, rng, None)
+    }
+
+    /// As [`Self::calculate_effect_value`], with a
+    /// custom base-points override (`effBasePoints`
+    /// in `CalculateSpellEffectValue`: the value
+    /// starts at `bp - baseDice`, then the usual
+    /// level/dice/combo math runs).
+    #[allow(clippy::cast_possible_wrap, clippy::cast_precision_loss)]
+    pub fn calculate_effect_value_bp(
+        &self,
+        effect_index: usize,
+        caster_level: u32,
+        combo_points: u8,
+        rng: &mut dyn SpellRng,
+        bp: Option<i32>,
     ) -> f32 {
         let eff = &self.effects[effect_index];
         #[allow(clippy::cast_possible_wrap)]
@@ -292,7 +500,8 @@ impl SpellEntry {
 
         #[allow(clippy::cast_possible_wrap)]
         let base_dice = eff.base_dice as i32;
-        let mut value = eff.base_points as f32;
+        #[allow(clippy::cast_precision_loss)]
+        let mut value = bp.map_or(eff.base_points as f32, |bp| (bp - base_dice) as f32);
         value += level as f32 * eff.real_points_per_level;
         #[allow(clippy::cast_possible_truncation)]
         let random_points = (eff.die_sides as f32 + level as f32 * eff.dice_per_level) as i32;
@@ -311,6 +520,38 @@ impl SpellEntry {
             value += eff.points_per_combo_point * f32::from(combo_points);
         }
         value
+    }
+
+    /// `SPELL_ATTR_SCALES_WITH_CREATURE_LEVEL` tail of
+    /// `CalculateSpellEffectValue`: rescale by the
+    /// class-1 `CreatureClassLevelStats.melee_damage`
+    /// ratio between caster level and spell level.
+    /// `cls_melee_damage(level)` supplies the store.
+    #[must_use]
+    pub fn creature_level_scaled(
+        &self,
+        effect_index: usize,
+        value: f32,
+        caster_level: u32,
+        cls_melee_damage: &dyn Fn(u32) -> f32,
+    ) -> f32 {
+        use crate::defines::{aura as aura_type, effect};
+        const ATTR_SCALES_WITH_CREATURE_LEVEL: u32 = 0x0008_0000;
+        let eff = &self.effects[effect_index];
+        if self.attributes & ATTR_SCALES_WITH_CREATURE_LEVEL == 0
+            || self.spell_level == 0
+            || eff.effect == effect::WEAPON_PERCENT_DAMAGE
+            || eff.effect == effect::KNOCK_BACK
+            || (eff.effect == effect::APPLY_AURA
+                && eff.apply_aura_name == aura_type::MOD_DECREASE_SPEED)
+        {
+            return value;
+        }
+        let power_spell = cls_melee_damage(self.spell_level);
+        if power_spell == 0.0 {
+            return value;
+        }
+        value * (cls_melee_damage(caster_level) / power_spell)
     }
 
     /// `CalculateSimpleValue` (`SpellEntry.h:1074`):
@@ -337,6 +578,15 @@ pub fn ditheru(v: f32, rng: &mut dyn SpellRng) -> u32 {
             magnitude as u32
         }
     }
+}
+
+/// `dither` (`Util.cpp`): signed stochastic rounding
+/// (`copysign(floor(abs(v)+frand), v)` truncated).
+pub fn dither(v: f32, rng: &mut dyn SpellRng) -> i32 {
+    let magnitude = (v.abs() + rng.frand01()).floor();
+    #[allow(clippy::cast_possible_truncation)]
+    let m = magnitude as i32;
+    if v < 0.0 { -m } else { m }
 }
 
 /// `CalcArmorReducedDamage` (`SpellCaster.cpp:850`)
@@ -462,6 +712,9 @@ pub struct SpellStore {
     /// `spell_proc_event` rows by aura spell id
     /// (rank-filled at load).
     pub proc_events: HashMap<u32, ProcEventEntry>,
+    /// `spell_cone` arcs in radians
+    /// (`mSpellCones`; negative = back cone).
+    pub cones: HashMap<u32, f32>,
 }
 
 /// One `spell_proc_event` row (`SpellProcEventEntry`,
@@ -481,6 +734,16 @@ pub struct ProcEventEntry {
 }
 
 impl SpellStore {
+    /// `GetSpellCone`: table arc or the 60-degree
+    /// default, in radians.
+    #[must_use]
+    pub fn cone_angle(&self, id: u32) -> f32 {
+        self.cones
+            .get(&id)
+            .copied()
+            .unwrap_or(60.0 * std::f32::consts::PI / 180.0)
+    }
+
     #[must_use]
     pub fn get(&self, id: u32) -> Option<&SpellEntry> {
         self.spells.get(&id)
@@ -499,7 +762,176 @@ impl SpellStore {
 
 #[cfg(test)]
 mod tests {
-    use super::spell_mod_apply;
+    use super::{SpellDbcTables, SpellEffectData, SpellEntry, spell_mod_apply};
+    use crate::defines::{aura as aura_type, effect};
+
+    fn tables_with(cast_ms: i32, duration_ms: i32) -> SpellDbcTables {
+        let mut tables = SpellDbcTables::default();
+        tables.cast_times.insert(
+            1,
+            crate::entry::CastTimeEntry {
+                cast_time: cast_ms,
+                cast_time_per_level: 0,
+                min_cast_time: 0,
+            },
+        );
+        tables.durations.insert(
+            1,
+            crate::entry::DurationEntry {
+                duration: duration_ms,
+                duration_per_level: 0,
+                max_duration: duration_ms,
+            },
+        );
+        tables
+    }
+
+    #[allow(clippy::large_types_passed_by_value)]
+    fn entry_with(effects: [SpellEffectData; 3]) -> SpellEntry {
+        SpellEntry {
+            casting_time_index: 1,
+            duration_index: 1,
+            spell_level: 60,
+            effects,
+            ..SpellEntry::default()
+        }
+    }
+
+    #[test]
+    fn coefficient_math_matches_fork_formulas() {
+        // Direct 3.5s cast: coeff = 3500/3500 = 1.0.
+        let e = entry_with(
+            [SpellEffectData {
+                effect: effect::SCHOOL_DAMAGE,
+                ..SpellEffectData::default()
+            }; 3],
+        );
+        let t = tables_with(3500, 0);
+        assert!((e.default_coefficient(&t, false) - 1.0).abs() < 1e-6);
+        // Instant direct clamps to 1500/3500.
+        let t0 = tables_with(0, 0);
+        assert!((e.default_coefficient(&t0, false) - 1500.0 / 3500.0).abs() < 1e-6);
+        // Area target halves.
+        let mut area = e.clone();
+        area.effects[0].implicit_target_a = 15;
+        assert!((area.default_coefficient(&t, false) - 0.5).abs() < 1e-6);
+
+        // DoT 15s, 3s ticks (5 ticks), instant cast:
+        // cast-for-bonus 3500, DotFactor 15000/15000/5=0.2.
+        let dot = entry_with(
+            [SpellEffectData {
+                effect: effect::APPLY_AURA,
+                apply_aura_name: aura_type::PERIODIC_DAMAGE,
+                amplitude: 3000,
+                ..SpellEffectData::default()
+            }; 3],
+        );
+        let td = tables_with(0, 15000);
+        assert_eq!(dot.aura_max_ticks(&td), 5);
+        assert!((dot.default_coefficient(&td, true) - 0.2).abs() < 1e-6);
+
+        // Level penalty: spellLevel 12 -> 1 - 8*0.0375 = 0.7;
+        // 0 and >20 are penalty-free.
+        let mut low = e.clone();
+        low.spell_level = 12;
+        assert!((low.level_penalty() - 0.7).abs() < 1e-6);
+        low.spell_level = 0;
+        assert!((low.level_penalty() - 1.0).abs() < 1e-6);
+
+        // Seal of Command custom coefficient.
+        let mut soc = e;
+        soc.id = 20424;
+        soc.spell_family_name = 10;
+        assert!((soc.custom_coefficient(0.99, true, 1, None) - 0.20).abs() < 1e-6);
+        assert!((soc.custom_coefficient(0.99, false, 1, None) - 0.29).abs() < 1e-6);
+    }
+
+    #[test]
+    fn effect_value_scaling_matches_fork() {
+        // Spell 6118 shape (audit exemplar): baseLevel
+        // 22, spellLevel 99, maxLevel 27, base 59,
+        // +1/level — fork yields a negative amount at
+        // caster 19 (level clamps to 22, 22-99 = -77);
+        // downstream fork guards clamp it. The Rust
+        // formula must reproduce that exactly.
+        struct ZeroRng;
+        impl crate::entry::SpellRng for ZeroRng {
+            fn irand(&mut self, min: i32, _max: i32) -> i32 {
+                min
+            }
+            fn frand01(&mut self) -> f32 {
+                0.0
+            }
+        }
+        let mut e = entry_with(
+            [SpellEffectData {
+                effect: effect::APPLY_AURA,
+                base_points: 59,
+                base_dice: 1,
+                die_sides: 1,
+                real_points_per_level: 1.0,
+                ..SpellEffectData::default()
+            }; 3],
+        );
+        e.base_level = 22;
+        e.spell_level = 99;
+        e.max_level = 27;
+        let v = e.calculate_effect_value(0, 19, 0, &mut ZeroRng);
+        assert!((v - (59.0 - 77.0 + 1.0)).abs() < 1e-6, "value {v}");
+
+        // SCALES_WITH_CREATURE_LEVEL ratio (class-1 CLS
+        // melee damage 20 at spell level, 30 at caster).
+        e.attributes = 0x0008_0000;
+        e.spell_level = 20;
+        let scaled =
+            e.creature_level_scaled(0, 100.0, 30, &|lvl| if lvl == 20 { 20.0 } else { 30.0 });
+        assert!((scaled - 150.0).abs() < 1e-6, "scaled {scaled}");
+        // No attribute -> identity.
+        e.attributes = 0;
+        let same = e.creature_level_scaled(0, 100.0, 30, &|_| 99.0);
+        assert!((same - 100.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn custom_base_points_replace_base() {
+        // `CalculateSpellEffectValue` with
+        // effBasePoints: value starts at bp - baseDice,
+        // then level/dice math (here dieSides 1 adds
+        // baseDice back, so bp + level term).
+        struct ZeroRng;
+        impl crate::entry::SpellRng for ZeroRng {
+            fn irand(&mut self, min: i32, _max: i32) -> i32 {
+                min
+            }
+            fn frand01(&mut self) -> f32 {
+                0.0
+            }
+        }
+        let mut e = entry_with(
+            [SpellEffectData {
+                effect: effect::SCHOOL_DAMAGE,
+                base_points: 10,
+                base_dice: 1,
+                die_sides: 1,
+                real_points_per_level: 2.0,
+                ..SpellEffectData::default()
+            }; 3],
+        );
+        e.spell_level = 10;
+        // No override: 10 + (20-10)*2 + 1 = 31.
+        let plain = e.calculate_effect_value_bp(0, 20, 0, &mut ZeroRng, None);
+        assert!((plain - 31.0).abs() < 1e-6, "plain {plain}");
+        // bp 100: (100-1) + 20 + 1 = 120.
+        let custom = e.calculate_effect_value_bp(0, 20, 0, &mut ZeroRng, Some(100));
+        assert!((custom - 120.0).abs() < 1e-6, "custom {custom}");
+        // bp 0 engaged (TriggerProccedSpell quirk):
+        // (0-1) + 20 + 1 = 20.
+        let zero = e.calculate_effect_value_bp(0, 20, 0, &mut ZeroRng, Some(0));
+        assert!((zero - 20.0).abs() < 1e-6, "zero {zero}");
+        // Signed dither keeps the sign.
+        assert_eq!(super::dither(-2.5, &mut ZeroRng), -2);
+        assert_eq!(super::dither(2.5, &mut ZeroRng), 2);
+    }
 
     #[test]
     #[allow(clippy::float_cmp)] // exact binary fractions under test

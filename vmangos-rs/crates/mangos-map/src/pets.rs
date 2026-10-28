@@ -127,7 +127,7 @@ pub struct PetState {
 }
 
 impl PetState {
-    fn is_hunter(&self) -> bool {
+    pub(crate) fn is_hunter(&self) -> bool {
         self.pet_type == PET_TYPE_HUNTER
     }
 }
@@ -145,6 +145,27 @@ enum PetLoadKind {
 }
 
 impl Map {
+    /// `Pet::SetEnabled` (`Pet.cpp:2335`): flip
+    /// `m_enabled` and inform the owner with
+    /// `SMSG_PET_MODE` (guid, react, command, 0,
+    /// enabled ? 0x0 : 0x8).
+    pub(crate) fn set_pet_enabled(&mut self, pet: ObjectGuid, on: bool) {
+        let Some((owner, react, command)) = self.pets.get_mut(&pet).map(|st| {
+            st.enabled = on;
+            (st.owner, st.react_state, st.command_state)
+        }) else {
+            return;
+        };
+        let mut payload = PacketWriter::new();
+        payload.write_u64_le(pet.raw());
+        payload.write_u8(react);
+        payload.write_u8(command);
+        payload.write_u8(0);
+        payload.write_u8(if on { 0 } else { 0x8 });
+        let packet = WorldPacket::with_body(op::SMSG_PET_MODE, payload.into_vec());
+        self.send_to_player(owner, packet);
+    }
+
     /// The controlled pet of `owner`, if any
     /// (`Unit::GetPet` by `UNIT_FIELD_SUMMON` guid).
     #[must_use]
@@ -1213,8 +1234,12 @@ impl Map {
                 CastTarget::Unit(target_guid),
                 CastOptions {
                     triggered: false,
+                    triggered_by_aura: false,
                     skip_known: true,
                     cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
                 },
             );
             if matches!(outcome, CastOutcome::Started) {
@@ -1386,8 +1411,12 @@ impl Map {
             CastTarget::Unit(target_guid),
             CastOptions {
                 triggered: false,
+                triggered_by_aura: false,
                 skip_known: true,
                 cast_item: None,
+                custom_base_points: [None; 3],
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
             },
         );
         match outcome {

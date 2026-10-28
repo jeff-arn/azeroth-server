@@ -1199,15 +1199,19 @@ impl Player {
         self.apply_weapon_state(&bonuses);
     }
 
-    /// `UpdateMaxHealth` with the modifier groups at
-    /// their zero-aura defaults (`BASE_PCT` 1, TOTAL 0,
-    /// `TOTAL_PCT` 1); `health_base` is the item-fed
-    /// `UNIT_MOD_HEALTH` `BASE_VALUE` sum.
+    /// `UpdateMaxHealth` (`StatSystem.cpp:164`):
+    /// base-plus-create times `BASE_PCT` (1, no aura
+    /// source), plus `TOTAL_VALUE` and the stamina
+    /// bonus, all times `TOTAL_PCT`; `health_base`
+    /// is the item-fed `UNIT_MOD_HEALTH` base sum.
     fn update_max_health(&mut self, health_base: f32) {
+        let (total_value, total_pct) = self.unit.health_modifier_groups();
         #[allow(clippy::cast_precision_loss)]
-        let value = health_base
+        let value = (health_base
             + self.unit.create_health as f32
-            + health_bonus_from_stamina(self.unit.stat(STAT_STAMINA));
+            + total_value
+            + health_bonus_from_stamina(self.unit.stat(STAT_STAMINA)))
+            * total_pct;
         // `std::max(1, int(value))`: float->int truncates.
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let max = if value < 1.0 { 1 } else { value as u32 };
@@ -1224,8 +1228,9 @@ impl Player {
         } else {
             0.0
         };
+        let (total_value, total_pct) = self.unit.power_modifier_groups(power);
         #[allow(clippy::cast_precision_loss)]
-        let value = base_value + create as f32 + bonus;
+        let value = (base_value + create as f32 + total_value + bonus) * total_pct;
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let max = value as u32;
         self.unit.set_max_power(power, max);
@@ -1279,18 +1284,20 @@ impl Player {
     fn apply_weapon_state(&mut self, bonuses: &EquippedBonuses) {
         self.unit.base_weapon_damage = bonuses.weapon_damage;
         {
+            // `SetAttackTime`: raw delay × attack-speed pct.
+            let pct = self.unit.mod_attack_speed_pct;
             let v = self.unit.world.object.values_mut();
             v.set_f32(
                 offsets::UNIT_FIELD_BASEATTACKTIME,
-                bonuses.attack_time_ms[0],
+                bonuses.attack_time_ms[0] * pct[0],
             );
             v.set_f32(
                 offsets::UNIT_FIELD_BASEATTACKTIME + 1,
-                bonuses.attack_time_ms[1],
+                bonuses.attack_time_ms[1] * pct[1],
             );
             v.set_f32(
                 offsets::UNIT_FIELD_RANGEDATTACKTIME,
-                bonuses.attack_time_ms[2],
+                bonuses.attack_time_ms[2] * pct[2],
             );
         }
         let melee_ap = self.unit.attack_power_from_stats(false);

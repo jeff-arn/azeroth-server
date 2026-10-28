@@ -25,6 +25,7 @@ pub const UNIT_STATE_MELEE_ATTACKING: u32 = 0x0000_0001;
 pub const UNIT_STATE_FEIGN_DEATH: u32 = 0x0000_0004;
 pub const UNIT_STATE_STUNNED: u32 = 0x0000_0008;
 pub const UNIT_STATE_ROOT: u32 = 0x0000_0010;
+pub const UNIT_STATE_ISOLATED: u32 = 0x0000_0020;
 pub const UNIT_STATE_DISTRACTED: u32 = 0x0000_0100;
 pub const UNIT_STATE_CONFUSED: u32 = 0x0000_0200;
 pub const UNIT_STATE_ROAMING: u32 = 0x0000_0800;
@@ -39,6 +40,8 @@ pub const UNIT_STATE_IGNORE_PATHFINDING: u32 = 0x0008_0000;
 pub const UNIT_STATE_RUNNING: u32 = 0x0100_0000;
 pub const UNIT_STATE_CAN_NOT_MOVE: u32 =
     UNIT_STATE_ROOT | UNIT_STATE_STUNNED | UNIT_STATE_FEIGN_DEATH;
+pub const UNIT_STATE_CAN_NOT_REACT: u32 =
+    UNIT_STATE_STUNNED | UNIT_STATE_FEIGN_DEATH | UNIT_STATE_CONFUSED | UNIT_STATE_FLEEING;
 pub const UNIT_STATE_MOVING: u32 = UNIT_STATE_ROAMING_MOVE
     | UNIT_STATE_CHASE_MOVE
     | UNIT_STATE_FOLLOW_MOVE
@@ -306,8 +309,20 @@ pub struct UnitBase {
     pub movement_counter: u32,
     /// `m_pendingMovementChanges`.
     pub pending_movement_changes: std::collections::VecDeque<PendingMovementChange>,
+    /// `m_modAttackSpeedPct[3]` (main/off/ranged).
+    pub mod_attack_speed_pct: [f32; 3],
     /// `m_transformSpell` (0 = untransformed).
     pub transform_spell: u32,
+    /// Spell providing the current `MOD_SHAPESHIFT`
+    /// form (0 = none); the form id itself lives in
+    /// `UNIT_FIELD_BYTES_1` byte 2 like the fork's
+    /// `SetShapeshiftForm`.
+    pub shapeshift_spell: u32,
+    /// Display id the shapeshift handler last wrote
+    /// (0 = form display not currently shown — no
+    /// display for the form, or a transform owns
+    /// the display).
+    pub shapeshift_display_id: u32,
     /// Object scale captured on transform entry, restored
     /// on exit (`SetTransformScale` native base).
     pub transform_base_scale: Option<f32>,
@@ -375,7 +390,10 @@ impl UnitBase {
             pending_spline_done: false,
             movement_counter: 0,
             pending_movement_changes: std::collections::VecDeque::new(),
+            mod_attack_speed_pct: [1.0; 3],
             transform_spell: 0,
+            shapeshift_spell: 0,
+            shapeshift_display_id: 0,
             transform_base_scale: None,
             auras: Vec::new(),
             attack_power_mods: [0.0, 0.0],
@@ -625,6 +643,50 @@ impl UnitBase {
     pub fn set_power(&mut self, power: usize, value: u32) {
         self.values()
             .set_u32(offsets::UNIT_FIELD_POWER1 + power as u16, value);
+    }
+
+    /// The `UNIT_MOD_HEALTH` aura modifier groups
+    /// (`HandleStatModifier` recompute): `TOTAL_VALUE`
+    /// sum of `MOD_INCREASE_HEALTH` (34) amounts and
+    /// `TOTAL_PCT` product of
+    /// `MOD_INCREASE_HEALTH_PERCENT` (133). `BASE_PCT`
+    /// has no aura source at 1.12 and stays 1.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn health_modifier_groups(&self) -> (f32, f32) {
+        let mut total = 0.0f32;
+        let mut pct = 1.0f32;
+        for e in self.auras.iter().flat_map(|h| h.effects.iter().flatten()) {
+            match e.aura_type {
+                34 => total += e.amount as f32,
+                133 => pct *= (100.0 + e.amount as f32) / 100.0,
+                _ => {}
+            }
+        }
+        (total, pct)
+    }
+
+    /// The `UNIT_MOD_POWER_START + power` aura
+    /// modifier groups: `TOTAL_VALUE` sum of
+    /// `MOD_INCREASE_ENERGY` (35) and `TOTAL_PCT`
+    /// product of `MOD_INCREASE_ENERGY_PERCENT`
+    /// (132) for the given power-type misc.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_wrap)]
+    pub fn power_modifier_groups(&self, power: usize) -> (f32, f32) {
+        let mut total = 0.0f32;
+        let mut pct = 1.0f32;
+        for e in self.auras.iter().flat_map(|h| h.effects.iter().flatten()) {
+            if e.misc_value != power as i32 {
+                continue;
+            }
+            match e.aura_type {
+                35 => total += e.amount as f32,
+                132 => pct *= (100.0 + e.amount as f32) / 100.0,
+                _ => {}
+            }
+        }
+        (total, pct)
     }
 
     /// `SetMaxPower` (clamps current power down to a
@@ -958,6 +1020,9 @@ impl UnitBase {
 /// `CreatureModelData.dbc` + `creature_display_info_addon`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModelData {
+    /// `CreatureDisplayInfo.ModelId` (feeds the
+    /// `FORM_CREATUREBEAR` display switch).
+    pub model_id: u32,
     /// `modelScale * displayScale` (`CheckValidScale`'d).
     pub native_scale: f32,
     pub bounding_radius: f32,
