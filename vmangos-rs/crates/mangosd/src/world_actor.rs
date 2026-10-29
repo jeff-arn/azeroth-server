@@ -25,6 +25,7 @@ use mangos_db::character_load::{ActionRow, CharacterLoad, HomebindRow};
 use mangos_db::character_save::{CharacterSaveBundle, CharacterStatsRow};
 use mangos_db::characters::{CharEnumRow, NameQueryRow};
 use mangos_entities::player::{MAX_MONEY_AMOUNT, MaterializeError, MaterializeInputs, Player};
+use mangos_entities::unit::Team;
 use mangos_guid::ObjectGuid;
 use mangos_log::{Level, Log};
 use mangos_map::{Map, MapConfig, MapEvent, WorldRng, WorldStores};
@@ -37,6 +38,8 @@ use mangos_world_data::enum_stores::EnumStores;
 use mangos_world_data::player_info::RaceClassDbc;
 use mangos_world_data::spawn_support::RespawnTimes;
 use mangos_world_data::strings::MangosStrings;
+
+mod battleground;
 
 use crate::ServerConfig;
 use crate::account_data::{AccountDataSet, PER_CHARACTER_CACHE_MASK};
@@ -224,6 +227,9 @@ pub struct WorldDeps {
     /// Extracted `mmaps` directory (navmesh); `None` in
     /// tests that do not exercise pathfinding.
     pub mmaps_dir: Option<std::path::PathBuf>,
+    /// Extracted `vmaps` directory (collision);
+    /// `None` in tests that do not exercise vmaps.
+    pub vmaps_dir: Option<std::path::PathBuf>,
     pub race_class_dbc: Arc<RaceClassDbc>,
     /// Persisted respawn times loaded at boot.
     pub respawn_times: RespawnTimes,
@@ -431,6 +437,13 @@ impl InstanceRuntime {
         self.next_instance_id
     }
 
+    /// Drop the in-memory id registration (battleground
+    /// deletion: fork `BattleGround` dtor removes the
+    /// map; BG instance ids never persist binds).
+    fn release(&mut self, instance_id: u32) {
+        self.instance_maps.remove(&instance_id);
+    }
+
     fn char_bind(&self, guid_low: u32, map_id: u32) -> Option<(u32, bool)> {
         self.char_binds
             .get(&guid_low)
@@ -477,6 +490,10 @@ struct PendingTeleport {
     /// `SMSG_INSTANCE_SAVE_CREATED` is sent by
     /// `InstanceMap::Add`, i.e. at worldport-ACK finish.
     granted: bool,
+    /// `DELAYED_SPELL_CAST_DESERTER`: cast Deserter
+    /// (26013) after the ACK (`LeaveBattleground` far
+    /// arm, Tier 3 Slice 3).
+    cast_deserter: bool,
 }
 
 /// World+characters AH bot service.
@@ -1226,6 +1243,9 @@ struct SessionEntry {
     /// Unread/pending-delivery mail tracking
     /// (`MasterPlayer` mail fields).
     mail_tracker: crate::mail::MailTracker,
+    /// Open script gossip menu: NPC guid + per-item
+    /// `(sender, action)` (`PlayerMenu` subset).
+    gossip_menu: Option<(ObjectGuid, Vec<(u32, u32)>)>,
 }
 
 /// `WorldSession::SendPacket` queue-full policy: `false` means
@@ -1280,6 +1300,12 @@ struct World {
     group_by_db_id: HashMap<u32, u64>,
     /// Member guid low -> group key (`Player::GetGroup`).
     player_group: HashMap<u32, u64>,
+    /// `Player::m_originalGroup` while inside a BG raid:
+    /// guid low -> (group key, subgroup) (Tier 3 Slice 3).
+    player_original_group: HashMap<u32, (u64, u8)>,
+    /// Battleground manager + queues (`BattleGroundMgr`,
+    /// Tier 3 Slice 3).
+    bg_manager: battleground::BgManager,
     /// Invitee guid low -> group key
     /// (`Player::GetGroupInvite`).
     player_group_invite: HashMap<u32, u64>,
@@ -1815,6 +1841,8 @@ pub fn spawn_world(
         next_bot_session: 1 << 62,
         maps: HashMap::new(),
         instances,
+        player_original_group: HashMap::new(),
+        bg_manager: battleground::BgManager::default(),
         pending_teleports: HashMap::new(),
         area_trigger_cooldowns: HashMap::new(),
         player_map: HashMap::new(),
@@ -2264,6 +2292,33 @@ fn quest_can_see_start(player: &Player, q: &QuestTemplate, templates: &QuestTemp
 /// `CanTakeQuest` (auto-complete quests show as
 /// reward). The fork's `exceptQuestId` exclusion
 /// has no caller here.
+/// Quest-relation starts for a creature or
+/// gameobject questgiver entry.
+fn quest_rel_starts(
+    rel: &mangos_world_data::quest_template::QuestRelations,
+    entry: u32,
+    is_go: bool,
+) -> &[u32] {
+    if is_go {
+        rel.gameobject_starts(entry)
+    } else {
+        rel.creature_starts(entry)
+    }
+}
+
+/// Quest-relation ends (see `quest_rel_starts`).
+fn quest_rel_ends(
+    rel: &mangos_world_data::quest_template::QuestRelations,
+    entry: u32,
+    is_go: bool,
+) -> &[u32] {
+    if is_go {
+        rel.gameobject_ends(entry)
+    } else {
+        rel.creature_ends(entry)
+    }
+}
+
 fn quest_prepare_menu(
     player: &Player,
     starts: &[u32],
@@ -2920,6 +2975,7 @@ impl World {
                         player_guid: None,
                         played_last_tick: Instant::now(),
                         played_level: 0,
+                        gossip_menu: None,
                         client_mover_guid: None,
                         move_reject_until_ms: 0,
                         anticheat: crate::anticheat::MovementAnticheat::default(),
@@ -4682,6 +4738,7 @@ impl World {
     /// kicks for over-long strings are unported — the
     /// handlers drop them silently, like the chat length
     /// family.
+    #[allow(clippy::too_many_lines)]
     fn on_guild_packet(&mut self, id: SessionId, packet: &WorldPacket) {
         let Some(actor_low) = self.actor_low(id) else {
             return;
@@ -4714,6 +4771,31 @@ impl World {
             opcode_id::MSG_SAVE_GUILD_EMBLEM => self.on_guild_emblem(id, actor_low, packet),
             opcode_id::CMSG_QUESTGIVER_STATUS_QUERY => {
                 self.on_questgiver_status_query(id, actor_low, packet);
+            }
+            opcode_id::CMSG_GOSSIP_HELLO => self.on_gossip_hello(id, actor_low, packet),
+            opcode_id::CMSG_BATTLEMASTER_HELLO => {
+                self.on_bg_battlemaster_hello(id, actor_low, packet);
+            }
+            opcode_id::CMSG_BATTLEMASTER_JOIN => {
+                self.on_bg_battlemaster_join(id, actor_low, packet);
+            }
+            opcode_id::CMSG_BATTLEFIELD_JOIN => self.on_bg_battlefield_join(id, actor_low, packet),
+            opcode_id::CMSG_BATTLEFIELD_PORT => self.on_bg_port(id, actor_low, packet),
+            opcode_id::CMSG_BATTLEFIELD_LIST => self.on_bg_list(id, actor_low, packet),
+            opcode_id::CMSG_BATTLEFIELD_STATUS => self.on_bg_status(id, actor_low, packet),
+            opcode_id::CMSG_LEAVE_BATTLEFIELD => self.on_bg_leave(id, actor_low, packet),
+            opcode_id::MSG_PVP_LOG_DATA => self.on_bg_pvp_log(id, actor_low, packet),
+            opcode_id::MSG_BATTLEGROUND_PLAYER_POSITIONS => {
+                self.on_bg_positions(id, actor_low, packet);
+            }
+            opcode_id::CMSG_AREA_SPIRIT_HEALER_QUERY => {
+                self.on_bg_spirit_healer_query(id, actor_low, packet);
+            }
+            opcode_id::CMSG_AREA_SPIRIT_HEALER_QUEUE => {
+                self.on_bg_spirit_healer_queue(id, actor_low, packet);
+            }
+            opcode_id::CMSG_GOSSIP_SELECT_OPTION => {
+                self.on_gossip_select_option(id, actor_low, packet);
             }
             opcode_id::CMSG_QUESTGIVER_HELLO => self.on_questgiver_hello(id, actor_low, packet),
             opcode_id::CMSG_QUESTGIVER_QUERY_QUEST => {
@@ -8288,35 +8370,149 @@ impl World {
     /// reach (fork `INTERACTION_DISTANCE` + radii;
     /// a flat 10 yd bound here). Returns the
     /// creature entry + template name.
-    fn quest_creature(&self, actor_low: u32, npc_guid: ObjectGuid) -> Option<(u32, String)> {
+    /// Resolve a questgiver object (creature or
+    /// gameobject) for the quest handlers: entry,
+    /// display name, and whether it is a gameobject.
+    /// Fork `GetNPCIfCanInteractWith` subset: alive
+    /// creature within 10yd; gameobjects have no
+    /// alive concept (fork distance gate only).
+    fn quest_object(&self, actor_low: u32, obj_guid: ObjectGuid) -> Option<(u32, String, bool)> {
         let map = self
             .player_map
             .get(&actor_low)
             .and_then(|map_id| self.maps.get(map_id))?;
-        let creature = map.creature(npc_guid)?;
+        let player = map.player(player_guid(actor_low))?;
+        let a = player.unit.world.position();
+        if obj_guid.is_game_object() {
+            let go = map.gameobject(obj_guid)?;
+            let b = go.world.position();
+            let dist_sq = (a.x - b.x).powi(2) + (a.y - b.y).powi(2) + (a.z - b.z).powi(2);
+            if dist_sq > 100.0 {
+                return None;
+            }
+            return Some((go.info.id, go.info.name.clone(), true));
+        }
+        let creature = map.creature(obj_guid)?;
         if !creature.unit.is_alive() {
             return None;
         }
-        let player = map.player(player_guid(actor_low))?;
-        let a = player.unit.world.position();
         let b = creature.unit.world.position();
         let dist_sq = (a.x - b.x).powi(2) + (a.y - b.y).powi(2) + (a.z - b.z).powi(2);
         if dist_sq > 100.0 {
             return None;
         }
-        Some((creature.original_entry, creature.info.name.clone()))
+        Some((creature.original_entry, creature.info.name.clone(), false))
+    }
+
+    /// `HandleGossipHelloOpcode` script subset: a
+    /// creature script may take over with its own
+    /// menu (`pGossipHello`); otherwise the gossip
+    /// closes (default gossip text/quest-menu
+    /// preparation is not modeled on this opcode —
+    /// quest interaction runs through
+    /// `CMSG_QUESTGIVER_HELLO`).
+    fn on_gossip_hello(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        let Ok(npc_guid) = packet.reader().read_u64_le().map(ObjectGuid::from_wire_raw) else {
+            return;
+        };
+        let player = player_guid(actor_low);
+        let menu = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.gossip_script_on_hello(player, npc_guid));
+        if let Some(menu) = menu {
+            self.send_gossip_menu(id, npc_guid, &menu);
+        } else {
+            self.clear_gossip_menu(id);
+            self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
+        }
+    }
+
+    /// `HandleGossipSelectOptionOpcode` script
+    /// subset: options index into the menu stored
+    /// by `on_gossip_hello` (`pGossipSelect`).
+    fn on_gossip_select_option(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let (Ok(npc_raw), Ok(option)) = (reader.read_u64_le(), reader.read_u32_le()) else {
+            return;
+        };
+        let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
+        let Some((sender, action)) = self
+            .sessions
+            .get(&id)
+            .and_then(|e| e.gossip_menu.as_ref())
+            .filter(|(guid, _)| *guid == npc_guid)
+            .and_then(|(_, items)| items.get(option as usize).copied())
+        else {
+            return;
+        };
+        let player = player_guid(actor_low);
+        let outcome = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.gossip_script_on_select(player, npc_guid, sender, action));
+        match outcome {
+            Some(mangos_map::gossip::GossipSelectOutcome::ShowMenu(menu)) => {
+                self.send_gossip_menu(id, npc_guid, &menu);
+            }
+            Some(mangos_map::gossip::GossipSelectOutcome::Close) | None => {
+                self.clear_gossip_menu(id);
+                self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
+            }
+        }
+    }
+
+    /// `PlayerMenu::SendGossipMenu` wire shape
+    /// (`GossipDef.cpp:130`, no quest items in the
+    /// script subset) + menu state store.
+    fn send_gossip_menu(
+        &mut self,
+        id: SessionId,
+        npc_guid: ObjectGuid,
+        menu: &mangos_map::gossip::GossipMenuData,
+    ) {
+        if let Some(entry) = self.sessions.get_mut(&id) {
+            entry.gossip_menu = Some((
+                npc_guid,
+                menu.items.iter().map(|i| (i.sender, i.action)).collect(),
+            ));
+        }
+        let mut writer = PacketWriter::new();
+        write_guid(&mut writer, npc_guid);
+        writer.write_u32_le(menu.text_id);
+        writer.write_u32_le(u32::try_from(menu.items.len()).unwrap_or(0));
+        for (index, item) in menu.items.iter().enumerate() {
+            writer.write_u32_le(u32::try_from(index).unwrap_or(0));
+            writer.write_u8(item.icon);
+            writer.write_u8(0);
+            writer.write_cstring(&item.text);
+        }
+        writer.write_u32_le(0);
+        let mut reply = WorldPacket::new(opcode_id::SMSG_GOSSIP_MESSAGE);
+        reply.take_writer(writer);
+        self.reply_packet(id, reply);
+    }
+
+    fn clear_gossip_menu(&mut self, id: SessionId) {
+        if let Some(entry) = self.sessions.get_mut(&id) {
+            entry.gossip_menu = None;
+        }
     }
 
     fn on_questgiver_status_query(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
         let Ok(npc_guid) = packet.reader().read_u64_le().map(ObjectGuid::from_wire_raw) else {
             return;
         };
-        let Some((entry, _name)) = self.quest_creature(actor_low, npc_guid) else {
+        let Some((entry, _name, is_go)) = self.quest_object(actor_low, npc_guid) else {
             return;
         };
         let stores = &self.deps.world_stores;
-        let starts = stores.quest_relations.creature_starts(entry);
-        let ends = stores.quest_relations.creature_ends(entry);
+        let starts = quest_rel_starts(&stores.quest_relations, entry, is_go);
+        let ends = quest_rel_ends(&stores.quest_relations, entry, is_go);
         let Some(map) = self
             .player_map
             .get(&actor_low)
@@ -8342,12 +8538,19 @@ impl World {
         let Ok(npc_guid) = packet.reader().read_u64_le().map(ObjectGuid::from_wire_raw) else {
             return;
         };
-        let Some((entry, name)) = self.quest_creature(actor_low, npc_guid) else {
+        self.send_quest_list(id, actor_low, npc_guid);
+    }
+
+    /// Shared quest-list send for `CMSG_QUESTGIVER_HELLO`
+    /// and the questgiver-GO `Use` arm
+    /// (`MapEvent::QuestGiverHello`).
+    fn send_quest_list(&mut self, id: SessionId, actor_low: u32, npc_guid: ObjectGuid) {
+        let Some((entry, name, is_go)) = self.quest_object(actor_low, npc_guid) else {
             return;
         };
         let stores = &self.deps.world_stores;
-        let starts = stores.quest_relations.creature_starts(entry);
-        let ends = stores.quest_relations.creature_ends(entry);
+        let starts = quest_rel_starts(&stores.quest_relations, entry, is_go);
+        let ends = quest_rel_ends(&stores.quest_relations, entry, is_go);
         let Some(map) = self
             .player_map
             .get(&actor_low)
@@ -8386,20 +8589,14 @@ impl World {
         };
         let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
         // Fork: the object must start or end the
-        // quest, else `CloseGossip` (gameobject and
-        // item questgivers unmodeled).
+        // quest, else `CloseGossip` (item questgivers
+        // unmodeled).
         let stores = &self.deps.world_stores;
         let involved = self
-            .quest_creature(actor_low, npc_guid)
-            .is_some_and(|(entry, _)| {
-                stores
-                    .quest_relations
-                    .creature_starts(entry)
-                    .contains(&quest_id)
-                    || stores
-                        .quest_relations
-                        .creature_ends(entry)
-                        .contains(&quest_id)
+            .quest_object(actor_low, npc_guid)
+            .is_some_and(|(entry, _, is_go)| {
+                quest_rel_starts(&stores.quest_relations, entry, is_go).contains(&quest_id)
+                    || quest_rel_ends(&stores.quest_relations, entry, is_go).contains(&quest_id)
             });
         if !involved {
             self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
@@ -8876,18 +9073,14 @@ impl World {
             return;
         };
         let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
-        let Some((entry, _name)) = self.quest_creature(actor_low, npc_guid) else {
+        let Some((entry, _name, is_go)) = self.quest_object(actor_low, npc_guid) else {
             return;
         };
         let stores = &self.deps.world_stores;
         let Some(q) = stores.quest_templates.get(quest_id).cloned() else {
             return;
         };
-        if !stores
-            .quest_relations
-            .creature_starts(entry)
-            .contains(&quest_id)
-        {
+        if !quest_rel_starts(&stores.quest_relations, entry, is_go).contains(&quest_id) {
             return;
         }
         let mut reason = 0u32;
@@ -8908,7 +9101,24 @@ impl World {
             self.reply_packet(id, reply);
             return;
         }
-        self.quest_add(id, actor_low, &q);
+        if self.quest_add(id, actor_low, &q) {
+            // `pQuestAcceptNPC` / `pGOQuestAccept`
+            // script seam (fork `OnQuestAccept` after
+            // `AddQuest`).
+            let player = player_guid(actor_low);
+            if let Some(map) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get_mut(&map_id))
+            {
+                if is_go {
+                    map.go_quest_script_on_accept(player, npc_guid, quest_id);
+                } else {
+                    map.quest_script_on_accept(player, npc_guid, quest_id);
+                }
+            }
+        }
     }
 
     /// `HandleQuestgiverCompleteQuest`: the fork
@@ -8974,15 +9184,11 @@ impl World {
             return;
         };
         let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
-        let Some((entry, _name)) = self.quest_creature(actor_low, npc_guid) else {
+        let Some((entry, _name, is_go)) = self.quest_object(actor_low, npc_guid) else {
             return;
         };
         let stores = self.deps.world_stores.clone();
-        if !stores
-            .quest_relations
-            .creature_ends(entry)
-            .contains(&quest_id)
-        {
+        if !quest_rel_ends(&stores.quest_relations, entry, is_go).contains(&quest_id) {
             return;
         }
         let alive = self
@@ -9056,15 +9262,11 @@ impl World {
             return;
         }
         let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
-        let Some((entry, _name)) = self.quest_creature(actor_low, npc_guid) else {
+        let Some((entry, _name, is_go)) = self.quest_object(actor_low, npc_guid) else {
             return;
         };
         let stores = self.deps.world_stores.clone();
-        if !stores
-            .quest_relations
-            .creature_ends(entry)
-            .contains(&quest_id)
-        {
+        if !quest_rel_ends(&stores.quest_relations, entry, is_go).contains(&quest_id) {
             return;
         }
         let alive = self
@@ -9117,8 +9319,8 @@ impl World {
     }
 
     /// `Player::RewardQuest` payout body (callers
-    /// gate with `quest_can_reward`; mail and
-    /// script hooks unmodeled; item space pre-check
+    /// gate with `quest_can_reward`; mail hooks
+    /// unmodeled; item space pre-check
     /// folded into the grant's full-backpack drop).
     /// `announce` mirrors the fork flag: the
     /// quest-complete packet is suppressed for the
@@ -9138,6 +9340,18 @@ impl World {
             if q.req_item_ids[i] != 0 && q.req_item_counts[i] != 0 {
                 self.quest_destroy_item_count(actor_low, q.req_item_ids[i], q.req_item_counts[i]);
             }
+        }
+        // `Player::RewardQuest` AV hook
+        // (`HandleQuestComplete`, creature enders only).
+        if npc_guid.is_creature()
+            && let Some(map) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get_mut(&map_id))
+            && map.bg.as_ref().is_some_and(|b| b.bg_type_id == 1)
+        {
+            map.av_handle_quest_complete(npc_guid, q.entry, player_guid(actor_low));
         }
         // Choice + fixed reward items (an empty
         // choice slot grants nothing, fork shape).
@@ -9302,6 +9516,21 @@ impl World {
                     triggered_by_spell: 0,
                 },
             );
+        }
+        // `pQuestRewardedNPC` / `pQuestRewardedGO`
+        // script seam (fork `OnQuestRewarded` at the
+        // end of `RewardQuest`).
+        if let Some(map) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+        {
+            if npc_guid.is_game_object() {
+                map.go_quest_script_on_rewarded(player_guid, npc_guid, q.entry);
+            } else {
+                map.quest_script_on_rewarded(player_guid, npc_guid, q.entry);
+            }
         }
         // Next-quest chaining lives in the choose
         // handler (`GetNextQuest`), as in the fork.
@@ -10990,6 +11219,7 @@ impl World {
                 player_guid: None,
                 played_last_tick: Instant::now(),
                 played_level: 0,
+                gossip_menu: None,
                 client_mover_guid: None,
                 move_reject_until_ms: 0,
                 anticheat: crate::anticheat::MovementAnticheat::default(),
@@ -15531,6 +15761,26 @@ impl World {
     /// granted a fresh permanent personal bind
     /// (`SMSG_INSTANCE_SAVE_CREATED`).
     fn resolve_map_key(&mut self, guid_low: u32, map_id: u32, player: &Player) -> (MapKey, bool) {
+        if mangos_world_data::battlegrounds::bg_type_by_map_id(map_id) != 0 {
+            // Login into a BG map: the live match's key
+            // when the saved bg instance still runs,
+            // else the BG entry point (fork
+            // `BattleGroundMap::CanEnter` +
+            // `TeleportAllPlayersTo(BG_ENTRY_POINT)`).
+            // Entry-point relocation runs in
+            // `bg_relocate_login` before this resolves.
+            let bg_instance = player.battleground.bg_instance_id;
+            if bg_instance != 0
+                && self.bg_manager.live.contains_key(&bg_instance)
+                && self.bg_manager.live[&bg_instance].map_key.map_id == map_id
+            {
+                return (self.bg_manager.live[&bg_instance].map_key, false);
+            }
+            // Fall through: `bg_relocate_login` already
+            // moved the player to the entry point, so
+            // this arm is only a safety net.
+            return (MapKey::shared(player.battleground.join_pos.0), false);
+        }
         if !self.deps.world_stores.maps.is_instance_map(map_id) {
             return (MapKey::shared(map_id), false);
         }
@@ -15684,6 +15934,42 @@ impl World {
             self.drain_map_events();
             return;
         }
+        self.teleport_player_to_key(id, dest_key, dest, granted, false);
+    }
+
+    /// Far transfer to an already-resolved dest key
+    /// (battleground port-in/out bypasses instance-bind
+    /// resolution; `BattleGroundMap::CanEnter` is the
+    /// manager's job).
+    fn teleport_player_to_key(
+        &mut self,
+        id: SessionId,
+        dest_key: MapKey,
+        dest: mangos_movement::movement_info::Position,
+        granted: bool,
+        cast_deserter: bool,
+    ) {
+        let Some(guid_low) = self.sessions.get(&id).and_then(|entry| entry.player_guid) else {
+            return;
+        };
+        if self.pending_teleports.contains_key(&id) {
+            return;
+        }
+        let Some(&current_key) = self.player_map.get(&guid_low) else {
+            return;
+        };
+        let dest_map_id = dest_key.map_id;
+        let guid = player_guid(guid_low);
+        if dest_key == current_key {
+            if let Some(map) = self.maps.get_mut(&current_key) {
+                map.teleport_player_in_map(guid, dest);
+            }
+            if cast_deserter {
+                self.bg_cast_deserter(guid_low);
+            }
+            self.drain_map_events();
+            return;
+        }
         // Far transfer: the pet reloads on the new map
         // from its refreshed row (live transfer of the
         // pet aggregate is Slice 5 territory).
@@ -15717,6 +16003,7 @@ impl World {
                 source_key: current_key,
                 key: dest_key,
                 granted,
+                cast_deserter,
             },
         );
         if self.bot_sessions.contains_key(&id) {
@@ -15786,7 +16073,13 @@ impl World {
         let Some(pending) = self.pending_teleports.remove(&id) else {
             return;
         };
+        let guid_low = pending.player.unit.guid().counter();
+        let cast_deserter = pending.cast_deserter;
         self.add_player_to_map(id, pending.player, pending.key, false);
+        if cast_deserter {
+            self.bg_cast_deserter(guid_low);
+        }
+        self.bg_maybe_add_player(pending.key, guid_low);
         if pending.granted {
             self.reply_packet(id, crate::player_login::build_instance_save_created());
         }
@@ -15796,11 +16089,16 @@ impl World {
         self.drain_map_events();
     }
 
-    fn enter_map(&mut self, session: SessionId, player: Player) {
+    fn enter_map(&mut self, session: SessionId, mut player: Player) {
+        // BG login relocation (`TeleportToBGEntryPoint`
+        // when the saved battleground is gone).
+        self.bg_relocate_login(&mut player);
         let map_id = player.unit.world.map_id;
         let guid_low = player.unit.guid().counter();
         let (map_key, granted) = self.resolve_map_key(guid_low, map_id, &player);
         self.add_player_to_map(session, player, map_key, true);
+        self.bg_maybe_add_player(map_key, guid_low);
+        self.bg_player_logged_in(session, guid_low);
         if granted {
             self.reply_packet(session, crate::player_login::build_instance_save_created());
         }
@@ -16167,6 +16465,8 @@ impl World {
         let now_unix = unix_now();
         let maps_dir = self.deps.maps_dir.clone();
         let navmesh_dir = self.deps.mmaps_dir.clone();
+        let vmaps_dir = self.deps.vmaps_dir.clone();
+        let (vmap_los, vmap_height) = (self.config.vmap_enable_los, self.config.vmap_enable_height);
         let map_config = MapConfig {
             // `IsPvPRealm()`: REALM_TYPE_PVP (1), RPPVP (8), FFA_PVP (16).
             pvp_realm: matches!(self.config.game_type, 1 | 8 | 16),
@@ -16191,6 +16491,7 @@ impl World {
             );
             map.set_maps_dir(maps_dir);
             map.set_mmaps_dir(navmesh_dir);
+            map.set_vmaps_dir(vmaps_dir, vmap_los, vmap_height);
             map
         });
         // Loaded cooldowns seed after saved auras
@@ -16245,6 +16546,11 @@ impl World {
     /// and disconnect share this; character save is
     /// Phase 6).
     fn leave_map(&mut self, guid_low: u32) {
+        // `LeaveBattleground(false)` + queue offline mark
+        // (`BattleGroundMgr::PlayerLoggedOut`) run while
+        // the player is still in its map (fork logout
+        // order: deserter applies before the save).
+        self.bg_player_logged_out(guid_low);
         // Logout `RemovePet(PET_SAVE_AS_CURRENT)` while
         // the pet is still live in the map.
         if let Some(map_id) = self.player_map.get(&guid_low).copied()
@@ -16278,12 +16584,13 @@ impl World {
     /// respawn clears to the characters DB.
     #[allow(clippy::too_many_lines)] // flat MapEvent dispatcher
     fn drain_map_events(&mut self) {
-        let mut events: Vec<MapEvent> = Vec::new();
-        for map in self.maps.values_mut() {
-            events.extend(map.drain_events());
+        let mut events: Vec<(MapKey, MapEvent)> = Vec::new();
+        for (key, map) in &mut self.maps {
+            let key = *key;
+            events.extend(map.drain_events().into_iter().map(|e| (key, e)));
         }
         let mut dead: Vec<SessionId> = Vec::new();
-        for event in events {
+        for (source_key, event) in events {
             match event {
                 MapEvent::Packet { to, packet } => {
                     if let Some(id) = self.player_session.get(&to.counter()).copied()
@@ -16291,6 +16598,55 @@ impl World {
                         && !send_packet(entry, packet)
                     {
                         dead.push(id);
+                    }
+                }
+                MapEvent::PlayerLeveled { player, new_level } => {
+                    self.bg_on_player_leveled(player.counter(), new_level);
+                }
+                MapEvent::BgScheduleQueueUpdate {
+                    queue_type_id,
+                    bg_type_id,
+                    bracket_id,
+                } => {
+                    self.bg_schedule_queue_update(queue_type_id, bg_type_id, bracket_id);
+                }
+                MapEvent::BgFreeSlotQueue { present } => {
+                    self.bg_free_slot_queue_set(source_key, present);
+                }
+                MapEvent::BgTransportOut { player } => {
+                    self.bg_transport_out(player.counter());
+                }
+                MapEvent::BgDelete => {
+                    self.bg_delete_map(source_key);
+                }
+                MapEvent::BgLangMessage {
+                    entry,
+                    msg_type,
+                    source,
+                    arg,
+                } => {
+                    self.bg_send_lang_message(source_key, entry, msg_type, source, arg);
+                }
+                MapEvent::BgLangMessage2 {
+                    entry,
+                    msg_type,
+                    source,
+                    arg_ids,
+                } => {
+                    self.bg_send_lang2_message(source_key, entry, msg_type, source, arg_ids);
+                }
+                MapEvent::BgWorldText { text } => {
+                    self.bg_send_world_text(&text);
+                }
+                MapEvent::BgRaidJoin { player, team } => {
+                    self.bg_raid_join(source_key, player.counter(), team);
+                }
+                MapEvent::BgRaidLeave { player, team } => {
+                    self.bg_raid_leave(source_key, player.counter(), team);
+                }
+                MapEvent::QuestGiverHello { player, object } => {
+                    if let Some(id) = self.player_session.get(&player.counter()).copied() {
+                        self.send_quest_list(id, player.counter(), object);
                     }
                 }
                 MapEvent::ClearCreatureRespawn {
@@ -16463,6 +16819,9 @@ impl World {
 
     /// Map ticks with real elapsed diff (tick contract).
     fn update_maps(&mut self) {
+        // `BattleGroundMgr::Update` (World::Update order:
+        // manager before map updates).
+        self.bg_update_manager();
         let now = Instant::now();
         let diff = u32::try_from(now.saturating_duration_since(self.last_tick).as_millis())
             .unwrap_or(u32::MAX);
@@ -17107,11 +17466,10 @@ impl World {
     }
 
     /// `HandleAreaTriggerOpcode` (`MiscHandler.cpp:675-851`)
-    /// subset: script gate evaluation (execution is a
-    /// recorded deviation — no DB-script engine and the
-    /// C++ `OnAreaTrigger` content scripts are unported),
-    /// quest-explore credit (deviation: no quest
-    /// progression system yet), tavern rest flag
+    /// subset: trigger-script execution (C++
+    /// `pAreaTrigger` by name, then DB
+    /// `areatrigger_scripts`), quest-explore credit,
+    /// tavern rest flag
     /// (rest-type/bonus-rate distinction lands with
     /// rest accrual), ghost-dungeon message (fork
     /// teleports the ghost in when the corpse lies in
@@ -17152,18 +17510,11 @@ impl World {
         if !trigger.contains(map_key.map_id, position.x, position.y, position.z, 5.0) {
             return;
         }
-        // Tavern triggers (`areatrigger_tavern`): the fork
-        // puts the player into tavern rest and stops
-        // (`HandleAreaTriggerOpcode`).
-        if stores.tavern_triggers.contains(&trigger_id) {
-            if let Some(map) = self.maps.get_mut(&map_key) {
-                map.set_player_rest_tavern(guid, trigger_id);
-            }
-            return;
-        }
-        // Script gate (`StartAreaTriggerScript` head):
-        // condition + per-map cooldown; execution of DB
-        // and C++ trigger scripts is unported.
+        // Script execution (`StartAreaTriggerScript`,
+        // before the fork's quest/tavern/teleport arms):
+        // condition + per-map cooldown gates, then the
+        // C++ `pAreaTrigger` by script name; on `false`,
+        // the DB `areatrigger_scripts` arm.
         if trigger.has_script() {
             let condition_ok = trigger.condition_id == 0
                 || self.maps.get(&map_key).is_some_and(|map| {
@@ -17183,13 +17534,16 @@ impl World {
                             now.saturating_add(i64::from(trigger.cooldown)),
                         );
                     }
-                    self.log.out(
-                        Level::Detail,
-                        &format!(
-                            "area trigger {trigger_id} script (id {}, name '{}') not executed: trigger scripts unported",
-                            trigger.script_id, trigger.script_name
-                        ),
-                    );
+                    let handled = self.maps.get_mut(&map_key).is_some_and(|map| {
+                        map.area_trigger_script(guid, trigger_id, &trigger.script_name)
+                    });
+                    self.drain_map_events();
+                    if !handled && trigger.script_id != 0 {
+                        if let Some(map) = self.maps.get_mut(&map_key) {
+                            map.scripts_start_area_trigger(trigger.script_id, guid);
+                        }
+                        self.drain_map_events();
+                    }
                 }
             }
         }
@@ -17225,6 +17579,15 @@ impl World {
                 self.reply_packet(id, reply);
             }
         }
+        // Tavern triggers (`areatrigger_tavern`): the fork
+        // puts the player into tavern rest and stops
+        // (`HandleAreaTriggerOpcode`).
+        if stores.tavern_triggers.contains(&trigger_id) {
+            if let Some(map) = self.maps.get_mut(&map_key) {
+                map.set_player_rest_tavern(guid, trigger_id);
+            }
+            return;
+        }
         // Tavern rest: flag only (rested-XP accrual
         // lands with character save).
         if stores.area_triggers.is_tavern(trigger_id) {
@@ -17240,6 +17603,63 @@ impl World {
                     .set_flag(offsets::PLAYER_FLAGS, 0x0000_0020);
             }
             return;
+        }
+        // BG entrance triggers (`areatrigger_bg_entrance`):
+        // level/team gate, entry-point snapshot, list.
+        if let Some(entrance) = stores.bg_entrances.get(trigger_id) {
+            let Some(template) = stores.battlegrounds.get(entrance.bg_type_id) else {
+                return;
+            };
+            let (min_level, max_level) = (template.min_level, template.max_level);
+            let player_team = self
+                .maps
+                .get(&map_key)
+                .and_then(|m| m.player(guid))
+                .map(|p| p.team);
+            let wrong = level < min_level
+                || level > max_level
+                || player_team.is_some_and(|t| {
+                    mangos_entities::battleground::team_db_value(t) != entrance.team
+                });
+            if wrong {
+                // Fork names the *opposite* of the
+                // player's team (verbatim quirk).
+                let faction = if player_team == Some(Team::Alliance) {
+                    "Horde"
+                } else {
+                    "Alliance"
+                };
+                let suffix = if min_level % 2 == 1 { "st" } else { "th" };
+                let text = format!(
+                    "You must be in the {faction} and at least {min_level}{suffix} level to enter."
+                );
+                self.send_area_trigger_message(id, &text);
+                return;
+            }
+            if let Some(map) = self.maps.get_mut(&map_key)
+                && let Some(player) = map.player_mut(guid)
+            {
+                player.battleground.set_entry_point(
+                    entrance.exit_map_id,
+                    entrance.exit_x,
+                    entrance.exit_y,
+                    entrance.exit_z,
+                    entrance.exit_o,
+                );
+            }
+            self.bg_send_list(guid_low, guid, entrance.bg_type_id);
+            return;
+        }
+        // In-BG areatrigger rules (`BattleGround::HandleAreaTrigger`).
+        if self.maps.get(&map_key).is_some_and(|m| m.bg.is_some()) {
+            let handled = self
+                .maps
+                .get_mut(&map_key)
+                .is_some_and(|map| map.bg_handle_area_trigger(guid, trigger_id));
+            self.drain_map_events();
+            if handled {
+                return;
+            }
         }
         let Some(teleport) = stores.area_triggers.teleport(trigger_id).cloned() else {
             return;
@@ -18007,6 +18427,8 @@ impl World {
                                 | opcode_id::CMSG_OFFER_PETITION
                                 | opcode_id::CMSG_TURN_IN_PETITION
                                 | opcode_id::CMSG_QUESTGIVER_STATUS_QUERY
+                                | opcode_id::CMSG_GOSSIP_HELLO
+                                | opcode_id::CMSG_GOSSIP_SELECT_OPTION
                                 | opcode_id::CMSG_QUESTGIVER_HELLO
                                 | opcode_id::CMSG_QUESTGIVER_QUERY_QUEST
                                 | opcode_id::CMSG_QUEST_QUERY

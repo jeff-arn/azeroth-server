@@ -55,6 +55,7 @@ fn race_class_dbc() -> RaceClassDbc {
                 faction_id: uint(row, 2),
                 model_m: uint(row, 3),
                 model_f: uint(row, 4),
+                res_sickness_spell_id: uint(row, 9),
                 team_id: uint(row, 5),
             },
         );
@@ -166,6 +167,15 @@ fn bench_creatures_move() {
                     chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
                     auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
                     maps: mangos_world_data::map_template::MapStore::default(),
+                    safe_locs: mangos_world_data::battlegrounds::SafeLocStore::default(),
+                    battlegrounds: mangos_world_data::battlegrounds::BattlegroundTemplates::default(
+                    ),
+                    battlemasters: mangos_world_data::battlegrounds::BattleMasters::default(),
+                    battle_event_indexes:
+                        mangos_world_data::battlegrounds::BattleEventIndexes::default(),
+                    graveyard_links: mangos_world_data::battlegrounds::GraveyardLinks::default(),
+                    bg_entrances: mangos_world_data::battlegrounds::BattlegroundEntrances::default(
+                    ),
                     area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
                     quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
                     quest_templates: mangos_world_data::quest_template::QuestTemplates::default(),
@@ -227,13 +237,20 @@ fn bench_creatures_move() {
         .expect("MANGOS_MMAPS_DIR")
         .into();
     map.set_mmaps_dir(Some(navmesh_dir));
+    // Tier 3 Slice 1: exercise the fork
+    // GetHeightStatic combine (GridMap + vmap)
+    // instead of the GridMap-only heuristic.
+    let vmaps_dir: PathBuf = std::env::var_os("MANGOS_VMAPS_DIR")
+        .expect("MANGOS_VMAPS_DIR")
+        .into();
+    map.set_vmaps_dir(Some(vmaps_dir), true, true);
     assert!(
         map.navmesh_active_at(player_pos),
         "navmesh tile must cover the bench spot"
     );
 
     // Ground height vs the C++-saved character z (the
-    // bench character stands on terrain; GridMap-only
+    // bench character stands on terrain; the combined
     // height should land within a couple of yards).
     let ground = map.ground_z(player_pos.x, player_pos.y, player_pos.z);
     assert!(

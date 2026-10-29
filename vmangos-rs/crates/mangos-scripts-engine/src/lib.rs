@@ -323,6 +323,21 @@ pub struct ScriptStores {
     pub conditions: ConditionMap,
     pub broadcast_texts: BroadcastTextMap,
     pub script_texts: ScriptTextMap,
+    /// `npc_gossip`: spawn guid low → `npc_text` id
+    /// (`ObjectMgr::LoadNpcGossips`).
+    pub npc_gossips: HashMap<u32, u32>,
+    /// `areatrigger_scripts` DB scripts
+    /// (`sAreaTriggerScripts`, `ScriptMgr.cpp:1388`).
+    pub area_trigger_scripts: ScriptMapMap,
+    /// `event_scripts` DB scripts (`sEventScripts`,
+    /// `ScriptMgr.cpp:1559`), keyed by event id.
+    pub event_scripts: ScriptMapMap,
+    /// `gameobject_scripts` DB scripts
+    /// (`sGameObjectScripts`), keyed by spawn guid low.
+    pub gameobject_scripts: ScriptMapMap,
+    /// `scripted_event_id`: event id → C++ script name
+    /// (`ScriptMgr::LoadEventIdScripts`).
+    pub scripted_event_ids: HashMap<u32, String>,
 }
 
 impl ScriptStores {

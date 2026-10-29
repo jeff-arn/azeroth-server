@@ -264,6 +264,10 @@ pub struct ServerConfig {
     pub prevent_item_datamining: bool,
     /// `ActivateWeather` (default true).
     pub activate_weather: bool,
+    /// `vmap.enableLOS` (fork default false).
+    pub vmap_enable_los: bool,
+    /// `vmap.enableHeight` (fork default false).
+    pub vmap_enable_height: bool,
     /// `ChangeWeatherInterval` in milliseconds (default
     /// 600000 = 10 minutes).
     pub change_weather_interval_ms: u32,
@@ -295,6 +299,75 @@ pub struct ServerConfig {
     /// `PlayerBot.AllowSaving` (default false,
     /// `PlayerBotMgr.cpp:56`).
     pub player_bot_allow_saving: bool,
+    /// `Battleground.*` / `BattleGround.*` / `Alterac.*`
+    /// (`World.cpp:763-783`, Tier 3 Slice 3).
+    pub battleground: BgConfig,
+}
+
+/// Battleground tuning (`World.cpp:763-783` defaults;
+/// `Battleground.InvitationType` dist file sets 1, code
+/// default is 0 and wins when unset).
+#[derive(Clone, Debug, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // fork config-key mirror
+pub struct BgConfig {
+    /// `Alterac.MinPlayersInQueue` (default 0).
+    pub av_min_players_in_queue: u32,
+    /// `Alterac.InitMaxPlayers` (default 0).
+    pub av_init_max_players: u32,
+    /// `Battleground.CastDeserter` (default true).
+    pub cast_deserter: bool,
+    /// `Battleground.QueueAnnouncer.Join` (default 0,
+    /// clamped 0..=2).
+    pub queue_announcer_join: u32,
+    /// `Battleground.QueueAnnouncer.Start` (default false).
+    pub queue_announcer_start: bool,
+    /// `Battleground.InvitationType` (default 0).
+    pub invitation_type: u32,
+    /// `BattleGround.PrematureFinishTimer` in ms
+    /// (default 5 minutes).
+    pub premature_finish_timer_ms: u32,
+    /// `BattleGround.PremadeGroupWaitForMatch` in ms
+    /// (default 0).
+    pub premade_wait_for_match_ms: u32,
+    /// `BattleGround.PremadeQueue.MinGroupSize` (default 6).
+    pub premade_min_group_size: u32,
+    /// `BattleGround.RandomizeQueues` (default false).
+    pub randomize_queues: bool,
+    /// `BattleGround.GroupQueueLimit` (default 40).
+    pub group_queue_limit: u32,
+    /// `BattleGround.TagInBattleGrounds` (default true).
+    pub tag_in_battlegrounds: bool,
+    /// `BattleGround.QueuesCount` after the fork 0-arm:
+    /// `WowPatch == 10 ? 3 : 1` (`World.cpp:778-784`).
+    pub queues_count: u32,
+}
+
+fn bg_config(cfg: &Config, wow_patch: u32) -> BgConfig {
+    let mut queues_count = to_u32(cfg.int_default("BattleGround.QueuesCount", 0)).min(3);
+    if queues_count == 0 {
+        queues_count = if wow_patch == 10 { 3 } else { 1 };
+    }
+    BgConfig {
+        av_min_players_in_queue: to_u32(cfg.int_default("Alterac.MinPlayersInQueue", 0)),
+        av_init_max_players: to_u32(cfg.int_default("Alterac.InitMaxPlayers", 0)),
+        cast_deserter: cfg.bool_default("Battleground.CastDeserter", true),
+        queue_announcer_join: to_u32(cfg.int_default("Battleground.QueueAnnouncer.Join", 0)).min(2),
+        queue_announcer_start: cfg.bool_default("Battleground.QueueAnnouncer.Start", false),
+        invitation_type: to_u32(cfg.int_default("Battleground.InvitationType", 0)),
+        premature_finish_timer_ms: to_u32(
+            cfg.int_default("BattleGround.PrematureFinishTimer", 300_000),
+        ),
+        premade_wait_for_match_ms: to_u32(
+            cfg.int_default("BattleGround.PremadeGroupWaitForMatch", 0),
+        ),
+        premade_min_group_size: to_u32(
+            cfg.int_default("BattleGround.PremadeQueue.MinGroupSize", 6),
+        ),
+        randomize_queues: cfg.bool_default("BattleGround.RandomizeQueues", false),
+        group_queue_limit: to_u32(cfg.int_default("BattleGround.GroupQueueLimit", 40)),
+        tag_in_battlegrounds: cfg.bool_default("BattleGround.TagInBattleGrounds", true),
+        queues_count,
+    }
 }
 
 fn bot_chat_config(cfg: &Config) -> mangos_bots::chat::ChatConfig {
@@ -423,6 +496,8 @@ impl ServerConfig {
             ) as u8,
             prevent_item_datamining: cfg.bool_default("Item.PreventDataMining", true),
             activate_weather: cfg.bool_default("ActivateWeather", true),
+            vmap_enable_los: cfg.bool_default("vmap.enableLOS", false),
+            vmap_enable_height: cfg.bool_default("vmap.enableHeight", false),
             change_weather_interval_ms: to_u32(cfg.int_default("ChangeWeatherInterval", 600_000)),
             bot_chat: bot_chat_config(cfg),
             bot_population: mangos_bots::population::PopulationConfig {
@@ -495,6 +570,7 @@ impl ServerConfig {
             player_save_stats_only_on_logout: cfg
                 .bool_default("PlayerSave.Stats.SaveOnlyOnLogout", true),
             player_bot_allow_saving: cfg.bool_default("PlayerBot.AllowSaving", false),
+            battleground: bg_config(cfg, to_u32(cfg.int_default("WowPatch", 0)).min(10)),
         }
     }
 }

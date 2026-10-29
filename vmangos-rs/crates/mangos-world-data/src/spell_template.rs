@@ -178,5 +178,6 @@ fn load_spell(f: &Fields, report: &mut LoadReport) -> SpellEntry {
         prevention_type: f.u32(141),
         custom: f.u32(149),
         name: f.string(124),
+        script_name: f.string(150),
     }
 }

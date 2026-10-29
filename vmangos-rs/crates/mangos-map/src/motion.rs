@@ -160,13 +160,14 @@ pub const MOVE_EXCLUDE_STEEP_SLOPES: u32 = 0x080;
 // ---------------------------------------------------------------------------
 // Ground heights
 
-/// Lazily-loaded `.map` height grids for one map id
-/// (`TerrainInfo` `GridMap` half of `Map::GetHeight`; the
-/// vmap half is deferred).
+/// Lazily-loaded `.map` height grids plus the
+/// vmap host for one map id (`TerrainInfo` +
+/// `VMapManager2` halves of `Map::GetHeight`).
 pub struct Heights {
     map_id: u32,
     dir: Option<PathBuf>,
     grids: HashMap<(i32, i32), Option<GridMap>>,
+    vmaps: crate::vmaps::VmapHost,
 }
 
 impl Heights {
@@ -176,7 +177,16 @@ impl Heights {
             map_id,
             dir,
             grids: HashMap::new(),
+            vmaps: crate::vmaps::VmapHost::new(map_id),
         }
+    }
+
+    pub fn set_vmaps_dir(&mut self, dir: Option<PathBuf>, enable_los: bool, enable_height: bool) {
+        self.vmaps.set_dir(dir, enable_los, enable_height);
+    }
+
+    pub(crate) fn vmaps(&mut self) -> &mut crate::vmaps::VmapHost {
+        &mut self.vmaps
     }
 
     /// Tile pair for a world position
@@ -211,19 +221,59 @@ impl Heights {
     /// grid height when the tile is loaded and the height
     /// is not the invalid sentinel, else the hint.
     pub fn ground_z(&mut self, x: f32, y: f32, z_hint: f32) -> f32 {
-        match self.grid(x, y) {
-            Some(grid) => {
-                let h = grid.height(x, y);
-                // Fork `GetHeightStatic` prefers the vmap
-                // height near the hint when the query is
-                // under the `.map` surface (`z < mapHeight`
-                // arm) — dungeons sit under outdoor terrain,
-                // so the raw grid height there is the surface
-                // far above. The vmap manager is not ported
-                // yet; until it lands, a grid height more
-                // than `DEFAULT_HEIGHT_SEARCH` (10) above the
+        let map_height = self.grid(x, y).map(|grid| grid.height(x, y));
+        if self.vmaps.height_enabled() {
+            // TerrainInfo::GetHeightStatic (GridMap.cpp:806)
+            // transcription. The dynamic-tree max of
+            // Map::GetHeight is not modeled (recorded).
+            use mangos_assets::gridmap::INVALID_HEIGHT_VALUE;
+            /// `DEFAULT_HEIGHT_SEARCH`.
+            const DEFAULT_HEIGHT_SEARCH: f32 = 10.0;
+            let mut map_h = INVALID_HEIGHT_VALUE;
+            if let Some(h) = map_height {
+                map_h = h;
+            }
+            let z2 = z_hint + 2.0;
+            let mut search = DEFAULT_HEIGHT_SEARCH;
+            if map_h > INVALID_HEIGHT && z2 - map_h > search {
+                search = z2 - map_h + 1.0;
+            }
+            let mut vmap_h = self.vmaps.vmap_height(x, y, z2, search);
+            if vmap_h <= INVALID_HEIGHT {
+                vmap_h = self.vmaps.vmap_height(x, y, z2, 10_000.0);
+            }
+            if vmap_h <= INVALID_HEIGHT && map_h > z2 && (z2 - map_h).abs() > 30.0 {
+                vmap_h = self.vmaps.vmap_height(x, y, z2, -search);
+            }
+            if vmap_h <= INVALID_HEIGHT && map_h > INVALID_HEIGHT && z2 < map_h {
+                vmap_h = self
+                    .vmaps
+                    .vmap_height(x, y, map_h + 2.0, DEFAULT_HEIGHT_SEARCH);
+            }
+            let out = if vmap_h > INVALID_HEIGHT {
+                if map_h > INVALID_HEIGHT && z_hint >= map_h && vmap_h <= map_h {
+                    map_h
+                } else {
+                    vmap_h
+                }
+            } else {
+                map_h
+            };
+            // Callers here expect a usable z; the fork
+            // returns the sentinel and lets its callers
+            // cope (UpdateAllowedPositionZ clamps via
+            // GetHeight's VALID_HEIGHT check upstream).
+            return if out > INVALID_HEIGHT { out } else { z_hint };
+        }
+        match map_height {
+            Some(h) => {
+                // No vmap height calc: a grid height more
+                // than DEFAULT_HEIGHT_SEARCH (10) above the
                 // hint is treated as not applicable and the
-                // hint (navmesh/spawn Z) stands.
+                // hint (navmesh/spawn Z) stands — dungeons
+                // sit under outdoor terrain. (The fork
+                // without vmap height is documented broken;
+                // this keeps vmap-less worlds usable.)
                 if h > INVALID_HEIGHT && h <= z_hint + 10.0 {
                     h
                 } else {
@@ -710,9 +760,47 @@ impl Map {
         }
     }
 
-    /// `Map::GetHeight` (`GridMap` subset).
+    /// `Map::GetHeight` (`GridMap` + vmap static
+    /// tree; dynamic-tree max not modeled).
     pub fn ground_z(&mut self, x: f32, y: f32, z_hint: f32) -> f32 {
         self.heights.ground_z(x, y, z_hint)
+    }
+
+    /// `Map::IsWithinLOS` static half
+    /// (`VMapManager2::isInLineOfSight`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn is_in_line_of_sight(
+        &mut self,
+        x1: f32,
+        y1: f32,
+        z1: f32,
+        x2: f32,
+        y2: f32,
+        z2: f32,
+        ignore_m2: bool,
+    ) -> bool {
+        self.heights
+            .vmaps()
+            .is_in_line_of_sight(x1, y1, z1, x2, y2, z2, ignore_m2)
+    }
+
+    /// `Map::GetLosHitPosition` static half
+    /// (dynamic gameobject tree not modeled):
+    /// trimmed destination on hit.
+    #[allow(clippy::too_many_arguments)]
+    pub fn get_los_hit_position(
+        &mut self,
+        x1: f32,
+        y1: f32,
+        z1: f32,
+        x2: f32,
+        y2: f32,
+        z2: f32,
+        modify_dist: f32,
+    ) -> Option<(f32, f32, f32)> {
+        self.heights
+            .vmaps()
+            .get_object_hit_pos(x1, y1, z1, x2, y2, z2, modify_dist)
     }
 
     /// `MoveSplineInit::Launch` (`MoveSplineInit.cpp:65-191`,

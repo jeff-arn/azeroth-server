@@ -13,7 +13,7 @@
 //! replicated — the executor resolves bad references to
 //! no-ops with error logs, matching the net effect.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use mangos_db::DbError;
 use mangos_scripts_engine::{
@@ -47,8 +47,15 @@ pub fn load_script_stores<S: std::hash::BuildHasher>(
         load_scripts_table(conn, "creature_movement_scripts", &condition_ids, report)?;
     let creature_spells_scripts =
         load_scripts_table(conn, "creature_spells_scripts", &condition_ids, report)?;
+    let area_trigger_scripts =
+        load_scripts_table(conn, "areatrigger_scripts", &condition_ids, report)?;
+    let event_scripts = load_scripts_table(conn, "event_scripts", &condition_ids, report)?;
+    let gameobject_scripts =
+        load_scripts_table(conn, "gameobject_scripts", &condition_ids, report)?;
+    let scripted_event_ids = load_scripted_event_ids(conn)?;
     let broadcast_texts = load_broadcast_texts(conn)?;
     let script_texts = load_script_texts(conn)?;
+    let npc_gossips = load_npc_gossips(conn)?;
     Ok(mangos_scripts_engine::ScriptStores {
         eventai_events,
         creature_ai_scripts,
@@ -58,6 +65,11 @@ pub fn load_script_stores<S: std::hash::BuildHasher>(
         conditions,
         broadcast_texts,
         script_texts,
+        npc_gossips,
+        area_trigger_scripts,
+        event_scripts,
+        gameobject_scripts,
+        scripted_event_ids,
     })
 }
 
@@ -244,6 +256,45 @@ pub fn load_conditions(conn: &mut mysql::Conn) -> Result<ConditionMap, DbError> 
                 flags: row.get(6).unwrap_or_default(),
             },
         );
+    }
+    Ok(out)
+}
+
+/// `ScriptMgr::LoadEventIdScripts`: event id → C++
+/// script name (possible-id validation skipped; the
+/// fork only logs unknown ids).
+///
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+pub fn load_scripted_event_ids(conn: &mut mysql::Conn) -> Result<HashMap<u32, String>, DbError> {
+    let rows: Vec<mysql::Row> = conn
+        .query("SELECT `id`, `script_name` FROM `scripted_event_id`")
+        .map_err(DbError::from)?;
+    let mut out = HashMap::new();
+    for row in rows {
+        let id: u32 = row.get(0).unwrap_or_default();
+        let name: String = row.get(1).unwrap_or_default();
+        out.insert(id, name);
+    }
+    Ok(out)
+}
+
+/// `ObjectMgr::LoadNpcGossips`: spawn guid low →
+/// `npc_text` id.
+///
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+pub fn load_npc_gossips(conn: &mut mysql::Conn) -> Result<HashMap<u32, u32>, DbError> {
+    let rows: Vec<mysql::Row> = conn
+        .query("SELECT `npc_guid`, `textid` FROM `npc_gossip`")
+        .map_err(DbError::from)?;
+    let mut out = HashMap::new();
+    for row in rows {
+        let guid: u32 = row.get(0).unwrap_or_default();
+        let text_id: u32 = row.get(1).unwrap_or_default();
+        out.insert(guid, text_id);
     }
     Ok(out)
 }

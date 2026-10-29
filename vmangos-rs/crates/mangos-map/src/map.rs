@@ -37,7 +37,7 @@ use crate::visibility;
 /// `def_world_states` (`Player.cpp:8102-8115`): default
 /// initial world-state pairs. Event/battleground-specific
 /// pairs join with their systems.
-const DEFAULT_WORLD_STATES: &[(u32, u32)] = &[
+pub(crate) const DEFAULT_WORLD_STATES: &[(u32, u32)] = &[
     (0x07AE, 0x01),
     (0x0532, 0x01),
     (0x0531, 0x00),
@@ -213,6 +213,9 @@ pub struct MapConfig {
     pub pvp_realm: bool,
     /// `ChangeWeatherInterval` in milliseconds (10 min).
     pub change_weather_interval_ms: u32,
+    /// `BattleGround.PrematureFinishTimer` in ms
+    /// (default 5 minutes; Tier 3 Slice 3).
+    pub bg_premature_finish_ms: u32,
 }
 
 impl Default for MapConfig {
@@ -233,6 +236,7 @@ impl Default for MapConfig {
             proc_delay_ms: 400,
             pvp_realm: false,
             change_weather_interval_ms: 600_000,
+            bg_premature_finish_ms: 300_000,
         }
     }
 }
@@ -245,6 +249,73 @@ pub type PlayerSlotId = ObjectGuid;
 pub enum MapEvent {
     /// Deliver a packet to this player's session.
     Packet { to: ObjectGuid, packet: WorldPacket },
+    /// Player gained a level (`GiveLevel` queue-slot
+    /// bracket ejection runs actor-side).
+    PlayerLeveled { player: ObjectGuid, new_level: u32 },
+    /// `AddOrSetPlayerToCorrectBgGroup`: the actor
+    /// puts the player into the team BG raid group
+    /// (creating it for the first member).
+    BgRaidJoin {
+        player: ObjectGuid,
+        team: mangos_entities::unit::Team,
+    },
+    /// Raid-group removal arm of `RemovePlayerAtLeave`.
+    BgRaidLeave {
+        player: ObjectGuid,
+        team: mangos_entities::unit::Team,
+    },
+    /// Battleground asks the manager to schedule a
+    /// queue update (`BattleGroundMgr::ScheduleQueueUpdate`,
+    /// Tier 3 Slice 3).
+    BgScheduleQueueUpdate {
+        queue_type_id: u32,
+        bg_type_id: u32,
+        bracket_id: u32,
+    },
+    /// Battleground membership in the free-slot queue
+    /// changed (`AddToBGFreeSlotQueue` /
+    /// `RemoveFromBGFreeSlotQueue`).
+    BgFreeSlotQueue { present: bool },
+    /// `RemovePlayerAtLeave` transport arm: the actor
+    /// far-teleports this player to their stored BG
+    /// entry point (`TeleportToBGEntryPoint`). Map-side
+    /// BG bookkeeping already ran.
+    BgTransportOut { player: ObjectGuid },
+    /// Empty battleground with no invited players:
+    /// fork `delete this` in `BattleGround::Update`;
+    /// the actor drops the map and its manager handle
+    /// (releasing the client-visible instance id).
+    BgDelete,
+    /// `PSendMessageToAll` with a `mangos_string` entry:
+    /// the actor resolves + formats (%u single-arg
+    /// forms) and sends to every BG player on this map.
+    BgLangMessage {
+        entry: i32,
+        msg_type: u32,
+        source: Option<ObjectGuid>,
+        arg: Option<u32>,
+    },
+    /// `SendMessage2ToAll` with a `mangos_string` entry:
+    /// arg ids are themselves `mangos_string` ids the
+    /// actor resolves into the %s slots (0 = none).
+    BgLangMessage2 {
+        entry: i32,
+        msg_type: u8,
+        source: Option<ObjectGuid>,
+        arg_ids: [i32; 2],
+    },
+    /// `SendWorldText` world announcement with a
+    /// `mangos_string` entry (BG started announce):
+    /// actor formats (name, level range carried as
+    /// strings by the map) to every session.
+    BgWorldText { text: String },
+    /// Questgiver gameobject used (`GAMEOBJECT_TYPE_QUESTGIVER`
+    /// `Use` arm): the actor sends the quest list
+    /// (fork `PrepareGossipMenu` + `SendPreparedGossip`).
+    QuestGiverHello {
+        player: ObjectGuid,
+        object: ObjectGuid,
+    },
     /// Persist `respawn_time = 0` for a creature spawn
     /// (expired row consumed at spawn).
     ClearCreatureRespawn { guid_low: u32, instance_id: u32 },
@@ -415,6 +486,10 @@ pub struct Map {
     pub(crate) players: HashMap<ObjectGuid, PlayerEntry>,
     pub(crate) creatures: HashMap<ObjectGuid, Creature>,
     pub(crate) gameobjects: HashMap<ObjectGuid, GameObject>,
+    /// `GameObjectAI` script state by GO guid (only
+    /// GOs whose template `script_name` maps to a
+    /// ported `GOGetAI` script get an entry).
+    pub(crate) go_ai: HashMap<ObjectGuid, crate::content::GoAiState>,
     /// Live dynamic objects (Slice 4b).
     pub(crate) dynobjects: HashMap<ObjectGuid, mangos_entities::dynobject::DynObject>,
     /// Dynobj affected-pass throttle accumulator.
@@ -501,9 +576,16 @@ pub struct Map {
     /// (`VISIBILITY_OFF` / `SetVisible(false)`): the
     /// Deadmines patrols and the Darkmoon chest.
     pub(crate) hidden_objects: std::collections::HashSet<ObjectGuid>,
-    /// Deadmines instance script state (map 36 with a
-    /// real instance id; Slice 7 hand-port).
-    pub(crate) deadmines: Option<crate::content::DeadminesState>,
+    /// Hand-ported instance script state
+    /// (`InstanceData`), created from
+    /// `map_template.script_name` for maps with a
+    /// real instance id (Tier 3 Slice 2).
+    pub(crate) instance: Option<crate::content::InstanceState>,
+    /// Live battleground match (`BattleGround` +
+    /// `BattleGroundMap` pair), created by the BG
+    /// manager through `init_battleground`
+    /// (Tier 3 Slice 3).
+    pub bg: Option<Box<crate::battlegrounds::BgState>>,
 }
 
 /// `TempSummon` lifecycle (Slice 7 subset).
@@ -536,6 +618,14 @@ impl Map {
     ) -> Map {
         let mut players_timer = ShortIntervalTimer::new();
         players_timer.set_interval(config.update_players_diff);
+        let instance = (instance_id != 0)
+            .then(|| {
+                stores
+                    .maps
+                    .get(map_id)
+                    .and_then(|e| crate::content::InstanceState::for_script(&e.script_name))
+            })
+            .flatten();
         Map {
             map_id,
             instance_id,
@@ -545,6 +635,7 @@ impl Map {
             players: HashMap::new(),
             creatures: HashMap::new(),
             gameobjects: HashMap::new(),
+            go_ai: HashMap::new(),
             dynobjects: HashMap::new(),
             dynobj_tick_ms: 0,
             cells: HashMap::new(),
@@ -575,7 +666,8 @@ impl Map {
             pets: HashMap::new(),
             summon_counter: 0x00F0_0000,
             hidden_objects: std::collections::HashSet::new(),
-            deadmines: (map_id == 36 && instance_id != 0).then(crate::content::DeadminesState::new),
+            instance,
+            bg: None,
         }
     }
 
@@ -585,6 +677,18 @@ impl Map {
     /// caller's z hint).
     pub fn set_maps_dir(&mut self, dir: Option<std::path::PathBuf>) {
         self.heights = crate::motion::Heights::new(self.map_id, dir);
+    }
+
+    /// Points the vmap host at the extracted
+    /// `vmaps` directory (binary boot; call after
+    /// `set_maps_dir`, which rebuilds `Heights`).
+    pub fn set_vmaps_dir(
+        &mut self,
+        dir: Option<std::path::PathBuf>,
+        enable_los: bool,
+        enable_height: bool,
+    ) {
+        self.heights.set_vmaps_dir(dir, enable_los, enable_height);
     }
 
     #[must_use]
@@ -737,11 +841,16 @@ impl Map {
         }
         self.clear_is_new(guid);
         self.update_player_zone(guid, true);
+        // `ZoneScript::OnPlayerEnter` (instance binding).
+        self.instance_on_player_enter(guid);
     }
 
     /// `Map::Remove(Player*)` subset: out-of-range to
     /// viewers, returns the aggregate for logout handling.
     pub fn remove_player(&mut self, guid: ObjectGuid) -> Option<Player> {
+        // `ZoneScript::OnPlayerLeave` fires while the
+        // player is still bound to the map.
+        self.instance_on_player_leave(guid);
         let entry = self.players.remove(&guid)?;
         let cell = Self::cell_of(entry.player.unit.world.position());
         if let Some(c) = self.cells.get_mut(&cell) {
@@ -874,10 +983,19 @@ impl Map {
         }
         self.update_rest_for_zone(guid, zone_id);
 
-        self.events.push(MapEvent::Packet {
-            to: guid,
-            packet: build_init_world_states(self.map_id, zone_id),
-        });
+        let packet = match self.bg.as_ref().map(|b| b.bg_type_id) {
+            Some(1) => self
+                .av_fill_initial_world_states(guid)
+                .unwrap_or_else(|| build_init_world_states(self.map_id, zone_id)),
+            Some(2) => self
+                .ws_fill_initial_world_states(guid)
+                .unwrap_or_else(|| build_init_world_states(self.map_id, zone_id)),
+            Some(3) => self
+                .ab_fill_initial_world_states(guid)
+                .unwrap_or_else(|| build_init_world_states(self.map_id, zone_id)),
+            _ => build_init_world_states(self.map_id, zone_id),
+        };
+        self.events.push(MapEvent::Packet { to: guid, packet });
         if self.config.activate_weather {
             let chances = self.stores.weather_chances.get(zone_id);
             let interval = self.config.change_weather_interval_ms;
@@ -1160,6 +1278,9 @@ impl Map {
         self.eventai_on_spawn(guid);
         // Instance-script `OnCreatureCreate` (Slice 7).
         self.instance_on_creature_create(guid);
+        // BG event registration (`OnObjectDBLoad`,
+        // Tier 3 Slice 3; no-op off BG maps).
+        self.bg_on_creature_db_load(guid);
         Some(guid)
     }
 
@@ -1215,6 +1336,11 @@ impl Map {
                 mangos_scripts_engine::event_type::SUMMONED_UNIT,
                 Some(guid),
             );
+
+            self.creature_script_just_summoned(summoner, guid);
+        }
+        if summoner.is_game_object() {
+            self.go_ai_just_summoned(guid);
         }
         Some(guid)
     }
@@ -1296,6 +1422,9 @@ impl Map {
         self.cells.entry(cell).or_default().gameobjects.insert(guid);
         self.gameobjects.insert(guid, go);
         self.instance_on_object_create(guid);
+        self.go_ai_create(guid);
+        // BG event registration (`OnObjectDBLoad`).
+        self.bg_on_gameobject_db_load(guid);
         Some(guid)
     }
 
@@ -1912,6 +2041,9 @@ impl Map {
         self.process_despawns_due();
         self.update_summons();
         self.instance_update(diff_ms);
+        // Tier 3 Slice 3: battleground match update.
+        self.bg_update(diff_ms);
+        self.go_ai_update(diff_ms);
         self.update_dynobjects(diff_ms);
         self.update_auras(diff_ms);
         self.update_respawns();

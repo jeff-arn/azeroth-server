@@ -57,6 +57,7 @@ fn race_class_dbc(dir: &Path) -> RaceClassDbc {
                 faction_id: uint(row, 2),
                 model_m: uint(row, 3),
                 model_f: uint(row, 4),
+                res_sickness_spell_id: uint(row, 9),
                 team_id: uint(row, 5),
             },
         );
@@ -272,7 +273,16 @@ fn bench_deadmines_slice() {
                     skills: mangos_world_data::skill_info::SkillDbc::default(),
                     chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
                     auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
-                    maps: mangos_world_data::map_template::MapStore::default(),
+                    maps: mangos_world_data::map_template::load_map_templates(conn, 10, 1.0)?,
+                    safe_locs: mangos_world_data::battlegrounds::SafeLocStore::default(),
+                    battlegrounds: mangos_world_data::battlegrounds::BattlegroundTemplates::default(
+                    ),
+                    battlemasters: mangos_world_data::battlegrounds::BattleMasters::default(),
+                    battle_event_indexes:
+                        mangos_world_data::battlegrounds::BattleEventIndexes::default(),
+                    graveyard_links: mangos_world_data::battlegrounds::GraveyardLinks::default(),
+                    bg_entrances: mangos_world_data::battlegrounds::BattlegroundEntrances::default(
+                    ),
                     area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
                     quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
                     quest_templates: mangos_world_data::quest_template::QuestTemplates::default(),

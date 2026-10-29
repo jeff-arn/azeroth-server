@@ -51,6 +51,10 @@ impl AuraEffectState {
                     | mangos_spells::defines::aura::PERIODIC_TRIGGER_SPELL
                     | mangos_spells::defines::aura::PERIODIC_DAMAGE_PERCENT
                     | mangos_spells::defines::aura::PERIODIC_LEECH
+                    // Fork PeriodicTick case
+                    // SPELL_AURA_DUMMY runs
+                    // PeriodicDummyTick.
+                    | mangos_spells::defines::aura::DUMMY
             )
     }
 }

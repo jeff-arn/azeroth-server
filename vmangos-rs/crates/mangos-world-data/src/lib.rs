@@ -12,6 +12,7 @@ pub mod area_trigger;
 pub mod areas;
 pub mod assets_check;
 pub mod auction_house;
+pub mod battlegrounds;
 pub mod chat_channels;
 pub mod creature_spells;
 pub mod creature_template;

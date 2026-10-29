@@ -73,7 +73,7 @@ impl Map {
         self.unit_base(guid).is_none_or(|u| u.gender() == 0)
     }
 
-    fn unit_has_aura(&self, guid: ObjectGuid, spell_id: u32) -> bool {
+    pub(crate) fn unit_has_aura(&self, guid: ObjectGuid, spell_id: u32) -> bool {
         self.aura_holders(guid)
             .iter()
             .any(|h| h.spell_id == spell_id)
@@ -198,6 +198,7 @@ impl Map {
         &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
+        eff_index: usize,
         victim: ObjectGuid,
         damage: f32,
         has_cast_item: bool,
@@ -936,6 +937,13 @@ impl Map {
                 }
             }
         }
+        // `Spell::EffectDummy` tail (`SpellEffects.cpp:1447`):
+        // creature-script dummy for creature victims (the
+        // gameobject-target arm has no Rust call site —
+        // GO spell targets are unmodeled).
+        if victim.is_creature() {
+            self.effect_dummy_creature(caster, spell.id, eff_index, victim);
+        }
     }
 
     /// Shrink Ray's `AddAura` + `SendSpellGo` pair.
@@ -1568,7 +1576,11 @@ impl Map {
     }
 
     /// `Player::RemoveSomeCooldown` (`Player.h:1411`).
-    fn remove_some_cooldowns(&mut self, caster: ObjectGuid, check: impl Fn(&SpellEntry) -> bool) {
+    pub(crate) fn remove_some_cooldowns(
+        &mut self,
+        caster: ObjectGuid,
+        check: impl Fn(&SpellEntry) -> bool,
+    ) {
         let mut erased_keys: Vec<u32> = Vec::new();
         let mut erased_spells: Vec<u32> = Vec::new();
         for ((guid, key), entry) in &self.cooldowns {

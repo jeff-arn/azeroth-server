@@ -64,6 +64,18 @@ pub struct WorldStores {
     pub auction_houses: mangos_world_data::auction_house::AuctionHouseDbc,
     /// `map_template` rows (`sMapStorage`, Phase 6 Slice 0).
     pub maps: mangos_world_data::map_template::MapStore,
+    /// `WorldSafeLocs.dbc` + DB facings (Tier 3 Slice 3).
+    pub safe_locs: mangos_world_data::battlegrounds::SafeLocStore,
+    /// `battleground_template` rows (Tier 3 Slice 3).
+    pub battlegrounds: mangos_world_data::battlegrounds::BattlegroundTemplates,
+    /// `battlemaster_entry` rows (Tier 3 Slice 3).
+    pub battlemasters: mangos_world_data::battlegrounds::BattleMasters,
+    /// `*_battleground` spawn event indexes (Tier 3 Slice 3).
+    pub battle_event_indexes: mangos_world_data::battlegrounds::BattleEventIndexes,
+    /// `game_graveyard_zone` links (Tier 3 Slice 3).
+    pub graveyard_links: mangos_world_data::battlegrounds::GraveyardLinks,
+    /// `areatrigger_bg_entrance` rows (Tier 3 Slice 3).
+    pub bg_entrances: mangos_world_data::battlegrounds::BattlegroundEntrances,
     /// Area triggers + teleports (Phase 6 Slice 0).
     pub area_triggers: mangos_world_data::area_trigger::AreaTriggerStore,
     /// Quest template subset for load/save parity
@@ -116,6 +128,12 @@ impl WorldStores {
             shapeshift_forms: HashMap::new(),
             skills: SkillDbc::default(),
             maps: mangos_world_data::map_template::MapStore::default(),
+            safe_locs: mangos_world_data::battlegrounds::SafeLocStore::default(),
+            battlegrounds: mangos_world_data::battlegrounds::BattlegroundTemplates::default(),
+            battlemasters: mangos_world_data::battlegrounds::BattleMasters::default(),
+            battle_event_indexes: mangos_world_data::battlegrounds::BattleEventIndexes::default(),
+            graveyard_links: mangos_world_data::battlegrounds::GraveyardLinks::default(),
+            bg_entrances: mangos_world_data::battlegrounds::BattlegroundEntrances::default(),
             area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
             quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
             quest_templates: mangos_world_data::quest_template::QuestTemplates::default(),

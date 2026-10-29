@@ -47,6 +47,12 @@ impl Vec3 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
+    /// `Vector3::magnitude`.
+    #[must_use]
+    pub fn length(self) -> f32 {
+        self.dot(self).sqrt()
+    }
+
     #[must_use]
     pub fn cross(self, other: Self) -> Self {
         Self::new(
@@ -68,6 +74,97 @@ impl std::ops::Add for Vec3 {
     type Output = Self;
     fn add(self, other: Self) -> Self {
         Self::new(self.x + other.x, self.y + other.y, self.z + other.z)
+    }
+}
+
+impl std::ops::Mul<f32> for Vec3 {
+    type Output = Self;
+    fn mul(self, k: f32) -> Self {
+        Self::new(self.x * k, self.y * k, self.z * k)
+    }
+}
+
+/// `G3D::Matrix3` subset (row-major `elt[row][col]`,
+/// column-vector multiply as in G3D).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Mat3 {
+    pub elt: [[f32; 3]; 3],
+}
+
+impl Mat3 {
+    /// `Matrix3::zero()`.
+    pub const ZERO: Self = Self { elt: [[0.0; 3]; 3] };
+
+    #[must_use]
+    pub const fn from_rows(r0: [f32; 3], r1: [f32; 3], r2: [f32; 3]) -> Self {
+        Self { elt: [r0, r1, r2] }
+    }
+
+    /// `Matrix3::fromEulerAnglesZYX(yaw, pitch, roll)`
+    /// = `Rz(yaw) * Ry(pitch) * Rx(roll)`.
+    #[must_use]
+    pub fn from_euler_angles_zyx(yaw: f32, pitch: f32, roll: f32) -> Self {
+        let (cy, sy) = (yaw.cos(), yaw.sin());
+        let z = Self::from_rows([cy, -sy, 0.0], [sy, cy, 0.0], [0.0, 0.0, 1.0]);
+        let (cp, sp) = (pitch.cos(), pitch.sin());
+        let y = Self::from_rows([cp, 0.0, sp], [0.0, 1.0, 0.0], [-sp, 0.0, cp]);
+        let (cr, sr) = (roll.cos(), roll.sin());
+        let x = Self::from_rows([1.0, 0.0, 0.0], [0.0, cr, -sr], [0.0, sr, cr]);
+        z.mul_mat(y.mul_mat(x))
+    }
+
+    /// Matrix product `self * rhs`.
+    #[must_use]
+    pub fn mul_mat(self, rhs: Self) -> Self {
+        let mut out = Self::ZERO;
+        for (i, row) in out.elt.iter_mut().enumerate() {
+            for (j, cell) in row.iter_mut().enumerate() {
+                *cell = self.elt[i][0] * rhs.elt[0][j]
+                    + self.elt[i][1] * rhs.elt[1][j]
+                    + self.elt[i][2] * rhs.elt[2][j];
+            }
+        }
+        out
+    }
+
+    /// `Matrix3 * Vector3`.
+    #[must_use]
+    pub fn mul_vec(self, v: Vec3) -> Vec3 {
+        Vec3::new(
+            self.elt[0][0] * v.x + self.elt[0][1] * v.y + self.elt[0][2] * v.z,
+            self.elt[1][0] * v.x + self.elt[1][1] * v.y + self.elt[1][2] * v.z,
+            self.elt[2][0] * v.x + self.elt[2][1] * v.y + self.elt[2][2] * v.z,
+        )
+    }
+
+    /// `Matrix3::inverse(1e-06)`: cofactor inverse,
+    /// `ZERO` when `|det| <= 1e-6` (the C++
+    /// two-arg form leaving the zero matrix).
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    pub fn inverse(self) -> Self {
+        let e = self.elt;
+        let mut inv = Self::ZERO;
+        inv.elt[0][0] = e[1][1] * e[2][2] - e[1][2] * e[2][1];
+        inv.elt[0][1] = e[0][2] * e[2][1] - e[0][1] * e[2][2];
+        inv.elt[0][2] = e[0][1] * e[1][2] - e[0][2] * e[1][1];
+        inv.elt[1][0] = e[1][2] * e[2][0] - e[1][0] * e[2][2];
+        inv.elt[1][1] = e[0][0] * e[2][2] - e[0][2] * e[2][0];
+        inv.elt[1][2] = e[0][2] * e[1][0] - e[0][0] * e[1][2];
+        inv.elt[2][0] = e[1][0] * e[2][1] - e[1][1] * e[2][0];
+        inv.elt[2][1] = e[0][1] * e[2][0] - e[0][0] * e[2][1];
+        inv.elt[2][2] = e[0][0] * e[1][1] - e[0][1] * e[1][0];
+        let det = e[0][0] * inv.elt[0][0] + e[0][1] * inv.elt[1][0] + e[0][2] * inv.elt[2][0];
+        if det.abs() <= 1e-06 {
+            return Self::ZERO;
+        }
+        let inv_det = 1.0 / det;
+        for row in &mut inv.elt {
+            for cell in row {
+                *cell *= inv_det;
+            }
+        }
+        inv
     }
 }
 
@@ -108,6 +205,61 @@ impl Ray {
             direction,
             inv_direction: Vec3::new(1.0 / direction.x, 1.0 / direction.y, 1.0 / direction.z),
         }
+    }
+
+    /// `Ray::intersectionTime(AABox)` via
+    /// `CollisionDetection::collisionTimeForMoving
+    /// PointFixedAABox`: 0 when the origin is
+    /// inside, the hit distance (Euclidean
+    /// `|location - origin|`, as in G3D), +inf on
+    /// miss.
+    #[must_use]
+    pub fn intersection_time_aabox(&self, b: AABox) -> f32 {
+        let o = [self.origin.x, self.origin.y, self.origin.z];
+        let d = [self.direction.x, self.direction.y, self.direction.z];
+        let lo = [b.lo.x, b.lo.y, b.lo.z];
+        let hi = [b.hi.x, b.hi.y, b.hi.z];
+        let mut inside = true;
+        let mut loc = o;
+        let mut max_t = [-1.0f32; 3];
+        for i in 0..3 {
+            if o[i] < lo[i] {
+                loc[i] = lo[i];
+                inside = false;
+                // IR(dir): any nonzero bit pattern.
+                if d[i].to_bits() != 0 {
+                    max_t[i] = (lo[i] - o[i]) / d[i];
+                }
+            } else if o[i] > hi[i] {
+                loc[i] = hi[i];
+                inside = false;
+                if d[i].to_bits() != 0 {
+                    max_t[i] = (hi[i] - o[i]) / d[i];
+                }
+            }
+        }
+        if inside {
+            return 0.0;
+        }
+        let mut which = 0usize;
+        if max_t[1] > max_t[which] {
+            which = 1;
+        }
+        if max_t[2] > max_t[which] {
+            which = 2;
+        }
+        if max_t[which] < 0.0 {
+            return f32::INFINITY;
+        }
+        for i in 0..3 {
+            if i != which {
+                loc[i] = o[i] + max_t[which] * d[i];
+                if loc[i] < lo[i] || loc[i] > hi[i] {
+                    return f32::INFINITY;
+                }
+            }
+        }
+        (Vec3::new(loc[0], loc[1], loc[2]) - self.origin).length()
     }
 }
 

@@ -365,6 +365,10 @@ pub struct Player {
     /// `UpdateAttackPowerAndDamage`).
     pub has_offhand_weapon: bool,
     pub deferred: DeferredLoad,
+    /// Battleground queue/instance state (`BGData` +
+    /// `m_bgBattleGroundQueueID`, Tier 3 Slice 3); seeded
+    /// from `deferred.bg_data` at materialize.
+    pub battleground: crate::battleground::BgPlayerState,
     /// Save-diff baseline (see [`SavedBaseline`]).
     pub saved: SavedBaseline,
 }
@@ -655,6 +659,7 @@ impl Player {
                 honor_cp: load.honor_cp.clone(),
                 actions: load.actions.clone(),
             },
+            battleground: crate::battleground::BgPlayerState::from_row(load.bg_data.as_ref()),
             deferred: DeferredLoad {
                 auras: std::mem::take(&mut load.auras),
                 spells: std::mem::take(&mut load.spells),

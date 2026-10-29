@@ -150,11 +150,663 @@ pub(crate) struct CreatureAi {
     pub invincibility_hp: u32,
     /// `SCRIPT_COMMAND_SET_REACT_STATE` override.
     pub react_override: Option<u8>,
-    /// Hand-ported `boss_mr_smite` state (Slice 7).
-    pub smite: Option<crate::content::SmiteState>,
+    /// Hand-ported `CreatureAI` script state
+    /// (`script_name` binding, Tier 3 Slice 2 step 3).
+    pub script: Option<crate::content::CreatureScriptAi>,
 }
 
 impl CreatureAi {
+    pub(crate) fn smite(&self) -> Option<&crate::content::SmiteState> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::MrSmite(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn smite_mut(&mut self) -> Option<&mut crate::content::SmiteState> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MrSmite(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn herod_mut(&mut self) -> Option<&mut crate::content::HerodAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Herod(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn trainee_mut(&mut self) -> Option<&mut crate::content::ScarletTraineeAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::ScarletTrainee(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn anastari(&self) -> Option<&crate::content::BaronessAnastariAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::BaronessAnastari(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn anastari_mut(&mut self) -> Option<&mut crate::content::BaronessAnastariAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::BaronessAnastari(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn ancient_hound_mut(&mut self) -> Option<&mut crate::content::AncientCoreHoundAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::AncientCoreHound(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn archaedas_minion_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::ArchaedasMinionAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::ArchaedasMinion(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn barthilas(&self) -> Option<&crate::content::MagistrateBarthilasAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::MagistrateBarthilas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn barthilas_mut(&mut self) -> Option<&mut crate::content::MagistrateBarthilasAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MagistrateBarthilas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn blackhand_veteran_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::BlackhandVeteranAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::BlackhandVeteran(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn commander_felstrom_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::CommanderFelstromAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CommanderFelstrom(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn core_hound_mut(&mut self) -> Option<&mut crate::content::CoreHoundAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CoreHound(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn core_rager_mut(&mut self) -> Option<&mut crate::content::CoreRagerAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CoreRager(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn cristal(&self) -> Option<&crate::content::CristalZigguratAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::CristalZiggurat(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn cristal_mut(&mut self) -> Option<&mut crate::content::CristalZigguratAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CristalZiggurat(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn dark_touched_warrior_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::DarkTouchedWarriorAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::DarkTouchedWarrior(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn dathrohan(&self) -> Option<&crate::content::DathrohanBalnazzarAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::DathrohanBalnazzar(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn dathrohan_mut(&mut self) -> Option<&mut crate::content::DathrohanBalnazzarAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::DathrohanBalnazzar(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn death_talon_captain_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::DeathTalonCaptainAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::DeathTalonCaptain(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn death_talon_seether_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::DeathTalonSeetherAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::DeathTalonSeether(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn emperor_thaurissan_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::EmperorThaurissanAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::EmperorThaurissan(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn eris_peasant_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::ErisHavenfirePeasantAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::ErisHavenfirePeasant(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn firelord_mut(&mut self) -> Option<&mut crate::content::FirelordAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Firelord(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn firesworn_mut(&mut self) -> Option<&mut crate::content::FireswornAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Firesworn(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn firewalker_mut(&mut self) -> Option<&mut crate::content::FirewalkerAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Firewalker(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn garr_mut(&mut self) -> Option<&mut crate::content::GarrAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Garr(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn geddon_mut(&mut self) -> Option<&mut crate::content::BaronGeddonAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::BaronGeddon(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn gehennas_mut(&mut self) -> Option<&mut crate::content::GehennasAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Gehennas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn general_angerforge_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::GeneralAngerforgeAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::GeneralAngerforge(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn gerstahn_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::HighInterrogatorGerstahnAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::HighInterrogatorGerstahn(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn golem_lord_argelmach_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::GolemLordArgelmachAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::GolemLordArgelmach(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn golemagg_mut(&mut self) -> Option<&mut crate::content::GolemaggAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Golemagg(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn gorosh_the_dervish_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::GoroshTheDervishAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::GoroshTheDervish(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn guardsman(&self) -> Option<&crate::content::CrimsonGuardsmanAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::CrimsonGuardsman(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn guardsman_mut(&mut self) -> Option<&mut crate::content::CrimsonGuardsmanAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CrimsonGuardsman(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn high_inquisitor_fairbanks(
+        &self,
+    ) -> Option<&crate::content::HighInquisitorFairbanksAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::HighInquisitorFairbanks(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn high_inquisitor_fairbanks_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::HighInquisitorFairbanksAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::HighInquisitorFairbanks(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn houndmaster_loksey_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::HoundmasterLokseyAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::HoundmasterLoksey(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn interrogator_vishas_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::InterrogatorVishasAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::InterrogatorVishas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn jandice_illusion_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::JandiceIllusionAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::JandiceIllusion(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn kt_shadow_fissure_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::KtShadowFissureAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::KtShadowFissure(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn lava_surger_mut(&mut self) -> Option<&mut crate::content::LavaSurgerAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::LavaSurger(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn lucifron_mut(&mut self) -> Option<&mut crate::content::LucifronAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Lucifron(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn majordomo_mut(&mut self) -> Option<&mut crate::content::MajordomoAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Majordomo(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn maleki(&self) -> Option<&crate::content::MalekiThePallidAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::MalekiThePallid(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn maleki_mut(&mut self) -> Option<&mut crate::content::MalekiThePallidAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MalekiThePallid(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn malgen_longspear_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::MalgenLongspearAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MalgenLongspear(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn mistress_nagmara_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::MistressNagmaraAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MistressNagmara(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn moira_bronzebeard_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::MoiraBronzebeardAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MoiraBronzebeard(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn naxx_plague_slime_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::NaxxPlagueSlimeAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::NaxxPlagueSlime(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn nerubenkan(&self) -> Option<&crate::content::NerubenkanAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::Nerubenkan(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn nerubenkan_mut(&mut self) -> Option<&mut crate::content::NerubenkanAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Nerubenkan(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn overlord_wyrmthalak_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::OverlordWyrmthalakAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::OverlordWyrmthalak(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn plugger_spazzring_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::PluggerSpazzringAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::PluggerSpazzring(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn postmaster(&self) -> Option<&crate::content::PostmasterMalownAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::PostmasterMalown(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn postmaster_mut(&mut self) -> Option<&mut crate::content::PostmasterMalownAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::PostmasterMalown(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn ragnaros_mut(&mut self) -> Option<&mut crate::content::RagnarosAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Ragnaros(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn ramstein(&self) -> Option<&crate::content::RamsteinTheGorgerAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::RamsteinTheGorger(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn ramstein_mut(&mut self) -> Option<&mut crate::content::RamsteinTheGorgerAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::RamsteinTheGorger(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn rat(&self) -> Option<&crate::content::RatPestifereAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::RatPestifere(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn rat_mut(&mut self) -> Option<&mut crate::content::RatPestifereAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::RatPestifere(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn restless_soul(&self) -> Option<&crate::content::RestlessSoulAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::RestlessSoul(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn restless_soul_mut(&mut self) -> Option<&mut crate::content::RestlessSoulAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::RestlessSoul(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn sapphiron_blizzard_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::SapphironBlizzardAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SapphironBlizzard(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn shazzrah_mut(&mut self) -> Option<&mut crate::content::ShazzrahAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Shazzrah(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn silver_hand(&self) -> Option<&crate::content::SilverHandBossesAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::SilverHandBosses(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn silver_hand_mut(&mut self) -> Option<&mut crate::content::SilverHandBossesAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SilverHandBosses(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn snokh_blackspine_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::SnokhBlackspineAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SnokhBlackspine(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn spectral(&self) -> Option<&crate::content::SpectralGhostlyCitizenAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::SpectralGhostlyCitizen(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn spectral_mut(&mut self) -> Option<&mut crate::content::SpectralGhostlyCitizenAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SpectralGhostlyCitizen(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn spirit_of_naxxramas_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::SpiritOfNaxxramasAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SpiritOfNaxxramas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn sulfuron_mut(&mut self) -> Option<&mut crate::content::SulfuronAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Sulfuron(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn timmy(&self) -> Option<&crate::content::TimmyTheCruelAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::TimmyTheCruel(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn timmy_mut(&mut self) -> Option<&mut crate::content::TimmyTheCruelAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::TimmyTheCruel(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn twilight_corrupter_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::TwilightCorrupterAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::TwilightCorrupter(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn watcher_blomberg_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::WatcherBlombergAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::WatcherBlomberg(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn watchman_doomgrip_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::WatchmanDoomgripAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::WatchmanDoomgrip(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn willey(&self) -> Option<&crate::content::CannonMasterWilleyAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::CannonMasterWilley(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn willey_mut(&mut self) -> Option<&mut crate::content::CannonMasterWilleyAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CannonMasterWilley(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
     fn new(kind: AiKind, owner: ObjectGuid, spells: Vec<SpellRuntime>) -> Self {
         Self {
             kind,
@@ -175,7 +827,7 @@ impl CreatureAi {
             flee_next_ms: 0,
             invincibility_hp: 0,
             react_override: None,
-            smite: None,
+            script: None,
         }
     }
 }
@@ -252,6 +904,7 @@ impl ThreatHost for MapThreatHost<'_> {
 }
 
 impl Map {
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn unit_is_alive(&self, guid: ObjectGuid) -> bool {
         if let Some(entry) = self.players.get(&guid) {
             return entry.player.unit.is_alive();
@@ -260,10 +913,12 @@ impl Map {
     }
 
     /// Has a `BasicAI` combat core (Basic or `EventAI`).
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
     pub(crate) fn ai_kind_is_basic(creature: &Creature) -> bool {
         Self::ai_kind_for(creature) != AiKind::Null
     }
 
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
     fn ai_kind_for(creature: &Creature) -> AiKind {
         let info = &creature.info;
         if info.ai_name == "NullAI"
@@ -282,6 +937,7 @@ impl Map {
     /// `ReactStates` subset: 0 passive, 1 defensive,
     /// 2 aggressive (from the ctor/`UpdateEntry` arms
     /// reachable with loaded template data).
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
     fn react_state_for(creature: &Creature) -> u8 {
         let info = &creature.info;
         if info.creature_type == CREATURE_TYPE_TOTEM {
@@ -293,6 +949,7 @@ impl Map {
         2
     }
 
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn ensure_ai(&mut self, guid: ObjectGuid) {
         if self.ai.contains_key(&guid) {
             return;
@@ -303,7 +960,7 @@ impl Map {
         let kind = Self::ai_kind_for(creature);
         let list_id = creature.info.spell_list_id;
         let entry = creature.info.entry;
-        let is_smite = creature.info.script_name == "boss_mr_smite";
+        let script_name = creature.info.script_name.clone();
         let spells = self.build_spell_runtime(list_id);
         let mut ai = CreatureAi::new(kind, guid, spells);
         if kind == AiKind::EventAi {
@@ -328,18 +985,202 @@ impl Map {
                 event_diff_ms: 0,
             });
         }
+        ai.script =
+            crate::content::CreatureScriptAi::for_script_gated(&script_name, self.map_id, entry);
+        let has_script = ai.script.is_some();
         self.ai.insert(guid, ai);
         if kind == AiKind::EventAi {
             self.eventai_reset(guid);
         }
-        if is_smite {
-            self.smite_reset(guid);
+        if has_script {
+            self.creature_script_reset(guid);
         }
+    }
+
+    /// `Creature::SelectAttackingTarget` (no-spell arm;
+    /// `Creature.cpp:2987`) over the online threat list.
+    /// `target`: fork `AttackingTarget` (RANDOM 0,
+    /// TOPAGGRO 1, BOTTOMAGGRO 2, NEAREST 3, FARTHEST 4);
+    /// `flags`: fork `SelectFlags` (`CreatureDefines.h:516`).
+    /// The friendly recheck folds into threat-list
+    /// membership; FARTHEST uses center distance (fork
+    /// `GetCombatDistance` unmodeled).
+    pub(crate) fn select_attacking_target(
+        &mut self,
+        guid: ObjectGuid,
+        target: u32,
+        position: usize,
+        flags: u32,
+    ) -> Option<ObjectGuid> {
+        let list: Vec<ObjectGuid> = self
+            .ai
+            .get(&guid)?
+            .threat
+            .threat_list()
+            .iter()
+            .map(mangos_threat::HostileRef::target)
+            .collect();
+        if position >= list.len() || list.is_empty() {
+            return None;
+        }
+        let mut suit: Vec<bool> = Vec::with_capacity(list.len());
+        for &t in &list {
+            suit.push(self.meets_select_requirement(guid, t, flags));
+        }
+        let suitable = |t: ObjectGuid| list.iter().position(|&x| x == t).is_some_and(|i| suit[i]);
+        match target {
+            0 => {
+                let pool: Vec<ObjectGuid> = list[position..]
+                    .iter()
+                    .copied()
+                    .filter(|&t| suitable(t))
+                    .collect();
+                if pool.is_empty() {
+                    return None;
+                }
+                let hi = u32::try_from(pool.len() - 1).unwrap_or(0);
+                let idx = self.rng.urand(0, hi) as usize;
+                pool.get(idx).copied()
+            }
+            1 => list[position..].iter().copied().find(|&t| suitable(t)),
+            2 => list[..list.len().saturating_sub(position)]
+                .iter()
+                .rev()
+                .copied()
+                .find(|&t| suitable(t)),
+            3 | 4 => {
+                let me = self.unit_position(guid)?;
+                let mut best: Option<(ObjectGuid, f32)> = None;
+                for &t in &list[position..] {
+                    if !suitable(t) {
+                        continue;
+                    }
+                    let Some(p) = self.unit_position(t) else {
+                        continue;
+                    };
+                    let dx = p.x - me.x;
+                    let dy = p.y - me.y;
+                    let dz = p.z - me.z;
+                    let d = dx * dx + dy * dy + dz * dz;
+                    let better = match best {
+                        None => true,
+                        Some((_, bd)) => {
+                            if target == 3 {
+                                d < bd
+                            } else {
+                                d > bd
+                            }
+                        }
+                    };
+                    if better {
+                        best = Some((t, d));
+                    }
+                }
+                best.map(|(t, _)| t)
+            }
+            _ => None,
+        }
+    }
+
+    /// `SelectUnit(SELECT_TARGET_RANDOM, 0)` script shorthand
+    /// (fork default flags `SELECT_FLAG_NO_TOTEM`).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn select_random_hostile(&mut self, guid: ObjectGuid) -> Option<ObjectGuid> {
+        self.select_attacking_target(guid, 0, 0, 0x100)
+    }
+
+    /// `Creature::MeetsSelectAttackingRequirement`
+    /// (no-spell arm; `Creature.cpp:2834`).
+    fn meets_select_requirement(
+        &mut self,
+        guid: ObjectGuid,
+        target: ObjectGuid,
+        flags: u32,
+    ) -> bool {
+        const SELECT_FLAG_IN_LOS: u32 = 0x001;
+        const SELECT_FLAG_PLAYER: u32 = 0x002;
+        const SELECT_FLAG_POWER_MANA: u32 = 0x004;
+        const SELECT_FLAG_POWER_RAGE: u32 = 0x008;
+        const SELECT_FLAG_POWER_ENERGY: u32 = 0x010;
+        const SELECT_FLAG_IN_MELEE_RANGE: u32 = 0x040;
+        const SELECT_FLAG_NOT_IN_MELEE_RANGE: u32 = 0x080;
+        const SELECT_FLAG_NO_TOTEM: u32 = 0x100;
+        const SELECT_FLAG_PLAYER_NOT_GM: u32 = 0x200;
+        const SELECT_FLAG_PET: u32 = 0x400;
+        const SELECT_FLAG_NOT_PLAYER: u32 = 0x800;
+        const SELECT_FLAG_POWER_NOT_MANA: u32 = 0x1000;
+        // SPAWNING | NOT_ATTACKABLE_1 | NON_ATTACKABLE_2 |
+        // TAXI_FLIGHT | NOT_SELECTABLE (`UnitDefines.h`).
+        const MASK: u32 = 0x0000_0002 | 0x0000_0080 | 0x0001_0000 | 0x0010_0000 | 0x0200_0000;
+        // Powers (`SharedDefines.h`): MANA 0, RAGE 1, ENERGY 3.
+        let power = self
+            .unit_base(target)
+            .map_or(255, mangos_entities::unit::UnitBase::power_type);
+        if flags & SELECT_FLAG_PLAYER != 0 && !target.is_player() {
+            return false;
+        }
+        if flags & SELECT_FLAG_NO_TOTEM != 0
+            && self
+                .creatures
+                .get(&target)
+                .is_some_and(|c| c.info.creature_type == CREATURE_TYPE_TOTEM)
+        {
+            return false;
+        }
+        if flags & SELECT_FLAG_POWER_MANA != 0 && power != 0 {
+            return false;
+        }
+        if flags & SELECT_FLAG_POWER_NOT_MANA != 0 && power == 0 {
+            return false;
+        }
+        if flags & SELECT_FLAG_POWER_RAGE != 0 && power != 1 {
+            return false;
+        }
+        if flags & SELECT_FLAG_POWER_ENERGY != 0 && power != 3 {
+            return false;
+        }
+        if flags & SELECT_FLAG_IN_MELEE_RANGE != 0 && !self.can_reach_melee(guid, target) {
+            return false;
+        }
+        if flags & SELECT_FLAG_NOT_IN_MELEE_RANGE != 0 && self.can_reach_melee(guid, target) {
+            return false;
+        }
+        if flags & SELECT_FLAG_IN_LOS != 0 {
+            let (Some(a), Some(b)) = (self.unit_position(guid), self.unit_position(target)) else {
+                return false;
+            };
+            if !self.heights.vmaps().is_in_line_of_sight(
+                a.x,
+                a.y,
+                a.z + 2.0,
+                b.x,
+                b.y,
+                b.z + 2.0,
+                false,
+            ) {
+                return false;
+            }
+        }
+        if flags & SELECT_FLAG_PLAYER_NOT_GM != 0 && !target.is_player() {
+            return false;
+        }
+        if flags & SELECT_FLAG_PET != 0 && !self.is_pet(target) {
+            return false;
+        }
+        if flags & SELECT_FLAG_NOT_PLAYER != 0 && target.is_player() {
+            return false;
+        }
+        if !self.unit_is_alive(target) {
+            return false;
+        }
+        let unit_flags = self.unit_value_u32(target, offsets::UNIT_FIELD_FLAGS);
+        unit_flags & MASK == 0
     }
 
     /// `SelectHostileTarget` over the threat manager
     /// (shared by the generic loop and hand-ported
     /// script AIs).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn get_hostile_target(&mut self, guid: ObjectGuid) -> Option<ObjectGuid> {
         let mut ai = self.ai.remove(&guid)?;
         let selected = {
@@ -350,6 +1191,10 @@ impl Map {
         selected
     }
 
+    /// Build the runtime rows of one creature spell
+    /// list (initial delays rolled).
+    /// `CreatureAI::SetSpellsList`.
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     /// Build the runtime rows of one creature spell
     /// list (initial delays rolled).
     pub(crate) fn build_spell_runtime(&mut self, list_id: u32) -> Vec<SpellRuntime> {
@@ -370,7 +1215,6 @@ impl Map {
         spells
     }
 
-    /// `CreatureAI::SetSpellsList`.
     pub(crate) fn set_creature_spells_list(&mut self, guid: ObjectGuid, list_id: u32) {
         self.ensure_ai(guid);
         let spells = self.build_spell_runtime(list_id);
@@ -379,6 +1223,7 @@ impl Map {
         }
     }
 
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn set_in_combat_flag(&mut self, guid: ObjectGuid, on: bool) {
         if let Some(u) = self.unit_base_mut(guid) {
             let flags = u.values().get_u32(offsets::UNIT_FIELD_FLAGS);
@@ -394,7 +1239,7 @@ impl Map {
     /// `Creature::GetAttackDistance` (detection range
     /// replaces the formula when set; stealth not
     /// modeled).
-    fn attack_distance(&self, creature: ObjectGuid, target: ObjectGuid) -> f32 {
+    pub(crate) fn attack_distance(&self, creature: ObjectGuid, target: ObjectGuid) -> f32 {
         let Some(c) = self.creatures.get(&creature) else {
             return 0.0;
         };
@@ -449,6 +1294,7 @@ impl Map {
 
     /// Proximity aggro scan (`MoveInLineOfSight`):
     /// engage the first attackable visible player.
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn try_proximity_aggro(&mut self, guid: ObjectGuid) {
         let players: Vec<ObjectGuid> = self.players.keys().copied().collect();
         for player in players {
@@ -468,6 +1314,7 @@ impl Map {
 
     /// `CreatureAI::AttackStart` + `SetInCombatWith`
     /// (proximity/damage entry into combat).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn enter_combat(&mut self, creature: ObjectGuid, target: ObjectGuid) {
         self.ensure_ai(creature);
         let position = self.unit_position(creature).unwrap_or_default();
@@ -488,7 +1335,9 @@ impl Map {
             u.last_combat_ms = now;
         }
         if fresh {
+            self.instance_on_creature_enter_combat(creature);
             self.eventai_enter_combat(creature, target);
+            self.creature_script_aggro(creature, target);
             // SMSG_AI_REACTION (raw guid + reaction).
             let mut payload = PacketWriter::new();
             payload.write_u64_le(creature.raw());
@@ -499,6 +1348,41 @@ impl Map {
         self.attack_start(creature, target);
     }
 
+    /// `Creature::SetInCombatWithZone(initialPulse=true)`
+    /// (`Creature.cpp:2781`) reduced: instance maps only,
+    /// every living player on the map enters combat with
+    /// the creature, closest first (the fork's initial
+    /// `AttackStart` pulse). Not modeled: the
+    /// `CSTATE_COMBAT_WITH_ZONE` leash state, pet
+    /// `EnterCombatWithTarget`, and the full
+    /// `IsValidAttackTarget` flag/faction screen (alive
+    /// only).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn set_in_combat_with_zone(&mut self, creature: ObjectGuid) {
+        if self.instance_id == 0 || !self.unit_is_alive(creature) {
+            return;
+        }
+        let center = self.unit_position(creature).unwrap_or_default();
+        let mut players: Vec<(f32, ObjectGuid)> = self
+            .players
+            .keys()
+            .copied()
+            .filter(|p| self.unit_is_alive(*p))
+            .map(|p| {
+                (
+                    self.unit_position(p)
+                        .map_or(f32::MAX, |pos| crate::visibility::dist3d(pos, center)),
+                    p,
+                )
+            })
+            .collect();
+        players.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for (_, player) in players {
+            self.enter_combat(creature, player);
+        }
+    }
+
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn add_threat(&mut self, creature: ObjectGuid, victim: ObjectGuid, amount: f32) {
         self.ensure_ai(creature);
         let Some(mut ai) = self.ai.remove(&creature) else {
@@ -623,6 +1507,18 @@ impl Map {
         if !self.unit_is_alive(attacker) || !self.unit_is_alive(victim) {
             return;
         }
+        // Fork `CreatureAI::AttackStart` enters combat
+        // (`Unit::Attack` + `SetInCombatWith`): threat entry
+        // plus the fresh-combat `Aggro` hook. Script bodies
+        // transcribe that call to this helper, so a creature
+        // attacker out of combat routes through
+        // `enter_combat` (which ends by setting the victim
+        // here). Pets keep the plain victim set (PetAI owns
+        // their combat entry).
+        if attacker.is_creature() && !self.is_pet(attacker) && !self.ai_in_combat(attacker) {
+            self.enter_combat(attacker, victim);
+            return;
+        }
         let already = self
             .unit_base_mut(attacker)
             .is_some_and(|u| u.melee_victim == Some(victim));
@@ -685,11 +1581,13 @@ impl Map {
             }
             self.eventai_process_type(guid, event_type::REACHED_HOME, None);
             self.eventai_reset(guid);
+            self.creature_script_just_reached_home(guid);
         }
     }
 
     /// `Creature::Update` AI half + `BasicAI::UpdateAI`
     /// + melee-timer decrement for every unit.
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn update_ai(&mut self, diff_ms: u32) {
         self.process_home_arrivals();
         self.process_movement_informs();
@@ -739,8 +1637,9 @@ impl Map {
             return;
         }
         self.regenerate_creature(guid, diff_ms);
-        if self.ai.get(&guid).is_some_and(|ai| ai.smite.is_some()) {
-            self.update_smite(guid, diff_ms);
+        if self.ai.get(&guid).is_some_and(|ai| ai.script.is_some())
+            && self.creature_script_update(guid, diff_ms)
+        {
             return;
         }
 
@@ -816,6 +1715,7 @@ impl Map {
         self.update_spells_list(guid, victim, diff_ms);
     }
 
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn should_leash_evade(&self, guid: ObjectGuid) -> bool {
         let Some(ai) = self.ai.get(&guid) else {
             return false;
@@ -844,7 +1744,11 @@ impl Map {
     }
 
     /// `CreatureAI::EnterEvadeMode`.
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn enter_evade_mode(&mut self, guid: ObjectGuid) {
+        // `InstanceData::OnCreatureEvade` (fork fires it from
+        // `CreatureAI::EnterEvadeMode`).
+        self.instance_on_creature_evade(guid);
         self.attack_stop(guid);
         self.cancel_cast(guid, false);
         self.remove_all_auras(guid);
@@ -866,9 +1770,7 @@ impl Map {
         if let Some(ai) = self.ai.get_mut(&guid) {
             ai.flee_until_ms = 0;
         }
-        if self.ai.get(&guid).is_some_and(|ai| ai.smite.is_some()) {
-            self.smite_reset(guid);
-        }
+        self.creature_script_enter_evade(guid);
         self.eventai_process_type(guid, event_type::EVADE, None);
         if let Some(mut master) = self.motion.remove(&guid) {
             master.clear(self, guid);
@@ -1194,7 +2096,7 @@ impl Map {
 
     /// `GetShieldBlockValue`: creature arm
     /// (`level/2 + strength/20`); players 0 (no shield).
-    fn unit_block_value(&self, guid: ObjectGuid) -> u32 {
+    pub(crate) fn unit_block_value(&self, guid: ObjectGuid) -> u32 {
         if guid.is_player() {
             // `Player::GetShieldBlockValue`
             // (`Player.cpp:5178-5185`) at pct identity:
@@ -1637,6 +2539,9 @@ impl Map {
     }
 
     /// `CreatureEventAI::Reset` (OOC timers re-armed).
+    /// `CreatureEventAI::JustRespawned` (spawn path).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    /// `CreatureEventAI::Reset` (OOC timers re-armed).
     pub(crate) fn eventai_reset(&mut self, guid: ObjectGuid) {
         if !self.eventai_active(guid) {
             return;
@@ -1668,7 +2573,6 @@ impl Map {
         }
     }
 
-    /// `CreatureEventAI::JustRespawned` (spawn path).
     pub(crate) fn eventai_on_spawn(&mut self, guid: ObjectGuid) {
         let is_eventai = self
             .creatures
@@ -2186,6 +3090,7 @@ impl Map {
 
     /// `CreatureEventAI::JustDied` + the killer's
     /// `KilledUnit` (player victims only, as in C++).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn eventai_on_death(&mut self, victim: ObjectGuid, killer: Option<ObjectGuid>) {
         if victim.is_creature() {
             self.ensure_ai(victim);
@@ -2327,24 +3232,10 @@ impl Map {
             })
             .collect();
         for (guid, motion_type, point_id) in informs {
-            // Hand-ported script hooks (Slice 7).
             if motion_type == crate::motion::POINT_MOTION_TYPE {
-                if self
-                    .ai
-                    .get(&guid)
-                    .and_then(|ai| ai.smite.as_ref())
-                    .is_some_and(|s| s.in_spline)
-                {
-                    self.smite_spline_finished(guid);
-                }
-                let summoner_is_gunpowder = self.summons.get(&guid).is_some_and(|st| {
-                    self.gameobjects
-                        .get(&st.summoner)
-                        .is_some_and(|go| go.info.script_name == "go_defias_gunpowder")
-                });
-                if summoner_is_gunpowder {
-                    self.gunpowder_summon_arrived(guid, point_id);
-                }
+                self.creature_script_movement_inform(guid, point_id);
+                self.go_ai_summoned_movement_inform(guid, point_id);
+                self.creature_script_summoned_movement_inform(guid, point_id);
             }
             if !self.eventai_active(guid) {
                 continue;
@@ -2527,6 +3418,7 @@ impl Map {
     /// weapon ranges and total attack power; offhand
     /// only with the dual-wield passive and an offhand
     /// weapon, melee AP mods never touch ranged).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
     pub(crate) fn refresh_weapon_damage_fields(&mut self, guid: ObjectGuid) {
         if let Some(entry) = self.players.get(&guid) {
             let offhand = entry.player.has_offhand_weapon && self.bot_knows_spell(guid, 674);

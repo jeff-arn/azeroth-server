@@ -196,6 +196,34 @@ impl Group {
         }
     }
 
+    /// A battleground raid (`AddOrSetPlayerToCorrectBgGroup`
+    /// first-player arm: `new Group` + `Create` — BG
+    /// groups are raids from creation and never persist,
+    /// so `db_id` stays 0 and no writes are emitted;
+    /// the leader is already a member).
+    #[must_use]
+    pub fn new_bg_raid(leader_low: u32, leader_name: String) -> Self {
+        Self {
+            db_id: 0,
+            leader_low,
+            leader_name: leader_name.clone(),
+            is_raid: true,
+            loot_method: loot_method::GROUP_LOOT,
+            loot_threshold: LOOT_THRESHOLD_DEFAULT,
+            looter_raw: player_guid(leader_low).raw(),
+            main_tank_low: 0,
+            main_assistant_low: 0,
+            members: vec![MemberSlot {
+                guid_low: leader_low,
+                name: leader_name,
+                subgroup: 0,
+                assistant: false,
+            }],
+            invitees: Vec::new(),
+            target_icons: [0; TARGET_ICON_COUNT],
+        }
+    }
+
     /// Rebuilds one boot-loaded group (`LoadGroupFromDB` +
     /// `LoadMemberFromDB`).
     #[must_use]

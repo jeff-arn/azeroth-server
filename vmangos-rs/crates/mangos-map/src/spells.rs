@@ -222,15 +222,15 @@ pub enum CastOutcome {
 /// One due periodic aura tick, collected under the
 /// holder borrow and applied afterwards.
 #[derive(Clone, Copy)]
-struct PeriodicTick {
-    target: ObjectGuid,
-    caster: ObjectGuid,
-    spell_id: u32,
-    aura_type: u32,
-    amount: i32,
-    effect_index: u32,
+pub(crate) struct PeriodicTick {
+    pub(crate) target: ObjectGuid,
+    pub(crate) caster: ObjectGuid,
+    pub(crate) spell_id: u32,
+    pub(crate) aura_type: u32,
+    pub(crate) amount: i32,
+    pub(crate) effect_index: u32,
     /// `EffectMiscValue` (power type for energize).
-    misc_value: i32,
+    pub(crate) misc_value: i32,
 }
 
 /// `GetNextDelayAtDamageMsTime` (`Spell.h:512`):
@@ -284,7 +284,7 @@ impl Map {
         })
     }
 
-    fn unit_power(&self, guid: ObjectGuid, power_type: u32) -> u32 {
+    pub(crate) fn unit_power(&self, guid: ObjectGuid, power_type: u32) -> u32 {
         if power_type == power::HEALTH {
             return self.unit_value_u32(guid, offsets::UNIT_FIELD_HEALTH);
         }
@@ -298,7 +298,7 @@ impl Map {
         Self::unit_max_power_index_of(power_type).map_or(0, |i| self.unit_value_u32(guid, i))
     }
 
-    fn unit_set_power(&mut self, guid: ObjectGuid, power_type: u32, value: u32) {
+    pub(crate) fn unit_set_power(&mut self, guid: ObjectGuid, power_type: u32, value: u32) {
         let index = if power_type == power::HEALTH {
             offsets::UNIT_FIELD_HEALTH
         } else if let Some(i) = Self::unit_power_index_of(power_type) {
@@ -311,7 +311,7 @@ impl Map {
         }
     }
 
-    fn is_hostile_pair(a: ObjectGuid, b: ObjectGuid) -> bool {
+    pub(crate) fn is_hostile_pair(a: ObjectGuid, b: ObjectGuid) -> bool {
         // No faction/reaction system yet: player<->creature
         // is hostile, same-kind is not.
         a.is_player() != b.is_player()
@@ -1129,6 +1129,18 @@ impl Map {
             self.check_target(caster, &spell, target, &mut applied_mods)
         {
             return fail(self, reason);
+        }
+        // `SpellScript::OnCheckCast` (end of `CheckCast`).
+        if let Some(reason) = self.spell_script_on_check_cast(caster, &spell, target) {
+            return fail(self, reason);
+        }
+        // `BattleGround::CheckSpellCast` override
+        // (AV shredder charms 21544/21565;
+        // `SPELL_FAILED_SPELL_UNAVAILABLE` = 0x2f).
+        if self.bg.as_ref().is_some_and(|b| b.bg_type_id == 1)
+            && !self.av_check_spell_cast(caster, spell.id)
+        {
+            return fail(self, 0x2F);
         }
 
         // Triggered casts keep their DBC cast time
@@ -2114,18 +2126,49 @@ impl Map {
         out
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )] // one SetTargetMap port
     fn collect_targets(
-        &self,
+        &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         target: CastTarget,
     ) -> Vec<ObjectGuid> {
-        let mode = spell
+        let eff_index = spell
             .effects
             .iter()
-            .find(|e| e.effect != effect::NONE)
-            .map_or(tgt::UNIT_CASTER, |e| e.implicit_target_a);
-        match mode {
+            .position(|e| e.effect != effect::NONE)
+            .unwrap_or(0);
+        let mut mode = spell.effects[eff_index].implicit_target_a;
+        if spell.effects[eff_index].effect == effect::NONE {
+            mode = tgt::UNIT_CASTER;
+        }
+        // `SpellScript::OnSetTargetMap` (fork
+        // `Spell::SetTargetMap` head): script may
+        // override mode/radius/max-targets/closest
+        // before the target switch. Radius starts at
+        // the effect radius the arms below used
+        // before this seam (the fork's max-range
+        // fallback for radius_index 0 is a
+        // pre-existing subset gap). The cone arm
+        // keeps its own radius computation.
+        let mut radius = self.effect_radius(spell, 0);
+        let mut max_targets = spell.max_affected_targets;
+        let mut select_closest = false;
+        self.spell_script_on_set_target_map(
+            caster,
+            spell,
+            eff_index,
+            &mut mode,
+            &mut radius,
+            &mut max_targets,
+            &mut select_closest,
+        );
+        let mut targets = match mode {
             tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT => match target {
                 CastTarget::Unit(g) => vec![g],
                 CastTarget::SelfCast | CastTarget::Dest(_) => vec![caster],
@@ -2136,7 +2179,7 @@ impl Map {
                 } else {
                     self.cast_dest(caster, spell, target)
                 };
-                self.units_around(caster, center, self.effect_radius(spell, 0), true)
+                self.units_around(caster, center, radius, true)
             }
             tgt::ENUM_UNITS_ENEMY_IN_CONE => {
                 // `FillAreaTargets(PUSH_IN_CONE)`:
@@ -2170,7 +2213,7 @@ impl Map {
                 } else {
                     self.cast_dest(caster, spell, target)
                 };
-                self.units_around(caster, center, self.effect_radius(spell, 0), false)
+                self.units_around(caster, center, radius, false)
             }
             tgt::ENUM_UNITS_PARTY_WITHIN_CASTER_RANGE
             | tgt::UNIT_PARTY
@@ -2179,8 +2222,83 @@ impl Map {
                 // (Battle Shout self-buff evidence).
                 vec![caster]
             }
+            tgt::LOCATION_CASTER_SRC | tgt::ENEMY_AOE_AT_SRC_LOC_SCRIPT => {
+                // A names the caster as the area source; B
+                // selects the units there (fork `Spell.cpp`
+                // target map). Script AoE (`7`) fills
+                // `SPELL_TARGETS_ALL` around the source and
+                // drops the caster; `spell_script_target`
+                // bounds filtering is not modeled yet.
+                let center = self.unit_position(caster).unwrap_or_default();
+                let radius = radius;
+                let target_b = spell
+                    .effects
+                    .iter()
+                    .find(|e| e.effect != effect::NONE)
+                    .map_or(0, |e| e.implicit_target_b);
+                if mode == tgt::ENEMY_AOE_AT_SRC_LOC_SCRIPT
+                    || target_b == tgt::ENEMY_AOE_AT_SRC_LOC_SCRIPT
+                {
+                    let mut all = self.units_around(caster, center, radius, true);
+                    all.extend(self.units_around(caster, center, radius, false));
+                    all.retain(|g| *g != caster);
+                    all
+                } else if target_b == tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC {
+                    self.units_around(caster, center, radius, true)
+                } else if target_b == tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC {
+                    self.units_around(caster, center, radius, false)
+                } else {
+                    vec![caster]
+                }
+            }
             _ => vec![caster],
+        };
+        // `SpellScript::OnCheckTarget` per-candidate
+        // filter (fork `Spell::CheckTarget` during
+        // target-map fill; eff-index granularity is
+        // the first-effect subset of this merged
+        // victim list).
+        let main_target = Self::script_unit_target(target);
+        targets.retain(|v| {
+            self.spell_script_on_check_target(caster, spell, main_target, *v, eff_index)
+        });
+        // Fork max-target trim (`Spell.cpp` tail of
+        // SetTargetMap): closest-first when the
+        // script asked, else random erasure; the
+        // explicit unit target is kept (fork handles
+        // it on the separate main-target path).
+        if max_targets > 0 && targets.len() > max_targets as usize {
+            if select_closest {
+                let cpos = self.unit_position(caster).unwrap_or_default();
+                targets.sort_by(|a, b| {
+                    let da = self.unit_position(*a).map_or(f32::MAX, |p| {
+                        (p.x - cpos.x).powi(2) + (p.y - cpos.y).powi(2)
+                    });
+                    let db = self.unit_position(*b).map_or(f32::MAX, |p| {
+                        (p.x - cpos.x).powi(2) + (p.y - cpos.y).powi(2)
+                    });
+                    da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                });
+                targets.truncate(max_targets as usize);
+            } else {
+                while targets.len() > max_targets as usize {
+                    let candidates: Vec<usize> = targets
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, g)| Some(**g) != main_target)
+                        .map(|(i, _)| i)
+                        .collect();
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let pick = if candidates.is_empty() {
+                        self.spell_rng().irand(0, targets.len() as i32 - 1) as usize
+                    } else {
+                        candidates[self.spell_rng().irand(0, candidates.len() as i32 - 1) as usize]
+                    };
+                    targets.remove(pick);
+                }
+            }
         }
+        targets
     }
 
     /// A bare `SendSpellGo` for effect customs that
@@ -2266,8 +2384,26 @@ impl Map {
         if victim.is_creature() && victim != caster {
             self.eventai_on_spell_hit(victim, caster, spell.id, spell.school);
         }
+        if victim.is_creature() {
+            self.creature_script_spell_hit(victim, caster, spell.id);
+        }
+        // `ZoneScript::OnCreatureSpellHit` (`Spell.cpp:1672`),
+        // beside the EventAI hooks above (the fork fires
+        // both at the end of `DoAllEffectOnTarget`).
+        if victim.is_creature() {
+            self.instance_on_creature_spell_hit(caster, victim, spell.id);
+        }
+        // `InstanceData::CustomSpellCasted`: the fork's
+        // only call site is the spell 27517 dummy arm
+        // (`SpellEffects.cpp:567`, BRD Theldren).
+        if spell.id == 27_517 {
+            self.instance_custom_spell_casted(spell.id, caster);
+        }
         if caster.is_creature() && victim != caster {
             self.eventai_on_spell_hit_target(caster, victim, spell.id, spell.school);
+        }
+        if caster.is_creature() {
+            self.creature_script_spell_hit_target(caster, victim, spell.id);
         }
         if !self.unit_is_alive(victim) && victim.is_creature() {
             // The hit hook may have despawned the
@@ -2280,6 +2416,9 @@ impl Map {
         // In-combat flags (DealDamage side effects land
         // with effects too via combat in ApplyAura).
         let mut holder_applied = false;
+        // `Spell::damage` script channel for this
+        // victim's effect pass (`OnEffectExecute` writes).
+        let mut script_damage = 0.0f32;
         for i in 0..3 {
             let eff = spell.effects[i];
             if eff.effect == effect::NONE {
@@ -2288,6 +2427,17 @@ impl Map {
             // Per-effect immunity (fork strips the
             // effect from the target's effectMask).
             if self.is_immune_to_spell_effect(victim, spell, i, victim == caster) {
+                continue;
+            }
+            if !self.spell_script_on_effect_execute(
+                caster,
+                spell,
+                victim,
+                i,
+                &mut script_damage,
+                triggered_by_aura_spell,
+                triggered_by_spell,
+            ) {
                 continue;
             }
             match eff.effect {
@@ -2380,7 +2530,8 @@ impl Map {
                 effect::SCHOOL_DAMAGE => {
                     let value = self.effect_value_bp(spell, i, caster_level, bp[i]);
                     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-                    let base = mangos_spells::ditheru(value, self.spell_rng()) as i32;
+                    let base =
+                        mangos_spells::ditheru(value + script_damage, self.spell_rng()) as i32;
                     self.school_damage(
                         caster,
                         spell,
@@ -2415,7 +2566,7 @@ impl Map {
                         )
                     };
                     if !spell.effects[..i].iter().any(|e| is_weapon(e.effect)) {
-                        let mut bonus = 0.0f32;
+                        let mut bonus = script_damage;
                         let mut pct = 1.0f32;
                         for (j, e) in spell.effects.iter().enumerate() {
                             let v = self.effect_value_bp(spell, j, caster_level, bp[j]);
@@ -2461,7 +2612,10 @@ impl Map {
                     }
                 }
                 effect::HEAL => {
-                    let value = self.effect_value_bp(spell, i, caster_level, bp[i]);
+                    // Script `spell->damage` adjustment
+                    // (e.g. Swiftmend) rides the same
+                    // additive channel as SCHOOL_DAMAGE.
+                    let value = self.effect_value_bp(spell, i, caster_level, bp[i]) + script_damage;
                     // `EffectHeal`: HealingBonusDone
                     // (coefficient on the advertised
                     // benefit, spellmod tail) then
@@ -2660,6 +2814,7 @@ impl Map {
                     self.effect_dummy(
                         caster,
                         spell,
+                        i,
                         victim,
                         damage,
                         has_cast_item,
@@ -2682,6 +2837,10 @@ impl Map {
                 _ => {}
             }
         }
+        // `SpellScript::OnAfterHit` (fork `Spell.cpp`
+        // DoAllEffectOnTarget unit case, after the
+        // effect pass and procs for this target).
+        self.spell_script_on_after_hit(caster, spell, victim);
     }
 
     /// `Unit::NearTeleportTo` dispatch: players take
@@ -2848,20 +3007,26 @@ impl Map {
     }
 
     /// `WorldObject::MovePositionToFirstCollision`
-    /// (`Object.cpp:1999`), `GridMap` subset: navmesh
-    /// path toward `from + dist·angle`
-    /// (`PathFinder::calculate(src, dest, false, true)`,
-    /// back point wins), `UpdateAllowedPositionZ`,
-    /// then the 10-step Z-safety walkback and
-    /// `NormalizeMapCoord`. The two
-    /// `GetLosHitPosition` vmap trims (−1.0f/−0.5f
-    /// collision-height passes) have no runtime
-    /// vmap manager behind them yet — recorded in
-    /// TIER2-PROGRESS Slice 6.1; the water-surface
-    /// arm of `UpdateAllowedPositionZ` rides the
-    /// same `ground_z` approximation as the rest
-    /// of the motion code.
-    fn first_collision_dest(&mut self, from: Position, angle: f32, dist: f32) -> Position {
+    /// (`Object.cpp:1999`): navmesh path toward
+    /// `from + dist·angle` (`PathFinder::calculate
+    /// (src, dest, false, true)`, back point wins),
+    /// `UpdateAllowedPositionZ`, the two vmap
+    /// `GetLosHitPosition` trims at collision-height
+    /// offsets (−1.0f horizontal, −0.5f vertical;
+    /// static tree only — the dynamic gameobject
+    /// half is not modeled), then the 10-step
+    /// Z-safety walkback and `NormalizeMapCoord`.
+    /// The water-surface arm of
+    /// `UpdateAllowedPositionZ` rides the same
+    /// `ground_z` approximation as the rest of the
+    /// motion code.
+    fn first_collision_dest(
+        &mut self,
+        from: Position,
+        angle: f32,
+        mut dist: f32,
+        half_height: f32,
+    ) -> Position {
         /// `ATTACK_DISTANCE` (`ObjectDefines.h:25`).
         const ATTACK_DISTANCE: f32 = 5.0;
         if dist <= 0.0 {
@@ -2870,7 +3035,7 @@ impl Map {
         let mut dest_x = from.x + dist * angle.cos();
         let mut dest_y = from.y + dist * angle.sin();
         let mut dest_z = from.z;
-        let end = Position::new(dest_x, dest_y, dest_z, from.o);
+        let end = Position::new(dest_x, dest_y, dest_z + half_height, from.o);
         let path = self.find_path_points(from, end, false, true);
         if let Some(back) = path.points.last() {
             dest_x = back.x;
@@ -2878,6 +3043,33 @@ impl Map {
             dest_z = back.z;
         }
         dest_z = self.ground_z(dest_x, dest_y, dest_z);
+        // Horizontal trim at eye level, then the
+        // vertical probe onto the destination.
+        if let Some((hx, hy, hz)) = self.get_los_hit_position(
+            from.x,
+            from.y,
+            from.z + half_height,
+            dest_x,
+            dest_y,
+            dest_z + half_height,
+            -1.0,
+        ) {
+            dest_x = hx;
+            dest_y = hy;
+            dest_z = hz - half_height;
+            dist = ((from.x - dest_x).powi(2) + (from.y - dest_y).powi(2)).sqrt();
+        }
+        if let Some((_, _, hz)) = self.get_los_hit_position(
+            dest_x,
+            dest_y,
+            dest_z + half_height,
+            dest_x,
+            dest_y,
+            dest_z,
+            -0.5,
+        ) {
+            dest_z = hz;
+        }
         // Fork Z-safety probe: step back toward the
         // source in tenths until the terrain Z is
         // within ATTACK_DISTANCE of the source Z. A
@@ -2940,7 +3132,12 @@ impl Map {
             } else {
                 self.effect_radius(spell, i)
             };
-            self.first_collision_dest(from, from.o + offset, radius)
+            // GetCollisionHeight (model height
+            // already scale-ratioed at display set).
+            let half_height = self
+                .unit_base(caster)
+                .map_or(2.0, |u| u.model_collision_height);
+            self.first_collision_dest(from, from.o + offset, radius, half_height)
         };
         let mut dest = dest;
         if let Some(victim_pos) = self.unit_position(victim) {
@@ -3224,7 +3421,11 @@ impl Map {
             } else {
                 self.random_point(center, 3.0).unwrap_or(center)
             };
-            self.summon_creature(eff.misc_value as u32, pos, caster, kind, duration_ms);
+            if let Some(summon) =
+                self.summon_creature(eff.misc_value as u32, pos, caster, kind, duration_ms)
+            {
+                self.spell_script_on_summon(caster, summon, spell);
+            }
         }
     }
 
@@ -4566,7 +4767,7 @@ impl Map {
         &mut self,
         attacker: ObjectGuid,
         victim: ObjectGuid,
-        damage: u32,
+        mut damage: u32,
         is_dot: bool,
         school_id: u32,
     ) {
@@ -4579,6 +4780,18 @@ impl Map {
         #[allow(clippy::cast_possible_wrap)]
         if self.is_immune_to_damage(victim, 1i32 << school_id, None) {
             return;
+        }
+        if victim.is_creature() {
+            if attacker != victim {
+                self.creature_script_attacked_by(victim, attacker);
+            }
+            // `CreatureAI::DamageTaken` may rewrite the amount.
+            let mut scripted = damage;
+            self.creature_script_damage_taken(victim, attacker, &mut scripted);
+            damage = scripted;
+            if damage == 0 {
+                return;
+            }
         }
         // `SetInvincibilityHpThreshold` floor (Slice 6b).
         let mut damage = damage;
@@ -4690,6 +4903,7 @@ impl Map {
 
     /// Death: state, cleanup, respawn scheduling
     /// (`Kill`/`setDeathState(JUST_DIED)` subset).
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn kill_unit(&mut self, victim: ObjectGuid, killer: Option<ObjectGuid>) {
         let is_creature = victim.is_creature();
         if let Some(killer) = killer
@@ -4718,8 +4932,32 @@ impl Map {
         // EventAI death/kill hooks run while the AI
         // state still exists (`JustDied`/`KilledUnit`).
         self.eventai_on_death(victim, killer);
+        if victim.is_player() {
+            self.instance_on_player_death(victim);
+        }
+        // BG kill scoring (`BattleGround::HandleKillPlayer` /
+        // `HandleKillUnit`, Tier 3 Slice 3; no-op off BG maps).
+        if self.bg.is_some() {
+            if victim.is_player() {
+                self.bg_handle_kill_player(victim, killer);
+            } else if victim.is_creature() {
+                self.bg_handle_kill_unit(victim, killer);
+            }
+        }
+        // `CreatureAI::KilledUnit` fires for any victim type
+        // (fork `Unit::Kill`); bodies gate on player victims
+        // themselves.
+        if let Some(k) = killer
+            && k != victim
+            && k.is_creature()
+        {
+            self.creature_script_killed_unit(k, victim);
+        }
         if is_creature {
             self.instance_on_creature_death(victim);
+            self.go_ai_summoned_creature_just_died(victim);
+            self.creature_script_just_died(victim, killer);
+            self.creature_script_summoned_creature_just_died(victim);
             if let Some(summoner) = self.summons.get(&victim).map(|st| st.summoner)
                 && summoner.is_creature()
             {
@@ -4806,6 +5044,7 @@ impl Map {
             // spawn row, replaces the corpse in the
             // creature map and re-initializes motion.
             self.spawn_creature(guid.counter(), &RespawnTimes::default());
+            self.creature_script_just_respawned(guid);
             self.events.push(MapEvent::ClearCreatureRespawn {
                 guid_low: guid.counter(),
                 instance_id: self.creature_respawn_key(guid.counter()),
@@ -5393,6 +5632,8 @@ impl Map {
             found
         };
         holder.slot = slot;
+        let holder_spell_id = holder.spell_id;
+        let holder_caster_guid = holder.caster;
         let duration_packet = (slot, holder.duration_ms);
         let has_ap = holder
             .effects
@@ -5422,6 +5663,10 @@ impl Map {
         } else {
             None
         };
+        // AuraScript::OnBeforeApply (holder level,
+        // per present effect) runs before the apply
+        // handlers, fork ApplyModifier order.
+        self.aura_script_on_before_apply(victim, &mut holder, true);
         let landed = if let Some(unit) = self.unit_base_mut(victim) {
             Self::aura_effect_apply(unit, &holder, true);
             Self::write_aura_slot(unit, &holder, false);
@@ -5430,6 +5675,10 @@ impl Map {
         } else {
             false
         };
+        if landed {
+            self.aura_script_on_after_apply(victim, holder_spell_id, holder_caster_guid, true);
+            self.aura_dummy_for_spell(victim, holder_spell_id, true);
+        }
         if has_stat || has_health_energy {
             self.refresh_derived_stats(victim);
             if let Some((cur, max)) = hp_before
@@ -6199,11 +6448,15 @@ impl Map {
         }
         let mut removed_holder: Option<(ObjectGuid, u32)> = None;
         let mut has_health_energy = false;
-        if let Some(unit) = self.unit_base_mut(victim) {
+        let extracted = if let Some(unit) = self.unit_base_mut(victim) {
             if index >= unit.auras.len() {
                 return;
             }
-            let holder = unit.auras.remove(index);
+            Some(unit.auras.remove(index))
+        } else {
+            None
+        };
+        if let Some(mut holder) = extracted {
             removed_holder = Some((holder.caster, holder.spell_id));
             has_ap = holder
                 .effects
@@ -6212,8 +6465,18 @@ impl Map {
                 .any(|e| e.aura_type == aura_type::MOD_ATTACK_POWER);
             has_stat = Self::holder_has_stat_mod(&holder);
             has_health_energy = Self::holder_has_health_energy_mod(&holder);
-            Self::aura_effect_apply(unit, &holder, false);
-            Self::write_aura_slot(unit, &holder, true);
+            // AuraScript::OnBeforeApply(apply=false)
+            // before the unapply handlers (fork
+            // ApplyModifier order).
+            self.aura_script_on_before_apply(victim, &mut holder, false);
+            if let Some(unit) = self.unit_base_mut(victim) {
+                Self::aura_effect_apply(unit, &holder, false);
+                Self::write_aura_slot(unit, &holder, true);
+            }
+        }
+        if let Some((removed_caster, removed_spell_id)) = removed_holder {
+            self.aura_script_on_after_apply(victim, removed_spell_id, removed_caster, false);
+            self.aura_dummy_for_spell(victim, removed_spell_id, false);
         }
         if has_stat || has_health_energy {
             self.refresh_derived_stats(victim);
@@ -6266,9 +6529,28 @@ impl Map {
         }
     }
 
+    /// `SpellAuraHolder::SetStackAmount` reduced: set the
+    /// holder's stack count and rewrite its aura slot
+    /// (stack byte). Modifier magnitude does not scale
+    /// by stack in the Rust aura system yet (global
+    /// stacking gap; the fork rescales amounts in the
+    /// aura handlers) — recorded in TIER3-PROGRESS.
+    pub(crate) fn set_aura_stack_amount(&mut self, victim: ObjectGuid, spell_id: u32, stack: u32) {
+        let landed = self.unit_base_mut(victim).and_then(|unit| {
+            let holder = unit.auras.iter_mut().find(|h| h.spell_id == spell_id)?;
+            holder.stack = stack.max(1);
+            let snapshot = holder.clone();
+            Self::write_aura_slot(unit, &snapshot, false);
+            Some(())
+        });
+        if landed.is_some() {
+            self.refresh_derived_stats(victim);
+        }
+    }
+
     /// `RemoveAurasDueToSpell` (no cancelable gate;
     /// proc charge exhaustion path).
-    pub(crate) fn remove_auras_due_to_spell(&mut self, victim: ObjectGuid, spell_id: u32) {
+    pub fn remove_auras_due_to_spell(&mut self, victim: ObjectGuid, spell_id: u32) {
         loop {
             let found = self
                 .unit_base_mut(victim)
@@ -6418,16 +6700,27 @@ impl Map {
             }
             #[allow(clippy::cast_possible_truncation)]
             let amount = value as i32;
-            let periodic = matches!(
-                eff.apply_aura_name,
-                aura_type::PERIODIC_DAMAGE
-                    | aura_type::PERIODIC_HEAL
-                    | aura_type::PERIODIC_ENERGIZE
-                    | aura_type::PERIODIC_TRIGGER_SPELL
-                    | aura_type::PERIODIC_DAMAGE_PERCENT
-                    | aura_type::PERIODIC_LEECH
-            );
-            let period_ms = if periodic { eff.amplitude } else { 0 };
+            // spell_haunting_spirits AuraScript
+            // OnBeforeApply: SetPeriodicTimer(5s)
+            // (sets isPeriodic + period + timer).
+            let haunt = spell.id == 7057 && i == 0;
+            let periodic = haunt
+                || matches!(
+                    eff.apply_aura_name,
+                    aura_type::PERIODIC_DAMAGE
+                        | aura_type::PERIODIC_HEAL
+                        | aura_type::PERIODIC_ENERGIZE
+                        | aura_type::PERIODIC_TRIGGER_SPELL
+                        | aura_type::PERIODIC_DAMAGE_PERCENT
+                        | aura_type::PERIODIC_LEECH
+                );
+            let period_ms = if haunt {
+                5000
+            } else if periodic {
+                eff.amplitude
+            } else {
+                0
+            };
             #[allow(clippy::cast_possible_wrap)]
             let timer = period_ms as i32;
             // `HandleAddModifier` charge seeding:
@@ -6727,8 +7020,8 @@ impl Map {
                         continue;
                     };
                     #[allow(clippy::cast_possible_truncation)]
-                    let trigger_id = spell.effects[tick.effect_index as usize].trigger_spell;
-                    if trigger_id == 0 || !self.unit_is_alive(tick.target) {
+                    let raw_trigger = spell.effects[tick.effect_index as usize].trigger_spell;
+                    if !self.unit_is_alive(tick.target) {
                         continue;
                     }
                     let caster = if spell.attributes & 0x0000_0800 != 0 {
@@ -6739,6 +7032,30 @@ impl Map {
                     if !self.unit_is_alive(caster) {
                         continue;
                     }
+                    // AuraScript::OnPeriodicTrigger may
+                    // cast a custom spell and suppress
+                    // (None) or replace the default
+                    // trigger cast (fork TriggerSpell).
+                    let mut trigger = (raw_trigger != 0).then_some(raw_trigger);
+                    self.aura_script_on_periodic_trigger(&tick, &spell, caster, &mut trigger);
+                    let Some(trigger_id) = trigger else {
+                        // `Aura::TriggerSpell` tail
+                        // (`SpellAuras.cpp:1518-1524`): no
+                        // triggered spell and no AuraScript
+                        // (empty `script_name` proxy) ->
+                        // creature dummy script on the
+                        // wearer. The fork logs an error
+                        // when unhandled; silent here.
+                        if spell.script_name.is_empty() && tick.target.is_creature() {
+                            self.effect_dummy_creature(
+                                caster,
+                                tick.spell_id,
+                                tick.effect_index as usize,
+                                tick.target,
+                            );
+                        }
+                        continue;
+                    };
                     self.cast_spell(
                         caster,
                         trigger_id,
@@ -6928,9 +7245,22 @@ impl Map {
                         }),
                     );
                 }
+                aura_type::DUMMY => {
+                    self.periodic_dummy_tick(&tick);
+                }
                 _ => {}
             }
         }
+    }
+
+    /// `Aura::PeriodicDummyTick` (`SpellAuras.cpp:
+    /// 6260`): `AuraScript` `OnPeriodicDummy`
+    /// dispatch first, then the fork's hardcoded
+    /// family switch. Only ported arms run;
+    /// the rest of the switch is recorded in
+    /// TIER3-PROGRESS Slice 2 step 4.
+    fn periodic_dummy_tick(&mut self, tick: &PeriodicTick) {
+        self.aura_script_on_periodic_dummy(tick);
     }
 
     // ------------------------------------------------ hit/resist/crit math

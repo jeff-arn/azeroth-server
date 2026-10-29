@@ -84,7 +84,8 @@ impl Map {
     // ------------------------------------------------ object helpers
 
     /// Position of any world object on this map.
-    pub(crate) fn object_position(&self, guid: ObjectGuid) -> Option<Position> {
+    #[must_use]
+    pub fn object_position(&self, guid: ObjectGuid) -> Option<Position> {
         if let Some(pos) = self.unit_position(guid) {
             return Some(pos);
         }
@@ -951,6 +952,52 @@ impl Map {
             return;
         };
         self.schedule_steps(&steps, source, target);
+    }
+
+    /// `ScriptsStart(sAreaTriggerScripts, id, player,
+    /// player)` (`Map::StartAreaTriggerScript`,
+    /// `Map.cpp:2588` DB arm).
+    pub fn scripts_start_area_trigger(&mut self, script_id: u32, player: ObjectGuid) {
+        let Some(steps) = self
+            .stores
+            .scripts
+            .area_trigger_scripts
+            .get(&script_id)
+            .cloned()
+        else {
+            return;
+        };
+        self.schedule_steps(&steps, Some(player), Some(player));
+    }
+
+    /// `ScriptsStart(sEventScripts, eventId, source,
+    /// target)` (GO goober/camera arms,
+    /// `GameObject.cpp`).
+    pub fn scripts_start_event(&mut self, event_id: u32, source: ObjectGuid, target: ObjectGuid) {
+        let Some(steps) = self.stores.scripts.event_scripts.get(&event_id).cloned() else {
+            return;
+        };
+        self.schedule_steps(&steps, Some(source), Some(target));
+    }
+
+    /// `ScriptsStart(sGameObjectScripts, spawnGuidLow,
+    /// user, go)` (goober no-event arm).
+    pub fn scripts_start_gameobject(
+        &mut self,
+        spawn_guid_low: u32,
+        source: ObjectGuid,
+        target: ObjectGuid,
+    ) {
+        let Some(steps) = self
+            .stores
+            .scripts
+            .gameobject_scripts
+            .get(&spawn_guid_low)
+            .cloned()
+        else {
+            return;
+        };
+        self.schedule_steps(&steps, Some(source), Some(target));
     }
 
     pub(crate) fn schedule_steps(
@@ -2168,6 +2215,7 @@ impl Map {
                 mangos_scripts_engine::event_type::SUMMONED_JUST_DESPAWN,
                 Some(guid),
             );
+            self.creature_script_summoned_creature_despawn(state.summoner, guid);
         }
         self.notify_object_removed(guid);
         if respawn_sec != u32::MAX {
@@ -2183,6 +2231,14 @@ impl Map {
     }
 
     pub(crate) fn despawn_gameobject_now(&mut self, guid: ObjectGuid) {
+        // `GameObjectAI::OnRemoveFromWorld` runs while
+        // the GO is still in the world (state taken out
+        // first so a self-despawn inside cannot recurse).
+        if let Some(mut state) = self.go_ai.remove(&guid)
+            && let crate::content::GoAiState::DarrowshireTrigger(s) = &mut state
+        {
+            self.go_ai_darrowshire_trigger_on_remove(guid, s);
+        }
         let Some(go) = self.gameobjects.remove(&guid) else {
             return;
         };
@@ -2234,7 +2290,7 @@ impl Map {
 
     /// `ChatHandler::BuildChatPacket` for the monster
     /// message types.
-    fn build_monster_chat(
+    pub(crate) fn build_monster_chat(
         &self,
         msg_type: u8,
         text: &str,

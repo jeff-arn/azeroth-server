@@ -11,18 +11,28 @@
 //! receiving player's GUID and drained by the caller.
 
 pub mod ai;
+pub mod area_triggers;
+pub mod battlegrounds;
+pub mod bg_ab;
+pub mod bg_av;
+pub mod bg_ws;
 pub mod content;
 pub mod customs;
+pub mod dummy_scripts;
 pub mod dynobjects;
+pub mod gossip;
 pub mod map;
 pub mod motion;
 pub mod pets;
+pub mod process_events;
 pub mod procs;
 pub mod regen;
 pub mod scripts;
+pub mod spell_scripts;
 pub mod spells;
 pub mod stores;
 pub mod visibility;
+pub mod vmaps;
 pub mod weather;
 pub mod xp;
 

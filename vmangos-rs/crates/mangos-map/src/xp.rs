@@ -241,6 +241,10 @@ impl Map {
                 to,
                 packet: build_levelup_info(info),
             });
+            self.events.push(MapEvent::PlayerLeveled {
+                player: to,
+                new_level: info.level,
+            });
         }
     }
 

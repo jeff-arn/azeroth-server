@@ -572,6 +572,7 @@ async fn start_server() -> u16 {
             realm_publisher: Arc::new(FakePublisher),
             maps_dir: None,
             mmaps_dir: None,
+            vmaps_dir: None,
             world_stores: Arc::new(mangos_map::WorldStores::empty()),
             race_class_dbc: Arc::new(mangos_world_data::player_info::RaceClassDbc::default()),
             respawn_times: mangos_world_data::spawn_support::RespawnTimes::default(),

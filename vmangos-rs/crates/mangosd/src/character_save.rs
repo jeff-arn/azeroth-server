@@ -418,10 +418,11 @@ pub fn build_save_bundle(
         .collect();
     let bundle = CharacterSaveBundle {
         row: character_row(player, ctx),
-        // BG state is unmodeled: `m_needSave` never
-        // sets, matching fork behavior for a player
-        // who never queued.
-        bg: None,
+        // `_SaveBGData`: outer None skips the delete
+        // entirely (`m_needSave` false — the fork
+        // early-out, also correct for a player who
+        // never queued).
+        bg: player.battleground.save_row(),
         buyback_purge: Vec::new(),
         inventory,
         quest_inserts,
@@ -503,6 +504,23 @@ pub fn rebaseline(
     now: u64,
     projected_quests: Vec<mangos_db::character_load::QuestStatusRow>,
 ) {
+    // `_SaveBGData` tail: `m_needSave = false`, and the
+    // retained load row tracks what was just written.
+    player.battleground.need_save = false;
+    player.deferred.bg_data =
+        if player.battleground.bg_instance_id != 0 || player.battleground.in_battleground_queue() {
+            Some(mangos_db::character_load::BgDataRow {
+                instance_id: player.battleground.bg_instance_id,
+                team: mangos_entities::battleground::team_db_value(player.battleground.bg_team),
+                join_x: player.battleground.join_pos.1,
+                join_y: player.battleground.join_pos.2,
+                join_z: player.battleground.join_pos.3,
+                join_o: player.battleground.join_pos.4,
+                join_map: player.battleground.join_pos.0,
+            })
+        } else {
+            None
+        };
     player.saved.spells = player.deferred.spells.clone();
     player.saved.skills = current_skills(player);
     player.saved.quest_status = projected_quests;

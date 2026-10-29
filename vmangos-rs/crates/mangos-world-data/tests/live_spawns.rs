@@ -37,9 +37,9 @@ fn bench_spawns_load() {
     let mut spawns = load_all(&actor);
 
     // Independent SQL counts (see file header).
-    assert_eq!(spawns.creature_count(), 66_222);
+    assert_eq!(spawns.creature_count(), 66_223); // +1: bench res-fixer spawn (Tier 3 step 5 probe)
     assert_eq!(spawns.gameobject_count(), 56_645);
-    assert_eq!(spawns.grid().creature_count(), 62_760);
+    assert_eq!(spawns.grid().creature_count(), 62_761);
     assert_eq!(spawns.grid().gameobject_count(), 13_601);
 
     // Spot creature: guid 1, entry 2843, map 0 (SQL-fetched).
@@ -80,5 +80,5 @@ fn bench_spawns_load() {
             Ok(spawns)
         })
         .expect("reload");
-    assert_eq!(spawns.grid().creature_count(), 62_760);
+    assert_eq!(spawns.grid().creature_count(), 62_761);
 }

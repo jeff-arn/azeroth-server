@@ -348,4 +348,5 @@ pub mod cast_result {
     pub const FAILED_TARGETS_DEAD: u8 = 101;
     pub const FAILED_TARGET_AURASTATE: u8 = 103;
     pub const FAILED_UNKNOWN: u8 = 145;
+    pub const FAILED_UNIT_NOT_INFRONT: u8 = 124;
 }

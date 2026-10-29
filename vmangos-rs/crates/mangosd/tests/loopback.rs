@@ -889,6 +889,7 @@ fn fake_race_class_dbc() -> mangos_world_data::player_info::RaceClassDbc {
             faction_id: 1,
             model_m: 49,
             model_f: 50,
+            res_sickness_spell_id: 15007,
             team_id: 7,
         },
     );
@@ -899,6 +900,7 @@ fn fake_race_class_dbc() -> mangos_world_data::player_info::RaceClassDbc {
             faction_id: 4,
             model_m: 55,
             model_f: 56,
+            res_sickness_spell_id: 15007,
             team_id: 7,
         },
     );
@@ -909,6 +911,7 @@ fn fake_race_class_dbc() -> mangos_world_data::player_info::RaceClassDbc {
             faction_id: 2,
             model_m: 51,
             model_f: 52,
+            res_sickness_spell_id: 15007,
             team_id: 1,
         },
     );
@@ -958,6 +961,7 @@ async fn start_server(backend: Arc<FakeBackend>) -> u16 {
             realm_publisher: Arc::new(FakeRealmPublisher),
             maps_dir: None,
             mmaps_dir: None,
+            vmaps_dir: None,
             world_stores: Arc::new(fake_world_stores()),
             race_class_dbc: Arc::new(fake_race_class_dbc()),
             respawn_times: mangos_world_data::spawn_support::RespawnTimes::default(),

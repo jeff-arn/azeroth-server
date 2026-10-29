@@ -29,6 +29,15 @@ const STATIC_FLAG_VISIBLE_TO_GHOSTS: u32 = 0x0020_0000;
 // Aggro-rate-scaled corpse sight uses `(20 + 25) * rate`
 // in C++; the rate is a map input, see `aggro_rate`.
 
+/// `GetDistance` (3D).
+#[must_use]
+pub fn dist3d(a: Position, b: Position) -> f32 {
+    let dx = a.x - b.x;
+    let dy = a.y - b.y;
+    let dz = a.z - b.z;
+    (dx * dx + dy * dy + dz * dz).sqrt()
+}
+
 /// 2D distance (`IsWithinDistInMap(..., is3D=false)`
 /// measures between positions, bounding radii excluded at
 /// this call shape in `Object.cpp:2202`? — the C++ body

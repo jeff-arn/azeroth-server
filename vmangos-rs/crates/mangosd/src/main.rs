@@ -1159,6 +1159,8 @@ struct InitialWorldSettings {
     maps_dir: std::path::PathBuf,
     /// Extracted `mmaps` directory for navmesh paths.
     mmaps_dir: std::path::PathBuf,
+    /// Extracted `vmaps` directory for collision.
+    vmaps_dir: std::path::PathBuf,
     strings: MangosStrings,
     enum_stores: mangos_world_data::enum_stores::EnumStores,
     world_stores: Arc<WorldStores>,
@@ -1302,6 +1304,7 @@ fn load_initial_world_settings(
     Ok(InitialWorldSettings {
         maps_dir: data_dir.maps_dir(),
         mmaps_dir: data_dir.mmaps_dir(),
+        vmaps_dir: data_dir.vmaps_dir(),
         strings,
         enum_stores,
         world_stores: Arc::clone(&phase4.0),
@@ -1335,6 +1338,8 @@ struct DbcTables {
     display_model: DisplayModelMap,
     /// `SpellShapeshiftForm.dbc` form → `flags1`.
     shapeshift_forms: std::collections::HashMap<u32, u32>,
+    /// `WorldSafeLocs.dbc` rows (id, map, x, y, z).
+    safe_loc_rows: Vec<(u32, u32, f32, f32, f32)>,
 }
 
 fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode> {
@@ -1383,6 +1388,7 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
                 model_m: uint(&row, 3),
                 model_f: uint(&row, 4),
                 team_id: uint(&row, 5),
+                res_sickness_spell_id: uint(&row, 9),
             },
         );
     }
@@ -1419,6 +1425,19 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
     for row in read_store(formats::SPELL_SHAPESHIFT_FORM)? {
         shapeshift_forms.insert(uint(&row, 0), uint(&row, 9));
     }
+    // Produced fields of `nifffxxxxxxxxx`: 0 = id, 1 = map, 2-4 = xyz.
+    let safe_loc_rows = read_store(formats::WORLD_SAFE_LOCS)?
+        .iter()
+        .map(|row| {
+            (
+                uint(row, 0),
+                uint(row, 1),
+                float(row, 2),
+                float(row, 3),
+                float(row, 4),
+            )
+        })
+        .collect();
     Ok(DbcTables {
         race_class,
         skills: skill_dbc,
@@ -1427,6 +1446,7 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
         display_scales,
         display_model,
         shapeshift_forms,
+        safe_loc_rows,
     })
 }
 
@@ -1849,6 +1869,7 @@ fn load_phase4_stores(
         display_scales,
         display_model,
         shapeshift_forms,
+        safe_loc_rows,
     } = read_dbc_tables(data_dir, log)?;
 
     let wow_patch = server_config.wow_patch;
@@ -2009,6 +2030,78 @@ fn load_phase4_stores(
             script_stores.broadcast_texts.len()
         ),
     );
+    // Tier 3 Slice 3: safe-loc facings + battleground
+    // templates (`LoadWorldSafeLocsFacing` /
+    // `CreateInitialBattleGrounds`). Map names resolve
+    // against the just-loaded `map_template` store.
+    let bg_rows = safe_loc_rows;
+    let bg_maps = maps.clone();
+    let bg_areas = areas.clone();
+    let bg_area_triggers = area_triggers.clone();
+    let (
+        safe_locs,
+        battlegrounds,
+        battlemasters,
+        battle_event_indexes,
+        graveyard_links,
+        bg_entrances,
+    ) = match databases.world.actor.call(move |conn| {
+        use mangos_world_data::battlegrounds::{
+            SafeLocStore, load_battle_event_indexes, load_battleground_entrances,
+            load_battleground_templates, load_battlemasters, load_graveyard_links,
+            load_safe_loc_facings,
+        };
+        let facings = load_safe_loc_facings(conn)?;
+        let safe_locs = SafeLocStore::from_rows(&bg_rows, &facings);
+        let mut r = LoadReport::default();
+        let battlegrounds = load_battleground_templates(
+            conn,
+            wow_patch,
+            &safe_locs,
+            &|m| bg_maps.get(m).map(|e| e.name.clone()),
+            &mut r,
+        )?;
+        let battlemasters = load_battlemasters(conn)?;
+        let battle_event_indexes = load_battle_event_indexes(conn)?;
+        let graveyard_links = load_graveyard_links(
+            conn,
+            wow_patch,
+            &safe_locs,
+            &|z| bg_areas.entry(z).is_some(),
+            &mut r,
+        )?;
+        let bg_entrances =
+            load_battleground_entrances(conn, &|t| bg_area_triggers.get(t).is_some(), &mut r)?;
+        Ok((
+            safe_locs,
+            battlegrounds,
+            battlemasters,
+            battle_event_indexes,
+            graveyard_links,
+            bg_entrances,
+        ))
+    }) {
+        Ok(v) => v,
+        Err(e) => {
+            log.out(
+                Level::Error,
+                &format!("battleground store load failed: {e}"),
+            );
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    log.out(
+        Level::Minimal,
+        &format!(
+            "battlegrounds: {} templates, {} safe locs, {} battlemasters, {} event indexes, {} graveyard links, {} entrances",
+            battlegrounds.len(),
+            safe_locs.len(),
+            battlemasters.len(),
+            battle_event_indexes.len(),
+            graveyard_links.len(),
+            bg_entrances.len()
+        ),
+    );
     let stores = Arc::new(WorldStores {
         creature_templates,
         gameobject_templates,
@@ -2039,6 +2132,12 @@ fn load_phase4_stores(
         chat_channels,
         auction_houses,
         maps,
+        safe_locs,
+        battlegrounds,
+        battlemasters,
+        battle_event_indexes,
+        graveyard_links,
+        bg_entrances,
         area_triggers,
         quests,
         quest_templates,
@@ -2454,6 +2553,7 @@ fn build_world_deps(
         world_stores: Arc::clone(&initial.world_stores),
         maps_dir: Some(initial.maps_dir.clone()),
         mmaps_dir: Some(initial.mmaps_dir.clone()),
+        vmaps_dir: Some(initial.vmaps_dir.clone()),
         race_class_dbc: Arc::clone(&initial.race_class_dbc),
         respawn_times: std::mem::take(&mut initial.respawn_times),
         presence: Arc::new(MysqlPresenceWriter {

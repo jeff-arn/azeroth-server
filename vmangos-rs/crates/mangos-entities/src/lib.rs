@@ -6,6 +6,7 @@
 //! independent owners — the C++ domains cross-read each other.
 
 pub mod aura;
+pub mod battleground;
 pub mod creature;
 pub mod dynobject;
 pub mod gameobject;

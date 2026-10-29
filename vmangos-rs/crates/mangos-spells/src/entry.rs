@@ -148,6 +148,8 @@ pub struct SpellEntry {
     pub custom: u32,
     /// fields[124] (diagnostics only).
     pub name: String,
+    /// `spell_template.script_name` (spell/aura script binding).
+    pub script_name: String,
 }
 
 /// `SpellCastTimes.dbc` row (`niii`).

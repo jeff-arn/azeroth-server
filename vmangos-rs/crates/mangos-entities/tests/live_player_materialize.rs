@@ -41,6 +41,7 @@ fn race_class_dbc() -> RaceClassDbc {
                 faction_id: uint(row, 2),
                 model_m: uint(row, 3),
                 model_f: uint(row, 4),
+                res_sickness_spell_id: 15007,
                 team_id: uint(row, 5),
             },
         );

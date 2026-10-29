@@ -71,6 +71,9 @@ pub struct RaceDbc {
     pub model_f: u32,
     /// `TeamID`: 7 = Alliance, 1 = Horde.
     pub team_id: u32,
+    /// `resSicknessSpellId` (`DBCStructure.h:157`,
+    /// produced field 9).
+    pub res_sickness_spell_id: u32,
 }
 
 /// `PlayerInfo` position/display half (`Player.h` create info).
@@ -103,6 +106,8 @@ pub struct PlayerLevelInfo {
 /// All `LoadPlayerInfo` products used at login.
 #[derive(Clone, Debug, Default)]
 pub struct PlayerInfos {
+    /// Race id -> `ChrRaces.resSicknessSpellId`.
+    res_sickness: HashMap<u32, u32>,
     max_player_level: u32,
     create: HashMap<(u32, u32), PlayerCreateInfo>,
     create_spells: HashMap<(u32, u32), Vec<u32>>,
@@ -124,6 +129,7 @@ impl PlayerInfos {
         xp_per_level: Vec<u32>,
     ) -> PlayerInfos {
         PlayerInfos {
+            res_sickness: HashMap::new(),
             max_player_level,
             create,
             create_spells: HashMap::new(),
@@ -136,6 +142,13 @@ impl PlayerInfos {
     #[must_use]
     pub fn max_player_level(&self) -> u32 {
         self.max_player_level
+    }
+
+    /// `ChrRacesEntry::resSicknessSpellId` for a
+    /// race (fork `sChrRacesStore.LookupEntry`).
+    #[must_use]
+    pub fn res_sickness_spell_id(&self, race: u32) -> Option<u32> {
+        self.res_sickness.get(&race).copied().filter(|id| *id != 0)
     }
 
     /// Number of `(race, class)` create definitions.
@@ -345,6 +358,14 @@ pub fn load_player_infos(
         );
     }
     let mut infos = PlayerInfos {
+        res_sickness: dbc
+            .map(|d| {
+                d.races
+                    .iter()
+                    .map(|(race, r)| (*race, r.res_sickness_spell_id))
+                    .collect()
+            })
+            .unwrap_or_default(),
         max_player_level,
         xp_per_level: vec![0; (max_player_level + 1) as usize],
         ..PlayerInfos::default()
