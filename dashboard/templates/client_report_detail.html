@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ report.title }} - Client Reports</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #e0d8c8; font-family: 'Segoe UI', Tahoma, Geneva, sans-serif; min-height: 100vh; }
+.container { max-width: 1060px; margin: 0 auto; padding: 20px; }
+nav { text-align: right; padding: 8px 0; }
+nav a { color: #c9aa71; text-decoration: none; font-size: 13px; font-weight: 600; margin-left: 16px; }
+nav a.active { color: #ffd100; }
+nav .user-info { float: left; color: #6b6860; font-size: 12px; }
+.header { text-align: center; padding: 24px 0 16px; border-bottom: 2px solid #c9aa71; margin-bottom: 16px; }
+.header h1 { color: #ffd100; font-size: 28px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px; }
+.header h2 { color: #c9aa71; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; font-weight: 400; }
+.back-link { color: #c9aa71; text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 16px; }
+.section { background: #16213e; border: 1px solid #c9aa71; border-radius: 6px; padding: 18px; margin-bottom: 20px; }
+.section-title { color: #ffd100; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; border-bottom: 1px solid #3d3d5c; padding-bottom: 8px; margin-bottom: 12px; }
+.report-title { font-size: 22px; color: #ffd100; margin-bottom: 8px; overflow-wrap: anywhere; }
+.meta { color: #8b8878; font-size: 12px; }
+dl { display: grid; grid-template-columns: 170px 1fr; gap: 7px 16px; font-size: 13px; }
+dt { color: #c9aa71; font-weight: 600; }
+dd { overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #0d1526; border: 1px solid #34405f; border-radius: 4px; padding: 12px; font-family: Consolas, monospace; font-size: 12px; line-height: 1.5; max-height: 560px; overflow: auto; }
+.btn { padding: 7px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; background: #c9aa71; color: #1a1a2e; text-decoration: none; display: inline-block; }
+.btn:hover { background: #ffd100; }
+select { background: #0d1526; color: #e0d8c8; border: 1px solid #445; border-radius: 4px; padding: 6px; }
+.file-row { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid #263557; }
+.file-row:last-child { border-bottom: none; }
+@media (max-width: 680px) { dl { grid-template-columns: 1fr; } .file-row { flex-direction: column; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav>
+    <span class="user-info">{{ char_name }}</span>
+    <a href="/">Dashboard</a>
+    <a href="/guild">Guild Roster</a>
+    <a href="/addons">Addons</a>
+    <a href="/client-reports" class="active">Client Reports</a>
+    <a href="/logout">Logout</a>
+  </nav>
+
+  <div class="header">
+    <h1>Azeroth</h1>
+    <h2>Client Report</h2>
+  </div>
+
+  <a class="back-link" href="/client-reports">&larr; Back to report inbox</a>
+
+  <section class="section">
+    <div class="report-title">{{ report.title }}</div>
+    <dl>
+      <dt>Status</dt><dd>{{ report.status }}</dd>
+      <dt>Kind / severity</dt><dd>{{ report.kind }} / {{ report.severity }}</dd>
+      <dt>Occurred</dt><dd>{{ report.occurred_at }}</dd>
+      <dt>Received</dt><dd>{{ report.received_at }}</dd>
+      <dt>Account</dt><dd>{{ report.account_name }} (#{{ report.account_id }})</dd>
+      <dt>Character / realm</dt><dd>{{ report.character_name or "—" }} · {{ report.realm_name or "—" }}</dd>
+      <dt>Client pack</dt><dd>{{ report.pack_name or "—" }} {{ report.pack_version or "" }}</dd>
+      <dt>Client build</dt><dd>{{ report.client_build or "—" }}</dd>
+      <dt>Executable SHA-256</dt><dd>{{ report.client_sha256 or "—" }}</dd>
+      <dt>Client report ID</dt><dd>{{ report.client_report_id }}</dd>
+      <dt>Server report ID</dt><dd>{{ report.id }}</dd>
+      <dt>Install ID</dt><dd>{{ report.install_id }}</dd>
+    </dl>
+    <form method="post" action="/client-reports/{{ report.id }}/status" style="margin-top:16px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="status">Set status</label>
+      <select id="status" name="status">
+        {% for value in ["new", "triaged", "resolved", "closed"] %}
+        <option value="{{ value }}"{% if report.status == value %} selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn" type="submit">Update</button>
+    </form>
+  </section>
+
+  <section class="section">
+    <div class="section-title">Report body</div>
+    <pre>{{ report.body }}</pre>
+  </section>
+
+  <section class="section">
+    <div class="section-title">Attachments</div>
+    {% if report.files %}
+      {% for file in report.files %}
+      <div class="file-row">
+        <div>{{ file.filename }}<br><span class="meta">{{ file.size_bytes }} bytes · SHA-256 {{ file.sha256 }}</span></div>
+        <a class="btn" href="/client-reports/{{ report.id }}/files/{{ file.id }}">Download</a>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="meta">No attachments were included.</p>
+    {% endif %}
+  </section>
+
+  <section class="section">
+    <div class="section-title">Context</div>
+    <pre>{{ context_json }}</pre>
+  </section>
+</div>
+</body>
+</html>

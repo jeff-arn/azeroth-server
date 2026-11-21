@@ -1,15 +1,35 @@
 """Azeroth Private Server Dashboard — Flask backend."""
 
 import functools
+import hmac
 import json
+import logging
 import os
 import re
+import secrets
 import subprocess
 import uuid
+from pathlib import Path
 
 import mysql.connector
 from auth import _verify_srp6_password
-from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+from client_reports import (
+    ClientReportError,
+    ClientReportNotFound,
+    ClientReportService,
+    MySQLClientReportRepository,
+)
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    send_from_directory,
+    session,
+    url_for,
+)
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
@@ -17,6 +37,14 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(32))
 
 ADDONS_DIR = os.path.join(os.path.dirname(__file__), "static", "addons")
 ADDONS_JSON = os.path.join(ADDONS_DIR, "addons.json")
+CLIENT_REPORTS_DIR = Path(
+    os.environ.get(
+        "CLIENT_REPORTS_DIR",
+        os.path.join(os.path.dirname(__file__), "client_report_uploads"),
+    )
+)
+CLIENT_REPORT_MAX_BYTES = int(os.environ.get("CLIENT_REPORT_MAX_BYTES", str(10 * 1024 * 1024)))
+logger = logging.getLogger(__name__)
 
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "127.0.0.1"),
@@ -130,6 +158,12 @@ def get_db(database):
     config = DB_CONFIG.copy()
     config["database"] = database
     return mysql.connector.connect(**config)
+
+
+client_report_service = ClientReportService(
+    MySQLClientReportRepository(get_db),
+    CLIENT_REPORTS_DIR,
+)
 
 
 def get_zone_name(zone_id):
@@ -927,6 +961,246 @@ def api_delete_addon(addon_id):
 def download_addon(filename):
     safe = secure_filename(filename)
     return send_from_directory(ADDONS_DIR, safe, as_attachment=True)
+
+
+# ============================================================================
+# Client bug/crash reports — pairing, companion ingestion, and admin inbox
+# ============================================================================
+
+
+def _is_admin():
+    return session.get("gmlevel", 0) >= 2
+
+
+def _client_report_error(exc):
+    status = getattr(exc, "status", 400)
+    if status >= 500:
+        logger.exception("client report operation failed")
+        return jsonify({"error": "Client report operation failed"}), status
+    return jsonify({"error": str(exc)}), status
+
+
+def _bearer_token():
+    header = request.headers.get("Authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return None
+
+
+def _require_client_install():
+    return client_report_service.authenticate(_bearer_token())
+
+
+def _client_reports_csrf_token():
+    if "client_reports_csrf" not in session:
+        session["client_reports_csrf"] = secrets.token_urlsafe(24)
+    return session["client_reports_csrf"]
+
+
+def _valid_client_reports_csrf():
+    expected = session.get("client_reports_csrf", "")
+    supplied = request.form.get("csrf_token", "")
+    return bool(expected) and hmac.compare_digest(expected, supplied)
+
+
+def _render_client_reports(pair=None, error=None):
+    is_admin = _is_admin()
+    installs = []
+    reports = []
+    setup_error = error
+    status_filter = request.args.get("status", "")
+    kind_filter = request.args.get("kind", "")
+    try:
+        installs = client_report_service.list_installs(session["account_id"])
+        if is_admin:
+            reports = client_report_service.list_reports(
+                status=status_filter or None,
+                kind=kind_filter or None,
+                limit=200,
+            )
+    except Exception:
+        logger.exception("failed to load client report inbox")
+        if not setup_error:
+            setup_error = "Client reports are not available yet. Apply the logs migration and check the dashboard log."
+    return render_template(
+        "client_reports.html",
+        char_name=session.get("char_name", ""),
+        username=session.get("username", ""),
+        is_admin=is_admin,
+        installs=installs,
+        reports=reports,
+        pair=pair,
+        error=setup_error,
+        status_filter=status_filter,
+        kind_filter=kind_filter,
+        dashboard_url=request.host_url.rstrip("/"),
+        csrf_token=_client_reports_csrf_token(),
+    )
+
+
+@app.route("/client-reports")
+@login_required
+def client_reports_page():
+    return _render_client_reports()
+
+
+@app.route("/client-reports/pair", methods=["POST"])
+@login_required
+def client_reports_pair_page():
+    if not _valid_client_reports_csrf():
+        return _render_client_reports(error="The form expired. Refresh and try again.")
+    try:
+        pair = client_report_service.create_pair_code(
+            {"id": session["account_id"], "username": session.get("username", "")}
+        )
+        return _render_client_reports(pair=pair)
+    except Exception:
+        logger.exception("failed to create client report pairing code")
+        return _render_client_reports(error="Could not create a pairing code. Check the dashboard log.")
+
+
+@app.route("/client-reports/installs/<install_id>/revoke", methods=["POST"])
+@login_required
+def client_reports_revoke_page(install_id):
+    if not _valid_client_reports_csrf():
+        return _render_client_reports(error="The form expired. Refresh and try again.")
+    try:
+        client_report_service.revoke_install(install_id, session["account_id"], _is_admin())
+        return redirect(url_for("client_reports_page"))
+    except ClientReportError as exc:
+        return _render_client_reports(error=str(exc))
+
+
+@app.route("/client-reports/<report_id>")
+@login_required
+def client_report_detail_page(report_id):
+    if not _is_admin():
+        return "Admin access required", 403
+    try:
+        report = client_report_service.get_report(report_id)
+    except ClientReportNotFound:
+        return "Client report not found", 404
+    return render_template(
+        "client_report_detail.html",
+        char_name=session.get("char_name", ""),
+        report=report,
+        context_json=json.dumps(report.get("context") or {}, indent=2, ensure_ascii=False),
+        csrf_token=_client_reports_csrf_token(),
+    )
+
+
+@app.route("/client-reports/<report_id>/status", methods=["POST"])
+@login_required
+def client_report_status_page(report_id):
+    if not _is_admin():
+        return "Admin access required", 403
+    if not _valid_client_reports_csrf():
+        return "The form expired. Refresh and try again.", 400
+    try:
+        client_report_service.set_status(report_id, request.form.get("status", ""))
+    except ClientReportError as exc:
+        return str(exc), exc.status
+    return redirect(url_for("client_report_detail_page", report_id=report_id))
+
+
+@app.route("/client-reports/<report_id>/files/<file_id>")
+@login_required
+def client_report_download(report_id, file_id):
+    if not _is_admin():
+        return "Admin access required", 403
+    try:
+        path, row = client_report_service.file_path(report_id, file_id)
+    except ClientReportNotFound:
+        return "Client report file not found", 404
+    return send_file(
+        path,
+        mimetype=row.get("content_type") or "text/plain",
+        as_attachment=True,
+        download_name=secure_filename(row.get("filename") or "report.txt"),
+    )
+
+
+@app.route("/api/client-reports/pair", methods=["POST"])
+def api_client_reports_pair():
+    data = request.get_json(silent=True) or {}
+    try:
+        result = client_report_service.exchange_pair_code(data.get("code", ""), data.get("label", "Gaming PC"))
+        return jsonify(result), 201
+    except ClientReportError as exc:
+        return _client_report_error(exc)
+
+
+@app.route("/api/client-reports/ping")
+def api_client_reports_ping():
+    try:
+        install = _require_client_install()
+        return jsonify(client_report_service.ping(install))
+    except ClientReportError as exc:
+        return _client_report_error(exc)
+
+
+@app.route("/api/client-reports", methods=["POST"])
+def api_client_reports_submit():
+    try:
+        install = _require_client_install()
+        if request.content_length and request.content_length > CLIENT_REPORT_MAX_BYTES:
+            return jsonify({"error": "Report bundle exceeds the size limit"}), 413
+        if request.files or request.form.get("report"):
+            raw_report = request.form.get("report", "")
+            try:
+                payload = json.loads(raw_report)
+            except (TypeError, json.JSONDecodeError):
+                return jsonify({"error": "report form field must contain JSON"}), 400
+            files = []
+            for uploaded in request.files.getlist("files"):
+                content = uploaded.stream.read(1024 * 1024 + 1)
+                files.append((uploaded.filename, content, uploaded.mimetype))
+        else:
+            payload = request.get_json(silent=True)
+            files = []
+            if payload is None:
+                return jsonify({"error": "JSON report body is required"}), 400
+        result, created = client_report_service.submit_report(install, payload, files)
+        return jsonify(result), 201 if created else 200
+    except ClientReportError as exc:
+        return _client_report_error(exc)
+    except Exception:
+        logger.exception("client report submission failed")
+        return jsonify({"error": "Client report submission failed"}), 500
+
+
+@app.route("/api/client-reports")
+@admin_required
+def api_client_reports_list():
+    try:
+        return jsonify(
+            client_report_service.list_reports(
+                status=request.args.get("status") or None,
+                kind=request.args.get("kind") or None,
+                limit=request.args.get("limit", 100, type=int),
+            )
+        )
+    except ClientReportError as exc:
+        return _client_report_error(exc)
+
+
+@app.route("/api/client-reports/<report_id>")
+@admin_required
+def api_client_report_detail(report_id):
+    try:
+        return jsonify(client_report_service.get_report(report_id))
+    except ClientReportError as exc:
+        return _client_report_error(exc)
+
+
+@app.route("/api/client-reports/<report_id>/status", methods=["POST"])
+@admin_required
+def api_client_report_status(report_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(client_report_service.set_status(report_id, data.get("status", "")))
+    except ClientReportError as exc:
+        return _client_report_error(exc)
 
 
 if __name__ == "__main__":
