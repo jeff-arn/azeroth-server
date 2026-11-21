@@ -45,6 +45,9 @@ docs/*
 # ============ Addon zip uploads ============
 dashboard/static/addons/*.zip
 
+# ============ Client report attachments ============
+dashboard/client_report_uploads/
+
 # ============ IDE / editor ============
 .vscode/
 .vscode-server/
