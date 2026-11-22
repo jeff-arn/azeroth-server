@@ -428,7 +428,7 @@ impl Map {
     }
 
     /// `Player::GetTeam()` as the numeric team id.
-    fn player_team_id(&self, guid: ObjectGuid) -> u32 {
+    pub(crate) fn player_team_id(&self, guid: ObjectGuid) -> u32 {
         let Some(entry) = self.players.get(&guid) else {
             return 0;
         };
@@ -2196,6 +2196,9 @@ impl Map {
     /// `u32::MAX` means no respawn; otherwise the
     /// creature returns via the normal respawn path.
     pub(crate) fn despawn_creature_now(&mut self, guid: ObjectGuid, respawn_sec: u32) {
+        // `Unit::RemoveFromWorld` ->
+        // `RemoveAllGameObjects` (Tier 4 B0-5).
+        self.unit_remove_all_gameobjects(guid);
         let Some(creature) = self.creatures.remove(&guid) else {
             return;
         };
@@ -2205,6 +2208,8 @@ impl Map {
         }
         self.motion.remove(&guid);
         self.ai.remove(&guid);
+        self.escorts.remove(&guid);
+        self.clear_loot_for_creature(guid);
         self.casts.remove(&guid);
         self.hidden_objects.remove(&guid);
         if let Some(state) = self.summons.remove(&guid)
@@ -2239,6 +2244,7 @@ impl Map {
         {
             self.go_ai_darrowshire_trigger_on_remove(guid, s);
         }
+        self.go_runtime.remove(&guid);
         let Some(go) = self.gameobjects.remove(&guid) else {
             return;
         };

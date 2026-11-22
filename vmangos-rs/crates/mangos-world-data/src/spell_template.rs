@@ -143,6 +143,8 @@ fn load_spell(f: &Fields, report: &mut LoadReport) -> SpellEntry {
         attributes_ex2: f.u32(9),
         attributes_ex3: f.u32(10),
         attributes_ex4: f.u32(11),
+        stances: f.u32(12),
+        stances_not: f.u32(13),
         targets: f.u32(14),
         casting_time_index: f.u32(19),
         recovery_time: f.u32(20),

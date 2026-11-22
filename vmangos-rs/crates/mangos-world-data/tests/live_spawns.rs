@@ -1,7 +1,10 @@
 //! Live spawn loads against the dev-bench world DB.
 //! `#[ignore]`d + gated on `TEST_MYSQL_URL_WORLD`. Read-only.
-//! Counts and spot values come from independent SQL (2026-10-19)
-//! that encodes the C++ loader filters, not from the loaders.
+//! Counts and spot values come from independent SQL (2026-10-19;
+//! grid totals re-derived 2026-11-12 for the B0-8 semantics:
+//! event-controlled spawns grid-register at load and are gated
+//! at materialization in `mangos-map`) that encodes the C++
+//! loader filters, not from the loaders.
 
 use mangos_db::DbActor;
 use mangos_world_data::creature_template::{TemplateValidation, load_creature_templates};
@@ -39,8 +42,8 @@ fn bench_spawns_load() {
     // Independent SQL counts (see file header).
     assert_eq!(spawns.creature_count(), 66_223); // +1: bench res-fixer spawn (Tier 3 step 5 probe)
     assert_eq!(spawns.gameobject_count(), 56_645);
-    assert_eq!(spawns.grid().creature_count(), 62_761);
-    assert_eq!(spawns.grid().gameobject_count(), 13_601);
+    assert_eq!(spawns.grid().creature_count(), 65_622);
+    assert_eq!(spawns.grid().gameobject_count(), 24_044);
 
     // Spot creature: guid 1, entry 2843, map 0 (SQL-fetched).
     let c = spawns.creature(1).expect("guid 1");
@@ -80,5 +83,5 @@ fn bench_spawns_load() {
             Ok(spawns)
         })
         .expect("reload");
-    assert_eq!(spawns.grid().creature_count(), 62_761);
+    assert_eq!(spawns.grid().creature_count(), 65_622);
 }

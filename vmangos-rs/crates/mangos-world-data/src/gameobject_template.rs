@@ -116,6 +116,14 @@ pub struct GameObjectTemplates {
 }
 
 impl GameObjectTemplates {
+    /// Test-fixture constructor (Tier 4 B0-5).
+    #[must_use]
+    pub fn from_entries_for_tests(entries: Vec<GameObjectInfo>) -> Self {
+        Self {
+            by_entry: entries.into_iter().map(|i| (i.id, i)).collect(),
+        }
+    }
+
     /// `sObjectMgr.GetGameObjectTemplate(entry)`.
     #[must_use]
     pub fn get(&self, entry: u32) -> Option<&GameObjectInfo> {

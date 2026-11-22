@@ -53,11 +53,84 @@ impl FactionEntry {
     }
 }
 
+/// `FACTION_TEMPLATE_FLAG_ATTACK_PVP_ACTIVE_PLAYERS`
+/// (`DBCEnums.h:81`): contested-guard faction.
+pub const FACTION_TEMPLATE_FLAG_ATTACK_PVP_ACTIVE_PLAYERS: u32 = 0x0000_1000;
+
+/// One `faction_template` row
+/// (`FactionTemplateEntry`, `DBCStructure.h:342-352`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FactionTemplateEntry {
+    pub id: u32,
+    /// Reputation faction this template maps to
+    /// (`faction_id` column; `GetFactionId`).
+    pub faction: u32,
+    pub faction_flags: u32,
+    pub our_mask: u32,
+    pub friendly_mask: u32,
+    pub hostile_mask: u32,
+    pub enemy_factions: [u32; 4],
+    pub friend_factions: [u32; 4],
+}
+
+impl FactionTemplateEntry {
+    /// `IsFriendlyTo` (`DBCStructure.h:358-380`).
+    #[must_use]
+    pub fn is_friendly_to(&self, entry: &FactionTemplateEntry) -> bool {
+        if entry.faction != 0 {
+            for enemy in self.enemy_factions {
+                if enemy == entry.faction {
+                    return false;
+                }
+            }
+            for friend in self.friend_factions {
+                if friend == entry.faction {
+                    return true;
+                }
+            }
+        }
+        self.friendly_mask & entry.our_mask != 0 || self.our_mask & entry.our_mask != 0
+    }
+
+    /// `IsHostileTo` (`DBCStructure.h:381-390`).
+    #[must_use]
+    pub fn is_hostile_to(&self, entry: &FactionTemplateEntry) -> bool {
+        if entry.faction != 0 {
+            for enemy in self.enemy_factions {
+                if enemy == entry.faction {
+                    return true;
+                }
+            }
+            for friend in self.friend_factions {
+                if friend == entry.faction {
+                    return false;
+                }
+            }
+        }
+        self.hostile_mask & entry.our_mask != 0
+    }
+
+    /// `IsNeutralToAll`.
+    #[must_use]
+    pub fn is_neutral_to_all(&self) -> bool {
+        self.enemy_factions.iter().all(|&f| f == 0)
+            && self.hostile_mask == 0
+            && self.friendly_mask == 0
+    }
+
+    /// `IsContestedGuardFaction`.
+    #[must_use]
+    pub fn is_contested_guard_faction(&self) -> bool {
+        self.faction_flags & FACTION_TEMPLATE_FLAG_ATTACK_PVP_ACTIVE_PLAYERS != 0
+    }
+}
+
 /// Loaded `faction` rows by entry and reputation-list index.
 #[derive(Clone, Debug, Default)]
 pub struct FactionStore {
     by_id: HashMap<u32, FactionEntry>,
     by_reputation_index: HashMap<i32, FactionEntry>,
+    templates: HashMap<u32, FactionTemplateEntry>,
 }
 
 impl FactionStore {
@@ -88,7 +161,34 @@ impl FactionStore {
         Self {
             by_id,
             by_reputation_index,
+            templates: HashMap::new(),
         }
+    }
+
+    /// Attaches `faction_template` rows (the DB half
+    /// of `LoadFactions`; also the test-fixture seam).
+    pub fn set_templates(&mut self, templates: impl IntoIterator<Item = FactionTemplateEntry>) {
+        self.templates = templates.into_iter().map(|t| (t.id, t)).collect();
+    }
+
+    /// `sFactionTemplateStore.LookupEntry(id)`.
+    #[must_use]
+    pub fn template(&self, template_id: u32) -> Option<FactionTemplateEntry> {
+        self.templates.get(&template_id).copied()
+    }
+
+    /// Number of loaded faction templates.
+    #[must_use]
+    pub fn template_len(&self) -> usize {
+        self.templates.len()
+    }
+
+    /// `WorldObject::GetFactionId` for a unit carrying
+    /// `template_id` in `UNIT_FIELD_FACTIONTEMPLATE`:
+    /// the template's reputation faction, else 0.
+    #[must_use]
+    pub fn faction_id_for_template(&self, template_id: u32) -> u32 {
+        self.template(template_id).map_or(0, |t| t.faction)
     }
 
     /// `ReputationMgr::Initialize` plus `LoadFromDB`, reduced
@@ -208,7 +308,7 @@ pub fn load_factions(conn: &mut mysql::Conn) -> Result<FactionStore, DbError> {
                           WHERE t1.`id` = t2.`id` AND `build` <= ?)",
         (SUPPORTED_CLIENT_BUILD,),
     )?;
-    Ok(FactionStore::from_entries(rows.into_iter().map(|row| {
+    let mut store = FactionStore::from_entries(rows.into_iter().map(|row| {
         let f = mangos_db::row::Fields::from_row(row);
         FactionEntry {
             id: f.u32(0),
@@ -218,7 +318,27 @@ pub fn load_factions(conn: &mut mysql::Conn) -> Result<FactionStore, DbError> {
             base_values: [f.i32(10), f.i32(11), f.i32(12), f.i32(13)],
             flags: [f.u32(14), f.u32(15), f.u32(16), f.u32(17)],
         }
-    })))
+    }));
+    // The `faction_template` half of `LoadFactions`
+    // (progressive on `build`, as above).
+    let template_rows: Vec<mysql::Row> = conn.exec(
+        "SELECT `id`, `faction_id`, `faction_flags`, `our_mask`, `friendly_mask`,          `hostile_mask`, `enemy_faction1`, `enemy_faction2`, `enemy_faction3`,          `enemy_faction4`, `friend_faction1`, `friend_faction2`, `friend_faction3`,          `friend_faction4` FROM `faction_template` t1          WHERE `build` = (SELECT max(`build`) FROM `faction_template` t2                           WHERE t1.`id` = t2.`id` AND `build` <= ?)",
+        (SUPPORTED_CLIENT_BUILD,),
+    )?;
+    store.set_templates(template_rows.into_iter().map(|row| {
+        let f = mangos_db::row::Fields::from_row(row);
+        FactionTemplateEntry {
+            id: f.u32(0),
+            faction: f.u32(1),
+            faction_flags: f.u32(2),
+            our_mask: f.u32(3),
+            friendly_mask: f.u32(4),
+            hostile_mask: f.u32(5),
+            enemy_factions: [f.u32(6), f.u32(7), f.u32(8), f.u32(9)],
+            friend_factions: [f.u32(10), f.u32(11), f.u32(12), f.u32(13)],
+        }
+    }));
+    Ok(store)
 }
 
 #[cfg(test)]

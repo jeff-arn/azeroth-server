@@ -1733,6 +1733,11 @@ pub const STORES: &[StoreGolden] = &[
         produced_sha256: "8cd09c650461cb3c0fa24fc80551af16fc3f58be31699c2fe7bfa697044d29eb",
     },
     StoreGolden {
+        file: "SkillLineAbility.dbc",
+        max_index: Some(15030),
+        produced_sha256: "a3d34f437650815b051bf64d3db584b0220d1e40e55c2d11b7f15cb08833cef9",
+    },
+    StoreGolden {
         file: "SkillRaceClassInfo.dbc",
         max_index: Some(890),
         produced_sha256: "ea5c91de0eeec62ed260233ffb9d947489e051cbef2af49b87b34f6bb13d2667",
@@ -1801,6 +1806,11 @@ pub const STORES: &[StoreGolden] = &[
         file: "TalentTab.dbc",
         max_index: Some(383),
         produced_sha256: "3dd95dd9827eaef162c7208b6ca776646505ff95310c93cd5fab523e52f125ae",
+    },
+    StoreGolden {
+        file: "TaxiNodes.dbc",
+        max_index: Some(87),
+        produced_sha256: "bff8b50374584d43c4021fe7ab586202bc541837f5ad67f19e3de8b3f2e35936",
     },
     StoreGolden {
         file: "TaxiPath.dbc",

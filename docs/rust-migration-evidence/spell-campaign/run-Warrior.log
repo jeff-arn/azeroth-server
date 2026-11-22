@@ -1,0 +1,6 @@
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+DRIFT-OK guid=900015 level=60 spells=3 health=2609
+ROW Warrior 5242 self: PASS  | bound SPELL_GO + aura 5242 in self fields 47-94
+ROW Warrior 6546 hostile_dummy: PASS  | Battle Stance aura 2457 verified, then DoT aura 6546 on dummy guid=17379390973850681688 + health 100->83
+LOGOUT-OK warrior-pilot

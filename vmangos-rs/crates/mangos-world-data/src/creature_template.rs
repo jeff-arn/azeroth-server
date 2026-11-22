@@ -303,6 +303,14 @@ pub struct CreatureTemplates {
 }
 
 impl CreatureTemplates {
+    /// Test-fixture constructor from full infos.
+    #[must_use]
+    pub fn from_entries_for_tests(entries: Vec<CreatureInfo>) -> Self {
+        Self {
+            by_entry: entries.into_iter().map(|e| (e.entry, e)).collect(),
+        }
+    }
+
     /// `sObjectMgr.GetCreatureTemplate(entry)`.
     #[must_use]
     pub fn get(&self, entry: u32) -> Option<&CreatureInfo> {

@@ -468,7 +468,8 @@ pub fn save_honor_cp(
                 guid_low,
                 row.victim_type,
                 row.victim_id,
-                finite(row.cp),
+                // Fork `%.1f` SQL formatting.
+                (finite(row.cp) * 10.0).round() / 10.0,
                 row.date,
                 row.kind,
             ),

@@ -24,7 +24,9 @@ use mangos_config::Config;
 use mangos_db::actor::DbActor;
 use mangos_db::character_load::{ActionRow, HomebindRow};
 use mangos_db::character_save::{CharacterSaveBundle, CharacterStatsRow};
-use mangos_db::characters::{AccountDataEntry, CharEnumRow, NameQueryRow};
+use mangos_db::characters::{
+    AccountDataEntry, CharEnumRow, CharacterOwner, DeletePlan, NameQueryRow, NewCharacter,
+};
 use mangos_db::migrations::{MigrationDb, check_required_migrations};
 use mangos_db::{CharacterDb, ConnectionInfo, DbError, WorldAuthDb};
 use mangos_log::{Level, Log};
@@ -206,9 +208,13 @@ impl AuthBackend for MysqlAuthBackend {
 }
 
 /// Direct `CharacterDb` forwarding (already the blocking shape
-/// the world actor's `spawn_blocking` jobs expect).
+/// the world actor's `spawn_blocking` jobs expect), plus the
+/// login-DB `realmcharacters` sync the create/delete
+/// handlers publish.
 struct MysqlCharQueries {
     db: Arc<CharacterDb>,
+    login: Arc<WorldAuthDb>,
+    realm_id: u32,
 }
 
 impl CharQueries for MysqlCharQueries {
@@ -233,6 +239,73 @@ impl CharQueries for MysqlCharQueries {
 
     fn tutorials(&self, account_id: u32) -> Result<Option<[u32; 8]>, DbError> {
         self.db.load_tutorials(account_id)
+    }
+
+    fn name_in_use(&self, name: &str) -> Result<bool, DbError> {
+        self.db.name_in_use(name)
+    }
+
+    fn character_count(&self, account_id: u32) -> Result<u32, DbError> {
+        self.db.character_count(account_id)
+    }
+
+    fn character_owner(&self, guid_low: u32) -> Result<Option<CharacterOwner>, DbError> {
+        self.db.character_owner(guid_low)
+    }
+
+    fn create_character(&self, new: &NewCharacter) -> Result<u32, DbError> {
+        self.db.create_character(new)
+    }
+
+    fn delete_character(&self, guid_low: u32, plan: &DeletePlan) -> Result<(), DbError> {
+        self.db.delete_character(guid_low, plan)
+    }
+
+    fn rename_character(
+        &self,
+        guid_low: u32,
+        account_id: u32,
+        new_name: &str,
+    ) -> Result<Option<String>, DbError> {
+        self.db.rename_character(guid_low, account_id, new_name)
+    }
+
+    fn old_deleted_characters(&self, keep_days: u32, now: u64) -> Result<Vec<(u32, u32)>, DbError> {
+        self.db.old_deleted_characters(keep_days, now)
+    }
+
+    fn save_corpse(&self, row: &mangos_db::corpse::CorpseRow) -> Result<(), DbError> {
+        let row = row.clone();
+        self.db
+            .actor()
+            .call(move |conn| mangos_db::corpse::save_corpse(conn, &row))
+    }
+
+    fn delete_corpse(&self, player_low: u32) -> Result<(), DbError> {
+        self.db
+            .actor()
+            .call(move |conn| mangos_db::corpse::delete_corpse_for_player(conn, player_low))
+    }
+
+    fn load_corpses(&self) -> Result<Vec<mangos_db::corpse::LoadedCorpse>, DbError> {
+        self.db.actor().call(mangos_db::corpse::load_corpses)
+    }
+
+    fn max_corpse_guid(&self) -> Result<u32, DbError> {
+        self.db.actor().call(mangos_db::corpse::max_corpse_guid)
+    }
+
+    fn sync_realm_char_count(&self, account_id: u32, count: u32) -> Result<(), DbError> {
+        let realm_id = self.realm_id;
+        self.login.actor().call(move |conn| {
+            use mysql::prelude::Queryable as _;
+            conn.exec_drop(
+                "REPLACE INTO `realmcharacters` (`numchars`, `acctid`, `realmid`) \
+                 VALUES (?, ?, ?)",
+                (count, account_id, realm_id),
+            )
+            .map_err(DbError::Driver)
+        })
     }
 }
 
@@ -477,6 +550,7 @@ impl QuestRewardStore for MysqlQuestRewardStore {
         bag: u32,
         slot: u32,
         creator_low: u32,
+        durability: u32,
     ) -> Result<u32, DbError> {
         self.characters.actor().call(move |conn| {
             mangos_db::quest_reward::create_reward_item(
@@ -487,6 +561,7 @@ impl QuestRewardStore for MysqlQuestRewardStore {
                 bag,
                 slot,
                 creator_low,
+                durability,
             )
         })
     }
@@ -715,6 +790,120 @@ impl TradeStore for MysqlTradeStore {
 
 struct MysqlCharacterSaver {
     characters: Arc<CharacterDb>,
+}
+
+struct MysqlHonorMarkerStore {
+    characters: Arc<CharacterDb>,
+}
+
+impl mangosd::world_actor::HonorMarkerStore for MysqlHonorMarkerStore {
+    fn set_honor_maintenance_marker(&self, marker: bool) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::honor::store_maintenance_marker(conn, marker))
+    }
+}
+
+struct MysqlGameEventStatusStore {
+    characters: Arc<CharacterDb>,
+}
+
+impl mangosd::world_actor::GameEventStatusStore for MysqlGameEventStatusStore {
+    fn game_event_started(&self, event: u16) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::game_events::insert_status(conn, event))
+    }
+
+    fn game_event_ended(&self, event: u16) -> Result<(), DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::game_events::delete_status(conn, event))
+    }
+}
+
+/// Boot honor maintenance (`HonorMaintenancer::
+/// Initialize` + `DoMaintenance`,
+/// `World.cpp:1792-1793`): runs the weekly
+/// recompute when the marker is set, writes the
+/// HCR report under `HonorDir`, and returns the
+/// effective week window. Failures degrade to a
+/// zero window with an error log (boot loaders
+/// in this section do not abort the boot).
+fn load_initial_honor(databases: &Databases, config: &ServerConfig, log: &Log) -> InitialHonor {
+    let cfg = mangos_db::honor::HonorMaintenanceConfig {
+        wow_patch: config.wow_patch,
+        maintenance_day: config.maintenance_day,
+        min_honor_kills: config.min_honor_kills,
+        rp_decay: config.rp_decay,
+        pool_size_per_faction: config.pvp_pool_size_per_faction,
+        city_protector: config.pvp_city_protector,
+        time_zone_offset_secs: i64::from(config.time_zone_offset_hours) * 3600,
+    };
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let outcome = databases
+        .characters
+        .actor()
+        .call(move |conn| mangos_db::honor::initialize_and_run(conn, &cfg, now_unix));
+    match outcome {
+        Ok(outcome) => {
+            if outcome.ran {
+                log.out(
+                    Level::Minimal,
+                    &format!(
+                        ">> Honor maintenance done: {} alliance, {} horde, {} inactive.",
+                        outcome.alliance_count, outcome.horde_count, outcome.inactive_count
+                    ),
+                );
+                if let Some(report) = &outcome.report {
+                    let path = format!(
+                        "{}/HCR_{}.txt",
+                        config.honor_dir.trim_end_matches('/'),
+                        hcr_timestamp(now_unix)
+                    );
+                    if let Err(e) = std::fs::write(&path, report) {
+                        log.out(Level::Error, &format!("Can't create HCR file: {e}"));
+                    }
+                }
+            }
+            InitialHonor {
+                week_begin_day: outcome.week_begin_day,
+                next_maintenance_day: outcome.next_maintenance_day,
+            }
+        }
+        Err(e) => {
+            log.out(Level::Error, &format!("honor maintenance failed: {e}"));
+            InitialHonor::default()
+        }
+    }
+}
+
+/// `Log::GetTimestampStr` shape
+/// (`_YYYY-MM-DD_HH-MM-SS`, UTC here; the fork
+/// uses localtime).
+#[allow(clippy::cast_possible_wrap)]
+fn hcr_timestamp(now_unix: u64) -> String {
+    let days = (now_unix / 86_400) as i64;
+    let secs = now_unix % 86_400;
+    // Civil-from-days (Howard Hinnant algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!(
+        "_{y:04}-{m:02}-{d:02}_{:02}-{:02}-{:02}",
+        secs / 3600,
+        (secs % 3600) / 60,
+        secs % 60
+    )
 }
 
 impl CharacterSaver for MysqlCharacterSaver {
@@ -1020,7 +1209,7 @@ fn report_gate(
 /// `Master::StartDB` for the login database, returning the
 /// world-auth handle so gate and auth share one actor.
 fn start_login_db(config: &Config, log: &Log) -> Result<Arc<WorldAuthDb>, ExitCode> {
-    let dbstring = config.string_default("LoginDatabaseInfo", "");
+    let dbstring = config.string_default("LoginDatabase.Info", "");
     let Some(info) = ConnectionInfo::parse(&dbstring) else {
         log.out(
             Level::Error,
@@ -1053,7 +1242,7 @@ fn start_login_db(config: &Config, log: &Log) -> Result<Arc<WorldAuthDb>, ExitCo
 /// `Master::StartDB` for the character database, returning
 /// the typed handle so gate and queries share one actor.
 fn start_character_db(config: &Config, log: &Log) -> Result<Arc<CharacterDb>, ExitCode> {
-    let dbstring = config.string_default("CharacterDatabaseInfo", "");
+    let dbstring = config.string_default("CharacterDatabase.Info", "");
     let Some(info) = ConnectionInfo::parse(&dbstring) else {
         log.out(
             Level::Error,
@@ -1102,12 +1291,12 @@ fn start_databases(config: &Config, log: &Log, realm_id: u32) -> Result<Database
         config,
         log,
         "World",
-        "WorldDatabaseInfo",
+        "WorldDatabase.Info",
         MigrationDb::World,
     )?;
     let characters = start_character_db(config, log)?;
     let login = start_login_db(config, log)?;
-    let logs = start_db(config, log, "Logs", "LogsDatabaseInfo", MigrationDb::Logs)?;
+    let logs = start_db(config, log, "Logs", "LogsDatabase.Info", MigrationDb::Logs)?;
 
     // clearOnlineAccounts (Master.cpp:485-493): boot writes on
     // record in PHASE3-PROGRESS.
@@ -1182,6 +1371,17 @@ struct InitialWorldSettings {
     initial_ah_bot: InitialAhBot,
     /// Boot-loaded instances + binds (Phase 6 Slice 0).
     initial_instances: mangos_db::instance::LoadedInstances,
+    /// Honor maintenance boot outcome (B0-7).
+    initial_honor: InitialHonor,
+    shutdown_events: Vec<u16>,
+}
+
+/// Effective honor week window after boot
+/// maintenance (`HonorMaintenancer` days).
+#[derive(Clone, Copy, Default)]
+struct InitialHonor {
+    week_begin_day: u32,
+    next_maintenance_day: u32,
 }
 
 fn load_initial_world_settings(
@@ -1319,6 +1519,20 @@ fn load_initial_world_settings(
         initial_guild_bots: load_initial_guild_bots(&databases.characters, server_config, log),
         initial_ah_bot: load_initial_ah_bot(databases, server_config, log),
         initial_instances: load_initial_instances(&databases.characters, log),
+        initial_honor: load_initial_honor(databases, server_config, log),
+        // `GameEventMgr::Initialize` character-DB
+        // half: read active-at-shutdown, truncate.
+        shutdown_events: match databases
+            .characters
+            .actor()
+            .call(mangos_db::game_events::load_and_clear_status)
+        {
+            Ok(events) => events,
+            Err(e) => {
+                log.out(Level::Error, &format!("game_event_status load failed: {e}"));
+                Vec::new()
+            }
+        },
     })
 }
 
@@ -1334,14 +1548,31 @@ struct DbcTables {
     skills: mangos_world_data::skill_info::SkillDbc,
     chat_channels: mangos_world_data::chat_channels::ChatChannelDbc,
     auction_houses: mangos_world_data::auction_house::AuctionHouseDbc,
+    durability: mangos_world_data::durability::DurabilityTables,
+    bank_bag_slot_prices: Vec<u32>,
+    stable_slot_prices: Vec<u32>,
     display_scales: std::collections::HashMap<u32, f32>,
     display_model: DisplayModelMap,
     /// `SpellShapeshiftForm.dbc` form → `flags1`.
     shapeshift_forms: std::collections::HashMap<u32, u32>,
     /// `WorldSafeLocs.dbc` rows (id, map, x, y, z).
     safe_loc_rows: Vec<(u32, u32, f32, f32, f32)>,
+    /// `SkillLineAbility.dbc` rows (trainer fit +
+    /// spell-chain derivation).
+    skill_line_abilities: Vec<mangos_spells::entry::SkillLineAbilityEntry>,
+    /// Taxi DBC rows (nodes, paths, path vertices),
+    /// assembled into the graph store once spells
+    /// (send-taxi path set) are loaded.
+    taxi_nodes: Vec<mangos_world_data::taxi::TaxiNode>,
+    taxi_paths: Vec<mangos_world_data::taxi::TaxiPath>,
+    taxi_path_nodes: Vec<mangos_world_data::taxi::TaxiPathNode>,
+    /// `Talent.dbc` / `TalentTab.dbc` products
+    /// (Tier 4 step 4g).
+    talents: std::collections::HashMap<u32, mangos_spells::entry::TalentEntry>,
+    talent_tabs: std::collections::HashMap<u32, u32>,
 }
 
+#[allow(clippy::too_many_lines)] // flat per-store DBC assembly, one block per table
 fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode> {
     use mangos_dbc::{DbcFile, FieldValue, formats};
     use mangos_entities::unit::check_valid_scale;
@@ -1381,6 +1612,10 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
 
     let mut race_class = RaceClassDbc::default();
     for row in read_store(formats::CHR_RACES)? {
+        race_class.race_flags.insert(uint(&row, 0), uint(&row, 1));
+        race_class
+            .starting_taxi_mask
+            .insert(uint(&row, 0), uint(&row, 10));
         race_class.races.insert(
             uint(&row, 0),
             RaceDbc {
@@ -1397,8 +1632,119 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
         race_class.class_power.insert(uint(&row, 0), uint(&row, 1));
     }
     let skill_dbc = read_skill_dbc(&read_store, uint)?;
+    // Produced fields of `niiiiiiiiiiiiii`: raw DBC
+    // fields 0..14 in order.
+    // Taxi DBCs. Produced fields: nodes `nifff...xii`
+    // -> 0 id, 1 map, 2-4 xyz, 5-12 names, 13/14
+    // mounts; paths `niii` -> id/from/to/price; path
+    // nodes `diiifffii` -> 0 path, 1 index, 2 map,
+    // 3-5 xyz, 6 flags, 7 delay.
+    // Talent DBCs. Produced fields: talents
+    // `niiiiiiiixxxxixxixxxi` -> 0 id, 1 tab, 2 row,
+    // 3 col, 4-8 rank spells, 9 depends-on talent,
+    // 10 rank, 11 spell; tabs `nxxxxxxxxxxxiix`
+    // -> 0 id, 1 class mask, 2 page (unused here).
+    let talents: std::collections::HashMap<u32, mangos_spells::entry::TalentEntry> =
+        read_store(formats::TALENT)?
+            .iter()
+            .map(|row| {
+                let entry = mangos_spells::entry::TalentEntry {
+                    id: uint(row, 0),
+                    tab: uint(row, 1),
+                    row: uint(row, 2),
+                    col: uint(row, 3),
+                    rank_spells: [
+                        uint(row, 4),
+                        uint(row, 5),
+                        uint(row, 6),
+                        uint(row, 7),
+                        uint(row, 8),
+                    ],
+                    depends_on: uint(row, 9),
+                    depends_on_rank: uint(row, 10),
+                    depends_on_spell: uint(row, 11),
+                };
+                (entry.id, entry)
+            })
+            .collect();
+    let talent_tabs: std::collections::HashMap<u32, u32> = read_store(formats::TALENT_TAB)?
+        .iter()
+        .map(|row| (uint(row, 0), uint(row, 1)))
+        .collect();
+    let taxi_nodes = read_store(formats::TAXI_NODES)?
+        .iter()
+        .map(|row| mangos_world_data::taxi::TaxiNode {
+            id: uint(row, 0),
+            map_id: uint(row, 1),
+            x: float(row, 2),
+            y: float(row, 3),
+            z: float(row, 4),
+            mount_creature_id: [uint(row, 13), uint(row, 14)],
+        })
+        .collect();
+    let taxi_paths = read_store(formats::TAXI_PATH)?
+        .iter()
+        .map(|row| mangos_world_data::taxi::TaxiPath {
+            id: uint(row, 0),
+            from: uint(row, 1),
+            to: uint(row, 2),
+            price: uint(row, 3),
+        })
+        .collect();
+    let taxi_path_nodes = read_store(formats::TAXI_PATH_NODE)?
+        .iter()
+        .map(|row| mangos_world_data::taxi::TaxiPathNode {
+            path: uint(row, 0),
+            index: uint(row, 1),
+            map_id: uint(row, 2),
+            x: float(row, 3),
+            y: float(row, 4),
+            z: float(row, 5),
+            action_flag: uint(row, 6),
+            delay: uint(row, 7),
+        })
+        .collect();
+    let skill_line_abilities = read_store(formats::SKILL_LINE_ABILITY)?
+        .iter()
+        .map(|row| mangos_spells::entry::SkillLineAbilityEntry {
+            id: uint(row, 0),
+            skill_id: uint(row, 1),
+            spell_id: uint(row, 2),
+            race_mask: uint(row, 3),
+            class_mask: uint(row, 4),
+            req_skill_value: uint(row, 7),
+            forward_spell_id: uint(row, 8),
+            learn_on_get_skill: uint(row, 9),
+            max_value: uint(row, 10),
+            min_value: uint(row, 11),
+            req_train_points: uint(row, 14),
+        })
+        .collect();
     let chat_channels = read_chat_channel_dbc(&read_store, uint)?;
     let auction_houses = read_auction_house_dbc(&read_store, uint)?;
+    let durability = read_durability_dbc(&read_store, uint, float)?;
+    let bank_bag_slot_prices = {
+        let mut prices: Vec<u32> = Vec::new();
+        for row in &read_store(mangos_dbc::formats::BANK_BAG_SLOT_PRICES)? {
+            let (slot, price) = (uint(row, 0) as usize, uint(row, 1));
+            if slot >= prices.len() {
+                prices.resize(slot + 1, 0);
+            }
+            prices[slot] = price;
+        }
+        prices
+    };
+    let stable_slot_prices = {
+        let mut prices: Vec<u32> = Vec::new();
+        for row in &read_store(mangos_dbc::formats::STABLE_SLOT_PRICES)? {
+            let (slot, price) = (uint(row, 0) as usize, uint(row, 1));
+            if slot >= prices.len() {
+                prices.resize(slot + 1, 0);
+            }
+            prices[slot] = price;
+        }
+        prices
+    };
     let mut model_scale: HashMap<u32, (f32, Option<f32>)> = HashMap::new();
     for row in read_store(formats::CREATURE_MODEL_DATA)? {
         model_scale.insert(uint(&row, 0), (float(&row, 3), Some(float(&row, 4))));
@@ -1443,10 +1789,19 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
         skills: skill_dbc,
         chat_channels,
         auction_houses,
+        durability,
+        bank_bag_slot_prices,
+        stable_slot_prices,
         display_scales,
         display_model,
         shapeshift_forms,
         safe_loc_rows,
+        skill_line_abilities,
+        taxi_nodes,
+        taxi_paths,
+        taxi_path_nodes,
+        talents,
+        talent_tabs,
     })
 }
 
@@ -1535,6 +1890,38 @@ fn read_auction_house_dbc(
     Ok(mangos_world_data::auction_house::AuctionHouseDbc::from_entries(entries))
 }
 
+/// Durability repair tables (Tier 4 step 4c):
+/// `DurabilityCosts.dbc` (level + 29 multipliers) and
+/// `DurabilityQuality.dbc` (id + quality mod).
+fn read_durability_dbc(
+    read_store: &impl Fn(
+        mangos_dbc::formats::StoreDef,
+    ) -> Result<Vec<Vec<mangos_dbc::FieldValue>>, ExitCode>,
+    uint: impl Fn(&[mangos_dbc::FieldValue], usize) -> u32,
+    float: impl Fn(&[mangos_dbc::FieldValue], usize) -> f32,
+) -> Result<mangos_world_data::durability::DurabilityTables, ExitCode> {
+    use mangos_dbc::formats;
+    use mangos_world_data::durability::{DurabilityCostEntry, DurabilityTables};
+    let costs = read_store(formats::DURABILITY_COSTS)?
+        .iter()
+        .map(|row| {
+            let mut multipliers = [0u32; 29];
+            for (i, m) in multipliers.iter_mut().enumerate() {
+                *m = uint(row, i + 1);
+            }
+            DurabilityCostEntry {
+                item_level: uint(row, 0),
+                multipliers,
+            }
+        })
+        .collect();
+    let quality = read_store(formats::DURABILITY_QUALITY)?
+        .iter()
+        .map(|row| (uint(row, 0), float(row, 1)))
+        .collect();
+    Ok(DurabilityTables::from_entries(costs, quality))
+}
+
 /// The world-DB half of the Phase 4 stores (one actor call).
 #[allow(clippy::type_complexity)]
 #[allow(clippy::too_many_lines)]
@@ -1566,6 +1953,7 @@ fn load_world_db_stores(
         mangos_world_data::quest_template::QuestTemplatesLite,
         mangos_world_data::quest_template::QuestTemplates,
         mangos_world_data::quest_template::QuestRelations,
+        mangos_world_data::gossip_menus::GossipStores,
         std::collections::HashSet<u32>,
         mangos_world_data::pet_data::PetStores,
         std::collections::HashSet<u32>,
@@ -1578,6 +1966,7 @@ fn load_world_db_stores(
     use mangos_world_data::creature_spells::load_creature_spells;
     use mangos_world_data::creature_template::{TemplateValidation, load_creature_templates};
     use mangos_world_data::gameobject_template::{GameObjectValidation, load_gameobject_templates};
+    use mangos_world_data::gossip_menus::load_gossip_stores;
     use mangos_world_data::item_prototype::load_item_prototypes_lite;
     use mangos_world_data::load_report::LoadReport;
     use mangos_world_data::map_template::load_map_templates;
@@ -1623,6 +2012,7 @@ fn load_world_db_stores(
         let quests = load_quest_templates_lite(conn)?;
         let quest_templates = load_quest_templates(conn, wow_patch)?;
         let quest_relations = load_quest_relations(conn)?;
+        let gossip = load_gossip_stores(conn)?;
         let tavern_triggers = load_tavern_triggers(conn)?;
         let weather_chances = load_weather_chances(conn)?;
         let inv_types = items.inventory_types();
@@ -1706,6 +2096,7 @@ fn load_world_db_stores(
             quests,
             quest_templates,
             quest_relations,
+            gossip,
             tavern_triggers,
             pet_stores,
             map_ids,
@@ -1866,10 +2257,19 @@ fn load_phase4_stores(
         skills: skill_dbc,
         chat_channels,
         auction_houses,
+        durability,
+        bank_bag_slot_prices,
+        stable_slot_prices,
         display_scales,
         display_model,
         shapeshift_forms,
         safe_loc_rows,
+        skill_line_abilities,
+        taxi_nodes,
+        taxi_paths,
+        taxi_path_nodes,
+        talents,
+        talent_tabs,
     } = read_dbc_tables(data_dir, log)?;
 
     let wow_patch = server_config.wow_patch;
@@ -1908,6 +2308,7 @@ fn load_phase4_stores(
         quests,
         quest_templates,
         quest_relations,
+        gossip,
         tavern_triggers,
         pet_stores,
         map_ids,
@@ -1966,6 +2367,23 @@ fn load_phase4_stores(
             return Err(ExitCode::from(ERROR_EXIT_CODE));
         }
     };
+    // `LoadSpellChains`: ability-derived chains with
+    // the `spell_chain` DB overlay applied over them.
+    let spell_chain_db = match databases
+        .world
+        .actor
+        .call(|conn| mangos_world_data::spell_chains::load_spell_chain_rows(conn, 5875))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            log.out(Level::Error, &format!("spell chain load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    let mut spell_chains =
+        mangos_spells::entry::derive_spell_chains(&spell_entries, &skill_line_abilities, &talents);
+    spell_chains.extend(spell_chain_db);
+    let talent_spell_pos = mangos_spells::SpellStore::build_talent_spell_pos(&talents);
     let model_data = build_model_data(&display_model, &display_addons);
     log_loaded_counts(
         log,
@@ -1997,7 +2415,7 @@ fn load_phase4_stores(
         }
     };
     let prevent_item_datamining = server_config.prevent_item_datamining;
-    let item_prototypes = match databases.world.actor.call(move |conn| {
+    let mut item_prototypes = match databases.world.actor.call(move |conn| {
         let mut discovered_items = obtained_items;
         discovered_items
             .extend(mangos_world_data::spell_template::load_spell_referenced_item_ids(conn, 5875)?);
@@ -2018,6 +2436,38 @@ fn load_phase4_stores(
         Level::Minimal,
         &format!(">> Loaded {} item prototypes.", item_prototypes.len()),
     );
+    // Tier 4 step 4c: vendor stock (`LoadVendorTemplates`
+    // + `LoadVendors`), after prototypes/templates exist.
+    let vendor_creature_templates = creature_templates.clone();
+    let vendor_protos = item_prototypes.clone();
+    let vendor_conditions: HashSet<u32> = script_stores.conditions.keys().copied().collect();
+    let vendor_items = match databases.world.actor.call(move |conn| {
+        mangos_world_data::vendor_items::load_vendor_items(
+            conn,
+            wow_patch,
+            &vendor_creature_templates,
+            &vendor_protos,
+            &vendor_conditions,
+        )
+    }) {
+        Ok((items, discovered, r)) => {
+            report(&r, "vendor items");
+            item_prototypes.mark_discovered(discovered);
+            log.out(
+                Level::Minimal,
+                &format!(
+                    ">> Loaded {} vendor template items, {} vendor items.",
+                    items.template_item_count(),
+                    items.creature_item_count()
+                ),
+            );
+            items
+        }
+        Err(e) => {
+            log.out(Level::Error, &format!("vendor item load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
     log.out(
         Level::Minimal,
         &format!(
@@ -2102,6 +2552,159 @@ fn load_phase4_stores(
             bg_entrances.len()
         ),
     );
+    let spell_store = mangos_spells::SpellStore {
+        spells: spell_entries,
+        tables: spell_tables,
+        skill_line_abilities,
+        spell_chains,
+        talents,
+        talent_tabs,
+        talent_spell_pos,
+        proc_events,
+        cones,
+    };
+    let trainer_templates = creature_templates.clone();
+    let trainer_skills = skill_dbc.clone();
+    let trainer_spells = match databases.world.actor.call(move |conn| {
+        let mut r = LoadReport::default();
+        let loaded = mangos_world_data::trainer_spells::load_trainer_stores(
+            conn,
+            5875,
+            &spell_store,
+            &trainer_skills,
+            &trainer_templates,
+            &mut r,
+        )?;
+        Ok::<_, mangos_db::DbError>((loaded, spell_store, r))
+    }) {
+        Ok((loaded, store, r)) => {
+            report(&r, "trainer spells");
+            log.out(
+                Level::Minimal,
+                &format!(">> Loaded {} trainer spells", loaded.spell_count()),
+            );
+            (loaded, store)
+        }
+        Err(e) => {
+            log.out(Level::Error, &format!("trainer spell load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    let (trainer_spells, spell_store) = trainer_spells;
+    let script_waypoint_templates = creature_templates.clone();
+    let script_waypoints = match databases.world.actor.call(move |conn| {
+        let mut r = LoadReport::default();
+        let loaded = mangos_world_data::script_waypoints::load_script_waypoints(
+            conn,
+            &script_waypoint_templates,
+            &mut r,
+        )?;
+        Ok::<_, mangos_db::DbError>((loaded, r))
+    }) {
+        Ok((loaded, r)) => {
+            report(&r, "script waypoints");
+            log.out(
+                Level::Minimal,
+                &format!(">> Loaded {} Script Waypoint nodes.", loaded.total_nodes()),
+            );
+            loaded
+        }
+        Err(e) => {
+            log.out(Level::Error, &format!("script waypoint load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    // Game events (B0-8): existence probes read the
+    // just-loaded spawn/quest/template sets.
+    let game_events = {
+        let spawns_probe = spawns.clone();
+        let templates_probe = creature_templates.clone();
+        let quest_probe = quest_templates.clone();
+        let wow_patch = server_config.wow_patch;
+        let now_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        match databases.world.actor.call(move |conn| {
+            mangos_world_data::game_events::load_game_events(
+                conn,
+                now_unix,
+                wow_patch,
+                &|guid| spawns_probe.creature(guid).is_some(),
+                &|guid| spawns_probe.gameobject(guid).is_some(),
+                &|quest| quest_probe.get(quest).is_some(),
+                // Mail templates are not a loaded
+                // store; existence is probed by the
+                // send path instead (fork checks the
+                // DBC-backed store here).
+                &|_template| true,
+                &|entry| templates_probe.get(entry).is_some(),
+            )
+        }) {
+            Ok((loaded, r)) => {
+                report(&r, "game events");
+                log.out(
+                    Level::Minimal,
+                    &format!(">> Loaded {} game events.", loaded.entries().count()),
+                );
+                loaded
+            }
+            Err(e) => {
+                log.out(Level::Error, &format!("game event load failed: {e}"));
+                return Err(ExitCode::from(ERROR_EXIT_CODE));
+            }
+        }
+    };
+    // Loot templates (B0-10).
+    let loot_stores = {
+        let wow_patch = server_config.wow_patch;
+        match databases.world.actor.call(move |conn| {
+            let mut r = LoadReport::default();
+            let loaded = mangos_world_data::loot::load_loot_stores(conn, wow_patch, &mut r)?;
+            Ok::<_, mangos_db::DbError>((loaded, r))
+        }) {
+            Ok((loaded, r)) => {
+                report(&r, "loot templates");
+                log.out(
+                    Level::Minimal,
+                    &format!(
+                        ">> Loaded {} creature loot templates.",
+                        loaded.creature.template_count()
+                    ),
+                );
+                loaded
+            }
+            Err(e) => {
+                log.out(Level::Error, &format!("loot template load failed: {e}"));
+                return Err(ExitCode::from(ERROR_EXIT_CODE));
+            }
+        }
+    };
+    let taxi_transitions = match databases
+        .world
+        .actor
+        .call(|conn| mangos_world_data::taxi::load_taxi_path_transitions(conn, 5875))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            log.out(Level::Error, &format!("taxi transition load failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    };
+    let spell_paths = mangos_world_data::taxi::spell_taxi_paths(spell_store.spells.values());
+    let taxi = mangos_world_data::taxi::TaxiStore::from_rows(
+        taxi_nodes,
+        taxi_paths,
+        taxi_path_nodes,
+        &spell_paths,
+        taxi_transitions,
+    );
+    {
+        let (nodes, paths, vertices) = taxi.counts();
+        log.out(
+            Level::Minimal,
+            &format!(">> Loaded {nodes} taxi nodes, {paths} taxi paths, {vertices} path vertices"),
+        );
+    }
     let stores = Arc::new(WorldStores {
         creature_templates,
         gameobject_templates,
@@ -2117,12 +2720,7 @@ fn load_phase4_stores(
         areas,
         weather_chances,
         waypoints,
-        spells: mangos_spells::SpellStore {
-            spells: spell_entries,
-            tables: spell_tables,
-            proc_events,
-            cones,
-        },
+        spells: spell_store,
         spell_target_positions,
         creature_spells,
         scripts: script_stores,
@@ -2142,11 +2740,22 @@ fn load_phase4_stores(
         quests,
         quest_templates,
         quest_relations,
+        gossip,
         tavern_triggers,
         exploration_base_xp,
         pets: pet_stores,
         shapeshift_forms,
         next_pet_number: std::sync::atomic::AtomicU32::new(1),
+        next_item_guid: std::sync::atomic::AtomicU32::new(1),
+        vendor_items,
+        durability,
+        bank_bag_slot_prices,
+        stable_slot_prices,
+        trainer_spells,
+        taxi,
+        script_waypoints,
+        game_events,
+        loot: loot_stores,
     });
 
     // `ObjectMgr::LoadPetNumber` + cache seed: next
@@ -2161,6 +2770,21 @@ fn load_phase4_stores(
             .store(seed, std::sync::atomic::Ordering::Relaxed),
         Err(e) => {
             log.out(Level::Error, &format!("pet number seed failed: {e}"));
+            return Err(ExitCode::from(ERROR_EXIT_CODE));
+        }
+    }
+    // Item guid seed past persisted instances (fork
+    // boot-seeded generator).
+    match databases
+        .characters
+        .actor()
+        .call(mangos_db::quest_reward::max_item_guid)
+    {
+        Ok(max_guid) => stores
+            .next_item_guid
+            .store(max_guid + 1, std::sync::atomic::Ordering::Relaxed),
+        Err(e) => {
+            log.out(Level::Error, &format!("item guid seed failed: {e}"));
             return Err(ExitCode::from(ERROR_EXIT_CODE));
         }
     }
@@ -2613,6 +3237,15 @@ fn build_world_deps(
             characters: Arc::clone(&databases.characters),
         }),
         initial_instances: std::mem::take(&mut initial.initial_instances),
+        initial_honor_week_begin: initial.initial_honor.week_begin_day,
+        initial_shutdown_events: initial.shutdown_events.clone(),
+        game_event_status: Arc::new(MysqlGameEventStatusStore {
+            characters: Arc::clone(&databases.characters),
+        }),
+        initial_honor_next_day: initial.initial_honor.next_maintenance_day,
+        honor_marker: Arc::new(MysqlHonorMarkerStore {
+            characters: Arc::clone(&databases.characters),
+        }),
     }
 }
 
@@ -2935,6 +3568,8 @@ async fn run_server(config: Config, log: Arc<Log>) -> ExitCode {
 
     let char_queries: Arc<dyn CharQueries> = Arc::new(MysqlCharQueries {
         db: Arc::clone(&databases.characters),
+        login: Arc::clone(&databases.login),
+        realm_id: server_config.realm_id,
     });
     let world_deps = build_world_deps(&databases, &mut initial, &char_queries);
     let (world_tx, _world_handle, world_health) = spawn_world(

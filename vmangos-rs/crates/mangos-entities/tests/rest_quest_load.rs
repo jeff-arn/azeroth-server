@@ -226,9 +226,11 @@ fn materialize() -> Player {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: NOW,
+        rest_rates: mangos_entities::player::RestRates::default(),
         skills: None,
         item_prototypes: Some(&protos),
         quest_templates: Some(&templates),
+        taxi: None,
     };
     Player::materialize(load(), &inputs).expect("materialize")
 }
@@ -288,4 +290,39 @@ fn deliver_recount_and_timer_conversion() {
         9
     );
     assert_eq!(player.load_now_unix, NOW);
+}
+
+#[test]
+fn item_added_quest_check_increments_and_completes_deliver_quest() {
+    let mut player = materialize();
+    // Simulate the just-stored gain in the live
+    // inventory (load recount had 3 of item 182 in a
+    // bank-side row; the gained stack lands in the
+    // backpack at count 4).
+    player.deferred.inventory[0].bag = 0;
+    player.deferred.inventory[0].slot = 23;
+    player.deferred.inventory[0].item.count = 4;
+
+    let templates = QuestTemplates::from_entries([QuestTemplate {
+        entry: 100,
+        method: 2,
+        req_item_ids: [182, 0, 0, 0],
+        req_item_counts: [4, 0, 0, 0],
+        ..QuestTemplate::default()
+    }]);
+    let updates = player.item_added_quest_check(182, 1, &templates);
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0].quest_id, 100);
+    assert_eq!(updates[0].old_count, 3);
+    assert_eq!(updates[0].new_count, 4);
+    assert!(updates[0].notify);
+    assert!(updates[0].completed);
+    let row = player
+        .deferred
+        .quest_status
+        .iter()
+        .find(|row| row.quest == 100)
+        .expect("quest row");
+    assert_eq!(row.item_count[0], 4);
+    assert_eq!(row.status, 1);
 }

@@ -111,7 +111,7 @@ impl Map {
 
     /// `GetVictim()`: the unit's current melee
     /// victim.
-    fn current_victim(&self, guid: ObjectGuid) -> Option<ObjectGuid> {
+    pub(crate) fn current_victim(&self, guid: ObjectGuid) -> Option<ObjectGuid> {
         self.unit_base(guid).and_then(|u| u.melee_victim)
     }
 
@@ -132,7 +132,7 @@ impl Map {
     /// combat state. The reverse attacker cleanup
     /// (`RemoveAllAttackers`) has no central
     /// registry here.
-    fn combat_stop(&mut self, guid: ObjectGuid, including_cast: bool) {
+    pub(crate) fn combat_stop(&mut self, guid: ObjectGuid, including_cast: bool) {
         if including_cast {
             self.cancel_cast(guid, true);
         }
@@ -165,7 +165,7 @@ impl Map {
     /// mirroring the generic-script `UPDATE_ENTRY`
     /// arm: swap template info and the
     /// entry/display/faction fields, rebuild AI.
-    fn creature_update_entry(&mut self, guid: ObjectGuid, new_entry: u32) {
+    pub(crate) fn creature_update_entry(&mut self, guid: ObjectGuid, new_entry: u32) {
         let Some(new_info) = self.stores.creature_templates.get(new_entry).cloned() else {
             return;
         };
@@ -197,6 +197,7 @@ impl Map {
     pub(crate) fn effect_dummy(
         &mut self,
         caster: ObjectGuid,
+        affective_caster: ObjectGuid,
         spell: &SpellEntry,
         eff_index: usize,
         victim: ObjectGuid,
@@ -207,6 +208,21 @@ impl Map {
         triggered_by_spell: u32,
     ) {
         match spell.id {
+            // Spirit Heal (SpellEffects.cpp:805-819): the
+            // affective (original) player confirms at the
+            // spell's unit target, the spirit healer.
+            17251 => {
+                if victim.raw() != 0 && self.players.contains_key(&affective_caster) {
+                    let mut payload = PacketWriter::new();
+                    payload.write_u64_le(victim.raw());
+                    let packet =
+                        WorldPacket::with_body(op::SMSG_SPIRIT_HEALER_CONFIRM, payload.into_vec());
+                    self.events.push(crate::map::MapEvent::Packet {
+                        to: affective_caster,
+                        packet,
+                    });
+                }
+            }
             // Deep Wounds (SpellEffects.cpp:696-730).
             12162 | 12850 | 12868 => {
                 let Some(unit) = self.unit_base(caster) else {

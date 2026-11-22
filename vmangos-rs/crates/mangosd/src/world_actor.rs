@@ -83,8 +83,8 @@ use crate::player_login::{
     time_bit_fields_now,
 };
 use crate::queries::{
-    build_creature_query_response, build_gameobject_query_response, build_item_query_response,
-    build_name_query_response,
+    build_corpse_query_response, build_creature_query_response, build_gameobject_query_response,
+    build_item_query_response, build_name_query_response, build_npc_text_update,
 };
 use crate::security;
 use crate::session_core::{Dispatch, SessionCore};
@@ -289,6 +289,18 @@ pub struct WorldDeps {
     pub instance: Arc<dyn InstanceStore>,
     /// Boot-loaded instances + binds, consumed at spawn.
     pub initial_instances: mangos_db::instance::LoadedInstances,
+    /// Honor week-begin day after boot maintenance
+    /// (`HonorMaintenancer::GetWeekBeginDay`).
+    pub initial_honor_week_begin: u32,
+    /// Next honor maintenance game day.
+    pub initial_honor_next_day: u32,
+    /// Honor maintenance marker writer.
+    pub honor_marker: Arc<dyn HonorMarkerStore>,
+    /// Events active at the previous shutdown
+    /// (`game_event_status` read at boot).
+    pub initial_shutdown_events: Vec<u16>,
+    /// `game_event_status` writer.
+    pub game_event_status: Arc<dyn GameEventStatusStore>,
 }
 
 /// Boot-loaded AH bot rows (`AuctionHouseBotMgr::Load`
@@ -494,6 +506,11 @@ struct PendingTeleport {
     /// (26013) after the ACK (`LeaveBattleground` far
     /// arm, Tier 3 Slice 3).
     cast_deserter: bool,
+    /// Cross-map taxi continuation vertex (fork
+    /// `flight->Reset` at worldport ACK, Tier 4
+    /// step 4f); set by the `TaxiResume` map event
+    /// that follows the flight's `TeleportPlayer`.
+    taxi_resume_node: Option<u32>,
 }
 
 /// World+characters AH bot service.
@@ -639,6 +656,7 @@ pub trait QuestRewardStore: Send + Sync {
     /// # Errors
     ///
     /// Returns [`DbError`] on driver failure.
+    #[allow(clippy::too_many_arguments)] // flat item-instance column list
     fn create_reward_item(
         &self,
         owner_low: u32,
@@ -647,6 +665,7 @@ pub trait QuestRewardStore: Send + Sync {
         bag: u32,
         slot: u32,
         creator_low: u32,
+        durability: u32,
     ) -> Result<u32, DbError>;
 
     /// Sets a stack count (0 deletes both rows).
@@ -914,6 +933,29 @@ pub trait GroupStore: Send + Sync {
 /// bundle atomically with respect to other calls on
 /// the characters DB actor, mirroring the fork's
 /// per-character delayed-transaction lane.
+/// Honor maintenance marker persistence
+/// (`saved_variables.honor_maintenance_marker`,
+/// Tier 4 B0-7).
+pub trait HonorMarkerStore: Send + Sync {
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn set_honor_maintenance_marker(&self, marker: bool) -> Result<(), DbError>;
+}
+
+/// `game_event_status` persistence (Tier 4 B0-8).
+pub trait GameEventStatusStore: Send + Sync {
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn game_event_started(&self, event: u16) -> Result<(), DbError>;
+
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn game_event_ended(&self, event: u16) -> Result<(), DbError>;
+}
+
 pub trait CharacterSaver: Send + Sync {
     /// Save the `Player::SaveToDB` bundle and, when
     /// present, its post-commit `_SaveStats` row.
@@ -1178,6 +1220,15 @@ struct BotState {
     in_world: bool,
 }
 
+/// One stored gossip menu item for select dispatch:
+/// script menus carry `(sender, action)`; default
+/// (`PrepareGossipMenu`) menus carry the full item.
+#[derive(Clone, Debug)]
+enum StoredGossipItem {
+    Script { sender: u32, action: u32 },
+    Default(mangos_map::gossip::DefaultGossipItem),
+}
+
 struct SessionEntry {
     account_id: u32,
     auth: AcceptedAuth,
@@ -1200,6 +1251,9 @@ struct SessionEntry {
     /// transiently during logout in C++; Phase 3 has no logout
     /// packet yet).
     player_loading: bool,
+    /// The character being loaded while `player_loading`
+    /// (`FindPlayerNotInWorld` target for char delete).
+    loading_guid: Option<u32>,
     /// The entered character, once login completed.
     player_guid: Option<u32>,
     /// Wall-clock anchor for `Player::Update` played
@@ -1243,9 +1297,9 @@ struct SessionEntry {
     /// Unread/pending-delivery mail tracking
     /// (`MasterPlayer` mail fields).
     mail_tracker: crate::mail::MailTracker,
-    /// Open script gossip menu: NPC guid + per-item
-    /// `(sender, action)` (`PlayerMenu` subset).
-    gossip_menu: Option<(ObjectGuid, Vec<(u32, u32)>)>,
+    /// Open gossip menu: NPC guid + per-item select
+    /// payload (`PlayerMenu` subset).
+    gossip_menu: Option<(ObjectGuid, Vec<StoredGossipItem>)>,
 }
 
 /// `WorldSession::SendPacket` queue-full policy: `false` means
@@ -1266,10 +1320,32 @@ struct World {
     /// Simulated maps by (map id, instance id);
     /// continents run as instance 0.
     maps: HashMap<MapKey, Map>,
+    /// Boot-loaded persisted corpses not yet placed
+    /// (drained per map at first creation), the
+    /// corpse guid seed, and the seeded-map set
+    /// (`ObjectMgr::LoadCorpses`).
+    pending_corpses: Vec<mangos_db::corpse::LoadedCorpse>,
+    corpse_guid_seed: u32,
+    corpse_seeded_maps: HashSet<MapKey>,
     /// Player guid low -> map key.
     player_map: HashMap<u32, MapKey>,
     /// Instance allocation + binds (Phase 6 Slice 0).
     instances: InstanceRuntime,
+    /// Honor maintenance runtime state (B0-7):
+    /// week begin for map configs, next day +
+    /// marker for `CheckMaintenanceDay`.
+    honor_week_begin: u32,
+    honor_next_day: u32,
+    honor_marker_set: bool,
+    honor_last_check: Option<Instant>,
+    /// Game-event runtime state (B0-8): active set
+    /// (`m_ActiveEvents`), initialized flag, and
+    /// the next scheduled re-check instant (fork
+    /// `Update()` return delay).
+    game_events_active: HashSet<u16>,
+    game_events_initialized: bool,
+    game_events_shutdown: HashSet<u16>,
+    game_events_next_check: Option<Instant>,
     /// Far teleports waiting for `MSG_MOVE_WORLDPORT_ACK`
     /// (bot sessions finish inline).
     pending_teleports: HashMap<SessionId, PendingTeleport>,
@@ -1797,6 +1873,9 @@ pub fn spawn_world(
         guild_bot_core,
     ) = bot_spawn_cores(&config, &mut deps, &log);
     let instances = InstanceRuntime::from_loaded(&deps.initial_instances);
+    let honor_week_begin = deps.initial_honor_week_begin;
+    let honor_next_day = deps.initial_honor_next_day;
+    let shutdown_events: HashSet<u16> = deps.initial_shutdown_events.iter().copied().collect();
     let mut world = World {
         config,
         log,
@@ -1810,6 +1889,14 @@ pub fn spawn_world(
         player_group_invite: HashMap::new(),
         next_group_key,
         next_group_db_id,
+        honor_week_begin,
+        honor_next_day,
+        honor_marker_set: false,
+        honor_last_check: None,
+        game_events_active: HashSet::new(),
+        game_events_initialized: false,
+        game_events_shutdown: shutdown_events,
+        game_events_next_check: None,
         roll_rng: WorldRng::from_entropy(),
         guilds,
         player_guild,
@@ -1840,6 +1927,9 @@ pub fn spawn_world(
         guild_bots_bootstrapped: false,
         next_bot_session: 1 << 62,
         maps: HashMap::new(),
+        pending_corpses: Vec::new(),
+        corpse_guid_seed: 0,
+        corpse_seeded_maps: HashSet::new(),
         instances,
         player_original_group: HashMap::new(),
         bg_manager: battleground::BgManager::default(),
@@ -1902,11 +1992,6 @@ const DIALOG_STATUS_REWARD2: u8 = 7;
 
 const QUEST_STATUS_COMPLETE: i32 = 1;
 const QUEST_STATUS_INCOMPLETE: i32 = 3;
-
-// Fork config defaults (`World.cpp` setConfig);
-// the `Quests.*HideDiff` keys are not read yet.
-const QUEST_LOW_LEVEL_HIDE_DIFF: u32 = 4;
-const QUEST_HIGH_LEVEL_HIDE_DIFF: u32 = 7;
 
 fn quest_rewarded(player: &Player, quest_id: u32) -> bool {
     player.quest_row(quest_id).is_some_and(|r| r.rewarded != 0)
@@ -2279,11 +2364,19 @@ fn quest_can_complete_repeatable(
 /// against `MinLevel` (`GetLevel() + diff >=
 /// MinLevel`; the negative-config arm is unreachable
 /// with the built-in default).
-fn quest_can_see_start(player: &Player, q: &QuestTemplate, templates: &QuestTemplates) -> bool {
+fn quest_can_see_start(
+    player: &Player,
+    q: &QuestTemplate,
+    templates: &QuestTemplates,
+    high_level_hide_diff: i32,
+) -> bool {
     if !q.is_active() || !quest_satisfy_gates(player, q, templates) {
         return false;
     }
-    player.unit.level() + QUEST_HIGH_LEVEL_HIDE_DIFF >= q.min_level
+    if high_level_hide_diff < 0 {
+        return true;
+    }
+    player.unit.level() + high_level_hide_diff as u32 >= q.min_level
 }
 
 /// `Player::PrepareQuestMenu`: (quest id, dialog
@@ -2370,6 +2463,8 @@ fn quest_dialog_status(
     starts: &[u32],
     ends: &[u32],
     templates: &QuestTemplates,
+    low_level_hide_diff: i32,
+    high_level_hide_diff: i32,
 ) -> u8 {
     let level = player.unit.level();
     let mut result = DIALOG_STATUS_NONE;
@@ -2406,7 +2501,7 @@ fn quest_dialog_status(
         if player.quest_status(*quest_id) != 0 {
             continue;
         }
-        if !quest_can_see_start(player, q, templates) {
+        if !quest_can_see_start(player, q, templates, high_level_hide_diff) {
             continue;
         }
         // `SatisfyQuestLevel` is `level >= MinLevel`.
@@ -2417,7 +2512,9 @@ fn quest_dialog_status(
                     && quest_rewarded(player, *quest_id))
             {
                 DIALOG_STATUS_REWARD_REP
-            } else if level <= quest_level_for_player(q, level) + QUEST_LOW_LEVEL_HIDE_DIFF {
+            } else if low_level_hide_diff < 0
+                || level <= quest_level_for_player(q, level) + low_level_hide_diff as u32
+            {
                 DIALOG_STATUS_AVAILABLE
             } else {
                 DIALOG_STATUS_CHAT
@@ -2918,8 +3015,97 @@ fn plan_store_new_item(
     dest
 }
 
+/// `CHAR_NAME_SUCCESS` (`SharedDefines.h:1594`).
+const CHAR_NAME_SUCCESS: u8 = 82;
+
+/// `ObjectMgr::CheckPlayerName(name, create=true)`
+/// (`ObjectMgr.cpp:9195`) minus `ValidateName`'s
+/// profane/reserved DBC regexes (no stores; recorded
+/// unmodeled). Returns the `CHAR_NAME_*` code.
+fn check_player_name(name: &str, min_name: u32, strict_mask: u32, realm_zone: u32) -> u8 {
+    const TOO_SHORT: u8 = 70;
+    const TOO_LONG: u8 = 71;
+    const MIXED_LANGUAGES: u8 = 73;
+    let len = name.chars().count();
+    if len > 12 {
+        return TOO_LONG;
+    }
+    if len < min_name as usize {
+        return TOO_SHORT;
+    }
+    if !is_valid_name_string(name, strict_mask, realm_zone) {
+        return MIXED_LANGUAGES;
+    }
+    CHAR_NAME_SUCCESS
+}
+
+/// `isValidString(wstr, strictMask, numericOrSpace=false,
+/// create=true)` (`ObjectMgr.cpp:9159`) over the fork's
+/// `Util.h` character families.
+fn is_valid_name_string(name: &str, strict_mask: u32, realm_zone: u32) -> bool {
+    let basic = |c: char| c.is_ascii_alphabetic();
+    let extended = |c: char| {
+        basic(c)
+            || matches!(c as u32, 0x00C0..=0x00D6 | 0x00D8..=0x00DF | 0x00E0..=0x00F6
+                | 0x00F8..=0x00FE | 0x0100..=0x012F | 0x1E9E)
+    };
+    let cyrillic = |c: char| matches!(c as u32, 0x0410..=0x044F | 0x0401 | 0x0451);
+    let east_asian = |c: char| {
+        matches!(c as u32, 0x1100..=0x11F9 | 0x3041..=0x30FF | 0x3131..=0x318E
+            | 0x31F0..=0x31FF | 0x3400..=0x4DB5 | 0x4E00..=0x9FC3
+            | 0xAC00..=0xD7A3 | 0xFF01..=0xFFEE)
+    };
+    let all = |pred: &dyn Fn(char) -> bool| name.chars().all(pred);
+    if strict_mask == 0 {
+        return all(&extended) || all(&cyrillic) || all(&east_asian);
+    }
+    if strict_mask & 0x2 != 0 {
+        // `GetRealmLanguageType(create=true)` by RealmZone.
+        let zone_ok = match realm_zone {
+            0 | 1 | 5 | 6 => all(&extended) || all(&cyrillic) || all(&east_asian),
+            2..=4 | 7..=10 => all(&extended),
+            12..=14 => all(&east_asian),
+            11 => all(&cyrillic),
+            _ => all(&basic),
+        };
+        if zone_ok {
+            return true;
+        }
+    }
+    if strict_mask & 0x1 != 0 && all(&basic) {
+        return true;
+    }
+    false
+}
+
+/// `Player::IsActionButtonDataValid` with a null player
+/// (`Player.cpp:6008`; the `MasterPlayer::Create`
+/// seeding filter): bounds, spell/item existence.
+fn is_action_button_data_valid(
+    button: u8,
+    action: u32,
+    action_type: u8,
+    spell_exists: impl Fn(u32) -> bool,
+    item_exists: impl Fn(u32) -> bool,
+) -> bool {
+    if usize::from(button) >= crate::player_login::MAX_ACTION_BUTTONS {
+        return false;
+    }
+    if action >= 0x0100_0000 {
+        return false; // MAX_ACTION_BUTTON_ACTION_VALUE
+    }
+    match action_type {
+        0 => spell_exists(action), // ACTION_BUTTON_SPELL
+        64 => item_exists(action), // ACTION_BUTTON_ITEM
+        _ => true,
+    }
+}
+
 impl World {
     async fn run(mut self, mut rx: mpsc::Receiver<WorldMessage>) {
+        // `World::SetInitialWorldSettings` retention sweep.
+        self.delete_old_characters();
+        self.load_persisted_corpses();
         let mut tick = tokio::time::interval(WORLD_TICK);
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
@@ -2940,6 +3126,8 @@ impl World {
                     self.update_bots();
                     self.update_maps();
                     self.update_player_saves();
+                    self.check_honor_maintenance_day();
+                    self.check_game_events();
                 }
             }
         }
@@ -2972,6 +3160,7 @@ impl World {
                         character_max_level: 0,
                         in_queue: false,
                         player_loading: false,
+                        loading_guid: None,
                         player_guid: None,
                         played_last_tick: Instant::now(),
                         played_level: 0,
@@ -3286,6 +3475,739 @@ impl World {
         });
     }
 
+    /// One-byte `SMSG_CHAR_CREATE` result
+    /// (`SharedDefines.h` response enum).
+    /// One-byte `SMSG_CHAR_RENAME` failure result.
+    fn send_char_rename_result(&mut self, id: SessionId, code: u8) {
+        let mut writer = PacketWriter::new();
+        writer.write_u8(code);
+        let mut packet = WorldPacket::new(opcode_id::SMSG_CHAR_RENAME);
+        packet.take_writer(writer);
+        self.reply_packet(id, packet);
+    }
+
+    /// `HandleCharRenameOpcode` +
+    /// `HandleChangePlayerNameOpcodeCallBack`
+    /// (`CharacterHandler.cpp:799,842`): normalize +
+    /// `CheckPlayerName` + reserved gate, then the
+    /// forced-rename DB gate; success replies
+    /// `RESPONSE_SUCCESS` + guid + name and
+    /// invalidates the player on every client. The
+    /// fork's async two-step collapses to one actor
+    /// call (single-writer); the name cache it
+    /// updates has no Rust counterpart (name queries
+    /// read the DB directly).
+    fn on_char_rename(&mut self, id: SessionId, packet: &WorldPacket) {
+        const CREATE_ERROR: u8 = 47;
+        const NAME_NO_NAME: u8 = 69;
+        const NAME_RESERVED: u8 = 75;
+        const RESPONSE_SUCCESS: u8 = 0;
+
+        let mut reader = packet.reader();
+        let Ok(raw_guid) = reader.read_u64_le() else {
+            self.bad_packet(id, opcode_id::CMSG_CHAR_RENAME);
+            return;
+        };
+        let guid = ObjectGuid::from_raw(raw_guid);
+        let raw_name = reader.read_cstring();
+        let Some((account_id, security_level)) = self
+            .sessions
+            .get(&id)
+            .map(|entry| (entry.account_id, entry.auth.security))
+        else {
+            return;
+        };
+        let Some(name) = normalize_player_name(&raw_name) else {
+            self.send_char_rename_result(id, NAME_NO_NAME);
+            return;
+        };
+        let name_code = check_player_name(
+            &name,
+            self.config.min_player_name,
+            self.config.strict_player_names,
+            self.config.realm_zone,
+        );
+        if name_code != CHAR_NAME_SUCCESS {
+            self.send_char_rename_result(id, name_code);
+            return;
+        }
+        if security_level == security::PLAYER {
+            match self.deps.petition.is_reserved_name(&name) {
+                Ok(true) => {
+                    self.send_char_rename_result(id, NAME_RESERVED);
+                    return;
+                }
+                Ok(false) => {}
+                Err(e) => self
+                    .log
+                    .out(Level::Error, &format!("reserved name check failed: {e}")),
+            }
+        }
+        let guid_low = guid.counter();
+        match self
+            .deps
+            .char_queries
+            .rename_character(guid_low, account_id, &name)
+        {
+            Ok(Some(old_name)) => {
+                self.log.out(
+                    Level::Basic,
+                    &format!(
+                        "Account: {account_id} Character:[{old_name}] (guid:{guid_low}) Changed name to: {name}"
+                    ),
+                );
+                let mut writer = PacketWriter::new();
+                writer.write_u8(RESPONSE_SUCCESS);
+                writer.write_u64_le(guid.raw());
+                writer.write_cstring(&name);
+                let mut packet = WorldPacket::new(opcode_id::SMSG_CHAR_RENAME);
+                packet.take_writer(writer);
+                self.reply_packet(id, packet);
+                // `InvalidatePlayerDataToAllClient`.
+                let sessions: Vec<SessionId> = self.sessions.keys().copied().collect();
+                for session in sessions {
+                    let mut writer = PacketWriter::new();
+                    writer.write_u64_le(guid.raw());
+                    let mut packet = WorldPacket::new(opcode_id::SMSG_INVALIDATE_PLAYER);
+                    packet.take_writer(writer);
+                    self.reply_packet(session, packet);
+                }
+            }
+            Ok(None) => self.send_char_rename_result(id, CREATE_ERROR),
+            Err(e) => {
+                self.log
+                    .out(Level::Error, &format!("character rename failed: {e}"));
+                self.send_char_rename_result(id, CREATE_ERROR);
+            }
+        }
+    }
+
+    fn send_char_create_result(&mut self, id: SessionId, code: u8) {
+        let mut writer = PacketWriter::new();
+        writer.write_u8(code);
+        let mut packet = WorldPacket::new(opcode_id::SMSG_CHAR_CREATE);
+        packet.take_writer(writer);
+        self.reply_packet(id, packet);
+    }
+
+    /// One-byte `SMSG_CHAR_DELETE` result.
+    fn send_char_delete_result(&mut self, id: SessionId, code: u8) {
+        let mut writer = PacketWriter::new();
+        writer.write_u8(code);
+        let mut packet = WorldPacket::new(opcode_id::SMSG_CHAR_DELETE);
+        packet.take_writer(writer);
+        self.reply_packet(id, packet);
+    }
+
+    /// `HandleCharCreateOpcode`
+    /// (`CharacterHandler.cpp:181-337`) + `SaveNewPlayer`.
+    /// Synchronous like the fork handler. Unmodeled:
+    /// `ValidateAppearance` `CharSections` gate and the
+    /// `ValidateName` profane/reserved DBC regexes (no
+    /// stores loaded; the `reserved_name` DB table gate
+    /// below is live) — recorded in TIER4-PROGRESS.
+    #[allow(clippy::too_many_lines)]
+    fn on_char_create(&mut self, id: SessionId, packet: &WorldPacket) {
+        use mangos_db::characters::NewCharacter;
+        // Response codes (`SharedDefines.h:1548-1594`).
+        const SUCCESS: u8 = 46;
+        const ERROR: u8 = 47;
+        const FAILED: u8 = 48;
+        const NAME_IN_USE: u8 = 49;
+        const DISABLED: u8 = 50;
+        const PVP_TEAMS_VIOLATION: u8 = 51;
+        const SERVER_LIMIT: u8 = 52;
+        const NAME_NO_NAME: u8 = 69;
+        const NAME_RESERVED: u8 = 75;
+
+        let mut reader = packet.reader();
+        let raw_name = reader.read_cstring();
+        let (Ok(race), Ok(class)) = (reader.read_u8(), reader.read_u8()) else {
+            self.bad_packet(id, opcode_id::CMSG_CHAR_CREATE);
+            return;
+        };
+        let fields = (
+            reader.read_u8(),
+            reader.read_u8(),
+            reader.read_u8(),
+            reader.read_u8(),
+            reader.read_u8(),
+            reader.read_u8(),
+            reader.read_u8(),
+        );
+        let (
+            Ok(gender),
+            Ok(skin),
+            Ok(face),
+            Ok(hair_style),
+            Ok(hair_color),
+            Ok(facial_hair),
+            Ok(_outfit),
+        ) = fields
+        else {
+            self.bad_packet(id, opcode_id::CMSG_CHAR_CREATE);
+            return;
+        };
+        let Some((account_id, security_level, characters_count)) =
+            self.sessions.get(&id).map(|entry| {
+                (
+                    entry.account_id,
+                    entry.auth.security,
+                    entry.characters_count,
+                )
+            })
+        else {
+            return;
+        };
+        let race_dbc = self.deps.race_class_dbc.races.get(&u32::from(race));
+
+        if security_level == security::PLAYER && self.config.characters_creating_disabled != 0 {
+            let mask = self.config.characters_creating_disabled;
+            let disabled = match race_dbc.map(|r| r.team_id) {
+                Some(7) => mask & (1 << 0) != 0,
+                Some(1) => mask & (1 << 1) != 0,
+                _ => false,
+            };
+            if disabled {
+                self.send_char_create_result(id, DISABLED);
+                return;
+            }
+        }
+        if race_dbc.is_none() || !self.deps.race_class_dbc.classes.contains(&u32::from(class)) {
+            self.log.out(
+                Level::Error,
+                &format!("Attempt to create character of invalid Class ({class}) or Race ({race})"),
+            );
+            self.send_char_create_result(id, FAILED);
+            return;
+        }
+        // CHRRACES_FLAGS_NOT_PLAYABLE = 0x01.
+        if self
+            .deps
+            .race_class_dbc
+            .race_flags
+            .get(&u32::from(race))
+            .is_some_and(|flags| flags & 0x01 != 0)
+        {
+            self.send_char_create_result(id, DISABLED);
+            return;
+        }
+        let Some(name) = normalize_player_name(&raw_name) else {
+            self.send_char_create_result(id, NAME_NO_NAME);
+            return;
+        };
+        let name_code = check_player_name(
+            &name,
+            self.config.min_player_name,
+            self.config.strict_player_names,
+            self.config.realm_zone,
+        );
+        if name_code != CHAR_NAME_SUCCESS {
+            self.send_char_create_result(id, name_code);
+            return;
+        }
+        if security_level == security::PLAYER {
+            match self.deps.petition.is_reserved_name(&name) {
+                Ok(true) => {
+                    self.send_char_create_result(id, NAME_RESERVED);
+                    return;
+                }
+                Ok(false) => {}
+                Err(e) => self
+                    .log
+                    .out(Level::Error, &format!("reserved name check failed: {e}")),
+            }
+        }
+        match self.deps.char_queries.name_in_use(&name) {
+            Ok(true) => {
+                self.send_char_create_result(id, NAME_IN_USE);
+                return;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                self.log
+                    .out(Level::Error, &format!("name-in-use check failed: {e}"));
+                self.send_char_create_result(id, ERROR);
+                return;
+            }
+        }
+        if u32::from(characters_count) >= self.config.characters_per_realm {
+            self.send_char_create_result(id, SERVER_LIMIT);
+            return;
+        }
+        let is_pvp_realm = matches!(self.config.game_type, 1 | 8 | 16);
+        let allow_two_side = !is_pvp_realm
+            || self.config.allow_two_side_accounts
+            || security_level > security::PLAYER;
+        if !allow_two_side {
+            let rows = self
+                .deps
+                .char_queries
+                .char_enum(account_id)
+                .unwrap_or_default();
+            if let Some(first) = rows.first() {
+                let new_team = race_dbc.map_or(0, |r| r.team_id);
+                let acc_team = self
+                    .deps
+                    .race_class_dbc
+                    .races
+                    .get(&u32::from(first.race))
+                    .map_or(0, |r| r.team_id);
+                if first.race == 0 || acc_team != new_team {
+                    self.send_char_create_result(id, PVP_TEAMS_VIOLATION);
+                    return;
+                }
+            }
+        }
+        // `SaveNewPlayer` gates: create-info pair and
+        // single-bit gender, both plain `false` in the fork.
+        let infos = &self.deps.world_stores.player_infos;
+        let Some(info) = infos
+            .create_info(u32::from(race), u32::from(class))
+            .copied()
+        else {
+            self.send_char_create_result(id, ERROR);
+            return;
+        };
+        if gender > 1 {
+            self.send_char_create_result(id, ERROR);
+            return;
+        }
+        let level = if security_level >= security::MODERATOR {
+            self.config.start_gm_level
+        } else {
+            self.config.start_player_level
+        }
+        .min(infos.max_player_level().max(1));
+        let class_info = infos.class_level_info(u32::from(class), level);
+        let level_stats = infos.level_info(u32::from(race), u32::from(class), level);
+        let (base_health, base_mana) = class_info.map_or((0, 0), |c| (c.basehealth, c.basemana));
+        let stats = level_stats.map_or([0u8; 5], |s| s.stats);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let health = (f32::from(base_health)
+            + mangos_entities::player::health_bonus_from_stamina(f32::from(stats[2])))
+            as u32;
+        let power_type = self
+            .deps
+            .race_class_dbc
+            .class_power
+            .get(&u32::from(class))
+            .copied()
+            .unwrap_or(0);
+        let mut powers = [0u32; 5];
+        if power_type == 0 {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            {
+                powers[0] = (f32::from(base_mana)
+                    + mangos_entities::player::mana_bonus_from_intellect(f32::from(stats[3])))
+                    as u32;
+            }
+        } else if power_type == 3 {
+            powers[3] = 100;
+        }
+        // Equipment cache + ammo (`SaveNewPlayer` starter
+        // pass): every empty allowed slot takes the item,
+        // fork included; slot indices cap at the cache
+        // width (the fork writes past its 20-wide array
+        // for extra bag slots — not replicated).
+        let prototypes = &self.deps.world_stores.item_prototypes;
+        let mut cache = [0u32; 20];
+        let mut ammo_id = 0u32;
+        for item in infos.create_items(u32::from(race), u32::from(class)) {
+            let Some(proto) = prototypes.get(item.item_id) else {
+                continue;
+            };
+            for slot in mangos_world_data::item_prototype::allowed_equip_slots(
+                proto,
+                u32::from(class),
+                false,
+            )
+            .into_iter()
+            .flatten()
+            {
+                let slot = usize::from(slot);
+                if slot < cache.len() && cache[slot] == 0 {
+                    cache[slot] = item.item_id;
+                }
+            }
+            if proto.inventory_type == 24 {
+                ammo_id = item.item_id;
+            }
+        }
+        let mut equipment_cache = String::new();
+        for item_id in cache {
+            equipment_cache.push_str(&item_id.to_string());
+            equipment_cache.push_str(" 0 ");
+        }
+        let spells = &self.deps.world_stores.spells;
+        let actions: Vec<(u8, u32, u8)> = infos
+            .create_actions(u32::from(race), u32::from(class))
+            .iter()
+            .filter(|a| {
+                is_action_button_data_valid(
+                    a.button,
+                    a.action,
+                    a.action_type,
+                    |spell| spells.spells.contains_key(&spell),
+                    |item| prototypes.get(item).is_some(),
+                )
+            })
+            .map(|a| (a.button, a.action, a.action_type))
+            .collect();
+        let taxi_words = {
+            let mut words = [0u32; 8];
+            words[0] = self
+                .deps
+                .race_class_dbc
+                .starting_taxi_mask
+                .get(&u32::from(race))
+                .copied()
+                .unwrap_or(0);
+            let mut text = String::new();
+            for word in words {
+                text.push_str(&word.to_string());
+                text.push(' ');
+            }
+            text
+        };
+        let new = NewCharacter {
+            account_id,
+            name,
+            race,
+            class,
+            gender,
+            skin,
+            face,
+            hair_style,
+            hair_color,
+            facial_hair,
+            level,
+            money: self.config.start_player_money.min(MAX_MONEY_AMOUNT),
+            map_id: info.map_id,
+            position_x: info.position_x,
+            position_y: info.position_y,
+            position_z: info.position_z,
+            orientation: info.orientation,
+            taxi_mask: taxi_words,
+            extra_flags: if security_level > security::PLAYER {
+                0x0002 // PLAYER_EXTRA_GM_ACCEPT_TICKETS
+            } else {
+                0x0004 // PLAYER_EXTRA_ACCEPT_WHISPERS
+            },
+            health,
+            powers,
+            equipment_cache,
+            ammo_id,
+            actions,
+            now: unix_now(),
+        };
+        match self.deps.char_queries.create_character(&new) {
+            Ok(guid) => {
+                let count = if let Some(entry) = self.sessions.get_mut(&id) {
+                    entry.characters_count = entry.characters_count.saturating_add(1);
+                    u32::from(entry.characters_count)
+                } else {
+                    return;
+                };
+                if let Err(e) = self
+                    .deps
+                    .char_queries
+                    .sync_realm_char_count(account_id, count)
+                {
+                    self.log
+                        .out(Level::Error, &format!("realm char count sync failed: {e}"));
+                }
+                self.log.out(
+                    Level::Basic,
+                    &format!(
+                        "Account {account_id} created character {} guid {guid}",
+                        new.name
+                    ),
+                );
+                self.send_char_create_result(id, SUCCESS);
+            }
+            Err(e) => {
+                self.log
+                    .out(Level::Error, &format!("character create failed: {e}"));
+                self.send_char_create_result(id, ERROR);
+            }
+        }
+    }
+
+    /// `HandleCharDeleteOpcode`
+    /// (`CharacterHandler.cpp:339-384`).
+    fn on_char_delete(&mut self, id: SessionId, packet: &WorldPacket) {
+        const SUCCESS: u8 = 57;
+        const FAILED: u8 = 58;
+        let mut reader = packet.reader();
+        let Ok(raw_guid) = reader.read_u64_le() else {
+            self.bad_packet(id, opcode_id::CMSG_CHAR_DELETE);
+            return;
+        };
+        let guid_low = ObjectGuid::from_raw(raw_guid).counter();
+        // Can't delete a loaded (still loading) character.
+        if self
+            .sessions
+            .values()
+            .any(|entry| entry.player_loading && entry.loading_guid == Some(guid_low))
+        {
+            return;
+        }
+        if self
+            .guilds
+            .values()
+            .any(|guild| guild.leader_low() == guid_low)
+        {
+            self.send_char_delete_result(id, FAILED);
+            return;
+        }
+        let Ok(Some(owner)) = self.deps.char_queries.character_owner(guid_low) else {
+            return;
+        };
+        let Some(account_id) = self.sessions.get(&id).map(|entry| entry.account_id) else {
+            return;
+        };
+        if owner.account_id != account_id {
+            return;
+        }
+        self.log.out(
+            Level::Basic,
+            &format!(
+                "Account {account_id} deleted character {} guid {guid_low}",
+                owner.name
+            ),
+        );
+        // Online (ALT-F4 residue): log the character out
+        // first (`LogoutPlayer(true)`).
+        if let Some(online_id) = self.player_session.get(&guid_low).copied() {
+            self.on_logout_request(online_id);
+        }
+        let mut method = self.config.char_delete_method;
+        if owner.level < self.config.char_delete_min_level {
+            method = 0;
+        }
+        self.perform_character_delete(guid_low, account_id, method);
+        self.send_char_delete_result(id, SUCCESS);
+    }
+
+    /// `Player::DeleteFromDB` live half + DB call +
+    /// realm recount (`Player.cpp:4361-4540`): guild
+    /// removal, group removal, petition purge, then the
+    /// resolved DB plan. Corpse-to-bones conversion is
+    /// unmodeled until the corpse system exists (death
+    /// flow, TIER4-PROGRESS).
+    fn perform_character_delete(&mut self, guid_low: u32, account_id: u32, method: u32) {
+        if let Some(guild_id) = self.player_guild.get(&guid_low).copied() {
+            let result = self
+                .guilds
+                .get_mut(&guild_id)
+                .map(|guild| guild.del_member(guid_low, false));
+            if let Some((fx, need_disband)) = result {
+                self.player_guild.remove(&guid_low);
+                self.apply_guild_fx(fx);
+                if need_disband {
+                    self.guild_disband_now(guild_id);
+                }
+            }
+        }
+        if let Some(key) = self.player_group.get(&guid_low).copied() {
+            self.remove_from_group(key, guid_low, crate::group::remove_method::LEAVE);
+        }
+        self.remove_petitions_and_signs(guid_low, 0);
+        // `ObjectAccessor::ConvertCorpseForPlayer`:
+        // the character's corpse becomes bones (or is
+        // removed) and its persisted row dies with it.
+        let owner_guid = player_guid(guid_low);
+        let corpse_keys: Vec<MapKey> = self
+            .maps
+            .iter()
+            .filter(|(_, map)| map.corpse_for_player(owner_guid).is_some())
+            .map(|(key, _)| *key)
+            .collect();
+        for key in corpse_keys {
+            if let Some(map) = self.maps.get_mut(&key) {
+                map.spawn_corpse_bones_for(owner_guid);
+            }
+        }
+        self.drain_map_events();
+        let plan = mangos_db::characters::DeletePlan {
+            method: u8::try_from(method).unwrap_or(0),
+            account_id,
+            mail_delivery_delay_secs: self.config.mail_delivery_delay_secs,
+            now: unix_now(),
+        };
+        if let Err(e) = self.deps.char_queries.delete_character(guid_low, &plan) {
+            self.log
+                .out(Level::Error, &format!("character delete failed: {e}"));
+            return;
+        }
+        if account_id != 0 {
+            match self.deps.char_queries.character_count(account_id) {
+                Ok(count) => {
+                    if let Err(e) = self
+                        .deps
+                        .char_queries
+                        .sync_realm_char_count(account_id, count)
+                    {
+                        self.log.out(
+                            Level::Error,
+                            &format!("realm char recount sync failed: {e}"),
+                        );
+                    }
+                }
+                Err(e) => self
+                    .log
+                    .out(Level::Error, &format!("realm char recount failed: {e}")),
+            }
+        }
+    }
+
+    /// `Player::DeleteOldCharacters` startup sweep: up
+    /// to two soft-deleted rows past `CharDelete.KeepDays`
+    /// (fork `LIMIT 0,2`), each fully deleted with the
+    /// live side effects above.
+    fn delete_old_characters(&mut self) {
+        let keep_days = self.config.char_delete_keep_days;
+        if keep_days == 0 {
+            return;
+        }
+        let stale = self
+            .deps
+            .char_queries
+            .old_deleted_characters(keep_days, unix_now())
+            .unwrap_or_default();
+        for (guid_low, deleted_account) in stale {
+            self.perform_character_delete(guid_low, deleted_account, 0);
+        }
+    }
+
+    /// `ObjectMgr::LoadCorpses` at boot: stage the
+    /// persisted resurrectable corpses for per-map
+    /// placement and seed the corpse guid counter.
+    fn load_persisted_corpses(&mut self) {
+        match self.deps.char_queries.load_corpses() {
+            Ok(rows) => {
+                self.log.out(
+                    Level::Basic,
+                    &format!("Loaded {} persisted corpses", rows.len()),
+                );
+                self.pending_corpses = rows;
+            }
+            Err(e) => self
+                .log
+                .out(Level::Error, &format!("corpse boot load failed: {e}")),
+        }
+        self.corpse_guid_seed = self.deps.char_queries.max_corpse_guid().unwrap_or(0);
+    }
+
+    /// First-touch placement of staged corpses into a
+    /// freshly created map (fork adds them at map
+    /// load): seed the guid counter, build entities
+    /// from the owner-appearance join, convert
+    /// expired reclaimable corpses to bones.
+    fn seed_map_corpses(&mut self, map_key: MapKey) {
+        if !self.corpse_seeded_maps.insert(map_key) {
+            return;
+        }
+        let seed = self.corpse_guid_seed;
+        let now = unix_now();
+        let mut place: Vec<mangos_entities::corpse::Corpse> = Vec::new();
+        let mut expired_owners: Vec<u32> = Vec::new();
+        self.pending_corpses.retain(|loaded| {
+            if loaded.row.map != map_key.map_id || loaded.row.instance != map_key.instance_id {
+                return true;
+            }
+            let row = &loaded.row;
+            let infos = &self.deps.world_stores.player_infos;
+            let display_id = infos
+                .create_info(u32::from(loaded.race), u32::from(loaded.class))
+                .map_or(0, |info| {
+                    if loaded.gender == 1 {
+                        info.display_id_f
+                    } else {
+                        info.display_id_m
+                    }
+                });
+            let mut flags = mangos_entities::corpse::CORPSE_FLAG_UNK2;
+            if loaded.character_flags & 0x0000_0400 != 0 {
+                flags |= mangos_entities::corpse::CORPSE_FLAG_HIDE_HELM;
+            }
+            if loaded.character_flags & 0x0000_0800 != 0 {
+                flags |= mangos_entities::corpse::CORPSE_FLAG_HIDE_CLOAK;
+            }
+            let mut items = [0u32; 19];
+            if let Some(cache) = &loaded.equipment_cache {
+                let tokens: Vec<u32> = cache
+                    .split_whitespace()
+                    .map(|t| t.parse().unwrap_or(0))
+                    .collect();
+                for (slot, item) in items.iter_mut().enumerate() {
+                    let item_id = tokens.get(slot * 2).copied().unwrap_or(0);
+                    if let Some(proto) = self.deps.world_stores.items.get(item_id) {
+                        *item = proto.display_id | (u32::from(proto.inventory_type) << 24);
+                    }
+                }
+            }
+            let appearance = mangos_entities::corpse::CorpseAppearance {
+                race: loaded.race,
+                gender: loaded.gender,
+                skin: loaded.skin,
+                face: loaded.face,
+                hair_style: loaded.hair_style,
+                hair_color: loaded.hair_color,
+                facial_hair: loaded.facial_hair,
+                display_id,
+                guild_id: loaded.guild_id,
+                flags,
+                items,
+            };
+            let corpse_type = if row.corpse_type == 2 {
+                mangos_entities::corpse::CorpseType::ResurrectablePvP
+            } else {
+                mangos_entities::corpse::CorpseType::ResurrectablePvE
+            };
+            let corpse = mangos_entities::corpse::Corpse::create(
+                row.guid,
+                row.map,
+                row.instance,
+                player_guid(row.player_guid),
+                corpse_type,
+                mangos_movement::movement_info::Position::new(
+                    row.position_x,
+                    row.position_y,
+                    row.position_z,
+                    row.orientation,
+                ),
+                &appearance,
+                row.time,
+            );
+            if row.time + 3 * 86_400 < now {
+                expired_owners.push(row.player_guid);
+                // A converted bones object is a newly
+                // created corpse in the fork, so its
+                // one-hour bones lifetime starts now.
+                let mut bones = corpse.to_bones();
+                bones.ghost_time = now;
+                place.push(bones);
+            } else {
+                place.push(corpse);
+            }
+            false
+        });
+        if let Some(map) = self.maps.get_mut(&map_key) {
+            map.seed_corpse_counter(seed);
+            for corpse in place {
+                map.add_corpse(corpse);
+            }
+        }
+        for player_low in expired_owners {
+            if let Err(e) = self.deps.char_queries.delete_corpse(player_low) {
+                self.log
+                    .out(Level::Error, &format!("expired corpse delete failed: {e}"));
+            }
+        }
+    }
+
     fn reply_packet(&mut self, id: SessionId, packet: WorldPacket) {
         let alive = self
             .sessions
@@ -3330,6 +4252,8 @@ impl World {
             opcode_id::CMSG_GAMEOBJECT_QUERY => self.on_gameobject_query(id, packet),
             opcode_id::CMSG_ITEM_QUERY_SINGLE => self.on_item_query(id, packet),
             opcode_id::CMSG_NAME_QUERY => self.on_name_query(id, packet),
+            opcode_id::CMSG_NPC_TEXT_QUERY => self.on_npc_text_query(id, packet),
+            opcode_id::MSG_CORPSE_QUERY => self.on_corpse_query(id),
             _ => {}
         }
     }
@@ -3560,17 +4484,28 @@ impl World {
     /// no group, matching the fork (no group exists
     /// until `Group::Create`).
     fn sync_entity_group(&mut self, guid_low: u32) {
-        let db_id = self
+        let group = self
             .player_group
             .get(&guid_low)
-            .and_then(|key| self.groups.get(key))
-            .map(Group::db_id)
-            .filter(|id| *id != 0);
+            .and_then(|key| self.groups.get(key));
+        let db_id = group.map(Group::db_id).filter(|id| *id != 0);
+        let (method, threshold, master_low) = group.map_or((3, 2, 0), |g| {
+            let master = ObjectGuid::from_raw(g.looter_raw());
+            let master_low = if master.is_empty() {
+                g.leader_low()
+            } else {
+                master.counter()
+            };
+            (g.loot_method(), g.loot_threshold(), master_low)
+        });
         if let Some(&map_key) = self.player_map.get(&guid_low)
             && let Some(map) = self.maps.get_mut(&map_key)
             && let Some(player) = map.player_mut(player_guid(guid_low))
         {
             player.group_id = db_id;
+            player.group_loot_method = method;
+            player.group_loot_threshold = threshold;
+            player.group_loot_master_low = master_low;
         }
     }
 
@@ -4111,6 +5046,17 @@ impl World {
             #[allow(clippy::cast_possible_truncation)]
             let fx = group.set_loot(method as u8, looter_raw, threshold as u8, &view);
             self.apply_group_fx(fx);
+        }
+        // Loot settings are mirrored into the map
+        // players for loot view computations.
+        let members: Vec<u32> = self
+            .player_group
+            .iter()
+            .filter(|(_, k)| **k == key)
+            .map(|(guid, _)| *guid)
+            .collect();
+        for low in members {
+            self.sync_entity_group(low);
         }
     }
 
@@ -8404,13 +9350,13 @@ impl World {
         Some((creature.original_entry, creature.info.name.clone(), false))
     }
 
-    /// `HandleGossipHelloOpcode` script subset: a
-    /// creature script may take over with its own
-    /// menu (`pGossipHello`); otherwise the gossip
-    /// closes (default gossip text/quest-menu
-    /// preparation is not modeled on this opcode —
-    /// quest interaction runs through
-    /// `CMSG_QUESTGIVER_HELLO`).
+    /// `HandleGossipHelloOpcode`: a creature script
+    /// may take over with its own menu
+    /// (`pGossipHello`); otherwise the default menu
+    /// is prepared (`PrepareGossipMenu` +
+    /// `SendPreparedGossip`). The fork interact gate
+    /// runs inside the default arm (the script arm
+    /// keeps its pre-existing ungated subset).
     fn on_gossip_hello(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
         let Ok(npc_guid) = packet.reader().read_u64_le().map(ObjectGuid::from_wire_raw) else {
             return;
@@ -8424,45 +9370,235 @@ impl World {
             .and_then(|map| map.gossip_script_on_hello(player, npc_guid));
         if let Some(menu) = menu {
             self.send_gossip_menu(id, npc_guid, &menu);
-        } else {
-            self.clear_gossip_menu(id);
-            self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
+            return;
         }
+        let Some(menu) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+            .and_then(|map| map.gossip_default_hello(player, npc_guid))
+        else {
+            return;
+        };
+        self.send_default_gossip_menu(id, actor_low, npc_guid, &menu);
     }
 
-    /// `HandleGossipSelectOptionOpcode` script
-    /// subset: options index into the menu stored
-    /// by `on_gossip_hello` (`pGossipSelect`).
+    /// `SendPreparedGossip` + `PlayerMenu::SendGossipMenu`
+    /// for a default-prepared menu: assemble
+    /// `PrepareQuestMenu` actor-side, apply the fork
+    /// send branches, store items for select.
+    fn send_default_gossip_menu(
+        &mut self,
+        id: SessionId,
+        actor_low: u32,
+        npc_guid: ObjectGuid,
+        menu: &mangos_map::gossip::DefaultGossipMenu,
+    ) {
+        let stores = &self.deps.world_stores;
+        let mut quests: Vec<(u32, u8)> = Vec::new();
+        if menu.can_see_quests
+            && let Some(map) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get(&map_id))
+            && let Some(player) = map.player(player_guid(actor_low))
+            && let Some(creature) = map.creature(npc_guid)
+        {
+            let entry = creature.original_entry;
+            let starts = quest_rel_starts(&stores.quest_relations, entry, false);
+            let ends = quest_rel_ends(&stores.quest_relations, entry, false);
+            quests = quest_prepare_menu(player, starts, ends, &stores.quest_templates);
+        }
+        if menu.just_discovered_node && quests.is_empty() {
+            self.clear_gossip_menu(id);
+            return;
+        }
+        // No gossip flag + quests + not a vendor: the
+        // client expects the quest list instead
+        // (`SendPreparedGossip` redirect).
+        if menu.npc_flags & 0x1 == 0 && !quests.is_empty() && menu.npc_flags & 0x4 == 0 {
+            self.send_quest_list(id, actor_low, npc_guid);
+            return;
+        }
+        if let Some(entry) = self.sessions.get_mut(&id) {
+            entry.gossip_menu = Some((
+                npc_guid,
+                menu.items
+                    .iter()
+                    .cloned()
+                    .map(StoredGossipItem::Default)
+                    .collect(),
+            ));
+        }
+        let mut writer = PacketWriter::new();
+        write_guid(&mut writer, npc_guid);
+        writer.write_u32_le(menu.text_id);
+        writer.write_u32_le(u32::try_from(menu.items.len()).unwrap_or(0));
+        for (index, item) in menu.items.iter().enumerate() {
+            writer.write_u32_le(u32::try_from(index).unwrap_or(0));
+            writer.write_u8(item.icon);
+            writer.write_u8(u8::from(item.coded));
+            writer.write_cstring(&item.text);
+        }
+        let quest_rows: Vec<_> = quests
+            .iter()
+            .filter_map(|(quest_id, icon)| {
+                stores
+                    .quest_templates
+                    .get(*quest_id)
+                    .map(|q| (*quest_id, *icon, q.quest_level, &q.title))
+            })
+            .collect();
+        writer.write_u32_le(u32::try_from(quest_rows.len()).unwrap_or(0));
+        for (quest_id, icon, quest_level, title) in &quest_rows {
+            writer.write_u32_le(*quest_id);
+            writer.write_u32_le(u32::from(*icon));
+            writer.write_u32_le(*quest_level);
+            writer.write_cstring(title);
+        }
+        let mut reply = WorldPacket::new(opcode_id::SMSG_GOSSIP_MESSAGE);
+        reply.take_writer(writer);
+        self.reply_packet(id, reply);
+    }
+
+    /// `HandleGossipSelectOptionOpcode`: options index
+    /// into the menu stored by `on_gossip_hello`
+    /// (script `pGossipSelect` or the default
+    /// `Player::OnGossipSelect` arm).
     fn on_gossip_select_option(&mut self, id: SessionId, actor_low: u32, packet: &WorldPacket) {
         let mut reader = packet.reader();
         let (Ok(npc_raw), Ok(option)) = (reader.read_u64_le(), reader.read_u32_le()) else {
             return;
         };
         let npc_guid = ObjectGuid::from_wire_raw(npc_raw);
-        let Some((sender, action)) = self
+        let Some(stored) = self
             .sessions
             .get(&id)
             .and_then(|e| e.gossip_menu.as_ref())
             .filter(|(guid, _)| *guid == npc_guid)
-            .and_then(|(_, items)| items.get(option as usize).copied())
+            .and_then(|(_, items)| items.get(option as usize).cloned())
         else {
             return;
         };
+        let player = player_guid(actor_low);
+        match stored {
+            StoredGossipItem::Script { sender, action } => {
+                let outcome = self
+                    .player_map
+                    .get(&actor_low)
+                    .copied()
+                    .and_then(|map_id| self.maps.get_mut(&map_id))
+                    .and_then(|map| map.gossip_script_on_select(player, npc_guid, sender, action));
+                match outcome {
+                    Some(mangos_map::gossip::GossipSelectOutcome::ShowMenu(menu)) => {
+                        self.send_gossip_menu(id, npc_guid, &menu);
+                    }
+                    Some(mangos_map::gossip::GossipSelectOutcome::Close) | None => {
+                        self.clear_gossip_menu(id);
+                        self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
+                    }
+                }
+            }
+            StoredGossipItem::Default(item) => {
+                self.on_gossip_select_default(id, actor_low, npc_guid, &item);
+            }
+        }
+    }
+
+    /// Default-menu select outcomes (actor-side
+    /// service packets for `Player::OnGossipSelect`).
+    fn on_gossip_select_default(
+        &mut self,
+        id: SessionId,
+        actor_low: u32,
+        npc_guid: ObjectGuid,
+        item: &mangos_map::gossip::DefaultGossipItem,
+    ) {
+        use mangos_map::gossip::DefaultGossipSelect as Sel;
         let player = player_guid(actor_low);
         let outcome = self
             .player_map
             .get(&actor_low)
             .copied()
             .and_then(|map_id| self.maps.get_mut(&map_id))
-            .and_then(|map| map.gossip_script_on_select(player, npc_guid, sender, action));
+            .map(|map| map.gossip_default_select(player, npc_guid, item));
+        let Some(outcome) = outcome else {
+            return;
+        };
         match outcome {
-            Some(mangos_map::gossip::GossipSelectOutcome::ShowMenu(menu)) => {
-                self.send_gossip_menu(id, npc_guid, &menu);
-            }
-            Some(mangos_map::gossip::GossipSelectOutcome::Close) | None => {
+            Sel::Close => {
                 self.clear_gossip_menu(id);
                 self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
             }
+            Sel::ShowMenu(menu) => {
+                self.send_default_gossip_menu(id, actor_low, npc_guid, &menu);
+            }
+            Sel::QuestList => {
+                self.clear_gossip_menu(id);
+                self.send_quest_list(id, actor_low, npc_guid);
+            }
+            Sel::TrainerList => {
+                self.clear_gossip_menu(id);
+                let default_title = self
+                    .strings
+                    .get(51)
+                    .map_or("", |entry| entry.text(0))
+                    .to_owned();
+                if let Some(map) = self
+                    .player_map
+                    .get(&actor_low)
+                    .copied()
+                    .and_then(|map_id| self.maps.get_mut(&map_id))
+                {
+                    map.send_trainer_list(player, npc_guid, &default_title);
+                }
+            }
+            Sel::PetitionShowList => {
+                self.clear_gossip_menu(id);
+                self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
+                let mut writer = PacketWriter::new();
+                write_guid(&mut writer, npc_guid);
+                writer.write_u8(1);
+                writer.write_u32_le(1);
+                writer.write_u32_le(mangos_db::petition::GUILD_CHARTER_ENTRY);
+                writer.write_u32_le(CHARTER_DISPLAY_ID);
+                writer.write_u32_le(CHARTER_COST);
+                writer.write_u32_le(1);
+                let mut reply = WorldPacket::new(opcode_id::SMSG_PETITION_SHOWLIST);
+                reply.take_writer(writer);
+                self.reply_packet(id, reply);
+            }
+            Sel::TabardActivate => {
+                self.clear_gossip_menu(id);
+                self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
+                let mut writer = PacketWriter::new();
+                write_guid(&mut writer, npc_guid);
+                let mut reply = WorldPacket::new(opcode_id::MSG_TABARDVENDOR_ACTIVATE);
+                reply.take_writer(writer);
+                self.reply_packet(id, reply);
+            }
+            Sel::AuctionHello => {
+                self.clear_gossip_menu(id);
+                if let Some((house, _)) = self.checked_auction_house(actor_low, npc_guid) {
+                    self.reply_packet(id, crate::auction::hello_packet(npc_guid, house.house_id));
+                }
+            }
+            Sel::BattlefieldList(bg_type_id) => {
+                self.clear_gossip_menu(id);
+                self.bg_send_list(actor_low, npc_guid, bg_type_id);
+            }
+            Sel::BinderConfirm => {
+                self.clear_gossip_menu(id);
+                self.reply_packet(id, WorldPacket::new(opcode_id::SMSG_GOSSIP_COMPLETE));
+                let mut writer = PacketWriter::new();
+                write_guid(&mut writer, npc_guid);
+                let mut reply = WorldPacket::new(opcode_id::SMSG_BINDER_CONFIRM);
+                reply.take_writer(writer);
+                self.reply_packet(id, reply);
+            }
+            Sel::Done => {}
         }
     }
 
@@ -8478,7 +9614,13 @@ impl World {
         if let Some(entry) = self.sessions.get_mut(&id) {
             entry.gossip_menu = Some((
                 npc_guid,
-                menu.items.iter().map(|i| (i.sender, i.action)).collect(),
+                menu.items
+                    .iter()
+                    .map(|i| StoredGossipItem::Script {
+                        sender: i.sender,
+                        action: i.action,
+                    })
+                    .collect(),
             ));
         }
         let mut writer = PacketWriter::new();
@@ -8524,7 +9666,14 @@ impl World {
         let Some(player) = map.player(player_guid(actor_low)) else {
             return;
         };
-        let status = quest_dialog_status(player, starts, ends, &stores.quest_templates);
+        let status = quest_dialog_status(
+            player,
+            starts,
+            ends,
+            &stores.quest_templates,
+            self.config.quest_low_level_hide_diff,
+            self.config.quest_high_level_hide_diff,
+        );
         let mut writer = PacketWriter::new();
         write_guid(&mut writer, npc_guid);
         // Fork `SendQuestGiverStatus` writes a u32.
@@ -8627,7 +9776,7 @@ impl World {
             .copied()
             .and_then(|map_id| self.maps.get(&map_id))
             .and_then(|map| map.player(player_guid(actor_low)))?;
-        let inv = &player.saved.inventory;
+        let inv = &player.deferred.inventory;
         for slot in 23..39u8 {
             if !inv.iter().any(|row| row.bag == 0 && row.slot == slot) {
                 return Some((0, u32::from(slot)));
@@ -8654,58 +9803,100 @@ impl World {
         None
     }
 
-    /// DB-row item grant + in-memory baseline
-    /// append (quest src/reward items; petition
-    /// precedent — the live `SendNewItem` push
-    /// joins with Slice 3's item runtime).
+    /// DB-row item grant for quest src/reward
+    /// items: the DB write is immediate
+    /// (`create_reward_item`), so the live rows and
+    /// the save baseline move together and the
+    /// client gets its `SendNewItem` push (a
+    /// baseline-only append left the item invisible
+    /// in-world, and the next save diff then deleted
+    /// its DB rows).
     fn quest_grant_item(&mut self, actor_low: u32, item_id: u32, count: u32) -> bool {
         let Some((bag, slot)) = self.quest_free_slot(actor_low) else {
             return false;
         };
+        let durability = self
+            .deps
+            .world_stores
+            .item_prototypes
+            .get(item_id)
+            .map_or(0, |proto| proto.max_durability);
         let item_guid = match self
             .deps
             .quest_reward
-            .create_reward_item(actor_low, item_id, count, bag, slot, 0)
+            .create_reward_item(actor_low, item_id, count, bag, slot, 0, durability)
         {
-            Ok(guid) => guid,
+            Ok(guid) => {
+                self.deps.world_stores.observe_item_guid(guid);
+                guid
+            }
             Err(e) => {
                 self.log
                     .out(Level::Error, &format!("quest item grant failed: {e}"));
                 return false;
             }
         };
-        let Some(player) = self
+        let row = mangos_db::character_load::InventoryRow {
+            item: mangos_db::character_load::ItemInstanceRow {
+                creator_guid: 0,
+                gift_creator_guid: 0,
+                count,
+                duration: 0,
+                charges: "0 0 0 0 0 ".to_string(),
+                flags: 0,
+                enchantments: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0".to_string(),
+                random_property_id: 0,
+                #[allow(clippy::cast_possible_truncation)]
+                durability: durability as u16,
+                text: 0,
+                item_guid,
+                item_id,
+                generated_loot: 0,
+            },
+            bag,
+            #[allow(clippy::cast_possible_truncation)]
+            slot: slot as u8,
+        };
+        let bag_slot = {
+            let Some(player) = self
+                .player_map
+                .get(&actor_low)
+                .copied()
+                .and_then(|map_id| self.maps.get_mut(&map_id))
+                .and_then(|map| map.player_mut(player_guid(actor_low)))
+            else {
+                return false;
+            };
+            // Bag-slot byte for `SendNewItem`
+            // (255 = backpack).
+            let bag_slot = if bag == 0 {
+                255
+            } else {
+                player
+                    .deferred
+                    .inventory
+                    .iter()
+                    .find(|r| r.item.item_guid == bag)
+                    .map_or(255, |r| r.slot)
+            };
+            player.deferred.inventory.push(row.clone());
+            player.saved.inventory.push(row);
+            bag_slot
+        };
+        if let Some(session_id) = self.player_session.get(&actor_low).copied() {
+            self.reply_packet(
+                session_id,
+                new_item_packet(player_guid(actor_low), bag_slot, slot, item_id, count),
+            );
+        }
+        if let Some(map) = self
             .player_map
             .get(&actor_low)
             .copied()
             .and_then(|map_id| self.maps.get_mut(&map_id))
-            .and_then(|map| map.player_mut(player_guid(actor_low)))
-        else {
-            return false;
-        };
-        player
-            .saved
-            .inventory
-            .push(mangos_db::character_load::InventoryRow {
-                item: mangos_db::character_load::ItemInstanceRow {
-                    creator_guid: 0,
-                    gift_creator_guid: 0,
-                    count,
-                    duration: 0,
-                    charges: "0 0 0 0 0 ".to_string(),
-                    flags: 0,
-                    enchantments: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0".to_string(),
-                    random_property_id: 0,
-                    durability: 0,
-                    text: 0,
-                    item_guid,
-                    item_id,
-                    generated_loot: 0,
-                },
-                bag,
-                #[allow(clippy::cast_possible_truncation)]
-                slot: slot as u8,
-            });
+        {
+            map.item_added_quest_check(player_guid(actor_low), item_id, count);
+        }
         true
     }
 
@@ -8743,7 +9934,7 @@ impl World {
             else {
                 return;
             };
-            player.saved.inventory.clone()
+            player.deferred.inventory.clone()
         };
         let plan = plan_store_new_item(&snapshot, proto, count, prototypes);
         if plan.is_empty() {
@@ -8794,8 +9985,12 @@ impl World {
                         bag,
                         slot,
                         creator_low,
+                        proto.max_durability,
                     ) {
-                        Ok(guid) => guid,
+                        Ok(guid) => {
+                            self.deps.world_stores.observe_item_guid(guid);
+                            guid
+                        }
                         Err(e) => {
                             self.log
                                 .out(Level::Error, &format!("created item grant failed: {e}"));
@@ -8815,7 +10010,8 @@ impl World {
                             flags: 0,
                             enchantments: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0".to_string(),
                             random_property_id: 0,
-                            durability: 0,
+                            #[allow(clippy::cast_possible_truncation)]
+                            durability: proto.max_durability as u16,
                             text: 0,
                             item_guid,
                             item_id,
@@ -8839,16 +10035,18 @@ impl World {
             .and_then(|map_id| self.maps.get_mut(&map_id))
             .and_then(|map| map.player_mut(player_guid(actor_low)))
         {
+            // Grant writes are DB-immediate
+            // (`create_reward_item`/`set_item_count`),
+            // so live rows and the save baseline move
+            // together (no save-diff churn).
             for (item_guid, new_count) in merges {
-                if let Some(row) = player
-                    .saved
-                    .inventory
-                    .iter_mut()
-                    .find(|row| row.item.item_guid == item_guid)
-                {
-                    row.item.count = new_count;
+                for rows in [&mut player.deferred.inventory, &mut player.saved.inventory] {
+                    if let Some(row) = rows.iter_mut().find(|row| row.item.item_guid == item_guid) {
+                        row.item.count = new_count;
+                    }
                 }
             }
+            player.deferred.inventory.extend(new_rows.iter().cloned());
             player.saved.inventory.extend(new_rows);
         }
         // The fork writes the real slot only when the
@@ -8871,6 +10069,14 @@ impl World {
                     granted,
                 ),
             );
+        }
+        if let Some(map) = self
+            .player_map
+            .get(&actor_low)
+            .copied()
+            .and_then(|map_id| self.maps.get_mut(&map_id))
+        {
+            map.item_added_quest_check(player_guid(actor_low), item_id, granted);
         }
     }
 
@@ -8922,15 +10128,14 @@ impl World {
             .and_then(|map| map.player_mut(player_guid(actor_low)))
         {
             for (item_guid, new_count) in &plan {
-                if let Some(inv) = player
-                    .saved
-                    .inventory
-                    .iter_mut()
-                    .find(|inv| inv.item.item_guid == *item_guid)
-                {
-                    inv.item.count = *new_count;
+                for rows in [&mut player.deferred.inventory, &mut player.saved.inventory] {
+                    if let Some(inv) = rows.iter_mut().find(|inv| inv.item.item_guid == *item_guid)
+                    {
+                        inv.item.count = *new_count;
+                    }
                 }
             }
+            player.deferred.inventory.retain(|inv| inv.item.count != 0);
             player.saved.inventory.retain(|inv| inv.item.count != 0);
         }
     }
@@ -9081,6 +10286,15 @@ impl World {
             return;
         };
         if !quest_rel_starts(&stores.quest_relations, entry, is_go).contains(&quest_id) {
+            return;
+        }
+        // Event quests leave the relation set while
+        // their event is inactive (B0-8; fork
+        // `UpdateEventQuests`).
+        if !stores
+            .game_events
+            .quest_takeable(quest_id, &self.game_events_active)
+        {
             return;
         }
         let mut reason = 0u32;
@@ -11216,6 +12430,7 @@ impl World {
                 character_max_level: 0,
                 in_queue: false,
                 player_loading: true,
+                loading_guid: Some(guid_low),
                 player_guid: None,
                 played_last_tick: Instant::now(),
                 played_level: 0,
@@ -14240,6 +15455,9 @@ impl World {
         if !language_allowed(request.lang, request.msg_type) {
             return;
         }
+        if request.lang == language::ADDON && !self.config.addon_channel {
+            return;
+        }
         // Addon-language traffic: channels (B.2b), group
         // types (B.3), and guild types (B.4) carry it.
         if request.lang == language::ADDON
@@ -15257,6 +16475,86 @@ impl World {
         );
     }
 
+    /// `HandleNpcTextQueryOpcode` (`QueryHandler.cpp:346`):
+    /// the client asks for an uncached gossip text while the
+    /// gossip menu that referenced it is pending, and fires
+    /// `GOSSIP_SHOW` only once this update arrives. The fork
+    /// reads (and ignores) the npc guid after the text id.
+    fn on_npc_text_query(&mut self, id: SessionId, packet: &WorldPacket) {
+        let mut reader = packet.reader();
+        let parsed = reader
+            .read_u32_le()
+            .and_then(|text_id| reader.read_u64_le().map(|guid| (text_id, guid)));
+        let Ok((text_id, _raw_guid)) = parsed else {
+            self.bad_packet(id, opcode_id::CMSG_NPC_TEXT_QUERY);
+            return;
+        };
+        let stores = &self.deps.world_stores.scripts;
+        self.reply_packet(
+            id,
+            build_npc_text_update(
+                text_id,
+                stores.npc_texts.get(&text_id),
+                &stores.broadcast_texts,
+            ),
+        );
+    }
+
+    /// `HandleCorpseQueryOpcode` (`QueryHandler.cpp:298`):
+    /// the player's resurrectable corpse on any loaded
+    /// map, displayed at the dungeon ghost entrance
+    /// when the corpse lies in a dungeon on another
+    /// map. The fork loads the entrance terrain on
+    /// demand for the height; here the entrance arm
+    /// only fires when that map is already loaded
+    /// (otherwise the corpse position answers, as
+    /// when the fork's terrain load fails).
+    fn on_corpse_query(&mut self, id: SessionId) {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        let mut found: Option<(u32, mangos_movement::movement_info::Position)> = None;
+        let keys: Vec<MapKey> = self.maps.keys().copied().collect();
+        for key in keys {
+            let hit = self
+                .maps
+                .get_mut(&key)
+                .and_then(|map| map.corpse_location_for(guid));
+            if let Some((pos, _zone, _area)) = hit {
+                found = Some((key.map_id, pos));
+                break;
+            }
+        }
+        let hit = found.map(|(corpse_map, pos)| {
+            #[allow(clippy::cast_possible_wrap)]
+            let (mut display_map, mut x, mut y, mut z) = (corpse_map as i32, pos.x, pos.y, pos.z);
+            if corpse_map != map_key.map_id
+                && let Some(entry) = self.deps.world_stores.maps.get(corpse_map)
+                && entry.is_dungeon()
+                && entry.ghost_entrance_map >= 0
+            {
+                #[allow(clippy::cast_sign_loss)]
+                let entrance_map = entry.ghost_entrance_map as u32;
+                let (ex, ey) = (entry.ghost_entrance_x, entry.ghost_entrance_y);
+                if let Some(key) = self
+                    .maps
+                    .keys()
+                    .copied()
+                    .find(|key| key.map_id == entrance_map)
+                    && let Some(map) = self.maps.get_mut(&key)
+                {
+                    // Fork `GetHeightStatic(x, y, MAX_HEIGHT)`.
+                    z = map.ground_z(ex, ey, 10_000.0);
+                    display_map = entry.ghost_entrance_map;
+                    x = ex;
+                    y = ey;
+                }
+            }
+            (display_map, x, y, z, corpse_map)
+        });
+        self.reply_packet(id, build_corpse_query_response(hit));
+    }
+
     fn live_name_query_row(&self, guid: ObjectGuid) -> Option<NameQueryRow> {
         if !guid.is_player() {
             return None;
@@ -15358,6 +16656,7 @@ impl World {
                 true
             } else {
                 entry.player_loading = true;
+                entry.loading_guid = Some(guid.counter());
                 false
             }
         };
@@ -15401,6 +16700,7 @@ impl World {
             return; // stale callback (C++ asserts this cannot happen)
         }
         entry.player_loading = false;
+        entry.loading_guid = None;
 
         // Bot sessions carry synthetic account ids
         // (fork `GenBotAccountId`); their login holder
@@ -15630,10 +16930,172 @@ impl World {
         );
     }
 
+    /// `Player::AddStartingItems` (`Player.cpp:529`,
+    /// called from `LoadFromDB` when the inventory load
+    /// came back empty on a never-played character):
+    /// store each `playercreateinfo_item` in its best
+    /// slot — equipment/bag slot first, then backpack
+    /// stacks. Rows are created in the DB now (fork
+    /// `StoreNewItem` + next save) and pushed into the
+    /// load so materialization sees them. Subsets: no
+    /// `CanEquipNewItem` proficiency recheck (create
+    /// rows are equippable by construction) and no
+    /// second equip pass; ammo id rides the character
+    /// row written at create.
+    /// One starting-item DB row + load append (the
+    /// `StoreNewItem` write inside `AddStartingItems`).
+    #[allow(clippy::too_many_arguments)]
+    fn create_starting_row(
+        &self,
+        load: &mut CharacterLoad,
+        owner: u32,
+        item_id: u32,
+        max_durability: u32,
+        bag: u32,
+        slot: u32,
+        count: u32,
+    ) -> bool {
+        match self.deps.quest_reward.create_reward_item(
+            owner,
+            item_id,
+            count,
+            bag,
+            slot,
+            0,
+            max_durability,
+        ) {
+            Ok(item_guid) => {
+                self.deps.world_stores.observe_item_guid(item_guid);
+                load.inventory
+                    .push(mangos_db::character_load::InventoryRow {
+                        item: mangos_db::character_load::ItemInstanceRow {
+                            creator_guid: 0,
+                            gift_creator_guid: 0,
+                            count,
+                            duration: 0,
+                            charges: "0 0 0 0 0 ".to_string(),
+                            flags: 0,
+                            enchantments: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0".to_string(),
+                            random_property_id: 0,
+                            #[allow(clippy::cast_possible_truncation)]
+                            durability: max_durability as u16,
+                            text: 0,
+                            item_guid,
+                            item_id,
+                            generated_loot: 0,
+                        },
+                        bag,
+                        #[allow(clippy::cast_possible_truncation)]
+                        slot: slot as u8,
+                    });
+                true
+            }
+            Err(e) => {
+                self.log.out(
+                    Level::Error,
+                    &format!("starting item grant failed for guid {owner}: {e}"),
+                );
+                false
+            }
+        }
+    }
+
+    fn grant_starting_items(&self, load: &mut CharacterLoad) {
+        let race = u32::from(load.row.race);
+        let class = u32::from(load.row.class);
+        let owner = load.row.guid;
+        let infos = &self.deps.world_stores.player_infos;
+        let prototypes = &self.deps.world_stores.item_prototypes;
+        let can_dual_wield = infos.default_spells(race, class).contains(&674);
+        let items: Vec<_> = infos.create_items(race, class).to_vec();
+        for item in items {
+            let Some(proto) = prototypes.get(item.item_id) else {
+                continue;
+            };
+            // Best-slot equip for unstackables; bags and
+            // quivers (no fork equip-slot arm) take the
+            // bag slots 19..22 by container capacity.
+            let mut placed = false;
+            if proto.stackable <= 1 {
+                let mut candidates: Vec<u8> =
+                    mangos_world_data::item_prototype::allowed_equip_slots(
+                        proto,
+                        class,
+                        can_dual_wield,
+                    )
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                if candidates.is_empty() && proto.container_slots > 0 {
+                    candidates = vec![19, 20, 21, 22];
+                }
+                for slot in candidates {
+                    if !load
+                        .inventory
+                        .iter()
+                        .any(|row| row.bag == 0 && row.slot == slot)
+                    {
+                        placed = self.create_starting_row(
+                            load,
+                            owner,
+                            item.item_id,
+                            proto.max_durability,
+                            0,
+                            u32::from(slot),
+                            item.amount.max(1),
+                        );
+                        break;
+                    }
+                }
+            }
+            if placed {
+                continue;
+            }
+            for dest in plan_store_new_item(&load.inventory, proto, item.amount, prototypes) {
+                match dest {
+                    StoreDest::Merge {
+                        item_guid,
+                        new_count,
+                        ..
+                    } => {
+                        if self
+                            .deps
+                            .quest_reward
+                            .set_item_count(item_guid, new_count)
+                            .is_ok()
+                            && let Some(row) = load
+                                .inventory
+                                .iter_mut()
+                                .find(|row| row.item.item_guid == item_guid)
+                        {
+                            row.item.count = new_count;
+                        }
+                    }
+                    StoreDest::New { bag, slot, count } => {
+                        self.create_starting_row(
+                            load,
+                            owner,
+                            item.item_id,
+                            proto.max_durability,
+                            bag,
+                            slot,
+                            count,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// `Player::LoadFromDB` aggregate construction with the
     /// boot-resolved DBC inputs.
     #[allow(clippy::approx_constant)] // fork Naxxramas exit orientation literal
     fn materialize_player(&self, mut load: CharacterLoad) -> Result<Player, MaterializeError> {
+        // `LoadFromDB`: first-ever login with an empty
+        // inventory load seeds the starting items.
+        if load.row.played_time_total == 0 && load.inventory.is_empty() {
+            self.grant_starting_items(&mut load);
+        }
         // Fork `_LoadFromDB` instance branch: an unbound
         // in-dungeon save relocates to the go-back
         // trigger destination (homebind below only when
@@ -15734,6 +17196,8 @@ impl World {
             skills: Some(&self.deps.world_stores.skills),
             item_prototypes: Some(&self.deps.world_stores.item_prototypes),
             quest_templates: Some(&self.deps.world_stores.quest_templates),
+            taxi: Some(&self.deps.world_stores.taxi),
+            rest_rates: self.config.rest_rates,
         };
         Player::materialize(load, &inputs)
     }
@@ -16004,6 +17468,7 @@ impl World {
                 key: dest_key,
                 granted,
                 cast_deserter,
+                taxi_resume_node: None,
             },
         );
         if self.bot_sessions.contains_key(&id) {
@@ -16075,7 +17540,15 @@ impl World {
         };
         let guid_low = pending.player.unit.guid().counter();
         let cast_deserter = pending.cast_deserter;
+        let taxi_resume_node = pending.taxi_resume_node;
+        let dest_key = pending.key;
         self.add_player_to_map(id, pending.player, pending.key, false);
+        if let Some(resume_node) = taxi_resume_node
+            && let Some(map) = self.maps.get_mut(&dest_key)
+        {
+            // Fork worldport-ACK flight reset.
+            map.taxi_resume_after_teleport(player_guid(guid_low), resume_node);
+        }
         if cast_deserter {
             self.bg_cast_deserter(guid_low);
         }
@@ -16090,6 +17563,12 @@ impl World {
     }
 
     fn enter_map(&mut self, session: SessionId, mut player: Player) {
+        // `AllFlightPaths`: fork login calls
+        // `SetTaxiCheater(true)`, setting
+        // `PLAYER_EXTRA_TAXICHEAT` (0x0008).
+        if self.config.all_flight_paths {
+            player.extra_flags |= 0x0008;
+        }
         // BG login relocation (`TeleportToBGEntryPoint`
         // when the saved battleground is gone).
         self.bg_relocate_login(&mut player);
@@ -16242,6 +17721,10 @@ impl World {
             return false;
         };
         let guid = player_guid(guid_low);
+        // `m_honorMgr.Update()` at `SaveToDB`.
+        if let Some(map) = self.maps.get_mut(&map_key) {
+            map.honor_refresh_player(guid);
+        }
         let now_unix = unix_now();
         let can_speak = self
             .sessions
@@ -16408,6 +17891,164 @@ impl World {
         true
     }
 
+    /// `HonorMaintenancer::CheckMaintenanceDay`
+    /// (`HonorMgr.cpp:551`): on reaching the next
+    /// maintenance day, set the marker (the
+    /// recompute itself runs at next boot, as in
+    /// the fork). Gated to a minute cadence.
+    ///
+    /// UNMODELED: `AutoHonorRestart` shutdown
+    /// scheduling (`ShutdownServ` has no Rust
+    /// counterpart yet); the marker + log are the
+    /// operator signal.
+    fn check_honor_maintenance_day(&mut self) {
+        if self.honor_marker_set {
+            return;
+        }
+        let now = Instant::now();
+        if self
+            .honor_last_check
+            .is_some_and(|t| now.duration_since(t) < Duration::from_secs(60))
+        {
+            return;
+        }
+        self.honor_last_check = Some(now);
+        let day = mangos_db::honor::game_day(
+            unix_now(),
+            i64::from(self.config.time_zone_offset_hours) * 3600,
+        );
+        if day < self.honor_next_day {
+            return;
+        }
+        match self.deps.honor_marker.set_honor_maintenance_marker(true) {
+            Ok(()) => {
+                self.honor_marker_set = true;
+                self.log.out(
+                    Level::Basic,
+                    "[MAINTENANCE] Honor maintenance needed: marker set,                      maintenance will run at next restart.",
+                );
+                if self.config.auto_honor_restart {
+                    self.log.out(
+                        Level::Basic,
+                        "[MAINTENANCE] AutoHonorRestart is on; automatic                          restart scheduling is not modeled — restart the                          server to run honor maintenance.",
+                    );
+                }
+            }
+            Err(e) => self.log.out(
+                Level::Error,
+                &format!("[MAINTENANCE] failed to set honor marker: {e}"),
+            ),
+        }
+    }
+
+    /// `GameEventMgr::Update` driver (B0-8): first
+    /// call is `Initialize` (the shutdown set was
+    /// read and the table truncated at boot);
+    /// afterwards the fork's own next-check delay
+    /// schedules re-evaluation. Schedule events
+    /// only — hardcoded `WorldEvent` content is
+    /// UNMODELED (see TIER4-PROGRESS B0-8), and
+    /// `SendEventMails` is unmodeled (the
+    /// `game_event_mail` table is empty in the
+    /// world-content database this server runs).
+    fn check_game_events(&mut self) {
+        if self.game_events_initialized
+            && self
+                .game_events_next_check
+                .is_some_and(|next| Instant::now() < next)
+        {
+            return;
+        }
+        self.update_game_events();
+    }
+
+    fn update_game_events(&mut self) {
+        use mangos_world_data::game_events::{is_event_active_at, next_check_delay};
+        let now_unix = unix_now();
+        let events = &self.deps.world_stores.game_events;
+        let mut now_active: HashSet<u16> = HashSet::new();
+        for (id, data) in events.entries() {
+            if data.disabled || data.hardcoded {
+                continue;
+            }
+            if is_event_active_at(data, now_unix) {
+                now_active.insert(id);
+            }
+        }
+        let delay = next_check_delay(events, now_unix);
+        self.game_events_next_check = Some(Instant::now() + Duration::from_secs(delay + 1));
+        self.log.out(
+            Level::Basic,
+            &format!("Next game event check in {} seconds.", delay + 1),
+        );
+        let started: Vec<u16> = now_active
+            .difference(&self.game_events_active)
+            .copied()
+            .collect();
+        let ended: Vec<u16> = self
+            .game_events_active
+            .difference(&now_active)
+            .copied()
+            .collect();
+        self.game_events_initialized = true;
+        if started.is_empty() && ended.is_empty() {
+            return;
+        }
+        let describe = |ids: &[u16]| -> Vec<(u16, String)> {
+            ids.iter()
+                .map(|id| {
+                    (
+                        *id,
+                        events
+                            .get(*id)
+                            .map(|d| d.description.clone())
+                            .unwrap_or_default(),
+                    )
+                })
+                .collect()
+        };
+        let started = describe(&started);
+        let ended = describe(&ended);
+        self.game_events_active = now_active;
+        for (id, description) in &started {
+            if let Err(e) = self.deps.game_event_status.game_event_started(*id) {
+                self.log.out(
+                    Level::Error,
+                    &format!("game_event_status insert for {id} failed: {e}"),
+                );
+            }
+            // `resume` (was active at shutdown) only
+            // suppresses event mails in the fork;
+            // mails are unmodeled (empty table).
+            let _resume = self.game_events_shutdown.contains(id);
+            if self.config.event_announce {
+                if let Some(text) = self.bg_format_lang(4, &[description]) {
+                    self.bg_send_world_text(&text);
+                }
+            }
+            self.log.out(
+                Level::Basic,
+                &format!("GameEvent {id} \"{description}\" started."),
+            );
+        }
+        for (id, description) in &ended {
+            if let Err(e) = self.deps.game_event_status.game_event_ended(*id) {
+                self.log.out(
+                    Level::Error,
+                    &format!("game_event_status delete for {id} failed: {e}"),
+                );
+            }
+            self.log.out(
+                Level::Basic,
+                &format!("GameEvent {id} \"{description}\" removed."),
+            );
+        }
+        let active = self.game_events_active.clone();
+        for map in self.maps.values_mut() {
+            map.set_active_game_events(active.clone(), &self.deps.respawn_times);
+        }
+    }
+
     fn update_player_saves(&mut self) {
         let now = Instant::now();
         let players: Vec<(SessionId, u32, bool)> = self
@@ -16449,25 +18090,41 @@ impl World {
         }
     }
 
-    /// Shared map-entry body (login + teleport finish).
-    fn add_player_to_map(
-        &mut self,
-        session: SessionId,
-        player: Player,
-        map_key: MapKey,
-        apply_auras: bool,
-    ) {
-        let map_id = map_key.map_id;
-        let guid_low = player.unit.guid().counter();
-        let player_level = player.unit.level();
-        let initial_player_save = self.initial_player_save_instant(guid_low);
-        let now_ms = self.server_ms();
-        let now_unix = unix_now();
-        let maps_dir = self.deps.maps_dir.clone();
-        let navmesh_dir = self.deps.mmaps_dir.clone();
-        let vmaps_dir = self.deps.vmaps_dir.clone();
-        let (vmap_los, vmap_height) = (self.config.vmap_enable_los, self.config.vmap_enable_height);
-        let map_config = MapConfig {
+    /// World-map `MapConfig` from the server
+    /// config (visibility by map kind, fork
+    /// `Map::GetVisibilityDistance`).
+    fn world_map_config(&self, map_key: MapKey) -> MapConfig {
+        // Visibility by map kind (fork
+        // `Map::GetVisibilityDistance`): instanced
+        // maps use the instance distance.
+        let visibility = if map_key.instance_id != 0 {
+            self.config.visibility_instances
+        } else {
+            self.config.visibility_continents
+        };
+        MapConfig {
+            visibility_distance: visibility,
+            grid_activation_distance: visibility,
+            grey_unit: self.config.visibility_grey_unit,
+            grey_object: self.config.visibility_grey_object,
+            relocation_lower_limit_sq: self.config.visibility_relocation_lower_limit
+                * self.config.visibility_relocation_lower_limit,
+            force_active_objects: self.config.visibility_force_active_objects,
+            creature_rates: self.config.creature_rates,
+            loot_rates: self.config.loot_rates,
+            corpse_decay_looted_rate: self.config.rate_corpse_decay_looted,
+            max_group_xp_distance: self.config.max_group_xp_distance,
+            show_health_values: self.config.show_health_values,
+            send_loot_roll_upon_reconnect: self.config.send_loot_roll_upon_reconnect,
+            regen_rates: mangos_map::map::RegenRates {
+                health: self.config.rate_health,
+                mana: self.config.rate_mana,
+                rage_loss: self.config.rate_rage_loss,
+                rage_income: self.config.rate_rage_income,
+                energy: self.config.rate_energy,
+            },
+            rest_rates: self.config.rest_rates,
+            aggro_rate: self.config.rate_creature_aggro,
             // `IsPvPRealm()`: REALM_TYPE_PVP (1), RPPVP (8), FFA_PVP (16).
             pvp_realm: matches!(self.config.game_type, 1 | 8 | 16),
             xp_rates: mangos_map::map::XpRates {
@@ -16479,9 +18136,93 @@ impl World {
             activate_weather: self.config.activate_weather,
             change_weather_interval_ms: self.config.change_weather_interval_ms,
             proc_delay_ms: self.config.spell_proc_delay_ms,
+            death_sickness_level: self.config.death_sickness_level,
+            respec: self.config.respec,
+            corpse_reclaim_delay_pvp: self.config.corpse_reclaim_delay_pvp,
+            corpse_reclaim_delay_pve: self.config.corpse_reclaim_delay_pve,
+            death_bones_world: self.config.death_bones_world,
+            death_bones_bg: self.config.death_bones_bg,
+            wow_patch: self.config.wow_patch,
+            accurate_pvp_timeline: self.config.pvp_accurate_timeline,
+            accurate_pvp_rewards: self.config.pvp_accurate_rewards,
+            enable_dk: self.config.pvp_dishonorable_kills,
+            time_zone_offset_secs: i64::from(self.config.time_zone_offset_hours) * 3600,
+            honor_week_begin_day: self.honor_week_begin,
             ..MapConfig::default()
+        }
+    }
+
+    /// `Player::LoadCorpse` at fresh login: convert a
+    /// live player's leftover resurrectable corpse, or
+    /// finish a dead login against the global corpse
+    /// state (seeded maps plus not-yet-seeded rows).
+    fn load_corpse_on_login(&mut self, guid_low: u32, current_key: MapKey) {
+        let guid = player_guid(guid_low);
+        let Some(is_alive) = self
+            .maps
+            .get(&current_key)
+            .and_then(|map| map.player(guid))
+            .map(|player| player.unit.is_alive())
+        else {
+            return;
         };
-        let map = self.maps.entry(map_key).or_insert_with(|| {
+        let existing_key = self
+            .maps
+            .iter()
+            .find(|(_, map)| map.corpse_for_player(guid).is_some())
+            .map(|(key, _)| *key);
+        if is_alive {
+            if let Some(key) = existing_key {
+                if let Some(map) = self.maps.get_mut(&key) {
+                    map.spawn_corpse_bones_for(guid);
+                }
+            } else {
+                let before = self.pending_corpses.len();
+                self.pending_corpses
+                    .retain(|loaded| loaded.row.player_guid != guid_low);
+                if self.pending_corpses.len() != before
+                    && let Err(e) = self.deps.char_queries.delete_corpse(guid_low)
+                {
+                    self.log
+                        .out(Level::Error, &format!("login corpse delete failed: {e}"));
+                }
+            }
+            return;
+        }
+        let pending_map_id = self.pending_corpses.iter().find_map(|loaded| {
+            (loaded.row.player_guid == guid_low && loaded.row.corpse_type != 0)
+                .then_some(loaded.row.map)
+        });
+        let corpse_map_id = existing_key.map(|key| key.map_id).or(pending_map_id);
+        if let Some(map) = self.maps.get_mut(&current_key) {
+            map.finish_dead_login(guid, corpse_map_id);
+        }
+    }
+
+    /// Shared map-entry body (login + teleport finish).
+    fn add_player_to_map(
+        &mut self,
+        session: SessionId,
+        player: Player,
+        map_key: MapKey,
+        apply_auras: bool,
+    ) {
+        let map_id = map_key.map_id;
+        let guid_low = player.unit.guid().counter();
+        let player_level = player.unit.level();
+        let reset_talents_on_login = player.character_flags
+            & mangos_map::talents::CHARACTER_FLAG_RESET_TALENTS_ON_LOGIN
+            != 0;
+        let initial_player_save = self.initial_player_save_instant(guid_low);
+        let now_ms = self.server_ms();
+        let now_unix = unix_now();
+        let maps_dir = self.deps.maps_dir.clone();
+        let navmesh_dir = self.deps.mmaps_dir.clone();
+        let vmaps_dir = self.deps.vmaps_dir.clone();
+        let (vmap_los, vmap_height) = (self.config.vmap_enable_los, self.config.vmap_enable_height);
+        let map_config = self.world_map_config(map_key);
+
+        if !self.maps.contains_key(&map_key) {
             let mut map = Map::new(
                 map_id,
                 map_key.instance_id,
@@ -16492,8 +18233,12 @@ impl World {
             map.set_maps_dir(maps_dir);
             map.set_mmaps_dir(navmesh_dir);
             map.set_vmaps_dir(vmaps_dir, vmap_los, vmap_height);
-            map
-        });
+            // Install the current event set (B0-8).
+            map.set_active_game_events(self.game_events_active.clone(), &RespawnTimes::default());
+            self.maps.insert(map_key, map);
+        }
+        self.seed_map_corpses(map_key);
+        let map = self.maps.get_mut(&map_key).expect("map just ensured");
         // Loaded cooldowns seed after saved auras
         // (fork `_LoadSpellCooldowns` order: some
         // cooldowns may already be set at aura load).
@@ -16517,6 +18262,18 @@ impl World {
             Vec::new()
         };
         map.add_player(player, &self.deps.respawn_times, now_unix, now_ms);
+        if apply_auras {
+            // `InitTalentForLevel` (load-time recount +
+            // free-point refresh; Tier 4 step 4g).
+            map.init_talent_for_level(player_guid(guid_low));
+            // `Player::ContinueTaxiFlight` (fresh
+            // login only; teleport re-entry resumes
+            // through the worldport-ack taxi reset).
+            map.continue_taxi_flight(player_guid(guid_low));
+            if reset_talents_on_login {
+                map.reset_talents(player_guid(guid_low), true);
+            }
+        }
         // `Player::LoadPet` (current pet) once the
         // player is in the map; far-teleport re-entry
         // reloads from the rows the old map's unsummon
@@ -16529,6 +18286,9 @@ impl World {
             let player_guid = ObjectGuid::with_entry(mangos_guid::HighGuid::PLAYER, 0, guid_low);
             map.apply_saved_auras(player_guid);
             map.seed_cooldowns(player_guid, &loaded_cooldowns);
+        }
+        if apply_auras {
+            self.load_corpse_on_login(guid_low, map_key);
         }
         self.player_map.insert(guid_low, map_key);
         self.player_session.insert(guid_low, session);
@@ -16735,6 +18495,30 @@ impl World {
                         self.log.out(Level::Error, &format!("pet save failed: {e}"));
                     }
                 }
+                MapEvent::CorpseSave(row) => {
+                    let row = mangos_db::corpse::CorpseRow {
+                        guid: row.guid,
+                        player_guid: row.player_guid,
+                        position_x: row.position_x,
+                        position_y: row.position_y,
+                        position_z: row.position_z,
+                        orientation: row.orientation,
+                        map: row.map,
+                        time: row.time,
+                        corpse_type: row.corpse_type,
+                        instance: row.instance,
+                    };
+                    if let Err(e) = self.deps.char_queries.save_corpse(&row) {
+                        self.log
+                            .out(Level::Error, &format!("corpse save failed: {e}"));
+                    }
+                }
+                MapEvent::CorpseDelete { player_low } => {
+                    if let Err(e) = self.deps.char_queries.delete_corpse(player_low) {
+                        self.log
+                            .out(Level::Error, &format!("corpse delete failed: {e}"));
+                    }
+                }
                 MapEvent::DeletePet { pet_id } => {
                     if let Err(e) = self.deps.pets.delete_pet(pet_id) {
                         self.log
@@ -16771,6 +18555,16 @@ impl World {
                 } => {
                     if let Some(id) = self.player_session.get(&player.counter()).copied() {
                         self.teleport_player(id, map_id, position);
+                    }
+                }
+                MapEvent::TaxiResume {
+                    player,
+                    resume_node,
+                } => {
+                    if let Some(id) = self.player_session.get(&player.counter()).copied()
+                        && let Some(pending) = self.pending_teleports.get_mut(&id)
+                    {
+                        pending.taxi_resume_node = Some(resume_node);
                     }
                 }
                 MapEvent::KnockBack {
@@ -16981,7 +18775,7 @@ impl World {
             else {
                 return;
             };
-            let inv = &player.saved.inventory;
+            let inv = &player.deferred.inventory;
             let row = if bag_index == 255 {
                 inv.iter().find(|r| r.bag == 0 && r.slot == slot)
             } else {
@@ -17419,6 +19213,538 @@ impl World {
         self.drain_map_events();
     }
 
+    /// Inventory slot packets (`ItemHandler.cpp`
+    /// arms; all work map-local in
+    /// `mangos_map::inventory`).
+    fn on_item_packet(&mut self, id: SessionId, packet: &WorldPacket) {
+        use mangos_map::inventory::InvPos;
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        let mut reader = packet.reader();
+        let read_u8 = |reader: &mut mangos_protocol::buffer::PacketReader<'_>| reader.read_u8();
+        match packet.opcode() {
+            opcode_id::CMSG_SWAP_INV_ITEM => {
+                let (Ok(src_slot), Ok(dst_slot)) = (read_u8(&mut reader), read_u8(&mut reader))
+                else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.swap_inv_item(guid, src_slot, dst_slot);
+                }
+            }
+            opcode_id::CMSG_SWAP_ITEM => {
+                let (Ok(dst_bag), Ok(dst_slot), Ok(src_bag), Ok(src_slot)) = (
+                    read_u8(&mut reader),
+                    read_u8(&mut reader),
+                    read_u8(&mut reader),
+                    read_u8(&mut reader),
+                ) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.swap_item_packet(
+                        guid,
+                        InvPos::new(src_bag, src_slot),
+                        InvPos::new(dst_bag, dst_slot),
+                    );
+                }
+            }
+            opcode_id::CMSG_AUTOEQUIP_ITEM => {
+                let (Ok(src_bag), Ok(src_slot)) = (read_u8(&mut reader), read_u8(&mut reader))
+                else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.auto_equip_item(guid, InvPos::new(src_bag, src_slot));
+                }
+            }
+            opcode_id::CMSG_AUTOEQUIP_ITEM_SLOT => {
+                let (Ok(raw), Ok(dst_slot)) = (reader.read_u64_le(), read_u8(&mut reader)) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.auto_equip_item_slot(guid, ObjectGuid::from_raw(raw), dst_slot);
+                }
+            }
+            opcode_id::CMSG_SPLIT_ITEM => {
+                let (Ok(src_bag), Ok(src_slot), Ok(dst_bag), Ok(dst_slot), Ok(count)) = (
+                    read_u8(&mut reader),
+                    read_u8(&mut reader),
+                    read_u8(&mut reader),
+                    read_u8(&mut reader),
+                    read_u8(&mut reader),
+                ) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.split_item(
+                        guid,
+                        InvPos::new(src_bag, src_slot),
+                        InvPos::new(dst_bag, dst_slot),
+                        count,
+                    );
+                }
+            }
+            opcode_id::CMSG_DESTROYITEM => {
+                let (Ok(bag), Ok(slot), Ok(count)) = (
+                    read_u8(&mut reader),
+                    read_u8(&mut reader),
+                    read_u8(&mut reader),
+                ) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                // data1..3 ignored (fork discards).
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.destroy_item(guid, InvPos::new(bag, slot), count);
+                }
+            }
+            _ => return,
+        }
+        self.drain_map_events();
+    }
+
+    /// Loot packets (`LootHandler.cpp` creature arms;
+    /// all work map-local in `mangos_map::loot`).
+    fn on_loot_packet(&mut self, id: SessionId, packet: &WorldPacket) {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        let mut reader = packet.reader();
+        let guid_of = ObjectGuid::from_raw;
+        match packet.opcode() {
+            opcode_id::CMSG_LOOT => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.handle_loot(guid, guid_of(raw));
+                }
+            }
+            opcode_id::CMSG_LOOT_RELEASE => {
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.handle_loot_release(guid);
+                }
+            }
+            opcode_id::CMSG_LOOT_MONEY => {
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.handle_loot_money(guid);
+                }
+            }
+            opcode_id::CMSG_AUTOSTORE_LOOT_ITEM => {
+                let Ok(slot) = reader.read_u8() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.handle_autostore_loot_item(guid, slot);
+                }
+            }
+            opcode_id::CMSG_LOOT_MASTER_GIVE => {
+                let (Ok(loot), Ok(slot), Ok(target)) =
+                    (reader.read_u64_le(), reader.read_u8(), reader.read_u64_le())
+                else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.handle_loot_master_give(guid, guid_of(loot), slot, guid_of(target));
+                }
+            }
+            opcode_id::CMSG_LOOT_ROLL => {
+                let (Ok(target), Ok(slot), Ok(choice)) =
+                    (reader.read_u64_le(), reader.read_u32_le(), reader.read_u8())
+                else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.handle_loot_roll(guid, guid_of(target), slot, choice);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Vendor packets (`NPCHandler.cpp` /
+    /// `ItemHandler.cpp` arms; all work map-local in
+    /// `mangos_map::vendor`).
+    #[allow(clippy::too_many_lines)]
+    fn on_vendor_packet(&mut self, id: SessionId, packet: &WorldPacket) {
+        use mangos_map::inventory::{BAG_MAIN, NULL_SLOT};
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        let mut reader = packet.reader();
+        let guid_of = |raw: u64| ObjectGuid::from_raw(raw);
+        match packet.opcode() {
+            opcode_id::CMSG_LIST_INVENTORY => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.send_list_inventory(guid, guid_of(raw));
+                }
+            }
+            opcode_id::CMSG_BUY_ITEM => {
+                let (Ok(vendor), Ok(item), Ok(count), Ok(_in_backpack)) = (
+                    reader.read_u64_le(),
+                    reader.read_u32_le(),
+                    reader.read_u8(),
+                    reader.read_u8(),
+                ) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.buy_item_from_vendor(
+                        guid,
+                        guid_of(vendor),
+                        item,
+                        count,
+                        BAG_MAIN,
+                        NULL_SLOT,
+                    );
+                }
+            }
+            opcode_id::CMSG_BUY_ITEM_IN_SLOT => {
+                let (Ok(vendor), Ok(item), Ok(bag), Ok(bag_slot), Ok(count)) = (
+                    reader.read_u64_le(),
+                    reader.read_u32_le(),
+                    reader.read_u64_le(),
+                    reader.read_u8(),
+                    reader.read_u8(),
+                ) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.buy_item_in_slot(
+                        guid,
+                        guid_of(vendor),
+                        item,
+                        guid_of(bag),
+                        bag_slot,
+                        count,
+                    );
+                }
+            }
+            opcode_id::CMSG_SELL_ITEM => {
+                let (Ok(vendor), Ok(item), Ok(count)) =
+                    (reader.read_u64_le(), reader.read_u64_le(), reader.read_u8())
+                else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.sell_item(guid, guid_of(vendor), guid_of(item), count);
+                }
+            }
+            opcode_id::CMSG_BUYBACK_ITEM => {
+                let (Ok(vendor), Ok(slot)) = (reader.read_u64_le(), reader.read_u32_le()) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.buyback_item(guid, guid_of(vendor), slot);
+                }
+            }
+            opcode_id::CMSG_BANKER_ACTIVATE => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.banker_activate(guid, guid_of(raw));
+                }
+            }
+            opcode_id::CMSG_BUY_BANK_SLOT => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.buy_bank_slot(guid, guid_of(raw));
+                }
+            }
+            opcode_id::MSG_LIST_STABLED_PETS => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.list_stabled_pets(guid, guid_of(raw));
+                }
+            }
+            opcode_id::CMSG_STABLE_PET => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.stable_pet(guid, guid_of(raw));
+                }
+            }
+            opcode_id::CMSG_UNSTABLE_PET => {
+                let (Ok(raw), Ok(pet_number)) = (reader.read_u64_le(), reader.read_u32_le()) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.unstable_pet(guid, guid_of(raw), pet_number);
+                }
+            }
+            opcode_id::CMSG_BUY_STABLE_SLOT => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.buy_stable_slot(guid, guid_of(raw));
+                }
+            }
+            opcode_id::CMSG_STABLE_REVIVE_PET => {
+                // Fork handler is empty (NPCHandler.cpp:768).
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.stable_revive_pet(guid);
+                }
+            }
+            opcode_id::CMSG_STABLE_SWAP_PET => {
+                let (Ok(raw), Ok(pet_number)) = (reader.read_u64_le(), reader.read_u32_le()) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.stable_swap_pet(guid, guid_of(raw), pet_number);
+                }
+            }
+            opcode_id::CMSG_REPAIR_ITEM => {
+                let (Ok(vendor), Ok(item)) = (reader.read_u64_le(), reader.read_u64_le()) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.repair_item(guid, guid_of(vendor), guid_of(item));
+                }
+            }
+            opcode_id::CMSG_TRAINER_LIST => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                // `LANG_NPC_TAINER_HELLO` (51), default
+                // locale (fork `GetMangosString`).
+                let default_title = self
+                    .strings
+                    .get(51)
+                    .map_or("", |entry| entry.text(0))
+                    .to_owned();
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.send_trainer_list(guid, guid_of(raw), &default_title);
+                }
+            }
+            opcode_id::CMSG_TRAINER_BUY_SPELL => {
+                let (Ok(trainer), Ok(spell_id)) = (reader.read_u64_le(), reader.read_u32_le())
+                else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.trainer_buy_spell(guid, guid_of(trainer), spell_id);
+                }
+            }
+            opcode_id::CMSG_LEARN_TALENT => {
+                let (Ok(talent_id), Ok(rank)) = (reader.read_u32_le(), reader.read_u32_le()) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.learn_talent(guid, talent_id, rank);
+                }
+            }
+            opcode_id::MSG_TALENT_WIPE_CONFIRM => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.handle_talent_wipe_confirm(guid, guid_of(raw));
+                }
+            }
+            opcode_id::CMSG_TAXINODE_STATUS_QUERY => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.send_taxi_status(guid, guid_of(raw));
+                }
+            }
+            opcode_id::CMSG_TAXIQUERYAVAILABLENODES => {
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.taxi_query_available_nodes(guid, guid_of(raw));
+                }
+            }
+            opcode_id::CMSG_ACTIVATETAXI => {
+                let (Ok(npc), Ok(from), Ok(to)) = (
+                    reader.read_u64_le(),
+                    reader.read_u32_le(),
+                    reader.read_u32_le(),
+                ) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.activate_taxi_from_npc(guid, &[from, to], guid_of(npc));
+                }
+            }
+            opcode_id::CMSG_ACTIVATETAXIEXPRESS => {
+                let (Ok(npc), Ok(_total_cost), Ok(node_count)) = (
+                    reader.read_u64_le(),
+                    reader.read_u32_le(),
+                    reader.read_u32_le(),
+                ) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                let mut nodes = Vec::new();
+                for _ in 0..node_count {
+                    let Ok(node) = reader.read_u32_le() else {
+                        self.bad_packet(id, packet.opcode());
+                        return;
+                    };
+                    nodes.push(node);
+                }
+                if nodes.is_empty() {
+                    return;
+                }
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.activate_taxi_from_npc(guid, &nodes, guid_of(npc));
+                }
+            }
+            _ => return,
+        }
+        self.drain_map_events();
+    }
+
+    /// Death-flow packets: `HandleRepopRequestOpcode`,
+    /// `HandleReclaimCorpseOpcode`,
+    /// `HandleSpiritHealerActivateOpcode` (map-local
+    /// work in `mangos_map::death`; the spirit
+    /// resurrect's cross-map graveyard compare runs
+    /// here like the fork's session handler).
+    fn on_death_packet(&mut self, id: SessionId, packet: &WorldPacket) {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        match packet.opcode() {
+            opcode_id::CMSG_REPOP_REQUEST => {
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.repop_request(guid);
+                }
+            }
+            opcode_id::CMSG_RECLAIM_CORPSE => {
+                let mut reader = packet.reader();
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                let corpse_guid = ObjectGuid::from_raw(raw);
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.reclaim_corpse(guid, corpse_guid);
+                }
+            }
+            opcode_id::CMSG_SPIRIT_HEALER_ACTIVATE => {
+                let mut reader = packet.reader();
+                let Ok(raw) = reader.read_u64_le() else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                self.on_spirit_healer_activate(id, map_key, guid, ObjectGuid::from_raw(raw));
+            }
+            _ => return,
+        }
+        self.drain_map_events();
+    }
+
+    /// `SendSpiritResurrect`: validate the healer,
+    /// resurrect with sickness, spawn bones wherever
+    /// the corpse lives, and teleport to the corpse's
+    /// graveyard when it differs from the ghost's.
+    fn on_spirit_healer_activate(
+        &mut self,
+        id: SessionId,
+        map_key: MapKey,
+        guid: ObjectGuid,
+        npc_guid: ObjectGuid,
+    ) {
+        let healer_ok = self
+            .maps
+            .get(&map_key)
+            .and_then(|map| map.spirit_healer_position(guid, npc_guid))
+            .is_some();
+        if !healer_ok {
+            return;
+        }
+        let team = self
+            .maps
+            .get(&map_key)
+            .and_then(|map| map.player_team_of(guid));
+        // Corpse graveyard (corpse may live on another
+        // map, e.g. the instance the player died in).
+        let mut corpse_key: Option<MapKey> = None;
+        let mut corpse_grave = None;
+        if let Some(team) = team {
+            let keys: Vec<MapKey> = self.maps.keys().copied().collect();
+            for key in keys {
+                let found = self
+                    .maps
+                    .get_mut(&key)
+                    .and_then(|map| map.corpse_location_for(guid));
+                if let Some((pos, zone, area)) = found {
+                    corpse_key = Some(key);
+                    corpse_grave = self
+                        .maps
+                        .get_mut(&key)
+                        .and_then(|map| map.graveyard_for(pos, team, zone, area));
+                    break;
+                }
+            }
+        }
+        let ghost_grave = self
+            .maps
+            .get_mut(&map_key)
+            .and_then(|map| map.player_graveyard(guid));
+        if let Some(map) = self.maps.get_mut(&map_key) {
+            map.spirit_healer_resurrect(guid);
+        }
+        if let Some(key) = corpse_key
+            && let Some(map) = self.maps.get_mut(&key)
+        {
+            map.spawn_corpse_bones_for(guid);
+        }
+        self.drain_map_events();
+        if let Some(gy) = corpse_grave
+            && corpse_grave != ghost_grave
+        {
+            let dest =
+                mangos_movement::movement_info::Position::new(gy.x, gy.y, gy.z, gy.orientation);
+            self.teleport_player(id, gy.map_id, dest);
+        }
+    }
+
     /// `HandleTextEmoteOpcode`: textEmote + emoteNum +
     /// target guid.
     fn on_text_emote(&mut self, id: SessionId, packet: &WorldPacket) {
@@ -17741,7 +20067,13 @@ impl World {
                 // mover in this slice is the player (no
                 // possession runtime), so a non-empty
                 // mismatch logs and snaps back to self.
-                let Ok((mover, _)) = ObjectGuid::read_packed(packet.body()) else {
+                // Fork `recvData >> guid` reads a raw u64
+                // (`ObjectGuid.cpp:176-182`), not a packed
+                // GUID; the packed parse turned real-client
+                // guid 1 into empty and froze movement.
+                let Some(mover) = packet.body().get(..8).map(|b| {
+                    ObjectGuid::from_wire_raw(u64::from_le_bytes(b.try_into().expect("8 bytes")))
+                }) else {
                     self.bad_packet(id, opcode);
                     return;
                 };
@@ -18141,13 +20473,24 @@ impl World {
                 map.send_knock_back_to_observers(guid);
             }
             AckKind::Teleport => {
-                // No senders yet: nothing can be pending.
-                wrong_ack(&self.log, "HandleMoveAck(no sender)");
-                if let Some(e) = self.sessions.get_mut(&id) {
-                    e.anticheat
-                        .on_wrong_ack_data(&self.config.anticheat, security);
+                // `HandleMoveTeleportAckOpcode`: consume the
+                // pending teleport change pushed by
+                // `teleport_player_in_map` and clear the
+                // spline-done hold (`SetSplineDonePending
+                // (false)` + `ExecuteTeleportNear`; the Rust
+                // near teleport relocates and broadcasts at
+                // send time, so the ack carries no movement
+                // info to relocate from). A counter with no
+                // pending entry is a fork log line only — no
+                // anticheat strike in the fork handler.
+                let Some(player) = map.player_mut(guid) else {
+                    return;
+                };
+                if !player.unit.find_pending_teleport_change(counter) {
+                    wrong_ack(&self.log, "HandleMoveTeleportAck");
+                    return;
                 }
-                return;
+                player.unit.pending_spline_done = false;
             }
             AckKind::SplineDone => unreachable!("handled above"),
         }
@@ -18276,6 +20619,9 @@ impl World {
         let idle_limit = self.config.character_screen_max_idle_secs;
         let mut kicked: Vec<SessionId> = Vec::new();
         let mut enum_requests: Vec<u32> = Vec::new();
+        let mut create_requests: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut delete_requests: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut rename_requests: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut login_requests: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut query_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut social_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
@@ -18298,6 +20644,10 @@ impl World {
         let mut attack_stop_packets: Vec<SessionId> = Vec::new();
         let mut set_selection_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut action_button_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut death_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut item_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut vendor_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut loot_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut emote_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut text_emote_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut gameobj_use_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
@@ -18333,6 +20683,15 @@ impl World {
                     Dispatch::Execute if opcode == opcode::CMSG_CHAR_ENUM => {
                         enum_requests.push(entry.account_id);
                     }
+                    Dispatch::Execute if opcode == opcode_id::CMSG_CHAR_CREATE => {
+                        create_requests.push((*id, packet));
+                    }
+                    Dispatch::Execute if opcode == opcode_id::CMSG_CHAR_DELETE => {
+                        delete_requests.push((*id, packet));
+                    }
+                    Dispatch::Execute if opcode == opcode_id::CMSG_CHAR_RENAME => {
+                        rename_requests.push((*id, packet));
+                    }
                     Dispatch::Execute if opcode == opcode::CMSG_PLAYER_LOGIN => {
                         login_requests.push((*id, packet));
                     }
@@ -18349,6 +20708,8 @@ impl World {
                                 | opcode_id::CMSG_GAMEOBJECT_QUERY
                                 | opcode_id::CMSG_ITEM_QUERY_SINGLE
                                 | opcode_id::CMSG_NAME_QUERY
+                                | opcode_id::CMSG_NPC_TEXT_QUERY
+                                | opcode_id::MSG_CORPSE_QUERY
                         ) =>
                     {
                         query_packets.push((*id, packet));
@@ -18565,6 +20926,71 @@ impl World {
                     {
                         action_button_packets.push((*id, packet));
                     }
+                    Dispatch::Execute
+                        if matches!(
+                            opcode,
+                            opcode_id::CMSG_REPOP_REQUEST
+                                | opcode_id::CMSG_RECLAIM_CORPSE
+                                | opcode_id::CMSG_SPIRIT_HEALER_ACTIVATE
+                        ) =>
+                    {
+                        death_packets.push((*id, packet));
+                    }
+                    Dispatch::Execute
+                        if matches!(
+                            opcode,
+                            opcode_id::CMSG_SWAP_INV_ITEM
+                                | opcode_id::CMSG_SWAP_ITEM
+                                | opcode_id::CMSG_AUTOEQUIP_ITEM
+                                | opcode_id::CMSG_AUTOEQUIP_ITEM_SLOT
+                                | opcode_id::CMSG_SPLIT_ITEM
+                                | opcode_id::CMSG_DESTROYITEM
+                        ) =>
+                    {
+                        item_packets.push((*id, packet));
+                    }
+                    Dispatch::Execute
+                        if matches!(
+                            opcode,
+                            opcode_id::CMSG_LIST_INVENTORY
+                                | opcode_id::CMSG_SELL_ITEM
+                                | opcode_id::CMSG_BUY_ITEM
+                                | opcode_id::CMSG_BUY_ITEM_IN_SLOT
+                                | opcode_id::CMSG_BUYBACK_ITEM
+                                | opcode_id::CMSG_BANKER_ACTIVATE
+                                | opcode_id::CMSG_BUY_BANK_SLOT
+                                | opcode_id::CMSG_REPAIR_ITEM
+                                | opcode_id::CMSG_TRAINER_LIST
+                                | opcode_id::CMSG_TRAINER_BUY_SPELL
+                                | opcode_id::CMSG_TAXINODE_STATUS_QUERY
+                                | opcode_id::CMSG_TAXIQUERYAVAILABLENODES
+                                | opcode_id::CMSG_ACTIVATETAXI
+                                | opcode_id::CMSG_ACTIVATETAXIEXPRESS
+                                | opcode_id::CMSG_LEARN_TALENT
+                                | opcode_id::MSG_TALENT_WIPE_CONFIRM
+                                | opcode_id::MSG_LIST_STABLED_PETS
+                                | opcode_id::CMSG_STABLE_PET
+                                | opcode_id::CMSG_UNSTABLE_PET
+                                | opcode_id::CMSG_BUY_STABLE_SLOT
+                                | opcode_id::CMSG_STABLE_REVIVE_PET
+                                | opcode_id::CMSG_STABLE_SWAP_PET
+                        ) =>
+                    {
+                        vendor_packets.push((*id, packet));
+                    }
+                    Dispatch::Execute
+                        if matches!(
+                            opcode,
+                            opcode_id::CMSG_LOOT
+                                | opcode_id::CMSG_LOOT_RELEASE
+                                | opcode_id::CMSG_LOOT_MONEY
+                                | opcode_id::CMSG_AUTOSTORE_LOOT_ITEM
+                                | opcode_id::CMSG_LOOT_MASTER_GIVE
+                                | opcode_id::CMSG_LOOT_ROLL
+                        ) =>
+                    {
+                        loot_packets.push((*id, packet));
+                    }
                     Dispatch::Execute if meta.handler_name == "HandleEmoteOpcode" => {
                         emote_packets.push((*id, packet));
                     }
@@ -18638,6 +21064,15 @@ impl World {
         for account_id in enum_requests {
             self.start_char_enum(account_id);
         }
+        for (id, packet) in create_requests {
+            self.on_char_create(id, &packet);
+        }
+        for (id, packet) in delete_requests {
+            self.on_char_delete(id, &packet);
+        }
+        for (id, packet) in rename_requests {
+            self.on_char_rename(id, &packet);
+        }
         for (id, packet) in login_requests {
             self.on_player_login_opcode(id, &packet);
         }
@@ -18704,6 +21139,18 @@ impl World {
         }
         for (id, packet) in action_button_packets {
             self.on_set_action_button(id, &packet);
+        }
+        for (id, packet) in death_packets {
+            self.on_death_packet(id, &packet);
+        }
+        for (id, packet) in item_packets {
+            self.on_item_packet(id, &packet);
+        }
+        for (id, packet) in vendor_packets {
+            self.on_vendor_packet(id, &packet);
+        }
+        for (id, packet) in loot_packets {
+            self.on_loot_packet(id, &packet);
         }
         for (id, packet) in emote_packets {
             self.on_emote(id, &packet);

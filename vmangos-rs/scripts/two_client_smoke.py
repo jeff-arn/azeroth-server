@@ -47,6 +47,7 @@ Run from the repository root.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import pathlib
 import select
@@ -180,6 +181,47 @@ def heartbeat_body(client_time: int, x: float, y: float, z: float, orientation: 
     return struct.pack("<IIffffI", 0, client_time, x, y, z, orientation, 0)
 
 
+def move_to(
+    client: Client,
+    position: tuple[float, float, float, float],
+    x: float,
+    y: float,
+    z: float | None = None,
+    step: float = 1.9,
+    interval: float = 0.25,
+) -> tuple[float, float, float, float]:
+    """Walk in a straight line by heartbeat snapshots.
+
+    Steps of `step` yards every `interval` seconds
+    approximate base run speed, so server movement
+    validation sees a plausible mover; z lerps to
+    the target height when given. Returns the new
+    position tuple (final orientation faces the
+    travel direction). No pathing: callers pick
+    legs over open ground.
+    """
+    cx, cy, cz, _orientation = position
+    tz = cz if z is None else z
+    dist = math.hypot(x - cx, y - cy)
+    facing = math.atan2(y - cy, x - cx) % (2 * math.pi)
+    steps = max(1, int(dist // step) + 1)
+    base_time = int(time.time() * 1000) & 0xFFFF_FFFF
+    for i in range(1, steps + 1):
+        frac = i / steps
+        client.send_packet(
+            MSG_MOVE_HEARTBEAT,
+            heartbeat_body(
+                (base_time + int(i * interval * 1000)) & 0xFFFF_FFFF,
+                cx + (x - cx) * frac,
+                cy + (y - cy) * frac,
+                cz + (tz - cz) * frac,
+                facing,
+            ),
+        )
+        time.sleep(interval)
+    return (x, y, tz, facing)
+
+
 def drain_until_idle(client: Client, idle_secs: float, max_secs: float) -> list[tuple[int, bytes]]:
     """Read packets until the stream is quiet; returns them
     all. Only calls read_packet when select reports data,
@@ -244,7 +286,9 @@ def login_client(account: str, account_id: int, guid: int) -> tuple[Client, tupl
     # The real client confirms itself as mover on
     # entering the world; movement packets are gated
     # on it server-side.
-    client.send_packet(CMSG_SET_ACTIVE_MOVER, pack_guid(guid))
+    # Fork reads a raw u64 GUID here (ObjectGuid.cpp
+    # operator>>), not a packed GUID.
+    client.send_packet(CMSG_SET_ACTIVE_MOVER, struct.pack("<Q", guid))
     print(f"LOGIN-OK account={account} guid={guid} map={map_id} pos=({x:.2f},{y:.2f},{z:.2f})")
     return client, (x, y, z, orientation)
 

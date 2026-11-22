@@ -25,9 +25,12 @@
 
 use mangos_db::character_load::{
     ActionRow, AuraRow, BgDataRow, BoundInstanceRow, CharacterLoad, ForgottenSkillRow, HonorCpRow,
-    InventoryRow, ItemLootRow, MailRow, MailedItemRow, QuestStatusRow, ReputationRow, SkillRow,
-    SocialRow, SpellCooldownRow, SpellRow,
+    ItemLootRow, MailRow, MailedItemRow, QuestStatusRow, ReputationRow, SkillRow, SocialRow,
+    SpellCooldownRow, SpellRow,
 };
+/// Re-exported so `mangos-map` slot operations can
+/// name the row type without a `mangos-db` edge.
+pub use mangos_db::character_load::{InventoryRow, ItemInstanceRow};
 use mangos_db::characters::AccountDataEntry;
 use mangos_guid::{HighGuid, ObjectGuid, TypeId};
 use mangos_movement::movement_info::{Position, is_valid_map_coord};
@@ -134,6 +137,34 @@ pub struct MaterializeInputs<'a> {
     /// `None` in template-free tests keeps quest rows
     /// verbatim (no timer conversion, no recount churn).
     pub quest_templates: Option<&'a QuestTemplates>,
+    /// Taxi graph for the `LoadTaxiDestinationsFromString`
+    /// integrity gate at load; `None` in taxi-free tests
+    /// keeps the pre-taxi homebind fallback for saved
+    /// mid-flight rows.
+    pub taxi: Option<&'a mangos_world_data::taxi::TaxiStore>,
+    /// `Rate.Rest.*` multipliers for offline accrual.
+    pub rest_rates: RestRates,
+}
+
+/// `Rate.Rest.*` multipliers (`World.cpp:512-514`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RestRates {
+    /// `Rate.Rest.InGame` (1.0).
+    pub in_game: f32,
+    /// `Rate.Rest.Offline.InTavernOrCity` (1.0).
+    pub offline_in_tavern_or_city: f32,
+    /// `Rate.Rest.Offline.InWilderness` (1.0).
+    pub offline_in_wilderness: f32,
+}
+
+impl Default for RestRates {
+    fn default() -> Self {
+        Self {
+            in_game: 1.0,
+            offline_in_tavern_or_city: 1.0,
+            offline_in_wilderness: 1.0,
+        }
+    }
 }
 
 /// Load rows retained verbatim for later slices.
@@ -147,6 +178,12 @@ pub struct DeferredLoad {
     pub quest_status: Vec<QuestStatusRow>,
     pub reputation: Vec<ReputationRow>,
     pub actions: Vec<ActionRow>,
+    /// Live inventory rows (Tier 4 step 4a): every
+    /// runtime reader/mutator works here;
+    /// `saved.inventory` is the as-loaded baseline
+    /// the save diff compares against (fork per-item
+    /// `uState`, aggregate-diff form).
+    pub inventory: Vec<mangos_db::character_load::InventoryRow>,
     pub item_loot: Vec<ItemLootRow>,
     pub honor_cp: Vec<HonorCpRow>,
     pub mails: Vec<MailRow>,
@@ -213,6 +250,22 @@ pub enum RestType {
 /// (`_SaveQuestStatus`), so the baseline keeps the
 /// stored absolute value while this carries the fork's
 /// live remainder.
+/// One `ItemAddedQuestCheck` objective update:
+/// counts are the row counts before/after the
+/// capped increment; `notify` is false for the
+/// quest's own source item (fork suppresses the
+/// `SMSG_QUESTUPDATE_ADD_ITEM` toast there).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct QuestItemAddedUpdate {
+    pub quest_id: u32,
+    pub item_id: u32,
+    pub objective_index: u8,
+    pub old_count: u32,
+    pub new_count: u32,
+    pub notify: bool,
+    pub completed: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct QuestTimerState {
     pub remaining_ms_at_load: u32,
@@ -224,15 +277,37 @@ pub struct QuestTimerState {
 }
 
 /// `ComputeRest` offline/online share (`Player.cpp:8393`):
-/// seconds × next-level XP / 1152000, rates at the
-/// fork defaults of 1.0 (the `Rate.Rest.*` config reads
-/// are not wired yet, like the other `Rate.*` values).
+/// seconds × next-level XP / 1152000 at the fork
+/// default `Rate.Rest.*` multipliers of 1.0.
 #[must_use]
 pub fn compute_rest(seconds: u64, next_level_xp: u32, offline: bool, in_rest_place: bool) -> f32 {
+    compute_rest_with_rates(
+        seconds,
+        next_level_xp,
+        offline,
+        in_rest_place,
+        RestRates::default(),
+    )
+}
+
+/// `ComputeRest` with `Rate.Rest.*` multipliers
+/// (`Player.cpp:8207-8225`).
+#[must_use]
+pub fn compute_rest_with_rates(
+    seconds: u64,
+    next_level_xp: u32,
+    offline: bool,
+    in_rest_place: bool,
+    rates: RestRates,
+) -> f32 {
     #[allow(clippy::cast_precision_loss)]
     let mut bonus = seconds as f32 * (next_level_xp as f32 / 1_152_000.0);
-    if offline && !in_rest_place {
-        bonus /= 4.0;
+    if !offline {
+        bonus *= rates.in_game;
+    } else if in_rest_place {
+        bonus *= rates.offline_in_tavern_or_city;
+    } else {
+        bonus *= rates.offline_in_wilderness / 4.0;
     }
     bonus
 }
@@ -305,6 +380,13 @@ pub struct Player {
     pub honor_last_week_cp: f32,
     pub honor_stored_hk: i32,
     pub honor_stored_dk: i32,
+    /// Runtime lifetime totals (`m_totalHK/DK`;
+    /// recomputed by `honor_update`, never saved
+    /// directly — the stored scalars are).
+    pub honor_total_hk: u32,
+    pub honor_total_dk: u32,
+    /// Cached rank info (`m_rank`).
+    pub honor_rank_info: crate::honor::HonorRankInfo,
     pub logout_time: u64,
     pub drunk: u16,
     /// `m_restBonus`, with the offline accrual of
@@ -331,15 +413,43 @@ pub struct Player {
     /// re-baselines (fork `uState = QUEST_UNCHANGED`).
     pub quest_load_changed: std::collections::HashSet<u32>,
     pub stable_slots: u8,
+    /// `m_escortingGuid` (Tier 4 B0-6): creature
+    /// this player is currently escorting (runtime
+    /// only, never persisted).
+    pub escorting_guid: ObjectGuid,
     pub death_expire_time: u64,
+    /// `m_deathTimer`: forced-repop countdown while in
+    /// `CORPSE` death state (6 minutes at `KillPlayer`).
+    pub death_timer_ms: u32,
+    /// `m_currentBankerGuid` (set by banker
+    /// activation; bank slot moves gate on it).
+    pub current_banker_guid: ObjectGuid,
+    /// Ring cursor for buyback slots
+    /// (`m_currentBuybackSlot`, Tier 4 step 4c);
+    /// reset to the first buyback slot at login,
+    /// exactly as the fork's in-memory cursor.
+    pub current_buyback_slot: u8,
     pub reset_talents_multiplier: u32,
+    /// `m_usedTalentCount` (Tier 4 step 4g): sum of
+    /// `GetTalentSpellCost` over known talent spells;
+    /// recounted at map entry, maintained by the
+    /// map-side learn/remove spell paths.
+    pub used_talent_count: u32,
     pub reset_talents_time: u64,
     /// `m_taxi` known-node mask words (`LoadTaxiMask` parse).
     pub taxi_mask: Vec<u32>,
-    /// Loaded `PlayerTaxi` destinations. Taxi flight
-    /// itself is unmodeled, but retaining the list keeps
-    /// `current_taxi_path` persistence fork-shaped.
+    /// `PlayerTaxi::m_TaxiDestinations` (front =
+    /// current source node); persisted as
+    /// `current_taxi_path` (first two entries).
     pub taxi_destinations: Vec<u32>,
+    /// `PlayerTaxi::m_discount` captured at flight
+    /// activation (per-leg charging).
+    pub taxi_discount: f32,
+    /// `PlayerTaxi::m_taxiPath`: stitched vertices of
+    /// an express (multi-hop) flight; empty for
+    /// single-path flights (the generator then reads
+    /// the store's per-path vertices).
+    pub taxi_path_nodes: Vec<mangos_world_data::taxi::TaxiPathNode>,
     pub homebind: Homebind,
     /// `SaveRecallPosition` snapshot after the final
     /// relocation of `LoadFromDB`.
@@ -347,6 +457,14 @@ pub struct Player {
     pub guild_id: u32,
     pub guild_rank: u8,
     pub group_id: Option<u32>,
+    /// Group loot settings mirrored from the actor
+    /// `Group` (`sync_entity_group`): method byte
+    /// (0 FFA, 1 round robin, 2 master, 3 group,
+    /// 4 need-before-greed), threshold quality,
+    /// master-looter guid low (0 = leader/none).
+    pub group_loot_method: u8,
+    pub group_loot_threshold: u8,
+    pub group_loot_master_low: u32,
     /// `m_regenTimer` (`Unit.h:354`, int32; only the
     /// player 2000 ms cadence is driven from it here —
     /// creature regen keeps its AI-side timer).
@@ -625,6 +743,9 @@ impl Player {
             honor_last_week_cp: row.honor_last_week_cp,
             honor_stored_hk: row.honor_stored_hk,
             honor_stored_dk: row.honor_stored_dk,
+            honor_total_hk: row.honor_stored_hk.max(0) as u32,
+            honor_total_dk: row.honor_stored_dk.max(0) as u32,
+            honor_rank_info: crate::honor::HonorRankInfo::calculate(row.honor_rank_points),
             logout_time: row.logout_time,
             drunk: row.drunk,
             rest_bonus: row.rest_bonus,
@@ -635,16 +756,26 @@ impl Player {
             quest_timers: std::collections::HashMap::new(),
             quest_load_changed: std::collections::HashSet::new(),
             stable_slots: 0,
+            escorting_guid: ObjectGuid::EMPTY,
             death_expire_time: row.death_expire_time,
+            death_timer_ms: 0,
+            current_banker_guid: ObjectGuid::EMPTY,
+            current_buyback_slot: 69,
             reset_talents_multiplier: row.reset_talents_multiplier,
+            used_talent_count: 0,
             reset_talents_time: row.reset_talents_time,
             taxi_mask: parse_u32_words(&row.known_taxi_mask),
             taxi_destinations: parse_u32_words(&row.current_taxi_path),
+            taxi_discount: 1.0,
+            taxi_path_nodes: Vec::new(),
             homebind: Homebind::default(),
             recall: WorldLocation::default(),
             guild_id: 0,
             guild_rank: 0,
             group_id: load.group_id,
+            group_loot_method: 3,
+            group_loot_threshold: 2,
+            group_loot_master_low: 0,
             regen_timer_ms: 0,
             carry_health_regen: 0.0,
             shield_block_flat: 0.0,
@@ -669,6 +800,9 @@ impl Player {
                 quest_status: std::mem::take(&mut load.quest_status),
                 reputation: std::mem::take(&mut load.reputation),
                 actions: std::mem::take(&mut load.actions),
+                // Clone, not take: `project_visible_equipment`
+                // still reads `load.inventory` below.
+                inventory: load.inventory.clone(),
                 item_loot: std::mem::take(&mut load.item_loot),
                 honor_cp: std::mem::take(&mut load.honor_cp),
                 mails: std::mem::take(&mut load.mails),
@@ -914,6 +1048,52 @@ impl Player {
         }
     }
 
+    /// `LoadTaxiDestinationsFromString` integrity
+    /// (`Player.cpp:14899-14945`): returns
+    /// `(recall_at_source, relocate_to)` — success
+    /// seeds recall at the source node, failure
+    /// relocates (source node or homebind) and has
+    /// already cleared the destination list. The
+    /// fork's mount check is display-id based;
+    /// mount-creature presence is the load-time
+    /// proxy available here.
+    fn taxi_load_gate(
+        &mut self,
+        inputs: &MaterializeInputs<'_>,
+    ) -> (Option<WorldLocation>, Option<WorldLocation>) {
+        let Some(taxi) = inputs.taxi else {
+            return (None, None);
+        };
+        if self.taxi_destinations.is_empty() {
+            return (None, None);
+        }
+        let dests = self.taxi_destinations.clone();
+        let alliance = self.team == crate::unit::Team::Alliance;
+        let integrity = dests.len() >= 2
+            && dests
+                .windows(2)
+                .all(|pair| taxi.taxi_path(pair[0], pair[1]).0 != 0)
+            && taxi.mount_creature_id(dests[0], alliance, true) != 0;
+        let node_location = |node: &mangos_world_data::taxi::TaxiNode| WorldLocation {
+            map_id: node.map_id as u16,
+            x: node.x,
+            y: node.y,
+            z: node.z,
+            o: 0.0,
+        };
+        if integrity {
+            (taxi.node(dests[0]).map(node_location), None)
+        } else {
+            let relocate = match taxi.node(dests[0]) {
+                Some(node) => node_location(node),
+                None => self.homebind.location,
+            };
+            self.taxi_destinations.clear();
+            self.taxi_path_nodes.clear();
+            (None, Some(relocate))
+        }
+    }
+
     /// Homebind + saved-position resolution
     /// (`Player.cpp:14615-14772` continent subset).
     fn init_position(
@@ -956,17 +1136,22 @@ impl Player {
             z: row.position_z,
             o: row.orientation,
         };
+        let (taxi_recall, taxi_relocate) = self.taxi_load_gate(inputs);
         let valid = is_valid_map_coord(saved.x, saved.y, saved.z, saved.o)
             && inputs.saved_map_known
             && !inputs.saved_map_is_instance
             && row.transport_guid == 0
-            && row.current_taxi_path.trim().is_empty();
-        let dest = if valid { saved } else { self.homebind.location };
+            && (row.current_taxi_path.trim().is_empty() || taxi_recall.is_some());
+        let dest = match taxi_relocate {
+            Some(location) => location,
+            None if valid => saved,
+            None => self.homebind.location,
+        };
         self.unit.world.map_id = u32::from(dest.map_id);
         self.unit
             .world
             .relocate(Position::new(dest.x, dest.y, dest.z, dest.o));
-        self.recall = dest;
+        self.recall = taxi_recall.unwrap_or(dest);
 
         // Sobering (Player.cpp:14777-14786) + misc clamps.
         #[allow(clippy::cast_precision_loss)] // C++ float(timeDiff) identically
@@ -1182,6 +1367,18 @@ impl Player {
         }
         self.unit.set_power(POWER_FOCUS, 0);
         self.unit.set_power(POWER_HAPPINESS, 0);
+    }
+
+    /// Equip-change stat refresh (`_ApplyItemMods` plus
+    /// `UpdateAllStats`): recompute the equipped
+    /// aggregates from the live rows, then the no-refill
+    /// derived-stat pass.
+    pub fn refresh_equipped_bonuses(
+        &mut self,
+        items: Option<&mangos_world_data::item_prototype::ItemPrototypes>,
+    ) {
+        self.equipped = equipped_bonuses_from_rows(&self.deferred.inventory, items);
+        self.refresh_derived_stats();
     }
 
     /// The `HandleStatModifier` update dispatch for aura
@@ -1506,12 +1703,11 @@ impl Player {
     /// (BGs are out of this goal's scope) and the pet
     /// level sync (no pet runtime yet; Slice 3). The
     /// caller owns `PLAYER_XP`, as in the fork.
-    /// Talent points move by the `CalculateTalentsPoints`
-    /// delta: the used-point count is untracked until
-    /// a talent DBC store and learn handler land, so
-    /// the loaded free/used split is preserved rather
-    /// than recomputed (`Rate.Talent` at its 1.0
-    /// default, like the other unwired `Rate.*`).
+    /// Talent points follow `InitTalentForLevel` /
+    /// `UpdateFreeTalentPoints` (Tier 4 step 4g):
+    /// free = `CalculateTalentsPoints` − used, floored
+    /// at 0. The over-used forced-reset arm needs map
+    /// spell removal; level-up can never trigger it.
     fn give_level(
         &mut self,
         level: u32,
@@ -1519,7 +1715,6 @@ impl Player {
         items: Option<&ItemPrototypes>,
         skills: Option<&SkillDbc>,
     ) -> LevelUpInfo {
-        let old_level = self.unit.level();
         let race = u32::from(self.unit.race());
         let class = u32::from(self.unit.class());
         let level_info = infos.level_info(race, class, level);
@@ -1560,9 +1755,7 @@ impl Player {
             let v = self.unit.world.object.values_mut();
             v.set_u32(offsets::PLAYER_NEXT_LEVEL_XP, infos.xp_for_level(level));
             v.set_u32(offsets::UNIT_FIELD_LEVEL, level);
-            let points = v.get_u32(offsets::PLAYER_CHARACTER_POINTS1)
-                + talent_points_for_level(level)
-                - talent_points_for_level(old_level);
+            let points = talent_points_for_level(level).saturating_sub(self.used_talent_count);
             v.set_u32(offsets::PLAYER_CHARACTER_POINTS1, points);
         }
         self.played_time_level = 0;
@@ -1576,7 +1769,7 @@ impl Player {
             self.unit.create_health = u32::from(class.basehealth);
             self.unit.create_mana = u32::from(class.basemana);
         }
-        let bonuses = equipped_bonuses_from_rows(&self.saved.inventory, items);
+        let bonuses = equipped_bonuses_from_rows(&self.deferred.inventory, items);
         self.equipped = bonuses;
         self.recompute_derived_stats(&bonuses, false);
         LevelUpInfo {
@@ -1645,7 +1838,8 @@ impl Player {
             .values()
             .get_u32(offsets::PLAYER_NEXT_LEVEL_XP);
         let in_rest_place = self.character_flags & CHARACTER_FLAG_RESTING != 0;
-        let gain = compute_rest(time_diff, next_xp, true, in_rest_place);
+        let gain =
+            compute_rest_with_rates(time_diff, next_xp, true, in_rest_place, inputs.rest_rates);
         let bonus = self.rest_bonus + gain;
         self.apply_rest_bonus(bonus, inputs.infos.max_player_level());
     }
@@ -1683,7 +1877,7 @@ impl Player {
         // `GetItemCount(item, checkInBank=true)`: every
         // character_inventory row (equipped, bags, bank).
         let mut counts: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
-        for inv in &self.saved.inventory {
+        for inv in &self.deferred.inventory {
             *counts.entry(inv.item.item_id).or_default() += inv.item.count;
         }
         for row in &mut self.deferred.quest_status {
@@ -1887,7 +2081,7 @@ impl Player {
     /// 19..23). Row `bag` values are container item
     /// guids; 0 marks a direct character slot.
     fn inventory_bag_guids(&self) -> Vec<u32> {
-        self.saved
+        self.deferred
             .inventory
             .iter()
             .filter(|inv| inv.bag == 0 && (19..23).contains(&inv.slot))
@@ -1901,14 +2095,14 @@ impl Player {
     /// equipment, backpack, and keyring direct rows
     /// plus inventory-bag contents; bank rows and
     /// bank-bag contents excluded. Session grants
-    /// and destroys keep `saved.inventory` in
+    /// and destroys keep `deferred.inventory` in
     /// lockstep with their DB-row writes. The fork's
     /// `IsInTrade` exclusion in `HasItemCount` has
     /// no row flag here.)
     #[must_use]
     pub fn quest_item_count(&self, item_id: u32) -> u32 {
         let bags = self.inventory_bag_guids();
-        self.saved
+        self.deferred
             .inventory
             .iter()
             .filter(|inv| inv.item.item_id == item_id)
@@ -1933,7 +2127,7 @@ impl Player {
     pub fn quest_destroy_candidates(&self, item_id: u32) -> Vec<(u32, u32)> {
         let direct = |range: std::ops::Range<u8>| -> Vec<(u32, u32)> {
             let mut rows: Vec<(u8, u32, u32)> = self
-                .saved
+                .deferred
                 .inventory
                 .iter()
                 .filter(|inv| {
@@ -1949,7 +2143,7 @@ impl Player {
         let mut out = direct(23..39);
         out.extend(direct(81..97));
         let mut bag_slots: Vec<(u8, u32)> = self
-            .saved
+            .deferred
             .inventory
             .iter()
             .filter(|inv| inv.bag == 0 && (19..23).contains(&inv.slot))
@@ -1958,7 +2152,7 @@ impl Player {
         bag_slots.sort_by_key(|row| row.0);
         for (_, bag_guid) in bag_slots {
             let mut rows: Vec<(u8, u32, u32)> = self
-                .saved
+                .deferred
                 .inventory
                 .iter()
                 .filter(|inv| inv.bag == bag_guid && inv.item.item_id == item_id)
@@ -1968,6 +2162,86 @@ impl Player {
             out.extend(rows.into_iter().map(|(_, guid, count)| (guid, count)));
         }
         out
+    }
+
+    /// `ItemAddedQuestCheck`: for each incomplete
+    /// DELIVER quest in log-slot order whose item
+    /// objectives include `item_id`, increment the
+    /// first matching objective (capped at the
+    /// required count), then run the completion
+    /// transition. Callers invoke this after the
+    /// gained item is present in the live inventory
+    /// (fork `StoreNewItem` checks before storing,
+    /// but its counts are row increments, not an
+    /// inventory recount; `can_complete_quest` here
+    /// recounts from inventory, so post-store is the
+    /// equivalent point in this architecture).
+    pub fn item_added_quest_check(
+        &mut self,
+        item_id: u32,
+        count: u32,
+        templates: &QuestTemplates,
+    ) -> Vec<QuestItemAddedUpdate> {
+        if count == 0 || item_id == 0 {
+            return Vec::new();
+        }
+        let mut quest_ids: Vec<u32> = Vec::new();
+        for slot in 0..20u16 {
+            let quest_id = self
+                .unit
+                .world
+                .object
+                .values()
+                .get_u32(offsets::PLAYER_QUEST_LOG_1_1 + slot * 3);
+            if quest_id != 0 && !quest_ids.contains(&quest_id) {
+                quest_ids.push(quest_id);
+            }
+        }
+
+        let mut updates = Vec::new();
+        for quest_id in quest_ids {
+            let Some(q) = templates.get(quest_id) else {
+                continue;
+            };
+            if !q.is_deliver() || self.quest_status(quest_id) != 3 {
+                continue;
+            }
+            for idx in 0..4 {
+                if q.req_item_ids[idx] != item_id {
+                    continue;
+                }
+                let req_count = q.req_item_counts[idx];
+                let (old_count, new_count) = {
+                    let Some(row) = self
+                        .deferred
+                        .quest_status
+                        .iter_mut()
+                        .find(|r| r.quest == quest_id)
+                    else {
+                        break;
+                    };
+                    let old_count = row.item_count[idx];
+                    let new_count = old_count.saturating_add(count).min(req_count);
+                    row.item_count[idx] = new_count;
+                    (old_count, new_count)
+                };
+                let completed = self.can_complete_quest(q) && self.complete_quest(quest_id);
+                if new_count > old_count || completed {
+                    #[allow(clippy::cast_possible_truncation)]
+                    updates.push(QuestItemAddedUpdate {
+                        quest_id,
+                        item_id,
+                        objective_index: idx as u8,
+                        old_count,
+                        new_count,
+                        notify: new_count > old_count && item_id != q.src_item_id,
+                        completed,
+                    });
+                }
+                break;
+            }
+        }
+        updates
     }
 
     /// `AdjustQuestReqItemCount`: recount the item
@@ -2072,44 +2346,76 @@ impl Player {
     /// inv-slot GUIDs + `SetVisibleItemSlot` words. Item
     /// objects and stat bonuses are deferred; suffix factor
     /// writes 0 (recomputed from loot tables in C++).
-    fn project_visible_equipment(&mut self, load: &CharacterLoad) {
-        for inv in &load.inventory {
-            if inv.bag != 0 || inv.slot >= EQUIPMENT_SLOT_END {
-                continue;
-            }
-            let slot = u16::from(inv.slot);
-            let item = &inv.item;
+    fn project_visible_equipment(&mut self, _load: &CharacterLoad) {
+        self.refresh_visible_equipment();
+    }
+
+    /// Full inv-slot + visible-item recompute from the
+    /// live rows (`SetInvSlot`/`SetVisibleItemSlot` on
+    /// every equip change, aggregate form): bag-0 rows
+    /// write their slot GUID (equipment, bags,
+    /// backpack, bank, keyring — fork slot range
+    /// 0..97), empty slots clear; equipment rows also
+    /// write the visible-item words.
+    pub fn refresh_visible_equipment(&mut self) {
+        const PLAYER_SLOT_END: u8 = 97; // KEYRING_SLOT_END
+        for slot in 0..PLAYER_SLOT_END {
+            let inv = self
+                .deferred
+                .inventory
+                .iter()
+                .find(|r| r.bag == 0 && r.slot == slot);
+            let slot16 = u16::from(slot);
             let v = self.unit.world.object.values_mut();
-            v.set_guid(
-                offsets::PLAYER_FIELD_INV_SLOT_HEAD + slot * 2,
-                ObjectGuid::new(HighGuid::ITEM, item.item_guid),
-            );
-            let base = offsets::PLAYER_VISIBLE_ITEM_1_0 + slot * MAX_VISIBLE_ITEM_OFFSET;
-            let creator = if item.creator_guid != 0 {
-                ObjectGuid::new(HighGuid::PLAYER, item.creator_guid)
+            if let Some(inv) = inv {
+                let item = &inv.item;
+                v.set_guid(
+                    offsets::PLAYER_FIELD_INV_SLOT_HEAD + slot16 * 2,
+                    ObjectGuid::new(HighGuid::ITEM, item.item_guid),
+                );
+                if slot < EQUIPMENT_SLOT_END {
+                    let base = offsets::PLAYER_VISIBLE_ITEM_1_0 + slot16 * MAX_VISIBLE_ITEM_OFFSET;
+                    let creator = if item.creator_guid != 0 {
+                        ObjectGuid::new(HighGuid::PLAYER, item.creator_guid)
+                    } else {
+                        ObjectGuid::default()
+                    };
+                    v.set_guid(
+                        offsets::PLAYER_VISIBLE_ITEM_1_CREATOR + slot16 * MAX_VISIBLE_ITEM_OFFSET,
+                        creator,
+                    );
+                    v.set_u32(base, item.item_id);
+                    for (i, enchant) in parse_enchant_ids(&item.enchantments)
+                        .into_iter()
+                        .enumerate()
+                    {
+                        v.set_u32(base + 1 + i as u16, enchant);
+                    }
+                    v.set_i16(
+                        offsets::PLAYER_VISIBLE_ITEM_1_PROPERTIES
+                            + slot16 * MAX_VISIBLE_ITEM_OFFSET,
+                        0,
+                        item.random_property_id,
+                    );
+                    v.set_u32(
+                        offsets::PLAYER_VISIBLE_ITEM_1_PROPERTIES
+                            + 1
+                            + slot16 * MAX_VISIBLE_ITEM_OFFSET,
+                        0,
+                    );
+                }
             } else {
-                ObjectGuid::default()
-            };
-            v.set_guid(
-                offsets::PLAYER_VISIBLE_ITEM_1_CREATOR + slot * MAX_VISIBLE_ITEM_OFFSET,
-                creator,
-            );
-            v.set_u32(base, item.item_id);
-            for (i, enchant) in parse_enchant_ids(&item.enchantments)
-                .into_iter()
-                .enumerate()
-            {
-                v.set_u32(base + 1 + i as u16, enchant);
+                v.set_guid(
+                    offsets::PLAYER_FIELD_INV_SLOT_HEAD + slot16 * 2,
+                    ObjectGuid::EMPTY,
+                );
+                if slot < EQUIPMENT_SLOT_END {
+                    let base = offsets::PLAYER_VISIBLE_ITEM_1_0 + slot16 * MAX_VISIBLE_ITEM_OFFSET;
+                    for i in 0..MAX_VISIBLE_ITEM_OFFSET {
+                        v.set_u32(base + i, 0);
+                    }
+                }
             }
-            v.set_i16(
-                offsets::PLAYER_VISIBLE_ITEM_1_PROPERTIES + slot * MAX_VISIBLE_ITEM_OFFSET,
-                0,
-                item.random_property_id,
-            );
-            v.set_u32(
-                offsets::PLAYER_VISIBLE_ITEM_1_PROPERTIES + 1 + slot * MAX_VISIBLE_ITEM_OFFSET,
-                0,
-            );
         }
     }
 }

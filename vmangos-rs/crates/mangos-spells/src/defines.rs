@@ -32,6 +32,21 @@ pub mod effect {
     pub const ENCHANT_ITEM_TEMPORARY: u32 = 54;
     pub const RESURRECT_NEW: u32 = 113;
     pub const ATTACK_ME: u32 = 114;
+    /// `SPELL_EFFECT_SKILL` (`SpellDefines.h:329`):
+    /// profession-rank spells carry it at index 1.
+    pub const SKILL: u32 = 118;
+    /// `SPELL_EFFECT_SEND_TAXI` (`SpellDefines.h`):
+    /// misc value is the taxi path id.
+    pub const SEND_TAXI: u32 = 123;
+    /// `SPELL_EFFECT_SUMMON_OBJECT_WILD`
+    /// (`SpellDefines.h:287`).
+    pub const SUMMON_OBJECT_WILD: u32 = 76;
+    /// `SPELL_EFFECT_SUMMON_OBJECT_SLOT1..4`
+    /// (`SpellDefines.h:315-318`).
+    pub const SUMMON_OBJECT_SLOT1: u32 = 104;
+    pub const SUMMON_OBJECT_SLOT2: u32 = 105;
+    pub const SUMMON_OBJECT_SLOT3: u32 = 106;
+    pub const SUMMON_OBJECT_SLOT4: u32 = 107;
     pub const PERSISTENT_AREA_AURA: u32 = 27;
     pub const ENERGIZE: u32 = 30;
     pub const TRIGGER_SPELL: u32 = 64;
@@ -138,6 +153,7 @@ pub mod aura {
     pub const RESIST_PUSHBACK: u32 = 149;
     pub const MOD_INVISIBILITY: u32 = 18;
     pub const MOD_CASTING_SPEED_NOT_STACK: u32 = 65;
+    pub const FEIGN_DEATH: u32 = 66;
     pub const MOD_POWER_COST_SCHOOL_PCT: u32 = 72;
     pub const MOD_POWER_COST_SCHOOL: u32 = 73;
     pub const REFLECT_SPELLS_SCHOOL: u32 = 74;
@@ -250,6 +266,7 @@ pub mod aura_interrupt_flag {
     pub const DAMAGE_CHANNEL_DURATION: u32 = 0x0000_4000;
     pub const MOUNT_CANCELS: u32 = 0x0002_0000;
     pub const SHAPESHIFTING_CANCELS: u32 = 0x0000_8000;
+    pub const INTERACTING_CANCELS: u32 = 0x0000_0400;
 }
 
 /// `enum SpellTargetType` (`SpellDefines.h:25+`), subset.
@@ -334,10 +351,12 @@ pub mod cast_result {
     pub const FAILED_IMMUNE: u8 = 34;
     pub const FAILED_LINE_OF_SIGHT: u8 = 42;
     pub const FAILED_NOT_READY: u8 = 60;
+    pub const FAILED_NOT_SHAPESHIFT: u8 = 61;
     pub const FAILED_NOT_KNOWN: u8 = 56;
     pub const FAILED_NO_MOUNTS_ALLOWED: u8 = 75;
     pub const FAILED_INTERRUPTED: u8 = 35;
     pub const FAILED_NO_POWER: u8 = 77;
+    pub const FAILED_ONLY_SHAPESHIFT: u8 = 86;
     pub const FAILED_OUT_OF_RANGE: u8 = 89;
     pub const FAILED_SILENCED: u8 = 96;
     pub const FAILED_CONFUSED: u8 = 22;

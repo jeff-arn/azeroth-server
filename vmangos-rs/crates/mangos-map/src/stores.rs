@@ -86,6 +86,9 @@ pub struct WorldStores {
     pub quest_templates: mangos_world_data::quest_template::QuestTemplates,
     /// Questgiver start/end relations (Tier 1 Slice 1a).
     pub quest_relations: mangos_world_data::quest_template::QuestRelations,
+    /// Default gossip menus/options/npc texts
+    /// (`LoadGossipMenu` family, Tier 4 gnome probe).
+    pub gossip: mangos_world_data::gossip_menus::GossipStores,
     /// `areatrigger_tavern` ids (Phase 6 Slice 1b rest).
     pub tavern_triggers: std::collections::HashSet<u32>,
     /// `exploration_basexp` (depth Slice 1b).
@@ -97,6 +100,35 @@ pub struct WorldStores {
     /// seeded past `MAX(character_pet.id)` at boot,
     /// bumped past any loaded row id.
     pub next_pet_number: std::sync::atomic::AtomicU32,
+    /// `ObjectMgr::GenerateItemGuid` low counter
+    /// (Tier 4 step 4b2): seeded past
+    /// `MAX(item_instance.guid)` at boot; the
+    /// DB-immediate grant path bumps it past any
+    /// guid it allocates (`observe_item_guid`).
+    pub next_item_guid: std::sync::atomic::AtomicU32,
+    /// Vendor stock lists (Tier 4 step 4c).
+    pub vendor_items: mangos_world_data::vendor_items::VendorItemStores,
+    /// Durability repair cost tables (Tier 4 step 4c).
+    pub durability: mangos_world_data::durability::DurabilityTables,
+    /// `BankBagSlotPrices.dbc` by slot id (Tier 4
+    /// step 4d); index 0 unused.
+    pub bank_bag_slot_prices: Vec<u32>,
+    /// `StableSlotPrices.dbc` indexed by slot number
+    /// (fork `sStableSlotPricesStore`; Tier 4 step
+    /// 4h).
+    pub stable_slot_prices: Vec<u32>,
+    /// Trainer spell lists and greetings (Tier 4
+    /// step 4e).
+    pub trainer_spells: mangos_world_data::trainer_spells::TrainerStores,
+    /// Taxi flight graph (Tier 4 step 4f).
+    pub taxi: mangos_world_data::taxi::TaxiStore,
+    /// Escort script waypoints (Tier 4 B0-6).
+    pub script_waypoints: mangos_world_data::script_waypoints::ScriptWaypointStore,
+    /// Game-event definitions and spawn lists
+    /// (Tier 4 B0-8).
+    pub game_events: mangos_world_data::game_events::GameEvents,
+    /// Loot templates (Tier 4 B0-10).
+    pub loot: mangos_world_data::loot::LootStores,
 }
 
 impl WorldStores {
@@ -138,12 +170,23 @@ impl WorldStores {
             quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
             quest_templates: mangos_world_data::quest_template::QuestTemplates::default(),
             quest_relations: mangos_world_data::quest_template::QuestRelations::default(),
+            gossip: mangos_world_data::gossip_menus::GossipStores::default(),
             tavern_triggers: std::collections::HashSet::new(),
             exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(),
             chat_channels: ChatChannelDbc::default(),
             auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
             pets: mangos_world_data::pet_data::PetStores::default(),
             next_pet_number: std::sync::atomic::AtomicU32::new(1),
+            next_item_guid: std::sync::atomic::AtomicU32::new(1),
+            vendor_items: mangos_world_data::vendor_items::VendorItemStores::default(),
+            durability: mangos_world_data::durability::DurabilityTables::default(),
+            bank_bag_slot_prices: Vec::new(),
+            stable_slot_prices: Vec::new(),
+            trainer_spells: mangos_world_data::trainer_spells::TrainerStores::default(),
+            taxi: mangos_world_data::taxi::TaxiStore::default(),
+            script_waypoints: mangos_world_data::script_waypoints::ScriptWaypointStore::default(),
+            game_events: mangos_world_data::game_events::GameEvents::default(),
+            loot: mangos_world_data::loot::LootStores::default(),
         }
     }
 
@@ -154,6 +197,19 @@ impl WorldStores {
     pub fn generate_pet_number(&self) -> u32 {
         self.next_pet_number
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Allocate the next item instance guid.
+    pub fn generate_item_guid(&self) -> u32 {
+        self.next_item_guid
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Keep the item counter past an externally
+    /// allocated guid (DB-immediate grants).
+    pub fn observe_item_guid(&self, item_guid: u32) {
+        self.next_item_guid
+            .fetch_max(item_guid + 1, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Keep the counter past a loaded row id (fork

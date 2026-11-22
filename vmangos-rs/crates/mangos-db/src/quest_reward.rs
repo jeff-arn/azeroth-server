@@ -37,9 +37,23 @@ fn plain_enchantments() -> String {
 /// reward exactly as `RewardQuest` does when
 /// `CanStoreNewItem` fails there.
 ///
+/// Highest persisted item instance guid (boot seed
+/// for the runtime item-guid generator).
+///
 /// # Errors
 ///
 /// Returns [`DbError`] on driver failure.
+pub fn max_item_guid(conn: &mut mysql::Conn) -> Result<u32, DbError> {
+    let row: Option<mysql::Row> = conn
+        .query_first("SELECT COALESCE(MAX(`guid`), 0) FROM `item_instance`")
+        .map_err(DbError::Driver)?;
+    Ok(row.and_then(|r| r.get(0)).unwrap_or_default())
+}
+
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+#[allow(clippy::too_many_arguments)] // flat column list of the two INSERTs
 pub fn create_reward_item(
     conn: &mut mysql::Conn,
     owner_low: u32,
@@ -48,13 +62,14 @@ pub fn create_reward_item(
     bag: u32,
     slot: u32,
     creator_low: u32,
+    durability: u32,
 ) -> Result<u32, DbError> {
     let item_low = next_item_guid(conn)?;
     conn.exec_drop(
         "INSERT INTO `item_instance` (`guid`, `item_id`, `owner_guid`, `creator_guid`, \
          `gift_creator_guid`, `count`, `duration`, `charges`, `flags`, `enchantments`, \
          `random_property_id`, `durability`, `text`, `generated_loot`) \
-         VALUES (?, ?, ?, ?, 0, ?, 0, '0 0 0 0 0 ', 0, ?, 0, 0, 0, 0)",
+         VALUES (?, ?, ?, ?, 0, ?, 0, '0 0 0 0 0 ', 0, ?, 0, ?, 0, 0)",
         (
             item_low,
             item_id,
@@ -62,6 +77,7 @@ pub fn create_reward_item(
             creator_low,
             count,
             plain_enchantments(),
+            durability,
         ),
     )
     .map_err(DbError::Driver)?;

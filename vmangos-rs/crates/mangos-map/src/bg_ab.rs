@@ -274,9 +274,9 @@ impl Map {
     /// Constructor: `m_buffChange = true` +
     /// `m_bgObjects.resize(16)` + start messages.
     /// Buff-change swaps run through
-    /// `HandleTriggerBuff` (trap GO runtime
-    /// unmodeled, recorded in the class doc above);
-    /// start messages are seeded by `BgState::new`.
+    /// `HandleTriggerBuff` (Tier 4 B0-5 trap
+    /// runtime); start messages are seeded by
+    /// `BgState::new`.
     pub(crate) fn ab_construct(&mut self) {
         if let Some(bg) = self.bg.as_mut() {
             bg.buff_change = true;
@@ -290,9 +290,9 @@ impl Map {
         if self.ab().is_some_and(|ab| ab.honor_tics != 0) {
             return true;
         }
-        // buff trap objects (dynamic creation
-        // unmodeled: bg_add_object returns false and
-        // the fork only logs the failure).
+        // Buff trap objects (`AddObject` blueprints;
+        // materialized at `StartingEventOpenDoors`,
+        // Tier 4 B0-5).
         for (i, buf) in AB_BUFF_POSITIONS.iter().enumerate() {
             let pos = Position::new(buf[0], buf[1], buf[2], buf[3]);
             let rotation = (0.0, 0.0, (buf[3] / 2.0).sin(), (buf[3] / 2.0).cos());

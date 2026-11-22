@@ -283,6 +283,24 @@ pub struct BroadcastText {
 /// Broadcast text id -> row.
 pub type BroadcastTextMap = HashMap<u32, BroadcastText>;
 
+/// One `npc_text` option (`NpcTextOption`,
+/// `NPCHandler.h:59`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct NpcTextOption {
+    pub probability: f32,
+    pub broadcast_text_id: u32,
+}
+
+/// One `npc_text` row (`NpcText`, `NPCHandler.h:65`):
+/// the 8 weighted text options.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NpcText {
+    pub options: [NpcTextOption; 8],
+}
+
+/// Npc text id -> row (`ObjectMgr::LoadNPCText`).
+pub type NpcTextMap = HashMap<u32, NpcText>;
+
 /// One `script_texts` row (`StringTextData` + the
 /// enUS content from `script_texts.content_default`).
 #[derive(Clone, Debug, PartialEq)]
@@ -326,6 +344,9 @@ pub struct ScriptStores {
     /// `npc_gossip`: spawn guid low → `npc_text` id
     /// (`ObjectMgr::LoadNpcGossips`).
     pub npc_gossips: HashMap<u32, u32>,
+    /// `npc_text`: text id → weighted options
+    /// (`ObjectMgr::LoadNPCText`).
+    pub npc_texts: NpcTextMap,
     /// `areatrigger_scripts` DB scripts
     /// (`sAreaTriggerScripts`, `ScriptMgr.cpp:1388`).
     pub area_trigger_scripts: ScriptMapMap,

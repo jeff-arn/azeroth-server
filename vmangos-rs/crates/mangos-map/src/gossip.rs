@@ -13,7 +13,7 @@
 //! interaction (fork `false`); select returns
 //! `None` likewise.
 
-use mangos_entities::unit::Team;
+use mangos_entities::unit::{Team, UnitBase};
 use mangos_guid::ObjectGuid;
 use mangos_protocol::update_field_table::offsets;
 use mangos_world_data::spawns::WorldLocation;
@@ -63,6 +63,107 @@ pub enum GossipSelectOutcome {
     /// A follow-up `SendGossipMenu`.
     ShowMenu(GossipMenuData),
 }
+
+/// One default-menu `GossipMenuItem` plus its
+/// `GossipMenuItemData` (`PrepareGossipMenu` output,
+/// non-script arm).
+#[derive(Clone, Debug)]
+pub struct DefaultGossipItem {
+    pub icon: u8,
+    pub coded: bool,
+    pub text: String,
+    pub box_text: String,
+    /// `m_gBoxMoney` (client confirmation popup amount).
+    pub box_money: u32,
+    /// `m_gOptionId` (`GossipOption`).
+    pub option_id: u32,
+    pub action_menu_id: i32,
+    pub action_poi_id: u32,
+    pub action_script_id: u32,
+}
+
+/// `PrepareGossipMenu` + `SendPreparedGossip` inputs for
+/// the actor-side quest menu assembly: the session layer
+/// computes `PrepareQuestMenu` itself (quest state lives
+/// there) and applies the `SendPreparedGossip` branch
+/// (just-discovered taxi node, quest-list redirect).
+#[derive(Clone, Debug)]
+pub struct DefaultGossipMenu {
+    pub text_id: u32,
+    pub items: Vec<DefaultGossipItem>,
+    /// `canSeeQuests` from `PrepareGossipMenu`.
+    pub can_see_quests: bool,
+    /// Creature `UNIT_NPC_FLAGS` for the
+    /// `SendPreparedGossip` quest-list redirect.
+    pub npc_flags: u32,
+    /// `GossipMenu::IsJustDiscoveredNode`.
+    pub just_discovered_node: bool,
+}
+
+/// Result of a default-menu gossip select
+/// (`Player::OnGossipSelect` creature arm). Service
+/// packets the map emits itself (vendor list, stable,
+/// taxi menu, talent wipe, bank) ride `MapEvent`s;
+/// `Done` means the actor sends nothing further.
+#[derive(Clone, Debug)]
+pub enum DefaultGossipSelect {
+    /// `CloseGossip` only.
+    Close,
+    /// A follow-up default menu (actor re-assembles
+    /// with its quest menu).
+    ShowMenu(DefaultGossipMenu),
+    /// `SendPreparedQuest` via the actor quest list.
+    QuestList,
+    /// `SendTrainerList` (actor supplies the default
+    /// title string).
+    TrainerList,
+    /// `CloseGossip` + `SendPetitionShowList` (actor).
+    PetitionShowList,
+    /// `CloseGossip` + `SendTabardVendorActivate`
+    /// (actor).
+    TabardActivate,
+    /// `SendAuctionHello` (actor).
+    AuctionHello,
+    /// `SendBattleGroundList` for this BG type (actor).
+    BattlefieldList(u32),
+    /// `CloseGossip` + `SetBindPoint`
+    /// (`SMSG_BINDER_CONFIRM`, actor).
+    BinderConfirm,
+    /// Map already emitted the service packet(s), or
+    /// the fork returns silently.
+    Done,
+}
+
+/// `GossipOption` (`GossipDef.h:37-55`).
+const GOSSIP_OPTION_GOSSIP: u32 = 1;
+const GOSSIP_OPTION_QUESTGIVER: u32 = 2;
+const GOSSIP_OPTION_VENDOR: u32 = 3;
+const GOSSIP_OPTION_TAXIVENDOR: u32 = 4;
+const GOSSIP_OPTION_TRAINER: u32 = 5;
+const GOSSIP_OPTION_SPIRITHEALER: u32 = 6;
+const GOSSIP_OPTION_SPIRITGUIDE: u32 = 7;
+const GOSSIP_OPTION_INNKEEPER: u32 = 8;
+const GOSSIP_OPTION_BANKER: u32 = 9;
+const GOSSIP_OPTION_PETITIONER: u32 = 10;
+const GOSSIP_OPTION_TABARDDESIGNER: u32 = 11;
+const GOSSIP_OPTION_BATTLEFIELD: u32 = 12;
+const GOSSIP_OPTION_AUCTIONEER: u32 = 13;
+const GOSSIP_OPTION_STABLEPET: u32 = 14;
+const GOSSIP_OPTION_ARMORER: u32 = 15;
+const GOSSIP_OPTION_UNLEARNTALENTS: u32 = 16;
+const GOSSIP_OPTION_UNLEARNPETSKILLS: u32 = 17;
+
+/// `UNIT_NPC_FLAG_QUESTGIVER`.
+const NPC_FLAG_QUESTGIVER: u32 = 0x2;
+/// `CLASS_HUNTER`.
+const CLASS_HUNTER: u8 = 3;
+/// `TRAINER_TYPE_CLASS`.
+const TRAINER_TYPE_CLASS_GOSSIP: u32 = 0;
+/// `TRAINER_TYPE_PETS`.
+const TRAINER_TYPE_PETS_GOSSIP: u32 = 3;
+/// Spirit healer resurrect cast
+/// (`OnGossipSelect` spirit-healer arm).
+const SPELL_SPIRIT_HEAL: u32 = 17251;
 
 /// `DEFAULT_GOSSIP_MESSAGE` (`GossipDef.h:33`).
 const DEFAULT_GOSSIP_MESSAGE: u32 = 16_777_215;
@@ -241,6 +342,326 @@ impl Map {
             .copied()
             .filter(|id| *id != 0)
             .unwrap_or(DEFAULT_GOSSIP_MESSAGE)
+    }
+
+    /// `Player::GetGossipTextId(menuId, pSource)`
+    /// (`Player.cpp:12242`): highest-condition fitting
+    /// `gossip_menu` text, else `DEFAULT_GOSSIP_MESSAGE`.
+    /// UNMODELED: the row `script_id` `ScriptsStart`
+    /// (`sGossipScripts` are not loaded).
+    fn gossip_menu_text_id(&self, menu_id: u32, player: ObjectGuid, npc: ObjectGuid) -> u32 {
+        if menu_id == 0 {
+            return DEFAULT_GOSSIP_MESSAGE;
+        }
+        let mut text_id = DEFAULT_GOSSIP_MESSAGE;
+        let mut last_condition_id = 0;
+        for row in self.stores.gossip.menu_texts(menu_id) {
+            let fits = (row.condition_id == 0 && last_condition_id == 0)
+                || (row.condition_id > last_condition_id
+                    && self.condition_satisfied(row.condition_id, Some(player), Some(npc)));
+            if fits {
+                last_condition_id = row.condition_id;
+                text_id = row.text_id;
+            }
+        }
+        text_id
+    }
+
+    /// `Creature::CanInteractWithBattleMaster(player,
+    /// false)` subset: battlemaster entry + level access
+    /// via the battleground template's level bracket.
+    /// UNMODELED: the exact `GetBGAccessByLevel` bracket
+    /// table (template min/max level used instead).
+    fn can_interact_with_battle_master(&self, player: ObjectGuid, npc: ObjectGuid) -> bool {
+        let Some(creature) = self.creature(npc) else {
+            return false;
+        };
+        let bg_type = self.stores.battlemasters.bg_type(creature.info.entry);
+        if bg_type == 0 {
+            return false;
+        }
+        let level = self.unit_base(player).map_or(0, UnitBase::level);
+        match self.stores.battlegrounds.get(bg_type) {
+            Some(tpl) => level >= tpl.min_level && (tpl.max_level == 0 || level <= tpl.max_level),
+            None => true,
+        }
+    }
+
+    /// `HandleGossipHelloOpcode` non-script arm
+    /// (`NPCHandler.cpp:378-382`): prepare the
+    /// creature's default gossip menu. `None` when the
+    /// fork returns silently (cannot interact).
+    /// UNMODELED: `PauseOutOfCombatMovement`, the
+    /// spirit-guide area query, and GO gossip hello
+    /// (GOs reach the quest list through `Use`).
+    pub fn gossip_default_hello(
+        &mut self,
+        player: ObjectGuid,
+        npc: ObjectGuid,
+    ) -> Option<DefaultGossipMenu> {
+        if !self.npc_if_can_interact_with(player, npc, 0) {
+            return None;
+        }
+        let menu_id = self.creature(npc)?.gossip_menu_id;
+        Some(self.gossip_prepare_menu(player, npc, menu_id))
+    }
+
+    /// `Player::PrepareGossipMenu` (creature source)
+    /// plus the `SendPreparedGossip` text pick; the
+    /// quest menu itself is assembled actor-side from
+    /// `can_see_quests`.
+    fn gossip_prepare_menu(
+        &mut self,
+        player: ObjectGuid,
+        npc: ObjectGuid,
+        menu_id: u32,
+    ) -> DefaultGossipMenu {
+        let (npc_flags, default_menu_id, info) = {
+            let Some(creature) = self.creature(npc) else {
+                return DefaultGossipMenu {
+                    text_id: DEFAULT_GOSSIP_MESSAGE,
+                    items: Vec::new(),
+                    can_see_quests: false,
+                    npc_flags: 0,
+                    just_discovered_node: false,
+                };
+            };
+            (
+                creature
+                    .unit
+                    .world
+                    .object
+                    .values()
+                    .get_u32(offsets::UNIT_NPC_FLAGS),
+                creature.gossip_menu_id,
+                creature.info.clone(),
+            )
+        };
+        let default_menu = menu_id == default_menu_id;
+        let mut can_see_quests = default_menu && npc_flags & NPC_FLAG_QUESTGIVER != 0;
+        let mut options = self.stores.gossip.menu_options(menu_id);
+        if options.is_empty() && default_menu {
+            options = self.stores.gossip.menu_options(0);
+        }
+        let options: Vec<_> = options.to_vec();
+        let player_alive = self.unit_base(player).is_some_and(UnitBase::is_alive);
+        let player_class = self.unit_base(player).map_or(0, UnitBase::class);
+        let player_level = self.unit_base(player).map_or(0, UnitBase::level);
+        let mut items = Vec::new();
+        let mut just_discovered_node = false;
+        for opt in &options {
+            if opt.condition_id != 0
+                && !self.condition_satisfied(opt.condition_id, Some(player), Some(npc))
+            {
+                if opt.option_id == GOSSIP_OPTION_QUESTGIVER {
+                    can_see_quests = false;
+                }
+                continue;
+            }
+            if opt.npc_option_npcflag & npc_flags == 0 {
+                continue;
+            }
+            let mut has_item = true;
+            match opt.option_id {
+                GOSSIP_OPTION_GOSSIP => {}
+                GOSSIP_OPTION_QUESTGIVER | GOSSIP_OPTION_ARMORER => has_item = false,
+                GOSSIP_OPTION_SPIRITHEALER => {
+                    if player_alive {
+                        has_item = false;
+                    }
+                }
+                GOSSIP_OPTION_VENDOR => {
+                    if self.vendor_rows(npc).is_empty() {
+                        has_item = false;
+                    }
+                }
+                GOSSIP_OPTION_TRAINER => {
+                    if !self.is_trainer_of(player, npc, false) {
+                        has_item = false;
+                    }
+                }
+                GOSSIP_OPTION_UNLEARNTALENTS => {
+                    // `CanTrainAndResetTalentsOf`
+                    // (`Creature.cpp:1433`).
+                    if !(player_level >= 10
+                        && info.trainer_type == TRAINER_TYPE_CLASS_GOSSIP
+                        && u32::from(player_class) == info.trainer_class)
+                    {
+                        has_item = false;
+                    }
+                }
+                GOSSIP_OPTION_UNLEARNPETSKILLS => {
+                    let pet_ok = self.pet_of(player).is_some_and(|pet| {
+                        self.pets
+                            .get(&pet)
+                            .is_some_and(|st| st.is_hunter() && st.spells.len() > 1)
+                    });
+                    if !(pet_ok
+                        && info.trainer_type == TRAINER_TYPE_PETS_GOSSIP
+                        && info.trainer_class == u32::from(CLASS_HUNTER))
+                    {
+                        has_item = false;
+                    }
+                }
+                GOSSIP_OPTION_TAXIVENDOR => {
+                    if self.send_learn_new_taxi_node(player, npc) {
+                        just_discovered_node = true;
+                    }
+                }
+                GOSSIP_OPTION_BATTLEFIELD => {
+                    if !self.can_interact_with_battle_master(player, npc) {
+                        has_item = false;
+                    }
+                }
+                GOSSIP_OPTION_STABLEPET => {
+                    if player_class != CLASS_HUNTER {
+                        has_item = false;
+                    }
+                }
+                GOSSIP_OPTION_SPIRITGUIDE
+                | GOSSIP_OPTION_INNKEEPER
+                | GOSSIP_OPTION_BANKER
+                | GOSSIP_OPTION_PETITIONER
+                | GOSSIP_OPTION_TABARDDESIGNER
+                | GOSSIP_OPTION_AUCTIONEER => {}
+                _ => has_item = false,
+            }
+            if has_item {
+                let text = if opt.option_broadcast_text != 0 {
+                    self.gossip_broadcast_text(opt.option_broadcast_text, player)
+                } else {
+                    opt.option_text.clone()
+                };
+                let box_text = if opt.box_broadcast_text != 0 {
+                    self.gossip_broadcast_text(opt.box_broadcast_text, player)
+                } else {
+                    opt.box_text.clone()
+                };
+                #[allow(clippy::cast_possible_truncation)]
+                items.push(DefaultGossipItem {
+                    icon: opt.option_icon as u8,
+                    coded: opt.box_coded,
+                    text,
+                    box_text,
+                    box_money: opt.box_money,
+                    option_id: opt.option_id,
+                    action_menu_id: opt.action_menu_id,
+                    action_poi_id: opt.action_poi_id,
+                    action_script_id: opt.action_script_id,
+                });
+            }
+        }
+        // `SendPreparedGossip` text pick: npc_gossip
+        // text first, overwritten by the menu text when
+        // a menu is set (fork order).
+        let mut text_id = self.gossip_text_id(npc);
+        if menu_id != 0 {
+            text_id = self.gossip_menu_text_id(menu_id, player, npc);
+        }
+        DefaultGossipMenu {
+            text_id,
+            items,
+            can_see_quests,
+            npc_flags,
+            just_discovered_node,
+        }
+    }
+
+    /// `Player::OnGossipSelect` creature arm
+    /// (`Player.cpp:12108`) for default-menu items.
+    /// UNMODELED: `SendPointOfInterest` (no
+    /// `points_of_interest` load) and the
+    /// `action_script_id` `sGossipScripts` start.
+    pub fn gossip_default_select(
+        &mut self,
+        player: ObjectGuid,
+        npc: ObjectGuid,
+        item: &DefaultGossipItem,
+    ) -> DefaultGossipSelect {
+        if !self.npc_if_can_interact_with(player, npc, 0) {
+            return DefaultGossipSelect::Done;
+        }
+        match item.option_id {
+            GOSSIP_OPTION_GOSSIP => match item.action_menu_id.cmp(&0) {
+                std::cmp::Ordering::Greater => {
+                    #[allow(clippy::cast_sign_loss)]
+                    let menu = self.gossip_prepare_menu(player, npc, item.action_menu_id as u32);
+                    DefaultGossipSelect::ShowMenu(menu)
+                }
+                std::cmp::Ordering::Less => {
+                    // `TalkedToCreature` kill credit.
+                    let entry = self.creature(npc).map_or(0, |c| c.info.entry);
+                    self.quest_kill_credit_one(player, npc, entry);
+                    DefaultGossipSelect::Close
+                }
+                std::cmp::Ordering::Equal => DefaultGossipSelect::Done,
+            },
+            GOSSIP_OPTION_SPIRITHEALER => {
+                if !self.unit_base(player).is_some_and(UnitBase::is_alive) {
+                    self.cast_spell_with_original_caster(
+                        npc,
+                        player,
+                        SPELL_SPIRIT_HEAL,
+                        CastTarget::Unit(npc),
+                        crate::spells::CastOptions {
+                            triggered: true,
+                            skip_known: true,
+                            ..Default::default()
+                        },
+                    );
+                }
+                DefaultGossipSelect::Done
+            }
+            GOSSIP_OPTION_QUESTGIVER => DefaultGossipSelect::QuestList,
+            GOSSIP_OPTION_VENDOR | GOSSIP_OPTION_ARMORER => {
+                self.send_list_inventory(player, npc);
+                DefaultGossipSelect::Done
+            }
+            GOSSIP_OPTION_STABLEPET => {
+                self.list_stabled_pets(player, npc);
+                DefaultGossipSelect::Done
+            }
+            GOSSIP_OPTION_TRAINER => DefaultGossipSelect::TrainerList,
+            GOSSIP_OPTION_UNLEARNTALENTS => {
+                self.send_talent_wipe_confirm(player, npc);
+                DefaultGossipSelect::Close
+            }
+            GOSSIP_OPTION_UNLEARNPETSKILLS => {
+                // `SendPetSkillWipeConfirm`: close, then
+                // the confirm packet is emitted map-side
+                // by the pet unlearn confirm helper when
+                // present; the close itself is fork-exact.
+                // UNMODELED: `SMSG_PET_UNLEARN_CONFIRM`
+                // send (pet reset-cost packet not ported).
+                DefaultGossipSelect::Close
+            }
+            GOSSIP_OPTION_TAXIVENDOR => {
+                self.send_taxi_menu(player, npc);
+                DefaultGossipSelect::Done
+            }
+            GOSSIP_OPTION_INNKEEPER => DefaultGossipSelect::BinderConfirm,
+            GOSSIP_OPTION_BANKER => {
+                self.banker_activate(player, npc);
+                DefaultGossipSelect::Done
+            }
+            GOSSIP_OPTION_PETITIONER => DefaultGossipSelect::PetitionShowList,
+            GOSSIP_OPTION_TABARDDESIGNER => DefaultGossipSelect::TabardActivate,
+            GOSSIP_OPTION_AUCTIONEER => DefaultGossipSelect::AuctionHello,
+            GOSSIP_OPTION_SPIRITGUIDE => {
+                let menu_id = self.creature(npc).map_or(0, |c| c.gossip_menu_id);
+                DefaultGossipSelect::ShowMenu(self.gossip_prepare_menu(player, npc, menu_id))
+            }
+            GOSSIP_OPTION_BATTLEFIELD => {
+                let entry = self.creature(npc).map_or(0, |c| c.info.entry);
+                let bg_type = self.stores.battlemasters.bg_type(entry);
+                if bg_type == 0 {
+                    DefaultGossipSelect::Done
+                } else {
+                    DefaultGossipSelect::BattlefieldList(bg_type)
+                }
+            }
+            _ => DefaultGossipSelect::Done,
+        }
     }
 
     /// `pGossipHello` dispatch: `Some(menu)` when a
@@ -558,7 +979,7 @@ impl Map {
         let entries: Vec<u32> = self
             .player(player)
             .map(|p| {
-                p.saved
+                p.deferred
                     .inventory
                     .iter()
                     .map(|inv| inv.item.item_id)
@@ -575,7 +996,7 @@ impl Map {
             })
             .collect();
         if let Some(p) = self.player_mut(player) {
-            for (inv, max) in p.saved.inventory.iter_mut().zip(fixes) {
+            for (inv, max) in p.deferred.inventory.iter_mut().zip(fixes) {
                 if max > 0 {
                     inv.item.durability = u16::try_from(max).unwrap_or(u16::MAX);
                 }
@@ -1025,18 +1446,17 @@ impl Map {
     }
 
     /// `QuestAccept_npc_daphne_stilwell` (`westfall.cpp:168-179`): quest 1651
-    /// starts Daphne's escort.
+    /// starts Daphne's escort (Tier 4 B0-6).
     fn npc_daphne_stilwell_quest_accept(
         &mut self,
-        _player: ObjectGuid,
-        _npc: ObjectGuid,
+        player: ObjectGuid,
+        npc: ObjectGuid,
         quest_id: u32,
     ) {
+        const SAY_DS_START: i32 = 2360;
         if quest_id == EKB_QUEST_TOME_VALOR {
-            // UNMODELED: DoScriptText(SAY_DS_START = 2360) (cpp:172); no
-            // creature-speech helper on Map.
-            // UNMODELED: escort Start(true, player, quest, true) (cpp:175);
-            // escort control lives in AI, not on Map.
+            self.do_script_text(SAY_DS_START, npc, None, -1);
+            self.escort_start(npc, true, Some(player), quest_id, true, false);
         }
     }
 
@@ -2262,8 +2682,22 @@ impl Map {
         if quest_id != QUEST_ESCAPE_THROUGH_FORCE && quest_id != QUEST_ESCAPE_THROUGH_STEALTH {
             return;
         }
-        // UNMODELED: npc_volcorAI StartEscort(player, quest).
-        let _ = (player, npc);
+        // `npc_volcorAI::StartEscort`
+        // (darkshore.cpp:587-611) escort Start arm:
+        // stealth runs, force walks.
+        // UNMODELED (script remainder): stand state,
+        // facing, temp faction + start-paused on the
+        // stealth quest, force-dialogue state,
+        // UNIT_FLAG_IMMUNE_TO_NPC removal, and the
+        // volcor WaypointReached/dialogue script.
+        self.escort_start(
+            npc,
+            quest_id == QUEST_ESCAPE_THROUGH_STEALTH,
+            Some(player),
+            quest_id,
+            false,
+            false,
+        );
     }
 
     /// `QuestComplete_npc_terenthis` (darkshore.cpp:855-887, registered as
@@ -2376,19 +2810,21 @@ impl Map {
     /// `QuestAccept_celebras_spirit`
     /// (desolace/maraudon/boss_celebras_the_cursed.cpp:309-317):
     /// quest 7046 resets the spirit AI, plays `SAY_ACCEPT`, starts escort.
-    fn celebras_spirit_quest_accept(
-        &mut self,
-        _player: ObjectGuid,
-        npc: ObjectGuid,
-        quest_id: u32,
-    ) {
+    fn celebras_spirit_quest_accept(&mut self, player: ObjectGuid, npc: ObjectGuid, quest_id: u32) {
         const QUEST_SCEPTER: u32 = 7046;
         const SAY_ACCEPT: i32 = 8952;
         if quest_id != QUEST_SCEPTER {
             return;
         }
+        // `celebrasSpiritAI::QuestAccepted`
+        // (boss_celebras_the_cursed.cpp:203-208):
+        // Reset, text, escort Start(run).
+        self.creature_script_reset(npc);
         self.do_script_text(SAY_ACCEPT, npc, None, -1);
-        // UNMODELED: celebrasSpiritAI escort Start(true, player, quest) (incl. AI Reset).
+        self.escort_start(npc, true, Some(player), quest_id, false, false);
+        // UNMODELED (script remainder):
+        // `JustStartedEscort` pause + phase event
+        // timers of the celebras spirit script.
     }
 
     /// `GossipHello_npc_lady_jaina_proudmoore`

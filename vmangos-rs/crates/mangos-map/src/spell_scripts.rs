@@ -21,9 +21,39 @@ use mangos_movement::movement_info::Position;
 use mangos_protocol::update_field_table::offsets;
 use mangos_spells::entry::SpellEntry;
 
-use crate::spells::{CastOptions, CastTarget, PeriodicTick};
+use crate::procs::ProcHandlerCtx;
+use crate::spells::{AuraRemoveMode, CastOptions, CastTarget, PeriodicTick};
 
 impl Map {
+    /// `AuraScript::OnProc` dispatch
+    /// (`UnitAuraProcHandler.cpp` script protocol):
+    /// `Some(true)` = `PROC_OK`, `Some(false)` =
+    /// `PROC_FAILED`, `None` = default handler.
+    pub(crate) fn aura_script_on_proc(&mut self, ctx: &ProcHandlerCtx) -> Option<bool> {
+        match ctx.aura_spell.script_name.as_str() {
+            "spell_mage_ignite" => {
+                let victim = ctx.victim?;
+                #[allow(clippy::cast_possible_wrap)]
+                let original = ctx.original_amount as i32;
+                Some(self.mage_ignite_on_proc(
+                    ctx.owner,
+                    victim,
+                    original,
+                    ctx.aura_spell.id,
+                    ctx.cooldown,
+                ))
+            }
+            "spell_mage_combustion_proc" => Some(self.mage_combustion_proc_on_proc(
+                ctx.owner,
+                ctx.victim,
+                ctx.aura_spell.id,
+                ctx.proc_ex & mangos_spells::defines::proc_ex::CRITICAL_HIT != 0,
+                ctx.holder.proc_charges <= 1,
+            )),
+            _ => None,
+        }
+    }
+
     /// `SpellScript::OnCheckCast` dispatch: `Some(reason)` fails
     /// the cast with that `SpellCastResult` byte.
     pub(crate) fn spell_script_on_check_cast(
@@ -68,6 +98,31 @@ impl Map {
     /// the effect. `script_damage` is the mutable
     /// `Spell::damage` equivalent for this victim's effect pass.
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)] // fork hook context + arm table
+    /// `SpellScript::OnInit` dispatch (fork
+    /// `Spell` construction, `Spell.cpp:309`):
+    /// rolls per-cast script state into
+    /// `script_effect_pick`. The Darkmoon tonk
+    /// arm stays unwired: it needs the fork's
+    /// temporary-pet unsummon/resummon pair
+    /// (`m_temporaryUnsummonedPetNumber`), which
+    /// the pet runtime does not carry yet —
+    /// unsummoning without resummon would strand
+    /// hunter pets, so the no-op is safer.
+    pub(crate) fn spell_script_on_init(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        script_effect_pick: &mut Option<u32>,
+    ) {
+        let _ = caster;
+        if spell.script_name == "spell_gnomeregan_collecting_fallout" {
+            let mut chosen = 0u32;
+            self.gnomeregan_collecting_fallout_on_init(&mut chosen);
+            *script_effect_pick = Some(chosen);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub(crate) fn spell_script_on_effect_execute(
         &mut self,
         caster: ObjectGuid,
@@ -77,9 +132,15 @@ impl Map {
         script_damage: &mut f32,
         triggered_by_aura_spell: u32,
         triggered_by_spell: u32,
+        script_effect_pick: Option<u32>,
     ) -> bool {
         let _ = triggered_by_spell;
         match spell.script_name.as_str() {
+            "spell_gnomeregan_collecting_fallout" => self
+                .gnomeregan_collecting_fallout_on_effect_execute(
+                    eff_index,
+                    script_effect_pick.unwrap_or(0),
+                ),
             "spell_paladin_holy_shock" => {
                 self.holy_shock_on_effect_execute(caster, spell, victim, eff_index)
             }
@@ -340,6 +401,110 @@ impl Map {
     /// `SpellScript::OnAfterHit` dispatch (fork
     /// `Spell.cpp` `DoAllEffectOnTarget`, after the
     /// effect pass for this unit target).
+    /// `SpellScript::OnHit` dispatch (fork
+    /// `Spell.cpp:1489/1558/1584`, per unit target
+    /// with its miss info; gated on `m_canTrigger`
+    /// by the caller).
+    pub(crate) fn spell_script_on_hit(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        victim: ObjectGuid,
+        miss_none: bool,
+    ) {
+        if spell.script_name == "spell_priest_power_word_shield" {
+            self.priest_power_word_shield_on_hit(caster, victim, miss_none);
+        }
+    }
+
+    /// `SpellScript::OnSuccessfulStart` dispatch
+    /// (fork `Spell::Prepare` success,
+    /// `Spell.cpp:3585`, before `SendSpellStart`).
+    /// The only live arm mutates the cast time
+    /// (`spell_instant_cast`: `SetCastTime(0)`).
+    pub(crate) fn spell_script_on_successful_start(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        cast_time_ms: &mut u32,
+    ) {
+        if spell.script_name == "spell_instant_cast" {
+            self.instant_cast_on_successful_start(caster, spell, cast_time_ms);
+        }
+    }
+
+    /// `SpellScript::OnCast` dispatch (fork
+    /// `Spell::cast` after power/reagents,
+    /// `Spell.cpp:3827`).
+    pub(crate) fn spell_script_on_cast(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        target: CastTarget,
+    ) {
+        if spell.script_name == "spell_elunes_candle" {
+            self.elunes_candle_on_cast(caster, target, spell);
+        }
+    }
+
+    /// `AuraScript::OnPeriodicTickEnd` dispatch
+    /// (fork `Aura::PeriodicTickEnd`,
+    /// `SpellAuras.cpp` — after each periodic
+    /// tick's effect).
+    pub(crate) fn aura_script_on_periodic_tick_end(&mut self, tick: &PeriodicTick) {
+        let Some(spell) = self.stores.spells.get(tick.spell_id) else {
+            return;
+        };
+        if spell.script_name == "spell_nefarian_class_call_mage" {
+            let holder = self
+                .aura_holders(tick.target)
+                .into_iter()
+                .find(|h| h.spell_id == tick.spell_id && h.caster == tick.caster);
+            let Some(holder) = holder else { return };
+            self.nefarian_class_call_mage_on_periodic_tick_end(tick.target, &holder);
+        }
+    }
+
+    /// `SpellScript::OnSuccessfulDispel` dispatch
+    /// (fork `Spell::EffectDispel` success path,
+    /// `SpellEffects.cpp:2521`).
+    pub(crate) fn spell_script_on_successful_dispel(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        eff_index: usize,
+    ) {
+        if spell.script_name == "spell_warlock_devour_magic" {
+            self.warlock_devour_magic_on_successful_dispel(caster, spell.id, eff_index);
+        }
+    }
+
+    /// `SpellScript::OnSuccessfulFinish` dispatch
+    /// (fork `Spell::finish` success tail,
+    /// `Spell.cpp:4519`; channeled spells fire it
+    /// at channel end in the fork — only the
+    /// immediate-finish path is wired here).
+    pub(crate) fn spell_script_on_successful_finish(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        target: CastTarget,
+    ) {
+        match spell.script_name.as_str() {
+            "spell_priest_holy_nova" => {
+                self.priest_holy_nova_on_successful_finish(caster, spell.id);
+            }
+            "spell_cannibalize" => {
+                self.cannibalize_on_successful_finish(
+                    caster,
+                    matches!(target, CastTarget::Unit(_)),
+                );
+            }
+            "spell_wolfshead_helm" => self.wolfshead_helm_on_successful_finish(caster, spell),
+            _ => {}
+        }
+    }
+
     pub(crate) fn spell_script_on_after_hit(
         &mut self,
         caster: ObjectGuid,
@@ -494,6 +659,7 @@ impl Map {
         victim: ObjectGuid,
         holder: &mut AuraHolder,
         apply: bool,
+        mode: AuraRemoveMode,
     ) {
         let Some(name) = self
             .stores
@@ -542,7 +708,17 @@ impl Map {
             // Grobbulus Mutating Injection: on
             // removal the bearer casts Poison Cloud.
             if name == "spell_grobbulus_mutating_injection" && !apply && eff == 0 {
-                self.grobbulus_mutating_injection_on_before_apply(victim, holder);
+                self.grobbulus_mutating_injection_on_before_apply(victim, holder, mode);
+            }
+            // Combustion buff clicked off: drop the
+            // invisible counter aura (starts the
+            // cooldown).
+            if name == "spell_mage_combustion_buff"
+                && !apply
+                && eff == 0
+                && mode == AuraRemoveMode::Cancel
+            {
+                self.mage_combustion_buff_on_after_apply(victim);
             }
             // Shadowmeld: on removal (eff 0, player)
             // drop the Elusiveness visual.
@@ -1687,7 +1863,6 @@ impl Map {
     // (`spell->m_casterUnit` + `m_spellInfo->Id` in scope).
     /// `WarlockDevourMagicScript::OnSuccessfulDispel`
     /// (`spell_warlock.cpp:192-217`): a dispelled debuff heals the felhunter.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn warlock_devour_magic_on_successful_dispel(
         &mut self,
         caster: ObjectGuid,
@@ -1724,7 +1899,6 @@ impl Map {
     // freshly summoned creature (`spell->m_caster` in scope).
     /// `WarlockInfernoScript::OnSummon` (`spell_warlock.cpp:225-235`): binds the
     /// Infernal with a free Enslave plus its root and burn-in visuals.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn warlock_inferno_on_summon(&mut self, caster: ObjectGuid, summon: ObjectGuid) {
         // Enslave demon effect, without mana cost and cooldown
         self.cast_spell(
@@ -2126,7 +2300,7 @@ impl Map {
     /// Returns `Some(true)` = `PROC_OK`, `Some(false)` = `PROC_FAILED`,
     /// `None` = no handling (mirrors `optional<SpellAuraProcResult>`).
     #[allow(clippy::too_many_arguments)]
-    #[allow(dead_code, clippy::items_after_statements, clippy::cast_precision_loss)] // NO-DISPATCHER-YET (step-4 remainder)
+    #[allow(clippy::items_after_statements, clippy::cast_precision_loss)]
     fn mage_ignite_on_proc(
         &mut self,
         owner: ObjectGuid,
@@ -2134,7 +2308,7 @@ impl Map {
         original_amount: i32,
         triggered_by_aura_spell_id: u32,
         proc_charges_cooldown: u32,
-    ) -> Option<bool> {
+    ) -> bool {
         const IGNITE_DOT: u32 = 12654;
         let _ = proc_charges_cooldown;
         let pct = match triggered_by_aura_spell_id {
@@ -2143,7 +2317,7 @@ impl Map {
             12846 => 0.12,
             12847 => 0.16,
             12848 => 0.20,
-            _ => return Some(false), // fork logs "non handled spell id"
+            _ => return false, // fork logs "non handled spell id"
         };
         let base_points = (pct * original_amount as f32) as i32;
         // Snapshot the victim's current ignite (spell 12654 eff 0): stack
@@ -2151,7 +2325,6 @@ impl Map {
         // mutation below runs without holding the unit borrow.
         struct IgniteState {
             stack: u32,
-            tick_damage: i32,
             ticks_done: u32,
         }
         let mut current: Option<IgniteState> = None;
@@ -2165,21 +2338,65 @@ impl Map {
                 };
                 current = Some(IgniteState {
                     stack: holder.stack,
-                    tick_damage: state.amount,
                     ticks_done: state.periodic_ticks,
                 });
                 break;
             }
         }
         if let Some(dot) = current {
-            // UNMODELED: stack-1 tick-damage accumulate + holder refresh need
-            // an aura-mutation seam (`ApplyModifier` re-run, `ModStackAmount`,
-            // `Refresh`, tick-count reapply gate) the lane does not wire yet.
-            // Fork-exact remainder: if ticks exhausted, remove 12654 and fall
-            // through to the fresh apply; else if stack < 5 add base_points to
-            // the tick and stack +1 (at 5 stacks just refresh), then PROC_OK.
-            let _ = dot;
-            return None;
+            // Fork stack branch: ticks exhausted ->
+            // remove and reapply fresh below; else
+            // accumulate tick damage (below 5
+            // stacks), ModStackAmount(1), Refresh
+            // (duration = max, periodicTick = 0,
+            // timer = period; visible stack/duration
+            // resend rides the generic aura update).
+            let max_ticks = {
+                let state = self.unit_base(victim).and_then(|u| {
+                    u.auras
+                        .iter()
+                        .find(|h| h.spell_id == IGNITE_DOT)
+                        .and_then(|h| {
+                            h.effects[0]
+                                .as_ref()
+                                .map(|s| (h.max_duration_ms, s.period_ms))
+                        })
+                });
+                match state {
+                    Some((max_ms, period)) if max_ms > 0 && period > 0 => (max_ms as u32) / period,
+                    _ => 0,
+                }
+            };
+            if dot.ticks_done >= max_ticks && max_ticks != 0 {
+                self.remove_auras_due_to_spell(victim, IGNITE_DOT);
+            } else {
+                if let Some(unit) = self.unit_base_mut(victim) {
+                    if let Some(holder) = unit.auras.iter_mut().find(|h| h.spell_id == IGNITE_DOT) {
+                        if dot.stack < 5 {
+                            if let Some(state) = holder.effects[0].as_mut() {
+                                state.amount += base_points;
+                                state.periodic_ticks = 0;
+                                #[allow(clippy::cast_possible_wrap)]
+                                {
+                                    state.periodic_timer = state.period_ms as i32;
+                                }
+                            }
+                            holder.stack = dot.stack + 1;
+                        } else {
+                            holder.stack = 5;
+                            if let Some(state) = holder.effects[0].as_mut() {
+                                state.periodic_ticks = 0;
+                                #[allow(clippy::cast_possible_wrap)]
+                                {
+                                    state.periodic_timer = state.period_ms as i32;
+                                }
+                            }
+                        }
+                        holder.duration_ms = holder.max_duration_ms;
+                    }
+                }
+                return true;
+            }
         }
         // No Ignite found: `TriggerProccedSpell(victim, basePoints, 12654,
         // nullptr, triggeredByAura, cooldown)` — custom-base-point triggered
@@ -2191,7 +2408,7 @@ impl Map {
             [Some(base_points), None, None],
             triggered_by_aura_spell_id,
         );
-        Some(true)
+        true
     }
 
     // ===== spell_mage_combustion_proc (spell_mage.cpp:139) spells: 11129
@@ -2207,7 +2424,6 @@ impl Map {
     /// `triggeredByAura->GetHolder()->GetAuraCharges() <= 1` (the future
     /// `OnProc` dispatcher supplies it). Returns `Some(true)` = `PROC_OK`,
     /// `Some(false)` = `PROC_FAILED`, `None` = no handling.
-    #[allow(dead_code, clippy::unnecessary_wraps)] // NO-DISPATCHER-YET (step-4 remainder)
     fn mage_combustion_proc_on_proc(
         &mut self,
         owner: ObjectGuid,
@@ -2215,24 +2431,24 @@ impl Map {
         triggered_by_aura_spell_id: u32,
         proc_ex_crit: bool,
         last_charge: bool,
-    ) -> Option<bool> {
+    ) -> bool {
         const COMBUSTION_PROC_AURA: u32 = 11129;
         const COMBUSTION_CRIT_BUFF: u32 = 28682;
         let _ = COMBUSTION_PROC_AURA;
         let Some(_victim) = victim else {
             // does not proc if no target is affected (aoe like flamestrike)
-            return Some(false);
+            return false;
         };
         // combustion counter was dispelled or clicked off
         if !self.unit_has_aura_spell(owner, COMBUSTION_CRIT_BUFF) {
             self.remove_auras_due_to_spell(owner, triggered_by_aura_spell_id);
-            return Some(false);
+            return false;
         }
         // last charge and crit
         if last_charge && proc_ex_crit {
             self.remove_auras_due_to_spell(owner, COMBUSTION_CRIT_BUFF);
             // remove Combustion auras; charge counting (will be removed)
-            return Some(true);
+            return true;
         }
         self.cast_spell(
             owner,
@@ -2249,7 +2465,7 @@ impl Map {
             },
         );
         // charge update only at crit hits, no hidden cooldowns
-        Some(proc_ex_crit)
+        proc_ex_crit
     }
 
     // ===== spell_mage_combustion_buff (spell_mage.cpp:169) spells: 28682
@@ -2261,7 +2477,6 @@ impl Map {
     // thread the remove mode; eff gate is EFFECT_INDEX_0):
     // if spell_id == 28682 && !apply {
     /// `MageCombustionBuffScript::OnAfterApply` (`spell_mage.cpp:171-176`).
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn mage_combustion_buff_on_after_apply(&mut self, victim: ObjectGuid) {
         // removing the invisible proc aura starts cooldown
         self.remove_auras_due_to_spell(victim, 11129);
@@ -2330,7 +2545,6 @@ impl Map {
     // the unit case, `:1956,1970` for gameobject targets).
     /// `PriestPowerWordShieldScript::OnHit` (`spell_priest.cpp:67-73`).
     /// `miss_none` mirrors `missInfo == SPELL_MISS_NONE`.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn priest_power_word_shield_on_hit(
         &mut self,
         caster: ObjectGuid,
@@ -2369,13 +2583,7 @@ impl Map {
     /// `PriestHolyNovaScript::OnSuccessfulFinish` (`spell_priest.cpp:81-118`).
     /// `caster` = `spell->m_casterUnit`; the heal must reuse the original
     /// targets (see UNMODELED note).
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
-    fn priest_holy_nova_on_successful_finish(
-        &mut self,
-        caster: ObjectGuid,
-        spell_id: u32,
-        victim: ObjectGuid,
-    ) {
+    fn priest_holy_nova_on_successful_finish(&mut self, caster: ObjectGuid, spell_id: u32) {
         let sub = match spell_id {
             15237 => 23455, // Holy Nova, rank 1
             15430 => 23458, // Holy Nova, rank 2
@@ -2385,14 +2593,16 @@ impl Map {
             27801 => 27805, // Holy Nova, rank 6
             _ => return,    // fork logs "assigned to unhandled spell id"
         };
-        // UNMODELED: fork re-prepares a raw Spell on ALL original targets;
-        // the lane can only emit a single-target triggered cast, so only the
-        // primary victim is covered here; multi-target re-emit needs a cast
-        // seam that takes an explicit target list.
+        // Fork re-prepares a raw Spell on the
+        // original targets; the sub-spells collect
+        // friendlies around the caster themselves,
+        // so one triggered self-cast re-derives the
+        // same set (a target that left range between
+        // the nova and here is the only divergence).
         self.cast_spell(
             caster,
             sub,
-            CastTarget::Unit(victim),
+            CastTarget::Unit(caster),
             CastOptions {
                 triggered: true,
                 triggered_by_aura: false,
@@ -2693,7 +2903,6 @@ impl Map {
     // dispatch exists in the Rust host (fork calls it inside `Spell::finish`,
     // `Spell.cpp`; for channels only after a full channel). Wire a
     // finish-time hook in the cast completion path.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn cannibalize_on_successful_finish(
         &mut self,
         caster: ObjectGuid,
@@ -3435,74 +3644,101 @@ impl Map {
     // ===== spell_target_dummy (spell_item.cpp:274) spells: 4071, 4072, 19805
     // NEEDS-HOST: OnSummon seam: fork summon-effect path (called after summoning a
     // creature; `ScriptMgr.h:165`). No summon hook in the lane yet.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
-    #[allow(clippy::unused_self)] // UNMODELED body
     fn target_dummy_on_summon(
         &mut self,
         caster: ObjectGuid,
         summon: ObjectGuid,
         spell: &SpellEntry,
     ) {
-        let _ = (caster, summon, spell);
-        // UNMODELED: fork sets the summon's faction to the caster's faction
-        // template (`SetFactionTemporary(..., TEMPFACTION_NONE)`) and
-        // `UNIT_FIELD_FLAGS = UNIT_FLAG_PLAYER_CONTROLLED`; the lane has no
-        // faction-template, temp-faction, or unit-flag write APIs.
+        let _ = spell;
+        // `SetFactionTemporary(caster faction,
+        // TEMPFACTION_NONE)`: no restore condition,
+        // so a direct faction write is fork-equal
+        // for a temp summon.
+        let faction = self
+            .unit_base(caster)
+            .map_or(0, mangos_entities::unit::UnitBase::faction_template);
+        if let Some(u) = self.unit_base_mut(summon) {
+            u.set_faction_template(faction);
+            // `UNIT_FLAG_PLAYER_CONTROLLED` (0x8),
+            // assigned (not OR-ed) as in the fork.
+            u.values().set_u32(offsets::UNIT_FIELD_FLAGS, 0x8);
+        }
     }
 
     // ===== spell_chained_essence_of_eranikus (spell_item.cpp:286) spells: 12766
     // NEEDS-HOST: OnSummon seam: fork summon-effect path (`ScriptMgr.h:165`).
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn chained_essence_of_eranikus_on_summon(
         &mut self,
         caster: ObjectGuid,
         summon: ObjectGuid,
         spell: &SpellEntry,
     ) {
-        let _ = (caster, summon, spell);
-        // UNMODELED: fork whispers `PickRandomValue(4438, 4439, 4440, 4441, 4442,
-        // 4443, 4444, 4445)` from the summon to `m_casterUnit` (`MonsterWhisper`);
-        // creature text/whisper is not in the lane runtime. The roll itself would
-        // be `self.spell_rng().irand(0, 7)` over that table. Reachable part: the
-        // fork's `m_casterUnit` null guard maps to the unit lookup below.
-        let _ = self.unit_base(caster).is_some();
+        let _ = spell;
+        // `MonsterWhisper(PickRandomValue(4438..4445),
+        // m_casterUnit)` under the fork's caster-unit
+        // null guard.
+        if self.unit_base(caster).is_none() {
+            return;
+        }
+        let text_id = 4438 + self.spell_rng().irand(0, 7);
+        self.do_script_text(text_id, summon, Some(caster), -1);
     }
 
     // ===== spell_release_umis_yeti (spell_item.cpp:301) spells: 17166
     // NEEDS-HOST: OnSummon seam: fork summon-effect path (`ScriptMgr.h:165`).
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
-    #[allow(clippy::unused_self)] // UNMODELED body
     fn release_umis_yeti_on_summon(
         &mut self,
         caster: ObjectGuid,
         summon: ObjectGuid,
         spell: &SpellEntry,
     ) {
-        let _ = (caster, summon, spell);
-        // UNMODELED: quest "Are We There, Yeti?" part 3 — fork plays
-        // `MonsterTextEmote(6327)` + `MonsterSay(9055)`, then per `GetAreaId`:
-        // 541 Un'Goro Crater -> follow NPC_QUIXXIL (10977), say 6314, walk off;
-        // 976 Tanaris -> follow NPC_SPRINKLE (7583), emote 6301, walk off;
-        // 2255 Winterspring -> follow NPC_LEGACKI (10978), emote 6306, walk off
-        // (`MoveFollow(0.6, PI)`, `SetWalk(false)`,
-        // `MoveWaypoint(0, 0, 0, 0, 0, false)`, `FindNearestCreature(..., 30.0)`).
-        // Motion, area ids, and creature text are not in the lane runtime.
+        let _ = (caster, spell);
+        // Quest "Are We There, Yeti?" part 3.
+        self.do_script_text(6327, summon, None, -1);
+        self.do_script_text(9055, summon, None, -1);
+        let Some(pos) = self.unit_position(summon) else {
+            return;
+        };
+        let (_, area_id) = self.zone_and_area_id(pos);
+        let (entry, text_id) = match area_id {
+            541 => (10977, 6314),  // Un'Goro: Quixxil
+            976 => (7583, 6301),   // Tanaris: Sprinkle
+            2255 => (10978, 6306), // Winterspring: Legacki
+            _ => return,
+        };
+        let Some(npc) = self.nearest_creature_with_entry(summon, entry, 30.0) else {
+            return;
+        };
+        self.creature_move_follow(summon, npc, 0.6, std::f32::consts::PI);
+        self.do_script_text(text_id, npc, None, -1);
+        self.set_walk(npc, false);
+        // `MoveWaypoint(0,...)`: resume the
+        // default (waypoint) generator.
+        self.motion_initialize(npc);
     }
 
     // ===== spell_vanquished_tentacle_of_cthun (spell_item.cpp:345) spells: 26391
     // NEEDS-HOST: OnSummon seam: fork summon-effect path (`ScriptMgr.h:165`).
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
-    #[allow(clippy::unused_self)] // UNMODELED body
     fn vanquished_tentacle_of_cthun_on_summon(
         &mut self,
         caster: ObjectGuid,
         summon: ObjectGuid,
         spell: &SpellEntry,
     ) {
-        let _ = (caster, summon, spell);
-        // UNMODELED: fork pins the summon (`SetIsAtStay(true)`,
-        // `SetCommandState(COMMAND_STAY)`, `SetIsCommandFollow(false)`,
-        // `SaveStayPosition`); charm-state writes are not in the lane runtime.
+        let _ = (caster, spell);
+        // Fork pins the guardian at stay
+        // (`CharmInfo` stay state + saved stay
+        // position). Pet-registered summons take
+        // COMMAND_STAY; plain temp summons go
+        // idle at the summon point (their evade
+        // home — the fork's saved stay position).
+        if let Some(st) = self.pets.get_mut(&summon) {
+            st.command_state = crate::pets::COMMAND_STAY;
+            st.commanded_victim = None;
+        } else {
+            self.creature_move_idle(summon);
+        }
     }
 
     // ===== spell_goblin_jumper_cables (spell_item.cpp:360) spells: 8342
@@ -3618,14 +3854,18 @@ impl Map {
     // NEEDS-HOST: OnSuccessfulStart seam: fork `Spell::Prepare` success path
     // (`ScriptMgr.h:145`; `SetCastTime(0)` + `ReSetTimer`). No prepare seam in
     // the lane — the lane starts casts from `cast_spell` with DBC cast times.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
-    #[allow(clippy::unused_self)] // UNMODELED body
-    fn instant_cast_on_successful_start(&mut self, caster: ObjectGuid, spell: &SpellEntry) {
+    #[allow(clippy::unused_self)]
+    fn instant_cast_on_successful_start(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        cast_time_ms: &mut u32,
+    ) {
         let _ = (caster, spell);
-        // UNMODELED: fork zeroes the remaining cast time and resets the cast
-        // timer so the Big Bronze Bomb / Goblin Mortar fires instantly; the lane
-        // has no in-flight cast-time override API. If the DBC already lists these
-        // as instant, this script is a no-op in the lane.
+        // Fork: `SetCastTime(0)` + `ReSetTimer` —
+        // the Big Bronze Bomb / Goblin Mortar
+        // fires instantly.
+        *cast_time_ms = 0;
     }
 
     // ===== spell_digging_claw (spell_item.cpp:442) spells: 5166 (quest 868 Egg Hunt)
@@ -3672,7 +3912,6 @@ impl Map {
     // ===== spell_elunes_candle (spell_item.cpp:479) spells: 26374
     // NEEDS-HOST: OnCast seam: fork `Spell::cast` post-checks path
     // (`ScriptMgr.h:159`). No cast seam in the lane yet.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn elunes_candle_on_cast(
         &mut self,
         caster: ObjectGuid,
@@ -3683,16 +3922,15 @@ impl Map {
         const OMEN: [u32; 5] = [26622, 26623, 26624, 26625, 26649];
         let _ = spell;
         let mut sub = 26636;
-        // UNMODELED: fork keys off the unit target's entry (`GetEntry() == 15467`
-        // Omen -> random OMEN spell; `== 15466` -> 26624); target entry lookup is
-        // not in the lane runtime, so the default 26636 always fires here.
+        // Fork keys off the unit target's entry:
+        // 15467 (Omen) -> random OMEN spell,
+        // 15466 -> 26624.
         if let CastTarget::Unit(victim) = target {
-            let _ = victim;
-        }
-        if false {
-            // Placeholder for the entry-keyed branch once target entries exist:
-            // 15467 -> OMEN[urand(0, 4)], 15466 -> 26624.
-            sub = OMEN[self.spell_rng().irand(0, 4) as usize];
+            match victim.entry() {
+                15467 => sub = OMEN[self.spell_rng().irand(0, 4) as usize],
+                15466 => sub = 26624,
+                _ => {}
+            }
         }
         self.cast_spell(
             caster,
@@ -3734,7 +3972,6 @@ impl Map {
     // ===== spell_wolfshead_helm (spell_item.cpp:527) spells: 17770
     // NEEDS-HOST: OnSuccessfulFinish seam: fork `Spell::finish` success path
     // (`ScriptMgr.h:147`). No finish seam in the lane yet.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn wolfshead_helm_on_successful_finish(&mut self, caster: ObjectGuid, spell: &SpellEntry) {
         let _ = spell;
         // Fork guards on `m_casterUnit`; cast 29940 on self, triggered.
@@ -4036,7 +4273,6 @@ impl Map {
     /// (`boss_nefarian.cpp:657-698`): every 5s the bearer (a living
     /// player mage without 23603) forces a random eligible raid member
     /// to be polymorphed via a non-triggered 23603 cast.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn nefarian_class_call_mage_on_periodic_tick_end(
         &mut self,
         victim: ObjectGuid,
@@ -4320,10 +4556,31 @@ impl Map {
         &mut self,
         victim: ObjectGuid,
         holder: &mut AuraHolder,
+        mode: AuraRemoveMode,
     ) {
         let spell_id = holder.spell_id;
         let caster = holder.caster;
-        let _ = caster;
+        // Mutagen Explosion from the aura caster;
+        // the dispelled cast carries no aura
+        // context (the explosion script reads it
+        // as its damage-scale gate).
+        if self.unit_base(caster).is_some() {
+            let by_dispel = mode == AuraRemoveMode::Dispel;
+            self.cast_spell(
+                caster,
+                28_206,
+                CastTarget::Unit(victim),
+                CastOptions {
+                    triggered: true,
+                    triggered_by_aura: !by_dispel,
+                    skip_known: true,
+                    cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: if by_dispel { 0 } else { spell_id },
+                    triggered_by_spell: if by_dispel { 0 } else { spell_id },
+                },
+            );
+        }
         // Poison Cloud on the bearer, triggered by the aura.
         self.cast_spell(
             victim,
@@ -4339,13 +4596,6 @@ impl Map {
                 triggered_by_spell: 0,
             },
         );
-        // NEEDS-HOST: the 28206 branch needs the aura remove mode
-        // (boss_grobbulus.cpp:235-244), and AuraHolder carries none:
-        // dispel (AURA_REMOVE_BY_DISPEL) -> caster casts 28206 on the
-        // bearer with no aura context; any other removal -> same cast
-        // with aura context (triggered_by_spell 28169, which the
-        // explosion script reads as its x1.5 gate). Neither cast is
-        // wired here until the seam carries the remove mode.
     }
 
     // NEEDS-HOST: OnSetTargetMap seam, see block above.
@@ -4884,17 +5134,22 @@ impl Map {
     // (`Spells/SpellEffects.cpp:2362,2840,2864`, also 2697/3575/4900/5120/5365
     // for the other summon kinds). Wire a post-summon dispatch carrying the
     // caster guid and the summoned creature guid.
-    #[allow(dead_code, clippy::unused_self)] // NO-DISPATCHER-YET (step-4 remainder)
     fn eye_of_naxxramas_summon_rockwing_gargoyles_on_summon(
         &mut self,
         caster: ObjectGuid,
         summon: ObjectGuid,
     ) {
-        // Fork: if the caster unit exists, the summon attacks the caster's
-        // `GetAttackerForHelper` target.
-        // UNMODELED: attacker-for-helper/threat lookup and `AttackStart` have no
-        // Rust runtime; no summon plumbing exists to route this through.
-        let _ = (caster, summon);
+        // `GetAttackerForHelper`: the caster's
+        // current victim, else its first attacker.
+        if self.unit_base(caster).is_none() {
+            return;
+        }
+        let target = self
+            .current_victim(caster)
+            .or_else(|| self.bot_attackers_of(caster).into_iter().next());
+        if let Some(target) = target {
+            self.attack_start(summon, target);
+        }
     }
 
     // ===== spell_uldaman_awaken_vault_warder (uldaman.cpp:226) spells: 10258
@@ -4914,7 +5169,6 @@ impl Map {
     // (`Spells/Spell.cpp:309,346`). Wire a once-per-cast dispatch that stores
     // per-cast state: the fork keeps `chosenEffect` as a per-script-instance
     // member picked here, which `OnEffectExecute` below reads.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
     fn gnomeregan_collecting_fallout_on_init(&mut self, chosen_effect: &mut u32) {
         // Fork: `chosenEffect = urand(EFFECT_INDEX_0, EFFECT_INDEX_1)` — exactly
         // one of the two trigger-spell effects fires per cast.
@@ -5020,6 +5274,23 @@ impl Map {
             // `spell_av_create_shredder`
             // (`battleground_alterac.cpp:4879`).
             21544 | 21565 => self.av_create_shredder_on_summon(caster, summon, spell),
+            // `spell_warlock_inferno`
+            // (`spell_warlock.cpp:223`).
+            1122 | 24670 => self.warlock_inferno_on_summon(caster, summon),
+            // `spell_target_dummy` (`spell_item.cpp:274`).
+            4071 | 4072 | 19805 => self.target_dummy_on_summon(caster, summon, spell),
+            // `spell_chained_essence_of_eranikus`
+            // (`spell_item.cpp:286`).
+            12766 => self.chained_essence_of_eranikus_on_summon(caster, summon, spell),
+            // `spell_release_umis_yeti`
+            // (`spell_item.cpp:301`).
+            17166 => self.release_umis_yeti_on_summon(caster, summon, spell),
+            // `spell_vanquished_tentacle_of_cthun`
+            // (`spell_item.cpp:345`).
+            26391 => self.vanquished_tentacle_of_cthun_on_summon(caster, summon, spell),
+            // `spell_eye_of_naxxramas_summon_rockwing_
+            // gargoyles` (`stratholme.cpp:663`).
+            16381 => self.eye_of_naxxramas_summon_rockwing_gargoyles_on_summon(caster, summon),
             _ => {}
         }
     }
@@ -5079,7 +5350,7 @@ impl Map {
     /// `GnomereganCollectingFalloutScript::OnEffectExecute`
     /// (`gnomeregan.cpp:883-887`): only the pre-rolled effect fires.
     /// `chosen_effect` is the NEEDS-HOST per-cast state from `OnInit`.
-    #[allow(dead_code)] // NO-DISPATCHER-YET (step-4 remainder)
+    #[allow(clippy::unused_self)]
     fn gnomeregan_collecting_fallout_on_effect_execute(
         &mut self,
         eff_index: usize,

@@ -22,7 +22,7 @@ use mangos_detour::{NavMesh, NavMeshQuery, nav_terrain};
 use mangos_entities::unit::{
     MOVE_RUN, MOVE_WALK, UNIT_STATE_ALL_DYN_STATES, UNIT_STATE_CAN_NOT_MOVE, UNIT_STATE_CHASE,
     UNIT_STATE_CHASE_MOVE, UNIT_STATE_DISTRACTED, UNIT_STATE_MOVING, UNIT_STATE_ROAMING,
-    UNIT_STATE_ROAMING_MOVE, UNIT_STATE_RUNNING, UnitBase,
+    UNIT_STATE_ROAMING_MOVE, UNIT_STATE_RUNNING, UNIT_STATE_TAXI_FLIGHT, UnitBase,
 };
 use mangos_guid::ObjectGuid;
 use mangos_guid::timer::ShortTimeTracker;
@@ -45,7 +45,14 @@ pub const WAYPOINT_MOTION_TYPE: u32 = 2;
 pub const CYCLIC_MOTION_TYPE: u32 = 3;
 pub const CHASE_MOTION_TYPE: u32 = 6;
 pub const HOME_MOTION_TYPE: u32 = 7;
+pub const FLIGHT_MOTION_TYPE: u32 = 8;
+/// `UNIT_FLAG_REMOVE_CLIENT_CONTROL` (`UnitDefines.h:543`).
+pub(crate) const UNIT_FLAG_REMOVE_CLIENT_CONTROL: u32 = 0x0000_0004;
+/// `UNIT_FLAG_TAXI_FLIGHT` (`UnitDefines.h:561`).
+pub(crate) const UNIT_FLAG_TAXI_FLIGHT: u32 = 0x0010_0000;
 pub const POINT_MOTION_TYPE: u32 = 9;
+/// `FOLLOW_MOTION_TYPE` (`MotionMaster.h:54`).
+pub const FOLLOW_MOTION_TYPE: u32 = 15;
 
 /// C++ `uint32` millisecond diffs flow into `int32` timers
 /// with the wrapping cast; diffs are frame times, so the
@@ -1102,17 +1109,40 @@ enum Generator {
     Home {
         arrived: bool,
     },
-    Chase {
-        target: ObjectGuid,
-        offset: f32,
-        angle: f32,
-        check_timer: ShortTimeTracker,
-        last_target_pos: Position,
-        recalculate: bool,
-        target_reached: bool,
-        /// `m_bReachable`.
-        reachable: bool,
+    /// `FlightPathMovementGenerator`: taxi vertices
+    /// (single-path list or the stitched express
+    /// list) plus the current vertex index.
+    Flight {
+        nodes: Vec<mangos_world_data::taxi::TaxiPathNode>,
+        current: u32,
     },
+    Chase(ChaseState),
+    /// `FollowMovementGenerator` (Tier 4 B0-6):
+    /// targeted-motion state shared with chase.
+    Follow(ChaseState),
+}
+
+/// Shared `TargetedMovementGeneratorMedium` state.
+#[derive(Clone, Debug)]
+struct ChaseState {
+    target: ObjectGuid,
+    offset: f32,
+    angle: f32,
+    check_timer: ShortTimeTracker,
+    last_target_pos: Position,
+    recalculate: bool,
+    target_reached: bool,
+    /// `m_bReachable`.
+    reachable: bool,
+}
+
+impl Generator {
+    fn targeted_state(&mut self) -> Option<&mut ChaseState> {
+        match self {
+            Generator::Chase(state) | Generator::Follow(state) => Some(state),
+            _ => None,
+        }
+    }
 }
 
 impl Generator {
@@ -1123,7 +1153,9 @@ impl Generator {
             Generator::Random { .. } => RANDOM_MOTION_TYPE,
             Generator::Waypoint { .. } => WAYPOINT_MOTION_TYPE,
             Generator::Home { .. } => HOME_MOTION_TYPE,
-            Generator::Chase { .. } => CHASE_MOTION_TYPE,
+            Generator::Flight { .. } => FLIGHT_MOTION_TYPE,
+            Generator::Chase(..) => CHASE_MOTION_TYPE,
+            Generator::Follow(..) => FOLLOW_MOTION_TYPE,
         }
     }
 
@@ -1158,7 +1190,10 @@ impl Generator {
                 *arrived = false;
                 home_set_target(map, guid);
             }
-            Generator::Chase { recalculate, .. } => {
+            Generator::Flight { .. } => {
+                self.flight_reset(map, guid);
+            }
+            Generator::Chase(state) => {
                 // SetWalk(false) + states + async recalc
                 // (run inline here).
                 if let Some(unit) = map.unit_base_mut(guid) {
@@ -1168,7 +1203,17 @@ impl Generator {
                         .remove(MovementFlags::WALK_MODE);
                     unit.add_unit_state(UNIT_STATE_CHASE | UNIT_STATE_CHASE_MOVE);
                 }
-                *recalculate = true;
+                state.recalculate = true;
+                self.chase_set_target_location(map, guid);
+            }
+            Generator::Follow(state) => {
+                if let Some(unit) = map.unit_base_mut(guid) {
+                    unit.add_unit_state(
+                        mangos_entities::unit::UNIT_STATE_FOLLOW
+                            | mangos_entities::unit::UNIT_STATE_FOLLOW_MOVE,
+                    );
+                }
+                state.recalculate = true;
                 self.chase_set_target_location(map, guid);
             }
         }
@@ -1183,9 +1228,24 @@ impl Generator {
                     unit.clear_unit_state(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
                 }
             }
-            Generator::Chase { .. } => {
+            Generator::Chase(..) => {
                 if let Some(unit) = map.unit_base_mut(guid) {
                     unit.clear_unit_state(UNIT_STATE_CHASE | UNIT_STATE_CHASE_MOVE);
+                }
+            }
+            Generator::Follow(..) => {
+                if let Some(unit) = map.unit_base_mut(guid) {
+                    unit.clear_unit_state(
+                        mangos_entities::unit::UNIT_STATE_FOLLOW
+                            | mangos_entities::unit::UNIT_STATE_FOLLOW_MOVE,
+                    );
+                }
+            }
+            Generator::Flight { .. } => {
+                // `FlightPathMovementGenerator::Interrupt`.
+                if let Some(unit) = map.unit_base_mut(guid) {
+                    unit.clear_unit_state(UNIT_STATE_TAXI_FLIGHT);
+                    unit.world.movement_info.flags.remove(MovementFlags::FLYING);
                 }
             }
         }
@@ -1217,9 +1277,24 @@ impl Generator {
                     map.events.push(MapEvent::JustReachedHome { guid });
                 }
             }
-            Generator::Chase { .. } => {
+            Generator::Flight { nodes, current } => {
+                // `FlightPathMovementGenerator::Finalize`
+                // + `Player::TaxiStepFinished` (in
+                // `taxi.rs`).
+                let in_progress = (*current as usize + 1) < nodes.len();
+                map.taxi_flight_finalize(guid, nodes, *current, in_progress);
+            }
+            Generator::Chase(..) => {
                 if let Some(unit) = map.unit_base_mut(guid) {
                     unit.clear_unit_state(UNIT_STATE_CHASE | UNIT_STATE_CHASE_MOVE);
+                }
+            }
+            Generator::Follow(..) => {
+                if let Some(unit) = map.unit_base_mut(guid) {
+                    unit.clear_unit_state(
+                        mangos_entities::unit::UNIT_STATE_FOLLOW
+                            | mangos_entities::unit::UNIT_STATE_FOLLOW_MOVE,
+                    );
                 }
             }
         }
@@ -1236,7 +1311,14 @@ impl Generator {
                     unit.add_unit_state(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
                 }
             }
-            Generator::Random { .. } | Generator::Chase { .. } => self.initialize(map, guid),
+            Generator::Random { .. } | Generator::Chase(..) | Generator::Follow(..) => {
+                self.initialize(map, guid);
+            }
+            Generator::Flight { .. } => {
+                // Relaunch from the current vertex
+                // (worldport continuation).
+                self.flight_reset(map, guid);
+            }
             Generator::Waypoint { is_wandering, .. } => {
                 if let Some(unit) = map.unit_base_mut(guid) {
                     unit.add_unit_state(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
@@ -1297,13 +1379,15 @@ impl Generator {
                 true
             }
             Generator::Waypoint { .. } => self.waypoint_update(map, guid, diff),
-            Generator::Chase { .. } => self.chase_update(map, guid, diff),
+            Generator::Chase(..) => self.chase_update(map, guid, diff),
+            Generator::Follow(..) => self.follow_update(map, guid, diff),
             Generator::Home { arrived } => {
                 *arrived = map
                     .unit_base_mut(guid)
                     .is_some_and(|u| u.spline.finalized());
                 !*arrived
             }
+            Generator::Flight { .. } => self.flight_update(map, guid),
         }
     }
 
@@ -1342,8 +1426,116 @@ impl Generator {
                         o: n.orientation,
                     })
             }
+            Generator::Flight { nodes, current } => {
+                nodes.get(*current as usize).map(|n| Position {
+                    x: n.x,
+                    y: n.y,
+                    z: n.z,
+                    o: 0.0,
+                })
+            }
             _ => None,
         }
+    }
+
+    // -- Flight (taxi) --------------------------------------
+
+    /// `GetPathAtMapEnd`: first vertex index on a
+    /// different map than the current vertex's.
+    fn flight_path_at_map_end(&self) -> usize {
+        let Generator::Flight { nodes, current } = self else {
+            return 0;
+        };
+        let current = *current as usize;
+        if current >= nodes.len() {
+            return nodes.len();
+        }
+        let map_id = nodes[current].map_id;
+        for (i, node) in nodes.iter().enumerate().skip(current) {
+            if node.map_id != map_id {
+                return i;
+            }
+        }
+        nodes.len()
+    }
+
+    /// `FlightPathMovementGenerator::Reset`
+    /// (`WaypointMovementGenerator.cpp:386-403`):
+    /// taxi state + client-control flags, then the
+    /// flying spline over the remaining same-map
+    /// vertices at `PLAYER_FLIGHT_SPEED` (32).
+    /// UNMODELED: hostile-ref online/offline toggle.
+    fn flight_reset(&mut self, map: &mut Map, guid: ObjectGuid) {
+        let end = self.flight_path_at_map_end();
+        let Generator::Flight { nodes, current } = self else {
+            return;
+        };
+        let current = *current as usize;
+        if let Some(unit) = map.unit_base_mut(guid) {
+            unit.add_unit_state(UNIT_STATE_TAXI_FLIGHT);
+            unit.values().set_flag(
+                offsets::UNIT_FIELD_FLAGS,
+                UNIT_FLAG_REMOVE_CLIENT_CONTROL | UNIT_FLAG_TAXI_FLIGHT,
+            );
+        }
+        let path: Vec<Position> = nodes
+            .iter()
+            .skip(current)
+            .take(end.saturating_sub(current))
+            .map(|n| Position {
+                x: n.x,
+                y: n.y,
+                z: n.z,
+                o: 0.0,
+            })
+            .collect();
+        if let Some(unit) = map.unit_base_mut(guid) {
+            unit.world.movement_info.flags.add(MovementFlags::FLYING);
+        }
+        let _ = map.launch_spline(
+            guid,
+            SplineLaunch {
+                path,
+                flying: true,
+                velocity: 32.0,
+                first_point_id: i32::try_from(current).unwrap_or(0),
+                ..SplineLaunch::default()
+            },
+        );
+    }
+
+    /// `FlightPathMovementGenerator::Update`
+    /// (`WaypointMovementGenerator.cpp:405-422`):
+    /// advance the vertex cursor with the spline,
+    /// charging the next leg at path boundaries.
+    /// Segment end at a map boundary also expires
+    /// the generator (fork `Finalize` then runs the
+    /// far-teleport continuation).
+    fn flight_update(&mut self, map: &mut Map, guid: ObjectGuid) -> bool {
+        let point_id = map
+            .unit_base(guid)
+            .map_or(0, |u| u.spline.current_path_idx());
+        let finalized = map.unit_base(guid).is_some_and(|u| u.spline.finalized());
+        let Generator::Flight { nodes, current } = self else {
+            return false;
+        };
+        while i64::from(*current) < i64::from(point_id) {
+            *current += 1;
+            let cur = *current as usize;
+            let in_progress = cur + 1 < nodes.len();
+            if in_progress && nodes[cur + 1].path != nodes[cur].path {
+                map.taxi_next_leg_charge(guid);
+            }
+        }
+        let cur = *current as usize;
+        let in_progress = cur + 1 < nodes.len();
+        if finalized && in_progress && cur >= self.flight_path_at_map_end() {
+            // Same-map segment exhausted with vertices
+            // left on another map: expire so Finalize
+            // teleports and the flight resumes there.
+            return false;
+        }
+        in_progress
     }
 
     // -- Random ------------------------------------------------
@@ -1619,14 +1811,14 @@ impl Generator {
     // slice expires chase on victim change itself.
 
     fn chase_set_target_location(&mut self, map: &mut Map, guid: ObjectGuid) {
-        let Generator::Chase {
+        let Some(ChaseState {
             target,
             offset,
             angle,
             last_target_pos,
             recalculate,
             ..
-        } = self
+        }) = self.targeted_state()
         else {
             return;
         };
@@ -1680,12 +1872,12 @@ impl Generator {
 
         let result = map.find_path_points(owner_pos, dest, false, false);
         let reachable = matches!(result.kind, PathKind::Normal | PathKind::Shortcut);
-        if let Generator::Chase {
+        if let Some(ChaseState {
             recalculate,
             target_reached,
             reachable: stored,
             ..
-        } = self
+        }) = self.targeted_state()
         {
             *stored = reachable;
             *recalculate = false;
@@ -1707,14 +1899,14 @@ impl Generator {
     }
 
     fn chase_update(&mut self, map: &mut Map, guid: ObjectGuid, diff: u32) -> bool {
-        let Generator::Chase {
+        let Some(ChaseState {
             target,
             offset,
             check_timer,
             last_target_pos,
             recalculate,
             ..
-        } = self
+        }) = self.targeted_state()
         else {
             return false;
         };
@@ -1781,13 +1973,90 @@ impl Generator {
                 motion_type: CHASE_MOTION_TYPE,
                 point_id: target.counter(),
             });
-            if let Generator::Chase { target_reached, .. } = self
-                && !*target_reached
+            if let Some(state) = self.targeted_state()
+                && !state.target_reached
             {
+                let target_reached = &mut state.target_reached;
                 *target_reached = true;
                 if map.can_reach_melee(guid, target) {
                     map.events.push(MapEvent::ChaseReached { guid, target });
                 }
+            }
+        }
+        true
+    }
+}
+
+impl Generator {
+    /// `FollowMovementGenerator::Update`
+    /// (`TargetedMovementGenerator.cpp:650`): chase
+    /// mechanics without the reach events; a
+    /// stationary follower relaunch checks
+    /// `IsFarEnoughToMoveStationaryFollower`.
+    fn follow_update(&mut self, map: &mut Map, guid: ObjectGuid, diff: u32) -> bool {
+        let Some(ChaseState {
+            target,
+            offset,
+            check_timer,
+            last_target_pos,
+            recalculate,
+            ..
+        }) = self.targeted_state()
+        else {
+            return false;
+        };
+        let (target, offset) = (*target, *offset);
+        let Some(target_pos) = map.unit_position(target) else {
+            return false;
+        };
+        let (can_not_move, finalized) = match map.unit_base_mut(guid) {
+            Some(unit) => (
+                unit.has_unit_state(UNIT_STATE_CAN_NOT_MOVE),
+                unit.spline.finalized(),
+            ),
+            None => return false,
+        };
+        if can_not_move {
+            if !finalized {
+                map.stop_moving(guid);
+            }
+            return true;
+        }
+        check_timer.update(ms_i32(diff));
+        if check_timer.passed() {
+            check_timer.reset(100);
+            let moved = dist3d(target_pos, *last_target_pos) > 0.1;
+            if moved {
+                *recalculate = true;
+            } else if finalized {
+                // `IsFarEnoughToMoveStationaryFollower`:
+                // beyond 1.4x the follow distance.
+                let owner_pos = map.unit_position(guid).unwrap_or(target_pos);
+                let sizes = map.bounding_radius_of(guid) + map.bounding_radius_of(target);
+                if dist3d(owner_pos, target_pos) - sizes > 1.4 * offset {
+                    *recalculate = true;
+                }
+            }
+        }
+        if *recalculate {
+            self.chase_set_target_location(map, guid);
+        }
+        if finalized {
+            // Face the followed unit when angle is 0.
+            if let Some(owner_pos) = map.unit_position(guid) {
+                let facing = (target_pos.y - owner_pos.y).atan2(target_pos.x - owner_pos.x);
+                if (owner_pos.o - facing).abs() > 0.01 {
+                    map.relocate_unit(
+                        guid,
+                        Position {
+                            o: facing,
+                            ..owner_pos
+                        },
+                    );
+                }
+            }
+            if let Some(state) = self.targeted_state() {
+                state.target_reached = true;
             }
         }
         true
@@ -1936,6 +2205,18 @@ impl MotionMaster {
         // Expire: finalize the old top, then reset whatever
         // surfaces (unless Finalize pushed something — our
         // finalizers never push).
+        self.expire_popped(map, guid, top);
+    }
+
+    /// `MovementExpired` on the current top.
+    fn expire_top(&mut self, map: &mut Map, guid: ObjectGuid) {
+        let Some(top) = self.stack.pop() else {
+            return;
+        };
+        self.expire_popped(map, guid, top);
+    }
+
+    fn expire_popped(&mut self, map: &mut Map, guid: ObjectGuid, mut top: Generator) {
         top.finalize(map, guid);
         if self.stack.is_empty() {
             // Rebuilt by the caller via motion_initialize
@@ -2007,6 +2288,44 @@ impl Map {
         }
     }
 
+    /// `Creature::PauseOutOfCombatMovement`
+    /// (`MotionMaster.cpp:923-945`, default
+    /// `NPC_MOVEMENT_PAUSE_TIME` 180000 ms): only the
+    /// current random/waypoint generator pauses, and
+    /// only out of combat.
+    pub(crate) fn pause_out_of_combat_movement(&mut self, guid: ObjectGuid) {
+        if self
+            .unit_base(guid)
+            .is_some_and(mangos_entities::unit::UnitBase::is_in_combat)
+        {
+            return;
+        }
+        let pausable = self.motion.get(&guid).is_some_and(|mm| {
+            matches!(
+                mm.stack.last(),
+                Some(Generator::Random { .. } | Generator::Waypoint { .. })
+            )
+        });
+        if !pausable {
+            return;
+        }
+        self.stop_moving_if_moving(guid);
+        if let Some(mm) = self.motion.get_mut(&guid)
+            && let Some(generator) = mm.stack.last_mut()
+        {
+            const PAUSE_MS: i32 = 180_000;
+            match generator {
+                Generator::Random { next_move, .. } | Generator::Waypoint { next_move, .. }
+                    // `AddPauseTime`: raise, never
+                    // lower, the pending wait.
+                    if next_move.expiry() < PAUSE_MS => {
+                        next_move.reset(PAUSE_MS);
+                    }
+                _ => {}
+            }
+        }
+    }
+
     /// `WorldObject::GetRandomPoint` ground arm via
     /// `Map::GetWalkRandomPosition`'s non-navmesh fallback
     /// (angle/radius around `center`, z lifted to ground).
@@ -2047,11 +2366,15 @@ impl Map {
     }
 
     /// Installs an idle motion master for a player
-    /// (bot locomotion, Phase 5 Slice D). Human
-    /// players are client-driven and never call this.
+    /// (bot locomotion, Phase 5 Slice D; fork players
+    /// always have one — taxi flight needs it for
+    /// human players too, Tier 4 step 4f). Never
+    /// replaces an existing stack.
     pub fn motion_initialize_player(&mut self, guid: ObjectGuid) {
         if self.players.contains_key(&guid) {
-            self.motion.insert(guid, MotionMaster::new(Generator::Idle));
+            self.motion
+                .entry(guid)
+                .or_insert_with(|| MotionMaster::new(Generator::Idle));
         }
     }
 
@@ -2205,7 +2528,7 @@ impl Map {
         let last = self.unit_position(target).unwrap_or_default();
         self.mutate_motion(
             guid,
-            Generator::Chase {
+            Generator::Chase(ChaseState {
                 target,
                 offset,
                 angle,
@@ -2214,7 +2537,35 @@ impl Map {
                 recalculate: true,
                 target_reached: false,
                 reachable: true,
-            },
+            }),
+        );
+    }
+
+    /// `MotionMaster::MoveFollow` (Tier 4 B0-6).
+    pub fn creature_move_follow(
+        &mut self,
+        guid: ObjectGuid,
+        target: ObjectGuid,
+        dist: f32,
+        angle: f32,
+    ) {
+        if self.unit_position(target).is_none() {
+            return;
+        }
+        self.stop_moving_if_moving(guid);
+        let last = self.unit_position(target).unwrap_or_default();
+        self.mutate_motion(
+            guid,
+            Generator::Follow(ChaseState {
+                target,
+                offset: dist,
+                angle,
+                check_timer: ShortTimeTracker::new(0),
+                last_target_pos: last,
+                recalculate: true,
+                target_reached: false,
+                reachable: true,
+            }),
         );
     }
 
@@ -2329,6 +2680,37 @@ impl Map {
         master.clear(self, guid);
         master.mutate(self, guid, Generator::Home { arrived: false });
         self.motion.entry(guid).or_insert(master);
+    }
+
+    /// `MotionMaster::MoveTaxiFlight` (both fork
+    /// overloads collapse to the materialized vertex
+    /// list plus start index).
+    pub fn player_move_taxi_flight(
+        &mut self,
+        guid: ObjectGuid,
+        nodes: Vec<mangos_world_data::taxi::TaxiPathNode>,
+        start_node: u32,
+    ) {
+        self.mutate_motion(
+            guid,
+            Generator::Flight {
+                nodes,
+                current: start_node,
+            },
+        );
+    }
+
+    /// `MotionMaster::MovementExpired(false)` for
+    /// flight tops (`SendDoFlight` pre-clean): expires
+    /// while the current generator is a flight.
+    pub(crate) fn motion_expire_flight(&mut self, guid: ObjectGuid) {
+        while self.motion_type_of(guid) == FLIGHT_MOTION_TYPE {
+            let Some(mut master) = self.motion.remove(&guid) else {
+                return;
+            };
+            master.expire_top(self, guid);
+            self.motion.entry(guid).or_insert(master);
+        }
     }
 
     fn mutate_motion(&mut self, guid: ObjectGuid, generator: Generator) {
@@ -2622,7 +3004,17 @@ impl Map {
     #[must_use]
     pub fn chase_target_of(&self, guid: ObjectGuid) -> Option<ObjectGuid> {
         match self.motion.get(&guid).and_then(|m| m.stack.last()) {
-            Some(Generator::Chase { target, .. }) => Some(*target),
+            Some(Generator::Chase(state)) => Some(state.target),
+            _ => None,
+        }
+    }
+
+    /// Current follow target, when the top generator
+    /// is a follow (Tier 4 B0-6).
+    #[must_use]
+    pub fn follow_target_of(&self, guid: ObjectGuid) -> Option<ObjectGuid> {
+        match self.motion.get(&guid).and_then(|m| m.stack.last()) {
+            Some(Generator::Follow(state)) => Some(state.target),
             _ => None,
         }
     }

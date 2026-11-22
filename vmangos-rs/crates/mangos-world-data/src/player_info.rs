@@ -1,8 +1,8 @@
-//! Player create/level info: `LoadPlayerInfo` minus the
-//! create-item/action sub-loaders (those feed character
-//! creation, not login), `ObjectMgr.cpp:4475-5060`. The
-//! create-spell sub-loader is included because
-//! `Player::LearnDefaultSpells` also runs at login load.
+//! Player create/level info: `LoadPlayerInfo`,
+//! `ObjectMgr.cpp:4475-5060`, including the create-item,
+//! create-spell, and create-action sub-loaders. The
+//! create-spell sub-loader is also consumed at login because
+//! `Player::LearnDefaultSpells` runs during load.
 //!
 //! Covers `playercreateinfo` (home position + display ids from
 //! `ChrRaces`), `player_classlevelstats` (base health/mana per
@@ -61,6 +61,13 @@ pub struct RaceClassDbc {
     /// Class id -> `powerType` (`ChrClassesEntry`, produced
     /// field 1 of fmt `nxxixssssssssxxix`).
     pub class_power: HashMap<u32, u32>,
+    /// Race id -> `ChrRacesEntry::Flags` (produced field 1;
+    /// `CHRRACES_FLAGS_NOT_PLAYABLE = 0x01` gates creation).
+    pub race_flags: HashMap<u32, u32>,
+    /// Race id -> `ChrRacesEntry::startingTaxiMask`
+    /// (produced field 10; `PlayerTaxi::InitTaxiNodes`
+    /// word 0 at creation).
+    pub starting_taxi_mask: HashMap<u32, u32>,
 }
 
 /// One `ChrRacesEntry` subset.
@@ -74,6 +81,21 @@ pub struct RaceDbc {
     /// `resSicknessSpellId` (`DBCStructure.h:157`,
     /// produced field 9).
     pub res_sickness_spell_id: u32,
+}
+
+/// `PlayerCreateInfoItem` (`playercreateinfo_item`).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PlayerCreateItem {
+    pub item_id: u32,
+    pub amount: u32,
+}
+
+/// `PlayerCreateInfoAction` (`playercreateinfo_action`).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PlayerCreateAction {
+    pub button: u8,
+    pub action: u32,
+    pub action_type: u8,
 }
 
 /// `PlayerInfo` position/display half (`Player.h` create info).
@@ -110,7 +132,9 @@ pub struct PlayerInfos {
     res_sickness: HashMap<u32, u32>,
     max_player_level: u32,
     create: HashMap<(u32, u32), PlayerCreateInfo>,
+    create_items: HashMap<(u32, u32), Vec<PlayerCreateItem>>,
     create_spells: HashMap<(u32, u32), Vec<u32>>,
+    create_actions: HashMap<(u32, u32), Vec<PlayerCreateAction>>,
     class_level: HashMap<u32, Vec<PlayerClassLevelInfo>>,
     level_stats: HashMap<(u32, u32), Vec<PlayerLevelInfo>>,
     xp_per_level: Vec<u32>,
@@ -132,11 +156,24 @@ impl PlayerInfos {
             res_sickness: HashMap::new(),
             max_player_level,
             create,
+            create_items: HashMap::new(),
             create_spells: HashMap::new(),
+            create_actions: HashMap::new(),
             class_level,
             level_stats,
             xp_per_level,
         }
+    }
+
+    /// Test constructor companion: injects starter-item
+    /// rows into a [`from_maps_for_tests`](Self::from_maps_for_tests)
+    /// store.
+    #[doc(hidden)]
+    pub fn set_create_items_for_tests(
+        &mut self,
+        items: HashMap<(u32, u32), Vec<PlayerCreateItem>>,
+    ) {
+        self.create_items = items;
     }
 
     #[must_use]
@@ -168,6 +205,22 @@ impl PlayerInfos {
     #[must_use]
     pub fn default_spells(&self, race: u32, class: u32) -> &[u32] {
         self.create_spells
+            .get(&(race, class))
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// `PlayerInfo::item`: `playercreateinfo_item` rows in load order.
+    #[must_use]
+    pub fn create_items(&self, race: u32, class: u32) -> &[PlayerCreateItem] {
+        self.create_items
+            .get(&(race, class))
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// `PlayerInfo::action`: `playercreateinfo_action` rows in load order.
+    #[must_use]
+    pub fn create_actions(&self, race: u32, class: u32) -> &[PlayerCreateAction] {
+        self.create_actions
             .get(&(race, class))
             .map_or(&[], Vec::as_slice)
     }
@@ -378,7 +431,9 @@ pub fn load_player_infos(
         &mut infos,
         &mut report,
     )?;
+    load_create_items(conn, dbc, &mut infos, &mut report)?;
     load_create_spells(conn, dbc, &mut infos, &mut report)?;
+    load_create_actions(conn, dbc, &mut infos, &mut report)?;
     load_class_level_stats(conn, max_player_level, dbc, &mut infos, &mut report)?;
     load_level_stats(conn, max_player_level, dbc, &mut infos, &mut report)?;
     load_xp_for_level(conn, max_player_level, &mut infos, &mut report)?;
@@ -493,6 +548,95 @@ fn load_create_spells(
             .entry((race, class))
             .or_default()
             .push(spell_id);
+    }
+    Ok(())
+}
+
+fn load_create_items(
+    conn: &mut mysql::Conn,
+    dbc: Option<&RaceClassDbc>,
+    infos: &mut PlayerInfos,
+    report: &mut LoadReport,
+) -> Result<(), DbError> {
+    let rows: Vec<mysql::Row> =
+        conn.query("SELECT `race`, `class`, `itemid`, `amount` FROM `playercreateinfo_item`")?;
+    for row in rows {
+        let f = mangos_db::row::Fields::from_row(row);
+        let (race, class, item_id, amount) = (f.u32(0), f.u32(1), f.u32(2), f.u32(3));
+        if !race_ok(dbc, race) {
+            report.error(format!(
+                "Wrong race {race} in `playercreateinfo_item` table, ignoring."
+            ));
+            continue;
+        }
+        if !class_ok(dbc, class) {
+            report.error(format!(
+                "Wrong class {class} in `playercreateinfo_item` table, ignoring."
+            ));
+            continue;
+        }
+        if amount == 0 {
+            report.error(format!(
+                "Item id {item_id} (class {class} race {race}) have amount==0 in `playercreateinfo_item` table, ignoring."
+            ));
+            continue;
+        }
+        infos
+            .create_items
+            .entry((race, class))
+            .or_default()
+            .push(PlayerCreateItem { item_id, amount });
+    }
+    Ok(())
+}
+
+fn load_create_actions(
+    conn: &mut mysql::Conn,
+    dbc: Option<&RaceClassDbc>,
+    infos: &mut PlayerInfos,
+    report: &mut LoadReport,
+) -> Result<(), DbError> {
+    let rows: Vec<mysql::Row> = conn.query(
+        "SELECT `race`, `class`, `button`, `action`, `type` FROM `playercreateinfo_action`",
+    )?;
+    if rows.is_empty() {
+        report.error("Error loading `playercreateinfo_action` table or empty table.".to_string());
+    }
+    for row in rows {
+        let f = mangos_db::row::Fields::from_row(row);
+        let (race, class) = (f.u32(0), f.u32(1));
+        if !race_ok(dbc, race) {
+            report.error(format!(
+                "Wrong race {race} in `playercreateinfo_action` table, ignoring."
+            ));
+            continue;
+        }
+        if !class_ok(dbc, class) {
+            report.error(format!(
+                "Wrong class {class} in `playercreateinfo_action` table, ignoring."
+            ));
+            continue;
+        }
+        let action = PlayerCreateAction {
+            button: f.u8(2),
+            action: f.u32(3),
+            action_type: f.u8(4),
+        };
+        // Fork also validates referenced spells/items in
+        // `IsActionButtonDataValid`; this loader has no spell/item
+        // stores, so only the structural button bound is checked.
+        if action.button >= 120 {
+            report.error(format!(
+                "Wrong button {} in `playercreateinfo_action` table, ignoring.",
+                action.button
+            ));
+            continue;
+        }
+        infos
+            .create_actions
+            .entry((race, class))
+            .or_default()
+            .push(action);
     }
     Ok(())
 }

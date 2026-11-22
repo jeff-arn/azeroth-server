@@ -67,14 +67,14 @@ pub struct CreatureRates {
 }
 
 impl Default for CreatureRates {
-    /// `mangosd.conf.example` defaults: all rates 1.0;
-    /// decays 60/300/300/3600/300.
+    /// Fork code defaults (`World.cpp:746-750`):
+    /// all rates 1.0; decays 300/600/1200/3600/900.
     fn default() -> Self {
         Self {
             hp: [1.0; 5],
             damage: [1.0; 5],
             spell_damage: [1.0; 5],
-            corpse_decay: [60, 300, 300, 3600, 300],
+            corpse_decay: [300, 600, 1200, 3600, 900],
         }
     }
 }
@@ -174,6 +174,20 @@ pub struct VirtualItemPrototype {
     pub sheath: u8,
 }
 
+/// One limited-stock vendor counter
+/// (`VendorItemCount`, `Creature.h`): the running
+/// stock for one vendor item on one creature
+/// instance, with its restock cadence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VendorItemCount {
+    pub item_id: u32,
+    pub count: u32,
+    /// Unix time stock last changed.
+    pub last_increment_time: u64,
+    /// Seconds per restock step (`incrtime`).
+    pub restock_delay: u32,
+}
+
 /// The Creature aggregate.
 #[derive(Clone, Debug)]
 #[allow(clippy::struct_excessive_bools)] // mirrors the C++ member set
@@ -235,6 +249,9 @@ pub struct Creature {
     pub is_dead_by_default: bool,
     /// `m_corpseDecayTimer` (ms remaining as a corpse).
     pub corpse_decay_timer: i64,
+    /// Limited vendor stock counters
+    /// (`m_vendorItemCounts`, Tier 4 step 4c).
+    pub vendor_item_counts: Vec<VendorItemCount>,
 }
 
 impl Creature {
@@ -658,6 +675,7 @@ impl Creature {
             equipment_id: 0,
             is_dead_by_default: false,
             corpse_decay_timer: 0,
+            vendor_item_counts: Vec::new(),
         };
         creature.init_entry(
             addon,

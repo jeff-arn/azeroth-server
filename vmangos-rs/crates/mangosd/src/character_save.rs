@@ -400,22 +400,16 @@ pub fn build_save_bundle(
         }
         rest
     };
-    // Inventory is DB-backed by the service layer:
-    // the fork's item update queue is empty here, so
-    // every loaded row saves Unchanged (no statements).
-    let inventory = player
-        .saved
-        .inventory
-        .iter()
-        .cloned()
-        .map(|row| InventorySaveItem {
-            row,
-            state: ItemSaveState::Unchanged,
-            wrapped: false,
-            has_saved_loot: false,
-            loot: LootSave::Unchanged,
-        })
-        .collect();
+    // Inventory diff (Tier 4 step 4a): live rows in
+    // `deferred.inventory` against the as-loaded
+    // `saved.inventory` baseline, keyed by item guid
+    // (fork per-item `uState`, aggregate form). Rows
+    // the grant/destroy service paths already wrote
+    // moved in both sets together, so they diff
+    // clean. Wrapped/saved-loot markers stay at their
+    // load-time defaults (gift wrap + container loot
+    // persistence unmodeled).
+    let inventory = diff_inventory(&player.saved.inventory, &player.deferred.inventory);
     let bundle = CharacterSaveBundle {
         row: character_row(player, ctx),
         // `_SaveBGData`: outer None skips the delete
@@ -499,6 +493,46 @@ pub fn homebind_row(player: &Player) -> mangos_db::character_load::HomebindRow {
 /// rows as written); quest timer remainders re-anchor
 /// to the save time and the load-time recount marks
 /// clear.
+/// Inventory save diff by item guid: live-only rows
+/// are `New`, value-changed rows `Changed`,
+/// baseline-only rows `Removed`, identical rows
+/// `Unchanged` (no statements).
+fn diff_inventory(
+    saved: &[mangos_db::character_load::InventoryRow],
+    live: &[mangos_db::character_load::InventoryRow],
+) -> Vec<InventorySaveItem> {
+    let mut out = Vec::with_capacity(live.len());
+    for row in live {
+        let state = match saved
+            .iter()
+            .find(|s| s.item.item_guid == row.item.item_guid)
+        {
+            None => ItemSaveState::New,
+            Some(old) if old == row => ItemSaveState::Unchanged,
+            Some(_) => ItemSaveState::Changed,
+        };
+        out.push(InventorySaveItem {
+            row: row.clone(),
+            state,
+            wrapped: false,
+            has_saved_loot: false,
+            loot: LootSave::Unchanged,
+        });
+    }
+    for row in saved {
+        if live.iter().all(|r| r.item.item_guid != row.item.item_guid) {
+            out.push(InventorySaveItem {
+                row: row.clone(),
+                state: ItemSaveState::Removed,
+                wrapped: false,
+                has_saved_loot: false,
+                loot: LootSave::Unchanged,
+            });
+        }
+    }
+    out
+}
+
 pub fn rebaseline(
     player: &mut Player,
     now: u64,
@@ -522,6 +556,7 @@ pub fn rebaseline(
             None
         };
     player.saved.spells = player.deferred.spells.clone();
+    player.saved.inventory = player.deferred.inventory.clone();
     player.saved.skills = current_skills(player);
     player.saved.quest_status = projected_quests;
     player.saved.reputation = player.deferred.reputation.clone();
@@ -539,4 +574,55 @@ pub fn rebaseline(
 /// `MasterPlayer::SaveActions` write.
 pub fn rebaseline_actions(player: &mut Player) {
     player.saved.actions = player.deferred.actions.clone();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mangos_db::character_load::{InventoryRow, ItemInstanceRow};
+
+    fn row(item_guid: u32, slot: u8, durability: u16) -> InventoryRow {
+        InventoryRow {
+            item: ItemInstanceRow {
+                creator_guid: 0,
+                gift_creator_guid: 0,
+                count: 1,
+                duration: 0,
+                charges: String::new(),
+                flags: 0,
+                enchantments: String::new(),
+                random_property_id: 0,
+                durability,
+                text: 0,
+                item_guid,
+                item_id: 25,
+                generated_loot: 0,
+            },
+            bag: 0,
+            slot,
+        }
+    }
+
+    #[test]
+    fn inventory_diff_states() {
+        let saved = vec![row(1, 0, 10), row(2, 23, 5), row(3, 24, 7)];
+        // guid 1 durability changed, guid 2 untouched,
+        // guid 3 removed, guid 4 new, guid 1 also moved.
+        let mut moved = row(1, 1, 9);
+        moved.item.count = 1;
+        let live = vec![moved, row(2, 23, 5), row(4, 25, 3)];
+        let diff = diff_inventory(&saved, &live);
+        let state_of = |guid: u32| {
+            diff.iter()
+                .find(|i| i.row.item.item_guid == guid)
+                .map(|i| i.state)
+        };
+        assert_eq!(state_of(1), Some(ItemSaveState::Changed));
+        assert_eq!(state_of(2), Some(ItemSaveState::Unchanged));
+        assert_eq!(state_of(3), Some(ItemSaveState::Removed));
+        assert_eq!(state_of(4), Some(ItemSaveState::New));
+        // Identical sets diff to all-Unchanged.
+        let diff = diff_inventory(&saved, &saved);
+        assert!(diff.iter().all(|i| i.state == ItemSaveState::Unchanged));
+    }
 }

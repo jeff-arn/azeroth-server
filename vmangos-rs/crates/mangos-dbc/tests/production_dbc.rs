@@ -80,10 +80,10 @@ fn all_158_files_headers_and_sections() {
 
 #[test]
 #[ignore = "requires MANGOS_DBC_DIR with production DBC fixtures"]
-fn all_46_stores_produced_values() {
+fn all_48_stores_produced_values() {
     let dir = dbc_dir();
-    assert_eq!(ALL_STORES.len(), 46);
-    assert_eq!(STORES.len(), 46);
+    assert_eq!(ALL_STORES.len(), 48);
+    assert_eq!(STORES.len(), 48);
     for store in ALL_STORES {
         let golden = STORES
             .iter()

@@ -122,7 +122,9 @@ fn bench_spawn_guid1_materializes() {
     assert_eq!(creature.unit.world.map_id, 0);
     assert_eq!(pos.x.to_bits(), (-14467.8f32).to_bits());
     assert_eq!(creature.respawn_delay, 300);
-    assert_eq!(creature.corpse_delay, 60);
+    // `Corpse.Decay.NORMAL` fork default (300);
+    // the old 60 pinned a wrong conf.example claim.
+    assert_eq!(creature.corpse_delay, 300);
     // No model data supplied -> UpdateModelData fallback 1.5.
     assert_eq!(
         v.get_f32(offsets::UNIT_FIELD_BOUNDINGRADIUS).to_bits(),

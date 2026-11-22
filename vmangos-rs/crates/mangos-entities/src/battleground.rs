@@ -317,24 +317,6 @@ impl BgPlayerState {
 }
 
 impl crate::player::Player {
-    /// `HonorMgr::Add(cp, BONUS)` subset: appends a new
-    /// `character_honor_cp` row (save-side multiset diff
-    /// inserts it, fork `STATE_NEW`).
-    pub fn honor_add_bonus(&mut self, cp: f32, game_day: u32) {
-        self.deferred
-            .honor_cp
-            .push(mangos_db::character_load::HonorCpRow {
-                // BONUS rows carry no victim; the fork
-                // stores the owner guid (`Add` with
-                // `victimGuid = GetGUIDLow()`).
-                victim_type: 0,
-                victim_id: self.unit.guid().counter(),
-                cp,
-                date: game_day,
-                kind: 3,
-            });
-    }
-
     /// Row-delta subset of `ModifyFactionReputation`
     /// (no runtime reputation manager exists yet; same
     /// treatment as quest rewards actor-side).

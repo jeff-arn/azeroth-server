@@ -41,8 +41,6 @@ const STATIC_FLAG_NO_XP: u32 = 0x0000_0002;
 /// `CREATURE_STATIC_FLAG_CORPSE_RAID`
 /// (`CreatureDefines.h:111`).
 const STATIC_FLAG_CORPSE_RAID: u32 = 0x0000_1000;
-/// `MaxGroupXPDistance` tree default (`World.cpp:561`).
-const GROUP_XP_DISTANCE: f32 = 74.0;
 
 /// `XP::GetGrayLevel`.
 #[must_use]
@@ -251,7 +249,7 @@ impl Map {
     /// `IsAtGroupRewardDistance` via `IsWithinLootXPDist`
     /// (2D, strict; the fork's size-factor addition is
     /// unmodeled — object sizes are not tracked).
-    fn at_group_reward_distance(
+    pub(crate) fn at_group_reward_distance(
         &self,
         member_pos: Position,
         victim_pos: Position,
@@ -264,7 +262,7 @@ impl Map {
         {
             return true;
         }
-        let mut dist = GROUP_XP_DISTANCE;
+        let mut dist = self.config.max_group_xp_distance;
         if victim.rank == RANK_WORLDBOSS {
             dist += 150.0;
         }
@@ -339,6 +337,9 @@ impl Map {
                 non_raid_dungeon,
                 self.config.xp_rates,
             );
+            // `RewardHonor` precedes XP in
+            // `RewardSinglePlayerAtKill`.
+            self.reward_honor_creature(reward_player, victim);
             self.grant_kill_xp(reward_player, victim, xp);
             // Pet XP only when the mob is not grey to
             // the owner (`RewardSinglePlayerAtKill`).
@@ -406,6 +407,14 @@ impl Map {
             if mob_level > gray_level(level) && not_gray_with_max.is_none_or(|(_, l)| l < level) {
                 not_gray_with_max = Some((*guid, level));
             }
+        }
+        // Honor arm of `RewardGroupAtKill_helper`:
+        // every alive in-distance member is
+        // rewarded honor (the XP gray-level skips
+        // below do not apply), and it runs even
+        // when no member is not-gray.
+        for guid in &members {
+            self.reward_honor_creature(*guid, victim);
         }
         let (Some((max_guid, _)), Some((not_gray_guid, not_gray_level))) =
             (member_with_max, not_gray_with_max)
@@ -619,6 +628,246 @@ impl Map {
                         to: player_guid,
                         packet,
                     });
+                }
+            }
+        }
+    }
+
+    /// `Player::ItemAddedQuestCheck` notification
+    /// tail: run the entity-side capped increment,
+    /// emit `SMSG_QUESTUPDATE_ADD_ITEM` in batches
+    /// of at most 63 (fork `SendQuestUpdateAddItem`)
+    /// and `SMSG_QUESTUPDATE_COMPLETE` on the
+    /// completion transition. Called after a newly
+    /// gained item is present in the live inventory.
+    pub fn item_added_quest_check(&mut self, player_guid: ObjectGuid, item_id: u32, count: u32) {
+        use mangos_protocol::buffer::PacketWriter;
+
+        let updates = {
+            let Some(entry_rec) = self.players.get_mut(&player_guid) else {
+                return;
+            };
+            entry_rec
+                .player
+                .item_added_quest_check(item_id, count, &self.stores.quest_templates)
+        };
+        for update in updates {
+            if update.notify {
+                let mut remaining = update.new_count - update.old_count;
+                while remaining > 0 {
+                    let batch = remaining.min(63);
+                    let mut writer = PacketWriter::new();
+                    writer.write_u32_le(update.item_id);
+                    writer.write_u32_le(batch);
+                    let mut packet = WorldPacket::new(
+                        mangos_protocol::opcode_table::opcode_id::SMSG_QUESTUPDATE_ADD_ITEM,
+                    );
+                    packet.take_writer(writer);
+                    self.events.push(MapEvent::Packet {
+                        to: player_guid,
+                        packet,
+                    });
+                    remaining -= batch;
+                }
+            }
+            if update.completed {
+                let mut writer = PacketWriter::new();
+                writer.write_u32_le(update.quest_id);
+                let mut packet = WorldPacket::new(
+                    mangos_protocol::opcode_table::opcode_id::SMSG_QUESTUPDATE_COMPLETE,
+                );
+                packet.take_writer(writer);
+                self.events.push(MapEvent::Packet {
+                    to: player_guid,
+                    packet,
+                });
+            }
+        }
+    }
+
+    /// `Player::FailQuest` (`Player.cpp:13160`):
+    /// repeatable untimed quests are removed from
+    /// the log, others are marked FAILED in place;
+    /// timed quests drop their timer and use the
+    /// timer-fail packet. Quest source-item cleanup
+    /// on removal is unmodeled (same subset as the
+    /// actor abandon handler).
+    pub(crate) fn fail_quest(&mut self, player_guid: ObjectGuid, quest_id: u32) {
+        /// `QUEST_STATE_FAIL` (`Player.h:450`).
+        const QUEST_STATE_FAIL: u8 = 0x02;
+        /// `QUEST_STATUS_FAILED`.
+        const QUEST_STATUS_FAILED: i32 = 2;
+        let Some(template) = self.stores.quest_templates.get(quest_id).cloned() else {
+            return;
+        };
+        let send = |this: &mut Self, opcode: u16| {
+            let mut writer = PacketWriter::new();
+            writer.write_u32_le(quest_id);
+            let mut packet = WorldPacket::new(opcode);
+            packet.take_writer(writer);
+            this.events.push(MapEvent::Packet {
+                to: player_guid,
+                packet,
+            });
+        };
+        if template.is_repeatable() && !template.limit_time != 0 {
+            send(self, opcode_id::SMSG_QUESTUPDATE_FAILED);
+            // `RemoveQuestAtSlot` reduced (actor
+            // abandon subset).
+            if let Some(entry) = self.players.get_mut(&player_guid) {
+                let player = &mut entry.player;
+                if let Some(slot) = player.find_quest_slot(quest_id) {
+                    player.set_quest_slot(slot, 0, 0);
+                }
+                player.set_quest_status(quest_id, 0);
+                player.quest_timers.remove(&quest_id);
+                if let Some(row) = player
+                    .deferred
+                    .quest_status
+                    .iter_mut()
+                    .find(|r| r.quest == quest_id)
+                {
+                    row.mob_count = [0; 4];
+                    row.item_count = [0; 4];
+                    row.explored = 0;
+                }
+            }
+            return;
+        }
+        let mut timed = false;
+        if let Some(entry) = self.players.get_mut(&player_guid) {
+            let player = &mut entry.player;
+            if let Some(slot) = player.find_quest_slot(quest_id) {
+                // `SetQuestSlotTimer(slot, 1)` keeps the
+                // quest id word; `set_quest_slot` also
+                // zeroes counters, so reapply none (fork
+                // keeps counters; the count word is
+                // rebuilt from the row on relog).
+                player.set_quest_slot(slot, quest_id, 1);
+                player.set_quest_slot_state(slot, QUEST_STATE_FAIL, true);
+                player.set_quest_status(quest_id, QUEST_STATUS_FAILED);
+            }
+            if template.limit_time != 0 {
+                timed = true;
+                player.quest_timers.remove(&quest_id);
+            }
+        }
+        if timed {
+            send(self, opcode_id::SMSG_QUESTUPDATE_FAILEDTIMER);
+        } else {
+            send(self, opcode_id::SMSG_QUESTUPDATE_FAILED);
+        }
+    }
+
+    /// `Player::GroupEventFailHappens`
+    /// (`Player.cpp:13794`): fail the quest for every
+    /// group member who has it incomplete, regardless
+    /// of distance (solo: just the player).
+    pub(crate) fn group_event_fail_happens(&mut self, player_guid: ObjectGuid, quest_id: u32) {
+        let members = self.escort_group_members(player_guid);
+        for member in members {
+            if self
+                .players
+                .get(&member)
+                .is_some_and(|e| e.player.quest_status(quest_id) == 3)
+            {
+                self.fail_quest(member, quest_id);
+            }
+        }
+    }
+
+    /// `Player::AreaExploredOrEventHappens`:
+    /// set the explored/event objective, send the
+    /// complete-event packet, and run the completion
+    /// transition.
+    pub(crate) fn area_explored_or_event_happens(
+        &mut self,
+        player_guid: ObjectGuid,
+        quest_id: u32,
+    ) {
+        /// `QUEST_STATE_COMPLETE` (`Player.h:449`).
+        const QUEST_STATE_COMPLETE: u8 = 0x01;
+        if quest_id == 0 {
+            return;
+        }
+        let Some(template) = self.stores.quest_templates.get(quest_id).cloned() else {
+            return;
+        };
+        let (needs_event, completed) = {
+            let Some(entry) = self.players.get_mut(&player_guid) else {
+                return;
+            };
+            let player = &mut entry.player;
+            let mut needs_event = false;
+            if let Some(slot) = player.find_quest_slot(quest_id) {
+                let explored = player.quest_row(quest_id).is_some_and(|r| r.explored != 0);
+                if !explored {
+                    needs_event = true;
+                    player.set_quest_slot_state(slot, QUEST_STATE_COMPLETE, true);
+                    if let Some(row) = player
+                        .deferred
+                        .quest_status
+                        .iter_mut()
+                        .find(|r| r.quest == quest_id)
+                    {
+                        row.explored = 1;
+                    }
+                }
+            }
+            let completed = player.can_complete_quest(&template) && player.complete_quest(quest_id);
+            (needs_event, completed)
+        };
+        if needs_event {
+            let mut writer = PacketWriter::new();
+            writer.write_u32_le(quest_id);
+            let mut packet = WorldPacket::new(opcode_id::SMSG_QUESTUPDATE_COMPLETE);
+            packet.take_writer(writer);
+            self.events.push(MapEvent::Packet {
+                to: player_guid,
+                packet,
+            });
+        }
+        // `CompleteQuest` itself sends no extra
+        // packet beyond the state change.
+        let _ = completed;
+    }
+
+    /// `Player::GroupEventHappens`: credit the
+    /// event objective to group members at group
+    /// reward distance from `event_pos` who are not
+    /// ghosts (solo: just the player, no distance
+    /// gate in fork either beyond membership).
+    pub(crate) fn group_event_happens(
+        &mut self,
+        player_guid: ObjectGuid,
+        quest_id: u32,
+        event_pos: Position,
+    ) {
+        let group_id = self
+            .players
+            .get(&player_guid)
+            .and_then(|e| e.player.group_id);
+        if group_id.is_none() {
+            self.area_explored_or_event_happens(player_guid, quest_id);
+        } else {
+            // Fork gates members by
+            // `IsAtGroupRewardDistance(eventObject)`
+            // (GROUP_XP_DISTANCE around the event
+            // object for non-instance content).
+            let members = self.escort_group_members(player_guid);
+            let group_xp_distance = self.config.max_group_xp_distance;
+            for member in members {
+                let in_range = self.unit_position(member).is_some_and(|pos| {
+                    let dx = pos.x - event_pos.x;
+                    let dy = pos.y - event_pos.y;
+                    dx * dx + dy * dy < group_xp_distance * group_xp_distance
+                });
+                let alive = self
+                    .players
+                    .get(&member)
+                    .is_some_and(|e| e.player.unit.is_alive());
+                if in_range && alive {
+                    self.area_explored_or_event_happens(member, quest_id);
                 }
             }
         }

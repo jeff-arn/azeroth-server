@@ -118,12 +118,24 @@ fn bench_map_visibility_and_relay() {
                     player_infos,
                     items,
                     item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
-                    factions: mangos_world_data::reputations::FactionStore::default(),
+                    factions: mangos_world_data::reputations::load_factions(conn)?,
+                    gossip: mangos_world_data::gossip_menus::GossipStores::default(),
                     areas: mangos_world_data::areas::AreaStore::default(),
                     exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(
                     ),
                     pets: mangos_world_data::pet_data::PetStores::default(),
                     next_pet_number: std::sync::atomic::AtomicU32::new(1),
+                    next_item_guid: std::sync::atomic::AtomicU32::new(1),
+                    vendor_items: mangos_world_data::vendor_items::VendorItemStores::default(),
+                    durability: mangos_world_data::durability::DurabilityTables::default(),
+                    bank_bag_slot_prices: Vec::new(),
+                    stable_slot_prices: Vec::new(),
+                    trainer_spells: mangos_world_data::trainer_spells::TrainerStores::default(),
+                    taxi: mangos_world_data::taxi::TaxiStore::default(),
+                    script_waypoints:
+                        mangos_world_data::script_waypoints::ScriptWaypointStore::default(),
+                    game_events: mangos_world_data::game_events::GameEvents::default(),
+                    loot: mangos_world_data::loot::LootStores::default(),
                     weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore::default(),
@@ -175,9 +187,11 @@ fn bench_map_visibility_and_relay() {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
         skills: None,
         item_prototypes: None,
         quest_templates: None,
+        taxi: None,
     };
     let player1 = Player::materialize(load.clone(), &inputs).expect("player1");
     let guid1 = player1.unit.guid();
@@ -254,6 +268,54 @@ fn bench_map_visibility_and_relay() {
             .iter()
             .any(|e| matches!(e, MapEvent::Packet { to, .. } if *to == guid1))
     );
+
+    // Corpse lifecycle: a killed creature must promote
+    // to CORPSE with an armed decay timer and stay
+    // visible (lootable) across visibility rescans.
+    {
+        use mangos_entities::unit::DeathState;
+        let victim = map
+            .visible_to(guid1)
+            .expect("v1")
+            .iter()
+            .copied()
+            .find(|g| map.creature(*g).is_some())
+            .expect("visible creature");
+        map.kill_unit(victim, Some(guid1));
+        let _ = map.drain_events();
+        map.tick(150, 1500, 1_800_000_000);
+        let nudge = MovementInfo {
+            pos: Position::new(pos1.x + 6.0, pos1.y, pos1.z, pos1.o),
+            server_time: 1700,
+            ..MovementInfo::default()
+        };
+        assert!(map.apply_movement(guid1, opcode_id::MSG_MOVE_HEARTBEAT, nudge, &respawns));
+        map.tick(150, 1850, 1_800_000_000);
+        let corpse = map.creature(victim).expect("corpse creature");
+        assert_eq!(corpse.unit.death_state, DeathState::Corpse, "corpse state");
+        assert!(corpse.corpse_decay_timer > 0, "decay timer armed");
+        assert!(
+            map.visible_to(guid1).expect("v1").contains(&victim),
+            "corpse stays visible across rescan"
+        );
+        // Spirit services are invisible to alive viewers
+        // (`IsInvisibleForAlive` symmetry).
+        for guid in map.visible_to(guid1).expect("v1").clone() {
+            if let Some(c) = map.creature(guid) {
+                let npc_flags = c
+                    .unit
+                    .world
+                    .object
+                    .values()
+                    .get_u32(mangos_protocol::update_field_table::offsets::UNIT_NPC_FLAGS);
+                assert_eq!(
+                    npc_flags & 0x60,
+                    0,
+                    "spirit healer/guide must not be visible to alive player"
+                );
+            }
+        }
+    }
 
     // Move far away: relocation scan drops mutual visibility
     // and emits out-of-range updates.

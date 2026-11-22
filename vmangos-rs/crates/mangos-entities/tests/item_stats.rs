@@ -280,9 +280,11 @@ fn equipped_items_feed_stat_pipeline() {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
         skills: None,
         item_prototypes: Some(&protos),
         quest_templates: None,
+        taxi: None,
     };
     let player = Player::materialize(load(), &inputs).expect("materialize");
     let unit = &player.unit;

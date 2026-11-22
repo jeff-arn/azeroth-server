@@ -60,6 +60,7 @@ fn race_class_dbc() -> RaceClassDbc {
 
 #[test]
 #[ignore = "requires bench world+characters DBs, CHARACTER_LOAD_GUID, MANGOS_DBC_DIR"]
+#[allow(clippy::too_many_lines)] // fixture assembly
 fn bench_warrior_materializes() {
     let world_url = std::env::var("TEST_MYSQL_URL_WORLD").expect("TEST_MYSQL_URL_WORLD");
     let chars_url = std::env::var("TEST_MYSQL_URL_CHARACTERS").expect("TEST_MYSQL_URL_CHARACTERS");
@@ -94,9 +95,11 @@ fn bench_warrior_materializes() {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
         skills: None,
         item_prototypes: None,
         quest_templates: None,
+        taxi: None,
     };
     let player = Player::materialize(load, &inputs).expect("materialize");
     let v = player.unit.world.object.values();

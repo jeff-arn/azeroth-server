@@ -221,6 +221,18 @@ impl ItemPrototypes {
     pub fn is_empty(&self) -> bool {
         self.by_entry.is_empty()
     }
+
+    /// `pItemProto->Discovered = true` side effects
+    /// applied after the initial load
+    /// (`IsVendorItemValid`): ids not in the store
+    /// are ignored.
+    pub fn mark_discovered(&mut self, item_ids: impl IntoIterator<Item = u32>) {
+        for item_id in item_ids {
+            if let Some(proto) = self.by_entry.get_mut(&item_id) {
+                proto.discovered = true;
+            }
+        }
+    }
 }
 
 /// Distinct item templates currently instantiated for
@@ -391,4 +403,65 @@ pub fn load_item_prototypes<S: BuildHasher>(
         by_entry.insert(entry, proto);
     }
     Ok(ItemPrototypes { by_entry })
+}
+
+/// `ItemPrototype::GetAllowedEquipSlots` (`Item.cpp:560`)
+/// equipment-slot candidates in fork order (`None`
+/// pads). Starting-item quivers (type 27) have no fork
+/// arm and stay slotless here, as in the cache pass;
+/// the login grant routes bags/quivers by container
+/// capacity instead.
+#[must_use]
+pub fn allowed_equip_slots(
+    proto: &ItemPrototype,
+    class_id: u32,
+    can_dual_wield: bool,
+) -> [Option<u8>; 4] {
+    let mut slots = [None; 4];
+    match proto.inventory_type {
+        1 => slots[0] = Some(0),      // HEAD
+        2 => slots[0] = Some(1),      // NECK
+        3 => slots[0] = Some(2),      // SHOULDERS
+        4 => slots[0] = Some(3),      // BODY
+        5 | 20 => slots[0] = Some(4), // CHEST / ROBE
+        6 => slots[0] = Some(5),      // WAIST
+        7 => slots[0] = Some(6),      // LEGS
+        8 => slots[0] = Some(7),      // FEET
+        9 => slots[0] = Some(8),      // WRISTS
+        10 => slots[0] = Some(9),     // HANDS
+        11 => {
+            slots[0] = Some(10);
+            slots[1] = Some(11);
+        } // FINGER
+        12 => {
+            slots[0] = Some(12);
+            slots[1] = Some(13);
+        } // TRINKET
+        13 => {
+            slots[0] = Some(15);
+            if can_dual_wield {
+                slots[1] = Some(16);
+            }
+        } // WEAPON
+        14 | 22 | 23 => slots[0] = Some(16), // SHIELD / WEAPONOFFHAND / HOLDABLE
+        15 | 25 | 26 => slots[0] = Some(17), // RANGED / THROWN / RANGEDRIGHT
+        16 => slots[0] = Some(14),    // CLOAK
+        17 | 21 => slots[0] = Some(15), // 2HWEAPON / WEAPONMAINHAND
+        18 => {
+            slots = [Some(19), Some(20), Some(21), Some(22)];
+        } // BAG
+        19 => slots[0] = Some(18),    // TABARD
+        28 => {
+            // RELIC by armor subclass + class.
+            let ok = matches!(
+                (proto.subclass, class_id),
+                (7, 2) | (8, 11) | (9, 7) | (0, 9)
+            );
+            if ok {
+                slots[0] = Some(17);
+            }
+        }
+        _ => {}
+    }
+    slots
 }

@@ -7,8 +7,10 @@
 //! script engine in `scripts.rs`, plus scripted flee.
 //!
 //! Recorded subset deviations: no assistance calls
-//! (`CallAssistance`), no pet/charm handling, hostility
-//! is player-vs-creature (no faction reactions), static
+//! (`CallAssistance`), no pet/charm handling, proximity
+//! aggro uses the faction-reaction hostile bit but
+//! spell targeting still uses the player-vs-creature
+//! `is_hostile_pair` approximation, static
 //! creature flags beyond critter/totem types are not
 //! consulted, spell-list target types outside
 //! self/victim/random-threat fall back to the victim,
@@ -1273,6 +1275,16 @@ impl Map {
         if !self.unit_is_alive(target) || !target.is_player() {
             return false;
         }
+        // `m_creature->IsHostileTo(pWho)` (BasicAI.cpp:64):
+        // proximity aggro only against reaction-hostile
+        // players; friendly/neutral NPCs (town guards,
+        // quest givers) never initiate. GuardAI's extra
+        // arms (attacking a friendly, hostile-to-players)
+        // are not modeled here.
+        // UNMODELED: GuardAI::MoveInLineOfSight extra arms.
+        if !self.creature_hostile_to_player(creature, target) {
+            return false;
+        }
         // `MoveInLineOfSight` rides visibility notifiers:
         // no aggro before the creature is in the player's
         // view.
@@ -1335,6 +1347,9 @@ impl Map {
             u.last_combat_ms = now;
         }
         if fresh {
+            // `npc_escortAI::EnterCombat` combat-start
+            // record (Tier 4 B0-6).
+            self.escort_on_enter_combat(creature);
             self.instance_on_creature_enter_combat(creature);
             self.eventai_enter_combat(creature, target);
             self.creature_script_aggro(creature, target);
@@ -1749,6 +1764,8 @@ impl Map {
         // `InstanceData::OnCreatureEvade` (fork fires it from
         // `CreatureAI::EnterEvadeMode`).
         self.instance_on_creature_evade(guid);
+        // `SetLootRecipient(nullptr)` on evade.
+        self.clear_loot_tap(guid);
         self.attack_stop(guid);
         self.cancel_cast(guid, false);
         self.remove_all_auras(guid);
@@ -1776,7 +1793,12 @@ impl Map {
             master.clear(self, guid);
             self.motion.entry(guid).or_insert(master);
         }
-        self.creature_move_home(guid);
+        // Tier 4 B0-6: escorting/following creatures
+        // return to their escort anchor instead of
+        // walking home.
+        if !self.escort_on_evade(guid) {
+            self.creature_move_home(guid);
+        }
     }
 
     /// Out-of-combat creature regen (`RegenerateAll`:
@@ -2208,6 +2230,39 @@ impl Map {
         clippy::cast_precision_loss,
         clippy::too_many_lines
     )]
+    /// Armor-reduced melee base damage before outcome
+    /// modifiers (`CalculateMeleeDamage` clean damage).
+    fn melee_base_damage(&mut self, attacker: ObjectGuid, victim: ObjectGuid) -> u32 {
+        // Field range roll, dithered, then armor
+        // (CalculateMeleeDamage order).
+        let min_dmg = f32::from_bits(self.unit_value_u32(attacker, offsets::UNIT_FIELD_MINDAMAGE));
+        let max_dmg = f32::from_bits(self.unit_value_u32(attacker, offsets::UNIT_FIELD_MAXDAMAGE));
+        let (lo, hi) = if min_dmg > max_dmg {
+            (max_dmg, min_dmg)
+        } else {
+            (min_dmg, max_dmg)
+        };
+        let rolled = mangos_spells::ditheru(
+            self.rng
+                .frand(lo.max(0.0), if hi == 0.0 { 5.0 } else { hi }),
+            self.spell_rng(),
+        );
+        let victim_armor = self.unit_resistance(victim, 0);
+        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+        {
+            mangos_spells::armor_reduced_damage(
+                rolled as f32,
+                victim_armor,
+                self.unit_level(attacker),
+            ) as u32
+        }
+    }
+
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        clippy::too_many_lines
+    )]
     fn melee_swing(&mut self, attacker: ObjectGuid, victim: ObjectGuid) {
         // Victim creature in evade mode: MELEE_HIT_EVADE.
         if victim.is_creature() && self.ai.get(&victim).is_some_and(|ai| ai.evading) {
@@ -2322,6 +2377,11 @@ impl Map {
                 return;
             }
             MeleeOutcome::Dodge => {
+                if attacker != victim {
+                    let clean = self.melee_base_damage(attacker, victim);
+                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                    self.reward_rage(attacker, (clean as f32 * 0.75) as u32, true);
+                }
                 self.raise_melee_procs(attacker, victim, proc_ex::DODGE, 0);
                 self.send_attacker_state(
                     attacker,
@@ -2334,6 +2394,11 @@ impl Map {
                 return;
             }
             MeleeOutcome::Parry => {
+                if attacker != victim {
+                    let clean = self.melee_base_damage(attacker, victim);
+                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                    self.reward_rage(attacker, (clean as f32 * 0.75) as u32, true);
+                }
                 self.raise_melee_procs(attacker, victim, proc_ex::PARRY, 0);
                 self.send_attacker_state(
                     attacker,
@@ -2348,26 +2413,7 @@ impl Map {
             _ => {}
         }
 
-        // Base damage: field range roll, dithered, then
-        // armor (CalculateMeleeDamage order).
-        let min_dmg = f32::from_bits(self.unit_value_u32(attacker, offsets::UNIT_FIELD_MINDAMAGE));
-        let max_dmg = f32::from_bits(self.unit_value_u32(attacker, offsets::UNIT_FIELD_MAXDAMAGE));
-        let (lo, hi) = if min_dmg > max_dmg {
-            (max_dmg, min_dmg)
-        } else {
-            (min_dmg, max_dmg)
-        };
-        let rolled = mangos_spells::ditheru(
-            self.rng
-                .frand(lo.max(0.0), if hi == 0.0 { 5.0 } else { hi }),
-            self.spell_rng(),
-        );
-        let victim_armor = self.unit_resistance(victim, 0);
-        let mut total = mangos_spells::armor_reduced_damage(
-            rolled as f32,
-            victim_armor,
-            self.unit_level(attacker),
-        ) as u32;
+        let mut total = self.melee_base_damage(attacker, victim);
 
         let mut hit_info = HITINFO_AFFECTS_VICTIM;
         let mut victim_state = VICTIMSTATE_NORMAL;
@@ -3233,6 +3279,10 @@ impl Map {
             .collect();
         for (guid, motion_type, point_id) in informs {
             if motion_type == crate::motion::POINT_MOTION_TYPE {
+                // Tier 4 B0-6: escort/follower
+                // `MovementInform` (base class runs
+                // before script overrides).
+                self.escort_movement_inform(guid, point_id);
                 self.creature_script_movement_inform(guid, point_id);
                 self.go_ai_summoned_movement_inform(guid, point_id);
                 self.creature_script_summoned_movement_inform(guid, point_id);

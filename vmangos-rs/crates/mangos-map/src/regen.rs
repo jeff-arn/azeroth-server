@@ -7,10 +7,9 @@
 //! (`Map::UpdatePlayers` -> `Player::Update`,
 //! `Map.cpp:888-919`, `Player.cpp:1236-1245`).
 //!
-//! Rates are the fork config defaults 1.0
+//! Rates come from `MapConfig::regen_rates`
 //! (`Rate.Health`, `Rate.Mana`, `Rate.Rage.Loss`,
-//! `Rate.Energy`; `World.cpp:471-478`): the world
-//! config stage does not parse `Rate.*` yet.
+//! `Rate.Energy`; `World.cpp:471-478`, defaults 1.0).
 //!
 //! Recorded deviations: `m_modManaRegen` /
 //! `m_modManaRegenInterrupt` are computed live at the
@@ -30,18 +29,10 @@ use mangos_entities::unit::{POWER_ENERGY, POWER_MANA, POWER_RAGE};
 use mangos_guid::ObjectGuid;
 use mangos_spells::defines::aura as aura_type;
 
-use crate::map::Map;
+use crate::map::{Map, RegenRates};
 
 /// `REGEN_TIME_PLAYER_FULL` (`UnitDefines.h:65`).
 const REGEN_TIME_PLAYER_FULL_MS: i32 = 2000;
-/// `Rate.Health` default (`World.cpp:471`).
-const RATE_HEALTH: f32 = 1.0;
-/// `Rate.Mana` default (`World.cpp:472`).
-const RATE_POWER_MANA: f32 = 1.0;
-/// `Rate.Rage.Loss` default (`World.cpp:474`).
-const RATE_POWER_RAGE_LOSS: f32 = 1.0;
-/// `Rate.Energy` default (`World.cpp:478`).
-const RATE_POWER_ENERGY: f32 = 1.0;
 /// `SPELLFAMILY_MAGE` (`DBCEnums.h:197`).
 const SPELLFAMILY_MAGE: u32 = 3;
 /// `SPELL_PREVENTION_TYPE_SILENCE`.
@@ -97,8 +88,10 @@ impl Map {
     /// regen pass per player with the accumulated
     /// players-gate diff.
     pub(crate) fn update_players(&mut self, diff_ms: u32) {
+        self.expire_corpses();
         let guids: Vec<ObjectGuid> = self.players.keys().copied().collect();
         for guid in guids {
+            self.update_death_timer(guid, diff_ms);
             self.update_player_regen(guid, diff_ms);
             self.update_player_rest(guid);
         }
@@ -163,7 +156,13 @@ impl Map {
             .object
             .values()
             .get_u32(mangos_protocol::update_field_table::offsets::PLAYER_NEXT_LEVEL_XP);
-        let gain = mangos_entities::player::compute_rest(elapsed_s, next_xp, false, true);
+        let gain = mangos_entities::player::compute_rest_with_rates(
+            elapsed_s,
+            next_xp,
+            false,
+            true,
+            self.config.rest_rates,
+        );
         let bonus = player.rest_bonus + gain;
         player.apply_rest_bonus(bonus, max_level);
         player.inn_enter_ms = Some(now_ms);
@@ -185,14 +184,14 @@ impl Map {
         if player.regen_timer_ms > 0 {
             return;
         }
-        regenerate_all(player, polymorphed);
+        regenerate_all(player, polymorphed, self.config.regen_rates);
         player.regen_timer_ms += REGEN_TIME_PLAYER_FULL_MS;
     }
 }
 
 /// `Player::RegenerateAll` (`Player.cpp:2310-2327`);
 /// the timer gate lives in the caller as in C++.
-fn regenerate_all(player: &mut Player, polymorphed: bool) {
+fn regenerate_all(player: &mut Player, polymorphed: bool, rates: RegenRates) {
     let in_combat = player.unit.is_in_combat();
     let auras = &player.unit.auras;
     // Not in combat or they have regeneration
@@ -201,20 +200,20 @@ fn regenerate_all(player: &mut Player, polymorphed: bool) {
         || has_aura_type(auras, aura_type::MOD_HEALTH_REGEN_IN_COMBAT)
         || polymorphed
     {
-        regenerate_health(player, polymorphed);
+        regenerate_health(player, polymorphed, rates);
         if !player.unit.is_in_combat()
             && !has_aura_type(&player.unit.auras, aura_type::INTERRUPT_REGEN)
         {
-            regenerate_power(player, POWER_RAGE);
+            regenerate_power(player, POWER_RAGE, rates);
         }
     }
 
-    regenerate_power(player, POWER_ENERGY);
-    regenerate_power(player, POWER_MANA);
+    regenerate_power(player, POWER_ENERGY, rates);
+    regenerate_power(player, POWER_MANA, rates);
 }
 
 /// `Player::Regenerate` (`Player.cpp:2329-2395`).
-fn regenerate_power(player: &mut Player, power: usize) {
+fn regenerate_power(player: &mut Player, power: usize, rates: RegenRates) {
     let unit = &mut player.unit;
     let mut cur_value = unit.power(power);
     let max_value = unit.max_power(power);
@@ -242,14 +241,14 @@ fn regenerate_power(player: &mut Player, power: usize) {
             let mod_mana_regen = power_regen_mp5 + power_regen;
 
             if unit.is_under_last_mana_use_effect() {
-                add_value = mod_mana_regen_interrupt * RATE_POWER_MANA * 2.0;
+                add_value = mod_mana_regen_interrupt * rates.mana * 2.0;
             } else {
-                add_value = mod_mana_regen * RATE_POWER_MANA * 2.0;
+                add_value = mod_mana_regen * rates.mana * 2.0;
             }
         }
         // 20 = 2 rage by tick (units are tenths).
-        POWER_RAGE => add_value = 20.0 * RATE_POWER_RAGE_LOSS,
-        POWER_ENERGY => add_value = 20.0 * RATE_POWER_ENERGY,
+        POWER_RAGE => add_value = 20.0 * rates.rage_loss,
+        POWER_ENERGY => add_value = 20.0 * rates.energy,
         _ => {}
     }
 
@@ -286,7 +285,7 @@ fn regenerate_power(player: &mut Player, power: usize) {
 }
 
 /// `Player::RegenerateHealth` (`Player.cpp:2397-2448`).
-fn regenerate_health(player: &mut Player, polymorphed: bool) {
+fn regenerate_health(player: &mut Player, polymorphed: bool, rates: RegenRates) {
     let unit = &mut player.unit;
     let cur_value = unit.health();
     let max_value = unit.max_health();
@@ -303,7 +302,7 @@ fn regenerate_health(player: &mut Player, polymorphed: bool) {
         let max = max_value as f32;
         add_value = max / 10.0;
     } else if !in_combat || has_aura_type(auras, aura_type::MOD_REGEN_DURING_COMBAT) {
-        add_value = unit.regen_hp_per_spirit() * RATE_HEALTH;
+        add_value = unit.regen_hp_per_spirit() * rates.health;
         if !in_combat {
             for effect in auras.iter().flat_map(|h| h.effects.iter().flatten()) {
                 if effect.aura_type == aura_type::MOD_HEALTH_REGEN_PERCENT {
@@ -339,7 +338,7 @@ fn regenerate_health(player: &mut Player, polymorphed: bool) {
     // Always-regeneration bonus (including combat).
     #[allow(clippy::cast_precision_loss)] // C++ converts identically
     let in_combat_bonus = total_aura_modifier(auras, aura_type::MOD_HEALTH_REGEN_IN_COMBAT) as f32;
-    add_value += RATE_HEALTH * 2.0 * (in_combat_bonus / 5.0);
+    add_value += rates.health * 2.0 * (in_combat_bonus / 5.0);
 
     // Health fractions carry to the next tick.
     add_value += player.carry_health_regen;

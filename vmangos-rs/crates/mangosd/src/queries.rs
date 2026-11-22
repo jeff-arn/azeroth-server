@@ -16,6 +16,7 @@ use mangos_guid::{HighGuid, ObjectGuid};
 use mangos_protocol::buffer::PacketWriter;
 use mangos_protocol::opcode_table::opcode_id;
 use mangos_protocol::world::WorldPacket;
+use mangos_scripts_engine::{BroadcastTextMap, NpcText};
 use mangos_spells::SpellEntry;
 use mangos_world_data::creature_template::CreatureInfo;
 use mangos_world_data::gameobject_template::GameObjectInfo;
@@ -225,6 +226,94 @@ pub fn build_item_query_response<S: BuildHasher>(
     finish(opcode_id::SMSG_ITEM_QUERY_SINGLE_RESPONSE, writer)
 }
 
+/// `SMSG_NPC_TEXT_UPDATE` at build 5875
+/// (`QueryHandler.cpp:346`, `HandleNpcTextQueryOpcode`).
+/// The client caches npc texts and withholds
+/// `GOSSIP_SHOW` until this reply arrives, so every
+/// query is answered: an unknown text id (or an option
+/// whose broadcast text is missing) sends the fork
+/// default block. Texts use the enUS broadcast store;
+/// the fork session-locale lookup is UNMODELED, as
+/// elsewhere in this module.
+#[must_use]
+pub fn build_npc_text_update(
+    text_id: u32,
+    npc_text: Option<&NpcText>,
+    broadcast_texts: &BroadcastTextMap,
+) -> WorldPacket {
+    fn write_default(writer: &mut PacketWriter) {
+        writer.write_f32_le(0.0);
+        writer.write_cstring("Greetings $N");
+        writer.write_cstring("Greetings $N");
+        for _ in 0..7 {
+            writer.write_u32_le(0);
+        }
+    }
+
+    let mut writer = PacketWriter::new();
+    writer.write_u32_le(text_id);
+    let Some(npc_text) = npc_text else {
+        for _ in 0..8 {
+            write_default(&mut writer);
+        }
+        return finish(opcode_id::SMSG_NPC_TEXT_UPDATE, writer);
+    };
+    for option in &npc_text.options {
+        let Some(bct) = broadcast_texts.get(&option.broadcast_text_id) else {
+            write_default(&mut writer);
+            continue;
+        };
+        writer.write_f32_le(option.probability);
+        let male = if bct.male_text.is_empty() {
+            &bct.female_text
+        } else {
+            &bct.male_text
+        };
+        let female = if bct.female_text.is_empty() {
+            &bct.male_text
+        } else {
+            &bct.female_text
+        };
+        writer.write_cstring(male);
+        writer.write_cstring(female);
+        writer.write_u32_le(bct.language_id);
+        for i in 0..3 {
+            writer.write_u32_le(bct.emote_delays[i]);
+            writer.write_u32_le(bct.emote_ids[i]);
+        }
+    }
+    finish(opcode_id::SMSG_NPC_TEXT_UPDATE, writer)
+}
+
+/// `MSG_CORPSE_QUERY` reply at build 5875
+/// (`QueryHandler.cpp:298`, `HandleCorpseQueryOpcode`):
+/// `0` when the player has no resurrectable corpse,
+/// else `1`, the display map (the dungeon
+/// ghost-entrance map for a cross-map corpse), the
+/// display position, and the corpse's own map. The
+/// ghost client polls this to place the corpse
+/// marker and to offer reclaim near the body, so
+/// every query is answered.
+#[must_use]
+pub fn build_corpse_query_response(hit: Option<(i32, f32, f32, f32, u32)>) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    match hit {
+        None => {
+            writer.write_u8(0);
+        }
+        Some((display_map, x, y, z, corpse_map)) => {
+            writer.write_u8(1);
+            #[allow(clippy::cast_sign_loss)] // wire i32, bit-identical
+            writer.write_u32_le(display_map as u32);
+            writer.write_f32_le(x);
+            writer.write_f32_le(y);
+            writer.write_f32_le(z);
+            writer.write_u32_le(corpse_map);
+        }
+    }
+    finish(opcode_id::MSG_CORPSE_QUERY, writer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,6 +335,23 @@ mod tests {
         expected.extend_from_slice(&2u32.to_le_bytes());
         expected.extend_from_slice(&0u32.to_le_bytes());
         expected.extend_from_slice(&1u32.to_le_bytes());
+        assert_eq!(packet.body(), expected.as_slice());
+    }
+
+    #[test]
+    fn corpse_query_response_matches_5875_shape() {
+        let packet = build_corpse_query_response(None);
+        assert_eq!(packet.opcode(), opcode_id::MSG_CORPSE_QUERY);
+        assert_eq!(packet.body(), [0u8].as_slice());
+
+        let packet = build_corpse_query_response(Some((0, -8949.95, -132.493, 83.5312, 36)));
+        assert_eq!(packet.opcode(), opcode_id::MSG_CORPSE_QUERY);
+        let mut expected = vec![1u8];
+        expected.extend_from_slice(&0i32.to_le_bytes());
+        expected.extend_from_slice(&(-8949.95f32).to_le_bytes());
+        expected.extend_from_slice(&(-132.493f32).to_le_bytes());
+        expected.extend_from_slice(&83.5312f32.to_le_bytes());
+        expected.extend_from_slice(&36u32.to_le_bytes());
         assert_eq!(packet.body(), expected.as_slice());
     }
 
@@ -434,5 +540,58 @@ mod tests {
         };
         let item = build_item_query_response(0x59, Some(&undiscovered), false, &HashMap::new());
         assert_eq!(item.body(), (0x59u32 | 0x8000_0000).to_le_bytes());
+    }
+
+    #[test]
+    fn npc_text_update_unknown_text_sends_eight_default_blocks() {
+        let packet = build_npc_text_update(4937, None, &BroadcastTextMap::new());
+        let body = packet.body();
+        // text id + 8 * (f32 + "Greetings $N\0" * 2 + 7 * u32)
+        assert_eq!(body.len(), 4 + 8 * (4 + 13 + 13 + 28));
+        assert_eq!(&body[0..4], 4937u32.to_le_bytes());
+        assert_eq!(&body[4..8], 0.0f32.to_le_bytes());
+        assert_eq!(&body[8..21], b"Greetings $N\0");
+        assert_eq!(&body[21..34], b"Greetings $N\0");
+        assert!(body[34..62].iter().all(|b| *b == 0));
+    }
+
+    #[test]
+    fn npc_text_update_option_uses_broadcast_text_with_gender_fallback() {
+        use mangos_scripts_engine::{BroadcastText, NpcTextOption};
+
+        let mut broadcast_texts = BroadcastTextMap::new();
+        broadcast_texts.insert(
+            42,
+            BroadcastText {
+                entry: 42,
+                male_text: "Hello $N".to_string(),
+                female_text: String::new(),
+                chat_type: 0,
+                sound_id: 0,
+                language_id: 7,
+                emote_ids: [4, 5, 6],
+                emote_delays: [1, 2, 3],
+            },
+        );
+        let mut npc_text = NpcText::default();
+        npc_text.options[0] = NpcTextOption {
+            probability: 0.5,
+            broadcast_text_id: 42,
+        };
+
+        let packet = build_npc_text_update(9, Some(&npc_text), &broadcast_texts);
+        let body = packet.body();
+        let mut expected = Vec::new();
+        expected.extend_from_slice(&9u32.to_le_bytes());
+        expected.extend_from_slice(&0.5f32.to_le_bytes());
+        expected.extend_from_slice(b"Hello $N\0");
+        // empty female text falls back to the male text
+        expected.extend_from_slice(b"Hello $N\0");
+        for word in [7u32, 1, 4, 2, 5, 3, 6] {
+            expected.extend_from_slice(&word.to_le_bytes());
+        }
+        assert_eq!(&body[..expected.len()], expected.as_slice());
+        // the remaining 7 options are fork default blocks
+        assert_eq!(body.len(), expected.len() + 7 * (4 + 13 + 13 + 28));
     }
 }

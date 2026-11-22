@@ -142,6 +142,10 @@ enum PetLoadKind {
     Current,
     /// DB row loaded by a summon spell.
     Called,
+    /// DB row loaded out of a stable slot by pet
+    /// number (Tier 4 step 4h); behaves like `Called`
+    /// (slot promotion applies).
+    StableOut,
 }
 
 impl Map {
@@ -358,6 +362,32 @@ impl Map {
                 // Fork takes the first matching row.
                 .cloned()?
         };
+        self.load_pet_with_row(owner, &row, kind)
+    }
+
+    /// Stable load by pet number (`LoadPetFromDB`
+    /// with an explicit `petNumber`, Tier 4 step 4h).
+    pub fn load_pet_by_number(&mut self, owner: ObjectGuid, pet_number: u32) -> bool {
+        let row = self.players.get(&owner).and_then(|entry| {
+            entry
+                .player
+                .deferred
+                .pets
+                .iter()
+                .find(|r| r.id == pet_number && r.entry != 0)
+                .cloned()
+        });
+        let Some(row) = row else { return false };
+        self.load_pet_with_row(owner, &row, PetLoadKind::StableOut)
+            .is_some()
+    }
+
+    fn load_pet_with_row(
+        &mut self,
+        owner: ObjectGuid,
+        row: &PetRow,
+        kind: PetLoadKind,
+    ) -> Option<ObjectGuid> {
         self.stores.observe_pet_number(row.id);
         let template = self.stores.creature_templates.get(row.entry)?.clone();
         // Temporary summoned pets never load as current.
@@ -381,7 +411,7 @@ impl Map {
             row.level.max(1)
         };
         let guid =
-            self.materialize_pet(owner, row.id, template, pet_kind, level, Some(&row), kind)?;
+            self.materialize_pet(owner, row.id, template, pet_kind, level, Some(row), kind)?;
         // Slot promotion (fork UPDATE pair + cache).
         if row.slot != PET_SAVE_AS_CURRENT {
             let owner_low = owner.counter();
@@ -881,13 +911,17 @@ impl Map {
     }
 
     /// `GetTPForSpell` core: `SkillLineAbility`
-    /// `reqtrainpoints` of the first matching row.
-    /// No `SkillLineAbility` store is loaded yet, so
-    /// training costs read as 0 (recorded deviation;
-    /// hunter-pet TP economy is balance-only here).
-    #[allow(clippy::unused_self)] // grows with the SkillLineAbility store
-    fn training_points_for_spell(&self, _spell_id: u32) -> i32 {
-        0
+    /// `reqtrainpoints` of the first matching row
+    /// (`SkillLineAbility` store landed in Tier 4
+    /// step 4e; wired here).
+    fn training_points_for_spell(&self, spell_id: u32) -> i32 {
+        self.stores
+            .spells
+            .abilities_for_spell(spell_id)
+            .next()
+            .map_or(0, |ability| {
+                i32::try_from(ability.req_train_points).unwrap_or(i32::MAX)
+            })
     }
 
     /// `ObjectMgr::GetXPForPetLevel`.

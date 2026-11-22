@@ -87,6 +87,10 @@ pub struct SpellEntry {
     pub attributes_ex2: u32,
     pub attributes_ex3: u32,
     pub attributes_ex4: u32,
+    /// fields[12] (`Stances` shapeshift-form mask).
+    pub stances: u32,
+    /// fields[13] (`StancesNot` shapeshift-form mask).
+    pub stances_not: u32,
     /// fields[14] (target mask bits).
     pub targets: u32,
     /// fields[19].
@@ -706,11 +710,74 @@ impl SpellEntry {
     }
 }
 
+/// One `SkillLineAbilityEntry` (`DBCStructure.h`,
+/// fields 0..14), as the trainer gates consume it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SkillLineAbilityEntry {
+    pub id: u32,
+    pub skill_id: u32,
+    pub spell_id: u32,
+    pub race_mask: u32,
+    pub class_mask: u32,
+    pub req_skill_value: u32,
+    pub forward_spell_id: u32,
+    pub learn_on_get_skill: u32,
+    pub max_value: u32,
+    pub min_value: u32,
+    pub req_train_points: u32,
+}
+
+/// `MAX_TALENT_RANK`.
+pub const MAX_TALENT_RANK: usize = 5;
+
+/// One `TalentEntry` (`DBCStructure.h:652`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TalentEntry {
+    pub id: u32,
+    pub tab: u32,
+    pub row: u32,
+    pub col: u32,
+    pub rank_spells: [u32; MAX_TALENT_RANK],
+    pub depends_on: u32,
+    pub depends_on_rank: u32,
+    pub depends_on_spell: u32,
+}
+
+/// `TalentSpellPos` (`SpellMgr.h`): a spell's place
+/// in a talent (talent id + 0-based rank index).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TalentSpellPos {
+    pub talent_id: u32,
+    pub rank: u32,
+}
+
+/// `SpellChainNode` (`SpellMgr.h`): rank position of a
+/// spell within its chain.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SpellChainNode {
+    pub prev: u32,
+    pub first: u32,
+    pub rank: u32,
+    pub req: u32,
+}
+
 /// All loaded spells by id.
 #[derive(Clone, Debug, Default)]
 pub struct SpellStore {
     pub spells: HashMap<u32, SpellEntry>,
     pub tables: SpellDbcTables,
+    /// `SkillLineAbility.dbc` rows in file order
+    /// (`sSkillLineAbilityStore`; chains derive from
+    /// their forward links, trainer fit from masks).
+    pub skill_line_abilities: Vec<SkillLineAbilityEntry>,
+    /// `mSpellChains`: spell id -> chain node.
+    pub spell_chains: HashMap<u32, SpellChainNode>,
+    /// `sTalentStore` rows by talent id.
+    pub talents: HashMap<u32, TalentEntry>,
+    /// `sTalentTabStore` class masks by tab id.
+    pub talent_tabs: HashMap<u32, u32>,
+    /// `mTalentSpellPosMap`: spell id -> talent place.
+    pub talent_spell_pos: HashMap<u32, TalentSpellPos>,
     /// `spell_proc_event` rows by aura spell id
     /// (rank-filled at load).
     pub proc_events: HashMap<u32, ProcEventEntry>,
@@ -735,7 +802,182 @@ pub struct ProcEventEntry {
     pub cooldown: u32,
 }
 
+/// `SpellMgr::LoadSpellChains` (`SpellMgr.cpp:1411-1530`):
+/// talent chains are seeded first (multi-rank talents
+/// only), then rank chains derive from the
+/// `SkillLineAbility` forward links (the ability pass
+/// never overwrites an existing node). The binary
+/// composes the `spell_chain` DB overlay over this
+/// result.
+#[must_use]
+#[allow(clippy::implicit_hasher)] // store maps use the default hasher throughout
+pub fn derive_spell_chains(
+    spells: &HashMap<u32, SpellEntry>,
+    abilities: &[SkillLineAbilityEntry],
+    talents: &HashMap<u32, TalentEntry>,
+) -> HashMap<u32, SpellChainNode> {
+    let mut chains: HashMap<u32, SpellChainNode> = HashMap::new();
+    // Talent seeding (`SpellMgr.cpp:1416-1442`).
+    for talent in talents.values() {
+        if talent.rank_spells[1] == 0 {
+            continue;
+        }
+        for (j, &spell_id) in talent.rank_spells.iter().enumerate() {
+            if spell_id == 0 || !spells.contains_key(&spell_id) {
+                continue;
+            }
+            chains.insert(
+                spell_id,
+                SpellChainNode {
+                    prev: if j > 0 { talent.rank_spells[j - 1] } else { 0 },
+                    first: talent.rank_spells[0],
+                    rank: u32::try_from(j).unwrap_or(0) + 1,
+                    req: 0,
+                },
+            );
+        }
+    }
+    let ability_spells: std::collections::HashSet<u32> =
+        abilities.iter().map(|ability| ability.spell_id).collect();
+    // forward -> prev, one link per spell (the fork
+    // asserts conflicts; first consistent link wins).
+    let mut prev_of: HashMap<u32, u32> = HashMap::new();
+    for ability in abilities {
+        let spell_id = ability.spell_id;
+        if !spells.contains_key(&spell_id) {
+            continue;
+        }
+        let mut forward_id = ability.forward_spell_id;
+        if spell_id == 2366 {
+            forward_id = 2368;
+        }
+        if spell_id == 20154 || forward_id == 0 {
+            continue;
+        }
+        if !spells.contains_key(&forward_id) || !ability_spells.contains(&forward_id) {
+            continue;
+        }
+        prev_of.entry(forward_id).or_insert(spell_id);
+    }
+
+    let mut chains: HashMap<u32, SpellChainNode> = HashMap::new();
+    for (&spell_id, &prev_id) in &prev_of {
+        if chains.contains_key(&spell_id) {
+            continue;
+        }
+        // Walk to the chain root; the fork's recursion
+        // depth cap is 30 (`deep = 30`).
+        let mut path = vec![spell_id];
+        let mut cursor = prev_id;
+        let mut depth = 0;
+        while depth < 30 {
+            path.push(cursor);
+            match prev_of.get(&cursor) {
+                Some(&next) => {
+                    cursor = next;
+                    depth += 1;
+                }
+                None => break,
+            }
+        }
+        let first = *path.last().unwrap_or(&spell_id);
+        let len = u32::try_from(path.len()).unwrap_or(u32::MAX);
+        for (index, &id) in path.iter().enumerate() {
+            let rank = len - u32::try_from(index).unwrap_or(0);
+            let prev = if rank <= 1 {
+                0
+            } else {
+                path.get(index + 1).copied().unwrap_or(0)
+            };
+            chains.entry(id).or_insert(SpellChainNode {
+                prev,
+                first,
+                rank,
+                req: 0,
+            });
+        }
+    }
+    chains
+}
+
 impl SpellStore {
+    /// `GetSkillLineAbilityMapBoundsBySpellId`: every
+    /// ability row naming this spell, file order.
+    pub fn abilities_for_spell(
+        &self,
+        spell_id: u32,
+    ) -> impl Iterator<Item = &SkillLineAbilityEntry> {
+        self.skill_line_abilities
+            .iter()
+            .filter(move |ability| ability.spell_id == spell_id)
+    }
+
+    /// `GetSpellChainNode`: chain membership, `None`
+    /// when the spell is not ranked.
+    #[must_use]
+    pub fn chain_node(&self, spell_id: u32) -> Option<&SpellChainNode> {
+        self.spell_chains.get(&spell_id)
+    }
+
+    /// `GetSpellRank`: 0 for unranked spells.
+    #[must_use]
+    pub fn spell_rank(&self, spell_id: u32) -> u32 {
+        self.spell_chains.get(&spell_id).map_or(0, |node| node.rank)
+    }
+
+    /// Builds `mTalentSpellPosMap` from the talent
+    /// table (fork builds it during spell load).
+    #[must_use]
+    pub fn build_talent_spell_pos(
+        talents: &HashMap<u32, TalentEntry>,
+    ) -> HashMap<u32, TalentSpellPos> {
+        let mut out = HashMap::new();
+        for talent in talents.values() {
+            for (rank, &spell_id) in talent.rank_spells.iter().enumerate() {
+                if spell_id != 0 {
+                    out.insert(
+                        spell_id,
+                        TalentSpellPos {
+                            talent_id: talent.id,
+                            rank: u32::try_from(rank).unwrap_or(0),
+                        },
+                    );
+                }
+            }
+        }
+        out
+    }
+
+    /// `GetTalentSpellPos`.
+    #[must_use]
+    pub fn talent_spell_pos(&self, spell_id: u32) -> Option<TalentSpellPos> {
+        self.talent_spell_pos.get(&spell_id).copied()
+    }
+
+    /// `GetTalentSpellCost`: rank+1 for talent spells,
+    /// 0 otherwise.
+    #[must_use]
+    pub fn talent_spell_cost(&self, spell_id: u32) -> u32 {
+        self.talent_spell_pos
+            .get(&spell_id)
+            .map_or(0, |pos| pos.rank + 1)
+    }
+
+    /// `IsPrimaryProfessionSpell` + first-rank check,
+    /// minus the skill-category lookup (the caller owns
+    /// the `SkillLine` categories): the spell carries
+    /// `SPELL_EFFECT_SKILL` at index 1, and `skill` is
+    /// that effect's misc value.
+    #[must_use]
+    pub fn profession_skill_of_spell(&self, spell_id: u32) -> Option<u32> {
+        let entry = self.get(spell_id)?;
+        let effect = entry.effects.get(1)?;
+        if effect.effect != crate::defines::effect::SKILL {
+            return None;
+        }
+        u32::try_from(effect.misc_value).ok()
+    }
+
     /// `GetSpellCone`: table arc or the 60-degree
     /// default, in radians.
     #[must_use]

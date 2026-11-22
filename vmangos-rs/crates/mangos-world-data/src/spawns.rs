@@ -139,6 +139,10 @@ pub struct CreatureSpawn {
     pub movement_type: u8,
     pub spawn_flags: u32,
     pub visibility_mod: f32,
+    /// `game_event_creature.event` (signed; 0 = not
+    /// event-controlled). Materialization gating
+    /// lives in `mangos-map` (B0-8).
+    pub game_event: i16,
     /// Non-DB field; 0 until the Slice 3 map manager ports
     /// continent instancing (module docs).
     pub instanciated_continent_instance_id: u32,
@@ -157,6 +161,7 @@ impl Default for CreatureSpawn {
             movement_type: 0,
             spawn_flags: 0,
             visibility_mod: 0.0,
+            game_event: 0,
             instanciated_continent_instance_id: 0,
         }
     }
@@ -218,6 +223,8 @@ pub struct GameObjectSpawn {
     pub go_state: u32,
     pub spawn_flags: u32,
     pub visibility_mod: f32,
+    /// `game_event_gameobject.event` (signed).
+    pub game_event: i16,
     /// Non-DB field; 0 (see [`CreatureSpawn`]).
     pub instanciated_continent_instance_id: u32,
 }
@@ -321,6 +328,37 @@ impl SpawnData {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Test-fixture constructor: registers each
+    /// spawn in the grid exactly like the loader.
+    #[must_use]
+    pub fn from_creatures_for_tests(spawns: Vec<(u32, CreatureSpawn)>) -> Self {
+        let mut data = Self::default();
+        for (guid, spawn) in spawns {
+            data.grid.add_creature(guid, &spawn.position);
+            data.creatures.insert(guid, spawn);
+        }
+        data
+    }
+
+    /// Test-fixture constructor for gameobject spawns
+    /// (Tier 4 B0-5).
+    #[must_use]
+    pub fn from_gameobjects_for_tests(spawns: Vec<(u32, GameObjectSpawn)>) -> Self {
+        let mut data = Self::default();
+        for (guid, spawn) in spawns {
+            data.grid.add_gameobject(guid, &spawn.position);
+            data.gameobjects.insert(guid, spawn);
+        }
+        data
+    }
+
+    /// Test-fixture insertion of one gameobject spawn
+    /// into an existing store (Tier 4 B0-5).
+    pub fn insert_gameobject_for_tests(&mut self, guid: u32, spawn: GameObjectSpawn) {
+        self.grid.add_gameobject(guid, &spawn.position);
+        self.gameobjects.insert(guid, spawn);
     }
 
     /// `GetCreatureData(guid)` (`ObjectMgr.h`, map lookup).
@@ -516,9 +554,11 @@ impl SpawnData {
                 movement_type: f.u8(16),
                 spawn_flags,
                 visibility_mod: f.f32(21),
+                game_event: 0,
                 instanciated_continent_instance_id: 0,
             };
             let game_event = f.i32(17) as i16;
+            data.game_event = game_event;
             let guid_pool_id = f.i32(18) as i16;
             let entry_pool_id = f.i32(19) as i16;
 
@@ -573,12 +613,7 @@ impl SpawnData {
 
             self.creatures.insert(guid, data);
             let data = &self.creatures[&guid];
-            if !already_present
-                && exists_in_patch
-                && game_event == 0
-                && guid_pool_id == 0
-                && entry_pool_id == 0
-            {
+            if !already_present && exists_in_patch && guid_pool_id == 0 && entry_pool_id == 0 {
                 let position = data.position;
                 self.grid.add_creature(guid, &position);
             }
@@ -668,6 +703,7 @@ impl SpawnData {
                 go_state: 0,
                 spawn_flags: f.u32(18),
                 visibility_mod: f.f32(19),
+                game_event: 0,
                 instanciated_continent_instance_id: 0,
             };
 
@@ -708,6 +744,7 @@ impl SpawnData {
             data.go_state = go_state;
 
             let game_event = f.i32(15) as i16;
+            data.game_event = game_event;
             let guid_pool_id = f.i32(16) as i16;
             let entry_pool_id = f.i32(17) as i16;
 
@@ -751,8 +788,7 @@ impl SpawnData {
                     .entry(u32::from(position.map_id))
                     .or_default()
                     .push(guid);
-            } else if !already_present && game_event == 0 && guid_pool_id == 0 && entry_pool_id == 0
-            {
+            } else if !already_present && guid_pool_id == 0 && entry_pool_id == 0 {
                 self.grid.add_gameobject(guid, &position);
             }
         }

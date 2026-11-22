@@ -268,6 +268,28 @@ impl World {
 
     fn bg_map_config(&self) -> MapConfig {
         MapConfig {
+            visibility_distance: self.config.visibility_bg,
+            grid_activation_distance: self.config.visibility_bg,
+            grey_unit: self.config.visibility_grey_unit,
+            grey_object: self.config.visibility_grey_object,
+            relocation_lower_limit_sq: self.config.visibility_relocation_lower_limit
+                * self.config.visibility_relocation_lower_limit,
+            force_active_objects: self.config.visibility_force_active_objects,
+            creature_rates: self.config.creature_rates,
+            loot_rates: self.config.loot_rates,
+            corpse_decay_looted_rate: self.config.rate_corpse_decay_looted,
+            max_group_xp_distance: self.config.max_group_xp_distance,
+            show_health_values: self.config.show_health_values,
+            send_loot_roll_upon_reconnect: self.config.send_loot_roll_upon_reconnect,
+            regen_rates: mangos_map::map::RegenRates {
+                health: self.config.rate_health,
+                mana: self.config.rate_mana,
+                rage_loss: self.config.rate_rage_loss,
+                rage_income: self.config.rate_rage_income,
+                energy: self.config.rate_energy,
+            },
+            rest_rates: self.config.rest_rates,
+            aggro_rate: self.config.rate_creature_aggro,
             pvp_realm: matches!(self.config.game_type, 1 | 8 | 16),
             xp_rates: mangos_map::map::XpRates {
                 kill: self.config.rate_xp_kill,
@@ -279,6 +301,18 @@ impl World {
             change_weather_interval_ms: self.config.change_weather_interval_ms,
             proc_delay_ms: self.config.spell_proc_delay_ms,
             bg_premature_finish_ms: self.config.battleground.premature_finish_timer_ms,
+            death_sickness_level: self.config.death_sickness_level,
+            respec: self.config.respec,
+            corpse_reclaim_delay_pvp: self.config.corpse_reclaim_delay_pvp,
+            corpse_reclaim_delay_pve: self.config.corpse_reclaim_delay_pve,
+            death_bones_world: self.config.death_bones_world,
+            death_bones_bg: self.config.death_bones_bg,
+            wow_patch: self.config.wow_patch,
+            accurate_pvp_timeline: self.config.pvp_accurate_timeline,
+            accurate_pvp_rewards: self.config.pvp_accurate_rewards,
+            enable_dk: self.config.pvp_dishonorable_kills,
+            time_zone_offset_secs: i64::from(self.config.time_zone_offset_hours) * 3600,
+            honor_week_begin_day: self.honor_week_begin,
             ..MapConfig::default()
         }
     }
@@ -756,7 +790,7 @@ impl World {
     /// `GetMangosString` + printf-style %s/%u sequencing
     /// (the BG announce strings mix both; args arrive
     /// pre-stringified in fork call order).
-    fn bg_format_lang(&self, entry: i32, args: &[&str]) -> Option<String> {
+    pub(crate) fn bg_format_lang(&self, entry: i32, args: &[&str]) -> Option<String> {
         let format = self.strings.get(entry)?.text(0).to_string();
         let mut out = String::new();
         let mut rest = format.as_str();

@@ -1,0 +1,56 @@
+{
+ "git_head": "a7b4bfaf",
+ "git_dirty": true,
+ "binary_build": "unknown: bench mangosd was already running; this harness neither builds nor starts it",
+ "world_host": "127.0.0.1",
+ "world_port": 18099,
+ "db_host": "127.0.0.1",
+ "started": "2026-11-21T18:50:01-0500",
+ "ended": "2026-11-21T18:52:58-0500",
+ "mode": "pilot",
+ "matrix_classes": [
+  "Warrior",
+  "Mage",
+  "Druid"
+ ],
+ "entry_327": {
+  "template": "1",
+  "spawns": "1"
+ },
+ "accounts": {
+  "SPELLCAMP01": 237,
+  "SPELLCAMP07": 238,
+  "SPELLCAMP09": 239
+ },
+ "talent_builds": {},
+ "setup_spells": {
+  "Warrior": [
+   2457
+  ]
+ },
+ "db_hostname": "nautilus.local",
+ "guids": {
+  "Campwarrior": 900015,
+  "Campmage": 900016,
+  "Campdruid": 900017
+ },
+ "measured_notes": [
+  "heal leg escalated 5185->5187 mid-pilot: rank-1 oracle band is 40-54 (MaxLevel=5 clamp per calculate_effect_value_bp) but bench regen ticks a deterministic +34/1.5s, so one window cannot separate a rank-1 heal from a phase-aligned tick (triple-cast jumps 49/23/29 mean 34); rank 3 band ~204-254 (MaxLevel=19 clamp) separates completely. This pilot casts pinned 5187 (rank 3/11), not last rank 25297; generated rows report rank metadata explicitly",
+  "bench login restores health above the saved value (SQL 300 loaded at ~600 in the /tmp/health_probe.py run), then ~17/s out-of-combat regen at 60: heal legs must be regen-baselined, raw deltas over-attribute",
+  "cross-client WorldState health for the ally proved stale (caster view 27->35 while ally self-view rose hundreds); the heal leg reads the ally's own socket",
+  "CMSG_CHAR_CREATE before CMSG_CHAR_ENUM always answers SERVER_LIMIT(52): the actor defaults the session count to 10 and only the enum burst lowers it (fixtures ensure sends enum first)"
+ ],
+ "per_class_counts": {
+  "Druid": 6,
+  "Mage": 2,
+  "Warrior": 2
+ },
+ "matrix_mode": "pilot",
+ "g1_skillraceclassinfo": "pending-for-fan-out (G1 resolved for counts in docs/SPELL_MATRIX.md; generator replay deferred)",
+ "g2_talent_builds": "pending-for-fan-out (pilot rows need no talents)",
+ "caveats": [
+  "caveat: full IsSpellValid replay not rerun",
+  "caveat: SCRIPT_EFFECT rows ride as BLOCKED script-evidence-unknown",
+  "caveat: bench-vs-production trainer equivalence unverified"
+ ]
+}

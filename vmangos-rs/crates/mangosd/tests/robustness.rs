@@ -109,6 +109,70 @@ impl CharQueries for FakeCharQueries {
     fn tutorials(&self, _account_id: u32) -> Result<Option<[u32; 8]>, DbError> {
         Ok(None)
     }
+
+    fn name_in_use(&self, _name: &str) -> Result<bool, DbError> {
+        Ok(false)
+    }
+
+    fn character_count(&self, _account_id: u32) -> Result<u32, DbError> {
+        Ok(0)
+    }
+
+    fn character_owner(
+        &self,
+        _guid_low: u32,
+    ) -> Result<Option<mangos_db::characters::CharacterOwner>, DbError> {
+        Ok(None)
+    }
+
+    fn create_character(&self, _new: &mangos_db::characters::NewCharacter) -> Result<u32, DbError> {
+        Ok(1)
+    }
+
+    fn delete_character(
+        &self,
+        _guid_low: u32,
+        _plan: &mangos_db::characters::DeletePlan,
+    ) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn rename_character(
+        &self,
+        _guid_low: u32,
+        _account_id: u32,
+        _new_name: &str,
+    ) -> Result<Option<String>, DbError> {
+        Ok(None)
+    }
+
+    fn old_deleted_characters(
+        &self,
+        _keep_days: u32,
+        _now: u64,
+    ) -> Result<Vec<(u32, u32)>, DbError> {
+        Ok(Vec::new())
+    }
+
+    fn sync_realm_char_count(&self, _account_id: u32, _count: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn save_corpse(&self, _row: &mangos_db::corpse::CorpseRow) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn delete_corpse(&self, _player_low: u32) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn load_corpses(&self) -> Result<Vec<mangos_db::corpse::LoadedCorpse>, DbError> {
+        Ok(Vec::new())
+    }
+
+    fn max_corpse_guid(&self) -> Result<u32, DbError> {
+        Ok(0)
+    }
 }
 
 struct FakeGuildStore;
@@ -162,6 +226,7 @@ impl QuestRewardStore for FakeQuestRewardStore {
         _bag: u32,
         _slot: u32,
         _creator_low: u32,
+        _durability: u32,
     ) -> Result<u32, mangos_db::DbError> {
         Ok(990_001)
     }
@@ -474,6 +539,26 @@ impl SocialStore for FakeSocialStore {
     }
 }
 
+struct FakeHonorMarker;
+
+impl mangosd::world_actor::HonorMarkerStore for FakeHonorMarker {
+    fn set_honor_maintenance_marker(&self, _marker: bool) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
+struct FakeGameEventStatus;
+
+impl mangosd::world_actor::GameEventStatusStore for FakeGameEventStatus {
+    fn game_event_started(&self, _event: u16) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    fn game_event_ended(&self, _event: u16) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
 struct FakeCharacterSaver;
 
 impl mangosd::world_actor::CharacterSaver for FakeCharacterSaver {
@@ -599,6 +684,11 @@ async fn start_server() -> u16 {
             initial_ah_bot: mangosd::world_actor::InitialAhBot::default(),
             instance: Arc::new(FakeInstanceStore),
             initial_instances: mangos_db::instance::LoadedInstances::default(),
+            initial_honor_week_begin: 0,
+            initial_honor_next_day: u32::MAX,
+            honor_marker: Arc::new(FakeHonorMarker),
+            initial_shutdown_events: Vec::new(),
+            game_event_status: Arc::new(FakeGameEventStatus),
             initial_guild_bots: mangos_db::guild_bots::LoadedGuildBots::default(),
         },
     );

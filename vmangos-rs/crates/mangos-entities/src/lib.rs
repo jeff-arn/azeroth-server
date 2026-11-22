@@ -7,9 +7,12 @@
 
 pub mod aura;
 pub mod battleground;
+pub mod corpse;
 pub mod creature;
 pub mod dynobject;
 pub mod gameobject;
+pub mod honor;
+pub mod item;
 pub mod object;
 pub mod player;
 pub mod unit;

@@ -729,6 +729,16 @@ pub struct DisplayInfoAddons {
 }
 
 impl DisplayInfoAddons {
+    /// Test-fixture constructor from creature display
+    /// addon rows.
+    #[must_use]
+    pub fn from_creature_addons_for_tests(addons: Vec<CreatureDisplayInfoAddon>) -> Self {
+        Self {
+            creature: addons.into_iter().map(|a| (a.display_id, a)).collect(),
+            gameobject: HashMap::new(),
+        }
+    }
+
     #[must_use]
     pub fn creature(&self, display_id: u32) -> Option<&CreatureDisplayInfoAddon> {
         self.creature.get(&display_id)

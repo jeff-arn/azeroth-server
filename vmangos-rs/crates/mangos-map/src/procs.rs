@@ -359,20 +359,20 @@ enum ProcResult {
 
 /// One per-effect proc handler invocation (the
 /// `Unit::Handle*Proc` argument set).
-struct ProcHandlerCtx<'a> {
+pub(crate) struct ProcHandlerCtx<'a> {
     /// Aura owner (`this`).
-    owner: ObjectGuid,
+    pub(crate) owner: ObjectGuid,
     /// The other unit (`pVictim`).
-    victim: Option<ObjectGuid>,
-    amount: u32,
-    original_amount: u32,
-    holder: &'a AuraHolder,
-    eff_index: usize,
-    aura_spell: &'a SpellEntry,
-    proc_spell: Option<&'a SpellEntry>,
-    proc_flag: u32,
-    proc_ex: u32,
-    cooldown: u32,
+    pub(crate) victim: Option<ObjectGuid>,
+    pub(crate) amount: u32,
+    pub(crate) original_amount: u32,
+    pub(crate) holder: &'a AuraHolder,
+    pub(crate) eff_index: usize,
+    pub(crate) aura_spell: &'a SpellEntry,
+    pub(crate) proc_spell: Option<&'a SpellEntry>,
+    pub(crate) proc_flag: u32,
+    pub(crate) proc_ex: u32,
+    pub(crate) cooldown: u32,
 }
 
 impl ProcHandlerCtx<'_> {
@@ -737,15 +737,6 @@ impl Map {
         self.proc_damage_and_spell(killer, args);
     }
 
-    /// `IsHonorOrXPTarget` subset for on-kill procs.
-    fn is_honor_or_xp_target(&self, owner: ObjectGuid, victim: ObjectGuid) -> bool {
-        if victim.is_player() {
-            return true;
-        }
-        let owner_level = self.unit_level(owner);
-        self.unit_level(victim) > crate::xp::gray_level(owner_level)
-    }
-
     /// Base attack time for PPM (`GetAttackTime`).
     fn unit_base_attack_time(&self, guid: ObjectGuid, attack_type: u32) -> u32 {
         use mangos_protocol::update_field_table::offsets;
@@ -858,65 +849,80 @@ impl Map {
                     proc_ex: args.proc_ex,
                     cooldown,
                 };
-                let result = match state.aura_type {
-                    aura_type::PROC_TRIGGER_SPELL => self.proc_trigger_spell(
-                        owner,
-                        trig.target,
-                        trig.proc_flag,
-                        &aura_spell,
-                        i,
-                        cooldown,
-                    ),
-                    aura_type::PROC_TRIGGER_DAMAGE => {
-                        self.proc_trigger_damage(owner, trig.target, &trig.holder, &aura_spell, i)
-                    }
-                    aura_type::DUMMY => self.dummy_aura_proc(&ctx),
-                    aura_type::OVERRIDE_CLASS_SCRIPTS => self.override_class_script_proc(&ctx),
-                    aura_type::ADD_TARGET_TRIGGER => self.add_target_trigger_proc(&ctx),
-                    aura_type::MOD_FEAR => self.remove_fear_by_damage_proc(&ctx),
-                    aura_type::MOD_ROOT | aura_type::MOD_PACIFY_SILENCE => {
-                        self.remove_by_damage_chance_proc(&ctx)
-                    }
-                    aura_type::MOD_DAMAGE_DONE => self.mod_damage_aura_proc(&ctx, state.misc_value),
-                    aura_type::MOD_INVISIBILITY => self.invisibility_aura_proc(&ctx),
-                    aura_type::MOD_RESISTANCE => Self::mod_resistance_aura_proc(&ctx),
-                    aura_type::MOD_CASTING_SPEED_NOT_STACK => match ctx.proc_spell {
-                        Some(spell) if spell.cast_time_ms(&self.stores.spells.tables) != 0 => {
-                            ProcResult::Ok
+                // `AuraScript::OnProc` override
+                // (`SpellAuraProcResult` protocol):
+                // Some replaces the type handler.
+                let scripted = self.aura_script_on_proc(&ctx);
+                let result = match scripted {
+                    Some(true) => ProcResult::Ok,
+                    Some(false) => ProcResult::Failed,
+                    None => match state.aura_type {
+                        aura_type::PROC_TRIGGER_SPELL => self.proc_trigger_spell(
+                            owner,
+                            trig.target,
+                            trig.proc_flag,
+                            &aura_spell,
+                            i,
+                            cooldown,
+                        ),
+                        aura_type::PROC_TRIGGER_DAMAGE => self.proc_trigger_damage(
+                            owner,
+                            trig.target,
+                            &trig.holder,
+                            &aura_spell,
+                            i,
+                        ),
+                        aura_type::DUMMY => self.dummy_aura_proc(&ctx),
+                        aura_type::OVERRIDE_CLASS_SCRIPTS => self.override_class_script_proc(&ctx),
+                        aura_type::ADD_TARGET_TRIGGER => self.add_target_trigger_proc(&ctx),
+                        aura_type::MOD_FEAR => self.remove_fear_by_damage_proc(&ctx),
+                        aura_type::MOD_ROOT | aura_type::MOD_PACIFY_SILENCE => {
+                            self.remove_by_damage_chance_proc(&ctx)
                         }
-                        _ => ProcResult::Failed,
-                    },
-                    aura_type::MOD_POWER_COST_SCHOOL | aura_type::MOD_POWER_COST_SCHOOL_PCT => {
-                        match ctx.proc_spell {
-                            Some(spell)
-                                if (spell.mana_cost != 0 || spell.mana_cost_percentage != 0)
-                                    && Self::school_mask_matches(state.misc_value, spell) =>
-                            {
+                        aura_type::MOD_DAMAGE_DONE => {
+                            self.mod_damage_aura_proc(&ctx, state.misc_value)
+                        }
+                        aura_type::MOD_INVISIBILITY => self.invisibility_aura_proc(&ctx),
+                        aura_type::MOD_RESISTANCE => Self::mod_resistance_aura_proc(&ctx),
+                        aura_type::MOD_CASTING_SPEED_NOT_STACK => match ctx.proc_spell {
+                            Some(spell) if spell.cast_time_ms(&self.stores.spells.tables) != 0 => {
                                 ProcResult::Ok
                             }
                             _ => ProcResult::Failed,
+                        },
+                        aura_type::MOD_POWER_COST_SCHOOL | aura_type::MOD_POWER_COST_SCHOOL_PCT => {
+                            match ctx.proc_spell {
+                                Some(spell)
+                                    if (spell.mana_cost != 0
+                                        || spell.mana_cost_percentage != 0)
+                                        && Self::school_mask_matches(state.misc_value, spell) =>
+                                {
+                                    ProcResult::Ok
+                                }
+                                _ => ProcResult::Failed,
+                            }
                         }
-                    }
-                    aura_type::REFLECT_SPELLS_SCHOOL => match ctx.proc_spell {
-                        Some(spell) if Self::school_mask_matches(state.misc_value, spell) => {
-                            ProcResult::Ok
-                        }
-                        _ => ProcResult::Failed,
-                    },
-                    aura_type::MECHANIC_IMMUNITY | aura_type::MOD_MECHANIC_RESISTANCE => {
-                        match ctx.proc_spell {
-                            Some(spell)
-                                if i32::try_from(spell.mechanic) == Ok(state.misc_value) =>
-                            {
+                        aura_type::REFLECT_SPELLS_SCHOOL => match ctx.proc_spell {
+                            Some(spell) if Self::school_mask_matches(state.misc_value, spell) => {
                                 ProcResult::Ok
                             }
                             _ => ProcResult::Failed,
+                        },
+                        aura_type::MECHANIC_IMMUNITY | aura_type::MOD_MECHANIC_RESISTANCE => {
+                            match ctx.proc_spell {
+                                Some(spell)
+                                    if i32::try_from(spell.mechanic) == Ok(state.misc_value) =>
+                                {
+                                    ProcResult::Ok
+                                }
+                                _ => ProcResult::Failed,
+                            }
                         }
-                    }
-                    aura_type::MOD_MELEE_HASTE => Self::haste_aura_proc(&ctx),
-                    t if CAN_T_TRIGGER_TYPES.contains(&t) => ProcResult::CantTrigger,
-                    // HandleNULLProc: OK, charges burn.
-                    _ => ProcResult::Ok,
+                        aura_type::MOD_MELEE_HASTE => Self::haste_aura_proc(&ctx),
+                        t if CAN_T_TRIGGER_TYPES.contains(&t) => ProcResult::CantTrigger,
+                        // HandleNULLProc: OK, charges burn.
+                        _ => ProcResult::Ok,
+                    },
                 };
                 match result {
                     ProcResult::CantTrigger => continue,

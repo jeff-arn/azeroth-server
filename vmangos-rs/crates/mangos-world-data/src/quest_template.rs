@@ -502,6 +502,16 @@ pub struct QuestRelations {
 }
 
 impl QuestRelations {
+    /// Test-fixture constructor (creature starts
+    /// only).
+    #[must_use]
+    pub fn from_creature_starts_for_tests(starts: Vec<(u32, Vec<u32>)>) -> Self {
+        Self {
+            creature_starts: starts.into_iter().collect(),
+            ..Self::default()
+        }
+    }
+
     /// Quests the creature entry can start
     /// (`Creature::HasQuest` source set).
     #[must_use]

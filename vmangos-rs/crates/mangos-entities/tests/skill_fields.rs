@@ -224,9 +224,11 @@ fn skill_fields_load_with_cpp_fixups() {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
         skills: Some(&dbc),
         item_prototypes: None,
         quest_templates: None,
+        taxi: None,
     };
     let player = Player::materialize(load, &inputs).expect("materialize");
 

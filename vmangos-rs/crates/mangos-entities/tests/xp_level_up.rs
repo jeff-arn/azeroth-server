@@ -156,9 +156,11 @@ fn materialize(level: u8) -> Player {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: NOW,
+        rest_rates: mangos_entities::player::RestRates::default(),
         skills: None,
         item_prototypes: None,
         quest_templates: None,
+        taxi: None,
     };
     Player::materialize(load, &inputs).expect("materialize")
 }

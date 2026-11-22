@@ -18,8 +18,9 @@ use std::collections::{HashMap, HashSet};
 use mangos_db::DbError;
 use mangos_scripts_engine::{
     ALL_DB_SCRIPT_FLAGS, BroadcastText, BroadcastTextMap, Condition, ConditionMap, EventAiEvent,
-    EventAiEventMap, MAX_ACTIONS, SF_GENERAL_SWAP_FINAL_TARGETS, SF_GENERAL_SWAP_INITIAL_TARGETS,
-    ScriptInfo, ScriptMapMap, ScriptText, ScriptTextMap, event_type,
+    EventAiEventMap, MAX_ACTIONS, NpcText, NpcTextMap, NpcTextOption,
+    SF_GENERAL_SWAP_FINAL_TARGETS, SF_GENERAL_SWAP_INITIAL_TARGETS, ScriptInfo, ScriptMapMap,
+    ScriptText, ScriptTextMap, event_type,
 };
 use mysql::prelude::Queryable;
 
@@ -56,6 +57,7 @@ pub fn load_script_stores<S: std::hash::BuildHasher>(
     let broadcast_texts = load_broadcast_texts(conn)?;
     let script_texts = load_script_texts(conn)?;
     let npc_gossips = load_npc_gossips(conn)?;
+    let npc_texts = load_npc_texts(conn)?;
     Ok(mangos_scripts_engine::ScriptStores {
         eventai_events,
         creature_ai_scripts,
@@ -66,6 +68,7 @@ pub fn load_script_stores<S: std::hash::BuildHasher>(
         broadcast_texts,
         script_texts,
         npc_gossips,
+        npc_texts,
         area_trigger_scripts,
         event_scripts,
         gameobject_scripts,
@@ -295,6 +298,42 @@ pub fn load_npc_gossips(conn: &mut mysql::Conn) -> Result<HashMap<u32, u32>, DbE
         let guid: u32 = row.get(0).unwrap_or_default();
         let text_id: u32 = row.get(1).unwrap_or_default();
         out.insert(guid, text_id);
+    }
+    Ok(out)
+}
+
+/// `ObjectMgr::LoadNPCText`: text id → 8 weighted
+/// options (reserved id 0 rows are skipped, as in
+/// the fork). The fork's load-time broadcast-text
+/// existence log is not reproduced; the query
+/// handler applies the same default block for a
+/// missing broadcast text.
+///
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+pub fn load_npc_texts(conn: &mut mysql::Conn) -> Result<NpcTextMap, DbError> {
+    let rows: Vec<mysql::Row> = conn
+        .query(
+            "SELECT `ID`, `Probability0`, `Probability1`, `Probability2`, `Probability3`, \
+             `Probability4`, `Probability5`, `Probability6`, `Probability7`, \
+             `BroadcastTextID0`, `BroadcastTextID1`, `BroadcastTextID2`, `BroadcastTextID3`, \
+             `BroadcastTextID4`, `BroadcastTextID5`, `BroadcastTextID6`, `BroadcastTextID7` \
+             FROM `npc_text`",
+        )
+        .map_err(DbError::from)?;
+    let mut out = NpcTextMap::new();
+    for row in rows {
+        let text_id: u32 = row.get(0).unwrap_or_default();
+        if text_id == 0 {
+            continue;
+        }
+        let mut options = [NpcTextOption::default(); 8];
+        for (i, option) in options.iter_mut().enumerate() {
+            option.probability = row.get(1 + i).unwrap_or_default();
+            option.broadcast_text_id = row.get(9 + i).unwrap_or_default();
+        }
+        out.insert(text_id, NpcText { options });
     }
     Ok(out)
 }

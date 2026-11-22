@@ -146,6 +146,27 @@ impl Map {
         }
     }
 
+    /// `EffectSummonObjectWild` flagdrop registration
+    /// (`SpellEffects.cpp:3545` at 5875):
+    /// `SetDroppedFlagGuid` for the enemy team while
+    /// the match is in progress.
+    pub(crate) fn ws_register_dropped_flag(&mut self, caster: ObjectGuid, go: ObjectGuid) {
+        if self
+            .bg
+            .as_ref()
+            .is_none_or(|b| b.status != bg_status::IN_PROGRESS)
+        {
+            return;
+        }
+        let Some(team) = self.players.get(&caster).map(|e| e.player.team) else {
+            return;
+        };
+        let enemy = other_team(team);
+        if let Some(ws) = self.ws_mut() {
+            ws.dropped_flag_guid[team_index(enemy)] = go;
+        }
+    }
+
     /// `GetTeamScore`.
     fn ws_team_score(&self, team: Team) -> i32 {
         self.bg
@@ -410,11 +431,16 @@ impl Map {
             self.bg_send_message_to_all(bct::HORDE_FLAG_RESPAWNED, None);
         }
         self.bg_play_sound_to_all(ws_sound::FLAGS_RESPAWNED);
-        // UNMODELED: fork deletes the dropped-flag GO
-        // summoned by spells 23334/23336; the Rust spell
-        // engine has no EFFECT_SUMMON_OBJECT arm, so no
-        // ground flag object exists to delete (step 6
-        // remainder). `ClearDroppedFlagGuid` still runs.
+        // Fork deletes the dropped-flag GO summoned
+        // by spells 23334/23336 (Tier 4 B0-5
+        // EFFECT_SUMMON_OBJECT_WILD), then
+        // `ClearDroppedFlagGuid` runs.
+        let dropped = self.ws().map_or(ObjectGuid::EMPTY, |ws| {
+            ws.dropped_flag_guid[team_index(team)]
+        });
+        if !dropped.is_empty() && self.gameobjects.contains_key(&dropped) {
+            self.despawn_gameobject_now(dropped);
+        }
         if let Some(ws) = self.ws_mut() {
             ws.dropped_flag_guid[team_index(team)] = ObjectGuid::EMPTY;
         }

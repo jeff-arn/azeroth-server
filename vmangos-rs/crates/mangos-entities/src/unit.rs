@@ -28,6 +28,10 @@ pub const UNIT_STATE_ROOT: u32 = 0x0000_0010;
 pub const UNIT_STATE_ISOLATED: u32 = 0x0000_0020;
 pub const UNIT_STATE_DISTRACTED: u32 = 0x0000_0100;
 pub const UNIT_STATE_CONFUSED: u32 = 0x0000_0200;
+/// `UNIT_STATE_POSSESSED` (`UnitDefines.h:416`).
+pub const UNIT_STATE_POSSESSED: u32 = 0x0000_0040;
+/// `UNIT_STATE_TAXI_FLIGHT` (`UnitDefines.h:419`).
+pub const UNIT_STATE_TAXI_FLIGHT: u32 = 0x0000_0080;
 pub const UNIT_STATE_ROAMING: u32 = 0x0000_0800;
 pub const UNIT_STATE_ROAMING_MOVE: u32 = 0x0000_1000;
 pub const UNIT_STATE_CHASE: u32 = 0x0000_2000;
@@ -42,6 +46,10 @@ pub const UNIT_STATE_CAN_NOT_MOVE: u32 =
     UNIT_STATE_ROOT | UNIT_STATE_STUNNED | UNIT_STATE_FEIGN_DEATH;
 pub const UNIT_STATE_CAN_NOT_REACT: u32 =
     UNIT_STATE_STUNNED | UNIT_STATE_FEIGN_DEATH | UNIT_STATE_CONFUSED | UNIT_STATE_FLEEING;
+/// `UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL`
+/// (`UnitDefines.h:447-448`).
+pub const UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL: u32 =
+    UNIT_STATE_CAN_NOT_REACT | UNIT_STATE_POSSESSED;
 pub const UNIT_STATE_MOVING: u32 = UNIT_STATE_ROAMING_MOVE
     | UNIT_STATE_CHASE_MOVE
     | UNIT_STATE_FOLLOW_MOVE
@@ -350,6 +358,13 @@ pub struct UnitBase {
     /// (player combat-drop approximation of
     /// `m_combatTimer`, Slice 6).
     pub last_combat_ms: u32,
+    /// `m_damageTakenHistory` + `m_lastDamageTaken`
+    /// epoch (map ms): per-attacker damage taken in
+    /// the last 60s window, consumed by
+    /// `RewardHonorOnDeath` (players only in fork
+    /// practice; stored on every unit as in fork).
+    pub damage_taken_history: std::collections::HashMap<mangos_guid::ObjectGuid, u32>,
+    pub last_damage_taken_ms: u32,
     /// `m_lastManaUseTimer` (five-second rule countdown).
     pub last_mana_use_timer_ms: u32,
     /// `m_lastManaUseSpellId`.
@@ -403,6 +418,8 @@ impl UnitBase {
             attack_timers: [0, 0],
             melee_victim: None,
             last_combat_ms: 0,
+            damage_taken_history: std::collections::HashMap::new(),
+            last_damage_taken_ms: 0,
             last_mana_use_timer_ms: 0,
             last_mana_use_spell: 0,
             base_attack_power: 0.0,
@@ -512,6 +529,21 @@ impl UnitBase {
         }
     }
 
+    /// `FindPendingMovementTeleportChange`: match
+    /// counter + `TELEPORT` type; erase on hit.
+    pub fn find_pending_teleport_change(&mut self, movement_counter: u32) -> bool {
+        let hit = self.pending_movement_changes.iter().position(|c| {
+            c.movement_counter == movement_counter && c.change_type == MOVEMENT_CHANGE_TELEPORT
+        });
+        match hit {
+            Some(idx) => {
+                self.pending_movement_changes.remove(idx);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// `FindPendingMovementFlagChange` analogue: match
     /// counter + change type + apply; erase on hit.
     pub fn find_pending_flag_change(
@@ -609,6 +641,17 @@ impl UnitBase {
     }
 
     /// `SetHealth` (caps at max health, as in C++).
+    /// `UnitDamaged` (`Unit.h:1013`) + the 60s
+    /// history expiry from `Unit::Update` (applied
+    /// at record time; same observable at death).
+    pub fn record_damage_taken(&mut self, from: mangos_guid::ObjectGuid, damage: u32, now_ms: u32) {
+        if now_ms.wrapping_sub(self.last_damage_taken_ms) > 60_000 {
+            self.damage_taken_history.clear();
+        }
+        *self.damage_taken_history.entry(from).or_default() += damage;
+        self.last_damage_taken_ms = now_ms;
+    }
+
     pub fn set_health(&mut self, value: u32) {
         let value = value.min(self.max_health());
         self.values().set_u32(offsets::UNIT_FIELD_HEALTH, value);
@@ -1126,6 +1169,31 @@ mod tests {
         jump.xy_speed = 2.5;
         assert!(unit.find_pending_knockback_change(&jump, 7));
         assert!(unit.pending_movement_changes.is_empty());
+    }
+
+    #[test]
+    fn teleport_pending_matches_counter_and_erases() {
+        use super::{MOVEMENT_CHANGE_ROOT, MOVEMENT_CHANGE_TELEPORT, PendingMovementChange};
+        let mut unit = unit_with(1, 0);
+        let push = |unit: &mut UnitBase, counter: u32, change_type: u8| {
+            unit.pending_movement_changes
+                .push_back(PendingMovementChange {
+                    movement_counter: counter,
+                    change_type,
+                    new_value: 0.0,
+                    apply: false,
+                    knockback: None,
+                });
+        };
+        push(&mut unit, 7, MOVEMENT_CHANGE_ROOT);
+        push(&mut unit, 7, MOVEMENT_CHANGE_TELEPORT);
+        // Wrong counter: no match, entries retained.
+        assert!(!unit.find_pending_teleport_change(8));
+        assert_eq!(unit.pending_movement_changes.len(), 2);
+        // Counter + type: match erases only the teleport entry.
+        assert!(unit.find_pending_teleport_change(7));
+        assert_eq!(unit.pending_movement_changes.len(), 1);
+        assert!(!unit.find_pending_teleport_change(7));
     }
 
     #[test]

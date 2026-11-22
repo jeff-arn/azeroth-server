@@ -151,8 +151,9 @@ pub fn unit_visible_for_player(
         if !can_see_in_world(viewer.unit.world.world_mask, target.unit.world.world_mask) {
             return false;
         }
-        // Invisible-for-alive symmetry is aura-driven
-        // (ghost aura 9036 etc.); no auras exist yet.
+        // Invisible-for-alive symmetry is enforced by
+        // the caller (`Map::is_visible`), which has
+        // aura-holder access.
         return creature_visible_in_grid(target, viewer, viewer_corpse, aggro_rate);
     }
     false
@@ -170,7 +171,8 @@ pub fn gameobject_visible(
     in_visible_list: bool,
     now_unix: u64,
 ) -> bool {
-    if !target.is_spawned(now_unix) {
+    let _ = now_unix;
+    if !target.is_spawned() {
         return false;
     }
     if is_server_only(&target.info) {

@@ -182,6 +182,7 @@ impl Default for XpRates {
 /// Map tuning (`mangosd.conf` values with their tree
 /// defaults).
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // flat conf key mirror
 pub struct MapConfig {
     /// `Visibility.Distance.*` for this map kind.
     pub visibility_distance: f32,
@@ -201,6 +202,20 @@ pub struct MapConfig {
     /// `Visibility.ForceActiveObjects` (true).
     pub force_active_objects: bool,
     pub creature_rates: CreatureRates,
+    /// `Rate.Drop.*` loot multipliers.
+    pub loot_rates: mangos_world_data::loot::LootRates,
+    /// `Rate.Corpse.Decay.Looted` (0.0).
+    pub corpse_decay_looted_rate: f32,
+    /// `MaxGroupXPDistance` (74.0).
+    pub max_group_xp_distance: f32,
+    /// `ShowHealthValues` (false).
+    pub show_health_values: bool,
+    /// `SendLootRollUponReconnect` (false).
+    pub send_loot_roll_upon_reconnect: bool,
+    /// Player regen rates (`Rate.Health` etc.).
+    pub regen_rates: RegenRates,
+    /// `Rate.Rest.*` multipliers.
+    pub rest_rates: mangos_entities::player::RestRates,
     pub compression: CompressionConfig,
     /// `ActivateWeather` (true).
     pub activate_weather: bool,
@@ -216,6 +231,86 @@ pub struct MapConfig {
     /// `BattleGround.PrematureFinishTimer` in ms
     /// (default 5 minutes; Tier 3 Slice 3).
     pub bg_premature_finish_ms: u32,
+    /// `Death.SicknessLevel` (default 11): at/above it
+    /// spirit resurrection applies sickness.
+    pub death_sickness_level: i32,
+    /// `Death.CorpseReclaimDelay.PvP` (default true).
+    pub corpse_reclaim_delay_pvp: bool,
+    /// `Death.CorpseReclaimDelay.PvE` (default true).
+    pub corpse_reclaim_delay_pve: bool,
+    /// `Death.Bones.World` (default true).
+    pub death_bones_world: bool,
+    /// `Death.Bones.Battleground` (default true).
+    pub death_bones_bg: bool,
+    /// `Rate.Respec*` + `Progression.NoRespecPriceDecay`
+    /// (Tier 4 step 4g).
+    pub respec: RespecConfig,
+    /// `WowPatch` content patch (0=1.2 .. 10=1.12);
+    /// honor timeline/reward gates read it (Tier 4
+    /// B0-7).
+    pub wow_patch: u32,
+    /// `PvP.AccurateTimeline` (default true).
+    pub accurate_pvp_timeline: bool,
+    /// `PvP.AccurateRewards` (default true).
+    pub accurate_pvp_rewards: bool,
+    /// `PvP.DishonorableKills` (default true).
+    pub enable_dk: bool,
+    /// `TimeZoneOffset` in seconds, for
+    /// `GetGameDay` (`World.cpp:588`).
+    pub time_zone_offset_secs: i64,
+    /// Maintenancer `GetWeekBeginDay()` at boot
+    /// (last maintenance game day).
+    pub honor_week_begin_day: u32,
+}
+
+/// Player regeneration rates (`World.cpp:471-478`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RegenRates {
+    /// `Rate.Health` (1.0).
+    pub health: f32,
+    /// `Rate.Mana` (1.0).
+    pub mana: f32,
+    /// `Rate.Rage.Loss` (1.0).
+    pub rage_loss: f32,
+    /// `Rate.Rage.Income` (1.0).
+    pub rage_income: f32,
+    /// `Rate.Energy` (1.0).
+    pub energy: f32,
+}
+
+impl Default for RegenRates {
+    fn default() -> Self {
+        Self {
+            health: 1.0,
+            mana: 1.0,
+            rage_loss: 1.0,
+            rage_income: 1.0,
+            energy: 1.0,
+        }
+    }
+}
+
+/// Talent respec pricing (`World.cpp:528-531`,
+/// `1081`); costs are in gold.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RespecConfig {
+    pub base_cost_gold: u32,
+    pub multiplicative_cost_gold: u32,
+    pub min_multiplier: u32,
+    pub max_multiplier: u32,
+    pub no_price_decay: bool,
+}
+
+impl Default for RespecConfig {
+    fn default() -> Self {
+        Self {
+            base_cost_gold: 1,
+            multiplicative_cost_gold: 5,
+            min_multiplier: 2,
+            max_multiplier: 10,
+            no_price_decay: true,
+        }
+    }
 }
 
 impl Default for MapConfig {
@@ -230,6 +325,13 @@ impl Default for MapConfig {
             aggro_rate: 1.0,
             force_active_objects: true,
             creature_rates: CreatureRates::default(),
+            loot_rates: mangos_world_data::loot::LootRates::default(),
+            corpse_decay_looted_rate: 0.0,
+            max_group_xp_distance: 74.0,
+            show_health_values: false,
+            send_loot_roll_upon_reconnect: false,
+            regen_rates: RegenRates::default(),
+            rest_rates: mangos_entities::player::RestRates::default(),
             compression: CompressionConfig::default(),
             activate_weather: true,
             xp_rates: XpRates::default(),
@@ -237,6 +339,18 @@ impl Default for MapConfig {
             pvp_realm: false,
             change_weather_interval_ms: 600_000,
             bg_premature_finish_ms: 300_000,
+            death_sickness_level: 11,
+            corpse_reclaim_delay_pvp: true,
+            corpse_reclaim_delay_pve: true,
+            death_bones_world: true,
+            death_bones_bg: true,
+            respec: RespecConfig::default(),
+            wow_patch: 0,
+            accurate_pvp_timeline: true,
+            accurate_pvp_rewards: true,
+            enable_dk: true,
+            time_zone_offset_secs: 0,
+            honor_week_begin_day: 0,
         }
     }
 }
@@ -372,6 +486,15 @@ pub enum MapEvent {
         map_id: u32,
         position: Position,
     },
+    /// Cross-map taxi continuation (fork
+    /// `flight->Reset` in the worldport-ack handler):
+    /// emitted immediately after the `TeleportPlayer`
+    /// of a map-switching flight; the actor applies
+    /// it once the player lands in the new map.
+    TaxiResume {
+        player: ObjectGuid,
+        resume_node: u32,
+    },
     /// Knockback launched on a player
     /// (`MovementAnticheat::OnKnockBack` +
     /// `Player::SetLaunched`): the actor marks the
@@ -412,6 +535,12 @@ pub enum MapEvent {
         script_id: u32,
         point_id: u32,
     },
+    /// Persist a resurrectable corpse
+    /// (`Corpse::SaveToDB` REPLACE).
+    CorpseSave(Box<mangos_entities::corpse::CorpseSaveRow>),
+    /// Delete a player's persisted corpse rows
+    /// (`Corpse::DeleteFromDB`; bones never persist).
+    CorpseDelete { player_low: u32 },
 }
 
 pub(crate) struct PlayerEntry {
@@ -490,8 +619,43 @@ pub struct Map {
     /// GOs whose template `script_name` maps to a
     /// ported `GOGetAI` script get an entry).
     pub(crate) go_ai: HashMap<ObjectGuid, crate::content::GoAiState>,
+    /// Dynamic-GO runtime state (Tier 4 B0-5):
+    /// creating spell, trap cooldown/arming and use
+    /// count for non-DB gameobjects (fork `m_spellId`,
+    /// `m_cooldownTime`, `m_useTimes`, loot-state
+    /// subset). Static trap GOs get an entry lazily on
+    /// first trap tick.
+    pub(crate) go_runtime: HashMap<ObjectGuid, crate::gameobjects::GoRuntime>,
+    /// Tier 4 B0-6: escort/follower AI state
+    /// (`npc_escortAI` / `FollowerAI` members).
+    pub(crate) escorts: HashMap<ObjectGuid, crate::escort::EscortKind>,
+    /// Active game events on this map (B0-8); pushed
+    /// by the world actor's `GameEventMgr`.
+    pub(crate) active_game_events: std::collections::HashSet<u16>,
+    /// Creature corpse loot by creature guid (B0-10,
+    /// fork `Creature::loot`).
+    pub(crate) loots: HashMap<ObjectGuid, crate::loot::LootState>,
+    /// Loot taps by creature guid (fork
+    /// `m_lootRecipientGuid` / group recipient id).
+    pub(crate) loot_taps: HashMap<ObjectGuid, crate::loot::LootTap>,
+    /// Open loot window per player (fork
+    /// `Player::m_lootGuid`).
+    pub(crate) player_loot_guid: HashMap<ObjectGuid, ObjectGuid>,
+    /// `GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT)`
+    /// counter (seeded past the DB guid space like
+    /// `summon_counter`).
+    pub(crate) go_low_counter: u32,
+    /// `Unit::m_ObjectSlotGuid[4]` for
+    /// `SPELL_EFFECT_SUMMON_OBJECT_SLOT1..4`.
+    pub(crate) unit_object_slots: HashMap<ObjectGuid, [Option<ObjectGuid>; 4]>,
     /// Live dynamic objects (Slice 4b).
     pub(crate) dynobjects: HashMap<ObjectGuid, mangos_entities::dynobject::DynObject>,
+    /// Player corpses and bones on this map
+    /// (`ObjectAccessor` corpse registry, map half).
+    pub(crate) corpses: HashMap<ObjectGuid, mangos_entities::corpse::Corpse>,
+    /// `GenerateCorpseLowGuid` counter, seeded by the
+    /// actor past the persisted `corpse` table max.
+    pub(crate) corpse_counter: u32,
     /// Dynobj affected-pass throttle accumulator.
     pub(crate) dynobj_tick_ms: u32,
     /// Runtime cell index for units/GOs (guid sets per
@@ -522,11 +686,17 @@ pub struct Map {
     pub(crate) ai: HashMap<ObjectGuid, crate::ai::CreatureAi>,
     /// In-progress casts by caster (Slice 5).
     pub(crate) casts: HashMap<ObjectGuid, crate::spells::ActiveCast>,
+    /// One-shot `m_originalCasterGUID` for the next
+    /// `cast_spell` begin (consumed into the cast).
+    pub(crate) next_original_caster: Option<ObjectGuid>,
     /// Triggered casts with a cast timer, ticking
     /// outside the current-cast slot (fork event
     /// spells; only channeled triggered casts take
     /// the slot).
     pub(crate) pending_triggered: Vec<(ObjectGuid, crate::spells::ActiveCast)>,
+    /// Projectile-delayed spell hits in flight
+    /// (`SPELL_STATE_DELAYED` target timers).
+    pub(crate) pending_delayed: Vec<crate::spells::DelayedSpellHit>,
     /// Spell + category cooldowns (map ms clock):
     /// (caster, spell id) and (caster, category) share
     /// one map via the high-bit tag on the id.
@@ -605,6 +775,7 @@ pub(crate) struct CellObjects {
     pub(crate) creatures: HashSet<ObjectGuid>,
     pub(crate) gameobjects: HashSet<ObjectGuid>,
     pub(crate) dynobjects: HashSet<ObjectGuid>,
+    pub(crate) corpses: HashSet<ObjectGuid>,
 }
 
 impl Map {
@@ -636,7 +807,17 @@ impl Map {
             creatures: HashMap::new(),
             gameobjects: HashMap::new(),
             go_ai: HashMap::new(),
+            go_runtime: HashMap::new(),
+            escorts: HashMap::new(),
+            active_game_events: std::collections::HashSet::new(),
+            loots: HashMap::new(),
+            loot_taps: HashMap::new(),
+            player_loot_guid: HashMap::new(),
+            go_low_counter: 0x00F0_0000,
+            unit_object_slots: HashMap::new(),
             dynobjects: HashMap::new(),
+            corpses: HashMap::new(),
+            corpse_counter: 0,
             dynobj_tick_ms: 0,
             cells: HashMap::new(),
             spawn_cells_loaded: HashSet::new(),
@@ -651,7 +832,9 @@ impl Map {
             navhost: crate::motion::NavHost::new(map_id, None),
             ai: HashMap::new(),
             casts: HashMap::new(),
+            next_original_caster: None,
             pending_triggered: Vec::new(),
+            pending_delayed: Vec::new(),
             cooldowns: HashMap::new(),
             pending_procs: Vec::new(),
             in_proc_cast: false,
@@ -803,6 +986,9 @@ impl Map {
         for activated_guid in activated {
             self.clear_is_new(activated_guid);
         }
+        // `m_honorMgr.Update()` (login initial
+        // packets, before init-self is built).
+        player.honor_update(self.game_day(), self.config.honor_week_begin_day);
         player.unit.world.object.add_to_world();
         // The player is not new yet for SendInitSelf:
         // C++ Map::Add(Player*) sends init-self before the
@@ -819,9 +1005,14 @@ impl Map {
             area_id: 0,
         };
         self.players.insert(guid, entry);
+        // Fork players always carry a MotionMaster
+        // (idle bottom); taxi flight (4f) is the first
+        // human-player consumer.
+        self.motion_initialize_player(guid);
         // `SendInitSelf` precedes `UpdateObjectVisibility`
         // in C++ `Map::Add(Player*)`.
         self.build_init_self(guid);
+        self.build_init_items(guid);
         // The generic add now marks the newcomer new for
         // other viewers, matching Map::Add(WorldObject*).
         if let Some(entry) = self.players.get_mut(&guid) {
@@ -843,6 +1034,14 @@ impl Map {
         self.update_player_zone(guid, true);
         // `ZoneScript::OnPlayerEnter` (instance binding).
         self.instance_on_player_enter(guid);
+        // Pending group-loot roll prompts (`Group::
+        // SendLootStartRollsForPlayer`): fork gates
+        // this on `SendLootRollUponReconnect` for an
+        // already-online reconnect; map entry is the
+        // closest hook and only runs when opted in.
+        if self.config.send_loot_roll_upon_reconnect {
+            self.send_pending_rolls(guid);
+        }
     }
 
     /// `Map::Remove(Player*)` subset: out-of-range to
@@ -851,7 +1050,11 @@ impl Map {
         // `ZoneScript::OnPlayerLeave` fires while the
         // player is still bound to the map.
         self.instance_on_player_leave(guid);
+        // `Unit::RemoveFromWorld` ->
+        // `RemoveAllGameObjects` (Tier 4 B0-5).
+        self.unit_remove_all_gameobjects(guid);
         let entry = self.players.remove(&guid)?;
+        self.motion.remove(&guid);
         let cell = Self::cell_of(entry.player.unit.world.position());
         if let Some(c) = self.cells.get_mut(&cell) {
             c.players.remove(&guid);
@@ -1178,6 +1381,10 @@ impl Map {
         respawns: &RespawnTimes,
     ) -> Option<ObjectGuid> {
         let data = self.stores.spawns.creature(guid_low).cloned()?;
+        // Game-event spawn gate (B0-8).
+        if !self.event_spawn_allowed(data.game_event) {
+            return None;
+        }
         let respawn_time = respawns
             .creature(
                 self.respawn_instance_key(data.instanciated_continent_instance_id),
@@ -1185,7 +1392,19 @@ impl Map {
             )
             .map_or(0, |e| e.respawn_time);
         let addon = self.stores.creature_addons.get(guid_low).cloned();
-        self.materialize_creature(guid_low, &data, addon.as_ref(), respawn_time)
+        let guid = self.materialize_creature(guid_low, &data, addon.as_ref(), respawn_time)?;
+        // Respawn re-materialization drops any stale
+        // corpse loot/tap for the guid (fork
+        // `SetDeathState(JUST_ALIVED)` clears the tap;
+        // the corpse object itself is replaced).
+        self.clear_loot_for_creature(guid);
+        // `game_event_creature_data` for the currently
+        // active event (B0-8; fork LoadFromDB event
+        // data application).
+        if let Some(event_data) = self.active_creature_event_data(guid_low) {
+            self.game_event_apply_creature_data(guid, &event_data);
+        }
+        Some(guid)
     }
 
     /// Materialize one creature from a spawn row (DB
@@ -1385,7 +1604,10 @@ impl Map {
         respawns: &RespawnTimes,
     ) -> Option<ObjectGuid> {
         let data = self.stores.spawns.gameobject(guid_low).cloned()?;
-
+        // Game-event spawn gate (B0-8).
+        if !self.event_spawn_allowed(data.game_event) {
+            return None;
+        }
         let respawn_time = respawns
             .gameobject(
                 self.respawn_instance_key(data.instanciated_continent_instance_id),
@@ -1542,6 +1764,7 @@ impl Map {
             can_see_special_info: empathy,
             group_only_granted: same_raid,
             can_see_health: same_raid || empathy,
+            show_health_values: self.config.show_health_values,
             strip_ffa_pvp: owner_player.is_some_and(|owner| owner != viewer_guid) && same_raid,
             ..Viewer::default()
         }
@@ -1572,6 +1795,7 @@ impl Map {
             candidates.extend(objects.creatures.iter().copied());
             candidates.extend(objects.gameobjects.iter().copied());
             candidates.extend(objects.dynobjects.iter().copied());
+            candidates.extend(objects.corpses.iter().copied());
         }
         // Objects already visible but outside the cell
         // search (they moved, or the viewer teleported) must
@@ -1632,6 +1856,13 @@ impl Map {
         }
     }
 
+    /// `Unit::IsInvisibleForAlive` for a player:
+    /// ghost aura 9036 (players are never spirit
+    /// services).
+    fn player_invisible_for_alive(&self, guid: ObjectGuid) -> bool {
+        self.aura_holders(guid).iter().any(|h| h.spell_id == 9036)
+    }
+
     /// Distance + state visibility for one pair.
     fn is_visible(
         &self,
@@ -1654,6 +1885,18 @@ impl Map {
             ) {
                 return false;
             }
+            // `IsVisibleForOrDetect` invisible-for-alive
+            // symmetry (`Unit.cpp:6526`, GM bypass
+            // unmodeled): an alive unit only sees an
+            // alive target when both share the ghost
+            // (9036) state.
+            if viewer.unit.is_alive()
+                && target_player.unit.is_alive()
+                && self.player_invisible_for_alive(target)
+                    != self.player_invisible_for_alive(viewer_guid)
+            {
+                return false;
+            }
             return visibility::unit_visible_for_player(
                 viewer,
                 None,
@@ -1671,6 +1914,15 @@ impl Map {
                 in_visible_list,
                 target_creature.visibility_modifier,
             ) {
+                return false;
+            }
+            // Invisible-for-alive symmetry (spirit
+            // healers/guides and ghost aura 9036).
+            if viewer.unit.is_alive()
+                && target_creature.unit.is_alive()
+                && self.creature_invisible_for_alive(target)
+                    != self.player_invisible_for_alive(viewer_guid)
+            {
                 return false;
             }
             return target_creature.respawn_time <= self.now_unix
@@ -1705,6 +1957,18 @@ impl Map {
                 };
             return dist <= edge;
         }
+        if let Some(target_corpse) = self.corpses.get(&target) {
+            // `Corpse::IsVisibleFor` world-object band:
+            // same object distance rule as dynobjects.
+            let dist = visibility::dist2d(view_point, target_corpse.world.position());
+            let edge = self.config.visibility_distance
+                + if in_visible_list {
+                    self.config.grey_object
+                } else {
+                    0.0
+                };
+            return dist <= edge;
+        }
         false
     }
 
@@ -1729,13 +1993,21 @@ impl Map {
             return;
         }
         if let Some(c) = self.creatures.get(&target) {
-            let view = Self::unit_view(
+            let mut view = Self::unit_view(
                 c.unit.world.movement_info,
                 c.unit.world.position(),
                 c.unit.speeds(),
                 true,
                 Some(&c.unit.spline),
             );
+            let stored = c
+                .unit
+                .world
+                .object
+                .values()
+                .get_u32(mangos_protocol::update_field_table::offsets::UNIT_DYNAMIC_FLAGS);
+            view.rewrites.dynamic_flags =
+                Some(self.creature_dynamic_flags(viewer_guid, target, stored));
             build_create_block(&c.unit.world.object, &view, &viewer, data, now_ms, effects);
             return;
         }
@@ -1762,6 +2034,17 @@ impl Map {
                     != 0,
             };
             build_create_block(&go.world.object, &view, &viewer, data, now_ms, effects);
+            return;
+        }
+        if let Some(corpse) = self.corpses.get(&target) {
+            let view = ObjectView {
+                movement: MovementSection::HasPosition(corpse.world.position()),
+                rewrites: mangos_entities::update::RewriteInputs::default(),
+                melee_victim: None,
+                transport_path_progress: None,
+                is_transport: false,
+            };
+            build_create_block(&corpse.world.object, &view, &viewer, data, now_ms, effects);
         }
     }
 
@@ -1791,6 +2074,68 @@ impl Map {
             self.now_ms,
             &mut effects,
         );
+        self.send_update_data(guid, &mut data);
+    }
+
+    /// Item creates for the owner at `AddToMap`
+    /// (fork sends them through visibility; items
+    /// have no world position, so one owner batch
+    /// right after init-self is the equivalent).
+    pub fn build_init_items(&mut self, guid: ObjectGuid) {
+        let Some(entry) = self.players.get(&guid) else {
+            return;
+        };
+        let rows = &entry.player.deferred.inventory;
+        if rows.is_empty() {
+            return;
+        }
+        // Loaded instances raise the split-clone GUID
+        // counter past every persisted low GUID (the
+        // boot seed covers the DB max; this keeps the
+        // invariant if a row was inserted out-of-band).
+        for row in rows {
+            self.stores.observe_item_guid(row.item.item_guid);
+        }
+        let viewer = Viewer {
+            is_self: false,
+            is_game_master: false,
+            has_debug_target_cheat: false,
+            item_owner_is_target: true,
+            owner_or_charmer_is_target: false,
+            can_see_special_info: false,
+            group_only_granted: false,
+            can_see_health: false,
+            show_health_values: false,
+            strip_ffa_pvp: false,
+        };
+        let view = ObjectView::default();
+        let mut data = UpdateData::new();
+        let mut effects = BuildEffects::default();
+        let now_ms = self.now_ms;
+        let prototypes = &self.stores.item_prototypes;
+        // Contents per bag item guid, for container
+        // slot fields.
+        let mut contents: HashMap<u32, Vec<(u8, ObjectGuid)>> = HashMap::new();
+        for row in rows.iter().filter(|r| r.bag != 0) {
+            contents.entry(row.bag).or_default().push((
+                row.slot,
+                mangos_entities::item::item_guid(row.item.item_guid),
+            ));
+        }
+        for row in rows {
+            let facts = prototypes.get(row.item.item_id).map_or_else(
+                mangos_entities::item::ItemProtoFacts::default,
+                |proto| mangos_entities::item::ItemProtoFacts {
+                    max_durability: proto.max_durability,
+                    container_slots: proto.container_slots,
+                },
+            );
+            let bag_contents = contents
+                .get(&row.item.item_guid)
+                .map_or(&[][..], Vec::as_slice);
+            let base = mangos_entities::item::item_object(row, guid, facts, bag_contents);
+            build_create_block(&base, &view, &viewer, &mut data, now_ms, &mut effects);
+        }
         self.send_update_data(guid, &mut data);
     }
 
@@ -2045,7 +2390,16 @@ impl Map {
         self.bg_update(diff_ms);
         self.go_ai_update(diff_ms);
         self.update_dynobjects(diff_ms);
+        // Tier 4 B0-5: dynamic GO lifetime + trap
+        // triggers (`GameObject::Update`).
+        self.update_gameobjects();
+        // Tier 4 B0-6: escort/follower AI
+        // (`npc_escortAI`/`FollowerAI::UpdateAI`).
+        self.update_escorts(diff_ms);
         self.update_auras(diff_ms);
+        // Tier 4 B0-10: group loot roll timeouts.
+        self.update_loot_rolls();
+        self.update_corpse_decay(diff_ms);
         self.update_respawns();
         self.update_weather(diff_ms);
         self.send_object_updates();
@@ -2106,7 +2460,7 @@ impl Map {
                     continue;
                 }
                 let viewer = self.viewer_for(viewer_guid, *target);
-                self.build_values_for(*target, &viewer, &mut data, &mut effects);
+                self.build_values_for(viewer_guid, *target, &viewer, &mut data, &mut effects);
             }
             self.send_update_data(viewer_guid, &mut data);
         }
@@ -2124,6 +2478,7 @@ impl Map {
 
     fn build_values_for(
         &self,
+        viewer_guid: ObjectGuid,
         target: ObjectGuid,
         viewer: &Viewer,
         data: &mut UpdateData,
@@ -2141,13 +2496,21 @@ impl Map {
             return;
         }
         if let Some(c) = self.creatures.get(&target) {
-            let view = Self::unit_view(
+            let mut view = Self::unit_view(
                 c.unit.world.movement_info,
                 c.unit.world.position(),
                 c.unit.speeds(),
                 true,
                 Some(&c.unit.spline),
             );
+            let stored = c
+                .unit
+                .world
+                .object
+                .values()
+                .get_u32(mangos_protocol::update_field_table::offsets::UNIT_DYNAMIC_FLAGS);
+            view.rewrites.dynamic_flags =
+                Some(self.creature_dynamic_flags(viewer_guid, target, stored));
             build_values_block(&c.unit.world.object, &view, viewer, data, effects);
             return;
         }

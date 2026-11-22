@@ -160,6 +160,11 @@ const SLOW_50: u32 = 12548; // MOD_DECREASE_SPEED -50%
 const HAMMER_OF_JUSTICE: u32 = 853; // MOD_STUN
 const SILENCE_SPELL: u32 = 15487; // MOD_SILENCE
 const GROWL_THREAT: u32 = 2649; // THREAT effect ~50
+const GROWL_FORM_GATED: u32 = 6795; // bear-form stance mask
+const BEAR_GATED_NO_CD: u32 = 99; // Demoralizing Roar, same stance mask
+const MOONFIRE: u32 = 8921; // not castable in bear/cat form
+const FAILED_ONLY_SHAPESHIFT: u8 = 86;
+const FAILED_NOT_SHAPESHIFT: u8 = 61;
 const DISPEL_MAGIC: u32 = 527;
 const PW_FORTITUDE: u32 = 1243;
 const INSTAKILL_SPELL: u32 = 5;
@@ -184,7 +189,7 @@ fn bench_spells_and_auras() {
     let dbc = race_class_dbc(&dbc_dir);
 
     let world = DbActor::spawn("test-world", &world_url).expect("world");
-    let (stores, oracle) = world
+    let (mut stores, oracle) = world
         .call(move |conn| {
             use mysql::prelude::Queryable;
             let (creature_templates, _) =
@@ -255,16 +260,33 @@ fn bench_spells_and_auras() {
                     player_infos,
                     items,
                     item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
-                    factions: mangos_world_data::reputations::FactionStore::default(),
+                    factions: mangos_world_data::reputations::load_factions(conn)?,
+                    gossip: mangos_world_data::gossip_menus::GossipStores::default(),
                     areas: mangos_world_data::areas::AreaStore::default(),
                     exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(
                     ),
                     pets: mangos_world_data::pet_data::PetStores::default(),
                     next_pet_number: std::sync::atomic::AtomicU32::new(1),
+                    next_item_guid: std::sync::atomic::AtomicU32::new(1),
+                    vendor_items: mangos_world_data::vendor_items::VendorItemStores::default(),
+                    durability: mangos_world_data::durability::DurabilityTables::default(),
+                    bank_bag_slot_prices: Vec::new(),
+                    stable_slot_prices: Vec::new(),
+                    trainer_spells: mangos_world_data::trainer_spells::TrainerStores::default(),
+                    taxi: mangos_world_data::taxi::TaxiStore::default(),
+                    script_waypoints:
+                        mangos_world_data::script_waypoints::ScriptWaypointStore::default(),
+                    game_events: mangos_world_data::game_events::GameEvents::default(),
+                    loot: mangos_world_data::loot::LootStores::default(),
                     weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore {
                         spells: spell_entries,
+                        skill_line_abilities: Vec::new(),
+                        spell_chains: std::collections::HashMap::new(),
+                        talents: std::collections::HashMap::new(),
+                        talent_tabs: std::collections::HashMap::new(),
+                        talent_spell_pos: std::collections::HashMap::new(),
                         proc_events,
                         cones: std::collections::HashMap::new(),
                         tables: mangos_spells::load_spell_dbc_tables(std::path::Path::new(
@@ -303,6 +325,25 @@ fn bench_spells_and_auras() {
         })
         .expect("stores");
 
+    // Production loads SpellShapeshiftForm flags; the stance-gate
+    // regression below needs the same table (Bear/Cat are shifted
+    // forms, warrior stances carry SHAPESHIFT_FLAG_STANCE).
+    {
+        let bytes = std::fs::read(dbc_dir.join(formats::SPELL_SHAPESHIFT_FORM.file))
+            .expect("SpellShapeshiftForm.dbc");
+        let store = DbcFile::parse(&bytes, formats::SPELL_SHAPESHIFT_FORM.fmt)
+            .expect("parse shapeshift forms")
+            .produce(formats::SPELL_SHAPESHIFT_FORM.fmt)
+            .expect("produce shapeshift forms");
+        for row in store.rows() {
+            stores.shapeshift_forms.insert(uint(row, 0), uint(row, 9));
+        }
+        assert!(
+            stores.shapeshift_forms.contains_key(&5),
+            "bear form row missing from SpellShapeshiftForm.dbc"
+        );
+    }
+
     let stores = Arc::new(stores);
     let chars = DbActor::spawn("test-chars", &chars_url).expect("chars");
     let load = chars
@@ -319,9 +360,11 @@ fn bench_spells_and_auras() {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
         skills: None,
         item_prototypes: None,
         quest_templates: None,
+        taxi: None,
     };
     let player = Player::materialize(load, &inputs).expect("player");
     let player_guid: ObjectGuid = player.unit.guid();
@@ -2436,7 +2479,40 @@ fn bench_spells_and_auras() {
                 .all(|h| h.spell_id != 339),
             "9033 must strip the root on shift-in"
         );
-        // Bear -> Cat: exclusivity + display swap.
+        // Stance/shape gate (`GetErrorAtShapeshiftedCast`):
+        // Growl's stance mask explicitly allows Bear form,
+        // while Moonfire needs caster/Moonkin form and must
+        // fail in Bear. `skip_known` only bypasses the known
+        // gate for this cross-class fixture; the cast is not
+        // triggered, so the shape gate itself is exercised.
+        tick(&mut map, 32); // outlast the 1.5s GCD
+        let _ = map.drain_events();
+        map.player_mut(player_guid)
+            .expect("player")
+            .unit
+            .set_power(1, 1000);
+        let outcome = map.cast_spell(
+            player_guid,
+            GROWL_FORM_GATED,
+            CastTarget::Unit(target),
+            opts,
+        );
+        assert_eq!(outcome, CastOutcome::Started, "Growl in Bear Form");
+        tick(&mut map, 32); // outlast the 1.5s GCD
+        let _ = map.drain_events();
+        map.player_mut(player_guid)
+            .expect("player")
+            .unit
+            .set_power(0, 10000);
+        let outcome = map.cast_spell(player_guid, MOONFIRE, CastTarget::Unit(target), opts);
+        assert_eq!(
+            outcome,
+            CastOutcome::Failed(FAILED_NOT_SHAPESHIFT),
+            "Moonfire in Bear Form must hit the shapeshift gate"
+        );
+        // Bear -> Cat: the fork gate rejects a direct form
+        // swap (`SPELL_ATTR_NOT_SHAPESHIFT` on Cat Form);
+        // the stock-shaped sequence cancels Bear first.
         tick(&mut map, 32); // outlast the 1.5s GCD
         let _ = map.drain_events();
         map.player_mut(player_guid)
@@ -2444,7 +2520,20 @@ fn bench_spells_and_auras() {
             .unit
             .set_power(0, 10000);
         let outcome = map.cast_spell(player_guid, 768, CastTarget::Unit(player_guid), opts);
-        assert_eq!(outcome, CastOutcome::Started, "Cat Form cast");
+        assert_eq!(
+            outcome,
+            CastOutcome::Failed(FAILED_NOT_SHAPESHIFT),
+            "direct Bear -> Cat cast must hit the shapeshift gate"
+        );
+        map.cancel_aura(player_guid, 5487);
+        tick(&mut map, 3);
+        let _ = map.drain_events();
+        map.player_mut(player_guid)
+            .expect("player")
+            .unit
+            .set_power(0, 10000);
+        let outcome = map.cast_spell(player_guid, 768, CastTarget::Unit(player_guid), opts);
+        assert_eq!(outcome, CastOutcome::Started, "Cat Form cast after cancel");
         tick(&mut map, 3);
         let _ = map.drain_events();
         {
@@ -2470,7 +2559,24 @@ fn bench_spells_and_auras() {
             map.aura_holders(player_guid)
                 .iter()
                 .all(|h| h.spell_id != 5487),
-            "bear holder must be stripped by cat exclusivity"
+            "bear holder must be gone after cancel + Cat Form"
+        );
+        tick(&mut map, 32); // outlast the 1.5s GCD
+        let _ = map.drain_events();
+        map.player_mut(player_guid)
+            .expect("player")
+            .unit
+            .set_power(1, 1000);
+        let outcome = map.cast_spell(
+            player_guid,
+            BEAR_GATED_NO_CD,
+            CastTarget::Unit(target),
+            opts,
+        );
+        assert_eq!(
+            outcome,
+            CastOutcome::Failed(FAILED_ONLY_SHAPESHIFT),
+            "Demoralizing Roar in Cat Form must hit the shapeshift gate"
         );
         // Cancel: byte + native display restored.
         map.cancel_aura(player_guid, 768);
@@ -2495,7 +2601,24 @@ fn bench_spells_and_auras() {
                 "native display restored"
             );
         }
-        println!("SHAPESHIFT form byte + display + 9033 ok");
+        tick(&mut map, 32); // outlast the 1.5s GCD
+        let _ = map.drain_events();
+        map.player_mut(player_guid)
+            .expect("player")
+            .unit
+            .set_power(1, 1000);
+        let outcome = map.cast_spell(
+            player_guid,
+            BEAR_GATED_NO_CD,
+            CastTarget::Unit(target),
+            opts,
+        );
+        assert_eq!(
+            outcome,
+            CastOutcome::Failed(FAILED_ONLY_SHAPESHIFT),
+            "Demoralizing Roar in caster form must hit the shapeshift gate"
+        );
+        println!("SHAPESHIFT form byte + display + 9033 + stance gate ok");
     }
 
     // --- TeleUnitsFaceCaster (Tier 2 Slice 6.5) -----

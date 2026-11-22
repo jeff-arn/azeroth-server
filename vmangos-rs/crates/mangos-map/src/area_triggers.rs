@@ -229,9 +229,9 @@ impl Map {
         match trigger_id {
             AREATRIGGER_ENTER_UBRS => {
                 self.brs_sort_room_event_mobs();
-                // `HasItemCount(12344, 1)` over bag inventory rows.
+                // `HasItemCount(12344, 1)` over live bag inventory rows.
                 let has_seal = self.player(player).is_some_and(|p| {
-                    p.saved
+                    p.deferred
                         .inventory
                         .iter()
                         .filter(|r| r.item.item_id == ITEM_SEAL_OF_ASCENSION)

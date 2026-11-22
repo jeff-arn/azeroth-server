@@ -23,6 +23,8 @@ use mangos_protocol::opcode_table::opcode_id as op;
 use mangos_protocol::world::WorldPacket;
 use mangos_world_data::battlegrounds::{BattlegroundTemplate, WorldSafeLoc};
 
+use mangos_entities::creature::SpawnRng as _;
+
 use crate::map::{Map, MapEvent};
 
 /// `enum BattleGroundStatus`.
@@ -207,6 +209,11 @@ pub struct BgState {
     pub event_objects: HashMap<(u8, u8), BgEventObjects>,
     /// `m_bgObjects` indexed by per-BG object type slot.
     pub bg_objects: Vec<ObjectGuid>,
+    /// Dynamic BG object blueprints (`AddObject`
+    /// creates the object off-grid in the fork; Rust
+    /// records entry/position/rotation and
+    /// materializes on `SpawnBGObject`).
+    pub bg_go_blueprints: HashMap<ObjectGuid, (u32, Position, [f32; 4])>,
     /// Spawn modes per DB creature spawn guid-low
     /// (`SetSpawnEventMode` targets, checked at spawn).
     pub creature_spawn_modes: HashMap<u32, u8>,
@@ -304,6 +311,7 @@ impl BgState {
             active_events: HashMap::new(),
             event_objects: HashMap::new(),
             bg_objects: Vec::new(),
+            bg_go_blueprints: HashMap::new(),
             creature_spawn_modes: HashMap::new(),
             kind,
             create_unix,
@@ -1163,7 +1171,7 @@ impl Map {
     }
 
     /// `ObjectMgr::GetClosestGraveYardForArea`.
-    fn closest_graveyard_for_area(
+    pub(crate) fn closest_graveyard_for_area(
         &self,
         area_or_zone: u32,
         pos: Position,
@@ -1534,26 +1542,11 @@ impl Map {
         }
     }
 
-    /// `HonorMgr::Add(cp, BONUS)` subset: appends a
-    /// `character_honor_cp` row (the save diff inserts
-    /// it, fork `STATE_NEW`). Returns false at cp 0.
-    ///
-    /// UNMODELED (Slice 4 remainder, reached here):
-    /// `HonorMgr` rank/standing recomputation, daily/
-    /// weekly totals and `SMSG_PVP_CREDIT` for bonus
-    /// honor (fork sends none for BONUS adds either —
-    /// `SendPVPCredit` is kill-side).
+    /// `HonorMgr::Add(cp, BONUS)` (full form since
+    /// B0-7: CP row + PVP credit with empty victim
+    /// + field refresh, as the fork `Add` tail).
     pub(crate) fn bg_honor_add(&mut self, player: ObjectGuid, cp: f32) -> bool {
-        if cp == 0.0 {
-            return false;
-        }
-        #[allow(clippy::cast_possible_truncation)]
-        let day = (self.now_unix / 86_400) as u32;
-        let Some(p) = self.player_mut(player) else {
-            return false;
-        };
-        p.honor_add_bonus(cp, day);
-        true
+        self.honor_add_player(player, cp, mangos_entities::honor::HONOR_TYPE_BONUS, None)
     }
 
     /// `RewardHonorToTeam`.
@@ -1917,7 +1910,9 @@ impl Map {
                         (Some(a), Some(b)) => {
                             let dx = a.x - b.x;
                             let dy = a.y - b.y;
-                            dx * dx + dy * dy < 74.0 * 74.0
+                            dx * dx + dy * dy
+                                < self.config.max_group_xp_distance
+                                    * self.config.max_group_xp_distance
                         }
                         _ => false,
                     };
@@ -2247,49 +2242,89 @@ impl Map {
         }
     }
 
-    /// `SpawnBGObject` (`respawnTime` in seconds in the
-    /// fork for GO respawn; `delay` here is milliseconds
-    /// only in name — fork passes seconds through
-    /// `SpawnEvent(..., delay)` call sites; kept as the
-    /// fork's raw value).
+    /// `SpawnBGObject` (`BattleGround.cpp:1520`;
+    /// `respawn_time` is the fork's raw seconds value
+    /// despite the constant's name).
     ///
     /// Rust representation: object materialized =
-    /// spawned, removed = despawned (fork keeps a
-    /// deactivated object; wire-equivalent).
-    ///
-    /// UNMODELED: GO loot-state reset + the 178786-89
-    /// 60s respawn-delay special case ride the GO
-    /// respawn runtime when it lands.
+    /// in-world; `SetRespawnTime` drives hide/show
+    /// through the fork `isSpawned` formula and the
+    /// tick expiry arm, `RESPAWN_NEVER` removes the
+    /// object (fork keeps a deactivated object for
+    /// dynamic entries; wire-equivalent).
     pub(crate) fn bg_spawn_object(&mut self, guid: ObjectGuid, respawn_time: u32) {
-        if respawn_time != RESPAWN_NEVER_MS {
-            if !self.gameobjects.contains_key(&guid) {
-                self.spawn_gameobject(
-                    guid.counter(),
-                    &mangos_world_data::spawn_support::RespawnTimes::default(),
-                );
+        use mangos_protocol::update_field_table::offsets;
+        if respawn_time == RESPAWN_NEVER_MS {
+            if self.gameobjects.contains_key(&guid) {
+                self.despawn_gameobject_now(guid);
             }
-        } else if self.gameobjects.contains_key(&guid) {
-            self.despawn_gameobject_now(guid);
+            return;
+        }
+        if !self.gameobjects.contains_key(&guid) {
+            let blueprint = self
+                .bg
+                .as_ref()
+                .and_then(|b| b.bg_go_blueprints.get(&guid).copied());
+            match blueprint {
+                Some((entry, pos, rotation)) => {
+                    self.create_dynamic_gameobject_with_low(entry, pos, rotation, guid.counter());
+                }
+                None => {
+                    self.spawn_gameobject(
+                        guid.counter(),
+                        &mangos_world_data::spawn_support::RespawnTimes::default(),
+                    );
+                }
+            }
+        }
+        // GO_JUST_DEACTIVATED -> GO_READY reset, state
+        // (flagstand excepted at 5875), respawn timer.
+        if let Some(r) = self.go_runtime.get_mut(&guid) {
+            r.just_deactivated = false;
+        }
+        let now = self.now_unix;
+        if let Some(go) = self.gameobjects.get_mut(&guid) {
+            // `GAMEOBJECT_TYPE_FLAGSTAND` = 24.
+            if go.info.go_type != 24 {
+                go.world
+                    .object
+                    .values_mut()
+                    .set_u32(offsets::GAMEOBJECT_STATE, 0);
+            }
+            go.set_respawn_time(respawn_time, now);
+            if matches!(go.info.id, 178_786..=178_789) {
+                go.respawn_delay_time = 60;
+            }
         }
     }
 
-    /// `AddObject` — dynamic GO creation by entry at a
-    /// fixed position, stored at `m_bgObjects[type]`.
-    ///
-    /// UNMODELED until kind steps need it: dynamic
-    /// (non-DB) gameobject creation is not in the map
-    /// runtime yet (no `CreateGameObject(entry)` path);
-    /// kind setups record their object layouts against
-    /// this seam in their steps.
-    #[allow(clippy::unused_self, dead_code)]
+    /// `AddObject` (`BattleGround.cpp:1271`) —
+    /// dynamic GO creation by entry at a fixed
+    /// position, stored at `m_bgObjects[type]`. The
+    /// fork creates the object off-grid (`AddToWorld`
+    /// only); Rust validates creation, records a
+    /// blueprint under the created guid, and despawns
+    /// the probe object the same tick.
     pub(crate) fn bg_add_object(
         &mut self,
-        _slot: usize,
-        _entry: u32,
-        _pos: Position,
-        _rotation: (f32, f32, f32, f32),
+        slot: usize,
+        entry: u32,
+        pos: Position,
+        rotation: (f32, f32, f32, f32),
     ) -> bool {
-        false
+        let rotation_arr = [rotation.0, rotation.1, rotation.2, rotation.3];
+        let Some(guid) = self.create_dynamic_gameobject(entry, pos, rotation_arr) else {
+            return false;
+        };
+        self.despawn_gameobject_now(guid);
+        if let Some(bg) = self.bg.as_mut() {
+            if bg.bg_objects.len() <= slot {
+                bg.bg_objects.resize(slot + 1, ObjectGuid::EMPTY);
+            }
+            bg.bg_objects[slot] = guid;
+            bg.bg_go_blueprints.insert(guid, (entry, pos, rotation_arr));
+        }
+        true
     }
 
     /// `DoorOpen` / `DoorClose` (GO state toggle).
@@ -2332,14 +2367,58 @@ impl Map {
         }
     }
 
-    /// `HandleTriggerBuff` — trap GO buff pickup
-    /// (speed/regen/berserk). Fork body ports with the
-    /// WS step (first consumer); stub keeps the GO-use
-    /// seam typed.
-    #[allow(clippy::unused_self)]
-    #[allow(dead_code)] // consumed by the kind steps
-    pub(crate) fn bg_handle_trigger_buff(&mut self, _go: ObjectGuid) {}
+    /// `HandleTriggerBuff` (`BattleGround.cpp:1696`):
+    /// trap GO buff pickup (speed/regen/berserk);
+    /// with buff-change enabled a random next buff
+    /// respawns at the slot after `BUFF_RESPAWN_TIME`.
+    pub(crate) fn bg_handle_trigger_buff(&mut self, go_guid: ObjectGuid) {
+        let Some(go) = self.gameobjects.get(&go_guid) else {
+            return;
+        };
+        if go.info.go_type != crate::gameobjects::GO_TYPE_TRAP || !go.is_spawned() {
+            return;
+        }
+        let entry = go.info.id;
+        let buff_change = self.bg.as_ref().is_some_and(|b| b.buff_change);
+        if !buff_change {
+            self.go_set_just_deactivated(go_guid);
+            return;
+        }
+        let Some(mut index) = self
+            .bg
+            .as_ref()
+            .and_then(|b| b.bg_objects.iter().rposition(|g| *g == go_guid))
+        else {
+            return;
+        };
+        let buff = usize::try_from(self.rng.urand(0, 2)).unwrap_or(0);
+        if entry != BUFF_ENTRIES[buff] {
+            self.bg_spawn_object(go_guid, RESPAWN_NEVER_MS);
+            for (curr, e) in BUFF_ENTRIES.iter().enumerate() {
+                if entry == *e {
+                    index = index - curr + buff;
+                }
+            }
+        }
+        if let Some(target) = self
+            .bg
+            .as_ref()
+            .and_then(|b| b.bg_objects.get(index).copied())
+        {
+            self.bg_spawn_object(target, BUFF_RESPAWN_TIME_SECS);
+        }
+    }
 }
+
+/// `BUFF_RESPAWN_TIME` (secs).
+const BUFF_RESPAWN_TIME_SECS: u32 = 180;
+
+/// `g_buffEntries` (`BattleGroundDefines.h:144`).
+const BUFF_ENTRIES: [u32; 3] = [
+    BG_OBJECTID_SPEEDBUFF_ENTRY,
+    BG_OBJECTID_REGENBUFF_ENTRY,
+    BG_OBJECTID_BERSERKERBUFF_ENTRY,
+];
 
 /// `BG_OBJECTID_SPEEDBUFF_ENTRY`.
 pub const BG_OBJECTID_SPEEDBUFF_ENTRY: u32 = 179_871;

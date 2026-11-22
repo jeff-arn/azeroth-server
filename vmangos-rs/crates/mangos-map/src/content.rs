@@ -1653,6 +1653,7 @@ pub(crate) enum CreatureScriptAi {
     EnragedFoulweald(EnragedFoulwealdAi),
     Maws(MawsAi),
     LazyPeon(LazyPeonAi),
+    DaphneStilwell(DaphneStilwellAi),
     Piznik(PiznikAi),
     Murkdeep(MurkdeepAi),
     MagramiSpectre(MagramiSpectreAi),
@@ -2118,6 +2119,7 @@ impl CreatureScriptAi {
             "npc_enraged_foulweald" => Some(Self::EnragedFoulweald(EnragedFoulwealdAi::new())),
             "mob_maws" => Some(Self::Maws(MawsAi::new())),
             "LazyPeons" => Some(Self::LazyPeon(LazyPeonAi::new())),
+            "npc_daphne_stilwell" => Some(Self::DaphneStilwell(DaphneStilwellAi::new())),
             "npc_piznik" => Some(Self::Piznik(PiznikAi::new())),
             "npc_murkdeep" => Some(Self::Murkdeep(MurkdeepAi::new())),
             "npc_magrami_spetre" => Some(Self::MagramiSpectre(MagramiSpectreAi::new())),
@@ -12289,6 +12291,24 @@ const ECTO_SPELL_TRANSFORM_BLACK: u32 = 7946;
 
 // ---- state structs (fork member order) ----
 
+/// `npc_daphne_stilwellAI` state (`westfall.cpp:
+/// 56-61`): last reached waypoint + shoot timer.
+/// The escort state itself lives in `Map::escorts`
+/// (Tier 4 B0-6).
+pub(crate) struct DaphneStilwellAi {
+    wp_holder: u32,
+    shoot_timer: u32,
+}
+
+impl DaphneStilwellAi {
+    fn new() -> Self {
+        Self {
+            wp_holder: 0,
+            shoot_timer: 0,
+        }
+    }
+}
+
 /// `celebras_the_cursedAI` state (cpp 61-63).
 #[allow(clippy::struct_field_names)]
 pub(crate) struct CelebrasTheCursedAi {
@@ -19477,9 +19497,11 @@ impl Map {
     }
 
     /// `Player::DestroyItemCount(item, count, true)` over
-    /// the saved inventory rows (fork walk order from
+    /// the live inventory rows (fork walk order from
     /// `quest_destroy_candidates`); persists through
-    /// `SetItemCount` like cast-item consumption.
+    /// `SetItemCount` like cast-item consumption. The
+    /// immediate DB write moves the save baseline in
+    /// lockstep (Tier 4 step 4a inventory split).
     fn destroy_player_item_count(&mut self, player: ObjectGuid, item_id: u32, mut count: u32) {
         let events = {
             let Some(entry) = self.players.get_mut(&player) else {
@@ -19493,20 +19515,24 @@ impl Map {
                 let take = stack.min(count);
                 let new_count = stack - take;
                 count -= take;
-                if let Some(inv) = entry
-                    .player
-                    .saved
-                    .inventory
-                    .iter_mut()
-                    .find(|inv| inv.item.item_guid == item_guid)
-                {
-                    inv.item.count = new_count;
+                for rows in [
+                    &mut entry.player.deferred.inventory,
+                    &mut entry.player.saved.inventory,
+                ] {
+                    if let Some(inv) = rows.iter_mut().find(|inv| inv.item.item_guid == item_guid) {
+                        inv.item.count = new_count;
+                    }
                 }
                 events.push(crate::map::MapEvent::SetItemCount {
                     item_guid,
                     count: new_count,
                 });
             }
+            entry
+                .player
+                .deferred
+                .inventory
+                .retain(|inv| inv.item.count != 0);
             entry
                 .player
                 .saved
@@ -33135,11 +33161,9 @@ impl Map {
     }
 
     /// `sGameEventMgr.IsActiveEvent`: game events are
-    /// unmodeled, so every check reads inactive
-    /// (event-gated bodies stay inert; recorded).
-    #[allow(clippy::unused_self)]
-    fn game_event_active(&self, _event_id: u32) -> bool {
-        false
+    /// state pushed by the world actor (B0-8).
+    fn game_event_active(&self, event_id: u32) -> bool {
+        u16::try_from(event_id).is_ok_and(|id| self.active_game_events.contains(&id))
     }
 
     /// `Player::GetQuestStatus(quest) ==
@@ -33271,7 +33295,7 @@ impl Map {
     /// `GameObject::Use` head; the trap-trigger gate
     /// shares it). True = handled, default use
     /// skipped.
-    fn go_ai_on_use(&mut self, user: ObjectGuid, go_guid: ObjectGuid) -> bool {
+    pub(crate) fn go_ai_on_use(&mut self, user: ObjectGuid, go_guid: ObjectGuid) -> bool {
         let Some(mut state) = self.go_ai.remove(&go_guid) else {
             return false;
         };
@@ -34243,15 +34267,23 @@ impl Map {
         false
     }
 
-    /// `GO_scarlet_cannon` (boss_cannon_master_willey.cpp:276-281).
-    /// NEEDS-MAP-HELPER: the whole body is `pPlayer->SummonGameObject`
-    /// plus `pCannonBall->Use(pPlayer)` and no temp-GO-summon helper
-    /// exists, so nothing executable is transcribed here.
-    #[allow(clippy::unused_self)]
-    fn go_hello_scarlet_cannon(&mut self, player: ObjectGuid, go: ObjectGuid) -> bool {
-        let _ = (player, go);
-        // C++: SummonGameObject(GO_CANNONBALL, 3534.3, -2966.74, 125.001,
-        // o 0.279_252, rot 0/0/0.139_173/0.990_268, respawn 1), then Use.
+    /// `GO_scarlet_cannon` (boss_cannon_master_willey.cpp:276-281):
+    /// summon the cannonball trap GO and use it on
+    /// the player (Tier 4 B0-5 exemplar).
+    fn go_hello_scarlet_cannon(&mut self, player: ObjectGuid, _go: ObjectGuid) -> bool {
+        /// `GO_CANNONBALL`.
+        const GO_CANNONBALL: u32 = 176_211;
+        let pos = Position::new(3534.3, -2966.74, 125.001, 0.279_252);
+        if let Some(ball) = self.summon_gameobject(
+            player,
+            GO_CANNONBALL,
+            pos,
+            [0.0, 0.0, 0.139_173, 0.990_268],
+            1,
+            true,
+        ) {
+            self.go_use_direct(player, ball);
+        }
         false
     }
 
@@ -35439,8 +35471,27 @@ impl Map {
         if state.timer_ms < diff_ms {
             match state.step {
                 0 => {
-                    // NEEDS-MAP-HELPER: `SpawnRune` x6 (`SummonGameObject`
-                    // `GO_SUMMON_CIRCLE`, cpp 44-49).
+                    // `SpawnRune` x6 (cpp 53-58, Tier 4
+                    // B0-5).
+                    const GO_SUMMON_CIRCLE: u32 = 175_571;
+                    const RUNE_POS: [(f32, f32, f32, f32); 6] = [
+                        (-13.7275, -384.816, 48.9746, 3.68265),
+                        (-27.8804, -385.891, 48.5067, 3.7001),
+                        (-24.8824, -369.619, 49.7059, 3.4034),
+                        (-12.3689, -376.475, 49.335, 5.044),
+                        (-34.5437, -370.233, 50.3396, 5.35816),
+                        (-47.9095, -369.089, 51.5425, 1.37881),
+                    ];
+                    for (i, (x, y, z, o)) in RUNE_POS.into_iter().enumerate() {
+                        state.runes[i] = self.summon_gameobject(
+                            go,
+                            GO_SUMMON_CIRCLE,
+                            Position::new(x, y, z, o),
+                            [0.0; 4],
+                            0,
+                            true,
+                        );
+                    }
                     state.timer_ms = 3_000;
                 }
                 1 => {
@@ -37448,9 +37499,7 @@ impl Map {
     /// GO gossip (`goober.gossipID`, no GO gossip
     /// session plumbing), `RewardPlayerAndGroupAtCast`
     /// GO-cast quest credit, linked trap, custom
-    /// anim, auto-close/loot-state cooldown, and the
-    /// `goober.spellId` GO-cast (GO spell casting is
-    /// unmodeled wholesale).
+    /// anim, auto-close/loot-state cooldown.
     fn go_use_goober(&mut self, player: ObjectGuid, go_guid: ObjectGuid) {
         let Some(info) = self.gameobjects.get(&go_guid).map(|g| g.info.clone()) else {
             return;
@@ -37504,6 +37553,13 @@ impl Map {
             u32::from(offsets::GAMEOBJECT_STATE),
             GO_STATE_ACTIVE,
         );
+        // `Use` tail (`GameObject.cpp:1923`): the
+        // GO casts `goober.spellId` (data10) on the
+        // user (Tier 4 B0-5 GO casting).
+        let spell_id = info.data_u32(10);
+        if spell_id != 0 {
+            self.go_cast_spell(go_guid, spell_id, player);
+        }
     }
 
     /// `GAMEOBJECT_TYPE_CAMERA` use subset
@@ -37826,6 +37882,7 @@ impl Map {
     pub(crate) fn creature_script_reset(&mut self, guid: ObjectGuid) {
         match self.ai.get(&guid).and_then(|ai| ai.script.as_ref()) {
             Some(CreatureScriptAi::MrSmite(_)) => self.smite_reset(guid),
+            Some(CreatureScriptAi::DaphneStilwell(_)) => self.daphne_reset(guid),
             Some(CreatureScriptAi::Herod(_)) => self.herod_reset(guid),
             Some(CreatureScriptAi::ScarletTrainee(_)) => self.trainee_reset(guid),
             Some(CreatureScriptAi::RottingMaggot(_)) => self.rotting_maggot_reset(guid),
@@ -40162,6 +40219,9 @@ impl Map {
     ) {
         match self.ai.get(&summoner).and_then(|ai| ai.script.as_ref()) {
             Some(CreatureScriptAi::Herod(_)) => self.herod_just_summoned(summoner, created),
+            Some(CreatureScriptAi::DaphneStilwell(_)) => {
+                self.daphne_just_summoned(summoner, created);
+            }
             Some(CreatureScriptAi::Doomrel(_)) => self.doomrel_just_summoned(summoner, created),
             Some(CreatureScriptAi::GeneralAngerforge(_)) => {
                 self.general_angerforge_just_summoned(summoner, created);
@@ -40228,6 +40288,204 @@ impl Map {
                 self.ysondre_just_summoned(summoner, created);
             }
             _ => {}
+        }
+    }
+
+    /// `npc_escortAI::WaypointReached` dispatch
+    /// (Tier 4 B0-6; called from
+    /// `escort_movement_inform`).
+    pub(crate) fn creature_script_escort_waypoint_reached(
+        &mut self,
+        guid: ObjectGuid,
+        point_id: u32,
+    ) {
+        if let Some(CreatureScriptAi::DaphneStilwell(_)) =
+            self.ai.get(&guid).and_then(|ai| ai.script.as_ref())
+        {
+            self.daphne_waypoint_reached(guid, point_id);
+        }
+    }
+
+    /// `npc_escortAI::WaypointStart` dispatch.
+    /// NO-CALLSITE-YET arms: no ported escort script
+    /// overrides it yet.
+    #[allow(clippy::unused_self)] // dispatcher shape; arms land with script ports
+    pub(crate) fn creature_script_escort_waypoint_start(
+        &mut self,
+        guid: ObjectGuid,
+        point_id: u32,
+    ) {
+        let _ = (guid, point_id);
+    }
+
+    /// `npc_escortAI::JustStartedEscort` dispatch.
+    /// NO-CALLSITE-YET arms.
+    #[allow(clippy::unused_self)] // dispatcher shape; arms land with script ports
+    pub(crate) fn creature_script_just_started_escort(&mut self, guid: ObjectGuid) {
+        let _ = guid;
+    }
+
+    /// `UpdateEscortAI` / `UpdateFollowerAI`
+    /// override dispatch; returns true when a
+    /// script override ran (the fork default body
+    /// then does not).
+    pub(crate) fn creature_script_escort_update(&mut self, guid: ObjectGuid, diff_ms: u32) -> bool {
+        match self.ai.get(&guid).and_then(|ai| ai.script.as_ref()) {
+            Some(CreatureScriptAi::DaphneStilwell(_)) => {
+                self.daphne_escort_update(guid, diff_ms);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// `FollowerAI::OnEscortFailed` dispatch.
+    /// NO-CALLSITE-YET arms.
+    #[allow(clippy::unused_self)] // dispatcher shape; arms land with script ports
+    pub(crate) fn creature_script_escort_failed(&mut self, guid: ObjectGuid, died: bool) {
+        let _ = (guid, died);
+    }
+
+    fn daphne_state_mut(&mut self, guid: ObjectGuid) -> Option<&mut DaphneStilwellAi> {
+        match self.ai.get_mut(&guid).and_then(|ai| ai.script.as_mut()) {
+            Some(CreatureScriptAi::DaphneStilwell(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// `npc_daphne_stilwellAI::Reset`
+    /// (`westfall.cpp:64-82`).
+    pub(crate) fn daphne_reset(&mut self, guid: ObjectGuid) {
+        const SAY_DS_DOWN_1: i32 = 5269;
+        const SAY_DS_DOWN_2: i32 = 2369;
+        const SAY_DS_DOWN_3: i32 = 2358;
+        let escorting = self.escort_has_state(guid, crate::escort::STATE_ESCORT_ESCORTING);
+        let holder = {
+            let Some(s) = self.daphne_state_mut(guid) else {
+                return;
+            };
+            if !escorting {
+                s.wp_holder = 0;
+            }
+            s.shoot_timer = 0;
+            s.wp_holder
+        };
+        if escorting {
+            let text = match holder {
+                7 => Some(SAY_DS_DOWN_1),
+                8 => Some(SAY_DS_DOWN_2),
+                9 => Some(SAY_DS_DOWN_3),
+                _ => None,
+            };
+            if let Some(text) = text {
+                self.do_script_text(text, guid, None, -1);
+            }
+        }
+    }
+
+    /// `npc_daphne_stilwellAI::WaypointReached`
+    /// (`westfall.cpp:83-130`). UNMODELED: the
+    /// `AttackStart` override (ranged chase at
+    /// 30 yd) — the engine melee `attack_start`
+    /// runs instead.
+    pub(crate) fn daphne_waypoint_reached(&mut self, guid: ObjectGuid, point: u32) {
+        const SAY_DS_PROLOGUE: i32 = 3090;
+        const QUEST_TOME_VALOR: u32 = 1651;
+        const NPC_DEFIAS_RAIDER: u32 = 6180;
+        /// `EMOTE_STATE_USESTANDING_NOSHEATHE`
+        /// (`SharedDefines.h:528`).
+        const EMOTE_USESTANDING_NOSHEATHE: u32 = 133;
+        const RAIDER_SPAWNS: [[f32; 4]; 5] = [
+            [-11450.836, 1569.755, 54.267, 4.230],
+            [-11449.697, 1569.124, 54.421, 4.206],
+            [-11448.237, 1568.307, 54.620, 4.206],
+            [-11448.037, 1570.213, 54.961, 4.283],
+            [-11449.018, 1570.738, 54.828, 4.220],
+        ];
+        if let Some(s) = self.daphne_state_mut(guid) {
+            s.wp_holder = point;
+        }
+        let summon_raiders = |this: &mut Self, count: usize| {
+            for spawn in RAIDER_SPAWNS.iter().take(count) {
+                this.summon_creature(
+                    NPC_DEFIAS_RAIDER,
+                    Position {
+                        x: spawn[0],
+                        y: spawn[1],
+                        z: spawn[2],
+                        o: spawn[3],
+                    },
+                    guid,
+                    TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT,
+                    30_000,
+                );
+            }
+        };
+        match point {
+            4 => {
+                // Fork literal 6946 at BASE_ATTACK
+                // (the `EQUIP_ID_RIFLE` enum is not
+                // the value used at cpp 88).
+                self.set_virtual_item_by_id(guid, 0, 6946);
+                self.unit_set_byte(guid, offsets::UNIT_FIELD_BYTES_2, 0, 2);
+                self.handle_emote_command(guid, EMOTE_USESTANDING_NOSHEATHE);
+            }
+            7 => summon_raiders(self, 3),
+            8 => {
+                self.unit_set_byte(guid, offsets::UNIT_FIELD_BYTES_2, 0, 2);
+                summon_raiders(self, 4);
+            }
+            9 => {
+                self.unit_set_byte(guid, offsets::UNIT_FIELD_BYTES_2, 0, 2);
+                summon_raiders(self, 5);
+            }
+            10 => self.escort_set_run(guid, false),
+            11 => self.do_script_text(SAY_DS_PROLOGUE, guid, None, -1),
+            13 => {
+                let equip_id = self.creatures.get(&guid).map_or(0, |c| c.info.equipment_id);
+                self.creature_load_equipment(guid, equip_id);
+                self.unit_set_byte(guid, offsets::UNIT_FIELD_BYTES_2, 0, SHEATH_UNARMED);
+                self.handle_emote_command(guid, EMOTE_USESTANDING_NOSHEATHE);
+            }
+            17 => {
+                if let Some(player) = self.escort_player(guid) {
+                    let pos = self.unit_position(guid).unwrap_or_default();
+                    self.group_event_happens(player, QUEST_TOME_VALOR, pos);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// `npc_daphne_stilwellAI::JustSummoned`
+    /// (`westfall.cpp:147`): raiders attack her.
+    pub(crate) fn daphne_just_summoned(&mut self, summoner: ObjectGuid, created: ObjectGuid) {
+        self.attack_start(created, summoner);
+    }
+
+    /// `npc_daphne_stilwellAI::UpdateEscortAI`
+    /// (`westfall.cpp:149-166`): Shoot every
+    /// second when the victim is out of melee
+    /// reach (melee itself rides the generic AI).
+    pub(crate) fn daphne_escort_update(&mut self, guid: ObjectGuid, diff_ms: u32) {
+        const SPELL_SHOOT: u32 = 6660;
+        let Some(victim) = self.current_victim(guid) else {
+            return;
+        };
+        let fire = {
+            let Some(s) = self.daphne_state_mut(guid) else {
+                return;
+            };
+            if s.shoot_timer < diff_ms {
+                s.shoot_timer = 1000;
+                true
+            } else {
+                s.shoot_timer -= diff_ms;
+                false
+            }
+        };
+        if fire && !self.can_reach_melee(guid, victim) {
+            self.do_cast_spell_if_can(guid, SPELL_SHOOT, CastTarget::Unit(victim));
         }
     }
 

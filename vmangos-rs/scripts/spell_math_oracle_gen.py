@@ -34,7 +34,7 @@ def db_query(sql):
     u = urllib.parse.urlparse(
         os.environ["TEST_MYSQL_URL_WORLD"].replace("mysql://", "http://", 1)
     )
-    cmd = ["mysql", "-h", u.hostname, "-P", str(u.port or 3306), "-u", u.username]
+    cmd = ["mysql", "--protocol=TCP", "-h", u.hostname, "-P", str(u.port or 3306), "-u", u.username]
     cmd += ["-N", "-B", "-D", u.path.lstrip("/"), "-e", sql]
     env = dict(os.environ, MYSQL_PWD=u.password or "")
     proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
@@ -81,7 +81,8 @@ def s32(v):
 COLS = [
     "entry", "school", "category", "dispel", "mechanic",
     "attributes", "attributesEx", "attributesEx2", "attributesEx3",
-    "attributesEx4", "targets", "castingTimeIndex", "recoveryTime",
+    "attributesEx4", "stances", "stancesNot", "targets",
+    "castingTimeIndex", "recoveryTime",
     "categoryRecoveryTime", "interruptFlags", "auraInterruptFlags",
     "channelInterruptFlags", "maxLevel", "baseLevel", "spellLevel",
     "durationIndex", "powerType", "manaCost", "manCostPerLevel",
@@ -233,7 +234,8 @@ def main():
             f"attributes_ex3: {row['attributesEx3']}, attributes_ex4: {row['attributesEx4']},"
         )
         lines.append(
-            f"                targets: {row['targets']}, casting_time_index: {row['castingTimeIndex']}, "
+            f"                stances: {row['stances']}, stances_not: {row['stancesNot']}, "
+            f"targets: {row['targets']}, casting_time_index: {row['castingTimeIndex']}, "
             f"recovery_time: {row['recoveryTime']}, category_recovery_time: {row['categoryRecoveryTime']},"
         )
         lines.append(
@@ -259,14 +261,15 @@ def main():
             lines.append(f"                    {eff_rs(e)},")
         lines.append("                ],")
         lines.append(
-            f"                spell_visual: {row['spellVisual1']}, mana_cost_percentage: {row['manaCostPercentage']}, "
+            f"                spell_visual: {row['spellVisual1']}, spell_icon_id: 0, "
+            f"mana_cost_percentage: {row['manaCostPercentage']}, "
             f"start_recovery_category: {row['startRecoveryCategory']}, start_recovery_time: {row['startRecoveryTime']},"
         )
         lines.append(
             f"                spell_family_name: {row['spellFamilyName']}, spell_family_flags: {row['spellFamilyFlags']}, "
             f"max_affected_targets: {row['maxAffectedTargets']}, dmg_class: {row['dmgClass']}, prevention_type: {row['preventionType']},"
         )
-        lines.append(f'                custom: 0, name: "{name}".to_string(),')
+        lines.append(f'                custom: 0, name: "{name}".to_string(), script_name: String::new(),')
         lines.append("            },")
         lines.append(f"            cast_time: ({s32(ct[1])}, {s32(ct[2])}, {s32(ct[3])}),")
         lines.append(f"            duration: ({s32(du[1])}, {s32(du[2])}, {s32(du[3])}),")

@@ -263,6 +263,21 @@ impl Group {
         self.db_id
     }
 
+    #[must_use]
+    pub fn loot_method(&self) -> u8 {
+        self.loot_method
+    }
+
+    #[must_use]
+    pub fn loot_threshold(&self) -> u8 {
+        self.loot_threshold
+    }
+
+    #[must_use]
+    pub fn looter_raw(&self) -> u64 {
+        self.looter_raw
+    }
+
     /// `IsCreated`: at least one member slot.
     #[must_use]
     pub fn is_created(&self) -> bool {

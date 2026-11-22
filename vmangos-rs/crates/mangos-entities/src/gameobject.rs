@@ -270,10 +270,80 @@ impl GameObject {
         rotation
     }
 
+    /// `isSpawned()` (`GameObject.h:118`), fork-exact:
+    /// a dynamic GO with a running despawn timer is
+    /// spawned; a by-default GO with a pending respawn
+    /// time is not.
     #[must_use]
-    pub fn is_spawned(&self, now_unix: u64) -> bool {
-        self.respawn_time <= now_unix
+    pub fn is_spawned(&self) -> bool {
+        self.respawn_delay_time == 0
+            || (self.respawn_time > 0 && !self.spawned_by_default)
+            || (self.respawn_time == 0 && self.spawned_by_default)
     }
+
+    /// `SetRespawnTime` (`GameObject.h:112`): arms the
+    /// despawn/respawn timer `secs` into the future
+    /// (0 clears both fields).
+    pub fn set_respawn_time(&mut self, secs: u32, now_unix: u64) {
+        if secs > 0 {
+            self.respawn_time = now_unix + u64::from(secs);
+            self.respawn_delay_time = i32::from_ne_bytes(secs.to_ne_bytes());
+        } else {
+            self.respawn_time = 0;
+            self.respawn_delay_time = 0;
+        }
+    }
+
+    /// Dynamic (non-DB) creation: `CreateGameObject` +
+    /// `Create` (`GameObject.cpp:102,173`) as used by
+    /// `WorldObject::SummonGameObject`, spell summon
+    /// effects and `BattleGround::AddObject`. The
+    /// constructor defaults ride `create`
+    /// (`m_spawnedByDefault = true` until
+    /// `SetOwnerGuid`/`SetSpellId` flips it).
+    ///
+    /// # Errors
+    ///
+    /// [`GoSpawnError`] for the C++ false returns.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_dynamic(
+        guid_low: u32,
+        info: GameObjectInfo,
+        position: Position,
+        map_id: u32,
+        rotation: [f32; 4],
+        anim_progress: u32,
+        go_state: u32,
+        force_active_objects: bool,
+    ) -> Result<GameObject, GoSpawnError> {
+        Self::create(
+            guid_low,
+            info,
+            position,
+            map_id,
+            rotation,
+            anim_progress,
+            go_state,
+            force_active_objects,
+        )
+    }
+}
+
+/// `GO_ANIMPROGRESS_DEFAULT`.
+pub const GO_ANIMPROGRESS_DEFAULT: u32 = 100;
+
+/// `GameObjectInfo::GetLinkedGameObjectEntry`
+/// (`GameObjectDefines.h:686`).
+#[must_use]
+pub fn linked_trap_entry(info: &GameObjectInfo) -> u32 {
+    let at = match info.go_type {
+        1 => 3,   // button.linkedTrapId
+        3 => 7,   // chest.linkedTrapId
+        8 => 2,   // spellFocus.linkedTrapId
+        10 => 12, // goober.linkedTrapId
+        _ => return 0,
+    };
+    info.data_u32(at)
 }
 
 /// `GameObjectInfo::IsLargeGameObject` (data indices from

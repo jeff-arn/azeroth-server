@@ -120,6 +120,10 @@ pub const SKILL_LINE: StoreDef = StoreDef {
     file: "SkillLine.dbc",
     fmt: "nixssssssssxxxxxxxxxxi",
 };
+pub const SKILL_LINE_ABILITY: StoreDef = StoreDef {
+    file: "SkillLineAbility.dbc",
+    fmt: "niiiiiiiiiiiiii",
+};
 pub const SKILL_RACE_CLASS_INFO: StoreDef = StoreDef {
     file: "SkillRaceClassInfo.dbc",
     fmt: "diiiiiix",
@@ -176,6 +180,10 @@ pub const TALENT_TAB: StoreDef = StoreDef {
     file: "TalentTab.dbc",
     fmt: "nxxxxxxxxxxxiix",
 };
+pub const TAXI_NODES: StoreDef = StoreDef {
+    file: "TaxiNodes.dbc",
+    fmt: "nifffssssssssxii",
+};
 pub const TAXI_PATH: StoreDef = StoreDef {
     file: "TaxiPath.dbc",
     fmt: "niii",
@@ -229,6 +237,7 @@ pub const ALL_STORES: &[StoreDef] = &[
     NAMES_RESERVED,
     QUEST_SORT,
     SKILL_LINE,
+    SKILL_LINE_ABILITY,
     SKILL_RACE_CLASS_INFO,
     SKILL_TIERS,
     SPELL_CATEGORY,
@@ -243,6 +252,7 @@ pub const ALL_STORES: &[StoreDef] = &[
     STABLE_SLOT_PRICES,
     TALENT,
     TALENT_TAB,
+    TAXI_NODES,
     TAXI_PATH,
     TAXI_PATH_NODE,
     TRANSPORT_ANIMATION,

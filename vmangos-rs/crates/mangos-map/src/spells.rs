@@ -9,8 +9,11 @@
 //! slots/durations/periodic ticks, creature death +
 //! respawn scheduling.
 //!
-//! Recorded subset deviations: no projectile delay
-//! (speed > 0 spells fail), spell mods are implemented
+//! Recorded subset deviations: projectile delay is
+//! implemented per target (dealer values computed at
+//! landing rather than snapshotted at launch, and the
+//! player spell-batching delay for instant spells is
+//! not modeled), spell mods are implemented
 //! for the wired ops (damage/dot, duration, range,
 //! crit chance/bonus, casting time, cost, cooldown,
 //! GCD, pushback resist, spell bonus damage; remaining
@@ -80,6 +83,9 @@ use crate::map::{CooldownEntry, LoadedCooldown, Map, MapEvent};
 
 /// `UNIT_FLAG_IN_COMBAT`.
 const UNIT_FLAG_IN_COMBAT: u32 = 0x0008_0000;
+/// Berserker Rage, whose first effect amplifies rage
+/// gained from damage taken (`Player::RewardRage`).
+const SPELL_BERSERKER_RAGE: u32 = 18_499;
 /// `CAST_FLAG_UNKNOWN1` (always set on non-triggered
 /// visible casts... kept minimal: set when cast time > 0
 /// like the ranged-weapon-independent clients expect).
@@ -94,6 +100,12 @@ const ATTR_EX4_IGNORE_RESISTANCES: u32 = 0x0000_0001;
 const ATTR_NO_AURA_CANCEL: u32 = 0x8000_0000;
 /// `SPELL_ATTR_COOLDOWN_ON_EVENT` (Attributes bit 25).
 const ATTR_COOLDOWN_ON_EVENT: u32 = 0x0200_0000;
+/// `SPELL_ATTR_NOT_SHAPESHIFT` (Attributes bit 16).
+const ATTR_NOT_SHAPESHIFT: u32 = 0x0001_0000;
+/// `SPELL_ATTR_EX2_ALLOW_WHILE_NOT_SHAPESHIFTED` (bit 19).
+const ATTR_EX2_ALLOW_WHILE_NOT_SHAPESHIFTED: u32 = 0x0008_0000;
+/// `SHAPESHIFT_FLAG_STANCE` (`SpellShapeshiftForm` flags1 bit 0).
+const SHAPESHIFT_FLAG_STANCE: u32 = 0x0000_0001;
 /// `SPELL_EFFECT_INTERRUPT_CAST` / `SPELL_EFFECT_KNOCK_BACK`
 /// for the binary-spell rule.
 const EFFECT_INTERRUPT_CAST: u32 = 68;
@@ -204,10 +216,49 @@ pub struct ActiveCast {
     pub triggered_by_aura_spell: u32,
     /// `m_triggeredBySpellInfo->Id` (0 = none).
     pub triggered_by_spell: u32,
+    /// Per-cast script state from
+    /// `SpellScript::OnInit` (fork script-instance
+    /// members): the pre-rolled effect index for
+    /// `spell_gnomeregan_collecting_fallout`.
+    pub script_effect_pick: Option<u32>,
     /// Original caster position (movement interrupts —
     /// handled by `apply_movement` cancellation, kept
     /// for diagnostics).
     pub position: Position,
+    /// `m_originalCasterGUID` when a caller casts on
+    /// another unit's behalf (Spirit Heal's gossip
+    /// select); `None` means the caster itself.
+    pub original_caster: Option<ObjectGuid>,
+}
+
+/// One projectile-delayed target hit (`Spell` in
+/// `SPELL_STATE_DELAYED`, `TargetInfo::timeDelay`):
+/// the launch already sent `SMSG_SPELL_GO` and
+/// rolled hit/miss; effects land when the timer
+/// elapses (`handle_delayed`). Damage/heal values
+/// are computed at landing here; the fork snapshots
+/// dealer values at launch
+/// (`HandleDelayedSpellLaunch`) — recorded
+/// deviation.
+pub(crate) struct DelayedSpellHit {
+    pub caster: ObjectGuid,
+    pub spell_id: u32,
+    pub caster_level: u32,
+    pub victim: ObjectGuid,
+    pub target: CastTarget,
+    pub applied_mods: Vec<(u32, u8)>,
+    pub ctx: ProcRaiseCtx,
+    pub custom_base_points: [Option<i32>; 3],
+    pub from_cast_item: bool,
+    pub cast_counter: u8,
+    pub triggered_by_aura_spell: u32,
+    pub triggered_by_spell: u32,
+    pub script_effect_pick: Option<u32>,
+    pub original_caster: Option<ObjectGuid>,
+    pub remaining_ms: i32,
+    /// Last scheduled hit of its cast: runs the
+    /// `finish()` tail after applying.
+    pub finish: bool,
 }
 
 /// Why a cast did not start (for the actor's logging;
@@ -217,6 +268,16 @@ pub enum CastOutcome {
     Started,
     Failed(u8),
     UnknownSpell,
+}
+
+/// `AuraRemoveMode` subset the script seams read
+/// (fork `Aura::GetRemoveMode`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AuraRemoveMode {
+    Default,
+    Cancel,
+    Dispel,
+    Expire,
 }
 
 /// One due periodic aura tick, collected under the
@@ -251,7 +312,28 @@ impl Map {
         &mut self.rng
     }
 
+    /// `SpellCaster::GetLevel` dispatch: units read
+    /// `UNIT_FIELD_LEVEL`; gameobjects read the fork
+    /// `GameObject::GetLevel` (`GameObject.cpp:2408`:
+    /// chest/trap info level, else `GAMEOBJECT_LEVEL`,
+    /// else `PLAYER_MAX_LEVEL`). Victim-side callers
+    /// only ever pass unit guids.
     pub(crate) fn unit_level(&self, guid: ObjectGuid) -> u32 {
+        if guid.is_game_object() {
+            return self.gameobjects.get(&guid).map_or(0, |go| {
+                let info_level = match go.info.go_type {
+                    3 => go.info.data_u32(9), // chest.level
+                    6 => go.info.data_u32(1), // trap.level
+                    _ => 0,
+                };
+                let level = if info_level != 0 {
+                    info_level
+                } else {
+                    go.world.object.values().get_u32(offsets::GAMEOBJECT_LEVEL)
+                };
+                if level > 0 { level } else { 60 }
+            });
+        }
         self.unit_value_u32(guid, offsets::UNIT_FIELD_LEVEL)
     }
 
@@ -1011,18 +1093,94 @@ impl Map {
             return true;
         }
         self.players.get(&caster).is_some_and(|entry| {
+            // `HasSpell`: persisted rows plus the
+            // race/class defaults `LearnDefaultSpells`
+            // adds as dependent spells at create and at
+            // every load (`Player.cpp:521`, `:14872`).
+            // Dependent spells are never written to
+            // `character_spell` (fork `_SaveSpells`
+            // skips them), so they cannot live in
+            // `deferred.spells`; a character created
+            // through the client knows only defaults
+            // until its first trained spell.
             entry
                 .player
                 .deferred
                 .spells
                 .iter()
                 .any(|s| s.spell == spell_id && s.active != 0)
+                || self
+                    .stores
+                    .player_infos
+                    .default_spells(
+                        u32::from(entry.player.unit.race()),
+                        u32::from(entry.player.unit.class()),
+                    )
+                    .contains(&spell_id)
         })
     }
 
     /// `Unit::CastSpell` + `Spell::prepare` subset.
     /// Starts the cast (instant spells complete inside
     /// this call, like C++ update(0) chaining).
+    /// `SpellEntry::GetErrorAtShapeshiftedCast`
+    /// (`SpellEntry.cpp:1012-1054`) for the caster's current
+    /// `UNIT_FIELD_BYTES_1` byte 2 form. `None` is
+    /// `SPELL_CAST_OK`.
+    fn shapeshift_cast_error(&mut self, caster: ObjectGuid, spell: &SpellEntry) -> Option<u8> {
+        // Talent learn spells ignore stance requirements
+        // (client-side stance display only).
+        if spell
+            .effects
+            .iter()
+            .any(|effect| effect.effect == effect::LEARN_SPELL)
+            && self.stores.spells.talent_spell_cost(spell.id) > 0
+        {
+            return None;
+        }
+        let form = self
+            .unit_base_mut(caster)
+            .map_or(0, |u| u.values().get_byte(offsets::UNIT_FIELD_BYTES_1, 2));
+        let stance_mask = if form == 0 {
+            0
+        } else {
+            1u32 << (u32::from(form) - 1)
+        };
+        if stance_mask & spell.stances_not != 0 {
+            return Some(cast_result::FAILED_NOT_SHAPESHIFT);
+        }
+        if stance_mask & spell.stances != 0 {
+            return None;
+        }
+        let act_as_shifted = if form > 0 {
+            // Fork: an unknown form logs and returns OK. This
+            // also leaves test worlds without the DBC table on
+            // their previous behavior for non-explicit forms;
+            // production loads every form row.
+            let flags1 = self
+                .stores
+                .shapeshift_forms
+                .get(&u32::from(form))
+                .copied()?;
+            flags1 & SHAPESHIFT_FLAG_STANCE == 0
+        } else {
+            false
+        };
+        if act_as_shifted {
+            if spell.attributes & ATTR_NOT_SHAPESHIFT != 0 {
+                return Some(cast_result::FAILED_NOT_SHAPESHIFT);
+            }
+            if spell.stances != 0 {
+                return Some(cast_result::FAILED_ONLY_SHAPESHIFT);
+            }
+        } else if spell.attributes_ex2 & ATTR_EX2_ALLOW_WHILE_NOT_SHAPESHIFTED == 0
+            && spell.stances != 0
+        {
+            return Some(cast_result::FAILED_ONLY_SHAPESHIFT);
+        }
+        None
+    }
+
     #[allow(clippy::too_many_lines)] // one prepare() port
     pub fn cast_spell(
         &mut self,
@@ -1031,9 +1189,15 @@ impl Map {
         target: CastTarget,
         options: CastOptions,
     ) -> CastOutcome {
+        let original_caster = self.next_original_caster.take();
         let Some(spell) = self.stores.spells.get(spell_id).cloned() else {
             return CastOutcome::UnknownSpell;
         };
+        // `SpellScript::OnInit` (fork `Spell`
+        // construction, `Spell.cpp:309`): per-cast
+        // script state, rolled before checks.
+        let mut script_effect_pick: Option<u32> = None;
+        self.spell_script_on_init(caster, &spell, &mut script_effect_pick);
         let fail = |map: &mut Map, reason: u8| {
             if !options.triggered {
                 map.send_cast_result(caster, spell_id, reason);
@@ -1080,10 +1244,10 @@ impl Map {
         if !options.triggered && self.casts.contains_key(&caster) {
             return fail(self, cast_result::FAILED_SPELL_IN_PROGRESS);
         }
-        // Projectile delay is not modeled in the slice.
-        if spell.speed > 0.0 {
-            return fail(self, cast_result::FAILED_UNKNOWN);
-        }
+        // Projectile spells (`speed > 0`) cast
+        // normally; their per-target effects are
+        // delayed at execution by distance/speed
+        // (`SPELL_STATE_DELAYED`).
         // Charged spell modifiers dropped for this
         // cast (`m_appliedMods`).
         let mut applied_mods: Vec<(u32, u8)> = Vec::new();
@@ -1094,6 +1258,11 @@ impl Map {
                 .is_some_and(|u| u.gcd_until_ms > now);
             if gcd || self.has_cooldown(caster, &spell, options.cast_item) {
                 return fail(self, cast_result::FAILED_NOT_READY);
+            }
+            // `GetErrorAtShapeshiftedCast` strict gate
+            // (`Spell::CheckCast`, non-triggered only).
+            if let Some(reason) = self.shapeshift_cast_error(caster, &spell) {
+                return fail(self, reason);
             }
             // Item casts are free
             // (`CalculatePowerCost` returns 0 with a
@@ -1147,7 +1316,7 @@ impl Map {
         // (fork `CalculateCastTime` has no triggered
         // zeroing; the spell simply shows no cast bar
         // and ticks outside the current-cast slot).
-        let cast_time = {
+        let mut cast_time = {
             let raw = spell.cast_time_ms(&self.stores.spells.tables);
             #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
             {
@@ -1162,6 +1331,9 @@ impl Map {
                 .max(0.0) as u32
             }
         };
+        // `SpellScript::OnSuccessfulStart` (fork
+        // `Spell::Prepare`, `Spell.cpp:3585`).
+        self.spell_script_on_successful_start(caster, &spell, &mut cast_time);
         let counter = self.unit_base_mut(caster).map_or(0, |u| {
             let c = u.cast_counter;
             u.cast_counter = u.cast_counter.wrapping_add(1);
@@ -1192,7 +1364,9 @@ impl Map {
             custom_base_points: options.custom_base_points,
             triggered_by_aura_spell: options.triggered_by_aura_spell,
             triggered_by_spell: options.triggered_by_spell,
+            script_effect_pick,
             position,
+            original_caster,
         };
         if cast_time > 0 && !options.triggered {
             self.send_spell_start(caster, &cast, &spell);
@@ -1216,6 +1390,25 @@ impl Map {
             self.update_cast(caster, 0);
         }
         CastOutcome::Started
+    }
+
+    /// `Unit::CastSpell` with an explicit original
+    /// caster (fork `Spell::m_originalCasterGUID`),
+    /// used by the spirit-healer gossip arm.
+    pub fn cast_spell_with_original_caster(
+        &mut self,
+        caster: ObjectGuid,
+        original_caster: ObjectGuid,
+        spell_id: u32,
+        target: CastTarget,
+        options: CastOptions,
+    ) -> CastOutcome {
+        let previous = self.next_original_caster.replace(original_caster);
+        let outcome = self.cast_spell(caster, spell_id, target, options);
+        if self.next_original_caster == Some(original_caster) {
+            self.next_original_caster = previous;
+        }
+        outcome
     }
 
     fn check_target(
@@ -1637,12 +1830,74 @@ impl Map {
         self.execute_cast(caster, cast);
     }
 
+    /// Fork per-target projectile flight time
+    /// (`floor(dist / speed * 1000)`, center distance
+    /// clamped to at least 5; self hits never delay).
+    fn projectile_delay_ms(&self, caster: ObjectGuid, victim: ObjectGuid, speed: f32) -> i32 {
+        if speed <= 0.0 || victim == caster {
+            return 0;
+        }
+        let (Some(from), Some(to)) = (self.unit_position(caster), self.unit_position(victim))
+        else {
+            return 0;
+        };
+        let dist = ((from.x - to.x).powi(2) + (from.y - to.y).powi(2) + (from.z - to.z).powi(2))
+            .sqrt()
+            .max(5.0);
+        #[allow(clippy::cast_possible_truncation)]
+        let ms = (dist / speed * 1000.0).floor() as i32;
+        ms
+    }
+
+    /// Land one projectile-delayed hit
+    /// (`handle_delayed` -> `DoAllEffectOnTarget`),
+    /// then the cast's `finish()` tail on its last
+    /// scheduled hit.
+    fn apply_delayed_hit(&mut self, mut hit: DelayedSpellHit) {
+        let Some(spell) = self.stores.spells.get(hit.spell_id).cloned() else {
+            return;
+        };
+        // The fork keeps the spell while its caster
+        // is in the world (a dead caster's projectile
+        // still lands); a caster removed from the map
+        // deletes the spell, and a removed victim
+        // drops just this hit.
+        if self.unit_base(hit.caster).is_none() && !self.gameobjects.contains_key(&hit.caster) {
+            return;
+        }
+        if self.unit_base(hit.victim).is_some() {
+            self.apply_effects(
+                hit.caster,
+                hit.original_caster.unwrap_or(hit.caster),
+                hit.caster_level,
+                &spell,
+                hit.victim,
+                match hit.target {
+                    CastTarget::Dest(pos) => Some(pos),
+                    _ => None,
+                },
+                Some(&mut hit.applied_mods),
+                Some(&hit.ctx),
+                hit.custom_base_points,
+                hit.from_cast_item,
+                hit.cast_counter,
+                hit.triggered_by_aura_spell,
+                hit.triggered_by_spell,
+                hit.script_effect_pick,
+            );
+        }
+        if hit.finish {
+            self.spell_script_on_successful_finish(hit.caster, &spell, hit.target);
+            self.remove_exhausted_spell_mods(hit.caster, &hit.applied_mods);
+        }
+    }
+
     /// The `cast()` execution body for a cast whose
     /// timer has elapsed (also run inline for
     /// slot-less triggered casts, fork prepare:
     /// triggered timer 0 executes in the call point).
     #[allow(clippy::too_many_lines)] // one cast() port (split from update_cast)
-    fn execute_cast(&mut self, caster: ObjectGuid, mut cast: ActiveCast) {
+    pub(crate) fn execute_cast(&mut self, caster: ObjectGuid, mut cast: ActiveCast) {
         let Some(spell) = self.stores.spells.get(cast.spell_id).cloned() else {
             return;
         };
@@ -1660,7 +1915,10 @@ impl Map {
         // GCD is added only for non-triggered casts
         // (prepare); `SendSpellCooldown` adds the
         // spell/category cooldown for every cast.
-        if cast.cast_item.is_none() && !cast.triggered_by_aura {
+        if cast.cast_item.is_none()
+            && !cast.triggered_by_aura
+            && (caster.is_player() || caster.is_creature_or_pet())
+        {
             let power_cost = spell.power_cost(
                 self.unit_power(caster, spell.power_type),
                 self.unit_max_power(caster, spell.power_type),
@@ -1714,6 +1972,10 @@ impl Map {
         } else {
             self.add_cooldowns(caster, &spell, &mut cast.applied_mods, None);
         }
+        // `SpellScript::OnCast` (fork `Spell::cast`
+        // after TakePower/TakeReagents,
+        // `Spell.cpp:3827`).
+        self.spell_script_on_cast(caster, &spell, cast.target);
 
         let victims = self.collect_targets(caster, &spell, cast.target);
         // `EffectPersistentAA` runs once per cast at
@@ -1777,6 +2039,13 @@ impl Map {
         }
 
         self.send_spell_go(caster, &cast, &spell, &hits, &misses);
+        // `SpellScript::OnHit` miss path (fork
+        // `Spell.cpp:1584`).
+        if cast.can_trigger_procs {
+            for (victim, _) in &misses {
+                self.spell_script_on_hit(caster, &spell, *victim, false);
+            }
+        }
         // `TakeCastItem` runs in `cast()` right after
         // `SendSpellGo` (the item must outlive the GO
         // packet's cast-item GUID); triggered casts
@@ -1828,9 +2097,43 @@ impl Map {
             },
             applied_mods: cast.applied_mods.clone(),
         };
+        // Projectile delay (`SPELL_STATE_DELAYED`):
+        // hits with a flight time are scheduled and
+        // land in `update_casts`; the rest apply now.
+        // Channeled casts keep the immediate path (no
+        // channeled spell in the modeled subset has a
+        // projectile speed).
+        let mut delayed: Vec<DelayedSpellHit> = Vec::new();
         for victim in hit_victims {
+            let delay = if cast.channeled {
+                0
+            } else {
+                self.projectile_delay_ms(caster, victim, spell.speed)
+            };
+            if delay > 0 {
+                delayed.push(DelayedSpellHit {
+                    caster,
+                    spell_id: spell.id,
+                    caster_level,
+                    victim,
+                    target: cast.target,
+                    applied_mods: cast.applied_mods.clone(),
+                    ctx: ctx.clone(),
+                    custom_base_points: cast.custom_base_points,
+                    from_cast_item: cast.cast_item.is_some(),
+                    cast_counter: cast.cast_counter,
+                    triggered_by_aura_spell: cast.triggered_by_aura_spell,
+                    triggered_by_spell: cast.triggered_by_spell,
+                    script_effect_pick: cast.script_effect_pick,
+                    original_caster: cast.original_caster,
+                    remaining_ms: delay,
+                    finish: false,
+                });
+                continue;
+            }
             self.apply_effects(
                 caster,
+                cast.original_caster.unwrap_or(caster),
                 caster_level,
                 &spell,
                 victim,
@@ -1845,16 +2148,24 @@ impl Map {
                 cast.cast_counter,
                 cast.triggered_by_aura_spell,
                 cast.triggered_by_spell,
+                cast.script_effect_pick,
             );
         }
-        let _ = caster_level;
         // Start channeling (the `handle_immediate`
         // tail). Effects are already applied in this
         // subset, so `MSG_CHANNEL_START` follows their
         // packets where the fork sends it first.
         if cast.channeled && !cast.channeling {
             self.start_channel(caster, cast, &spell, &hits);
+        } else if let Some(last) = delayed.last_mut() {
+            // `finish()` runs when the last delayed
+            // target lands (fork `handle_delayed`).
+            last.finish = true;
+            self.pending_delayed.extend(delayed);
         } else {
+            // `SpellScript::OnSuccessfulFinish`
+            // (fork `Spell::finish`, `Spell.cpp:4519`).
+            self.spell_script_on_successful_finish(caster, &spell, cast.target);
             self.remove_exhausted_spell_mods(caster, &cast.applied_mods);
         }
     }
@@ -2070,9 +2381,9 @@ impl Map {
             CastTarget::Dest(pos) => pos,
             CastTarget::Unit(g) => self
                 .unit_position(g)
-                .or_else(|| self.unit_position(caster))
+                .or_else(|| self.world_object_position(caster))
                 .unwrap_or_default(),
-            CastTarget::SelfCast => self.unit_position(caster).unwrap_or_default(),
+            CastTarget::SelfCast => self.world_object_position(caster).unwrap_or_default(),
         }
     }
 
@@ -2175,7 +2486,7 @@ impl Map {
             },
             tgt::ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC | tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC => {
                 let center = if mode == tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC {
-                    self.unit_position(caster).unwrap_or_default()
+                    self.world_object_position(caster).unwrap_or_default()
                 } else {
                     self.cast_dest(caster, spell, target)
                 };
@@ -2187,7 +2498,7 @@ impl Map {
                 // radius, else max range) inside the
                 // spell's cone arc (negative arc =
                 // back cone).
-                let center = self.unit_position(caster).unwrap_or_default();
+                let center = self.world_object_position(caster).unwrap_or_default();
                 let radius = if spell.effects[0].radius_index != 0 {
                     self.effect_radius(spell, 0)
                 } else {
@@ -2209,7 +2520,7 @@ impl Map {
             }
             tgt::ENUM_UNITS_FRIEND_AOE_AT_DEST_LOC | tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC => {
                 let center = if mode == tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC {
-                    self.unit_position(caster).unwrap_or_default()
+                    self.world_object_position(caster).unwrap_or_default()
                 } else {
                     self.cast_dest(caster, spell, target)
                 };
@@ -2229,7 +2540,7 @@ impl Map {
                 // `SPELL_TARGETS_ALL` around the source and
                 // drops the caster; `spell_script_target`
                 // bounds filtering is not modeled yet.
-                let center = self.unit_position(caster).unwrap_or_default();
+                let center = self.world_object_position(caster).unwrap_or_default();
                 let radius = radius;
                 let target_b = spell
                     .effects
@@ -2249,6 +2560,77 @@ impl Map {
                     self.units_around(caster, center, radius, false)
                 } else {
                     vec![caster]
+                }
+            }
+            // `TARGET_NONE` (A=0,B=0 routes here too)
+            // and `TARGET_LOCATION_CASTER_DEST`: the
+            // fork's per-effect custom fill
+            // (`Spell.cpp:3126-3316`). Modeled groups:
+            // the learn/create/resurrect family takes
+            // the explicit unit target, trigger/skill
+            // effects take the caster, modifier auras
+            // take the caster, dummy defaults to the
+            // unit target. UNMODELED: the remaining
+            // fork fills (summons, enchants, cannibalize
+            // and kin) keep the caster fallback.
+            tgt::NONE | tgt::LOCATION_CASTER_DEST => {
+                let eff = &spell.effects[eff_index];
+                let unit_target = match target {
+                    CastTarget::Unit(g) => g,
+                    CastTarget::SelfCast | CastTarget::Dest(_) => caster,
+                };
+                match eff.effect {
+                    // Fork unit-target group: BIND,
+                    // PARRY, BLOCK, CREATE_ITEM,
+                    // TRIGGER_MISSILE, LEARN_SPELL,
+                    // SKILL_STEP, ADD_HONOR,
+                    // PROFICIENCY, SUMMON_POSSESSED,
+                    // SUMMON_OBJECT_WILD,
+                    // SELF_RESURRECT, REPUTATION,
+                    // SEND_TAXI, plus SUMMON_PLAYER,
+                    // RESURRECT and DUMMY's default.
+                    11
+                    | 22
+                    | 23
+                    | 24
+                    | 32
+                    | 36
+                    | 44
+                    | 45
+                    | 60
+                    | 73
+                    | 76
+                    | 85
+                    | 94
+                    | 103
+                    | 123
+                    | effect::DUMMY
+                    | effect::RESURRECT
+                    | effect::RESURRECT_NEW => {
+                        vec![unit_target]
+                    }
+                    // Fork caster group: TRIGGER_SPELL
+                    // (in the unit-target group but
+                    // self-cast), SUMMON_CHANGE_ITEM,
+                    // SUMMON_GUARDIAN, ADD_FARSIGHT,
+                    // STUCK, DESTROY_ALL_TOTEMS,
+                    // CREATE_HOUSE, SKILL.
+                    34 | 42 | 72 | 81 | 84 | 110 | effect::TRIGGER_SPELL | effect::SKILL => {
+                        vec![caster]
+                    }
+                    effect::APPLY_AURA => {
+                        // Flat/pct spell-modifier auras
+                        // land on the caster; other
+                        // auras take the unit target.
+                        if eff.apply_aura_name == aura_type::ADD_FLAT_MODIFIER
+                            || eff.apply_aura_name == aura_type::ADD_PCT_MODIFIER
+                        {
+                            vec![caster]
+                        } else {
+                            vec![unit_target]
+                        }
+                    }
+                    _ => vec![caster],
                 }
             }
             _ => vec![caster],
@@ -2367,6 +2749,7 @@ impl Map {
     fn apply_effects(
         &mut self,
         caster: ObjectGuid,
+        affective_caster: ObjectGuid,
         caster_level: u32,
         spell: &SpellEntry,
         victim: ObjectGuid,
@@ -2378,6 +2761,7 @@ impl Map {
         cast_counter: u8,
         triggered_by_aura_spell: u32,
         triggered_by_spell: u32,
+        script_effect_pick: Option<u32>,
     ) {
         // EventAI SpellHit hooks (Slice 6b), once per
         // hit target as in `DoAllEffectOnTarget`.
@@ -2413,6 +2797,12 @@ impl Map {
                 return;
             }
         }
+        // `SpellScript::OnHit` (fork `Spell.cpp:1489`
+        // family; hit path — the miss path fires from
+        // `finish_cast`).
+        if proc_ctx.is_some_and(|c| c.can_trigger) {
+            self.spell_script_on_hit(caster, spell, victim, true);
+        }
         // In-combat flags (DealDamage side effects land
         // with effects too via combat in ApplyAura).
         let mut holder_applied = false;
@@ -2437,6 +2827,7 @@ impl Map {
                 &mut script_damage,
                 triggered_by_aura_spell,
                 triggered_by_spell,
+                script_effect_pick,
             ) {
                 continue;
             }
@@ -2484,8 +2875,14 @@ impl Map {
                             remove.push(idx);
                         }
                     }
+                    let dispelled_any = !remove.is_empty();
                     for idx in remove.into_iter().rev() {
-                        self.remove_aura_at(victim, idx);
+                        self.remove_aura_at_mode(victim, idx, AuraRemoveMode::Dispel);
+                    }
+                    // `SpellScript::OnSuccessfulDispel`
+                    // (`SpellEffects.cpp:2521`).
+                    if dispelled_any {
+                        self.spell_script_on_successful_dispel(caster, spell, i);
                     }
                 }
                 // `EffectLearnSpell` (fork
@@ -2509,6 +2906,24 @@ impl Map {
                                 WorldPacket::with_body(op::SMSG_LEARNED_SPELL, payload.into_vec());
                             self.send_to_player(victim, packet);
                         }
+                    }
+                }
+                // `EffectSendTaxi`
+                // (`SpellEffects.cpp:5380`): start the
+                // misc-value taxi path for a player
+                // victim (nocheck activation).
+                effect::SEND_TAXI => {
+                    if victim.is_player()
+                        && let Ok(path_id) = u32::try_from(eff.misc_value)
+                        && let Some(path) = self.stores.taxi.path_by_id(path_id).copied()
+                    {
+                        self.activate_taxi_path_to(
+                            victim,
+                            &[path.from, path.to],
+                            None,
+                            spell.id,
+                            true,
+                        );
                     }
                 }
                 effect::INSTAKILL => {
@@ -2750,6 +3165,19 @@ impl Map {
                         pet_level,
                     );
                 }
+                // `EffectSummonObjectWild` (Tier 4
+                // B0-5, `SpellEffects.cpp:3490`).
+                effect::SUMMON_OBJECT_WILD => {
+                    self.summon_object_wild_effect(caster, spell, i, client_dest);
+                }
+                // `EffectSummonObject` slots 1-4
+                // (`SpellEffects.cpp:5045`).
+                effect::SUMMON_OBJECT_SLOT1
+                | effect::SUMMON_OBJECT_SLOT2
+                | effect::SUMMON_OBJECT_SLOT3
+                | effect::SUMMON_OBJECT_SLOT4 => {
+                    self.summon_object_effect(caster, spell, i, client_dest);
+                }
                 // SPELL_EFFECT_LEARN_PET_SPELL.
                 effect::LEARN_PET_SPELL
                     if victim == caster && caster.is_player() && eff.trigger_spell != 0 =>
@@ -2813,6 +3241,7 @@ impl Map {
                     let damage = self.effect_value_bp(spell, i, caster_level, bp[i]);
                     self.effect_dummy(
                         caster,
+                        affective_caster,
                         spell,
                         i,
                         victim,
@@ -3303,7 +3732,7 @@ impl Map {
             let Some(entry) = self.players.get_mut(&caster) else {
                 return;
             };
-            let inv = &mut entry.player.saved.inventory;
+            let inv = &mut entry.player.deferred.inventory;
             let Some(idx) = inv
                 .iter()
                 .position(|row| row.item.item_guid == item.item_guid)
@@ -4746,6 +5175,44 @@ impl Map {
         }
     }
 
+    /// `Player::RewardRage` (`Player.cpp:2249-2272`):
+    /// rage from direct damage dealt, or from damage
+    /// taken while surviving it. Power is stored in
+    /// tenths, hence the final `* 10` conversion.
+    pub(crate) fn reward_rage(&mut self, player_guid: ObjectGuid, damage: u32, attacker: bool) {
+        if damage == 0 || !player_guid.is_player() {
+            return;
+        }
+        let Some(player) = self.players.get(&player_guid).map(|entry| &entry.player) else {
+            return;
+        };
+        if u32::from(player.unit.power_type()) != power::RAGE {
+            return;
+        }
+        let berserker_rage = !attacker
+            && player.unit.auras.iter().any(|holder| {
+                holder.spell_id == SPELL_BERSERKER_RAGE && holder.effects[0].is_some()
+            });
+        let amount = rage_reward_amount(
+            player.unit.level(),
+            damage,
+            attacker,
+            berserker_rage,
+            self.config.regen_rates.rage_income,
+        );
+        if amount == 0 {
+            return;
+        }
+        if let Some(unit) = self.unit_base_mut(player_guid) {
+            let current = unit.power(mangos_entities::unit::POWER_RAGE);
+            let max = unit.max_power(mangos_entities::unit::POWER_RAGE);
+            unit.set_power(
+                mangos_entities::unit::POWER_RAGE,
+                current.saturating_add(amount).min(max),
+            );
+        }
+    }
+
     /// Health application + combat flag + death
     /// (`Unit::DealDamage` subset). `is_dot` is the
     /// fork `DamageEffectType::DOT` arm (periodic ticks
@@ -4792,6 +5259,9 @@ impl Map {
             if damage == 0 {
                 return;
             }
+            // Loot tap (`DealDamage` `SetLootRecipient`
+            // block, before absorb/kill resolution).
+            self.tap_creature(victim, attacker);
         }
         // `SetInvincibilityHpThreshold` floor (Slice 6b).
         let mut damage = damage;
@@ -4865,6 +5335,35 @@ impl Map {
         if let Some(u) = self.unit_base_mut(victim) {
             u.set_health(new_health);
         }
+        // `UnitDamaged` (player victims): honor
+        // damage history for `RewardHonorOnDeath`;
+        // attacker resolves to the affecting player
+        // (owner for pets/summons) or EMPTY.
+        if victim.is_player() && victim != attacker {
+            let affecting = if attacker.is_player() {
+                attacker
+            } else if let Some(owner) = self.pet_owner(attacker).filter(|g| g.is_player()) {
+                owner
+            } else if let Some(summoner) = self
+                .summons
+                .get(&attacker)
+                .map(|st| st.summoner)
+                .filter(|g| g.is_player())
+            {
+                summoner
+            } else {
+                ObjectGuid::EMPTY
+            };
+            if let Some(u) = self.unit_base_mut(victim) {
+                u.record_damage_taken(affecting, damage, now);
+            }
+        }
+        // Rage from direct damage dealt (`DealDamage`
+        // attacker arm). The amount is the post-absorb
+        // damage, matching the value reaching health.
+        if !is_dot && attacker != victim {
+            self.reward_rage(attacker, damage, true);
+        }
         if absorbed_full {
             // Fully absorbed: combat + pushback above
             // still apply in the fork; no kill/threat.
@@ -4882,6 +5381,11 @@ impl Map {
         if new_health == 0 {
             self.kill_unit(victim, Some(attacker));
             return;
+        }
+        // Rage from damage received, only in the fork's
+        // non-lethal branch.
+        if victim.is_player() && victim != attacker {
+            self.reward_rage(victim, damage, false);
         }
         // Slice 6: `AttackedBy` — creature victims take
         // threat and engage (damage threat is 1:1 in the
@@ -4903,8 +5407,10 @@ impl Map {
 
     /// Death: state, cleanup, respawn scheduling
     /// (`Kill`/`setDeathState(JUST_DIED)` subset).
+    /// Public: GM-kill and live death-flow probes
+    /// enter here, like the fork's `Unit::Kill`.
     #[allow(clippy::too_many_lines)]
-    pub(crate) fn kill_unit(&mut self, victim: ObjectGuid, killer: Option<ObjectGuid>) {
+    pub fn kill_unit(&mut self, victim: ObjectGuid, killer: Option<ObjectGuid>) {
         let is_creature = victim.is_creature();
         if let Some(killer) = killer
             && self.unit_is_alive(victim)
@@ -4916,18 +5422,50 @@ impl Map {
             if !u.is_alive() {
                 return;
             }
-            u.death_state = if is_creature {
-                DeathState::JustDied
-            } else {
-                DeathState::Dead
-            };
+            u.death_state = DeathState::JustDied;
             u.set_health(0);
+        }
+        if is_creature {
+            // `Creature::SetDeathState(JUST_DIED)`
+            // arms the corpse decay timer and promotes
+            // to `CORPSE` in the same call (flying
+            // `CORPSE_FALLING` unmodeled); without
+            // this the corpse fails the alive-viewer
+            // grid rule on the next visibility scan
+            // and despawns instantly, unlootable.
+            if let Some(c) = self.creatures.get_mut(&victim) {
+                c.corpse_decay_timer = if c.info.despawn_instantly() {
+                    1
+                } else {
+                    i64::from(c.corpse_delay) * 1000
+                };
+                c.unit.death_state = DeathState::Corpse;
+            }
+        }
+        if victim.is_player() {
+            // `RewardHonorOnDeath` (`Unit::Kill`
+            // player-victim arm).
+            self.reward_honor_on_death(victim);
+            if self.bg.is_none() {
+                // `Player::KillPlayer` (fork converts
+                // `JUST_DIED` → `CORPSE` one update
+                // later): repop timer, durability,
+                // reclaim-delay ladder.
+                self.kill_player(victim, killer);
+            } else if let Some(u) = self.unit_base_mut(victim) {
+                // Battlegrounds keep their spirit-guide
+                // ghost wave, which consumes `DEAD`.
+                u.death_state = DeathState::Dead;
+            }
         }
         // Kill XP (`Unit::Kill` rewards precede the
         // AI death hooks in the fork as well).
         if is_creature {
             self.reward_kill_xp(victim, killer);
             self.quest_kill_credit(victim, killer);
+            // Corpse loot generation (fork `Kill`
+            // generates before `JustDied` hooks).
+            self.generate_creature_loot(victim, killer);
         }
         // EventAI death/kill hooks run while the AI
         // state still exists (`JustDied`/`KilledUnit`).
@@ -4956,6 +5494,9 @@ impl Map {
         if is_creature {
             self.instance_on_creature_death(victim);
             self.go_ai_summoned_creature_just_died(victim);
+            // Tier 4 B0-6: escort/follower `JustDied`
+            // quest-fail arm.
+            self.escort_on_just_died(victim);
             self.creature_script_just_died(victim, killer);
             self.creature_script_summoned_creature_just_died(victim);
             if let Some(summoner) = self.summons.get(&victim).map(|st| st.summoner)
@@ -5026,6 +5567,37 @@ impl Map {
             guid: victim,
             killer,
         });
+    }
+
+    /// Corpse decay tick (`Creature::Update`
+    /// `CORPSE` arm subset): count the decay timer
+    /// down; on expiry `RemoveCorpse` — state
+    /// `DEAD` (invisible to the alive-viewer grid
+    /// rule) and any unlooted loot is gone. The
+    /// fork's respawn-time removal arm is covered
+    /// by `update_respawns` re-materializing the
+    /// spawn. Dead-by-default corpses never decay.
+    pub(crate) fn update_corpse_decay(&mut self, diff_ms: u32) {
+        let diff = i64::from(diff_ms);
+        let mut expired = Vec::new();
+        for (guid, creature) in &mut self.creatures {
+            if creature.unit.death_state != DeathState::Corpse || creature.is_dead_by_default {
+                continue;
+            }
+            if creature.corpse_decay_timer <= diff {
+                expired.push(*guid);
+            } else {
+                creature.corpse_decay_timer -= diff;
+            }
+        }
+        for guid in expired {
+            if let Some(creature) = self.creatures.get_mut(&guid) {
+                creature.corpse_decay_timer = 0;
+                creature.unit.death_state = DeathState::Dead;
+            }
+            self.loots.remove(&guid);
+            self.loot_taps.remove(&guid);
+        }
     }
 
     /// Respawn due creatures (`Creature::Respawn`
@@ -5666,7 +6238,7 @@ impl Map {
         // AuraScript::OnBeforeApply (holder level,
         // per present effect) runs before the apply
         // handlers, fork ApplyModifier order.
-        self.aura_script_on_before_apply(victim, &mut holder, true);
+        self.aura_script_on_before_apply(victim, &mut holder, true, AuraRemoveMode::Default);
         let landed = if let Some(unit) = self.unit_base_mut(victim) {
             Self::aura_effect_apply(unit, &holder, true);
             Self::write_aura_slot(unit, &holder, false);
@@ -5709,6 +6281,44 @@ impl Map {
         self.refresh_skill_bonuses(victim);
         self.refresh_speed(victim);
         self.refresh_cc_flags(victim);
+        self.refresh_ghost_flag(victim);
+    }
+
+    /// Holder-derived ghost bits
+    /// (`Aura::HandleAuraGhost`): the
+    /// `UNIT_VIS_FLAGS_GHOST` vis byte on any unit,
+    /// plus `PLAYER_FLAGS_GHOST` on players, while
+    /// any `SPELL_AURA_GHOST` effect is present.
+    /// Recompute-style like `refresh_cc_flags`.
+    pub(crate) fn refresh_ghost_flag(&mut self, guid: ObjectGuid) {
+        // `UNIT_BYTES_1_OFFSET_VIS_FLAG` /
+        // `UNIT_VIS_FLAGS_GHOST` (`UnitDefines.h:88,147`).
+        const VIS_FLAG_OFFSET: u8 = 3;
+        const VIS_FLAG_GHOST: u8 = 0x01;
+        let ghost = self
+            .aura_holders(guid)
+            .iter()
+            .flat_map(|h| h.effects.iter().flatten())
+            .any(|e| e.aura_type == aura_type::GHOST);
+        if let Some(unit) = self.unit_base_mut(guid) {
+            let values = unit.world.object.values_mut();
+            if ghost {
+                values.set_byte_flag(offsets::UNIT_FIELD_BYTES_1, VIS_FLAG_OFFSET, VIS_FLAG_GHOST);
+            } else {
+                values.remove_byte_flag(
+                    offsets::UNIT_FIELD_BYTES_1,
+                    VIS_FLAG_OFFSET,
+                    VIS_FLAG_GHOST,
+                );
+            }
+            if guid.is_player() {
+                if ghost {
+                    values.set_flag(offsets::PLAYER_FLAGS, 0x0000_0010);
+                } else {
+                    values.remove_flag(offsets::PLAYER_FLAGS, 0x0000_0010);
+                }
+            }
+        }
     }
 
     /// Holder-derived `UNIT_FIELD_FLAGS` CC bits
@@ -5937,7 +6547,7 @@ impl Map {
     /// config-true temporary-unsummon/resummon
     /// arms have no temporary-pet state yet —
     /// recorded in TIER2-PROGRESS Slice 6.2.
-    fn pet_mount_transition(&mut self, guid: ObjectGuid, mounting: bool) {
+    pub(crate) fn pet_mount_transition(&mut self, guid: ObjectGuid, mounting: bool) {
         if guid.is_player() {
             if let Some(pet) = self.pet_of(guid) {
                 self.set_pet_enabled(pet, !mounting);
@@ -6376,8 +6986,17 @@ impl Map {
         self.set_speed_rate(guid, 3, swim);
     }
 
-    #[allow(clippy::too_many_lines)] // one RemoveAura port
     pub(crate) fn remove_aura_at(&mut self, victim: ObjectGuid, index: usize) {
+        self.remove_aura_at_mode(victim, index, AuraRemoveMode::Default);
+    }
+
+    #[allow(clippy::too_many_lines)] // one RemoveAura port
+    pub(crate) fn remove_aura_at_mode(
+        &mut self,
+        victim: ObjectGuid,
+        index: usize,
+        mode: AuraRemoveMode,
+    ) {
         let mut has_ap = false;
         let mut has_stat = false;
         let mut hp_before = None;
@@ -6468,7 +7087,7 @@ impl Map {
             // AuraScript::OnBeforeApply(apply=false)
             // before the unapply handlers (fork
             // ApplyModifier order).
-            self.aura_script_on_before_apply(victim, &mut holder, false);
+            self.aura_script_on_before_apply(victim, &mut holder, false, mode);
             if let Some(unit) = self.unit_base_mut(victim) {
                 Self::aura_effect_apply(unit, &holder, false);
                 Self::write_aura_slot(unit, &holder, true);
@@ -6517,6 +7136,7 @@ impl Map {
         self.refresh_skill_bonuses(victim);
         self.refresh_speed(victim);
         self.refresh_cc_flags(victim);
+        self.refresh_ghost_flag(victim);
     }
 
     pub(crate) fn remove_all_auras(&mut self, victim: ObjectGuid) {
@@ -6572,7 +7192,7 @@ impl Map {
                     .position(|h| h.spell_id == spell_id && h.cancelable)
             });
             match found {
-                Some(i) => self.remove_aura_at(victim, i),
+                Some(i) => self.remove_aura_at_mode(victim, i, AuraRemoveMode::Cancel),
                 None => return,
             }
         }
@@ -6886,7 +7506,10 @@ impl Map {
             let mut keep = Vec::new();
             let mut due = Vec::new();
             for (caster, mut cast) in pending {
-                if self.unit_base(caster).is_none() {
+                // GO casters (Tier 4 B0-5) tick here
+                // too; the fork runs their spells from
+                // `GameObject::Update`.
+                if self.unit_base(caster).is_none() && !self.gameobjects.contains_key(&caster) {
                     continue;
                 }
                 cast.remaining_ms -= i32::try_from(diff_ms).unwrap_or(i32::MAX);
@@ -6899,6 +7522,25 @@ impl Map {
             self.pending_triggered = keep;
             for (caster, cast) in due {
                 self.execute_cast(caster, cast);
+            }
+        }
+        // Projectile-delayed hits (`handle_delayed`):
+        // each lands on its own flight timer.
+        if !self.pending_delayed.is_empty() {
+            let pending = std::mem::take(&mut self.pending_delayed);
+            let mut keep = Vec::new();
+            let mut due = Vec::new();
+            for mut hit in pending {
+                hit.remaining_ms -= i32::try_from(diff_ms).unwrap_or(i32::MAX);
+                if hit.remaining_ms <= 0 {
+                    due.push(hit);
+                } else {
+                    keep.push(hit);
+                }
+            }
+            self.pending_delayed = keep;
+            for hit in due {
+                self.apply_delayed_hit(hit);
             }
         }
     }
@@ -7001,7 +7643,7 @@ impl Map {
         // Remove expired holders back-to-front per unit.
         expired.sort_by_key(|&(_, index)| std::cmp::Reverse(index));
         for (target, index) in expired {
-            self.remove_aura_at(target, index);
+            self.remove_aura_at_mode(target, index, AuraRemoveMode::Expire);
         }
     }
 
@@ -7250,6 +7892,9 @@ impl Map {
                 }
                 _ => {}
             }
+            // `AuraScript::OnPeriodicTickEnd`
+            // (fork `Aura::PeriodicTickEnd`).
+            self.aura_script_on_periodic_tick_end(&tick);
         }
     }
 
@@ -7458,6 +8103,34 @@ impl Map {
     }
 }
 
+/// `Player::RewardRage` amount, returned in the
+/// stored power units (tenths of one rage point).
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn rage_reward_amount(
+    level: u32,
+    damage: u32,
+    attacker: bool,
+    berserker_rage: bool,
+    income_rate: f32,
+) -> u32 {
+    let level = level as f32;
+    let conversion = 0.009_110_783 * level * level + 3.225_598 * level + 4.265_291;
+    let mut added = damage as f32 / conversion * if attacker { 7.5 } else { 2.5 };
+    if berserker_rage {
+        added *= 1.3;
+    }
+    added *= income_rate;
+    if added <= 0.0 {
+        0
+    } else {
+        (added * 10.0) as u32
+    }
+}
+
 fn spell_meleedamage(damage_class: u32) -> bool {
     damage_class == dmg_class::MELEE || damage_class == dmg_class::RANGED
 }
@@ -7577,7 +8250,18 @@ fn resist_multiplier_outcome(
 
 #[cfg(test)]
 mod tests {
-    use super::next_delay_at_damage_ms;
+    use super::{next_delay_at_damage_ms, rage_reward_amount};
+
+    #[test]
+    fn rage_reward_formula_matches_fork() {
+        assert_eq!(rage_reward_amount(19, 20, true, false, 1.0), 21);
+        assert_eq!(rage_reward_amount(19, 23, false, false, 1.0), 8);
+        assert_eq!(rage_reward_amount(19, 23, false, true, 1.0), 10);
+        assert_eq!(rage_reward_amount(60, 1000, true, false, 1.0), 325);
+        assert_eq!(rage_reward_amount(60, 1000, false, true, 1.0), 140);
+        assert_eq!(rage_reward_amount(19, 20, true, false, 2.0), 43);
+        assert_eq!(rage_reward_amount(19, 0, true, false, 1.0), 0);
+    }
 
     #[test]
     fn pushback_delay_schedule_matches_fork() {

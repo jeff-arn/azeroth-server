@@ -13,8 +13,9 @@ use mangos_db::DbActor;
 use mangos_db::character_load::load_character;
 use mangos_dbc::{DbcFile, FieldValue, formats};
 use mangos_entities::player::{MAX_MONEY_AMOUNT, MaterializeInputs, Player};
+use mangos_entities::unit::POWER_RAGE;
 use mangos_guid::ObjectGuid;
-use mangos_map::spells::{CastOptions, CastTarget};
+use mangos_map::spells::{CastOptions, CastOutcome, CastTarget};
 use mangos_map::{Map, MapConfig, MapEvent, WorldRng, WorldStores};
 use mangos_movement::movement_info::Position;
 use mangos_protocol::opcode_table::opcode_id;
@@ -107,7 +108,7 @@ fn bench_creature_ai_and_melee() {
     // Oracle: pillager spawn position + cls damage row
     // + template damage columns, straight from SQL.
     let world = DbActor::spawn("test-world", &world_url).expect("world");
-    let (stores, pillager_spawn) = world
+    let (stores, pillager_spawn, guard_spawn) = world
         .call(move |conn| {
             use mysql::prelude::Queryable;
             let (creature_templates, _) =
@@ -144,6 +145,15 @@ fn bench_creature_ai_and_melee() {
                      WHERE id=589 AND map=0 ORDER BY guid LIMIT 1",
                 )
                 .map_err(mangos_db::DbError::from)?;
+            // Coldridge Mountaineer (853): the friendly
+            // level-55 guard standing ~7 yd from the
+            // dwarf/gnome spawn point.
+            let guard_spawn: Option<(f32, f32, f32)> = conn
+                .query_first(
+                    "SELECT position_x, position_y, position_z FROM creature \
+                     WHERE guid=398 AND id=853 AND map=0",
+                )
+                .map_err(mangos_db::DbError::from)?;
             Ok((
                 WorldStores {
                     creature_templates,
@@ -156,16 +166,33 @@ fn bench_creature_ai_and_melee() {
                     player_infos,
                     items,
                     item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
-                    factions: mangos_world_data::reputations::FactionStore::default(),
+                    factions: mangos_world_data::reputations::load_factions(conn)?,
+                    gossip: mangos_world_data::gossip_menus::GossipStores::default(),
                     areas: mangos_world_data::areas::AreaStore::default(),
                     exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(
                     ),
                     pets: mangos_world_data::pet_data::PetStores::default(),
                     next_pet_number: std::sync::atomic::AtomicU32::new(1),
+                    next_item_guid: std::sync::atomic::AtomicU32::new(1),
+                    vendor_items: mangos_world_data::vendor_items::VendorItemStores::default(),
+                    durability: mangos_world_data::durability::DurabilityTables::default(),
+                    bank_bag_slot_prices: Vec::new(),
+                    stable_slot_prices: Vec::new(),
+                    trainer_spells: mangos_world_data::trainer_spells::TrainerStores::default(),
+                    taxi: mangos_world_data::taxi::TaxiStore::default(),
+                    script_waypoints:
+                        mangos_world_data::script_waypoints::ScriptWaypointStore::default(),
+                    game_events: mangos_world_data::game_events::GameEvents::default(),
+                    loot: mangos_world_data::loot::LootStores::default(),
                     weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore {
                         spells: spell_entries,
+                        skill_line_abilities: Vec::new(),
+                        spell_chains: std::collections::HashMap::new(),
+                        talents: std::collections::HashMap::new(),
+                        talent_tabs: std::collections::HashMap::new(),
+                        talent_spell_pos: std::collections::HashMap::new(),
                         proc_events: std::collections::HashMap::new(),
                         cones: std::collections::HashMap::new(),
                         tables: mangos_spells::load_spell_dbc_tables(std::path::Path::new(
@@ -200,6 +227,7 @@ fn bench_creature_ai_and_melee() {
                     tavern_triggers: std::collections::HashSet::new(),
                 },
                 pillager_spawn.expect("pillager spawn"),
+                guard_spawn.expect("guard spawn"),
             ))
         })
         .expect("stores");
@@ -220,9 +248,11 @@ fn bench_creature_ai_and_melee() {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
         skills: None,
         item_prototypes: None,
         quest_templates: None,
+        taxi: None,
     };
     let player = Player::materialize(load, &inputs).expect("player");
     let player_guid: ObjectGuid = player.unit.guid();
@@ -316,6 +346,12 @@ fn bench_creature_ai_and_melee() {
     };
 
     // --- Aggro + chase + melee -------------------------
+    // Rage regression: the warrior starts empty and must
+    // gain rage from the pillager's landed white damage.
+    map.player_mut(player_guid)
+        .expect("player")
+        .unit
+        .set_power(POWER_RAGE, 0);
     let mut attack_starts = 0usize;
     let mut state_updates: Vec<u32> = Vec::new();
     for _ in 0..400 {
@@ -405,6 +441,16 @@ fn bench_creature_ai_and_melee() {
     }
     let player_health1 = map.player_mut(player_guid).expect("player").unit.health();
     assert!(player_health1 < player_health0, "player took no damage");
+    let rage_from_damage_taken = map
+        .player(player_guid)
+        .expect("player")
+        .unit
+        .power(POWER_RAGE);
+    println!("RAGE from damage taken: {rage_from_damage_taken}");
+    assert!(
+        rage_from_damage_taken > 0,
+        "warrior gained no rage from damage taken"
+    );
 
     // --- Spell threat (Rend from Slice 5) --------------
     // The pillager out-damages the level-19 bench warrior
@@ -412,6 +458,24 @@ fn bench_creature_ai_and_melee() {
     // between phases (in-memory only; healing systems
     // are not under test here).
     heal_player_full(&mut map, player_guid);
+    // Rend is stance-gated (Battle/Defensive): enter
+    // Battle Stance first so this threat leg casts under
+    // fork-legal conditions.
+    let stance_outcome = map.cast_spell(
+        player_guid,
+        2457,
+        CastTarget::Unit(player_guid),
+        CastOptions::default(),
+    );
+    assert_eq!(stance_outcome, CastOutcome::Started, "Battle Stance cast");
+    tick(&mut map, 40);
+    let _ = map.drain_events();
+    assert!(
+        map.aura_holders(player_guid)
+            .iter()
+            .any(|h| h.spell_id == 2457),
+        "Battle Stance aura missing before Rend"
+    );
     map.player_mut(player_guid)
         .expect("player")
         .unit
@@ -499,6 +563,10 @@ fn bench_creature_ai_and_melee() {
     tick(&mut map, 2);
     let _ = map.drain_events();
     let before = map.creature(target).expect("target").unit.health();
+    map.player_mut(player_guid)
+        .expect("player")
+        .unit
+        .set_power(POWER_RAGE, 0);
     map.attack_start(player_guid, target);
     let mut player_swings = 0usize;
     for _ in 0..400 {
@@ -523,6 +591,58 @@ fn bench_creature_ai_and_melee() {
     println!("PLAYER-MELEE swings={player_swings} health {before}->{after}");
     assert!(player_swings >= 3, "player swings not observed");
     assert!(after < before, "pillager took no player melee damage");
+    let rage_after_player_melee = map
+        .player(player_guid)
+        .expect("player")
+        .unit
+        .power(POWER_RAGE);
+    println!("RAGE after player melee: {rage_after_player_melee}");
+    assert!(
+        rage_after_player_melee > 0,
+        "warrior gained no rage during melee combat"
+    );
+
+    // --- Friendly guard never proximity-aggros ---------
+    // Regression (Tier 4 gnome probe): proximity aggro
+    // lacked the fork `IsHostileTo` reaction gate
+    // (BasicAI.cpp:64), so the Coldridge Mountaineer
+    // (853, level 55) one-shot fresh level-1 characters
+    // at the dwarf/gnome spawn point. Stand next to the
+    // guard for 10 s: no combat, no damage.
+    map.attack_stop(player_guid);
+    heal_player_full(&mut map, player_guid);
+    let guard_pos = Position::new(guard_spawn.0, guard_spawn.1, guard_spawn.2, 0.0);
+    {
+        let mut info = map
+            .player_mut(player_guid)
+            .expect("player")
+            .unit
+            .world
+            .movement_info;
+        info.pos = Position::new(guard_pos.x + 3.0, guard_pos.y, guard_pos.z, 0.0);
+        map.relocate_from_client(player_guid, info, &respawns);
+    }
+    tick(&mut map, 4);
+    let _ = map.drain_events();
+    let visible = map.visible_to(player_guid).cloned().expect("visible");
+    let guard = visible
+        .iter()
+        .copied()
+        .find(|g| map.creature(*g).is_some_and(|c| c.info.entry == 853))
+        .expect("a Coldridge Mountaineer in view");
+    let guard_health0 = map.player_mut(player_guid).expect("player").unit.health();
+    tick(&mut map, 200);
+    let _ = map.drain_events();
+    let guard_health1 = map.player_mut(player_guid).expect("player").unit.health();
+    println!("GUARD health {guard_health0}->{guard_health1}");
+    assert!(
+        !map.ai_in_combat(guard),
+        "friendly guard entered combat with the player"
+    );
+    assert_eq!(
+        guard_health1, guard_health0,
+        "player damaged while standing by a friendly guard"
+    );
 
     println!("LIVE-AI-PASS");
 }

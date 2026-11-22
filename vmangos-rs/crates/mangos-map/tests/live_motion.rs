@@ -147,12 +147,24 @@ fn bench_creatures_move() {
                     player_infos,
                     items,
                     item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
-                    factions: mangos_world_data::reputations::FactionStore::default(),
+                    factions: mangos_world_data::reputations::load_factions(conn)?,
+                    gossip: mangos_world_data::gossip_menus::GossipStores::default(),
                     areas: mangos_world_data::areas::AreaStore::default(),
                     exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(
                     ),
                     pets: mangos_world_data::pet_data::PetStores::default(),
                     next_pet_number: std::sync::atomic::AtomicU32::new(1),
+                    next_item_guid: std::sync::atomic::AtomicU32::new(1),
+                    vendor_items: mangos_world_data::vendor_items::VendorItemStores::default(),
+                    durability: mangos_world_data::durability::DurabilityTables::default(),
+                    bank_bag_slot_prices: Vec::new(),
+                    stable_slot_prices: Vec::new(),
+                    trainer_spells: mangos_world_data::trainer_spells::TrainerStores::default(),
+                    taxi: mangos_world_data::taxi::TaxiStore::default(),
+                    script_waypoints:
+                        mangos_world_data::script_waypoints::ScriptWaypointStore::default(),
+                    game_events: mangos_world_data::game_events::GameEvents::default(),
+                    loot: mangos_world_data::loot::LootStores::default(),
                     weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore::default(),
@@ -217,9 +229,11 @@ fn bench_creatures_move() {
         saved_map_is_instance: false,
         max_money: MAX_MONEY_AMOUNT,
         now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
         skills: None,
         item_prototypes: None,
         quest_templates: None,
+        taxi: None,
     };
     let player = Player::materialize(load, &inputs).expect("player");
     let player_guid = player.unit.guid();

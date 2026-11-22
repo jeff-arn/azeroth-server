@@ -124,6 +124,35 @@ pub struct ServerConfig {
     /// `WowPatch` (default 0 = patch 1.2, clamped to 10 at the
     /// 1.12 gate, `World.cpp:461-465`).
     pub wow_patch: u32,
+    /// `MaintenanceDay` (default 4, clamped 0-6,
+    /// `World.cpp:634`): weekday of honor maintenance.
+    pub maintenance_day: u32,
+    /// `MinHonorKills` raw value (default 0 = patch
+    /// default resolved in the maintenancer,
+    /// `World.cpp:622-631`).
+    pub min_honor_kills: u32,
+    /// `RpDecay` (default 0.2, clamped 0-1,
+    /// `World.cpp:633`).
+    pub rp_decay: f32,
+    /// `PvP.PoolSizePerFaction` (default 0).
+    pub pvp_pool_size_per_faction: u32,
+    /// `PvP.DishonorableKills` (default true).
+    pub pvp_dishonorable_kills: bool,
+    /// `PvP.CityProtector` (default true).
+    pub pvp_city_protector: bool,
+    /// `AutoHonorRestart` (default true).
+    pub auto_honor_restart: bool,
+    /// `Event.Announce` (dist default 0).
+    pub event_announce: bool,
+    /// `PvP.AccurateTimeline` (default true).
+    pub pvp_accurate_timeline: bool,
+    /// `PvP.AccurateRewards` (default true).
+    pub pvp_accurate_rewards: bool,
+    /// `TimeZoneOffset` in hours (default 0,
+    /// `World.cpp:588`).
+    pub time_zone_offset_hours: i32,
+    /// `HonorDir` (default `./`, `World.cpp:883`).
+    pub honor_dir: String,
     /// `UpdateUptimeInterval` in minutes (default 10,
     /// `World.cpp:679`). Zero disables the periodic refresh
     /// (the C++ timer would fire every tick at 0; recorded
@@ -166,6 +195,116 @@ pub struct ServerConfig {
     pub min_charter_name: u32,
     /// `StrictCharterNames` (default 0, `World.cpp:602`).
     pub strict_charter_names: u32,
+    /// `CharactersCreatingDisabled` team mask (default
+    /// 0, `World.cpp:610`): bit 0 Alliance, bit 1 Horde.
+    pub characters_creating_disabled: u32,
+    /// `CharactersPerRealm` (default 10, clamped
+    /// 1..=10, `World.cpp:611`).
+    pub characters_per_realm: u32,
+    /// `AllowTwoSide.Accounts` (default false,
+    /// `World.cpp:590`): both factions on one account
+    /// on a `PvP` realm.
+    pub allow_two_side_accounts: bool,
+    /// `StartPlayerLevel` (default 1, `World.cpp:620`;
+    /// clamped to the DBC max level at use).
+    pub start_player_level: u32,
+    /// `GM.StartLevel` (default 1, `World.cpp:658`;
+    /// fork floors it at `StartPlayerLevel`).
+    pub start_gm_level: u32,
+    /// `StartPlayerMoney` (default 0 copper,
+    /// `World.cpp:621`).
+    pub start_player_money: u32,
+    /// `MinPlayerName` (default 2, clamped 2..=12,
+    /// `World.cpp:605`).
+    pub min_player_name: u32,
+    /// `StrictPlayerNames` (default 0, `World.cpp:601`).
+    pub strict_player_names: u32,
+    /// `CharDelete.Method` (default 0, clamped 0..=1,
+    /// `World.cpp:873`).
+    pub char_delete_method: u32,
+    /// `CharDelete.MinLevel` (default 0, `World.cpp:874`):
+    /// below it, deletes always fully erase.
+    pub char_delete_min_level: u32,
+    /// `CharDelete.KeepDays` (default 30, `World.cpp:875`):
+    /// soft-deleted retention before the final sweep;
+    /// 0 disables the sweep.
+    pub char_delete_keep_days: u32,
+    /// `Visibility.Distance.Continents` (fork
+    /// `DEFAULT_VISIBILITY_DISTANCE` 100).
+    pub visibility_continents: f32,
+    /// `Visibility.Distance.Instances` (170).
+    pub visibility_instances: f32,
+    /// `Visibility.Distance.BG` (fork code
+    /// default 533; dist template's 180 is stale).
+    pub visibility_bg: f32,
+    /// `Visibility.Distance.Grey.Unit` (1) /
+    /// `.Grey.Object` (10).
+    pub visibility_grey_unit: f32,
+    pub visibility_grey_object: f32,
+    /// `Visibility.RelocationLowerLimit` (10).
+    pub visibility_relocation_lower_limit: f32,
+    /// `Visibility.ForceActiveObjects` (true).
+    pub visibility_force_active_objects: bool,
+    /// `Rate.Creature.*` + `Corpse.Decay.*`
+    /// (all 1.0 / fork decay seconds).
+    pub creature_rates: mangos_entities::creature::CreatureRates,
+    /// `Rate.Creature.Aggro` (1.0).
+    pub rate_creature_aggro: f32,
+    /// `Rate.Drop.Item.*` by quality + Referenced +
+    /// `Rate.Drop.Money` (all 1.0).
+    pub loot_rates: mangos_world_data::loot::LootRates,
+    /// `Rate.Corpse.Decay.Looted` (0.0).
+    pub rate_corpse_decay_looted: f32,
+    /// `MaxGroupXPDistance` (74.0; fork
+    /// `GROUP_XP_DISTANCE` config index).
+    pub max_group_xp_distance: f32,
+    /// `Quests.LowLevelHideDiff` (4; negative
+    /// disables the low-level hide icon downgrade).
+    pub quest_low_level_hide_diff: i32,
+    /// `Quests.HighLevelHideDiff` (7; negative
+    /// disables the too-high quest hide).
+    pub quest_high_level_hide_diff: i32,
+    /// `ShowHealthValues` (false): strangers see
+    /// real health values instead of percent words.
+    pub show_health_values: bool,
+    /// `SendLootRollUponReconnect` (false).
+    pub send_loot_roll_upon_reconnect: bool,
+    /// `AllFlightPaths` (false): login sets the
+    /// taxi-cheat extra flag.
+    pub all_flight_paths: bool,
+    /// `AddonChannel` (true): addon-language chat
+    /// is dropped when disabled.
+    pub addon_channel: bool,
+    /// `Rate.Health` (1.0).
+    pub rate_health: f32,
+    /// `Rate.Mana` (1.0).
+    pub rate_mana: f32,
+    /// `Rate.Rage.Loss` (1.0).
+    pub rate_rage_loss: f32,
+    /// `Rate.Rage.Income` (1.0).
+    pub rate_rage_income: f32,
+    /// `Rate.Energy` (1.0).
+    pub rate_energy: f32,
+    /// `Rate.Rest.*` multipliers (all 1.0).
+    pub rest_rates: mangos_entities::player::RestRates,
+    /// `Death.SicknessLevel` (default 11,
+    /// `World.cpp:753`).
+    pub death_sickness_level: i32,
+    /// `Death.CorpseReclaimDelay.PvP` (default true,
+    /// `World.cpp:754`).
+    pub corpse_reclaim_delay_pvp: bool,
+    /// `Death.CorpseReclaimDelay.PvE` (default true,
+    /// `World.cpp:755`).
+    pub corpse_reclaim_delay_pve: bool,
+    /// `Death.Bones.World` (default true,
+    /// `World.cpp:756`).
+    pub death_bones_world: bool,
+    /// `Death.Bones.Battleground` (default true,
+    /// `World.cpp:757`).
+    pub death_bones_bg: bool,
+    /// `Rate.Respec*` + `Progression.NoRespecPriceDecay`
+    /// (`World.cpp:528-531`, `1081`; Tier 4 step 4g).
+    pub respec: mangos_map::map::RespecConfig,
     /// `AllowTwoSide.Interaction.Mail` (default false,
     /// `World.cpp:597`).
     pub allow_two_side_interaction_mail: bool,
@@ -422,6 +561,18 @@ impl ServerConfig {
             restrict_unverified_accounts: cfg.bool_default("RestrictUnverifiedAccounts", false),
             world_available: cfg.bool_default("WorldAvailable", true),
             wow_patch: to_u32(cfg.int_default("WowPatch", 0)).min(10),
+            maintenance_day: to_u32(cfg.int_default("MaintenanceDay", 4)).min(6),
+            min_honor_kills: to_u32(cfg.int_default("MinHonorKills", 0)),
+            rp_decay: cfg.float_default("RpDecay", 0.2).clamp(0.0, 1.0),
+            pvp_pool_size_per_faction: to_u32(cfg.int_default("PvP.PoolSizePerFaction", 0)),
+            pvp_dishonorable_kills: cfg.bool_default("PvP.DishonorableKills", true),
+            pvp_city_protector: cfg.bool_default("PvP.CityProtector", true),
+            auto_honor_restart: cfg.bool_default("AutoHonorRestart", true),
+            event_announce: cfg.bool_default("Event.Announce", false),
+            pvp_accurate_timeline: cfg.bool_default("PvP.AccurateTimeline", true),
+            pvp_accurate_rewards: cfg.bool_default("PvP.AccurateRewards", true),
+            time_zone_offset_hours: cfg.int_default("TimeZoneOffset", 0),
+            honor_dir: cfg.string_default("HonorDir", "./"),
             uptime_update_mins: to_u32(cfg.int_default("UpdateUptimeInterval", 10)),
             motd: cfg.string_default("Motd", "Welcome to the Massive Network Game Object Server."),
             game_type: to_u32(cfg.int_default("GameType", 0)),
@@ -443,6 +594,104 @@ impl ServerConfig {
             min_petition_signs: to_u32(cfg.int_default("MinPetitionSigns", 9)).min(9),
             min_charter_name: to_u32(cfg.int_default("MinCharterName", 2)).clamp(2, 24),
             strict_charter_names: to_u32(cfg.int_default("StrictCharterNames", 0)),
+            characters_creating_disabled: to_u32(cfg.int_default("CharactersCreatingDisabled", 0)),
+            characters_per_realm: to_u32(cfg.int_default("CharactersPerRealm", 10)).clamp(1, 10),
+            allow_two_side_accounts: cfg.bool_default("AllowTwoSide.Accounts", false),
+            start_player_level: to_u32(cfg.int_default("StartPlayerLevel", 1)).max(1),
+            start_gm_level: to_u32(cfg.int_default("GM.StartLevel", 1))
+                .max(to_u32(cfg.int_default("StartPlayerLevel", 1)).max(1)),
+            start_player_money: to_u32(cfg.int_default("StartPlayerMoney", 0)),
+            min_player_name: to_u32(cfg.int_default("MinPlayerName", 2)).clamp(2, 12),
+            strict_player_names: to_u32(cfg.int_default("StrictPlayerNames", 0)),
+            char_delete_method: to_u32(cfg.int_default("CharDelete.Method", 0)).min(1),
+            char_delete_min_level: to_u32(cfg.int_default("CharDelete.MinLevel", 0)),
+            char_delete_keep_days: to_u32(cfg.int_default("CharDelete.KeepDays", 30)),
+            visibility_continents: cfg.float_default("Visibility.Distance.Continents", 100.0),
+            visibility_instances: cfg.float_default("Visibility.Distance.Instances", 170.0),
+            visibility_bg: cfg.float_default("Visibility.Distance.BG", 533.0),
+            visibility_grey_unit: cfg.float_default("Visibility.Distance.Grey.Unit", 1.0),
+            visibility_grey_object: cfg.float_default("Visibility.Distance.Grey.Object", 10.0),
+            visibility_relocation_lower_limit: cfg
+                .float_default("Visibility.RelocationLowerLimit", 10.0),
+            visibility_force_active_objects: cfg
+                .bool_default("Visibility.ForceActiveObjects", true),
+            creature_rates: mangos_entities::creature::CreatureRates {
+                hp: [
+                    cfg.float_default("Rate.Creature.Normal.HP", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.Elite.HP", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RAREELITE.HP", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.WORLDBOSS.HP", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RARE.HP", 1.0),
+                ],
+                damage: [
+                    cfg.float_default("Rate.Creature.Normal.Damage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.Elite.Damage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RAREELITE.Damage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.WORLDBOSS.Damage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RARE.Damage", 1.0),
+                ],
+                spell_damage: [
+                    cfg.float_default("Rate.Creature.Normal.SpellDamage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.Elite.SpellDamage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RAREELITE.SpellDamage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.WORLDBOSS.SpellDamage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RARE.SpellDamage", 1.0),
+                ],
+                corpse_decay: [
+                    to_u32(cfg.int_default("Corpse.Decay.NORMAL", 300)),
+                    to_u32(cfg.int_default("Corpse.Decay.ELITE", 600)),
+                    to_u32(cfg.int_default("Corpse.Decay.RAREELITE", 1200)),
+                    to_u32(cfg.int_default("Corpse.Decay.WORLDBOSS", 3600)),
+                    to_u32(cfg.int_default("Corpse.Decay.RARE", 900)),
+                ],
+            },
+            rate_creature_aggro: cfg.float_default("Rate.Creature.Aggro", 1.0),
+            loot_rates: mangos_world_data::loot::LootRates {
+                by_quality: [
+                    cfg.float_default("Rate.Drop.Item.Poor", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Normal", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Uncommon", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Rare", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Epic", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Legendary", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Artifact", 1.0),
+                ],
+                referenced: cfg.float_default("Rate.Drop.Item.Referenced", 1.0),
+                money: cfg.float_default("Rate.Drop.Money", 1.0),
+            },
+            rate_corpse_decay_looted: cfg.float_default("Rate.Corpse.Decay.Looted", 0.0),
+            max_group_xp_distance: cfg.float_default("MaxGroupXPDistance", 74.0),
+            quest_low_level_hide_diff: cfg.int_default("Quests.LowLevelHideDiff", 4),
+            quest_high_level_hide_diff: cfg.int_default("Quests.HighLevelHideDiff", 7),
+            show_health_values: cfg.bool_default("ShowHealthValues", false),
+            send_loot_roll_upon_reconnect: cfg.bool_default("SendLootRollUponReconnect", false),
+            all_flight_paths: cfg.bool_default("AllFlightPaths", false),
+            addon_channel: cfg.bool_default("AddonChannel", true),
+            rate_health: cfg.float_default("Rate.Health", 1.0),
+            rate_mana: cfg.float_default("Rate.Mana", 1.0),
+            rate_rage_loss: cfg.float_default("Rate.Rage.Loss", 1.0),
+            rate_rage_income: cfg.float_default("Rate.Rage.Income", 1.0),
+            rate_energy: cfg.float_default("Rate.Energy", 1.0),
+            rest_rates: mangos_entities::player::RestRates {
+                in_game: cfg.float_default("Rate.Rest.InGame", 1.0),
+                offline_in_tavern_or_city: cfg
+                    .float_default("Rate.Rest.Offline.InTavernOrCity", 1.0),
+                offline_in_wilderness: cfg.float_default("Rate.Rest.Offline.InWilderness", 1.0),
+            },
+            death_sickness_level: cfg.int_default("Death.SicknessLevel", 11),
+            respec: mangos_map::map::RespecConfig {
+                base_cost_gold: to_u32(cfg.int_default("Rate.RespecBaseCost", 1)),
+                multiplicative_cost_gold: to_u32(
+                    cfg.int_default("Rate.RespecMultiplicativeCost", 5),
+                ),
+                min_multiplier: to_u32(cfg.int_default("Rate.RespecMinMultiplier", 2)),
+                max_multiplier: to_u32(cfg.int_default("Rate.RespecMaxMultiplier", 10)),
+                no_price_decay: cfg.bool_default("Progression.NoRespecPriceDecay", true),
+            },
+            corpse_reclaim_delay_pvp: cfg.bool_default("Death.CorpseReclaimDelay.PvP", true),
+            corpse_reclaim_delay_pve: cfg.bool_default("Death.CorpseReclaimDelay.PvE", true),
+            death_bones_world: cfg.bool_default("Death.Bones.World", true),
+            death_bones_bg: cfg.bool_default("Death.Bones.Battleground", true),
             allow_two_side_interaction_mail: cfg
                 .bool_default("AllowTwoSide.Interaction.Mail", false),
             allow_two_side_interaction_trade: cfg
@@ -590,6 +839,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)] // exact config defaults
     fn defaults_match_cpp_code() {
         let s = ServerConfig::from_config(&cfg("RealmID = 1\n"));
         assert_eq!(s.realm_id, 1);
@@ -599,6 +849,56 @@ mod tests {
         assert_eq!(s.no_auth_timeout_secs, 10);
         assert_eq!(s.character_screen_max_idle_secs, 0);
         assert_eq!(s.player_security_limit, security::PLAYER);
+        assert_eq!(s.max_group_xp_distance, 74.0);
+        assert_eq!(s.quest_low_level_hide_diff, 4);
+        assert_eq!(s.quest_high_level_hide_diff, 7);
+        assert!(!s.show_health_values);
+        assert!(!s.send_loot_roll_upon_reconnect);
+        assert!(!s.all_flight_paths);
+        assert!(s.addon_channel);
+        assert_eq!(s.rate_health, 1.0);
+        assert_eq!(s.rate_mana, 1.0);
+        assert_eq!(s.rate_rage_loss, 1.0);
+        assert_eq!(s.rate_rage_income, 1.0);
+        assert_eq!(s.rate_energy, 1.0);
+        assert_eq!(s.rest_rates.in_game, 1.0);
+        assert_eq!(s.rest_rates.offline_in_tavern_or_city, 1.0);
+        assert_eq!(s.rest_rates.offline_in_wilderness, 1.0);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)] // exact config values
+    fn tier4_config_closeout_values_are_read() {
+        let s = ServerConfig::from_config(&cfg("MaxGroupXPDistance = 99.5\n\
+             Quests.LowLevelHideDiff = -1\n\
+             Quests.HighLevelHideDiff = 12\n\
+             ShowHealthValues = 1\n\
+             SendLootRollUponReconnect = 1\n\
+             AllFlightPaths = 1\n\
+             AddonChannel = 0\n\
+             Rate.Health = 2\n\
+             Rate.Mana = 3\n\
+             Rate.Rage.Loss = 4\n\
+             Rate.Rage.Income = 9\n\
+             Rate.Energy = 5\n\
+             Rate.Rest.InGame = 6\n\
+             Rate.Rest.Offline.InTavernOrCity = 7\n\
+             Rate.Rest.Offline.InWilderness = 8\n"));
+        assert_eq!(s.max_group_xp_distance, 99.5);
+        assert_eq!(s.quest_low_level_hide_diff, -1);
+        assert_eq!(s.quest_high_level_hide_diff, 12);
+        assert!(s.show_health_values);
+        assert!(s.send_loot_roll_upon_reconnect);
+        assert!(s.all_flight_paths);
+        assert!(!s.addon_channel);
+        assert_eq!(s.rate_health, 2.0);
+        assert_eq!(s.rate_mana, 3.0);
+        assert_eq!(s.rate_rage_loss, 4.0);
+        assert_eq!(s.rate_rage_income, 9.0);
+        assert_eq!(s.rate_energy, 5.0);
+        assert_eq!(s.rest_rates.in_game, 6.0);
+        assert_eq!(s.rest_rates.offline_in_tavern_or_city, 7.0);
+        assert_eq!(s.rest_rates.offline_in_wilderness, 8.0);
     }
 
     #[test]
