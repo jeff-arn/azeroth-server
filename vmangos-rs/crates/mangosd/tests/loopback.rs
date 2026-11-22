@@ -5480,6 +5480,155 @@ fn fake_ghost_spirit_healer_world_stores() -> mangos_map::WorldStores {
     stores
 }
 
+fn fake_gossip_world_stores() -> mangos_map::WorldStores {
+    use mangos_world_data::creature_template::{CreatureInfo, CreatureTemplates};
+    use mangos_world_data::gossip_menus::{GossipMenuOption, GossipMenuText, GossipStores};
+    use mangos_world_data::spawn_support::{CreatureDisplayInfoAddon, DisplayInfoAddons};
+    use mangos_world_data::spawns::{CreatureSpawn, SpawnData, WorldLocation};
+
+    let mut stores = fake_world_stores();
+    stores.creature_templates = CreatureTemplates::from_entries_for_tests(vec![CreatureInfo {
+        entry: 6500,
+        name: "Gossiptest".into(),
+        faction: 35,
+        npc_flags: 0x1, // UNIT_NPC_FLAG_GOSSIP
+        gossip_menu_id: 90,
+        civilian: true,
+        unit_class: 1,
+        display_id: [49, 0, 0, 0],
+        display_probability: [100, 0, 0, 0],
+        display_total_probability: 100,
+        ..Default::default()
+    }]);
+    stores.display_addons =
+        DisplayInfoAddons::from_creature_addons_for_tests(vec![CreatureDisplayInfoAddon {
+            display_id: 49,
+            bounding_radius: 0.3,
+            combat_reach: 1.5,
+            speed_walk: 2.5,
+            speed_run: 8.0,
+            gender: 0,
+            display_id_other_gender: 0,
+        }]);
+    let mut spawn = CreatureSpawn::default();
+    spawn.creature_id[0] = 6500;
+    spawn.position = WorldLocation {
+        map_id: 0,
+        x: -8948.95,
+        y: -132.493,
+        z: 83.5312,
+        o: 0.0,
+    };
+    stores.spawns = SpawnData::from_creatures_for_tests(vec![(4351, spawn)]);
+    let option = |text: &str, action_menu_id: i32| GossipMenuOption {
+        id: 0,
+        option_icon: 0,
+        option_text: text.into(),
+        option_broadcast_text: 0,
+        option_id: 1, // GOSSIP_OPTION_GOSSIP
+        npc_option_npcflag: 0x1,
+        action_menu_id,
+        action_poi_id: 0,
+        action_script_id: 0,
+        box_coded: false,
+        box_money: 0,
+        box_text: String::new(),
+        box_broadcast_text: 0,
+        condition_id: 0,
+    };
+    stores.gossip = GossipStores::from_maps_for_tests(
+        HashMap::from([
+            (
+                90,
+                vec![GossipMenuText {
+                    text_id: 91090,
+                    script_id: 0,
+                    condition_id: 0,
+                }],
+            ),
+            (
+                91,
+                vec![GossipMenuText {
+                    text_id: 91091,
+                    script_id: 0,
+                    condition_id: 0,
+                }],
+            ),
+        ]),
+        HashMap::from([
+            (90, vec![option("Tell me more.", 91)]),
+            (91, vec![option("Farewell.", -1)]),
+        ]),
+    );
+    stores
+}
+
+/// Default gossip hello/select round trip: hello opens
+/// menu 90, selecting its gossip option follows to
+/// menu 91, and selecting the terminal option closes.
+#[tokio::test]
+async fn gossip_hello_select_round_trip() {
+    use mangos_guid::{HighGuid, ObjectGuid};
+    use mangos_protocol::opcode_table::opcode_id;
+
+    let backend = FakeBackend::with_test_user();
+    let port = start_server_with_stores(backend, fake_gossip_world_stores()).await;
+    let (mut client, seed) = Client::connect(port).await;
+
+    client.send_auth(seed, "TESTUSER", good_digest(seed)).await;
+    client.crypt.init(SESSIONKEY_HEX);
+    let (op, _) = client.read_packet().await.expect("auth ok");
+    assert_eq!(op, opcode::SMSG_AUTH_RESPONSE);
+    client.send_packet(opcode::CMSG_CHAR_ENUM, &[]).await;
+    let _ = client.read_until_opcode(opcode::SMSG_CHAR_ENUM).await;
+    client
+        .send_packet(opcode::CMSG_PLAYER_LOGIN, &7u64.to_le_bytes())
+        .await;
+    let _ = client
+        .read_until_opcode(opcode_id::SMSG_LOGIN_VERIFY_WORLD)
+        .await;
+    let _ = flush_packets(&mut client).await;
+
+    let npc = ObjectGuid::with_entry(HighGuid::UNIT, 6500, 4351);
+    let npc_raw = npc.raw();
+    client
+        .send_packet(opcode_id::CMSG_GOSSIP_HELLO, &npc_raw.to_le_bytes())
+        .await;
+    let body = client
+        .read_until_opcode(opcode_id::SMSG_GOSSIP_MESSAGE)
+        .await;
+    let u32_at = |b: &[u8], at: usize| u32::from_le_bytes(b[at..at + 4].try_into().expect("u32"));
+    assert_eq!(u32_at(&body, 8), 91090, "first gossip text");
+    assert_eq!(u32_at(&body, 12), 1, "first gossip option count");
+    assert!(
+        body.windows(b"Tell me more.".len())
+            .any(|w| w == b"Tell me more."),
+        "first gossip option text"
+    );
+
+    let mut select = npc_raw.to_le_bytes().to_vec();
+    select.extend_from_slice(&0u32.to_le_bytes());
+    client
+        .send_packet(opcode_id::CMSG_GOSSIP_SELECT_OPTION, &select)
+        .await;
+    let body = client
+        .read_until_opcode(opcode_id::SMSG_GOSSIP_MESSAGE)
+        .await;
+    assert_eq!(u32_at(&body, 8), 91091, "follow-up gossip text");
+    assert_eq!(u32_at(&body, 12), 1, "follow-up gossip option count");
+    assert!(
+        body.windows(b"Farewell.".len()).any(|w| w == b"Farewell."),
+        "follow-up gossip option text"
+    );
+
+    client
+        .send_packet(opcode_id::CMSG_GOSSIP_SELECT_OPTION, &select)
+        .await;
+    let _ = client
+        .read_until_opcode(opcode_id::SMSG_GOSSIP_COMPLETE)
+        .await;
+}
+
 async fn login_ghost_client(port: u16) -> (Client, Vec<(u16, Vec<u8>)>) {
     use mangos_protocol::opcode_table::opcode_id;
 

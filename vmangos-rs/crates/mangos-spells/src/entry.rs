@@ -611,7 +611,7 @@ pub fn armor_reduced_damage(damage: f32, victim_armor: i32, attacker_level: u32)
 }
 
 /// The `Player::ApplySpellMod` composition
-/// (`Player.cpp:22510`): flat sums add to the base,
+/// (`Player.cpp:22196`): flat sums add to the base,
 /// then the percent sum scales the sum —
 /// `base + ((base + flat) * pct / 100 + flat)`.
 #[must_use]

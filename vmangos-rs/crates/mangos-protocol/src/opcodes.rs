@@ -40,9 +40,8 @@ pub fn lookup_opcode(opcode: u16) -> Option<&'static OpcodeMeta> {
     opcode_meta(opcode).filter(|meta| meta.registered)
 }
 
-/// Reverse lookup by exact C++ name (`LookupOpcodeValue`,
-/// `Opcodes.cpp:926-935`): `None` for unknown or out-of-table
-/// names, matching the C++ `-1` result.
+/// Reverse lookup by exact opcode name: `None` for
+/// unknown or out-of-table names.
 #[must_use]
 pub fn lookup_opcode_value(name: &str) -> Option<u16> {
     OPCODE_TABLE

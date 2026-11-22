@@ -122,7 +122,7 @@ impl Map {
         }
     }
 
-    /// `peon_wake_up` (`durotar.cpp:202` area): Awaken
+    /// `peon_wake_up` (`durotar.cpp:172`): Awaken
     /// Peon (19938) on a sleeping Lazy Peon (10556) with
     /// the sleep buff (17743) grants the player monster
     /// credit. The wake itself is the AI `SpellHit`.

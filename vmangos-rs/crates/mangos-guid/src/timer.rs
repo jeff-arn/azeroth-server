@@ -1,4 +1,4 @@
-//! The tick timers from `vmangos/src/shared/Timer.h:73-150`,
+//! The tick timers from `vmangos/src/shared/Timer.h:73-149`,
 //! ported 1:1 per the Phase 4 tick contract: `Update(diff)`
 //! accumulates (or counts down), `Passed()` is a plain
 //! comparison, `Reset()` subtracts **one** interval, remainder
@@ -141,7 +141,7 @@ impl TimeTracker {
     }
 }
 
-/// `struct ShortTimeTracker` (`Timer.h:138-150`): `i32` count
+/// `struct ShortTimeTracker` (`Timer.h:137-147`): `i32` count
 /// down.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ShortTimeTracker {

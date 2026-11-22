@@ -66,13 +66,14 @@ impl AccountDataSet {
         self.entries.get(data_type)
     }
 
-    /// `WorldSession::HandleRequestAccountData`
-    /// (`MiscHandler.cpp:897-945`): empty slots answer
-    /// `(type, 0)`; non-empty slots answer the type, the
-    /// uncompressed size of `data || '\0' || timestamp`, and
-    /// its zlib stream. `None` means an out-of-range type or
-    /// a compression failure, both of which C++ answers with
-    /// silence.
+    /// Account-data answer for one slot. Empty slots
+    /// answer `(type, 0)`; non-empty slots answer the
+    /// type, the uncompressed size of
+    /// `data || '\0' || timestamp`, and its zlib stream.
+    /// Recorded deviation: the fork handler compresses
+    /// only the entry data and reports `data.size()`
+    /// (`MiscHandler.cpp:918-937`). `None` means an
+    /// out-of-range type or a compression failure.
     #[must_use]
     pub fn build_update_packet(&self, data_type: u32) -> Option<WorldPacket> {
         let entry = self.get(usize::try_from(data_type).ok()?)?;
