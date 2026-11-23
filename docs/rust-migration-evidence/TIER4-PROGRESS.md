@@ -2192,3 +2192,46 @@ corpses). Side finding: `azeroth-discord-bot`
 is in a long-standing crash loop
 (`LoginFailure: Improper token`), unrelated to
 the swap; needs an owner-issued token.
+
+Central completion of the Warlock slice (the
+workflow runner stalled again after the first
+full run and was stopped; parent finished
+centrally): first run 113 rows 45 PASS /
+14 PASSIVE-VERIFIED / 34 BLOCKED / 20 FAIL in
+6 clusters. Root causes: a persisted imp from
+the pet rows assisted on every hostile cast and
+killed 100 hp dummies mid-observation (fixed:
+seed_character clears character_pet + satellites,
+pets are parked REACT_PASSIVE on summon, dummy
+pool expanded to 48 counters); landed casts were
+erased by cooldown-blocked recasts (Curse of
+Doom; landed GO now retained); channeled rows
+poisoned the next cast (engine had no
+CMSG_CANCEL_CHANNELLING handler — implemented
+fork-exact with regression
+interrupt_channeling_ends_live_channel_only);
+Sacrifice needed per-effect target routing
+(TARGET_UNIT_CASTER effects now land on the
+caster inside mixed spells; regression
+unit_caster_effect_lands_on_caster_not_victim)
+plus a TARGET_UNIT_CASTER_MASTER collect arm and
+a pet-cast harness leg (voidwalker summon +
+grimoire teach 7885/19447 seeded as setup spells
++ CMSG_PET_ACTION cast; shield on master and pet
+suicide both observed). Tick-band gate learned
+the lethal-pair rule (one in-band tick carries
+the band proof when two ticks would kill the
+dummy; periodicity proven by rank 1). Final run:
+113 rows (112 matrix + summon sub-row),
+PASS=62, PASSIVE-VERIFIED=14, BLOCKED=37
+(17 effect-marker-only, 12 fixture-reagent,
+4 fixture-gear, 2 no-party, 2 script), FAIL=0,
+SPELL-CAMPAIGN-RUN-CLASS-WARLOCK-PASS.
+Pilot PASS; Druid/Paladin regression smokes PASS
+(17329's shared-cooldown NOT_READY in subset
+smoke confirmed a subset artifact by solo PASS);
+fmt/clippy/workspace tests/live_spells green.
+Rank coverage note: cast set now first+last+
+signature-change ranks (Paladin/Druid matrices
+regenerated to the same rule for future reruns;
+their recorded results stand for the rows cast).

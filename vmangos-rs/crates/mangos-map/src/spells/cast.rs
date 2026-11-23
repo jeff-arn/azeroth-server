@@ -388,6 +388,7 @@ impl Map {
         self.check_skinning_target(caster, spell, target, applied_mods, triggered)
     }
 
+    #[allow(clippy::too_many_lines)] // one CheckCast-target port
     fn check_target(
         &mut self,
         caster: ObjectGuid,
@@ -410,6 +411,8 @@ impl Map {
         // caster-targeted for check purposes.
         match mode {
             0 | tgt::UNIT_CASTER
+            | tgt::UNIT_CASTER_MASTER
+            | tgt::UNIT_CASTER_PET
             | tgt::ENUM_UNITS_PARTY_WITHIN_CASTER_RANGE
             | tgt::UNIT_PARTY
             | tgt::UNIT_FRIEND_AND_PARTY
@@ -419,7 +422,16 @@ impl Map {
             // Caster-centered AoE enumerations likewise
             // start (victim expansion is a recorded
             // Slice 5 gap; effects land on the caster
-            // target slot).
+            // target slot). `UNIT_CASTER_MASTER`
+            // (Sacrifice) resolves to the owner or
+            // nothing at fill time
+            // (`Spell.cpp:2856`) with no check-time
+            // failure; the caster's pet likewise
+            // starts (fork skips pet-target-existence
+            // checks, `Spell.cpp:7211`) while
+            // execution resolves the pet server-side.
+            // Player master/pet casts collect on the
+            // caster/pet respectively.
             | tgt::LOCATION_CASTER_DEST
             | tgt::LOCATION_UNIT_MINION_POSITION
             | tgt::LOCATION_CASTER_SRC
@@ -612,6 +624,21 @@ impl Map {
     /// no GCD is reset (the GCD is added at execution,
     /// so a preparing cast has none to clear — the same
     /// outcome as the fork's `ResetGCD`).
+    /// `WorldSession::HandleCancelChanneling`
+    /// (`SpellHandler.cpp:491`): interrupt the current
+    /// channeled spell (spell id in the packet is
+    /// unused); triggered channels are immune. The
+    /// remote-control mover arm has no Rust slot.
+    pub fn interrupt_channeling(&mut self, caster: ObjectGuid) {
+        let live = self
+            .casts
+            .get(&caster)
+            .is_some_and(|cast| cast.channeling && !cast.triggered);
+        if live {
+            self.cancel_cast(caster, true);
+        }
+    }
+
     pub fn interrupt_non_melee_spells(
         &mut self,
         caster: ObjectGuid,

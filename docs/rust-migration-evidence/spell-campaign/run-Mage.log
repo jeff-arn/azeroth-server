@@ -6,5 +6,5 @@ AUTH-OK + ADDON-INFO
 LOGIN-OK account=SPELLCAMP07 guid=900016 map=0 pos=(-6295.00,315.00,377.50)
 DRIFT-OK guid=900016 level=60 spells=2 health=1640
 ROW Mage 168 self: PASS  | bound SPELL_GO + aura 168 on self; after logout character_spell total=2 (seeded=2), spell168 rows=1
-ROW Mage 133 hostile_dummy: PASS  | bound SPELL_START+SPELL_GO, then opcode 592 body spell=133 target=17379390973850681688 attacker=900016 damage=27; dummy health 100->35
+ROW Mage 133 hostile_dummy: PASS  | bound SPELL_START+SPELL_GO, then opcode 592 body spell=133 target=17379390973850682870 attacker=900016 damage=25; dummy health 100->40
 LOGOUT-OK mage-pilot

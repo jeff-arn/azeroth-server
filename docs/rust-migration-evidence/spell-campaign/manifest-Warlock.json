@@ -1,0 +1,104 @@
+{
+ "mode": "run-class",
+ "class": "Warlock",
+ "matrix_file": "/Users/jeffarn/Programming/azeroth-server/vmangos-rs/scripts/spell_campaign_matrix-Warlock.json",
+ "matrix_mode": "full",
+ "matrix_counts": {
+  "Warlock": 112
+ },
+ "talent_build": {
+  "name": "smruin",
+  "role": "RangeDps",
+  "total_points": 51,
+  "known_spell_ids": [
+   17782,
+   17787,
+   17792,
+   17803,
+   17813,
+   17959,
+   18095,
+   18134,
+   18178,
+   18183,
+   18219,
+   18265,
+   18275,
+   18288,
+   18830
+  ],
+  "required_spell_ids": []
+ },
+ "fixture_note": "union-seeded single-race fixture; not a legal single-race spellbook claim where union exceeds any one race (Paladin Human==Dwarf==160, numerically equal)",
+ "seed_count": 219,
+ "talent_seed_checks": [
+  {
+   "spell_id": 17782,
+   "learned": true
+  },
+  {
+   "spell_id": 17787,
+   "learned": true
+  },
+  {
+   "spell_id": 17792,
+   "learned": true
+  },
+  {
+   "spell_id": 17803,
+   "learned": true
+  },
+  {
+   "spell_id": 17813,
+   "learned": true
+  },
+  {
+   "spell_id": 17959,
+   "learned": true
+  },
+  {
+   "spell_id": 18095,
+   "learned": true
+  },
+  {
+   "spell_id": 18134,
+   "learned": true
+  },
+  {
+   "spell_id": 18178,
+   "learned": true
+  },
+  {
+   "spell_id": 18183,
+   "learned": true
+  },
+  {
+   "spell_id": 18219,
+   "learned": true
+  },
+  {
+   "spell_id": 18265,
+   "learned": true
+  },
+  {
+   "spell_id": 18275,
+   "learned": true
+  },
+  {
+   "spell_id": 18288,
+   "learned": true
+  },
+  {
+   "spell_id": 18830,
+   "learned": true
+  }
+ ],
+ "failure_clusters": [],
+ "verdict_counts": {
+  "BLOCKED": 37,
+  "PASS": 62,
+  "PASSIVE-VERIFIED": 14
+ },
+ "git_head": "ad86c120",
+ "git_dirty": true
+}

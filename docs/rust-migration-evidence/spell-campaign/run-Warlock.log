@@ -1,0 +1,120 @@
+SEEDED guid=900023 spells=219 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP08 guid=900023 map=0 pos=(-6295.00,315.00,377.50)
+DRIFT-OK guid=900023 level=60 spells=219 health=1884
+ROW Warlock 172 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 2/4 in oracle band [10-10] (required>=2, target_alive=True, out_of_band=0, a
+ROW Warlock 348 hostile_dummy: PASS  | observable outcome: health 100->57, matching damage=14; ticks 2/5 in oracle band [4-4] (required>=2, target_alive=True, 
+ROW Warlock 603 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/1 in oracle band [3200-3200] (required>=1, target_alive=False, out_of_band
+ROW Warlock 686 hostile_dummy: PASS  | observable outcome: health 100->61, matching damage=16 after 1 attempt(s)
+ROW Warlock 688 pet: PASS  | bound SPELL_GO + pet object tracked guid=17379390962306908189 entry=416 dist=2.1yd health=769 +2s GCD settle
+ROW Warlock 689 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 691 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 693 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 697 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 702 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 704 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 710 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 712 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 755 pet: PASS  | observable outcome: target_aura=True
+ROW Warlock 980 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 2/12 in oracle band [7-7] (required>=2, target_alive=True, out_of_band=0, am
+ROW Warlock 1010 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 1098 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 1120 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 2/5 in oracle band [11-11] (required>=2, target_alive=True, out_of_band=0, a
+ROW Warlock 1454 self: BLOCKED effect-marker-only | classify_only
+ROW Warlock 1490 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 1714 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 1949 self: PASS  | observable outcome: caster_aura=True
+ROW Warlock 2362 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 2947 party_duel: BLOCKED no-party | solo repro
+ROW Warlock 3110 hostile_dummy: PASS  | observable outcome: health 100->78, matching damage=9 after 1 attempt(s)
+ROW Warlock 3716 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Warlock 5138 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 5484 ground_area: PASS  | observable outcome: target_aura=True
+ROW Warlock 5676 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=44 after 1 attempt(s)
+ROW Warlock 5740 ground_area: PASS  | observable outcome: object_seen=False, health 100->0, matching damage=43
+ROW Warlock 5782 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 5857 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Warlock 6201 item_reagent_ammo: BLOCKED script-evidence-unknown | classify_only
+ROW Warlock 6215 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 6307 self: PASS  | observable outcome: caster_aura=True
+ROW Warlock 6353 item_reagent_ammo: BLOCKED fixture-gear | offhand is not armor-class (class 4): None; starter lacks a shield
+ROW Warlock 6358 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 6360 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Warlock 6366 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 6789 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 7812 pet: PASS  | observable outcome: caster_aura=True; pet_cast via CMSG_PET_ACTION pet=17379390962323685407 health_after=0; voidwalker s
+ROW Warlock 7814 hostile_dummy: PASS  | observable outcome: health 100->21, matching damage=33 after 1 attempt(s)
+ROW Warlock 7870 self: PASS  | observable outcome: caster_aura=True
+ROW Warlock 11675 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/5 in oracle band [91-91] (required>=1, target_alive=False, out_of_band=0, 
+ROW Warlock 11678 ground_area: PASS  | observable outcome: object_seen=False, health 100->0, matching damage=227
+ROW Warlock 11681 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Warlock 11682 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Warlock 11684 self: PASS  | observable outcome: caster_aura=True after 5 mana wait(s)
+ROW Warlock 11689 self: BLOCKED effect-marker-only | classify_only
+ROW Warlock 688 pet: PASS  | bound SPELL_GO + pet object tracked guid=17379390962306908193 entry=416 dist=2.5yd health=769 after 10 mana wait(s) +2s 
+ROW Warlock 11695 pet: PASS  | observable outcome: target_aura=True
+ROW Warlock 11700 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 11704 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 11708 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 11713 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/12 in oracle band [87-87] (required>=1, target_alive=False, out_of_band=0,
+ROW Warlock 11717 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 11719 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 11722 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 11726 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 11730 item_reagent_ammo: BLOCKED script-evidence-unknown | classify_only
+ROW Warlock 11763 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=95 after 1 attempt(s)
+ROW Warlock 11767 self: PASS  | observable outcome: caster_aura=True
+ROW Warlock 11771 party_duel: BLOCKED no-party | solo repro
+ROW Warlock 11775 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Warlock 11780 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=99 after 1 attempt(s)
+ROW Warlock 11785 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Warlock 17728 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 17735 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Warlock 17752 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Warlock 17767 self: PASS  | observable outcome: caster_aura=True
+ROW Warlock 17782 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 17787 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 17792 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 17803 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 17813 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 17854 self: PASS  | observable outcome: caster_aura=True
+ROW Warlock 17862 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 17923 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=208 after 1 attempt(s)
+ROW Warlock 17924 item_reagent_ammo: BLOCKED fixture-gear | offhand is not armor-class (class 4): None; starter lacks a shield
+ROW Warlock 17926 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 17928 ground_area: PASS  | observable outcome: target_aura=True
+ROW Warlock 17937 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 17953 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 17959 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 18095 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 18134 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 18178 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 18183 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 18219 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 18265 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 18275 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 18288 self: PASS  | observable outcome: caster_aura=True
+ROW Warlock 18540 item_reagent_ammo: BLOCKED fixture-reagent | reagent 16583 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 18647 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 18830 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 18867 item_reagent_ammo: BLOCKED fixture-gear | offhand is not armor-class (class 4): None; starter lacks a shield
+ROW Warlock 18871 item_reagent_ammo: BLOCKED fixture-gear | offhand is not armor-class (class 4): None; starter lacks a shield
+ROW Warlock 18881 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warlock 18930 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=331 after 1 attempt(s)
+ROW Warlock 18932 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=537 after 1 attempt(s)
+ROW Warlock 18937 pet: BLOCKED effect-marker-only | classify_only
+ROW Warlock 18938 pet: BLOCKED effect-marker-only | classify_only
+ROW Warlock 19007 passive: PASSIVE-VERIFIED | learned=True
+ROW Warlock 19244 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Warlock 19443 pet: PASS  | observable outcome: caster_aura=True; pet_cast via CMSG_PET_ACTION pet=17379390962323685410 health_after=0; voidwalker s
+ROW Warlock 19480 self: PASS  | observable outcome: caster_aura=True
+ROW Warlock 19505 self: BLOCKED effect-marker-only | classify_only
+ROW Warlock 19647 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Warlock 19736 self: BLOCKED effect-marker-only | classify_only
+ROW Warlock 20757 item_reagent_ammo: BLOCKED fixture-reagent | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Warlock 25307 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=528 after 1 attempt(s); reused observably-clean dummy (alive, full he
+ROW Warlock 25309 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=279; ticks 0/5 in oracle band [102-102]: target died before a tick co
+ROW Warlock 25311 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/6 in oracle band [137-137] (required>=1, target_alive=False, out_of_band=0
+LOGOUT-OK Warlock-run
+run-class Warlock: 113 rows, BLOCKED=37, PASS=62, PASSIVE-VERIFIED=14
+SPELL-CAMPAIGN-RUN-CLASS-WARLOCK-PASS

@@ -588,8 +588,13 @@ impl Map {
         }
 
         // Armor after bonus+crit (fork mitigation
-        // stage), NORMAL school only, then ditheru.
-        if damage_f > 0.0 && spell.school == school::NORMAL {
+        // stage), NORMAL school only, direct damage
+        // only: the fork's `Aura::PeriodicTick` never
+        // calls `CalcArmorReducedDamage` (armor runs
+        // only in `CalculateMeleeDamage`), so periodic
+        // ticks (bleeds included) bypass armor here,
+        // then ditheru.
+        if damage_f > 0.0 && spell.school == school::NORMAL && !dot {
             let victim_armor = self.unit_resistance(victim, school::NORMAL);
             damage_f = mangos_spells::armor_reduced_damage(
                 damage_f,
@@ -1214,6 +1219,47 @@ impl Map {
             // spawn row, replaces the corpse in the
             // creature map and re-initializes motion.
             self.spawn_creature(guid.counter(), &RespawnTimes::default());
+            // Re-materialization replaces the corpse viewers
+            // may still track: evict it (fork `RemoveCorpse`
+            // destroy) so the respawn is not stuck in the
+            // tracked-but-stale state where per-tick values
+            // never reach it and scans no-op. Nearby viewers
+            // are flagged for rescan so the respawn creates
+            // promptly even when nobody moves (fork
+            // `Map::Update` revisits active cells every
+            // tick, while scans here otherwise run on
+            // movement).
+            if let Some(pos) = self.unit_position(guid) {
+                let radius = self.config.visibility_distance
+                    + self.config.grey_unit.max(self.config.grey_object);
+                let watchers: Vec<ObjectGuid> = self
+                    .players
+                    .iter()
+                    .filter(|(_, e)| {
+                        e.visible.contains(&guid)
+                            || crate::visibility::dist2d(e.player.unit.world.position(), pos)
+                                <= radius
+                    })
+                    .map(|(g, _)| *g)
+                    .collect();
+                for watcher in watchers {
+                    if self
+                        .players
+                        .get(&watcher)
+                        .is_some_and(|e| e.visible.contains(&guid))
+                    {
+                        if let Some(entry) = self.players.get_mut(&watcher) {
+                            entry.visible.remove(&guid);
+                        }
+                        let mut data = mangos_protocol::update_data::UpdateData::new();
+                        data.add_out_of_range_guid(guid);
+                        self.send_update_data(watcher, &mut data);
+                    }
+                    if let Some(entry) = self.players.get_mut(&watcher) {
+                        entry.scan_due = true;
+                    }
+                }
+            }
             self.creature_script_just_respawned(guid);
             self.events.push(MapEvent::ClearCreatureRespawn {
                 guid_low: guid.counter(),

@@ -835,3 +835,33 @@ fn fish_loot_falls_back_to_zone_template() {
     assert_eq!(responses[0][8], 3, "LOOT_FISHING wire byte");
     assert_eq!(responses[0][13], 1, "zone template item");
 }
+
+/// `HandleCancelChanneling` map arm: a live channel ends
+/// on demand (the Warlock campaign's `SPELL_IN_PROGRESS`
+/// cluster: Health Funnel/Hellfire channels poisoned the
+/// next cast), while a triggered channel is immune
+/// (fork `SpellHandler.cpp:491`).
+#[test]
+fn interrupt_channeling_ends_live_channel_only() {
+    let stores = fishing_stores(vec![], vec![]);
+    let mut fx = setup(300, stores, 24);
+    start_fake_channel(&mut fx);
+    fx.map.interrupt_channeling(fx.caster);
+    assert!(
+        !fx.map.casts.contains_key(&fx.caster),
+        "cancel-channelling must free the cast slot"
+    );
+    // Triggered channels survive (fork early-return).
+    start_fake_channel(&mut fx);
+    if let Some(cast) = fx.map.casts.get_mut(&fx.caster) {
+        cast.triggered = true;
+    }
+    fx.map.interrupt_channeling(fx.caster);
+    assert!(
+        fx.map.casts.contains_key(&fx.caster),
+        "triggered channel is immune to cancel-channelling"
+    );
+    // No live cast: a no-op, never a panic.
+    fx.map.casts.remove(&fx.caster);
+    fx.map.interrupt_channeling(fx.caster);
+}

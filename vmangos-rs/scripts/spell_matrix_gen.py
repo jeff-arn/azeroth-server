@@ -28,11 +28,11 @@ Two modes:
   SPELL-MATRIX-GEN-SELFTEST-PASS.
 
 `--full --class <Class>` (per-class fan-out over the pinned classes
-Paladin and Druid): emit `spell_campaign_matrix-<Class>.json` with
-one cast row per merged S7 component over the G1 union plus the
-selected 51-point talent build's known spells, plus the all-rank
-seed list. Full mode never writes MATRIX_PATH, so `--pilot` output
-stays byte-stable.
+Paladin, Druid, and Warlock): emit `spell_campaign_matrix-<Class>.json`
+with first + last rank rows per merged S7 component over the G1 union
+plus the selected 51-point talent build's known spells (plus interior
+ranks whose signature differs), plus the all-rank seed list. Full mode
+never writes MATRIX_PATH, so `--pilot` output stays byte-stable.
 Whole-matrix (9-class) fan-out stays closed until G2 has a legal
 selected build for every class.
 """
@@ -170,14 +170,26 @@ CLASS_FANOUT_EXPECTATIONS = {
         "excluded": [20473, 20911, 20925, 26573],
     },
     "Druid": {
-        # Excluded are shipped-chain lower ranks outside both audited
-        # sets that carry a talent cost (Insect Swarm 5570 and Feral
-        # Faerie Fire 16857, rank 1 each): the Paladin 20473-shaped
-        # merged extra, keeping the seed at the 51 cap.
+        # Selected build is now feralcat (17 known; the balance
+        # build's Feral Faerie Fire 16857 moved inside the audited
+        # set). Excluded are shipped-chain lower ranks outside both
+        # audited sets that carry a talent cost (Insect Swarm 5570
+        # and 16689, rank 1 each): the Paladin 20473-shaped merged
+        # extra, keeping the seed at the 51 cap.
         "union": 187,
+        "talent_known": 17,
+        "overlap": [],
+        "excluded": [5570, 16689],
+    },
+    "Warlock": {
+        # smruin (first legal build by role preference): the merged
+        # extras are Shadowburn 17877, Conflagrate 17962, and Dark
+        # Pact 18220 (rank 1 each, cost 1 each), keeping the seed at
+        # the 51 cap exactly like Paladin/Druid.
+        "union": 202,
         "talent_known": 15,
         "overlap": [],
-        "excluded": [5570, 16857],
+        "excluded": [17877, 17962, 18220],
     },
 }
 
@@ -199,6 +211,24 @@ CLASS_FULL_BUCKET_COUNTS = {
         "form_totem": 64,
         "passive": 3,
         "form": 5,
+    },
+    "Warlock": {
+        # smruin fan-out (audited over the exact G1 union): no
+        # friendly/dual/corpse/form rows for this class. The six
+        # Sacrifice ranks (TARGET_UNIT_CASTER_MASTER) count as pet,
+        # not self: cast by the voidwalker on its master.
+        "self": 26,
+        "friendly": 0,
+        "hostile_dummy": 110,
+        "item_reagent_ammo": 31,
+        "party_duel": 5,
+        "ground_area": 13,
+        "dual": 0,
+        "corpse": 0,
+        "pet": 16,
+        "form_totem": 0,
+        "passive": 1,
+        "form": 0,
     },
 }
 
@@ -383,6 +413,18 @@ def effective_row(spell_id: int) -> dict:
         ("effect_base_dice1", int),
         ("effect_base_dice2", int),
         ("effect_base_dice3", int),
+        ("max_level", int),
+        ("base_level", int),
+        ("spell_level", int),
+        ("effect_dice_per_level1", float),
+        ("effect_dice_per_level2", float),
+        ("effect_dice_per_level3", float),
+        ("effect_real_points_per_level1", float),
+        ("effect_real_points_per_level2", float),
+        ("effect_real_points_per_level3", float),
+        ("effect_amplitude1", int),
+        ("effect_amplitude2", int),
+        ("effect_amplitude3", int),
         ("script_name", str),
     ]
     out = _query(
@@ -399,7 +441,11 @@ def effective_row(spell_id: int) -> dict:
         "effectImplicitTargetB3,recoveryTime,"
         "effectBasePoints1,effectBasePoints2,effectBasePoints3,"
         "effectDieSides1,effectDieSides2,effectDieSides3,"
-        "effectBaseDice1,effectBaseDice2,effectBaseDice3,script_name "
+        "effectBaseDice1,effectBaseDice2,effectBaseDice3,"
+        "maxLevel,baseLevel,spellLevel,"
+        "effectDicePerLevel1,effectDicePerLevel2,effectDicePerLevel3,"
+        "effectRealPointsPerLevel1,effectRealPointsPerLevel2,effectRealPointsPerLevel3,"
+        "effectAmplitude1,effectAmplitude2,effectAmplitude3,script_name "
         f"FROM spell_template t1 WHERE entry={spell_id} AND "
         f"build=(SELECT max(build) FROM spell_template t2 "
         f"WHERE t1.entry=t2.entry AND build <= {SUPPORTED_BUILD})"
@@ -1146,7 +1192,10 @@ def derive_bucket(spell_id: int, eff: dict) -> str:
         return "item_reagent_ammo"
     if targets & PARTY_TARGETS or effects & DUEL_EFFECTS:
         return "party_duel"
-    if targets & PET_TARGETS or effects & (PET_SUMMON_EFFECTS | LEARN_PET_EFFECTS):
+    if targets & PET_TARGETS or 27 in targets or effects & (PET_SUMMON_EFFECTS | LEARN_PET_EFFECTS):
+        # 27 = TARGET_UNIT_CASTER_MASTER: the spell is cast BY the
+        # pet on its master (Voidwalker Sacrifice), never by the
+        # player directly; it rides the pet scenario's pet-cast leg.
         return "pet"
     if targets & (LOCATION_TARGETS | AOE_TARGETS) or effects & GROUND_EFFECTS:
         return "ground_area"
@@ -1173,6 +1222,112 @@ def max_direct_heal(eff: dict) -> int:
 #: as heal legs that could only FAIL.
 SUB_OBSERVABLE_HEAL_MAX = 10
 
+#: `SPELL_AURA_PERIODIC_DAMAGE` (`SpellAuraDefines.h:54`): the DoT
+#: aura whose per-tick amounts the harness latches from
+#: SMSG_PERIODICAURALOG (590).
+PERIODIC_DAMAGE_AURA = 3
+
+#: Campaign caster level for oracle bands (the fixture is seeded and
+#: run at 60).
+ORACLE_CASTER_LEVEL = 60
+
+
+def f32(value: float) -> float:
+    """Round-trip through 32-bit float, like the fork's
+    `CalculateSpellEffectValue` (`spell_math_oracle_gen.py` mirrors
+    the same per-operation rounding)."""
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
+def effect_tick_bounds(eff: dict, index: int, caster_level: int = ORACLE_CASTER_LEVEL) -> tuple[float, float]:
+    """Fork `CalculateSpellEffectValue` irand endpoints for one
+    effect at the campaign caster level (pure; same math as
+    `spell_math_oracle_gen.effect_value_bounds`)."""
+    max_level = int(eff["max_level"])
+    base_level = int(eff["base_level"])
+    spell_level = int(eff["spell_level"])
+    level = caster_level
+    if level > max_level and max_level > 0:
+        level = max_level
+    elif level < base_level:
+        level = base_level
+    level -= spell_level
+    base_dice = int(eff[f"effect_base_dice{index}"])
+    value = float(int(eff[f"effect_base_points{index}"]))
+    value = f32(value + f32(level * f32(float(eff[f"effect_real_points_per_level{index}"]))))
+    random_points = int(
+        f32(float(eff[f"effect_die_sides{index}"]) + level * f32(float(eff[f"effect_dice_per_level{index}"])))
+    )
+    if random_points in (0, 1):
+        value = f32(value + base_dice)
+        return (value, value)
+    low = min(base_dice, random_points)
+    high = max(base_dice, random_points)
+    return (f32(value + low), f32(value + high))
+
+
+def load_spell_durations(dbc_path: pathlib.Path | None = None) -> dict[int, int]:
+    """SpellDuration.dbc index -> duration ms (fork `GetDuration`
+    base: field 1, absolute value; -1 stays -1 for infinite)."""
+    dbc_path = dbc_path or resolve_dbc_dir()
+    data = (dbc_path / "SpellDuration.dbc").read_bytes()
+    if len(data) < 20 or data[:4] != b"WDBC":
+        raise AssertionError(f"{dbc_path}/SpellDuration.dbc: not a WDBC file")
+    _magic, count, _fields, record_size, _string_size = struct.unpack_from("<4sIIII", data, 0)
+    durations = {}
+    for index in range(count):
+        rec_id, duration_ms, _a = struct.unpack_from("<iii", data, 20 + index * record_size)
+        durations[rec_id] = -1 if duration_ms == -1 else abs(duration_ms)
+    return durations
+
+
+def periodic_tick_band(eff: dict, durations: dict[int, int], caster_level: int = ORACLE_CASTER_LEVEL) -> dict | None:
+    """Oracle per-tick band for the first periodic-damage effect.
+
+    Pure function of the cast row's own effect terms (base points /
+    dice / sides / per-level terms at the campaign caster level with
+    the fork max/base clamp) plus the DBC duration for the tick
+    count. Returns None when the row has no periodic-damage effect
+    or no tick period. The band is raw formula output (stored base
+    points + 1 when die sides collapse to 1), stated as such in the
+    row's evidence note, never calibrated from wire data.
+    """
+    for index in (1, 2, 3):
+        if int(eff.get(f"aura{index}", 0)) != PERIODIC_DAMAGE_AURA:
+            continue
+        period_ms = int(eff.get(f"effect_amplitude{index}", 0))
+        if period_ms <= 0:
+            return None
+        low, high = effect_tick_bounds(eff, index, caster_level)
+        duration_ms = int(durations.get(int(eff.get("duration_index", 0)), 0))
+        count = duration_ms // period_ms if duration_ms > 0 else None
+        return {
+            "effect_index": index,
+            "tick_band": [low, high],
+            "tick_period_ms": period_ms,
+            "tick_duration_ms": duration_ms,
+            "tick_count_expected": count,
+        }
+    return None
+
+
+def select_rank_coverage(ordered_members: list[int], signatures: dict[int, tuple]) -> list[int]:
+    """Cast set for one merged chain: first + last rank plus any
+    interior rank whose (effect_ids, aura_ids, script_name) signature
+    differs from the previous rank in level order. Pure; the caller
+    orders members by (spell_level, spell_id)."""
+    if len(ordered_members) <= 2:
+        return list(ordered_members)
+    picks = [ordered_members[0]]
+    previous = signatures[ordered_members[0]]
+    for member in ordered_members[1:-1]:
+        current = signatures[member]
+        if current != previous:
+            picks.append(member)
+        previous = current
+    picks.append(ordered_members[-1])
+    return picks
+
 
 def _verify_aura(spell_id: int, eff: dict) -> int:
     """Aura id to observe: the applied aura when it is a separate
@@ -1183,10 +1338,13 @@ def _verify_aura(spell_id: int, eff: dict) -> int:
     return best if best > spell_id else spell_id
 
 
-def derive_expected(spell_id: int, eff: dict, bucket: str) -> dict:
+def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, int] | None = None) -> dict:
     """Observable outcome for one cast row. SCRIPT_EFFECT rows keep
     their intent kind but ride as classify_only (G4 script evidence
-    unknown); threat-only and dispel-only rows are marker-only."""
+    unknown); threat-only and dispel-only rows are marker-only.
+    Summon-effect rows expect a pet object; periodic-damage rows
+    carry an oracle per-tick band (plus expected tick count when
+    durations are given) for the hostile leg's 590 latch."""
     effects = _effects_of(eff)
     auras = {eff["aura1"], eff["aura2"], eff["aura3"]}
     script = eff["script_name"]
@@ -1261,8 +1419,6 @@ def derive_expected(spell_id: int, eff: dict, bucket: str) -> dict:
             }
     if HEAL_EFFECTS & effects:
         return {"kind": "heal_delta_target"}
-    if SCHOOL_DAMAGE_EFFECTS & effects:
-        return {"kind": "damage_log", "opcode": 592}
     if (
         effects & TELEPORT_EFFECTS
         and not has_aura
@@ -1274,7 +1430,30 @@ def derive_expected(spell_id: int, eff: dict, bucket: str) -> dict:
             "note": "teleport leaves the bench map; cross-map leg verifies the transfer, never an object",
         }
     if bucket == "ground_area":
-        return {"kind": "object_created"}
+        # Consecrated/rain ground rows still tick periodically; the
+        # band rides as evidence (no leg latches ground ticks yet).
+        if effects & GROUND_EFFECTS:
+            return _with_tick_band({"kind": "object_created"}, eff, durations)
+        if APPLY_AURA_EFFECTS & effects or has_aura:
+            # Instant area-aura rows (Howl of Terror's fear): no
+            # dynobject exists, so the leg checks the aura on the
+            # in-radius dummy instead of an object.
+            return _with_tick_band({"kind": "aura_on_target", "aura": _verify_aura(spell_id, eff)}, eff, durations)
+        if effects & SCHOOL_DAMAGE_EFFECTS and not (effects & SCRIPT_EFFECTS):
+            # Trigger-only damage appliers (Hellfire Effect): a
+            # direct dest cast resolves no targets fork-exactly
+            # (dest-switch default), so there is no observable
+            # outcome to gate on.
+            return {"kind": "none_marker", "note": "trigger-only applier: direct cast is a fork-exact no-op"}
+        return _with_tick_band({"kind": "object_created"}, eff, durations)
+    if SCHOOL_DAMAGE_EFFECTS & effects:
+        return _with_tick_band({"kind": "damage_log", "opcode": 592}, eff, durations)
+    if bucket == "pet" and effects & (PET_SUMMON_EFFECTS | LEARN_PET_EFFECTS):
+        # A reagent-free summon row is the pet scenario's setup: the
+        # leg verifies the pet object itself, never a dummy.
+        # Reagent-gated summons stay in the item bucket above (their
+        # item_consumed kind drives the fixture-reagent gate).
+        return {"kind": "pet_created"}
     if bucket == "item_reagent_ammo":
         reagents = [eff[f"reagent{i}"] for i in range(1, 9) if eff[f"reagent{i}"]]
         if reagents:
@@ -1286,8 +1465,12 @@ def derive_expected(spell_id: int, eff: dict, bucket: str) -> dict:
         }
     if APPLY_AURA_EFFECTS & effects or has_aura:
         aura = _verify_aura(spell_id, eff)
+        if 27 in _targets_of(eff):
+            # TARGET_UNIT_CASTER_MASTER: cast by the pet, lands on
+            # the player (Sacrifice's shield).
+            return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
         if bucket == "self":
-            return {"kind": "aura_on_caster", "aura": aura}
+            return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
         if bucket == "form_totem":
             # Stance-gated rows keep their natural target: feral
             # abilities land their aura on the enemy (Growl/Bash/Rip),
@@ -1295,10 +1478,23 @@ def derive_expected(spell_id: int, eff: dict, bucket: str) -> dict:
             # alone cannot decide the side; the targets can. 22 is
             # areaselect-enemy around the caster (Demoralizing Roar).
             if _targets_of(eff) & (HOSTILE_TARGETS | FRIENDLY_TARGETS | AOE_TARGETS | {22}):
-                return {"kind": "aura_on_target", "aura": aura}
-            return {"kind": "aura_on_caster", "aura": aura}
-        return {"kind": "aura_on_target", "aura": aura}
+                return _with_tick_band({"kind": "aura_on_target", "aura": aura}, eff, durations)
+            return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
+        return _with_tick_band({"kind": "aura_on_target", "aura": aura}, eff, durations)
     return {"kind": "none_marker", "note": "EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only"}
+
+
+def _with_tick_band(expected: dict, eff: dict, durations: dict[int, int] | None) -> dict:
+    """Attach the oracle per-tick band when the row carries a
+    periodic-damage effect and durations are given (full mode).
+    With durations None (pilot/self-test probes) the expected dict
+    is returned unchanged, so band math stays opt-in."""
+    if durations is None:
+        return expected
+    band = periodic_tick_band(eff, durations)
+    if band is None:
+        return expected
+    return {**expected, **band}
 
 
 def g1_summary(doc: dict) -> str:
@@ -1390,11 +1586,12 @@ def selected_talent_known_spells(class_name: str, talent_doc: dict | None = None
 
 
 def derive_full_rows(class_name: str = "Paladin", pre_g1: dict | None = None, talent_doc: dict | None = None) -> dict:
-    """Per-class fan-out: one cast row per merged S7 component over the
-    G1 union plus the selected talent build's known spells, plus the
-    all-rank seed list (every cast row's all_rank_ids, so trainer
-    prev-rank and SelectAuraRankForLevel behave as on a trained
-    character).
+    """Per-class fan-out: first + last rank of every merged S7
+    component over the G1 union plus the selected talent build's
+    known spells (plus interior ranks whose effect/aura/script
+    signature differs), plus the all-rank seed list (every cast
+    row's all_rank_ids, so trainer prev-rank and
+    SelectAuraRankForLevel behave as on a trained character).
 
     Also audits the bucket derivation over the G1 union against the
     pinned distribution; any drift raises instead of emitting.
@@ -1445,23 +1642,44 @@ def derive_full_rows(class_name: str = "Paladin", pre_g1: dict | None = None, ta
         )
     if 21563 in cast_ids:
         raise AssertionError("spell_disabled 21563 reached the cast set")
+    durations = load_spell_durations()
+    eff_cache: dict[int, dict] = {}
+
+    def cached_eff(spell_id: int) -> dict:
+        if spell_id not in eff_cache:
+            eff_cache[spell_id] = effective_row(spell_id)
+        return eff_cache[spell_id]
+
+    def rank_signature(spell_id: int) -> tuple:
+        row_eff = cached_eff(spell_id)
+        return (
+            (row_eff["effect1"], row_eff["effect2"], row_eff["effect3"]),
+            (row_eff["aura1"], row_eff["aura2"], row_eff["aura3"]),
+            row_eff["script_name"],
+        )
+
     rows = []
     for comp in comps:
-        cast = comp["cast_spell_id"]
-        eff = effective_row(cast)
-        bucket = derive_bucket(cast, eff)
-        expected = derive_expected(cast, eff, bucket)
-        spec: dict = {"class": class_name, "bucket": bucket, "expected": expected}
-        row = validate_row(cast, spec, eff)
-        row["merged_chain"] = {
-            "members": comp["members"],
-            "chain_firsts": comp["chain_firsts"],
-        }
-        if "classify_only" in expected:
-            row["campaign"] = f"classify_only_{expected['classify_only']}"
-        elif expected["kind"] in ("none_marker", "dual_outcome"):
-            row["campaign"] = "classify_only"
-        rows.append(row)
+        # Rank coverage: first + last rank of the merged chain plus
+        # any interior rank whose signature differs from the previous
+        # rank in level order (a stricter gate than last-rank-only:
+        # a mid-chain behavior change can no longer hide).
+        ordered = sorted(comp["members"], key=lambda s: (pre_g1["effective"][s]["spell_level"], s))
+        for cast in select_rank_coverage(ordered, {spell: rank_signature(spell) for spell in ordered}):
+            eff = cached_eff(cast)
+            bucket = derive_bucket(cast, eff)
+            expected = derive_expected(cast, eff, bucket, durations)
+            spec: dict = {"class": class_name, "bucket": bucket, "expected": expected}
+            row = validate_row(cast, spec, eff)
+            row["merged_chain"] = {
+                "members": comp["members"],
+                "chain_firsts": comp["chain_firsts"],
+            }
+            if "classify_only" in expected:
+                row["campaign"] = f"classify_only_{expected['classify_only']}"
+            elif expected["kind"] in ("none_marker", "dual_outcome"):
+                row["campaign"] = "classify_only"
+            rows.append(row)
     rows.sort(key=lambda r: (r["class"], r["spell_id"]))
     raw_seed = set(seed_input) | {rank for row in rows for rank in row["all_rank_ids"]}
     if not set(seed_input) <= raw_seed:
@@ -1658,7 +1876,18 @@ def run_self_test() -> int:
         full_rows = full_doc["rows"]
         assert all(r["class"] == class_name for r in full_rows)
         assert full_doc["full_cast_count"] == len(full_rows)
-        assert full_doc["full_merged_chains"] == len(full_rows)
+        # Rank coverage: several rows may share one merged chain
+        # (first + last + signature-change interiors), so the merged
+        # count is the distinct member-sets, never the row count.
+        distinct_comps = {tuple(r["merged_chain"]["members"]) for r in full_rows}
+        assert full_doc["full_merged_chains"] == len(distinct_comps)
+        for row in full_rows:
+            band = (row.get("expected") or {}).get("tick_band")
+            if band is not None:
+                assert len(band) == 2 and band[0] <= band[1], row["spell_id"]
+                assert (row["expected"]["tick_period_ms"] or 0) > 0, row["spell_id"]
+                count = row["expected"].get("tick_count_expected")
+                assert count is None or count >= 1, row["spell_id"]
         seed_set = set(full_doc["full_seed_spell_ids"][class_name])
         excluded_set = set(full_doc.get("full_seed_excluded_spell_ids", {}).get(class_name, []))
         assert not (seed_set & excluded_set), excluded_set & seed_set
@@ -1714,7 +1943,7 @@ def run_self_test() -> int:
             for row in corpse_rows:
                 assert row["expected"]["kind"] == "resurrect_request", row
             assert not [r for r in full_rows if r["expected"]["kind"] == "expect_cast_failure"]
-            assert excluded_set == {5570, 16857}, excluded_set
+            assert excluded_set == {5570, 16689}, excluded_set
         print(f"SELFTEST per-class artifact {class_name} cast={len(full_rows)} seed={len(seed_set)} ok")
     # G1 artifact, if generated, must reproduce the derived
     # matrix's exact level-60 union counts with no exclusions.
@@ -1867,6 +2096,11 @@ def run_self_test() -> int:
     consecration = _eff(effect1=27, aura1=3, targ_a1=18)
     assert derive_bucket(20924, consecration) == "ground_area"
     assert derive_expected(20924, consecration, "ground_area") == {"kind": "object_created"}
+    # Instant area-aura ground rows (Howl of Terror's fear) carry no
+    # dynobject: the leg checks the aura on the in-radius dummy.
+    howl = _eff(effect1=6, effect2=6, aura1=7, aura2=31, targ_a1=22, targ_a2=22)
+    assert derive_bucket(5484, howl) == "ground_area"
+    assert derive_expected(5484, howl, "ground_area") == {"kind": "aura_on_target", "aura": 5484}
     greater = _eff(effect1=6, aura1=99, targ_a1=61, reagent1=21177)
     assert derive_bucket(25916, greater) == "item_reagent_ammo"
     assert derive_expected(25916, greater, "item_reagent_ammo") == {"kind": "item_consumed", "reagent": 21177}
@@ -1928,7 +2162,113 @@ def run_self_test() -> int:
     }
     assert CLASS_FULL_BUCKET_COUNTS["Paladin"] == PALADIN_FULL_BUCKET_COUNTS
     assert CLASS_FANOUT_EXPECTATIONS["Druid"]["union"] == 187
-    assert CLASS_FANOUT_EXPECTATIONS["Druid"]["excluded"] == [5570, 16857]
+    assert CLASS_FANOUT_EXPECTATIONS["Druid"]["excluded"] == [5570, 16689]
+    # Warlock pins: the audited smruin fan-out literals above.
+    assert CLASS_FANOUT_EXPECTATIONS["Warlock"] == {
+        "union": 202,
+        "talent_known": 15,
+        "overlap": [],
+        "excluded": [17877, 17962, 18220],
+    }
+    assert CLASS_FULL_BUCKET_COUNTS["Warlock"] == {
+        "self": 26,
+        "friendly": 0,
+        "hostile_dummy": 110,
+        "item_reagent_ammo": 31,
+        "party_duel": 5,
+        "ground_area": 13,
+        "dual": 0,
+        "corpse": 0,
+        "pet": 16,
+        "form_totem": 0,
+        "passive": 1,
+        "form": 0,
+    }
+    # Rank-coverage selector: first + last plus interiors that differ
+    # from the previous rank; identical chains keep two rows.
+    sig_a = ((6, 0, 0), (3, 0, 0), "")
+    sig_b = ((6, 2, 0), (3, 0, 0), "")
+    assert select_rank_coverage([11], {11: sig_a}) == [11]
+    assert select_rank_coverage([11, 22], {11: sig_a, 22: sig_a}) == [11, 22]
+    assert select_rank_coverage([11, 22, 33], {11: sig_a, 22: sig_a, 33: sig_a}) == [11, 33]
+    assert select_rank_coverage([11, 22, 33, 44], {11: sig_a, 22: sig_b, 33: sig_b, 44: sig_a}) == [11, 22, 44]
+
+    # Oracle tick-band math: Corruption-rank-6 shape ticks 137.0
+    # (stored 136 + 1, die sides collapse) every 3000 ms over
+    # 18000 ms = 6 ticks.
+    def _dot_eff(**over: object) -> dict:
+        base = _eff(
+            max_level=65,
+            base_level=60,
+            spell_level=60,
+            duration_index=85,
+            effect1=6,
+            aura1=3,
+            effect_base_points1=136,
+            effect_die_sides1=1,
+            effect_base_dice1=1,
+            effect_dice_per_level1=0,
+            effect_real_points_per_level1=0,
+            effect_amplitude1=3000,
+        )
+        base.update(over)
+        return base
+
+    corruption_eff = _dot_eff()
+    assert effect_tick_bounds(corruption_eff, 1) == (137.0, 137.0)
+    band = periodic_tick_band(corruption_eff, {85: 18000})
+    assert band == {
+        "effect_index": 1,
+        "tick_band": [137.0, 137.0],
+        "tick_period_ms": 3000,
+        "tick_duration_ms": 18000,
+        "tick_count_expected": 6,
+    }, band
+    # Fork level clamp: above max_level the level term freezes
+    # (level 60 -> 10, minus spell level 1 = 9; 10 + 9 * 1.0 + 1).
+    clamped = _dot_eff(
+        max_level=10,
+        base_level=1,
+        spell_level=1,
+        effect_base_points1=10,
+        effect_real_points_per_level1=1.0,
+    )
+    assert effect_tick_bounds(clamped, 1) == (20.0, 20.0), effect_tick_bounds(clamped, 1)
+    # Open dice: the band spans base+min to base+max.
+    open_dice = _dot_eff(effect_die_sides1=6, effect_base_dice1=1, effect_base_points1=10)
+    assert effect_tick_bounds(open_dice, 1) == (11.0, 16.0)
+    # Rain-of-Fire shape: per-level term at 60 (level 58 + 2 * 0.6).
+    rof = _dot_eff(
+        max_level=63,
+        base_level=58,
+        spell_level=58,
+        duration_index=31,
+        effect_base_points1=225,
+        effect_real_points_per_level1=0.6,
+        effect_amplitude1=2000,
+    )
+    rof_band = periodic_tick_band(rof, {31: 8000})
+    assert rof_band is not None and rof_band["tick_count_expected"] == 4, rof_band
+    assert len(rof_band["tick_band"]) == 2 and abs(rof_band["tick_band"][0] - 227.2) < 0.01, rof_band
+    # No periodic-damage aura, or no period, means no band.
+    assert periodic_tick_band(_eff(effect1=6, aura1=4), {85: 18000}) is None
+    assert periodic_tick_band(_dot_eff(effect_amplitude1=0), {85: 18000}) is None
+    # derive_expected attaches the band only when durations are
+    # given, and never to non-periodic rows.
+    assert "tick_band" not in derive_expected(20293, seal, "self")
+    no_band = derive_expected(25311, _dot_eff(name="Corruption", effect1=6, aura1=3), "hostile_dummy")
+    assert "tick_band" not in no_band
+    with_band = derive_expected(25311, _dot_eff(name="Corruption", effect1=6, aura1=3), "hostile_dummy", {85: 18000})
+    assert with_band["tick_band"] == [137.0, 137.0] and with_band["tick_count_expected"] == 6, with_band
+    # Summon rows expect a created pet; reagent-gated summons stay
+    # item rows for the fixture-reagent gate.
+    imp = _eff(effect1=56, targ_a1=32, name="Summon Imp")
+    assert derive_bucket(688, imp) == "pet"
+    assert derive_expected(688, imp, "pet") == {"kind": "pet_created"}
+    fel = _eff(effect1=56, targ_a1=32, reagent1=6265, name="Summon Felhunter")
+    assert derive_bucket(691, fel) == "item_reagent_ammo"
+    assert derive_expected(691, fel, "item_reagent_ammo") == {"kind": "item_consumed", "reagent": 6265}
+    print("SELFTEST rank coverage + tick bands + pet kinds ok")
     # Druid derivation: forms, stance gates, corpse, HoT/heal. Forms
     # (shapeshift aura 36, even with Effect 77) derive the form bucket
     # with a form_change outcome, never a script classify_only.
@@ -1966,6 +2306,11 @@ def run_self_test() -> int:
     # Corpse precedes form/reagent: Rebirth (Effect 113 + Moonkin-bit
     # gate + reagent) classifies corpse with a resurrect request, so
     # the harness never routes it to the item leg.
+    # TARGET_UNIT_CASTER_MASTER (27) rows are cast BY the pet on
+    # its master: pet bucket, shield lands on the player.
+    sacrifice = _eff(effect1=6, aura1=69, targ_a1=27, effect2=1, targ_a2=1, name="Sacrifice")
+    assert derive_bucket(7812, sacrifice) == "pet"
+    assert derive_expected(7812, sacrifice, "pet") == {"kind": "aura_on_caster", "aura": 7812}
     rebirth = _eff(effect1=113, targ_a1=17, stances=1073741824, reagent1=17038, name="Rebirth")
     assert derive_bucket(20748, rebirth) == "corpse"
     assert derive_expected(20748, rebirth, "corpse") == {"kind": "resurrect_request"}
@@ -2045,7 +2390,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pilot", action="store_true", help="emit the pinned pilot matrix")
     parser.add_argument(
-        "--full", action="store_true", help="whole-class fan-out (one cast row per merged S7 chain on the last rank)"
+        "--full",
+        action="store_true",
+        help="whole-class fan-out (first + last rank per merged S7 chain plus signature-change interiors)",
     )
     parser.add_argument(
         "--class", dest="class_name", default="Paladin", help="class fanned out by --full (default Paladin)"

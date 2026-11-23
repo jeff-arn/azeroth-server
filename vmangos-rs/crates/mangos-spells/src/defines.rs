@@ -301,7 +301,9 @@ pub mod aura_interrupt_flag {
 pub mod target {
     pub const NONE: u32 = 0;
     pub const UNIT_CASTER: u32 = 1;
+    pub const UNIT_CASTER_PET: u32 = 5;
     pub const UNIT_ENEMY: u32 = 6;
+    pub const UNIT_CASTER_MASTER: u32 = 27;
     pub const ENUM_UNITS_PARTY_WITHIN_CASTER_RANGE: u32 = 20;
     pub const ENUM_UNITS_ENEMY_IN_CONE: u32 = 24;
     pub const UNIT_FRIEND: u32 = 21;

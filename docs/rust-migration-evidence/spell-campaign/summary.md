@@ -54,3 +54,43 @@ counts: BLOCKED=8, PASS=40, PASSIVE-VERIFIED=15
 - 9881 Maul form_totem target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
 - 20748 Rebirth corpse target=None: BLOCKED wire-target-unsupported  | no corpse-target scenario in a live class run; the parser discards corpse GUIDs (correction 2)
 - 21850 Gift of the Wild item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17026 absent from bags and the engine has no reagent gate; scenario-inapplicable
+## Warlock run-class (113 rows)
+
+counts: BLOCKED=37, PASS=62, PASSIVE-VERIFIED=14
+- 691 Summon Felhunter item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 693 Create Soulstone (Minor) item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 697 Summon Voidwalker item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 712 Summon Succubus item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 1098 Enslave Demon item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 1454 Life Tap self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 2362 Create Spellstone item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 2947 Fire Shield party_duel target=None: BLOCKED no-party  | solo character with no party; scenario-inapplicable
+- 3716 Torment hostile_dummy target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 5857 Hellfire Effect ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 6201 Create Healthstone (Minor) item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 6353 Soul Fire item_reagent_ammo target=None: BLOCKED fixture-gear  | offhand is not armor-class (class 4): None; starter lacks a shield
+- 6360 Soothing Kiss hostile_dummy target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 6366 Create Firestone (Lesser) item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11681 Hellfire Effect ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 11682 Hellfire Effect ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 11689 Life Tap self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 11726 Enslave Demon item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11730 Create Healthstone (Major) item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 11771 Fire Shield party_duel target=None: BLOCKED no-party  | solo character with no party; scenario-inapplicable
+- 11775 Torment hostile_dummy target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 11785 Soothing Kiss hostile_dummy target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 17728 Create Spellstone (Major) item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 17735 Suffering ground_area target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 17752 Suffering ground_area target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 17924 Soul Fire item_reagent_ammo target=None: BLOCKED fixture-gear  | offhand is not armor-class (class 4): None; starter lacks a shield
+- 17953 Create Firestone (Major) item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 18540 Ritual of Doom item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 16583 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 18867 Shadowburn item_reagent_ammo target=None: BLOCKED fixture-gear  | offhand is not armor-class (class 4): None; starter lacks a shield
+- 18871 Shadowburn item_reagent_ammo target=None: BLOCKED fixture-gear  | offhand is not armor-class (class 4): None; starter lacks a shield
+- 18937 Dark Pact pet target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 18938 Dark Pact pet target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 19244 Spell Lock hostile_dummy target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 19505 Devour Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 19647 Spell Lock hostile_dummy target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 19736 Devour Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 20757 Create Soulstone (Major) item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable

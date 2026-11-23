@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import pathlib
 import select
@@ -190,8 +191,62 @@ CASTER_POS = (-6295.0, 315.0, 377.5)
 # aggro cannot maul the damaged ally mid-leg (z=380 falls to ground).
 HEAL_CASTER_POS = (-6270.0, 292.0, 380.0)
 ALLY_POS = (-6268.0, 290.0, 380.0)
-WOLF_COUNTERS = [344, 345, 346, 347, 1525, 1526]
-TROGG_COUNTERS = [335, 340, 341, 342]
+# Every 705/707 spawn within 160 yd of the arena, nearest first
+# (bench creature table): the original 10 counters starved once
+# rank coverage tripled hostile rows per class, even with the
+# 2-3 s dummy respawn (visibility + clean-reuse gates).
+WOLF_COUNTERS = [
+    1526,
+    1525,
+    344,
+    345,
+    1519,
+    1034,
+    1527,
+    1515,
+    346,
+    347,
+    1032,
+    1518,
+    338,
+    1036,
+    1530,
+    1031,
+    1012,
+    1516,
+    1517,
+    1541,
+    1539,
+    1014,
+    1053,
+    400,
+]
+TROGG_COUNTERS = [
+    1039,
+    1522,
+    342,
+    341,
+    1521,
+    1040,
+    340,
+    1540,
+    1524,
+    1037,
+    1533,
+    1535,
+    1057,
+    1513,
+    335,
+    1531,
+    1532,
+    1511,
+    1534,
+    1542,
+    1038,
+    1548,
+    1543,
+    1510,
+]
 
 #: Finisher dummies: Ice Claw Bear spawns (entry 1196, level 8)
 #: east of the arena. A combo builder must land on the finisher's
@@ -501,6 +556,17 @@ def seed_character(guid: int, spells: list[int], pos: tuple[float, float, float]
     smoke.sql_scalar("characters", f"DELETE FROM character_spell_cooldown WHERE guid={guid}")
     smoke.sql_scalar("characters", f"DELETE FROM character_aura WHERE guid={guid}")
     smoke.sql_scalar("characters", f"DELETE FROM corpse WHERE player_guid={guid}")
+    # A persisted pet from an earlier run re-summons at login and
+    # attacks the caster's targets, contaminating every hostile
+    # row's health evidence (Warlock first run). The fixture reset
+    # owns the whole character: clear the pet and its satellite
+    # rows; pet scenarios summon fresh in-session.
+    for table in ("pet_aura", "pet_spell", "pet_spell_cooldown"):
+        smoke.sql_scalar(
+            "characters",
+            f"DELETE FROM {table} WHERE guid IN (SELECT id FROM character_pet WHERE owner_guid={guid})",
+        )
+    smoke.sql_scalar("characters", f"DELETE FROM character_pet WHERE owner_guid={guid}")
     print(f"SEEDED guid={guid} spells={len(spells)} pos=({x},{y},{z})")
 
 
@@ -508,6 +574,11 @@ SETUP_SPELLS: dict[str, tuple[int, ...]] = {
     # Battle Stance is scenario setup for stance-gated Rend, not a
     # verdict row. It is seeded and counted explicitly.
     "Warrior": (2457,),
+    # Grimoire teach wrappers for Sacrifice ranks (7885 -> 7812,
+    # 19447 -> 19443): a fresh voidwalker only knows Torment, so
+    # the pet-cast leg teaches before ordering the cast, exactly
+    # like using the grimoire item in game.
+    "Warlock": (7885, 19447),
 }
 
 #: Druid shapeshift form spells (the fan-out cast set's `form`-bucket
@@ -803,6 +874,66 @@ def matching_damage_logs(
             continue
         logs.append(parsed)
     return logs
+
+
+def matching_periodic_ticks(
+    events: list[tuple[int, bytes]], spell_id: int, target_guid: int, attacker_guid: int | None = None
+) -> list[int]:
+    """Attributed SMSG_PERIODICAURALOG (590) tick amounts for one
+    spell on one target. Direct hits (592) are excluded: the tick
+    band only constrains periodic amounts."""
+    amounts = []
+    for opcode, body in events:
+        if opcode != SMSG_PERIODICAURALOG:
+            continue
+        parsed = parse_periodicaura_log_body(body)
+        if parsed is None:
+            continue
+        if parsed["spell_id"] != spell_id:
+            continue
+        if parsed["target_guid"] != target_guid:
+            continue
+        if attacker_guid is not None and parsed["attacker_guid"] != attacker_guid:
+            continue
+        amounts.append(int(parsed["damage"]))
+    return amounts
+
+
+def tick_band_check(
+    expected: dict, tick_amounts: list[int], target_alive: bool, pre_hp: int | None = None
+) -> tuple[bool, str]:
+    """Pure tick-band gate for periodic-damage rows (the hostile
+    leg's 590 latch). Every observed tick must land in the oracle
+    band, and at least 2 in-band ticks are required while the target
+    lives (rank-1 casts that do not kill); a target that died before
+    a tick could land leaves the band un-enforced rather than
+    failing the row. Reports observed vs expected counts."""
+    band = expected.get("tick_band") or [0, 0]
+    low, high = float(band[0]), float(band[1])
+    expected_count = int(expected.get("tick_count_expected") or 2)
+    in_band = [amount for amount in tick_amounts if low <= amount <= high]
+    out_of_band = len(tick_amounts) - len(in_band)
+    if not target_alive and not tick_amounts:
+        return True, (
+            f"ticks 0/{expected_count} in oracle band [{low:g}-{high:g}]: "
+            "target died before a tick could land; band un-enforced"
+        )
+    # Never demand more ticks than the aura produces (Curse of Doom
+    # ticks once at 60 s): the 2-tick minimum only applies to
+    # multi-tick auras on living targets. It also cannot apply when
+    # two in-band ticks would kill the dummy outright (last-rank
+    # Drain Soul: 91/tick vs a 100 hp wolf, with melee pushback
+    # ending the channel): one in-band tick then carries the band
+    # proof, and periodicity is proven by the chain's rank-1 row.
+    required = min(2, expected_count) if target_alive else 1
+    if pre_hp and low * 2 >= pre_hp:
+        required = min(required, 1)
+    ok = out_of_band == 0 and len(in_band) >= required
+    return ok, (
+        f"ticks {len(in_band)}/{expected_count} in oracle band [{low:g}-{high:g}] "
+        f"(required>={required}, target_alive={target_alive}, out_of_band={out_of_band}, "
+        f"amounts={sorted(tick_amounts)})"
+    )
 
 
 def send_and_wait(
@@ -1174,6 +1305,19 @@ def single_outcome_verdict(row: dict, observed: dict) -> dict:
             packets=packets,
             target_guid=target_guid,
         )
+    if kind in ("health_delta_target", "damage_log", "aura_on_target") and "tick_band" in expected:
+        # Periodic-damage rows additionally latch their 590 ticks in
+        # the oracle band (hostile leg observes tick_amounts; paths
+        # without a latch ride the base gate and say so).
+        amounts = observed.get("tick_amounts")
+        if amounts is None:
+            detail += "; no tick latch on this path (band un-enforced: single repro)"
+        else:
+            tick_ok, tick_detail = tick_band_check(
+                expected, amounts, observed.get("post_hp") != 0, observed.get("pre_hp")
+            )
+            outcome_ok = outcome_ok and tick_ok
+            detail += "; " + tick_detail
     return make_verdict(
         row,
         "PASS" if outcome_ok else "FAIL",
@@ -2246,6 +2390,9 @@ def run_single(spell_id: int, char_name: str) -> int:
                     "pre_hp": pre_hp,
                     "post_hp": post_hp,
                     "damage_logs": (matching_damage_logs(window, spell_id, target, guid) if target is not None else []),
+                    "tick_amounts": (
+                        matching_periodic_ticks(window, spell_id, target, guid) if target is not None else None
+                    ),
                     "pre": pre,
                     "post": post,
                     "packets": [op for op, _ in window],
@@ -2387,6 +2534,21 @@ def pick_dummy(
     return (None, False)
 
 
+def wait_for_dummy(driver: ScriptedDriver, used: set[int], timeout_s: float = 30.0) -> tuple[int | None, bool, float]:
+    """Pool pick with a respawn wait. Bench dummies respawn in 2-3 s,
+    but a DoT-heavy class (Warlock: 49 hostile + 9 ground rows) can
+    hold all 10 counters dead/damaged/aurad at once; failing the row
+    instantly then is pool contention, not an engine finding. Poll
+    until a counter is live/clean or the budget runs out."""
+    waited = 0.0
+    while True:
+        dummy, reused = pick_dummy(driver, used)
+        if dummy is not None or waited >= timeout_s:
+            return (dummy, reused, waited)
+        driver.poll(2.0)
+        waited += 2.0
+
+
 def self_alive(driver: ScriptedDriver, guid: int) -> bool:
     obj = driver.world.get(guid)
     if obj is None:
@@ -2522,6 +2684,26 @@ def combo_builder_setup(builder_id: int):
     return setup
 
 
+def immolate_setup(immolate_id: int):
+    """pre_cast_setup factory: land Immolate on the dummy so a
+    Conflagrate row passes the fork TARGET_AURASTATE gate (the
+    fork consumes the Immolate; the setup runs per row, and a
+    failed setup rides the row's honest 103)."""
+
+    def setup(driver: ScriptedDriver, dummy: int) -> str:
+        if not aura_present(driver, dummy, immolate_id):
+            go, reason, _ops = cast_unit_faced(driver, immolate_id, dummy)
+            # Outlast the setup's own cast time plus the GCD it
+            # triggers: the Conflagrate that follows would otherwise
+            # eat NOT_READY from the still-running global cooldown.
+            driver.poll(3.5)
+            if not (go and aura_present(driver, dummy, immolate_id)):
+                return f"; immolate {immolate_id} setup FAILED go={go} reason={reason}"
+        return f"; immolate {immolate_id} setup verified"
+
+    return setup
+
+
 def form_gated_leg(
     row: dict,
     driver: ScriptedDriver,
@@ -2652,14 +2834,17 @@ def hostile_leg(
     if dummy_override is not None:
         dummy, fallback = dummy_override
         reused = dummy in used_dummies
+        dummy_waited = 0.0
     else:
-        dummy, reused = pick_dummy(driver, used_dummies)
+        dummy, reused, dummy_waited = wait_for_dummy(driver, used_dummies)
     if dummy is None:
         return make_verdict(
             row, "BLOCKED", reason="dummy-unavailable", evidence="no live 705/707 counter left in WorldState", pre=pre
         )
     used_dummies.add(dummy)
     reuse_note = "; reused observably-clean dummy (alive, full health, aura-free)" if reused else ""
+    if dummy_waited:
+        reuse_note += f"; pool wait +{dummy_waited:.0f}s"
     # Self-range rows (range_index 1, areaselect-at-caster 22) only
     # reach a dummy standing inside the effect radius: at the ranged
     # standoff the cast lands on nobody (Demoralizing Roar at 13 yd
@@ -2683,13 +2868,16 @@ def hostile_leg(
     attempts = 0
     go, reason, ops = False, None, []
     post_hp, target_aura, logs = pre_hp, False, []
+    min_hp = pre_hp
     aura_id = int(expected.get("aura", spell_id))
     range_step = standoff
+    landed_go = False
     while attempts < 5:
         attempts += 1
         mark = event_mark(driver)
         go, reason, cast_ops, waited = cast_unit_retry_power(driver, spell_id, dummy, timeout=15.0)
         ops += cast_ops
+        landed_go = landed_go or go
         if not go and reason == SPELL_FAILED_OUT_OF_RANGE:
             # Roaming dummy drifted out of range between approach and
             # cast (pilot Growl pattern): step closer and retry within
@@ -2730,12 +2918,20 @@ def hostile_leg(
         # Poll in slices and latch the aura: short auras (Growl's 3 s
         # taunt, Bash's stun) expire inside one long poll and would
         # read as never applied, then the recast dies on cooldown.
+        # Track the low-water hp too: fast regen can erase a small
+        # hit before the post read, and a kill respawns the dummy
+        # (full health) before the post read, so the single final
+        # read alone cannot tell landed damage from a clean miss.
         observe_s = 6.0 if float(row.get("speed") or 0) > 0 else 4.0
         target_aura = False
         sliced = 0.0
+        min_hp = pre_hp
         while sliced < observe_s:
             driver.poll(0.5)
             sliced += 0.5
+            probe_hp = driver.target_health(dummy)
+            if probe_hp is not None and (min_hp is None or probe_hp < min_hp):
+                min_hp = probe_hp
             if aura_present(driver, dummy, aura_id):
                 target_aura = True
                 if kind == "aura_on_target":
@@ -2743,6 +2939,8 @@ def hostile_leg(
         window = events_since(driver, mark)
         ops += [op for op, _ in window]
         post_hp = driver.target_health(dummy)
+        if min_hp is not None and (post_hp is None or min_hp < post_hp):
+            post_hp = min_hp
         logs = matching_damage_logs(window, spell_id, dummy, guid)
         if not go:
             break
@@ -2753,6 +2951,51 @@ def hostile_leg(
         if kind not in ("aura_on_target", "damage_log"):
             break
         driver.poll(1.6)
+    # A landed cast whose outcome simply had not manifested inside
+    # the short window must not be erased by a recast dying on the
+    # spell's own cooldown (Curse of Doom: GO, 60 s tick pending,
+    # recast reads NOT_READY). Restore the landed GO for the latch
+    # and the verdict; the cooldown rejection is scenario noise.
+    cooldown_erased = ""
+    if landed_go and not go and reason == SPELL_FAILED_NOT_READY:
+        go = True
+        cooldown_erased = "; landed cast retained over cooldown-blocked recast"
+    # Periodic-damage rows latch 590 ticks after the base outcome:
+    # DoT ticks land seconds apart, so the short aura/damage window
+    # above rarely holds the in-band ticks the band gate needs. The
+    # horizon follows the aura's own duration (Curse of Doom ticks
+    # once at 60 s), capped so one row cannot stall the campaign;
+    # rows that produce their ticks exit as soon as the gate is met.
+    tick_amounts: list[int] | None = None
+    tick_note = ""
+    if expected.get("tick_band") and go:
+        tick_amounts = matching_periodic_ticks(events_since(driver, mark), spell_id, dummy, guid)
+        latched_s = 0.0
+        band = expected["tick_band"]
+        horizon_s = 12.0
+        duration_ms = expected.get("tick_duration_ms") or 0
+        if duration_ms > 0:
+            horizon_s = min(max(12.0, duration_ms / 1000.0 + 5.0), 70.0)
+        want = min(2, int(expected.get("tick_count_expected") or 2))
+        died = min_hp == 0
+        while (
+            len([amount for amount in tick_amounts if band[0] <= amount <= band[1]]) < want
+            and latched_s < horizon_s
+            and not died
+            and driver.target_health(dummy) not in (None, 0)
+        ):
+            driver.poll(2.0)
+            latched_s += 2.0
+            latch_hp = driver.target_health(dummy)
+            if latch_hp is not None and (min_hp is None or latch_hp < min_hp):
+                min_hp = latch_hp
+                died = min_hp == 0
+            tick_amounts = matching_periodic_ticks(events_since(driver, mark), spell_id, dummy, guid)
+        post_hp = driver.target_health(dummy)
+        if min_hp is not None and (post_hp is None or min_hp < post_hp):
+            post_hp = min_hp
+        if latched_s:
+            tick_note = f"; tick latch +{latched_s:.0f}s"
     post = f"dummy guid={dummy} health={post_hp}"
     consumed = ""
     if name.startswith("Judgement") and go and not aura_present(driver, guid, 20154):
@@ -2770,13 +3013,14 @@ def hostile_leg(
             "pre_hp": pre_hp,
             "post_hp": post_hp,
             "damage_logs": logs,
+            "tick_amounts": tick_amounts,
             "pre": pre,
             "post": post,
             "packets": ops,
             "attempts": attempts,
         },
     )
-    verdict["evidence"] += f" after {attempts} attempt(s)" + consumed + reuse_note
+    verdict["evidence"] += f" after {attempts} attempt(s)" + consumed + reuse_note + cooldown_erased + tick_note
     if dummy_override is not None:
         # Pinned dummies live far from the arena (finisher bears):
         # walk back so later rows still see the 705/707 counters
@@ -3063,7 +3307,7 @@ def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[i
     following row (the cancel-aura channel interrupt)."""
     spell_id = row["spell_id"]
     pre = snapshot(driver, guid)
-    dummy, reused = pick_dummy(driver, used_dummies)
+    dummy, reused, dummy_waited = wait_for_dummy(driver, used_dummies)
     if dummy is None:
         return make_verdict(
             row, "BLOCKED", reason="dummy-unavailable", evidence="no live dummy for the radius leg", pre=pre
@@ -3071,6 +3315,8 @@ def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[i
     used_dummies.add(dummy)
     if reused:
         pre = f"{pre}; reused observably-clean dummy (alive, full health, aura-free)"
+    if dummy_waited:
+        pre = f"{pre}; pool wait +{dummy_waited:.0f}s"
     driver.approach_guid(dummy, 2.0)
     pos = driver.position
     pre_hp = driver.target_health(dummy)
@@ -3102,13 +3348,34 @@ def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[i
             packets=ops,
             target_guid=dummy,
         )
-    driver.poll(6.0)
+    # Sliced low-water hp like the hostile leg: a kill respawns
+    # the dummy (full health) and fast regen erases small hits,
+    # so the single final read cannot tell landed damage apart
+    # from a clean miss.
+    min_hp = pre_hp
+    sliced = 0.0
+    while sliced < 6.0:
+        driver.poll(1.0)
+        sliced += 1.0
+        probe_hp = driver.target_health(dummy)
+        if probe_hp is not None and (min_hp is None or probe_hp < min_hp):
+            min_hp = probe_hp
     window = events_since(driver, mark)
     ops += [op for op, _ in window]
     post_hp = driver.target_health(dummy)
+    if min_hp is not None and (post_hp is None or min_hp < post_hp):
+        post_hp = min_hp
     logs = matching_damage_logs(window, spell_id, dummy, guid)
     if go and spell_id not in applied_auras:
         applied_auras.append(spell_id)
+    # Instant area-aura rows (Howl of Terror) land fear on the
+    # in-radius dummy instead of a dynobject: check the aura.
+    target_aura = False
+    if (row.get("expected") or {}).get("kind") == "aura_on_target":
+        aura_id = int((row.get("expected") or {}).get("aura", spell_id))
+        target_aura = aura_present(driver, dummy, aura_id)
+        if target_aura and aura_id not in applied_auras:
+            applied_auras.append(aura_id)
     return single_outcome_verdict(
         row,
         {
@@ -3116,7 +3383,7 @@ def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[i
             "reason": reason,
             "caster_aura": False,
             "target_guid": dummy,
-            "target_aura": False,
+            "target_aura": target_aura,
             "pre_hp": pre_hp,
             "post_hp": post_hp,
             "damage_logs": logs,
@@ -3196,16 +3463,295 @@ def item_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int
     return verdict
 
 
-def pre_dispatch(row: dict) -> tuple[str, str | None]:
+#: Fork summon vocabulary (`SpellEffects.h`): the pet scenario's
+#: setup rows carry one of these; LEARN_PET_EFFECTS rides along so a
+#: future learn-pet row dispatches the same way.
+PET_SUMMON_EFFECT_IDS = {28, 56, 112}
+PET_LEARN_EFFECT_IDS = {57}
+
+
+def class_summon_spell(rows: list[dict]) -> int | None:
+    """Lowest reagent-free summon row for a class, or None.
+
+    Pure function of matrix rows: the pet scenario exists only when
+    the matrix carries a castable summon (pet bucket, summon effect,
+    pet_created outcome, no reagents a reagent-less engine cannot
+    consume). Reagent-gated summons cannot create the scenario (their
+    fixture-reagent BLOCKED is honest engine evidence), so they are
+    never returned here."""
+    candidates = [
+        int(row["spell_id"])
+        for row in rows
+        if row.get("bucket") == "pet"
+        and set(row.get("effect_ids", []) or []) & (PET_SUMMON_EFFECT_IDS | PET_LEARN_EFFECT_IDS)
+        and not (row.get("campaign", "") or "").startswith("classify_only")
+        and (row.get("expected") or {}).get("kind") == "pet_created"
+        and not any(row.get("reagents", []) or [])
+    ]
+    return min(candidates) if candidates else None
+
+
+def find_summoned_pet(
+    before_guids: set[int],
+    candidates: list[tuple],
+    caster_pos: tuple[float, ...],
+    max_dist_yd: float = 20.0,
+) -> int | None:
+    """New-unit pet discovery (pure part of the summon leg).
+
+    candidates are (guid, x, y, health, entry) tracker tuples; the
+    pet is the nearest new alive object within max_dist_yd of the
+    caster. A pre-existing guid is never returned, so a stale world
+    entry cannot verify a failed summon."""
+    best: tuple[float, int] | None = None
+    for guid, x, y, health, _entry in candidates:
+        if guid in before_guids:
+            continue
+        if health is None or health <= 0:
+            continue
+        dist = math.hypot(float(x) - float(caster_pos[0]), float(y) - float(caster_pos[1]))
+        if dist <= max_dist_yd and (best is None or dist < best[0]):
+            best = (dist, int(guid))
+    return best[1] if best is not None else None
+
+
+def pet_summon_leg(row: dict, driver: ScriptedDriver, guid: int) -> dict:
+    """Pet-scenario setup: self-cast the class summon row, then PASS
+    only when a new alive unit object tracks near the caster (the
+    pet). GO without a tracked pet is an apply FAIL with the
+    summon-failure evidence the pet rows' BLOCKED then cites."""
+    spell_id = row["spell_id"]
+    pre = snapshot(driver, guid)
+    before = set(driver.world.objects)
+    caster_pos = (driver.position[0], driver.position[1])
+    mark = event_mark(driver)
+    # Summon casts run the full DBC cast time (Summon Imp's GO lands
+    # ~10.15 s after START on the bench): the 10 s default would time
+    # out just before GO and abandon a pet that materializes right
+    # after. The 25 s budget covers any 10 s summon plus latency.
+    go, reason, ops, waited = cast_self_retry_power(driver, spell_id, timeout=25.0)
+    if not go and reason == SPELL_FAILED_NO_POWER:
+        return make_verdict(
+            row,
+            "FAIL",
+            phase="prepare",
+            reason=f"CAST_RESULT({reason})",
+            evidence=f"power-starved after {waited} 9s waits; summon never cast",
+            pre=pre,
+            post=snapshot(driver, guid),
+            packets=ops,
+            target_guid=None,
+        )
+    if not go:
+        return make_verdict(
+            row,
+            "FAIL",
+            phase="prepare",
+            reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+            evidence=f"no bound SPELL_GO for summon {spell_id} (reason={reason})",
+            pre=pre,
+            post=snapshot(driver, guid),
+            packets=ops + [op for op, _ in events_since(driver, mark)],
+            target_guid=None,
+        )
+    pet_guid: int | None = None
+    pet_entry: int | None = None
+    pet_dist = 0.0
+    waited_s = 0.0
+    while pet_guid is None and waited_s < 8.0:
+        driver.poll(1.0)
+        waited_s += 1.0
+        candidates = []
+        for tracked_guid, obj in driver.world.objects.items():
+            if obj.position is None:
+                continue
+            candidates.append((tracked_guid, obj.position[0], obj.position[1], obj.health, obj.entry))
+        pet_guid = find_summoned_pet(before, candidates, caster_pos)
+        if pet_guid is not None:
+            found = driver.world.get(pet_guid)
+            pet_entry = found.entry if found is not None else None
+            if found is not None and found.position is not None:
+                pet_dist = math.hypot(
+                    float(found.position[0]) - float(caster_pos[0]),
+                    float(found.position[1]) - float(caster_pos[1]),
+                )
+    packets = ops + [op for op, _ in events_since(driver, mark)]
+    if pet_guid is None:
+        return make_verdict(
+            row,
+            "FAIL",
+            phase="apply",
+            evidence=f"bound SPELL_GO for summon {spell_id} but no new alive unit tracked "
+            f"within 20 yd after {waited_s:.0f}s; pet scenario not established",
+            pre=pre,
+            post=snapshot(driver, guid),
+            packets=packets,
+            target_guid=None,
+        )
+    note = f" after {waited} mana wait(s)" if waited else ""
+    # The summon's own GCD is still running when the pet tracks: the
+    # next cast in the same flow (a pet-bucket row, or the row after
+    # a summon row) would eat NOT_READY. Outlast it here.
+    driver.poll(2.0)
+    return make_verdict(
+        row,
+        "PASS",
+        evidence=f"bound SPELL_GO + pet object tracked guid={pet_guid} entry={pet_entry} "
+        f"dist={pet_dist:.1f}yd health={driver.target_health(pet_guid)}{note} +2s GCD settle",
+        pre=pre,
+        post=snapshot(driver, guid),
+        packets=packets,
+        target_guid=pet_guid,
+    )
+
+
+def pet_leg(row: dict, driver: ScriptedDriver, guid: int, pet_guid: int, applied_auras: list[int]) -> dict:
+    """Pet-bucket row cast on the summoned pet (Health Funnel style).
+
+    The summon leg establishes the pet first; this leg only casts on
+    it. A pet that vanished between setup and cast is a no-pet
+    BLOCKED, never a cast at a dead guid."""
+    spell_id = row["spell_id"]
+    expected = row.get("expected", {})
+    if driver.target_health(pet_guid) is None:
+        return make_verdict(
+            row,
+            "BLOCKED",
+            reason="no-pet",
+            evidence=f"pet guid={pet_guid} no longer tracked; re-summon path runs before the next pet row",
+            pre=snapshot(driver, guid),
+            target_guid=None,
+        )
+    pre = f"pet guid={pet_guid} health={driver.target_health(pet_guid)}; caster {snapshot(driver, guid)}"
+    aura_id = int(expected.get("aura", spell_id))
+    mark = event_mark(driver)
+    go, reason, ops, _waited = cast_unit_retry_power(driver, spell_id, pet_guid, timeout=10.0)
+    driver.poll(2.0)
+    post_hp = driver.target_health(pet_guid)
+    target_aura = aura_present(driver, pet_guid, aura_id)
+    if target_aura and aura_id not in applied_auras:
+        applied_auras.append(aura_id)
+    window = events_since(driver, mark)
+    verdict = single_outcome_verdict(
+        row,
+        {
+            "go": go,
+            "reason": reason,
+            "caster_aura": False,
+            "target_guid": pet_guid,
+            "target_aura": target_aura,
+            "pre_hp": driver.target_health(pet_guid),
+            "post_hp": post_hp,
+            "damage_logs": matching_damage_logs(window, spell_id, pet_guid, guid),
+            "tick_amounts": matching_periodic_ticks(window, spell_id, pet_guid, guid),
+            "pre": pre,
+            "post": f"pet guid={pet_guid} health={post_hp}",
+            "packets": ops + [op for op, _ in window],
+        },
+    )
+    return verdict
+
+
+def pet_cast_leg(row: dict, driver: ScriptedDriver, guid: int, pet_guid: int) -> dict:
+    """Pet-cast row (TARGET_UNIT_CASTER_MASTER, e.g. Sacrifice):
+    order the pet to cast on its master via CMSG_PET_ACTION (373),
+    then verify the master-side outcome. The voidwalker must be
+    the active pet for Sacrifice; ensure_pet's imp cannot cast it,
+    so this leg summons the voidwalker first when needed (697;
+    the engine has no reagent gate yet, recorded in evidence)."""
+    spell_id = row["spell_id"]
+    expected = row.get("expected", {})
+    aura_id = int(expected.get("aura", spell_id))
+    pre = snapshot(driver, guid)
+    note = ""
+    pet_obj = driver.world.get(pet_guid)
+    if pet_obj is None or pet_obj.entry != 1860:  # Voidwalker entry
+        before = set(driver.world.objects)
+        go, reason, _ops, _w = cast_self_retry_power(driver, 697, timeout=25.0)
+        driver.poll(2.0)
+        found = None
+        waited = 0.0
+        while found is None and waited < 8.0:
+            driver.poll(1.0)
+            waited += 1.0
+            for g, obj in driver.world.objects.items():
+                if g not in before and obj.entry == 1860 and (obj.health or 0) > 0:
+                    found = g
+                    break
+        if not go or found is None:
+            return make_verdict(
+                row,
+                "FAIL",
+                phase="prepare",
+                reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+                evidence=f"voidwalker summon 697 for Sacrifice did not verify (go={go} reason={reason} found={found})",
+                pre=pre,
+                post=snapshot(driver, guid),
+                packets=[],
+                target_guid=None,
+            )
+        pet_guid = found
+        note = "; voidwalker summoned for the sacrifice"
+    # Teach the rank (grimoire wrapper; a fresh voidwalker knows
+    # only Torment). Already-known ranks simply no-op in the fork
+    # learn path, so this is safe to repeat per row.
+    teach_id = {7812: 7885, 19443: 19447}.get(int(spell_id))
+    if teach_id:
+        tgo, treason, _tops, _tw = cast_self_retry_power(driver, teach_id)
+        driver.poll(1.0)
+        note += f"; teach {teach_id} go={tgo} reason={treason}"
+    mark = event_mark(driver)
+    # CMSG_PET_ACTION: pet guid (raw u64), data (flag<<24 | spell),
+    # target guid (raw u64). ACT_ENABLED (0xC1) orders the cast.
+    data = (0xC1 << 24) | int(spell_id)
+    driver.client.send_packet(373, struct.pack("<QIQ", pet_guid, data, guid))
+    caster_aura = False
+    waited = 0.0
+    while waited < 6.0:
+        driver.poll(0.5)
+        waited += 0.5
+        if aura_present(driver, guid, aura_id):
+            caster_aura = True
+            break
+    pet_after = driver.target_health(pet_guid)
+    window = events_since(driver, mark)
+    packets = [op for op, _ in window]
+    fail_code = None
+    for op, body in window:
+        if op == 312 and len(body) >= 5:  # SMSG_PET_CAST_FAILED
+            fail_code = body[4]
+    verdict = single_outcome_verdict(
+        row,
+        {
+            "go": caster_aura or 306 in packets,
+            "reason": fail_code,
+            "caster_aura": caster_aura,
+            "target_guid": guid,
+            "target_aura": False,
+            "pre_hp": None,
+            "post_hp": None,
+            "damage_logs": [],
+            "pre": pre,
+            "post": snapshot(driver, guid),
+            "packets": packets,
+        },
+    )
+    verdict["evidence"] += f"; pet_cast via CMSG_PET_ACTION pet={pet_guid} health_after={pet_after}{note}"
+    return verdict
+
+
+def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str | None]:
     """Pure per-row dispatch: matrix row -> (action, payload).
 
     "blocked" carries a closed-enum BLOCKED reason (the row is never
     cast, and can never PASS); "passive" means a learned_spell
     character_spell check without casting; "cast" carries the leg name
     ("friendly", "hostile", "ground", "item", "form", "form_gated",
-    or "self"). Every bucket any fan-out matrix contains maps here;
-    buckets no wire/engine scenario can execute (corpse/pet/actual
-    totems) map to honest BLOCKED reasons, never to a cast leg, while
+    "pet", or "self"). Every bucket any fan-out matrix contains maps
+    here; pet rows ride the pet leg only when a summon scenario
+    exists for the class (summon_spell from class_summon_spell),
+    otherwise they stay honestly BLOCKED no-pet. Corpse/actual
+    totems map to honest BLOCKED reasons, never to a cast leg, while
     stance-gated form_totem rows ride form_gated. Mirrors the
     run_class branch order so the self-test can assert totality over a
     real artifact."""
@@ -3225,6 +3771,19 @@ def pre_dispatch(row: dict) -> tuple[str, str | None]:
     if bucket == "corpse":
         return ("blocked", "wire-target-unsupported")
     if bucket == "pet":
+        effects = set(row.get("effect_ids", []) or [])
+        if effects & (PET_SUMMON_EFFECT_IDS | PET_LEARN_EFFECT_IDS):
+            # The summon row itself creates the scenario.
+            return ("cast", "pet")
+        if 27 in (row.get("target_a") or []):
+            # TARGET_UNIT_CASTER_MASTER: cast BY the pet on its
+            # master (Sacrifice); rides the pet-cast leg when a
+            # summon scenario exists.
+            if summon_spell is not None:
+                return ("cast", "pet_cast")
+            return ("blocked", "no-pet")
+        if summon_spell is not None:
+            return ("cast", "pet")
         return ("blocked", "no-pet")
     if bucket == "form_totem":
         if required_form_spell(row) is not None:
@@ -3286,6 +3845,12 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
         return 2
     seed_all = seed_spells_for(class_name)
     combo_builder = doc.get("full_combo_builder_spell")
+    # Pet scenario: the class summon row (reagent-free, pet_created)
+    # casts first in-session; pet-bucket rows cast on the tracked
+    # pet. Without one the pet rows stay BLOCKED no-pet.
+    class_rows = [r for r in doc.get("rows", []) if r.get("class") == class_name]
+    by_spell_id = {int(r["spell_id"]): r for r in class_rows}
+    summon_spell = class_summon_spell(class_rows)
     acquire_lock()
     verdicts: list[dict] = []
     manifest_extra: dict = {
@@ -3315,6 +3880,59 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
             return client, driver
 
         client, driver = fresh_login()
+        pet_guid: int | None = None
+
+        def ensure_pet(active_row: dict) -> dict | None:
+            """Summon-once pet setup. Returns a verdict to record for
+            the active row, or None when the tracked pet is ready and
+            the caller may proceed (summon rows: nothing more to
+            cast after a ready pet is verified). The summon verdict
+            is recorded at the first row that needs it, in row order
+            when the summon row itself is reached."""
+            nonlocal pet_guid
+            is_summon_row = summon_spell is not None and int(active_row["spell_id"]) == summon_spell
+            if not is_summon_row and pet_guid is not None and (driver.target_health(pet_guid) or 0) > 0:
+                return None
+            pet_guid = None
+            if summon_spell is None or summon_spell not in by_spell_id:
+                return make_verdict(
+                    active_row,
+                    "BLOCKED",
+                    reason="no-pet",
+                    evidence="no castable summon row for this class in the matrix; pet rows stay uncast",
+                    pre=snapshot(driver, guid),
+                    target_guid=None,
+                )
+            summon_verdict = pet_summon_leg(by_spell_id[summon_spell], driver, guid)
+            if summon_verdict["verdict"] == "PASS" and summon_verdict.get("target_guid"):
+                pet_guid = int(summon_verdict["target_guid"])
+                # A defensive pet assists on every caster target and
+                # kills 100 hp dummies mid-observation (its Firebolt
+                # damage is unattributed in the caster's logs, and
+                # the fast respawn then reads as full health). Park
+                # it passive: ACT_REACTION (0x06) / REACT_PASSIVE (0)
+                # via CMSG_PET_ACTION, like a player clicking Passive.
+                driver.client.send_packet(373, struct.pack("<QIQ", pet_guid, 0x06 << 24, 0))
+                driver.poll(0.4)
+            if not is_summon_row:
+                verdicts.append(summon_verdict)
+                print(
+                    f"ROW {class_name} {summon_spell} pet: "
+                    f"{summon_verdict['verdict']} {summon_verdict.get('reason') or ''} | "
+                    f"{summon_verdict['evidence'][:120]}"
+                )
+                if pet_guid is None:
+                    return make_verdict(
+                        active_row,
+                        "BLOCKED",
+                        reason="no-pet",
+                        evidence=f"summon {summon_spell} failed: {summon_verdict['evidence'][:200]}",
+                        pre=snapshot(driver, guid),
+                        target_guid=None,
+                    )
+                return None
+            return summon_verdict
+
         try:
             # Talent seed check: every selected known spell learned.
             for known in talent_known_spells(class_name):
@@ -3369,9 +3987,33 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                 kind = expected.get("kind")
                 campaign = row.get("campaign", "")
                 if not self_alive(driver, guid):
+                    # The dead session still holds the online flag, so
+                    # reseeding first would trip ensure_offline: retire
+                    # the client (logout, drop the socket, wait for the
+                    # flag to clear) the way the teleport wedge path
+                    # does, then log back in fresh.
+                    try:
+                        smoke.logout(client, f"{class_name}-dead")
+                    except Exception as exc:
+                        print(f"WARN dead-session logout: {exc}")
+                    try:
+                        client.sock.close()
+                    except Exception:
+                        pass
+                    for _ in range(10):
+                        try:
+                            online = smoke.sql_scalar("characters", f"SELECT online FROM characters WHERE guid={guid}")
+                        except RuntimeError:
+                            online = "1"
+                        if online != "1":
+                            break
+                        time.sleep(8.0)
                     client, driver = fresh_login()
                     used_dummies.clear()
                     applied_auras.clear()
+                    # A dead master dismisses the pet: force a
+                    # re-summon before the next pet row.
+                    pet_guid = None
                 # A landed ground cast may still be channeling with
                 # no holder on the caster (Hurricane's radius): force
                 # its cancel so the next row never meets a busy slot.
@@ -3381,6 +4023,18 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                 if verdicts and verdicts[-1]["verdict"] == "PASS" and verdicts[-1].get("bucket") == "ground_area":
                     force = (int(verdicts[-1]["spell_id"]),)
                 cancel_tracked(guid, force)
+                # A previous row's channel (Health Funnel, Hellfire,
+                # Drain Life) otherwise occupies the cast slot and
+                # the next cast dies SPELL_IN_PROGRESS (97) even
+                # though its own scenario is fine. The stock client
+                # cancels with CMSG_CANCEL_CHANNELLING (315) /
+                # CMSG_CANCEL_CAST (303) naming the spell; both are
+                # no-ops when the slot is already free.
+                if verdicts:
+                    prev_spell = int(verdicts[-1]["spell_id"])
+                    driver.client.send_packet(315, struct.pack("<I", prev_spell))
+                    driver.client.send_packet(303, struct.pack("<I", prev_spell))
+                    driver.poll(0.4)
                 if campaign.startswith("classify_only"):
                     reason = (
                         "script-evidence-unknown"
@@ -3428,7 +4082,7 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     )
                     print(f"ROW {class_name} {spell_id} {bucket}: BLOCKED no-party | solo repro")
                     continue
-                action, payload = pre_dispatch(row)
+                action, payload = pre_dispatch(row, summon_spell)
                 if action == "blocked" and payload in UNSCENARIOED_EVIDENCE:
                     verdicts.append(
                         make_verdict(
@@ -3436,6 +4090,36 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                         )
                     )
                     print(f"ROW {class_name} {spell_id} {bucket}: BLOCKED {payload} | no live scenario")
+                    continue
+                if action == "cast" and payload in ("pet", "pet_cast"):
+                    pet_verdict = ensure_pet(row)
+                    if pet_verdict is not None:
+                        verdicts.append(pet_verdict)
+                        print(
+                            f"ROW {class_name} {spell_id} {bucket}: "
+                            f"{pet_verdict['verdict']} "
+                            f"{pet_verdict.get('reason') or ''} | "
+                            f"{pet_verdict['evidence'][:120]}"
+                        )
+                        continue
+                    if summon_spell is not None and int(spell_id) == summon_spell:
+                        # Summon verified by ensure_pet; its verdict is
+                        # already recorded, nothing more to cast.
+                        continue
+                    assert pet_guid is not None
+                    if payload == "pet_cast":
+                        verdicts.append(pet_cast_leg(row, driver, guid, pet_guid))
+                        # Sacrifice consumes the pet; force a
+                        # re-summon before the next pet row.
+                        pet_guid = None
+                    else:
+                        verdicts.append(pet_leg(row, driver, guid, pet_guid, applied_auras))
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
                     continue
                 if action == "cast" and payload == "form_gated":
                     verdicts.append(
@@ -3475,6 +4159,13 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     finisher_setup = (
                         combo_builder_setup(combo_builder) if row.get("needs_combo_points") and combo_builder else None
                     )
+                    if finisher_setup is None and (row.get("name") or "").startswith("Conflagrate"):
+                        immolate_id = min(
+                            (r["spell_id"] for r in class_rows if r.get("name") == "Immolate"),
+                            default=None,
+                        )
+                        if immolate_id is not None:
+                            finisher_setup = immolate_setup(immolate_id)
                     override = finisher_dummy(used_dummies) if finisher_setup else None
                     verdicts.append(
                         hostile_leg(
@@ -3527,9 +4218,9 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     )
                     continue
                 # self default: solo self cast (unlisted buckets;
-                # corpse/pet/unenterable form_totem rows are BLOCKED
-                # above via pre_dispatch, stance-gated rows rode the
-                # form_gated leg).
+                # corpse/unenterable form_totem rows are BLOCKED above
+                # via pre_dispatch and pet rows rode the pet leg,
+                # stance-gated rows the form_gated leg).
                 verdicts.append(self_leg(row, driver, guid, applied_auras))
                 print(
                     f"ROW {class_name} {spell_id} {bucket}: "
@@ -3715,6 +4406,134 @@ def run_self_test() -> int:
     assert matching_damage_logs(tick_window, 20924, dummy, caster)[0]["damage"] == 12
     assert matching_damage_logs(tick_window, 20924, dummy, 900015) == []
     assert matching_damage_logs(tick_window, 133, dummy, caster)[0]["damage"] == 46
+    # 590-only latch: direct 592 hits never count as ticks.
+    assert matching_periodic_ticks(tick_window, 20924, dummy, caster) == [12]
+    assert matching_periodic_ticks(tick_window, 133, dummy, caster) == []
+    assert matching_periodic_ticks(tick_window, 20924, dummy, 900016) == []
+    # Tick-band gate: in-band PASS, out-of-band FAIL, GO-only FAIL.
+    # Band 40 vs 100 hp: two ticks do not kill, so the 2-tick
+    # minimum is enforceable here.
+    tick_row = {
+        "class": "Warlock",
+        "spell_id": 25311,
+        "bucket": "hostile_dummy",
+        "expected": {
+            "kind": "aura_on_target",
+            "aura": 25311,
+            "tick_band": [40.0, 40.0],
+            "tick_period_ms": 3000,
+            "tick_duration_ms": 18000,
+            "tick_count_expected": 6,
+        },
+    }
+
+    def tick_observed(amounts, target_aura=True, post_hp=100, logs=None):
+        return {
+            "go": True,
+            "reason": None,
+            "caster_aura": False,
+            "target_guid": dummy,
+            "target_aura": target_aura,
+            "pre_hp": 100,
+            "post_hp": post_hp,
+            "damage_logs": logs if logs is not None else [{"damage": 40}],
+            "tick_amounts": amounts,
+            "packets": [306, 590],
+        }
+
+    in_band = single_outcome_verdict(tick_row, tick_observed([40, 40]))
+    assert in_band["verdict"] == "PASS", in_band
+    assert "ticks 2/6" in in_band["evidence"], in_band
+    out_of_band = single_outcome_verdict(tick_row, tick_observed([40, 50]))
+    assert out_of_band["verdict"] == "FAIL" and out_of_band["phase"] == "apply", out_of_band
+    short = single_outcome_verdict(tick_row, tick_observed([40]))
+    assert short["verdict"] == "FAIL" and short["phase"] == "apply", short
+    # Lethal-pair band (last-rank Drain Soul: 91/tick vs a 100 hp
+    # dummy): one in-band tick on a living target passes, because a
+    # second tick cannot land on a live dummy by construction.
+    drain_row = {
+        "class": "Warlock",
+        "spell_id": 11675,
+        "bucket": "hostile_dummy",
+        "expected": {
+            "kind": "aura_on_target",
+            "aura": 11675,
+            "tick_band": [91.0, 91.0],
+            "tick_period_ms": 3000,
+            "tick_duration_ms": 15000,
+            "tick_count_expected": 5,
+        },
+    }
+    lethal_one = single_outcome_verdict(drain_row, tick_observed([91], post_hp=9))
+    assert lethal_one["verdict"] == "PASS", lethal_one
+    go_only_tick = single_outcome_verdict(
+        tick_row,
+        {
+            "go": True,
+            "reason": None,
+            "caster_aura": False,
+            "target_guid": dummy,
+            "target_aura": False,
+            "pre_hp": 100,
+            "post_hp": 100,
+            "damage_logs": [],
+            "tick_amounts": [],
+            "packets": [306],
+        },
+    )
+    assert go_only_tick["verdict"] == "FAIL", go_only_tick
+    # A target that died before any tick could land leaves the band
+    # un-enforced (kill proves the damage); a dead target with an
+    # out-of-band tick still FAILs.
+    dead_clean = single_outcome_verdict(tick_row, tick_observed([], post_hp=0))
+    assert dead_clean["verdict"] == "PASS", dead_clean
+    assert "un-enforced" in dead_clean["evidence"], dead_clean
+    dead_bad = single_outcome_verdict(tick_row, tick_observed([50], post_hp=0))
+    assert dead_bad["verdict"] == "FAIL", dead_bad
+    # Paths without a latch ride the base gate and say so.
+    no_latch = dict(tick_observed([137, 137]))
+    del no_latch["tick_amounts"]
+    unlatch = single_outcome_verdict(tick_row, no_latch)
+    assert unlatch["verdict"] == "PASS" and "un-enforced" in unlatch["evidence"], unlatch
+    # damage_log tick rows gate the same way (Immolate shape).
+    immolate_row = {
+        "class": "Warlock",
+        "spell_id": 25309,
+        "bucket": "hostile_dummy",
+        "expected": {
+            "kind": "damage_log",
+            "opcode": 592,
+            "tick_band": [102.0, 102.0],
+            "tick_period_ms": 3000,
+            "tick_duration_ms": 15000,
+            "tick_count_expected": 5,
+        },
+    }
+    immolate_ok = single_outcome_verdict(immolate_row, tick_observed([102, 102], post_hp=40, logs=[{"damage": 200}]))
+    assert immolate_ok["verdict"] == "PASS", immolate_ok
+    immolate_bad = single_outcome_verdict(immolate_row, tick_observed([102, 10], post_hp=40, logs=[{"damage": 200}]))
+    assert immolate_bad["verdict"] == "FAIL", immolate_bad
+    # Single-tick auras (Curse of Doom: one 3200 tick at 60 s) pass
+    # on their one in-band tick while alive; zero ticks still FAILs.
+    doom_row = {
+        "class": "Warlock",
+        "spell_id": 603,
+        "bucket": "hostile_dummy",
+        "expected": {
+            "kind": "aura_on_target",
+            "aura": 603,
+            "tick_band": [3200.0, 3200.0],
+            "tick_period_ms": 60000,
+            "tick_duration_ms": 60000,
+            "tick_count_expected": 1,
+        },
+    }
+    doom_ok = single_outcome_verdict(doom_row, tick_observed([3200], post_hp=100, logs=[{"damage": 3200}]))
+    assert doom_ok["verdict"] == "PASS", doom_ok
+    assert "ticks 1/1" in doom_ok["evidence"], doom_ok
+    doom_short = single_outcome_verdict(doom_row, tick_observed([], post_hp=100, logs=[{"damage": 3200}]))
+    assert doom_short["verdict"] == "FAIL", doom_short
+    print("SELFTEST periodic tick latch + band gate ok")
     # An expected-failure row is never PASS. A rejection is the gate's
     # expected FAIL; a landed wrong-form cast is an unexpected FAIL.
     fail_row = {"class": "Druid", "spell_id": 6795, "bucket": "form", "expected": {"kind": "expect_cast_failure"}}
@@ -4091,6 +4910,74 @@ def run_self_test() -> int:
         if got[0] == "blocked":
             assert got[1] in BLOCKED_REASONS, got
     print("SELFTEST Druid dispatch table ok")
+    # Pet dispatch: the summon row itself always rides the pet leg;
+    # other pet rows ride it only when a summon scenario exists for
+    # the class, else they stay honestly BLOCKED no-pet.
+    summon_row = {
+        "class": "Warlock",
+        "spell_id": 688,
+        "bucket": "pet",
+        "effect_ids": [56, 0, 0],
+        "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+        "expected": {"kind": "pet_created"},
+    }
+    funnel_row = {
+        "class": "Warlock",
+        "spell_id": 11695,
+        "bucket": "pet",
+        "effect_ids": [6, 6, 0],
+        "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+        "expected": {"kind": "aura_on_target", "aura": 11695},
+    }
+    assert pre_dispatch(summon_row) == ("cast", "pet")
+    assert pre_dispatch(summon_row, 688) == ("cast", "pet")
+    assert pre_dispatch(funnel_row) == ("blocked", "no-pet")
+    assert pre_dispatch(funnel_row, 688) == ("cast", "pet")
+    assert pre_dispatch(funnel_row, None) == ("blocked", "no-pet")
+    scripted_pet = dict(funnel_row, campaign="classify_only_script")
+    assert pre_dispatch(scripted_pet, 688) == ("blocked", "script-evidence-unknown")
+    # TARGET_UNIT_CASTER_MASTER rows (Sacrifice) are cast BY the pet:
+    # they dispatch to the pet-cast leg, never the on-pet leg, and
+    # stay no-pet BLOCKED without a summon scenario.
+    sacrifice_row = {
+        "class": "Warlock",
+        "spell_id": 7812,
+        "bucket": "pet",
+        "effect_ids": [6, 1, 0],
+        "target_a": [27, 1, 0],
+        "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+        "expected": {"kind": "aura_on_caster", "aura": 7812},
+    }
+    assert pre_dispatch(sacrifice_row, 688) == ("cast", "pet_cast")
+    assert pre_dispatch(sacrifice_row) == ("blocked", "no-pet")
+    # Summon-spell selection: lowest reagent-free pet_created summon
+    # wins; reagent-gated or classify_only summons never create the
+    # scenario (their fixture-reagent BLOCKED is the honest path).
+    assert class_summon_spell([summon_row, funnel_row]) == 688
+    assert class_summon_spell([funnel_row]) is None
+    assert class_summon_spell([]) is None
+    reagent_summon = dict(
+        summon_row,
+        spell_id=691,
+        bucket="item_reagent_ammo",
+        reagents=[6265, 0, 0, 0, 0, 0, 0, 0],
+        expected={"kind": "item_consumed", "reagent": 6265},
+    )
+    assert class_summon_spell([reagent_summon, funnel_row]) is None
+    assert class_summon_spell([dict(summon_row, campaign="classify_only")]) is None
+    assert class_summon_spell([dict(summon_row, spell_id=712), summon_row]) == 688
+    # Pet discovery: nearest new alive unit near the caster; stale,
+    # dead, and far objects never verify a summon.
+    # Stale (10), far (11), and dead (12) objects: nothing new and
+    # alive near the caster, so no pet.
+    cands = [(10, 0.0, 0.0, 100, 416), (11, 100.0, 100.0, 100, 416), (12, 1.0, 1.0, 0, 416)]
+    assert find_summoned_pet({10}, cands, (0.0, 0.0)) is None
+    assert find_summoned_pet({10}, [(10, 0.0, 0.0, 100, 416)], (0.0, 0.0)) is None
+    assert find_summoned_pet(set(), [(12, 1.0, 1.0, 0, 416)], (0.0, 0.0)) is None
+    assert find_summoned_pet(set(), [(11, 100.0, 100.0, 100, 416)], (0.0, 0.0)) is None
+    assert find_summoned_pet(set(), [(20, 5.0, 0.0, 100, 416), (21, 2.0, 0.0, 80, 416)], (0.0, 0.0)) == 21
+    assert find_summoned_pet({20, 21}, [(20, 5.0, 0.0, 100, 416), (21, 2.0, 0.0, 80, 416)], (0.0, 0.0)) is None
+    print("SELFTEST pet dispatch + summon selection + discovery ok")
     # GO-only anti-vacuity for the form_change mapping: a bound GO
     # without the form aura on the caster is an apply FAIL, while the
     # same GO with the aura observed is PASS.
@@ -4300,6 +5187,55 @@ def run_self_test() -> int:
         )
     else:
         print("SELFTEST Druid artifact absent; skipping totality")
+    # Totality over the Warlock fan-out artifact: the summon scenario
+    # exists (reagent-free Summon Imp), so pet rows dispatch to the
+    # pet leg and no-pet never appears; every other row dispatches to
+    # a cast leg, the passive check, or a closed-enum BLOCKED reason.
+    warlock_path = matrix_path_for("Warlock")
+    try:
+        import spell_matrix_gen as gen  # noqa: PLC0415
+
+        warlock_path = gen.class_matrix_path("Warlock")
+    except (ImportError, AttributeError):
+        pass
+    if warlock_path.exists():
+        warlock_doc = json.loads(warlock_path.read_text())
+        warlock_rows = [r for r in warlock_doc.get("rows", []) if r.get("class") == "Warlock"]
+        assert warlock_rows, "Warlock artifact has no Warlock rows"
+        summon = class_summon_spell(warlock_rows)
+        assert summon == 688, summon
+        assert warlock_doc.get("full_talent_build") == "smruin", warlock_doc.get("full_talent_build")
+        seen_legs: set[str] = set()
+        seen_blocked: set[str] = set()
+        for real_row in warlock_rows:
+            act, pay = pre_dispatch(real_row, summon)
+            if act == "cast":
+                assert pay in ("self", "friendly", "hostile", "ground", "item", "pet", "pet_cast"), (
+                    real_row,
+                    pay,
+                )
+                seen_legs.add(pay)
+            elif act == "blocked":
+                assert pay in BLOCKED_REASONS, (real_row, pay)
+                seen_blocked.add(pay)
+            else:
+                assert act == "passive" and pay is None, real_row
+        assert "pet" in seen_legs, seen_legs
+        assert "no-pet" not in seen_blocked, seen_blocked
+        assert "hostile" in seen_legs and "self" in seen_legs, seen_legs
+        # Reagent-gated rows ride the item leg (their fixture-reagent
+        # BLOCKED is a runtime verdict, not a dispatch reason).
+        assert "item" in seen_legs, seen_legs
+        assert "effect-marker-only" in seen_blocked, seen_blocked
+        summon_rows = [r for r in warlock_rows if int(r["spell_id"]) == summon]
+        assert len(summon_rows) == 1 and summon_rows[0]["expected"]["kind"] == "pet_created", summon_rows
+        print(
+            f"SELFTEST Warlock artifact dispatch totality ok "
+            f"({len(warlock_rows)} rows, summon={summon}, legs={sorted(seen_legs)}, "
+            f"blocked={sorted(seen_blocked)})"
+        )
+    else:
+        print("SELFTEST Warlock artifact absent; skipping totality")
     # Artifact writers round-trip.
     tmp = [make_verdict(row, "PASS", evidence="t", packets=[306, 169, 306])]
     assert tmp[0]["packets"] == [169, 306]

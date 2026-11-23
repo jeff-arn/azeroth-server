@@ -17934,6 +17934,25 @@ impl World {
         self.drain_map_events();
     }
 
+    /// `HandleCancelChanneling` (`SpellHandler.cpp:491`):
+    /// the spell id is read and unused; the current
+    /// channeled spell (unless triggered) ends. The
+    /// remote-control mover arm has no Rust slot.
+    fn on_cancel_channelling(&mut self, id: SessionId, packet: &WorldPacket) {
+        let Some((map_key, guid)) = self.player_map_guid(id) else {
+            return;
+        };
+        if packet.body().len() < 4 {
+            self.bad_packet(id, packet.opcode());
+            return;
+        }
+        let Some(map) = self.maps.get_mut(&map_key) else {
+            return;
+        };
+        map.interrupt_channeling(guid);
+        self.drain_map_events();
+    }
+
     /// `HandleCancelAuraOpcode` subset.
     fn on_cancel_aura(&mut self, id: SessionId, packet: &WorldPacket) {
         let Some((map_key, guid)) = self.player_map_guid(id) else {
@@ -19695,6 +19714,7 @@ impl World {
         let mut cast_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut use_item_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut cancel_cast_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
+        let mut cancel_channel_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut cancel_aura_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut attack_swing_packets: Vec<(SessionId, WorldPacket)> = Vec::new();
         let mut attack_stop_packets: Vec<SessionId> = Vec::new();
@@ -19960,6 +19980,9 @@ impl World {
                     Dispatch::Execute if meta.handler_name == "HandleCancelCastOpcode" => {
                         cancel_cast_packets.push((*id, packet));
                     }
+                    Dispatch::Execute if meta.handler_name == "HandleCancelChanneling" => {
+                        cancel_channel_packets.push((*id, packet));
+                    }
                     Dispatch::Execute if meta.handler_name == "HandleCancelAuraOpcode" => {
                         cancel_aura_packets.push((*id, packet));
                     }
@@ -20181,6 +20204,9 @@ impl World {
         }
         for (id, packet) in cancel_cast_packets {
             self.on_cancel_cast(id, &packet);
+        }
+        for (id, packet) in cancel_channel_packets {
+            self.on_cancel_channelling(id, &packet);
         }
         for (id, packet) in cancel_aura_packets {
             self.on_cancel_aura(id, &packet);

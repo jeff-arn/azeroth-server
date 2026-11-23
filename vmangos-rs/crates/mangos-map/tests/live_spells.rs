@@ -19,7 +19,7 @@ use mangos_entities::player::{MAX_MONEY_AMOUNT, MaterializeInputs, Player};
 use mangos_guid::ObjectGuid;
 use mangos_map::spells::{CastOptions, CastOutcome, CastTarget};
 use mangos_map::{Map, MapConfig, MapEvent, WorldRng, WorldStores};
-use mangos_movement::movement_info::Position;
+use mangos_movement::movement_info::{MovementInfo, Position};
 use mangos_protocol::opcode_table::opcode_id;
 use mangos_protocol::update_field_table::offsets;
 use mangos_world_data::creature_template::{TemplateValidation, load_creature_templates};
@@ -565,12 +565,14 @@ fn bench_spells_and_auras() {
         "periodic tick count vs duration/amplitude"
     );
     for dmg in &periodic_logs {
-        // Armor can only reduce the snapshot amount,
-        // and every tick must beat the 75% armor cap
-        // floor of the value lo bound.
-        assert!(
-            *dmg > 0 && *dmg <= u32::try_from(amount).expect("positive amount"),
-            "tick damage {dmg} vs snapshot {amount}"
+        // Fork `Aura::PeriodicTick` applies no armor
+        // (`CalcArmorReducedDamage` runs only in
+        // `CalculateMeleeDamage` for white swings):
+        // every bleed tick must equal the snapshot.
+        assert_eq!(
+            *dmg,
+            u32::try_from(amount).expect("positive amount"),
+            "bleed tick damage {dmg} vs snapshot {amount}"
         );
     }
     assert!(
@@ -2955,4 +2957,550 @@ fn bench_spells_and_auras() {
         "Lay on Hands did not heal to max health"
     );
     println!("LIVE-SPELLS-PASS");
+}
+
+/// Packed-guid bytes for wire-mention search (mask + non-zero LE
+/// bytes, the server's packing).
+fn packed_guid_bytes(guid: u64) -> Vec<u8> {
+    let le = guid.to_le_bytes();
+    let mut mask = 0u8;
+    let mut out = vec![0u8];
+    for (i, b) in le.iter().enumerate() {
+        if *b != 0 {
+            mask |= 1 << i;
+            out.push(*b);
+        }
+    }
+    out[0] = mask;
+    out
+}
+
+#[test]
+#[ignore = "requires bench world+characters DBs, CHARACTER_LOAD_GUID, MANGOS_DBC_DIR"]
+#[allow(clippy::too_many_lines)] // one end-to-end scenario
+fn bench_creature_respawn() {
+    // A killed bench dummy must re-materialize under the same guid
+    // once its spawn delay elapses (the campaign's 10-counter pool
+    // depends on 2-3 s respawns; without them every DoT-heavy class
+    // drains the pool into dummy-unavailable).
+    let world_url = std::env::var("TEST_MYSQL_URL_WORLD").expect("TEST_MYSQL_URL_WORLD");
+    let chars_url = std::env::var("TEST_MYSQL_URL_CHARACTERS").expect("TEST_MYSQL_URL_CHARACTERS");
+    let guid: u32 = std::env::var("CHARACTER_LOAD_GUID")
+        .expect("CHARACTER_LOAD_GUID")
+        .parse()
+        .expect("guid");
+    let dbc_dir: PathBuf = std::env::var_os("MANGOS_DBC_DIR")
+        .expect("MANGOS_DBC_DIR")
+        .into();
+    let dbc = race_class_dbc(&dbc_dir);
+
+    let world = DbActor::spawn("test-world", &world_url).expect("world");
+    let stores = world
+        .call(move |conn| {
+            let (creature_templates, _) =
+                load_creature_templates(conn, 10, &TemplateValidation::default())?;
+            let (gameobject_templates, _) =
+                load_gameobject_templates(conn, 10, &GameObjectValidation::default())?;
+            let map_ids = load_map_ids(conn)?;
+            let mut spawns = SpawnData::new();
+            spawns.load_creatures(conn, 10, &creature_templates, Some(&map_ids), false)?;
+            spawns.load_gameobjects(
+                conn,
+                10,
+                &gameobject_templates,
+                Some(&map_ids),
+                None,
+                false,
+            )?;
+            let (creature_addons, _) = load_creature_addons(conn, 10, None, None, None)?;
+            let (equipment, _) = load_equipment_templates(conn, 10, None)?;
+            let (cls, _) = load_class_level_stats(conn)?;
+            let (display_addons, _) = load_display_info_addons(conn, 5875, None, None)?;
+            let (player_infos, _) = load_player_infos(conn, 60, None, Some(&map_ids), None)?;
+            let items = load_item_prototypes_lite(conn, 10)?;
+            let mut report = LoadReport::default();
+            let waypoints = load_waypoints(conn, &mut report)?;
+            let mut spell_report = LoadReport::default();
+            let spell_entries = load_spell_templates(conn, 5875, &mut spell_report)?;
+            let proc_events = mangos_world_data::proc_events::load_spell_proc_events(conn, 5875)?;
+            Ok(WorldStores {
+                creature_templates,
+                gameobject_templates,
+                spawns,
+                creature_addons,
+                equipment,
+                cls,
+                display_addons,
+                player_infos,
+                items,
+                item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
+                factions: mangos_world_data::reputations::load_factions(conn)?,
+                reputation_kills: mangos_world_data::reputations::ReputationKillStores::default(),
+                gossip: mangos_world_data::gossip_menus::GossipStores::default(),
+                areas: mangos_world_data::areas::AreaStore::default(),
+                exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(),
+                pets: mangos_world_data::pet_data::PetStores::default(),
+                next_pet_number: std::sync::atomic::AtomicU32::new(1),
+                next_item_guid: std::sync::atomic::AtomicU32::new(1),
+                vendor_items: mangos_world_data::vendor_items::VendorItemStores::default(),
+                durability: mangos_world_data::durability::DurabilityTables::default(),
+                bank_bag_slot_prices: Vec::new(),
+                stable_slot_prices: Vec::new(),
+                trainer_spells: mangos_world_data::trainer_spells::TrainerStores::default(),
+                taxi: mangos_world_data::taxi::TaxiStore::default(),
+                script_waypoints: mangos_world_data::script_waypoints::ScriptWaypointStore::default(
+                ),
+                game_events: mangos_world_data::game_events::GameEvents::default(),
+                loot: mangos_world_data::loot::LootStores::default(),
+                locks: mangos_world_data::locks::LockStore::default(),
+                fishing_base_skills: mangos_world_data::fishing::FishingBaseSkills::default(),
+                weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
+                waypoints,
+                spells: mangos_spells::SpellStore {
+                    spells: spell_entries,
+                    skill_line_abilities: Vec::new(),
+                    spell_chains: std::collections::HashMap::new(),
+                    talents: std::collections::HashMap::new(),
+                    talent_tabs: std::collections::HashMap::new(),
+                    talent_spell_pos: std::collections::HashMap::new(),
+                    proc_events,
+                    cones: std::collections::HashMap::new(),
+                    tables: mangos_spells::load_spell_dbc_tables(std::path::Path::new(
+                        &std::env::var("MANGOS_DBC_DIR").expect("MANGOS_DBC_DIR"),
+                    ))
+                    .expect("spell dbc tables"),
+                },
+                spell_target_positions:
+                    mangos_world_data::spell_target_position::SpellTargetPositions::default(),
+                creature_spells: mangos_world_data::creature_spells::CreatureSpellsMap::new(),
+                scripts: mangos_scripts_engine::ScriptStores::default(),
+                display_scales: HashMap::new(),
+                model_data: HashMap::new(),
+                shapeshift_forms: HashMap::new(),
+                skills: mangos_world_data::skill_info::SkillDbc::default(),
+                chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
+                auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
+                maps: mangos_world_data::map_template::MapStore::default(),
+                safe_locs: mangos_world_data::battlegrounds::SafeLocStore::default(),
+                battlegrounds: mangos_world_data::battlegrounds::BattlegroundTemplates::default(),
+                battlemasters: mangos_world_data::battlegrounds::BattleMasters::default(),
+                battle_event_indexes: mangos_world_data::battlegrounds::BattleEventIndexes::default(
+                ),
+                graveyard_links: mangos_world_data::battlegrounds::GraveyardLinks::default(),
+                bg_entrances: mangos_world_data::battlegrounds::BattlegroundEntrances::default(),
+                area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
+                quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
+                quest_templates: mangos_world_data::quest_template::QuestTemplates::default(),
+                quest_relations: mangos_world_data::quest_template::QuestRelations::default(),
+                tavern_triggers: std::collections::HashSet::new(),
+            })
+        })
+        .expect("stores");
+    let stores = Arc::new(stores);
+    let chars = DbActor::spawn("test-chars", &chars_url).expect("chars");
+    let load = chars
+        .call(move |conn| load_character(conn, guid))
+        .expect("load")
+        .expect("fixture exists");
+    let inputs = MaterializeInputs {
+        infos: &stores.player_infos,
+        race: dbc.races.get(&1),
+        power_type: 1,
+        display_scale: 1.0,
+        model: None,
+        saved_map_known: true,
+        saved_map_is_instance: false,
+        max_money: MAX_MONEY_AMOUNT,
+        now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
+        skills: None,
+        item_prototypes: None,
+        quest_templates: None,
+        taxi: None,
+    };
+    let player = Player::materialize(load, &inputs).expect("player");
+    let player_guid: ObjectGuid = player.unit.guid();
+    let mut map = Map::new(
+        0,
+        0,
+        MapConfig::default(),
+        Arc::clone(&stores),
+        WorldRng::from_seed(11),
+    );
+    let respawns = RespawnTimes::default();
+    map.add_player(player, &respawns, 1_800_000_000, 1000);
+    let _ = map.drain_events();
+    // Relocate to the Coldridge campaign arena and take a fast
+    // (2-3 s) bench wolf as the respawn subject.
+    {
+        let mut info: MovementInfo = map
+            .player_mut(player_guid)
+            .expect("player")
+            .unit
+            .world
+            .movement_info;
+        info.pos = Position::new(-6293.0, 313.0, 377.5, 0.0);
+        assert!(map.relocate_from_client(player_guid, info, &respawns));
+    }
+    let _ = map.drain_events();
+    // Let the visibility scan run after the cross-map relocate,
+    // advancing the test clock throughout so the later respawn
+    // wait is measured from a real baseline.
+    let mut now_ms = 1000u32;
+    let mut now_unix = 1_800_000_000u64;
+    for _ in 0..40 {
+        now_ms += 50;
+        if now_ms % 1000 == 0 {
+            now_unix += 1;
+        }
+        map.tick(50, now_ms, now_unix);
+    }
+    let _ = map.drain_events();
+    let target = map
+        .visible_to(player_guid)
+        .cloned()
+        .expect("visible")
+        .iter()
+        .copied()
+        .find(|g| {
+            map.creature(*g)
+                .is_some_and(|c| c.original_entry == 705 && c.unit.health() > 0)
+        })
+        .expect("a live 705 wolf in view");
+    let delay = map.creature(target).expect("target").respawn_delay;
+    println!("RESPAWN-SUBJECT guid={target:?} delay={delay}s");
+    assert!(delay > 0 && delay <= 30, "unexpected respawn delay {delay}");
+    map.kill_unit(target, Some(player_guid));
+    // Drain the kill traffic: only respawn-window packets may
+    // mention the wolf below.
+    let _ = map.drain_events();
+    match map.creature(target) {
+        None => println!("POST-KILL creature entry gone from map"),
+        Some(c) => println!(
+            "POST-KILL alive={} hp={} max={} entry={}",
+            c.unit.is_alive(),
+            c.unit.health(),
+            c.unit.max_health(),
+            c.original_entry
+        ),
+    }
+    assert!(
+        !map.creature(target).is_some_and(|c| c.unit.is_alive()),
+        "kill did not land"
+    );
+    // The respawn is due at the kill tick's now_unix + delay; the
+    // clock has advanced continuously since setup, so the wait is
+    // real.
+    let mut elapsed_ms = 0u32;
+    let budget_ms = (delay + 15) * 1000;
+    while elapsed_ms < budget_ms {
+        now_ms += 50;
+        elapsed_ms += 50;
+        if elapsed_ms % 1000 == 0 {
+            now_unix += 1;
+        }
+        map.tick(50, now_ms, now_unix);
+        if map.creature(target).is_some_and(|c| c.unit.is_alive()) {
+            break;
+        }
+    }
+    let alive = map.creature(target).is_some_and(|c| c.unit.is_alive());
+    let hp = map.creature(target).map_or(0, |c| c.unit.health());
+    println!("RESPAWN-RESULT alive={alive} hp={hp} after={elapsed_ms}ms delay={delay}s");
+    assert!(alive, "no respawn within delay {delay}s + 15 s");
+    // The standing viewer must actually be told: the respawn has to
+    // re-enter the viewer's visible set (per-tick values only reach
+    // viewers already tracking the target; scans run on movement).
+    let seen = map
+        .visible_to(player_guid)
+        .is_some_and(|set| set.contains(&target));
+    println!("RESPAWN-VISIBLE seen={seen}");
+    assert!(seen, "respawned wolf never re-entered viewer visibility");
+    // And the wire must have carried it: the wolf's packed guid must
+    // appear in a post-respawn update to the viewer (destroy of the
+    // corpse and re-create of the respawn). A silent respawn leaves
+    // a standing client tracking a corpse forever.
+    let packed = packed_guid_bytes(target.raw());
+    let mut mentions = 0usize;
+    for event in map.drain_events() {
+        if let MapEvent::Packet { to, packet } = event {
+            if to == player_guid
+                && packet.opcode() == opcode_id::SMSG_UPDATE_OBJECT
+                && packet
+                    .body()
+                    .windows(packed.len())
+                    .any(|w| w == packed.as_slice())
+            {
+                mentions += 1;
+                println!(
+                    "RESPAWN-MENTION op={} len={} head={:02x?}",
+                    packet.opcode(),
+                    packet.body().len(),
+                    &packet.body()[..packet.body().len().min(24)]
+                );
+            }
+        }
+    }
+    println!("RESPAWN-MENTIONS mentions={mentions}");
+    // Destroy alone is the bug (corpse evicted, respawn silent):
+    // the standing viewer must also get the re-create.
+    assert!(
+        mentions >= 2,
+        "respawn never re-created the wolf to the standing viewer"
+    );
+    println!("RESPAWN-PASS");
+}
+
+#[test]
+#[ignore = "requires bench world+characters DBs, CHARACTER_LOAD_GUID, MANGOS_DBC_DIR"]
+#[allow(clippy::too_many_lines)] // one end-to-end scenario
+fn bench_pet_target_modes() {
+    // Pet/master implicit targets must validate fork-exactly (see
+    // body): Health Funnel rides the summoned Imp, Sacrifice rides
+    // the caster as its own master.
+    let world_url = std::env::var("TEST_MYSQL_URL_WORLD").expect("TEST_MYSQL_URL_WORLD");
+    let chars_url = std::env::var("TEST_MYSQL_URL_CHARACTERS").expect("TEST_MYSQL_URL_CHARACTERS");
+    let guid: u32 = std::env::var("CHARACTER_LOAD_GUID")
+        .expect("CHARACTER_LOAD_GUID")
+        .parse()
+        .expect("guid");
+    let dbc_dir: PathBuf = std::env::var_os("MANGOS_DBC_DIR")
+        .expect("MANGOS_DBC_DIR")
+        .into();
+    let dbc = race_class_dbc(&dbc_dir);
+
+    let world = DbActor::spawn("test-world", &world_url).expect("world");
+    let stores = world
+        .call(move |conn| {
+            let (creature_templates, _) =
+                load_creature_templates(conn, 10, &TemplateValidation::default())?;
+            let (gameobject_templates, _) =
+                load_gameobject_templates(conn, 10, &GameObjectValidation::default())?;
+            let map_ids = load_map_ids(conn)?;
+            let mut spawns = SpawnData::new();
+            spawns.load_creatures(conn, 10, &creature_templates, Some(&map_ids), false)?;
+            spawns.load_gameobjects(
+                conn,
+                10,
+                &gameobject_templates,
+                Some(&map_ids),
+                None,
+                false,
+            )?;
+            let (creature_addons, _) = load_creature_addons(conn, 10, None, None, None)?;
+            let (equipment, _) = load_equipment_templates(conn, 10, None)?;
+            let (cls, _) = load_class_level_stats(conn)?;
+            let (display_addons, _) = load_display_info_addons(conn, 5875, None, None)?;
+            let (player_infos, _) = load_player_infos(conn, 60, None, Some(&map_ids), None)?;
+            let items = load_item_prototypes_lite(conn, 10)?;
+            let mut report = LoadReport::default();
+            let waypoints = load_waypoints(conn, &mut report)?;
+            let mut spell_report = LoadReport::default();
+            let spell_entries = load_spell_templates(conn, 5875, &mut spell_report)?;
+            let proc_events = mangos_world_data::proc_events::load_spell_proc_events(conn, 5875)?;
+            Ok(WorldStores {
+                creature_templates,
+                gameobject_templates,
+                spawns,
+                creature_addons,
+                equipment,
+                cls,
+                display_addons,
+                player_infos,
+                items,
+                item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
+                factions: mangos_world_data::reputations::load_factions(conn)?,
+                reputation_kills: mangos_world_data::reputations::ReputationKillStores::default(),
+                gossip: mangos_world_data::gossip_menus::GossipStores::default(),
+                areas: mangos_world_data::areas::AreaStore::default(),
+                exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(),
+                pets: mangos_world_data::pet_data::PetStores::default(),
+                next_pet_number: std::sync::atomic::AtomicU32::new(1),
+                next_item_guid: std::sync::atomic::AtomicU32::new(1),
+                vendor_items: mangos_world_data::vendor_items::VendorItemStores::default(),
+                durability: mangos_world_data::durability::DurabilityTables::default(),
+                bank_bag_slot_prices: Vec::new(),
+                stable_slot_prices: Vec::new(),
+                trainer_spells: mangos_world_data::trainer_spells::TrainerStores::default(),
+                taxi: mangos_world_data::taxi::TaxiStore::default(),
+                script_waypoints: mangos_world_data::script_waypoints::ScriptWaypointStore::default(
+                ),
+                game_events: mangos_world_data::game_events::GameEvents::default(),
+                loot: mangos_world_data::loot::LootStores::default(),
+                locks: mangos_world_data::locks::LockStore::default(),
+                fishing_base_skills: mangos_world_data::fishing::FishingBaseSkills::default(),
+                weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
+                waypoints,
+                spells: mangos_spells::SpellStore {
+                    spells: spell_entries,
+                    skill_line_abilities: Vec::new(),
+                    spell_chains: std::collections::HashMap::new(),
+                    talents: std::collections::HashMap::new(),
+                    talent_tabs: std::collections::HashMap::new(),
+                    talent_spell_pos: std::collections::HashMap::new(),
+                    proc_events,
+                    cones: std::collections::HashMap::new(),
+                    tables: mangos_spells::load_spell_dbc_tables(std::path::Path::new(
+                        &std::env::var("MANGOS_DBC_DIR").expect("MANGOS_DBC_DIR"),
+                    ))
+                    .expect("spell dbc tables"),
+                },
+                spell_target_positions:
+                    mangos_world_data::spell_target_position::SpellTargetPositions::default(),
+                creature_spells: mangos_world_data::creature_spells::CreatureSpellsMap::new(),
+                scripts: mangos_scripts_engine::ScriptStores::default(),
+                display_scales: HashMap::new(),
+                model_data: HashMap::new(),
+                shapeshift_forms: HashMap::new(),
+                skills: mangos_world_data::skill_info::SkillDbc::default(),
+                chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
+                auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
+                maps: mangos_world_data::map_template::MapStore::default(),
+                safe_locs: mangos_world_data::battlegrounds::SafeLocStore::default(),
+                battlegrounds: mangos_world_data::battlegrounds::BattlegroundTemplates::default(),
+                battlemasters: mangos_world_data::battlegrounds::BattleMasters::default(),
+                battle_event_indexes: mangos_world_data::battlegrounds::BattleEventIndexes::default(
+                ),
+                graveyard_links: mangos_world_data::battlegrounds::GraveyardLinks::default(),
+                bg_entrances: mangos_world_data::battlegrounds::BattlegroundEntrances::default(),
+                area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
+                quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
+                quest_templates: mangos_world_data::quest_template::QuestTemplates::default(),
+                quest_relations: mangos_world_data::quest_template::QuestRelations::default(),
+                tavern_triggers: std::collections::HashSet::new(),
+            })
+        })
+        .expect("stores");
+    let stores = Arc::new(stores);
+    let chars = DbActor::spawn("test-chars", &chars_url).expect("chars");
+    let load = chars
+        .call(move |conn| load_character(conn, guid))
+        .expect("load")
+        .expect("fixture exists");
+    let inputs = MaterializeInputs {
+        infos: &stores.player_infos,
+        race: dbc.races.get(&1),
+        power_type: 1,
+        display_scale: 1.0,
+        model: None,
+        saved_map_known: true,
+        saved_map_is_instance: false,
+        max_money: MAX_MONEY_AMOUNT,
+        now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
+        skills: None,
+        item_prototypes: None,
+        quest_templates: None,
+        taxi: None,
+    };
+    let player = Player::materialize(load, &inputs).expect("player");
+    let player_guid: ObjectGuid = player.unit.guid();
+    let mut map = Map::new(
+        0,
+        0,
+        MapConfig::default(),
+        Arc::clone(&stores),
+        WorldRng::from_seed(11),
+    );
+    let respawns = RespawnTimes::default();
+    map.add_player(player, &respawns, 1_800_000_000, 1000);
+    let _ = map.drain_events();
+
+    // Pet/master implicit targets (Health Funnel's 5, Sacrifice's
+    // 27) must pass validation: the fork skips pet-target checks
+    // (`Spell.cpp:7211`) and resolves the pet/master server-side.
+    let mut now_ms = 1000u32;
+    let mut now_unix = 1_800_000_000u64;
+    let mut tick = |map: &mut Map, n: u32| {
+        for _ in 0..n {
+            now_ms += 50;
+            if now_ms % 1000 == 0 {
+                now_unix += 1;
+            }
+            map.tick(50, now_ms, now_unix);
+        }
+    };
+    let known_opt = || CastOptions {
+        triggered: false,
+        triggered_by_aura: false,
+        skip_known: true,
+        cast_item: None,
+        custom_base_points: [None; 3],
+        triggered_by_aura_spell: 0,
+        triggered_by_spell: 0,
+    };
+    {
+        let p = map.player_mut(player_guid).expect("player");
+        p.unit.set_max_power(0, 100_000);
+        p.unit.set_power(0, 100_000);
+    }
+    // Sacrifice targets the caster's master (self for a player).
+    let sac = map.cast_spell(player_guid, 7812, CastTarget::SelfCast, known_opt());
+    println!("SACRIFICE outcome={sac:?}");
+    assert!(
+        matches!(sac, CastOutcome::Started),
+        "Sacrifice self must start, got {sac:?}"
+    );
+    let sac_holders: Vec<u32> = map
+        .aura_holders(player_guid)
+        .iter()
+        .map(|h| h.spell_id)
+        .collect();
+    println!("SACRIFICE holders={sac_holders:?}");
+    // Summon Imp, then Health Funnel it: the funnel targets the
+    // caster's pet and must start plus land its aura on the pet.
+    let sum = map.cast_spell(player_guid, 688, CastTarget::SelfCast, known_opt());
+    assert!(
+        matches!(sum, CastOutcome::Started),
+        "Summon Imp must start, got {sum:?}"
+    );
+    tick(&mut map, 240);
+    let _ = map.drain_events();
+    let pet = map.pet_of(player_guid).expect("imp pet summoned");
+    let fun = map.cast_spell(player_guid, 755, CastTarget::Unit(pet), known_opt());
+    println!("FUNNEL outcome={fun:?} pet={pet:?}");
+    assert!(
+        matches!(fun, CastOutcome::Started),
+        "Health Funnel on the pet must start, got {fun:?}"
+    );
+    let pet_holders: Vec<u32> = map.aura_holders(pet).iter().map(|h| h.spell_id).collect();
+    println!("PET holders={pet_holders:?}");
+    assert!(
+        pet_holders.contains(&755),
+        "funnel aura 755 missing on the pet"
+    );
+    // Sacrifice with the Imp out (mirrors the live campaign order);
+    // the funnel channel holds the slot until it ends.
+    tick(&mut map, 240);
+    let sac_imp_out = map.cast_spell(player_guid, 7812, CastTarget::SelfCast, known_opt());
+    assert!(
+        matches!(sac_imp_out, CastOutcome::Started),
+        "Sacrifice with pet out must start, got {sac_imp_out:?}"
+    );
+    let holders_with_pet: Vec<u32> = map
+        .aura_holders(player_guid)
+        .iter()
+        .map(|h| h.spell_id)
+        .collect();
+    println!("SACRIFICE-WITH-PET holders={holders_with_pet:?}");
+    // Dest-targeted direct damage resolves no targets on a direct
+    // cast (fork dest-switch default breaks): the Hellfire tick
+    // applier must start yet never self-hit.
+    let hp_before = map.player(player_guid).expect("player").unit.health();
+    let self_pos = map
+        .player(player_guid)
+        .expect("player")
+        .unit
+        .world
+        .position();
+    let hf = map.cast_spell(player_guid, 5857, CastTarget::Dest(self_pos), known_opt());
+    assert!(
+        matches!(hf, CastOutcome::Started),
+        "Hellfire Effect must start, got {hf:?}"
+    );
+    tick(&mut map, 20);
+    let hp_after = map.player(player_guid).expect("player").unit.health();
+    println!("HELLFIRE-EFFECT hp {hp_before}->{hp_after}");
+    assert_eq!(hp_before, hp_after, "dest damage hit the caster");
+    println!("PET-TARGETS-PASS");
 }

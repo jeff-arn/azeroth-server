@@ -265,9 +265,31 @@ impl Map {
                             vec![unit_target]
                         }
                     }
+                    // Direct damage on a dest target has no
+                    // fork fill (`SetTargetMap` dest-switch
+                    // default breaks with no targets): the
+                    // tick appliers (Hellfire Effect) only
+                    // carry victims on trigger casts. The
+                    // caster fallback would wrongly
+                    // self-hit.
+                    effect::SCHOOL_DAMAGE if matches!(target, CastTarget::Dest(_)) => Vec::new(),
                     _ => vec![caster],
                 }
             }
+            // The caster's pet or nothing (fork
+            // `FillTargetMap` `TARGET_UNIT_CASTER_PET`:
+            // pet, else charm, else no target). Charm
+            // fallback is unmodeled; an empty victim
+            // list skips the effect fork-exactly.
+            tgt::UNIT_CASTER_PET => self.pet_of(caster).map_or_else(Vec::new, |pet| vec![pet]),
+            // The caster's owner or nothing (fork
+            // `FillTargetMap` `TARGET_UNIT_CASTER_MASTER`:
+            // the pet's master; a player caster has none,
+            // so the effect skips fork-exactly — e.g.
+            // Voidwalker Sacrifice shields the owner).
+            tgt::UNIT_CASTER_MASTER => self
+                .pet_owner(caster)
+                .map_or_else(Vec::new, |owner| vec![owner]),
             // Unmodeled location modes and
             // `TARGET_LOCATION_CASTER_FISHING_SPOT`
             // (fork `Spell.cpp:2945-2948` pushes the
@@ -398,6 +420,19 @@ impl Map {
             if eff.effect == effect::NONE {
                 continue;
             }
+            // Per-effect target map (fork `SetTargetMap`
+            // per effect): a `TARGET_UNIT_CASTER` effect
+            // lands on the caster even inside a mixed
+            // spell whose victim list came from another
+            // effect's mode (Sacrifice: shield on the
+            // master via effect 1, suicide on the pet
+            // itself via effect 2). The merged victim
+            // list otherwise stays the subset shape.
+            let victim = if eff.implicit_target_a == tgt::UNIT_CASTER {
+                caster
+            } else {
+                victim
+            };
             // Per-effect immunity (fork strips the
             // effect from the target's effectMask).
             if self.is_immune_to_spell_effect(victim, spell, i, victim == caster) {

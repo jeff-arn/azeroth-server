@@ -37,6 +37,10 @@ const EVISCERATE_SPELL: u32 = 9202;
 const BITE_SPELL: u32 = 9203;
 /// Finishing-move stand-in (`ATTR_EX_FINISHING_MOVE_DAMAGE`).
 const FINISHER_SPELL: u32 = 9204;
+/// Mixed-target stand-in: damage on the unit target plus a
+/// `TARGET_UNIT_CASTER` instakill that must land on the caster
+/// (Sacrifice shape).
+const MIXED_SELF_KILL_SPELL: u32 = 9205;
 /// Creature template entry for victims.
 const VICTIM_ENTRY: u32 = 9301;
 /// `TARGET_UNIT` implicit target (see insignia fixture).
@@ -266,6 +270,25 @@ fn combo_stores() -> WorldStores {
             effects: [
                 unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
                 SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Mixed-target spell: unit damage + caster-targeted
+    // instakill (Sacrifice's shield-master/pet-suicide shape,
+    // minus the aura).
+    stores.spells.spells.insert(
+        MIXED_SELF_KILL_SPELL,
+        SpellEntry {
+            id: MIXED_SELF_KILL_SPELL,
+            effects: [
+                unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
+                SpellEffectData {
+                    effect: effect::INSTAKILL,
+                    implicit_target_a: 1, // TARGET_UNIT_CASTER
+                    ..Default::default()
+                },
                 SpellEffectData::default(),
             ],
             ..Default::default()
@@ -603,4 +626,37 @@ fn finisher_without_combo_target_rejected() {
         cast_options(),
     );
     assert_eq!(outcome, CastOutcome::Started);
+}
+
+#[test]
+fn unit_caster_effect_lands_on_caster_not_victim() {
+    // Per-effect target map (fork `SetTargetMap` per
+    // effect): inside a mixed spell, the
+    // `TARGET_UNIT_CASTER` instakill strikes the caster
+    // while the unit-target damage strikes the victim.
+    // Found live by the Warlock campaign (Sacrifice
+    // would otherwise shield/kill the wrong unit).
+    let Fixture {
+        mut map,
+        caster,
+        victim,
+    } = setup(10);
+    let victim_before = victim_health(&map, victim);
+    let outcome = map.cast_spell(
+        caster,
+        MIXED_SELF_KILL_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    assert_eq!(
+        map.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
+        0,
+        "caster-targeted instakill must land on the caster"
+    );
+    let victim_after = victim_health(&map, victim);
+    assert!(
+        victim_after < victim_before && victim_after > 0,
+        "victim takes only the unit-target damage ({victim_before} -> {victim_after})"
+    );
 }
