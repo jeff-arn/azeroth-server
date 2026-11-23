@@ -535,7 +535,106 @@ def ensure_character(account: str, account_id: int, name: str, race: int, cls: i
     return int(found)
 
 
-def seed_character(guid: int, spells: list[int], pos: tuple[float, float, float] = CASTER_POS) -> None:
+#: Hunter pet fixture (Call Pet 883 is family-0, outside the matrix,
+#: so the harness seeds the saved pet itself). Timber Wolf 69 is
+#: tameable (type 1 BEAST, pet_family 1, STATIC_FLAG_TAMEABLE) and
+#: carries Growl; Pet Wolf 860 (type 7, family 0) is not. Rust
+#: `load_pet_from_rows` (pets.rs) finds the first row with entry
+#: != 0 and slot 0 (current); `load_pet_with_row` needs
+#: pet_type 1 (HUNTER), a tameable template, and level from the row
+#: for hunter pets, and ignores created_by_spell 0 for Called loads.
+#: Slot/pet_type/level constants mirror mangos-db pet.rs.
+HUNTER_PET_SETUP_SPELL = 883
+HUNTER_PET_ENTRY = 69
+HUNTER_PET_SPELL = 2649
+HUNTER_PET_ROW_ID = 900001
+HUNTER_PET_DISPLAY_ID = 604
+
+#: Hunter ranged fixture (fork `CheckItems` honesty; the Rust engine
+#: has no weapon/ammo gate, so the bench runs without it). Ashwood
+#: Bow 5596 (class 2) in the ranged slot, Rough Arrows 2512 in the
+#: backpack, and a Militia Shortsword 1161 in the mainhand for the
+#: melee-weapon rows. Fixed item guids keep the fixture idempotent
+#: and fixture-scoped (seed_character never touches other guids).
+EQUIPMENT_SLOT_MAINHAND = 15
+EQUIPMENT_SLOT_RANGED = 17
+HUNTER_GEAR_ROWS = (
+    # (item_guid, entry, bag, slot, count)
+    (910001, 5596, 0, EQUIPMENT_SLOT_RANGED, 1),
+    (910002, 2512, 0, 23, 200),
+    (910003, 1161, 0, EQUIPMENT_SLOT_MAINHAND, 1),
+)
+
+
+def seed_hunter_pet(guid: int) -> None:
+    """Insert the saved-pet rows Call Pet needs (opt-in Hunter
+    fixture). Runs after seed_character's delete phase (which clears
+    every pet row for this owner), so the insert is idempotent and
+    cleanup stays fixture-scoped: the next seed deletes these rows
+    again. Pet spells ride pet_spell (load-only companion data the
+    Rust loader reads); no pet_aura rows (never read at load)."""
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM character_pet WHERE owner_guid={guid} AND id={HUNTER_PET_ROW_ID}",
+    )
+    smoke.sql_scalar(
+        "characters",
+        "INSERT INTO character_pet (id, entry, owner_guid, display_id, "
+        "created_by_spell, pet_type, level, xp, react_state, "
+        "loyalty_points, loyalty, training_points, slot, name, "
+        "renamed, current_health, current_mana, current_happiness, "
+        "save_time, reset_talents_cost, reset_talents_time, "
+        "action_bar_data, teach_spell_data) VALUES "
+        f"({HUNTER_PET_ROW_ID}, {HUNTER_PET_ENTRY}, {guid}, "
+        f"{HUNTER_PET_DISPLAY_ID}, 0, 1, 60, 0, 1, 0, 1, 0, 0, "
+        "'Pet', 0, 9999, 9999, 3, 0, 0, 0, "
+        "'0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ', '')",
+    )
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM pet_spell WHERE guid={HUNTER_PET_ROW_ID}",
+    )
+    smoke.sql_scalar(
+        "characters",
+        f"INSERT INTO pet_spell (guid, spell, active) VALUES ({HUNTER_PET_ROW_ID}, {HUNTER_PET_SPELL}, 0)",
+    )
+    print(f"SEEDED hunter pet guid={guid} pet_id={HUNTER_PET_ROW_ID} entry={HUNTER_PET_ENTRY}")
+
+
+def seed_hunter_gear(guid: int) -> None:
+    """Equip the Hunter ranged fixture (idempotent, fixture-scoped).
+
+    Deletes only this owner's slot rows plus our fixed item guids,
+    then inserts the bow/arrows/sword. Starter-kit duplicates (Old
+    Blunderbuss) land in bag slots when the equip slots are taken.
+    """
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM character_inventory WHERE guid={guid} AND bag=0 AND slot IN ({EQUIPMENT_SLOT_MAINHAND}, "
+        f"{EQUIPMENT_SLOT_RANGED}, 23)",
+    )
+    fixed = ",".join(str(item_guid) for item_guid, _entry, _bag, _slot, _count in HUNTER_GEAR_ROWS)
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM item_instance WHERE guid IN ({fixed}) AND owner_guid={guid}",
+    )
+    for item_guid, entry, bag, slot, count in HUNTER_GEAR_ROWS:
+        smoke.sql_scalar(
+            "characters",
+            "INSERT INTO item_instance (guid, item_id, owner_guid, count, enchantments) VALUES "
+            f"({item_guid}, {entry}, {guid}, {count}, '')",
+        )
+        smoke.sql_scalar(
+            "characters",
+            "INSERT INTO character_inventory (guid, bag, slot, item_guid, item_id) VALUES "
+            f"({guid}, {bag}, {slot}, {item_guid}, {entry})",
+        )
+    print(f"SEEDED hunter gear guid={guid} rows={len(HUNTER_GEAR_ROWS)}")
+
+
+def seed_character(
+    guid: int, spells: list[int], pos: tuple[float, float, float] = CASTER_POS, hunter_pet: bool = False
+) -> None:
     x, y, z = pos
     smoke.ensure_offline(guid)
     smoke.sql_scalar(
@@ -567,6 +666,8 @@ def seed_character(guid: int, spells: list[int], pos: tuple[float, float, float]
             f"DELETE FROM {table} WHERE guid IN (SELECT id FROM character_pet WHERE owner_guid={guid})",
         )
     smoke.sql_scalar("characters", f"DELETE FROM character_pet WHERE owner_guid={guid}")
+    if hunter_pet:
+        seed_hunter_pet(guid)
     print(f"SEEDED guid={guid} spells={len(spells)} pos=({x},{y},{z})")
 
 
@@ -579,6 +680,10 @@ SETUP_SPELLS: dict[str, tuple[int, ...]] = {
     # the pet-cast leg teaches before ordering the cast, exactly
     # like using the grimoire item in game.
     "Warlock": (7885, 19447),
+    # Call Pet is family-0 (outside the matrix, like Warrior
+    # Battle Stance): the Hunter pet scenario casts it as setup,
+    # and it must be seeded or the book lacks it.
+    "Hunter": (HUNTER_PET_SETUP_SPELL,),
 }
 
 #: Druid shapeshift form spells (the fan-out cast set's `form`-bucket
@@ -2439,6 +2544,44 @@ def cast_unit_retry_power(
     return go, reason, ops, waited
 
 
+def cooldown_wait_s(recovery_ms: object, category_ms: object, margin_s: float = 5.0, cap_s: float = 600.0) -> float:
+    """Pure full-cooldown wait: max(recovery, category) plus margin, capped.
+
+    The matrix carries only recoveryTime, but same-chain ranks share
+    the fork's categoryRecoveryTime (Wyvern Sting 24132/24133 share
+    category 1111 at 120 s) which also rejects with NOT_READY. The
+    live lookup below feeds this; the cap matches not_ready_retry so
+    one row cannot stall the campaign.
+    """
+    try:
+        wait_s = max(float(recovery_ms or 0), float(category_ms or 0)) / 1000.0 + margin_s
+    except (TypeError, ValueError):
+        wait_s = margin_s
+    return min(max(wait_s, margin_s), cap_s)
+
+
+def live_cooldown_wait_s(spell_id: int) -> float:
+    """Full fork cooldown wait for a NOT_READY row (live bench oracle).
+
+    Resolves max(recoveryTime, categoryRecoveryTime) over the
+    spell_template builds and waits it out plus margin. Bench-only
+    read on a rare path (first NOT_READY per row); failure falls
+    back to the margin so the row still retries once.
+    """
+    try:
+        row = smoke.sql_scalar(
+            "mangos",
+            "SELECT COALESCE(MAX(recoveryTime),0),COALESCE(MAX(categoryRecoveryTime),0) "
+            f"FROM spell_template WHERE entry={int(spell_id)}",
+        )
+        parts = str(row).split("\t")
+        return cooldown_wait_s(parts[0] if len(parts) > 0 else 0, parts[1] if len(parts) > 1 else 0)
+    except Exception:
+        # Bench oracle unreachable: still retry once after the
+        # margin rather than failing the row on a read error.
+        return cooldown_wait_s(0, 0)
+
+
 def not_ready_retry(
     driver: ScriptedDriver,
     guid: int,
@@ -2872,12 +3015,26 @@ def hostile_leg(
     aura_id = int(expected.get("aura", spell_id))
     range_step = standoff
     landed_go = False
+    cooldown_waited_s = 0.0
+    cooldown_note = ""
     while attempts < 5:
         attempts += 1
         mark = event_mark(driver)
         go, reason, cast_ops, waited = cast_unit_retry_power(driver, spell_id, dummy, timeout=15.0)
         ops += cast_ops
         landed_go = landed_go or go
+        if not go and reason == SPELL_FAILED_NOT_READY and not landed_go and not cooldown_waited_s:
+            # Shared category cooldown (multi-rank chains: Wyvern
+            # Sting 24132 arms category 1111/120 s, so 24133 reads
+            # NOT_READY): the matrix carries only recoveryTime, so
+            # resolve the full fork cooldown live from the bench
+            # oracle and wait it out once within the same cap,
+            # like the blessing legs (a landed GO never waits:
+            # the cooldown_erased arm below retains it).
+            cooldown_waited_s = live_cooldown_wait_s(spell_id)
+            driver.poll(cooldown_waited_s)
+            cooldown_note = f"; cooldown wait +{cooldown_waited_s:.0f}s"
+            continue
         if not go and reason == SPELL_FAILED_OUT_OF_RANGE:
             # Roaming dummy drifted out of range between approach and
             # cast (pilot Growl pattern): step closer and retry within
@@ -3020,7 +3177,9 @@ def hostile_leg(
             "attempts": attempts,
         },
     )
-    verdict["evidence"] += f" after {attempts} attempt(s)" + consumed + reuse_note + cooldown_erased + tick_note
+    verdict["evidence"] += (
+        f" after {attempts} attempt(s)" + consumed + reuse_note + cooldown_erased + cooldown_note + tick_note
+    )
     if dummy_override is not None:
         # Pinned dummies live far from the arena (finisher bears):
         # walk back so later rows still see the 705/707 counters
@@ -3449,6 +3608,33 @@ def item_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int
         if verdict["verdict"] == "PASS":
             verdict["evidence"] += detail
         return verdict
+    want_class = int(row.get("equipped_item_class", -1))
+    if want_class == 2:
+        # Weapon rows (Hunter ranged/melee): the fixture seeds a
+        # class-2 weapon in the ranged slot (fork
+        # EQUIPMENT_SLOT_RANGED = 17). Melee rows ride the same
+        # gate: the Rust engine has no weapon check, and the
+        # fixture also seeds a mainhand sword for fork honesty.
+        gear = equipped_item_class(guid, slot=EQUIPMENT_SLOT_RANGED)
+        if gear is None or gear[0] != 2:
+            return make_verdict(
+                row,
+                "BLOCKED",
+                reason="fixture-gear",
+                evidence=f"ranged slot is not weapon-class (class 2): {gear}; hunter fixture lacks a ranged weapon",
+                pre=pre,
+            )
+        verdict = self_leg(row, driver, guid, applied_auras)
+        verdict["evidence"] += f"; ranged weapon equipped {gear}"
+        return verdict
+    if want_class != 4:
+        return make_verdict(
+            row,
+            "BLOCKED",
+            reason="fixture-gear",
+            evidence=f"equipped-item class {want_class} has no fixture gate; scenario-inapplicable",
+            pre=pre,
+        )
     gear = equipped_item_class(guid)
     if gear is None or gear[0] != 4:
         return make_verdict(
@@ -3468,6 +3654,17 @@ def item_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int
 #: future learn-pet row dispatches the same way.
 PET_SUMMON_EFFECT_IDS = {28, 56, 112}
 PET_LEARN_EFFECT_IDS = {57}
+#: Fork `SPELL_EFFECT_SUMMON_DEAD_PET` (`SpellDefines.h:320`):
+#: Revive Pet needs a dead pet, which no live leg scenarios.
+PET_REVIVE_EFFECT_IDS = {109}
+#: Fork summon-object effects (`SpellDefines.h`): trap placements
+#: carry 104 (GAMEOBJECT). Rows with these effects plus no
+#: observable outcome (no aura, no damage/heal/script) create an
+#: object the harness cannot observe (object_seen unsupported).
+BARE_OBJECT_EFFECT_IDS = {76, 86, 104, 105, 106, 107}
+#: Fork hostile targets (`SpellDefines.h`), mirroring the matrix
+#: generator's HOSTILE_TARGETS for the item-bucket routing below.
+HOSTILE_TARGET_IDS = {6, 2, 15, 16, 24, 28, 36, 54}
 
 
 def class_summon_spell(rows: list[dict]) -> int | None:
@@ -3512,6 +3709,33 @@ def find_summoned_pet(
         dist = math.hypot(float(x) - float(caster_pos[0]), float(y) - float(caster_pos[1]))
         if dist <= max_dist_yd and (best is None or dist < best[0]):
             best = (dist, int(guid))
+    return best[1] if best is not None else None
+
+
+def find_active_pet(objects, caster_pos: tuple[float, ...], entry: int, max_dist_yd: float = 20.0) -> int | None:
+    """Already-out pet discovery (pure part of the fixture-summon reuse).
+
+    The engine auto-loads the slot-0 saved pet at world entry, so a
+    Hunter Call Pet cast with the pet already out is a silent no-op
+    (GO, nothing new to track). The scenario pet is the nearest
+    alive unit of the fixture entry near the caster carrying
+    campaign-pet health (level-60 pet rows hold thousands of HP;
+    wild same-entry wolves and 100-hp arena dummies must never
+    verify as the scenario pet).
+    """
+    best: tuple[float, int] | None = None
+    for tracked_guid, obj in objects.items():
+        if getattr(obj, "entry", None) != entry:
+            continue
+        health = getattr(obj, "health", None)
+        if health is None or health <= 1000:
+            continue
+        pos = getattr(obj, "position", None)
+        if pos is None:
+            continue
+        dist = math.hypot(float(pos[0]) - float(caster_pos[0]), float(pos[1]) - float(caster_pos[1]))
+        if dist <= max_dist_yd and (best is None or dist < best[0]):
+            best = (dist, int(tracked_guid))
     return best[1] if best is not None else None
 
 
@@ -3752,7 +3976,10 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
     exists for the class (summon_spell from class_summon_spell),
     otherwise they stay honestly BLOCKED no-pet. Corpse/actual
     totems map to honest BLOCKED reasons, never to a cast leg, while
-    stance-gated form_totem rows ride form_gated. Mirrors the
+    stance-gated form_totem rows ride form_gated. Ranged-weapon
+    item rows verify on the dummy (hostile for unit targets, ground
+    for area-only rows like Volley); bare summon-object placements
+    and dead-pet revives stay BLOCKED. Mirrors the
     run_class branch order so the self-test can assert totality over a
     real artifact."""
     campaign = row.get("campaign", "")
@@ -3766,6 +3993,9 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
         return ("blocked", "script-evidence-unknown")
     if kind == "learned_spell":
         return ("passive", None)
+    if PET_REVIVE_EFFECT_IDS & set(row.get("effect_ids") or []):
+        # Revive Pet: no dead-pet scenario in a live class run.
+        return ("blocked", "target-not-dead")
     if bucket == "party_duel":
         return ("blocked", "no-party")
     if bucket == "corpse":
@@ -3796,8 +4026,32 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
     if bucket == "hostile_dummy":
         return ("cast", "hostile")
     if bucket == "ground_area":
+        effects = set(row.get("effect_ids") or [])
+        if (
+            kind == "object_created"
+            and effects & BARE_OBJECT_EFFECT_IDS
+            and not (effects & (PET_SUMMON_EFFECT_IDS | PET_LEARN_EFFECT_IDS))
+            and not any(row.get("aura_ids") or [])
+        ):
+            # Bare summon-object placements (Hunter traps): the
+            # trap object is wire-invisible (object_seen
+            # unsupported) and the trigger damage attributes to the
+            # effect spell, whose own rows verify it. Stays uncast.
+            return ("blocked", "effect-marker-only")
         return ("cast", "ground")
     if bucket == "item_reagent_ammo":
+        if (
+            not any(row.get("reagents") or [])
+            and kind in ("damage_log", "aura_on_target")
+            and set(row.get("target_a") or []) & HOSTILE_TARGET_IDS
+        ):
+            # Reagent-free weapon rows verify on the dummy, not the
+            # caster: unit-targeted rows ride hostile, area-only
+            # rows (Volley) ride the ground dest leg. Reagent rows
+            # keep the item leg (their fixture-reagent gate).
+            if 6 in (row.get("target_a") or []):
+                return ("cast", "hostile")
+            return ("cast", "ground")
         return ("cast", "item")
     return ("cast", "self")
 
@@ -3808,6 +4062,9 @@ UNSCENARIOED_EVIDENCE = {
     "run; the parser discards corpse GUIDs (correction 2)",
     "no-pet": "no pet scenario for this class in a live run; nothing to observe",
     "engine-totem": "totem/stance hardware scenario not implemented in this harness; engine-totem",
+    "effect-marker-only": "no wire-observable outcome for this row shape in a live run "
+    "(bare trap placements, marker-only rows); left uncast",
+    "target-not-dead": "no dead-pet scenario in a live class run; revive rows stay uncast",
 }
 
 
@@ -3851,6 +4108,13 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
     class_rows = [r for r in doc.get("rows", []) if r.get("class") == class_name]
     by_spell_id = {int(r["spell_id"]): r for r in class_rows}
     summon_spell = class_summon_spell(class_rows)
+    if class_name == "Hunter" and summon_spell is None:
+        # Call Pet 883 is family-0 (outside the matrix, seeded via
+        # SETUP_SPELLS): the fixture summon for the Hunter pet
+        # scenario. Not a matrix row, so its verdict is setup
+        # evidence only and is never recorded (row counts must
+        # equal the matrix).
+        summon_spell = HUNTER_PET_SETUP_SPELL
     acquire_lock()
     verdicts: list[dict] = []
     manifest_extra: dict = {
@@ -3874,7 +4138,9 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
         account_id = int(smoke.sql_scalar("realmd", f"SELECT id FROM account WHERE username='{account}'"))
 
         def fresh_login(pos: tuple | None = None):
-            seed_character(guid, seed_all, pos=pos or CASTER_POS)
+            seed_character(guid, seed_all, pos=pos or CASTER_POS, hunter_pet=(class_name == "Hunter"))
+            if class_name == "Hunter":
+                seed_hunter_gear(guid)
             client, driver = login_as(account, account_id, guid)
             drift_gate(driver, guid, len(seed_all))
             return client, driver
@@ -3888,13 +4154,18 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
             the caller may proceed (summon rows: nothing more to
             cast after a ready pet is verified). The summon verdict
             is recorded at the first row that needs it, in row order
-            when the summon row itself is reached."""
+            when the summon row itself is reached. The Hunter
+            fixture summon (Call Pet, not a matrix row) is setup
+            evidence only: its verdict is never recorded."""
             nonlocal pet_guid
-            is_summon_row = summon_spell is not None and int(active_row["spell_id"]) == summon_spell
+            fixture_summon = summon_spell is not None and summon_spell not in by_spell_id
+            is_summon_row = (
+                summon_spell is not None and not fixture_summon and int(active_row["spell_id"]) == summon_spell
+            )
             if not is_summon_row and pet_guid is not None and (driver.target_health(pet_guid) or 0) > 0:
                 return None
             pet_guid = None
-            if summon_spell is None or summon_spell not in by_spell_id:
+            if summon_spell is None or (not fixture_summon and summon_spell not in by_spell_id):
                 return make_verdict(
                     active_row,
                     "BLOCKED",
@@ -3903,7 +4174,33 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     pre=snapshot(driver, guid),
                     target_guid=None,
                 )
-            summon_verdict = pet_summon_leg(by_spell_id[summon_spell], driver, guid)
+            if fixture_summon:
+                # The engine auto-loads the slot-0 saved pet at
+                # world entry, so by the first pet row the fixture
+                # pet is usually already out (a Call Pet cast then
+                # is a silent no-op GO with nothing new to track).
+                # Reuse it directly, parked passive like a
+                # summoned one; only cast when nothing qualifies.
+                existing = find_active_pet(
+                    driver.world.objects,
+                    (driver.position[0], driver.position[1]),
+                    HUNTER_PET_ENTRY if class_name == "Hunter" else -1,
+                )
+                if existing is not None:
+                    pet_guid = existing
+                    driver.client.send_packet(373, struct.pack("<QIQ", pet_guid, 0x06 << 24, 0))
+                    driver.poll(0.4)
+                    return None
+                summon_row = {
+                    "class": class_name,
+                    "spell_id": summon_spell,
+                    "name": "Call Pet",
+                    "bucket": "pet",
+                    "expected": {"kind": "pet_created"},
+                }
+            else:
+                summon_row = by_spell_id[summon_spell]
+            summon_verdict = pet_summon_leg(summon_row, driver, guid)
             if summon_verdict["verdict"] == "PASS" and summon_verdict.get("target_guid"):
                 pet_guid = int(summon_verdict["target_guid"])
                 # A defensive pet assists on every caster target and
@@ -3914,6 +4211,19 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                 # via CMSG_PET_ACTION, like a player clicking Passive.
                 driver.client.send_packet(373, struct.pack("<QIQ", pet_guid, 0x06 << 24, 0))
                 driver.poll(0.4)
+            if fixture_summon:
+                # Setup evidence only (not a matrix row): proceed
+                # to the pet row on PASS, else BLOCKED no-pet.
+                if pet_guid is None:
+                    return make_verdict(
+                        active_row,
+                        "BLOCKED",
+                        reason="no-pet",
+                        evidence=f"fixture summon {summon_spell} failed: {summon_verdict['evidence'][:200]}",
+                        pre=snapshot(driver, guid),
+                        target_guid=None,
+                    )
+                return None
             if not is_summon_row:
                 verdicts.append(summon_verdict)
                 print(
@@ -4209,7 +4519,17 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     )
                     continue
                 if bucket == "item_reagent_ammo":
-                    verdicts.append(item_leg(row, driver, guid, used_dummies, applied_auras))
+                    if action == "cast" and payload == "hostile":
+                        # Ranged-weapon unit rows (Hunter): the
+                        # pre_dispatch routes them off the item leg
+                        # to the dummy, like hostile-bucket rows.
+                        verdicts.append(hostile_leg(row, driver, guid, used_dummies, applied_auras))
+                    elif action == "cast" and payload == "ground":
+                        # Area-only weapon rows (Hunter Volley):
+                        # the dest leg, like ground-bucket rows.
+                        verdicts.append(ground_leg(row, driver, guid, used_dummies, applied_auras))
+                    else:
+                        verdicts.append(item_leg(row, driver, guid, used_dummies, applied_auras))
                     print(
                         f"ROW {class_name} {spell_id} {bucket}: "
                         f"{verdicts[-1]['verdict']} "
@@ -4977,6 +5297,33 @@ def run_self_test() -> int:
     assert find_summoned_pet(set(), [(11, 100.0, 100.0, 100, 416)], (0.0, 0.0)) is None
     assert find_summoned_pet(set(), [(20, 5.0, 0.0, 100, 416), (21, 2.0, 0.0, 80, 416)], (0.0, 0.0)) == 21
     assert find_summoned_pet({20, 21}, [(20, 5.0, 0.0, 100, 416), (21, 2.0, 0.0, 80, 416)], (0.0, 0.0)) is None
+    # Already-out pet discovery: the login-autoloaded fixture pet
+    # (right entry, campaign health, near caster) reuses; wild
+    # same-entry wolves, 100-hp dummies, wrong entries, far and
+    # position-less objects never qualify.
+    from types import SimpleNamespace as _NS
+
+    _objs = {
+        1: _NS(entry=69, health=3052, position=(1.0, 1.0, 0.0, 0.0)),
+        2: _NS(entry=69, health=300, position=(0.5, 0.5, 0.0, 0.0)),
+        3: _NS(entry=705, health=3052, position=(0.5, 0.5, 0.0, 0.0)),
+        4: _NS(entry=69, health=3052, position=(100.0, 100.0, 0.0, 0.0)),
+        5: _NS(entry=69, health=0, position=(1.0, 1.0, 0.0, 0.0)),
+        6: _NS(entry=69, health=3052, position=None),
+    }
+    assert find_active_pet(_objs, (0.0, 0.0), 69) == 1
+    assert find_active_pet({2: _objs[2]}, (0.0, 0.0), 69) is None
+    assert find_active_pet({3: _objs[3]}, (0.0, 0.0), 69) is None
+    assert find_active_pet({4: _objs[4]}, (0.0, 0.0), 69) is None
+    assert find_active_pet({5: _objs[5], 6: _objs[6]}, (0.0, 0.0), 69) is None
+    assert find_active_pet(_objs, (0.0, 0.0), 416) is None
+    # Full-cooldown wait: category dominates (Wyvern 0/120000 ->
+    # 125 s), recovery dominates when larger, the cap binds long
+    # rows, and garbage falls back to the margin.
+    assert cooldown_wait_s(0, 120000) == 125.0
+    assert cooldown_wait_s(20000, 0) == 25.0
+    assert cooldown_wait_s(3600000, 3600000) == 600.0
+    assert cooldown_wait_s("x", None) == 5.0
     print("SELFTEST pet dispatch + summon selection + discovery ok")
     # GO-only anti-vacuity for the form_change mapping: a bound GO
     # without the form aura on the caster is an apply FAIL, while the
@@ -5236,6 +5583,159 @@ def run_self_test() -> int:
         )
     else:
         print("SELFTEST Warlock artifact absent; skipping totality")
+    # Hunter fan-out dispatch: reagent-free weapon rows verify on
+    # the dummy (unit targets ride hostile, area-only Volley rides
+    # ground); bare trap placements and Revive Pet stay BLOCKED;
+    # pet rows ride the pet leg only with the Call Pet fixture
+    # summon (883), else no-pet.
+    aimed_row = {
+        "class": "Hunter",
+        "spell_id": 19434,
+        "bucket": "item_reagent_ammo",
+        "effect_ids": [121, 0, 0],
+        "target_a": [6, 0, 0],
+        "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+        "equipped_item_class": 2,
+        "expected": {"kind": "damage_log", "opcode": 592},
+    }
+    assert pre_dispatch(aimed_row) == ("cast", "hostile")
+    sting_row = {
+        "class": "Hunter",
+        "spell_id": 1978,
+        "bucket": "item_reagent_ammo",
+        "effect_ids": [6, 0, 0],
+        "target_a": [6, 0, 0],
+        "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+        "equipped_item_class": 2,
+        "expected": {"kind": "aura_on_target", "aura": 1978},
+    }
+    assert pre_dispatch(sting_row) == ("cast", "hostile")
+    volley_row = {
+        "class": "Hunter",
+        "spell_id": 1510,
+        "bucket": "item_reagent_ammo",
+        "effect_ids": [6, 0, 0],
+        "target_a": [28, 0, 0],
+        "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+        "equipped_item_class": 2,
+        "expected": {"kind": "aura_on_target", "aura": 1510},
+    }
+    assert pre_dispatch(volley_row) == ("cast", "ground")
+    soulfire_row = {
+        "class": "Warlock",
+        "spell_id": 6353,
+        "bucket": "item_reagent_ammo",
+        "effect_ids": [2, 0, 0],
+        "target_a": [6, 0, 0],
+        "reagents": [6265, 0, 0, 0, 0, 0, 0, 0],
+        "equipped_item_class": -1,
+        "expected": {"kind": "item_consumed", "reagent": 6265},
+    }
+    assert pre_dispatch(soulfire_row) == ("cast", "item")
+    trap_row = {
+        "class": "Hunter",
+        "spell_id": 1499,
+        "bucket": "ground_area",
+        "effect_ids": [104, 0, 0],
+        "aura_ids": [0, 0, 0],
+        "expected": {"kind": "object_created"},
+    }
+    assert pre_dispatch(trap_row) == ("blocked", "effect-marker-only")
+    revive_row = {
+        "class": "Hunter",
+        "spell_id": 982,
+        "bucket": "ground_area",
+        "effect_ids": [109, 0, 0],
+        "aura_ids": [0, 0, 0],
+        "expected": {"kind": "object_created"},
+    }
+    assert pre_dispatch(revive_row) == ("blocked", "target-not-dead")
+    mend_row = {
+        "class": "Hunter",
+        "spell_id": 136,
+        "bucket": "pet",
+        "effect_ids": [10, 0, 0],
+        "target_a": [5, 0, 0],
+        "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+        "expected": {"kind": "aura_on_target", "aura": 136},
+    }
+    assert pre_dispatch(mend_row) == ("blocked", "no-pet")
+    assert pre_dispatch(mend_row, HUNTER_PET_SETUP_SPELL) == ("cast", "pet")
+    assert pre_dispatch(mend_row, None) == ("blocked", "no-pet")
+    # Fixture vocabulary: Call Pet is family-0 (outside the matrix),
+    # so the matrix carries no summon row for Hunter; the fixture
+    # constants pin the setup the pet scenario needs.
+    assert HUNTER_PET_SETUP_SPELL == 883
+    assert HUNTER_PET_SETUP_SPELL in SETUP_SPELLS["Hunter"]
+    assert HUNTER_PET_ENTRY == 69
+    assert HUNTER_PET_SPELL == 2649
+    assert [entry for _guid, entry, _bag, _slot, _count in HUNTER_GEAR_ROWS] == [5596, 2512, 1161]
+    assert EQUIPMENT_SLOT_RANGED == 17
+    assert EQUIPMENT_SLOT_MAINHAND == 15
+    for reason in ("effect-marker-only", "target-not-dead"):
+        assert reason in BLOCKED_REASONS, reason
+        assert reason in UNSCENARIOED_EVIDENCE, reason
+    print("SELFTEST Hunter dispatch table ok")
+    # Totality over the real Hunter fan-out artifact when present:
+    # every row dispatches to a cast leg, the passive check, or a
+    # closed-enum BLOCKED reason, with the Call Pet fixture summon.
+    # Without it the pet rows honestly stay no-pet.
+    hunter_path = matrix_path_for("Hunter")
+    if hunter_path.exists():
+        hunter_doc = json.loads(hunter_path.read_text())
+        hunter_rows = [r for r in hunter_doc.get("rows", []) if r.get("class") == "Hunter"]
+        assert hunter_rows, "Hunter artifact has no Hunter rows"
+        assert class_summon_spell(hunter_rows) is None
+        assert hunter_doc.get("full_talent_build") == "mm", hunter_doc.get("full_talent_build")
+        seen_legs: set[str] = set()
+        seen_blocked: set[str] = set()
+        for real_row in hunter_rows:
+            act, pay = pre_dispatch(real_row, HUNTER_PET_SETUP_SPELL)
+            if act == "cast":
+                assert pay in ("self", "hostile", "ground", "item", "pet"), (real_row, pay)
+                seen_legs.add(pay)
+            elif act == "blocked":
+                assert pay in BLOCKED_REASONS, (real_row, pay)
+                seen_blocked.add(pay)
+            else:
+                assert act == "passive" and pay is None, real_row
+        # Hunter has no reagent-gated rows, so every item-bucket
+        # row either routes to a dummy leg (hostile/ground) or is
+        # classify_only-blocked: the item leg is unused, and the
+        # ranged fixture exists for fork honesty, not gating.
+        assert {"self", "hostile", "ground", "pet"} <= seen_legs, seen_legs
+        assert "item" not in seen_legs, seen_legs
+        assert "no-pet" not in seen_blocked, seen_blocked
+        assert "effect-marker-only" in seen_blocked, seen_blocked
+        assert "target-not-dead" in seen_blocked, seen_blocked
+        for real_row in hunter_rows:
+            if real_row.get("bucket") == "pet" and not (real_row.get("campaign", "") or "").startswith("classify_only"):
+                assert pre_dispatch(real_row, HUNTER_PET_SETUP_SPELL) == ("cast", "pet"), real_row
+                assert pre_dispatch(real_row) == ("blocked", "no-pet"), real_row
+        # Seed castability (the live 145 regression): every castable
+        # row's spell is in the artifact seed, the Call Pet setup
+        # spell is seeded, and talent cost settles at the cap.
+        hunter_seed = set(hunter_doc.get("full_seed_spell_ids", {}).get("Hunter", []))
+        assert hunter_seed, "Hunter artifact seed empty"
+        assert hunter_doc.get("full_seed_talent_cost", 99) <= 51, hunter_doc.get("full_seed_talent_cost")
+        assert HUNTER_PET_SETUP_SPELL in seed_spells_for("Hunter")
+        castable = [
+            r
+            for r in hunter_rows
+            if not (r.get("campaign", "") or "").startswith("classify_only")
+            and (r.get("expected") or {}).get("kind") not in ("none_marker", "dual_outcome", "learned_spell")
+        ]
+        assert castable, "no castable Hunter rows"
+        for cast_row in castable:
+            assert cast_row["spell_id"] in hunter_seed, cast_row["spell_id"]
+            assert isinstance(cast_row.get("cooldown_ms"), int), cast_row
+        print(
+            f"SELFTEST Hunter artifact dispatch totality ok "
+            f"({len(hunter_rows)} rows, legs={sorted(seen_legs)}, "
+            f"blocked={sorted(seen_blocked)})"
+        )
+    else:
+        print("SELFTEST Hunter artifact absent; skipping totality")
     # Artifact writers round-trip.
     tmp = [make_verdict(row, "PASS", evidence="t", packets=[306, 169, 306])]
     assert tmp[0]["packets"] == [169, 306]

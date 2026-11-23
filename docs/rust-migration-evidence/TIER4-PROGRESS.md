@@ -2242,3 +2242,84 @@ side-port boot-checked, droplet backed up
 the previous pair preserved as mangosd.cf58-bak
 (realmd 1582565b unchanged, not restarted);
 8085 listening on the fresh boot.
+
+Hunter spell campaign full run (2026-11-23/24, bench
+127.0.0.1:18099, fan-out matrix 80 last-rank rows
+over merged S7 chains: seed G1 union 123 + mm
+talent 16, cost exactly 51, excluded [19306, 19386];
+seed_all 142 with the Call Pet fixture setup):
+first full run 52 PASS / 13 PASSIVE-VERIFIED /
+14 BLOCKED / 1 FAIL, final rerun 53 PASS /
+13 PASSIVE-VERIFIED / 14 BLOCKED / 0 FAIL
+(`run-class Hunter: 80 rows`, zero failure
+clusters; honest BLOCKED remainder 13
+effect-marker-only + 1 target-not-dead
+(Revive Pet), zero FAILs). Failure clusters
+from the first full run, all fixed test-first in
+shared-root-cause order:
+(1) pet scenario (3 rows BLOCKED no-pet): the
+engine auto-loads the slot-0 saved pet at world
+entry (fork `Player::LoadPet`), so the seeded
+Timber Wolf 69 (tameable: type 1, family 1,
+flags 16; pet_type 1, slot 0, created_by_spell 0)
+was already out and the Call Pet 883 cast was a
+silent no-op GO with nothing new to track. The
+harness now reuses the already-out pet
+(`find_active_pet`: fixture entry, campaign
+health > 1000 so wild wolves and 100-hp dummies
+never qualify, within 20 yd), parked REACT_PASSIVE
+like a summon; fixture summon still casts when
+nothing qualifies (regression asserts cover the
+reuse and the wild/dummy/far/position-less
+rejections; live rerun 136/13544/1002 PASS);
+(2) shared category cooldown (24133 Wyvern Sting
+r3 read NOT_READY 60 after 24132 armed category
+1111/120 s; the matrix carries only recoveryTime):
+the hostile leg now waits out the full fork
+cooldown resolved live from the bench oracle
+(`live_cooldown_wait_s`: max(recoveryTime,
+categoryRecoveryTime) + 5 s margin, 600 s cap
+matching `not_ready_retry`) once per row within
+the 5-attempt cap (a landed GO never waits: the
+Curse-of-Doom retained-GO arm keeps priority);
+24133 PASS after 2 attempts with cooldown wait
++125 s. No engine change: the fork rejects
+same-category ranks mid-cooldown by design.
+Honest BLOCKED remainder: 7 bare trap placements
+(Freezing/Immolation/Frost/Explosive ranks: the
+trap object is wire-invisible and the trigger
+damage attributes to the trap-effect spell,
+whose own hostile/ground rows verify it),
+5 threat/dispel markers (Disengage x2,
+Distracting Shot x2, Tranquilizing Shot),
+1 dispel marker (Improved Mend Pet 24406),
+1 target-not-dead (Revive Pet 982: the RESURRECT
+3-layer gap stands). Pet/ammo scenario outcomes:
+Call Pet fixture summon + REACT_PASSIVE parking
+PASS (Mend Pet r1/r7 and Eyes of the Beast all
+PASS on the reused pet); ranged fixture (Ashwood
+Bow 5596 in ranged slot 17 + Rough Arrows +
+mainhand sword) gates all 23 weapon rows; no
+min-range gate in Rust (fork dead-zone 8-35 yd
+for range-114 rows) — Hunter hostile standoff
+rides 13 yd; Auto Shot 75 PASS with 592 damage
+(no autorepeat modeling needed for the verdict).
+No regression: pilot SPELL-CAMPAIGN-PILOT-PASS
+before and after; Paladin (10310+20924), Druid
+(6795+9896), Warlock (688+7812+980) smokes PASS
+on the final tree; generator + campaign
+self-tests PASS; P/D/W artifacts byte-identical
+(matrices untouched — cooldown data stays a live
+harness read); cargo fmt clean, ruff clean,
+live_spells (incl. bench_spells_and_auras) PASS
+with CHARACTER_LOAD_GUID=1; independent artifact
+audit 1:1 with zero vacuous PASS rows. One
+harness file changed (spell_campaign.py:
+find_active_pet + ensure_pet reuse, cooldown_wait_s
++ live_cooldown_wait_s + hostile-leg NOT_READY arm,
+self-test asserts), plus the Hunter matrix artifact
+and evidence; bench mangosd already ran the
+current tree (debug binary newer than every .rs;
+listener 18099 verified, no restart), the
+side-bench pair never touched. No commit or push
+was made.

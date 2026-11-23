@@ -94,3 +94,40 @@ counts: BLOCKED=37, PASS=62, PASSIVE-VERIFIED=14
 - 19647 Spell Lock hostile_dummy target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
 - 19736 Devour Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
 - 20757 Create Soulstone (Major) item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 6265 absent from bags and the engine has no reagent gate; scenario-inapplicable
+## Hunter run-class (80 rows)
+
+counts: BLOCKED=14, PASS=53, PASSIVE-VERIFIED=13
+- 781 Disengage rank 1/3 item_reagent_ammo target=None: BLOCKED effect-marker-only  expected_failure=False | threat-only: no wire-observable outcome; classify_only
+- 982 Revive Pet rank 1/1 ground_area target=None: BLOCKED target-not-dead  expected_failure=False | no dead-pet scenario in a live class run; revive rows stay uncast
+- 1499 Freezing Trap rank 1/3 ground_area target=None: BLOCKED effect-marker-only  expected_failure=False | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 13795 Immolation Trap rank 1/5 ground_area target=None: BLOCKED effect-marker-only  expected_failure=False | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 13809 Frost Trap rank 1/1 ground_area target=None: BLOCKED effect-marker-only  expected_failure=False | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 13813 Explosive Trap rank 1/3 ground_area target=None: BLOCKED effect-marker-only  expected_failure=False | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 14273 Disengage rank 3/3 item_reagent_ammo target=None: BLOCKED effect-marker-only  expected_failure=False | threat-only: no wire-observable outcome; classify_only
+- 14305 Immolation Trap rank 5/5 ground_area target=None: BLOCKED effect-marker-only  expected_failure=False | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 14311 Freezing Trap rank 3/3 ground_area target=None: BLOCKED effect-marker-only  expected_failure=False | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 14317 Explosive Trap rank 3/3 ground_area target=None: BLOCKED effect-marker-only  expected_failure=False | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 15632 Distracting Shot rank 6/6 item_reagent_ammo target=None: BLOCKED effect-marker-only  expected_failure=False | threat-only: no wire-observable outcome; classify_only
+- 19801 Tranquilizing Shot rank 1/1 item_reagent_ammo target=None: BLOCKED effect-marker-only  expected_failure=False | dispel needs a debuffed ally; classify_only
+- 20736 Distracting Shot rank 1/6 item_reagent_ammo target=None: BLOCKED effect-marker-only  expected_failure=False | threat-only: no wire-observable outcome; classify_only
+- 24406 Improved Mend Pet rank 1/1 pet target=None: BLOCKED effect-marker-only  expected_failure=False | dispel needs a debuffed ally; classify_only
+## Hunter run-class (3 rows)
+
+counts: PASS=3
+## Hunter run-class (80 rows)
+
+counts: BLOCKED=14, PASS=53, PASSIVE-VERIFIED=13
+- 781 Disengage item_reagent_ammo target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 982 Revive Pet ground_area target=None: BLOCKED target-not-dead  | no dead-pet scenario in a live class run; revive rows stay uncast
+- 1499 Freezing Trap ground_area target=None: BLOCKED effect-marker-only  | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 13795 Immolation Trap ground_area target=None: BLOCKED effect-marker-only  | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 13809 Frost Trap ground_area target=None: BLOCKED effect-marker-only  | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 13813 Explosive Trap ground_area target=None: BLOCKED effect-marker-only  | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 14273 Disengage item_reagent_ammo target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 14305 Immolation Trap ground_area target=None: BLOCKED effect-marker-only  | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 14311 Freezing Trap ground_area target=None: BLOCKED effect-marker-only  | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 14317 Explosive Trap ground_area target=None: BLOCKED effect-marker-only  | no wire-observable outcome for this row shape in a live run (bare trap placements, marker-only rows); left uncast
+- 15632 Distracting Shot item_reagent_ammo target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 19801 Tranquilizing Shot item_reagent_ammo target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 20736 Distracting Shot item_reagent_ammo target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 24406 Improved Mend Pet pet target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only

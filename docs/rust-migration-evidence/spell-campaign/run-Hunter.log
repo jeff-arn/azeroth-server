@@ -1,0 +1,89 @@
+SEEDED hunter pet guid=900019 pet_id=900001 entry=69
+SEEDED guid=900019 spells=142 pos=(-6295.0,315.0,377.5)
+SEEDED hunter gear guid=900019 rows=3
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP03 guid=900019 map=0 pos=(-6295.00,315.00,377.50)
+DRIFT-OK guid=900019 level=60 spells=142 health=2217
+ROW Hunter 75 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=40 after 1 attempt(s)
+ROW Hunter 136 pet: PASS  | observable outcome: target_aura=True
+ROW Hunter 781 item_reagent_ammo: BLOCKED effect-marker-only | classify_only
+ROW Hunter 982 ground_area: BLOCKED target-not-dead | no live scenario
+ROW Hunter 1002 pet: PASS  | observable outcome: target_aura=True
+ROW Hunter 1130 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Hunter 1495 hostile_dummy: PASS  | observable outcome: health 100->40, matching damage=25 after 1 attempt(s)
+ROW Hunter 1499 ground_area: BLOCKED effect-marker-only | no live scenario
+ROW Hunter 1510 item_reagent_ammo: PASS  | observable outcome: target_aura=False; dummy died with 1 attributed logs; no tick latch on this path (band un-enforced: 
+ROW Hunter 1543 ground_area: PASS  | observable outcome: target_aura=True
+ROW Hunter 1978 item_reagent_ammo: PASS  | observable outcome: target_aura=True; ticks 2/5 in oracle band [4-4] (required>=2, target_alive=True, out_of_band=0, amo
+ROW Hunter 2643 item_reagent_ammo: PASS  | observable outcome: health 100->2, matching damage=41 after 1 attempt(s)
+ROW Hunter 2973 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=47 after 2 attempt(s)
+ROW Hunter 2974 item_reagent_ammo: PASS  | observable outcome: health 100->88, matching damage=5 after 1 attempt(s)
+ROW Hunter 3034 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Hunter 3043 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Hunter 3044 item_reagent_ammo: PASS  | observable outcome: health 100->69, matching damage=13 after 1 attempt(s)
+ROW Hunter 3045 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 5116 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Hunter 5118 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 5384 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 13159 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 13163 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 13165 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 13544 pet: PASS  | observable outcome: target_aura=True
+ROW Hunter 13795 ground_area: BLOCKED effect-marker-only | no live scenario
+ROW Hunter 13797 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 2/5 in oracle band [21-21] (required>=1, target_alive=False, out_of_band=0, 
+ROW Hunter 13809 ground_area: BLOCKED effect-marker-only | no live scenario
+ROW Hunter 13812 ground_area: PASS  | observable outcome: object_seen=False, health 100->0, matching damage=142
+ROW Hunter 13813 ground_area: BLOCKED effect-marker-only | no live scenario
+ROW Hunter 14266 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=181 after 1 attempt(s)
+ROW Hunter 14268 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=50 after 1 attempt(s)
+ROW Hunter 14271 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=115 after 1 attempt(s)
+ROW Hunter 14273 item_reagent_ammo: BLOCKED effect-marker-only | classify_only
+ROW Hunter 14277 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Hunter 14280 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Hunter 14287 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=183 after 1 attempt(s)
+ROW Hunter 14295 item_reagent_ammo: PASS  | observable outcome: target_aura=False; dummy died with 2 attributed logs; no tick latch on this path (band un-enforced: 
+ROW Hunter 14301 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/5 in oracle band [138-138] (required>=1, target_alive=False, out_of_band=0
+ROW Hunter 14305 ground_area: BLOCKED effect-marker-only | no live scenario
+ROW Hunter 14311 ground_area: BLOCKED effect-marker-only | no live scenario
+ROW Hunter 14315 ground_area: PASS  | observable outcome: object_seen=False, health 100->0, matching damage=257
+ROW Hunter 14317 ground_area: BLOCKED effect-marker-only | no live scenario
+ROW Hunter 14325 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Hunter 15632 item_reagent_ammo: BLOCKED effect-marker-only | classify_only
+ROW Hunter 19153 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19245 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19300 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19389 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19407 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19420 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19425 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19431 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19434 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=112 after 1 attempt(s)
+ROW Hunter 19490 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19503 item_reagent_ammo: PASS  | observable outcome: health 100->61, matching damage=21 after 1 attempt(s)
+ROW Hunter 19506 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 19510 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 19801 item_reagent_ammo: BLOCKED effect-marker-only | classify_only
+ROW Hunter 20043 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 20190 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 20736 item_reagent_ammo: BLOCKED effect-marker-only | classify_only
+ROW Hunter 20904 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=642 after 1 attempt(s)
+ROW Hunter 20909 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=70 after 1 attempt(s)
+ROW Hunter 20910 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=110 after 1 attempt(s)
+ROW Hunter 24131 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/6 in oracle band [50-50] (required>=1, target_alive=False, out_of_band=0, 
+ROW Hunter 24132 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Hunter 24133 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 2 attempt(s); cooldown wait +125s
+ROW Hunter 24134 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/6 in oracle band [70-70] (required>=1, target_alive=False, out_of_band=0, 
+ROW Hunter 24135 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/6 in oracle band [100-100] (required>=1, target_alive=False, out_of_band=0
+ROW Hunter 24283 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 24295 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 24395 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 24396 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 24397 self: PASS  | observable outcome: caster_aura=True
+ROW Hunter 24406 pet: BLOCKED effect-marker-only | classify_only
+ROW Hunter 24691 passive: PASSIVE-VERIFIED | learned=True
+ROW Hunter 25294 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=191 after 1 attempt(s)
+ROW Hunter 25295 item_reagent_ammo: PASS  | observable outcome: target_aura=True; ticks 1/5 in oracle band [111-111] (required>=1, target_alive=False, out_of_band=0
+ROW Hunter 25296 self: PASS  | observable outcome: caster_aura=True
+LOGOUT-OK Hunter-run
+run-class Hunter: 80 rows, BLOCKED=14, PASS=53, PASSIVE-VERIFIED=13
+SPELL-CAMPAIGN-RUN-CLASS-HUNTER-PASS

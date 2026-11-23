@@ -1,0 +1,109 @@
+{
+ "mode": "run-class",
+ "class": "Hunter",
+ "matrix_file": "/Users/jeffarn/Programming/azeroth-server/vmangos-rs/scripts/spell_campaign_matrix-Hunter.json",
+ "matrix_mode": "full",
+ "matrix_counts": {
+  "Hunter": 80
+ },
+ "talent_build": {
+  "name": "mm",
+  "role": "RangeDps",
+  "total_points": 51,
+  "known_spell_ids": [
+   19153,
+   19245,
+   19300,
+   19389,
+   19407,
+   19420,
+   19425,
+   19431,
+   19434,
+   19490,
+   19503,
+   19506,
+   19510,
+   24283,
+   24295,
+   24691
+  ],
+  "required_spell_ids": []
+ },
+ "fixture_note": "union-seeded single-race fixture; not a legal single-race spellbook claim where union exceeds any one race (Paladin Human==Dwarf==160, numerically equal)",
+ "seed_count": 142,
+ "talent_seed_checks": [
+  {
+   "spell_id": 19153,
+   "learned": true
+  },
+  {
+   "spell_id": 19245,
+   "learned": true
+  },
+  {
+   "spell_id": 19300,
+   "learned": true
+  },
+  {
+   "spell_id": 19389,
+   "learned": true
+  },
+  {
+   "spell_id": 19407,
+   "learned": true
+  },
+  {
+   "spell_id": 19420,
+   "learned": true
+  },
+  {
+   "spell_id": 19425,
+   "learned": true
+  },
+  {
+   "spell_id": 19431,
+   "learned": true
+  },
+  {
+   "spell_id": 19434,
+   "learned": true
+  },
+  {
+   "spell_id": 19490,
+   "learned": true
+  },
+  {
+   "spell_id": 19503,
+   "learned": true
+  },
+  {
+   "spell_id": 19506,
+   "learned": true
+  },
+  {
+   "spell_id": 19510,
+   "learned": true
+  },
+  {
+   "spell_id": 24283,
+   "learned": true
+  },
+  {
+   "spell_id": 24295,
+   "learned": true
+  },
+  {
+   "spell_id": 24691,
+   "learned": true
+  }
+ ],
+ "failure_clusters": [],
+ "verdict_counts": {
+  "BLOCKED": 14,
+  "PASS": 53,
+  "PASSIVE-VERIFIED": 13
+ },
+ "git_head": "810d9a0f",
+ "git_dirty": true
+}

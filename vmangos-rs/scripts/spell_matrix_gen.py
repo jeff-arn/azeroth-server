@@ -28,7 +28,7 @@ Two modes:
   SPELL-MATRIX-GEN-SELFTEST-PASS.
 
 `--full --class <Class>` (per-class fan-out over the pinned classes
-Paladin, Druid, and Warlock): emit `spell_campaign_matrix-<Class>.json`
+Paladin, Druid, Warlock, and Hunter): emit `spell_campaign_matrix-<Class>.json`
 with first + last rank rows per merged S7 component over the G1 union
 plus the selected 51-point talent build's known spells (plus interior
 ranks whose signature differs), plus the all-rank seed list. Full mode
@@ -113,6 +113,13 @@ LEARN_PET_EFFECTS = {57}
 DUEL_EFFECTS = {83}
 HEAL_EFFECTS = {10, 62, 67}
 SCHOOL_DAMAGE_EFFECTS = {2}
+#: Fork `EffectWeaponDmg` (`SpellEffects.cpp:3295`): weapon-damage
+#: rows (17 NOSCHOOL, 31 PERCENT, 58 WEAPON, 121 NORMALIZED)
+#: verify the damage log like school-damage rows. Used only in the
+#: item bucket below: stance-gated form_totem rows (Druid
+#: Claw/Shred) keep their marker — the stance gate, not the
+#: damage, owns them.
+WEAPON_DAMAGE_EFFECTS = {17, 31, 58, 121}
 APPLY_AURA_EFFECTS = {6, 35}
 DISPEL_EFFECTS = {38}
 THREAT_EFFECTS = {63}
@@ -191,6 +198,20 @@ CLASS_FANOUT_EXPECTATIONS = {
         "overlap": [],
         "excluded": [17877, 17962, 18220],
     },
+    "Hunter": {
+        # mm (first legal build by role preference): the merged
+        # extras are Counterattack 19306 and Wyvern Sting 19386
+        # (rank 1 each, cost 1 each), keeping the seed at the 51
+        # cap exactly like Paladin/Druid/Warlock. Trueshot Aura
+        # 19506 casts as the book's best rank (best-in-book): its
+        # higher shipped ranks 20905/20906 are family-0 phantoms no
+        # 51-point book holds, so they ride the seed costless
+        # rather than excluding the cast.
+        "union": 123,
+        "talent_known": 16,
+        "overlap": [],
+        "excluded": [19306, 19386],
+    },
 }
 
 #: Per-class G1-union bucket distributions under derive_bucket's
@@ -228,6 +249,27 @@ CLASS_FULL_BUCKET_COUNTS = {
         "pet": 16,
         "form_totem": 0,
         "passive": 1,
+        "form": 0,
+    },
+    "Hunter": {
+        # mm fan-out (audited over the exact G1 union): no
+        # friendly/dual/corpse/form rows for this class. The pet
+        # bucket holds only Mend Pet ranks, Eyes of the Beast, and
+        # the Improved Mend Pet marker (Call Pet itself is
+        # family-0, outside the matrix). Ranged-weapon rows count
+        # as item (equipped class 2 / ranged-slot attr); TARGET_UNIT
+        # Wyvern DoT ranks count as hostile, not self.
+        "self": 17,
+        "friendly": 0,
+        "hostile_dummy": 18,
+        "item_reagent_ammo": 62,
+        "party_duel": 0,
+        "ground_area": 17,
+        "dual": 0,
+        "corpse": 0,
+        "pet": 9,
+        "form_totem": 0,
+        "passive": 0,
         "form": 0,
     },
 }
@@ -1203,6 +1245,18 @@ def derive_bucket(spell_id: int, eff: dict) -> str:
         return "friendly"
     if targets & HOSTILE_TARGETS:
         return "hostile_dummy"
+    if targets - {0} == {25}:
+        # TARGET_UNIT-only rows name an explicit unit target: the
+        # fork applies them to the selected unit. Damaging ones
+        # ride the hostile leg (Hunter Wyvern Sting DoT ranks
+        # 24131/24134/24135); heal-only ones the friendly leg.
+        # Dual (Holy Shock) is pinned above and never reaches here.
+        if (effects & (SCHOOL_DAMAGE_EFFECTS | WEAPON_DAMAGE_EFFECTS) or PERIODIC_DAMAGE_AURA in auras) and not (
+            effects & HEAL_EFFECTS
+        ):
+            return "hostile_dummy"
+        if effects & HEAL_EFFECTS:
+            return "friendly"
     return "self"
 
 
@@ -1433,6 +1487,17 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
         # Consecrated/rain ground rows still tick periodically; the
         # band rides as evidence (no leg latches ground ticks yet).
         if effects & GROUND_EFFECTS:
+            if (
+                (APPLY_AURA_EFFECTS & effects or has_aura)
+                and PERIODIC_DAMAGE_AURA not in auras
+                and not (effects & (SCHOOL_DAMAGE_EFFECTS | WEAPON_DAMAGE_EFFECTS | HEAL_EFFECTS | SCRIPT_EFFECTS))
+            ):
+                # Non-damaging persistent area aura (Flare): the
+                # dummy in the radius gains the aura whether or
+                # not the fork spawns a dynobject, so the leg
+                # checks the aura like the Howl instant area-aura
+                # rows. Damaging ground rows keep object_created.
+                return _with_tick_band({"kind": "aura_on_target", "aura": _verify_aura(spell_id, eff)}, eff, durations)
             return _with_tick_band({"kind": "object_created"}, eff, durations)
         if APPLY_AURA_EFFECTS & effects or has_aura:
             # Instant area-aura rows (Howl of Terror's fear): no
@@ -1458,6 +1523,19 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
         reagents = [eff[f"reagent{i}"] for i in range(1, 9) if eff[f"reagent{i}"]]
         if reagents:
             return {"kind": "item_consumed", "reagent": reagents[0]}
+        if WEAPON_DAMAGE_EFFECTS & effects:
+            # Equipped-weapon rows (Hunter Multi/Aimed/Raptor/Auto
+            # Shot, Scatter Shot): no reagents, so the observable
+            # is the weapon hit, not a reagent count.
+            return _with_tick_band({"kind": "damage_log", "opcode": 592}, eff, durations)
+        if (APPLY_AURA_EFFECTS & effects or has_aura) and _targets_of(eff) & HOSTILE_TARGETS:
+            # Ranged-weapon rows (Hunter Serpent/Scorpid/Viper
+            # Sting, Concussive Shot, Hunter's Mark): the aura
+            # lands on the enemy, not the caster — the same side
+            # rule as every other bucket, with the tick band when
+            # the aura is periodic damage. Rows without enemy-target
+            # auras keep the caster side below.
+            return _with_tick_band({"kind": "aura_on_target", "aura": _verify_aura(spell_id, eff)}, eff, durations)
         return {
             "kind": "aura_on_caster",
             "aura": _verify_aura(spell_id, eff),
@@ -1585,6 +1663,26 @@ def selected_talent_known_spells(class_name: str, talent_doc: dict | None = None
     return selected["name"], list(selected["known_spell_ids"])
 
 
+def higher_chain_ranks_in_book(cast: int, seed_set: set[int], pre_g1: dict) -> list[int]:
+    """Higher shipped-chain ranks of `cast` present in the seed book.
+
+    Pure query over the shipped chain closure and the audited seed
+    input: the best-in-book escape hatch in derive_full_rows keeps a
+    non-last cast exactly when this returns empty (no merge-split:
+    a higher rank in the book would share the component and outrank
+    the cast). Offline-testable with a synthetic pre_g1 dict.
+    """
+    chain = chain_metadata(cast)
+    cast_level = pre_g1["effective"][cast]["spell_level"]
+    higher = []
+    for member in chain["all_rank_ids"]:
+        if member == cast or member not in seed_set:
+            continue
+        if (pre_g1["effective"][member]["spell_level"], member) > (cast_level, cast):
+            higher.append(member)
+    return sorted(higher)
+
+
 def derive_full_rows(class_name: str = "Paladin", pre_g1: dict | None = None, talent_doc: dict | None = None) -> dict:
     """Per-class fan-out: first + last rank of every merged S7
     component over the G1 union plus the selected talent build's
@@ -1637,9 +1735,21 @@ def derive_full_rows(class_name: str = "Paladin", pre_g1: dict | None = None, ta
     for spell_id in seed_input:
         shipped_lasts.add(chain_metadata(spell_id)["last_rank_id"])
     if not set(cast_ids) <= shipped_lasts:
-        raise AssertionError(
-            f"merged cast set is not a subset of shipped lasts: {sorted(set(cast_ids) - shipped_lasts)}"
-        )
+        # Best-in-book casts: a talent-known rank can be the book's
+        # best when its higher shipped ranks are unholdable
+        # (outside the audited union + known sets, e.g. Hunter
+        # Trueshot Aura 19506 whose higher ranks 20905/20906 are
+        # talent-only phantoms no 51-point book holds). The cast
+        # stays only when no higher chain rank is in the seed
+        # book; a higher rank present there is a merge-split bug
+        # and still raises.
+        seed_set = set(seed_input)
+        for cast in sorted(set(cast_ids) - shipped_lasts):
+            higher_in_book = higher_chain_ranks_in_book(cast, seed_set, pre_g1)
+            if higher_in_book:
+                raise AssertionError(
+                    f"{class_name}: cast spell {cast} is not the book's best rank: {higher_in_book} also seeded"
+                )
     if 21563 in cast_ids:
         raise AssertionError("spell_disabled 21563 reached the cast set")
     durations = load_spell_durations()
@@ -2151,6 +2261,35 @@ def run_self_test() -> int:
     assert derive_expected(25903, big_heal, "friendly") == {"kind": "heal_delta_target"}
     loh = _eff(effect1=67, targ_a1=21, name="Lay on Hands", effect_base_points1=-1)
     assert derive_expected(10310, loh, "friendly") == {"kind": "heal_delta_target"}
+    # Hunter derivation: reagent-free weapon rows verify the weapon
+    # hit (Multi-Shot/Aimed/Raptor/Auto/Scatter shape); reagent-free
+    # enemy-target aura rows verify the aura on the dummy with the
+    # tick band when periodic (Serpent Sting shape). The self-side
+    # equipped row above is unchanged.
+    ranged_hit = _eff(effect1=58, targ_a1=6, equipped_item_class=2, attributes=0x10002, name="Raptor Strike")
+    assert derive_bucket(2973, ranged_hit) == "item_reagent_ammo"
+    assert derive_expected(2973, ranged_hit, "item_reagent_ammo") == {"kind": "damage_log", "opcode": 592}
+    normalized = _eff(effect1=121, targ_a1=6, equipped_item_class=2, attributes=0x10002, name="Multi-Shot")
+    assert derive_expected(2643, normalized, "item_reagent_ammo") == {"kind": "damage_log", "opcode": 592}
+    sting = _eff(effect1=6, aura1=3, targ_a1=6, equipped_item_class=2, attributes=0x10002, name="Serpent Sting")
+    assert derive_bucket(1978, sting) == "item_reagent_ammo"
+    assert derive_expected(1978, sting, "item_reagent_ammo", {8: 15000}) == {
+        "kind": "aura_on_target",
+        "aura": 1978,
+    }
+    # TARGET_UNIT-only damaging rows ride the hostile bucket
+    # (Wyvern Sting DoT shape); dispel-only ones keep self.
+    wyvern = _eff(effect1=6, aura1=3, targ_a1=25, name="Wyvern Sting")
+    assert derive_bucket(24131, wyvern) == "hostile_dummy"
+    assert derive_expected(24131, wyvern, "hostile_dummy")["kind"] == "aura_on_target"
+    devour = _eff(effect1=38, targ_a1=25, name="Devour Magic")
+    assert derive_bucket(19505, devour) == "self"
+    # Non-damaging persistent area aura rows verify the aura on the
+    # in-radius dummy (Flare shape); damaging ground rows keep the
+    # object (Consecration shape, asserted above).
+    flare = _eff(effect1=27, effect2=27, aura1=41, aura2=41, targ_a1=28, targ_a2=28, name="Flare")
+    assert derive_bucket(1543, flare) == "ground_area"
+    assert derive_expected(1543, flare, "ground_area") == {"kind": "aura_on_target", "aura": 1543}
     print("SELFTEST bucket derivation cases ok")
     # Per-class pins reproduce the pre-generalization Paladin
     # literals exactly; Druid pins are the audited values above.
@@ -2184,6 +2323,50 @@ def run_self_test() -> int:
         "passive": 1,
         "form": 0,
     }
+    # Hunter pins: the audited mm fan-out literals above.
+    assert CLASS_FANOUT_EXPECTATIONS["Hunter"] == {
+        "union": 123,
+        "talent_known": 16,
+        "overlap": [],
+        "excluded": [19306, 19386],
+    }
+    assert CLASS_FULL_BUCKET_COUNTS["Hunter"] == {
+        "self": 17,
+        "friendly": 0,
+        "hostile_dummy": 18,
+        "item_reagent_ammo": 62,
+        "party_duel": 0,
+        "ground_area": 17,
+        "dual": 0,
+        "corpse": 0,
+        "pet": 9,
+        "form_totem": 0,
+        "passive": 0,
+        "form": 0,
+    }
+    # Best-in-book casts: a non-last cast keeps its row exactly when
+    # no higher chain rank sits in the seed book (Trueshot Aura
+    # 19506 with unholdable higher ranks 20905/20906); a higher
+    # rank present in the book is a merge-split bug and is
+    # reported. Offline: chain_metadata is stubbed, levels are
+    # synthetic.
+    real_chain_metadata = chain_metadata
+    try:
+        globals()["chain_metadata"] = lambda spell: (
+            {"all_rank_ids": [19506, 20905, 20906]} if spell == 19506 else real_chain_metadata(spell)
+        )
+        fake_pre = {
+            "effective": {
+                19506: {"spell_level": 40},
+                20905: {"spell_level": 50},
+                20906: {"spell_level": 60},
+            }
+        }
+        assert higher_chain_ranks_in_book(19506, {19506}, fake_pre) == []
+        assert higher_chain_ranks_in_book(19506, {19506, 20905, 20906}, fake_pre) == [20905, 20906]
+    finally:
+        globals()["chain_metadata"] = real_chain_metadata
+    print("SELFTEST Hunter pins + best-in-book ok")
     # Rank-coverage selector: first + last plus interiors that differ
     # from the previous rank; identical chains keep two rows.
     sig_a = ((6, 0, 0), (3, 0, 0), "")
