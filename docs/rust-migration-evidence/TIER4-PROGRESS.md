@@ -2235,3 +2235,10 @@ Rank coverage note: cast set now first+last+
 signature-change ranks (Paladin/Druid matrices
 regenerated to the same rule for future reruns;
 their recorded results stand for the rows cast).
+Warlock deploy (same day): mangosd 6d28d530
+built in the ubuntu:22.04 amd64 recipe,
+side-port boot-checked, droplet backed up
+(*_20261123_201521), swapped binary-only with
+the previous pair preserved as mangosd.cf58-bak
+(realmd 1582565b unchanged, not restarted);
+8085 listening on the fresh boot.
