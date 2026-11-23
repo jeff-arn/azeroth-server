@@ -34,7 +34,7 @@ use mangos_spells::{ProcEventEntry, SpellEntry};
 
 use crate::Map;
 use crate::map::CooldownEntry;
-use crate::spells::{CastOptions, CastOutcome, CastTarget};
+use crate::spells::{CastItemCtx, CastOptions, CastOutcome, CastTarget};
 
 const ATTR_EX3_NOT_A_PROC: u32 = 0x0000_0200;
 const ATTR_EX3_SUPPRESS_CASTER_PROCS: u32 = 0x0001_0000;
@@ -1138,6 +1138,37 @@ impl Map {
         bp: [Option<i32>; 3],
     ) {
         self.cast_custom_spell_aura(caster, target, spell_id, bp, 0);
+    }
+
+    /// `CastCustomSpell` carrying the originating cast's item
+    /// (item-script arms forwarding `spell->m_CastItem`, e.g.
+    /// Flametongue's 10444): same triggered/aura-originated shape
+    /// as `cast_custom_spell`, plus the item.
+    pub(crate) fn cast_custom_spell_item(
+        &mut self,
+        caster: ObjectGuid,
+        target: ObjectGuid,
+        spell_id: u32,
+        bp: [Option<i32>; 3],
+        cast_item: Option<CastItemCtx>,
+    ) {
+        let was_in_proc = self.in_proc_cast;
+        self.in_proc_cast = true;
+        let _ = self.cast_spell(
+            caster,
+            spell_id,
+            CastTarget::Unit(target),
+            CastOptions {
+                triggered: true,
+                triggered_by_aura: true,
+                skip_known: true,
+                cast_item,
+                custom_base_points: bp,
+                triggered_by_aura_spell: 0,
+                triggered_by_spell: 0,
+            },
+        );
+        self.in_proc_cast = was_in_proc;
     }
 
     /// `cast_custom_spell` carrying the proccing

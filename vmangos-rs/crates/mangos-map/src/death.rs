@@ -9,7 +9,11 @@
 //! `KillPlayer`, `HasPendingMovementChange` repop
 //! deferral, spirit-of-redemption/soulstone
 //! self-resurrect arms, pet-kill PvP-death flavor,
-//! BG insignia looting of corpses, and the in-instance entrance-corpse
+//! the deferred `RemoveCorpses` queue (convert runs
+//! synchronously in the effect instead) and the
+//! `ScheduleRepopAtGraveyard` timer (the repop
+//! teleport already runs inside `build_player_repop`),
+//! and the in-instance entrance-corpse
 //! reclaim shortcut (ghost re-enters the instance
 //! portal to resurrect — reclaim here needs the
 //! corpse on the ghost's current map).
@@ -84,11 +88,15 @@ impl Map {
     }
 
     /// Removes a corpse/bones object and destroys it
-    /// for current viewers.
+    /// for current viewers. Loot state dies with the
+    /// object (fork loot lives on the `Corpse`; a
+    /// reopen then releases on the missing-corpse arm).
     fn remove_corpse_object(&mut self, guid: ObjectGuid) {
         let Some(corpse) = self.corpses.remove(&guid) else {
             return;
         };
+        self.loots.remove(&guid);
+        self.player_loot_guid.retain(|_, g| *g != guid);
         let cell = Self::cell_of(corpse.world.position());
         if let Some(objects) = self.cells.get_mut(&cell) {
             objects.corpses.remove(&guid);
@@ -153,6 +161,82 @@ impl Map {
         if spawns_bones && let Some(bones) = bones {
             self.add_corpse(bones);
         }
+    }
+
+    /// `ObjectAccessor::ConvertCorpseForPlayer` world
+    /// half (fork `ObjectAccessor.cpp:247-280`): the
+    /// resurrectable corpse is destroyed and its bones
+    /// successor spawns on the same guid (fork
+    /// `Map::RemoveCorpses`, `:3487-3586`). Stale window
+    /// state dies with the corpse (fork loot lives on
+    /// the removed object). With a looter, the owner is
+    /// told the corpse is gone (`MSG_CORPSE_QUERY` 0,
+    /// fork `:3557-3562`) and the caller opens the
+    /// insignia window on the bones (fork `:3564`).
+    pub(crate) fn convert_corpse_for_player(
+        &mut self,
+        owner: ObjectGuid,
+        looter: Option<ObjectGuid>,
+    ) {
+        if !owner.is_player() {
+            return;
+        }
+        if self.corpse_for_player(owner).is_none() {
+            return;
+        }
+        self.spawn_corpse_bones_for(owner);
+        if looter.is_some() && self.players.contains_key(&owner) {
+            let mut writer = PacketWriter::new();
+            writer.write_u8(0);
+            self.events.push(MapEvent::Packet {
+                to: owner,
+                packet: WorldPacket::with_body(op::MSG_CORPSE_QUERY, writer.into_vec()),
+            });
+        }
+    }
+
+    /// `Player::RemovedInsignia` (fork
+    /// `Player.cpp:7655-7677`): BG-only. A ghostless
+    /// victim is repopped first (fork
+    /// `BuildPlayerRepop`; the fork also schedules a
+    /// graveyard repop that has no Rust equivalent —
+    /// the repop teleport already runs inside
+    /// `build_player_repop`). The victim is told it was
+    /// skinned (`SMSG_PLAYER_SKINNED` 0, fork `:7672`),
+    /// then its corpse converts for the looter.
+    /// Returns the bones guid, or `None` when nothing
+    /// converted (no BG, or no resurrectable corpse).
+    pub(crate) fn removed_insignia(
+        &mut self,
+        victim: ObjectGuid,
+        looter: ObjectGuid,
+    ) -> Option<ObjectGuid> {
+        self.bg.as_ref()?;
+        let is_ghost = self
+            .players
+            .get(&victim)
+            .is_some_and(|e| e.player.unit.death_state == DeathState::Dead);
+        let is_corpse = self
+            .players
+            .get(&victim)
+            .is_some_and(|e| e.player.unit.death_state == DeathState::Corpse);
+        if !is_ghost && !is_corpse {
+            return None;
+        }
+        if !is_ghost {
+            self.build_player_repop(victim);
+        }
+        let corpse_guid = self.corpse_for_player(victim)?;
+        if self.players.contains_key(&victim) {
+            let mut writer = PacketWriter::new();
+            writer.write_u8(0);
+            self.events.push(MapEvent::Packet {
+                to: victim,
+                packet: WorldPacket::with_body(op::SMSG_PLAYER_SKINNED, writer.into_vec()),
+            });
+            self.convert_corpse_for_player(victim, Some(looter));
+        }
+        Some(corpse_guid)
     }
 
     /// `Player::KillPlayer` + the `Unit::Kill`
@@ -379,6 +463,24 @@ impl Map {
         zone_id: u32,
         area_id: u32,
     ) -> Option<WorldSafeLoc> {
+        // CGT tower link (`OPvPCapturePointEP_CGT::LinkGraveYard`,
+        // `OutdoorPvPEP.cpp:681-687`): while a side holds Crown
+        // Guard, its ghosts in zones 139/2258 use graveyard 927.
+        // The overlay is map-local (the DB link store is
+        // read-only shared state).
+        if self.map_id == crate::outdoor_pvp_ep::EP_MAP_ID
+            && let Some(linked) = self.outdoor_ep.graveyard_team
+            && linked == team
+            && (zone_id == crate::outdoor_pvp_ep::EP_ZONE
+                || zone_id == crate::outdoor_pvp_ep::EP_TFV_AREA
+                || area_id == crate::outdoor_pvp_ep::EP_TFV_AREA)
+            && let Some(gy) = self
+                .stores
+                .safe_locs
+                .get(crate::outdoor_pvp_ep::EP_GRAVEYARD_ID)
+        {
+            return Some(gy);
+        }
         if let Some(gy) = self.closest_graveyard_for_area(area_id, pos, team) {
             return Some(gy);
         }

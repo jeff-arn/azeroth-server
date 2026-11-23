@@ -16,7 +16,7 @@ impl Map {
         eff_index: usize,
         victim: ObjectGuid,
         damage: f32,
-        has_cast_item: bool,
+        cast_item: Option<CastItemCtx>,
         cast_counter: u8,
         triggered_by_aura_spell: u32,
         triggered_by_spell: u32,
@@ -216,7 +216,7 @@ impl Map {
             // flag stands in (identical for the
             // item-use path that reaches this).
             17271 => {
-                if !has_cast_item && !caster.is_player() {
+                if cast_item.is_none() && !caster.is_player() {
                     return;
                 }
                 let spell_id = if self.roll_chance_i(50) { 17269 } else { 17270 };
@@ -235,7 +235,7 @@ impl Map {
             // Engineering dragonlings / battle
             // chicken (SpellEffects.cpp:988-1019).
             23074 | 23075 | 23076 | 23133 => {
-                if !has_cast_item {
+                if cast_item.is_none() {
                     return;
                 }
                 let spell_id = match spell.id {
@@ -249,7 +249,7 @@ impl Map {
             // Goblin Bomb Dispenser
             // (SpellEffects.cpp:1020-1033).
             23134 => {
-                if !has_cast_item {
+                if cast_item.is_none() {
                     return;
                 }
                 if self.urand(0, 99) < 10 {

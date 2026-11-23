@@ -23,7 +23,7 @@ use mangos_protocol::update_field_table::offsets;
 use mangos_spells::entry::SpellEntry;
 
 use crate::procs::ProcHandlerCtx;
-use crate::spells::{AuraRemoveMode, CastOptions, CastTarget, PeriodicTick};
+use crate::spells::{AuraRemoveMode, CastItemCtx, CastOptions, CastTarget, PeriodicTick};
 
 mod aura;
 mod check_cast;

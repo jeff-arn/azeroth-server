@@ -311,7 +311,7 @@ impl Map {
 
     /// `GetSkillValue` over deferred skill rows
     /// (base value; bonus words ride the same rows).
-    fn skill_value(player: &Player, skill: u32) -> u32 {
+    pub(crate) fn skill_value(player: &Player, skill: u32) -> u32 {
         player
             .deferred
             .skills
@@ -1325,7 +1325,12 @@ impl Map {
         };
         let src_item = item_guid(src_row.item.item_guid);
         let count = u32::from(count);
-        if src_row.item.generated_loot != 0 {
+        // Fork `CanBeMergedPartlyWith` refuses on
+        // `HasGeneratedLoot` (live unlooted window
+        // content), not on the persisted bool: an
+        // emptied container splits again, an
+        // ungenerated one was never blocked.
+        if self.item_has_generated_loot(src_row.item.item_guid) {
             self.send_inventory_error(
                 guid,
                 ERR_COULDNT_SPLIT_ITEMS,

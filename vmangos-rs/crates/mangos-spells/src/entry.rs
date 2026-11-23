@@ -708,6 +708,15 @@ impl SpellEntry {
     pub fn is_channeled(&self) -> bool {
         self.attributes_ex & (0x0000_0004 | 0x0000_0040) != 0
     }
+
+    /// `NeedsComboPoints` (`SpellEntry.h:958`):
+    /// `SPELL_ATTR_EX_FINISHING_MOVE_DAMAGE` (`0x0010_0000`)
+    /// or `SPELL_ATTR_EX_FINISHING_MOVE_DURATION`
+    /// (`0x0040_0000`).
+    #[must_use]
+    pub fn needs_combo_points(&self) -> bool {
+        self.attributes_ex & (0x0010_0000 | 0x0040_0000) != 0
+    }
 }
 
 /// One `SkillLineAbilityEntry` (`DBCStructure.h`,

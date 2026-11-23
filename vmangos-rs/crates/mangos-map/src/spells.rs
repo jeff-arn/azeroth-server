@@ -244,7 +244,9 @@ pub(crate) struct DelayedSpellHit {
     pub applied_mods: Vec<(u32, u8)>,
     pub ctx: ProcRaiseCtx,
     pub custom_base_points: [Option<i32>; 3],
-    pub from_cast_item: bool,
+    /// Item-use cast context (`m_CastItem`), carried to
+    /// delayed hits so the script lane still sees it.
+    pub cast_item: Option<CastItemCtx>,
     pub cast_counter: u8,
     pub triggered_by_aura_spell: u32,
     pub triggered_by_spell: u32,
@@ -254,6 +256,10 @@ pub(crate) struct DelayedSpellHit {
     /// Last scheduled hit of its cast: runs the
     /// `finish()` tail after applying.
     pub finish: bool,
+    /// A non-caster target missed at cast time, so a
+    /// finishing-move spell keeps its combo points
+    /// (`Spell.cpp:4467-4478` `needDrop`).
+    pub missed_non_caster: bool,
 }
 
 /// Why a cast did not start (for the actor's logging;

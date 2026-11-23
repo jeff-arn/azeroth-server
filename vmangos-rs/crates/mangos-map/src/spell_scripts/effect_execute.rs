@@ -43,6 +43,9 @@ impl Map {
         triggered_by_aura_spell: u32,
         triggered_by_spell: u32,
         script_effect_pick: Option<u32>,
+        cast_item: Option<CastItemCtx>,
+        caster_level: u32,
+        bp: [Option<i32>; 3],
     ) -> bool {
         let _ = triggered_by_spell;
         match spell.script_name.as_str() {
@@ -216,12 +219,22 @@ impl Map {
             "spell_gdr_channel" => {
                 self.gdr_channel_on_effect_execute(caster, spell, victim, eff_index)
             }
-            "spell_goblin_jumper_cables" => {
-                self.goblin_jumper_cables_on_effect_execute(caster, spell, victim, eff_index)
-            }
-            "spell_goblin_jumper_cables_xl" => {
-                self.goblin_jumper_cables_xl_on_effect_execute(caster, spell, victim, eff_index)
-            }
+            "spell_goblin_jumper_cables" => self.goblin_jumper_cables_on_effect_execute(
+                caster, spell, victim, eff_index, cast_item,
+            ),
+            "spell_goblin_jumper_cables_xl" => self.goblin_jumper_cables_xl_on_effect_execute(
+                caster, spell, victim, eff_index, cast_item,
+            ),
+            "spell_shaman_flametongue_proc_dummy" => self
+                .shaman_flametongue_proc_dummy_on_effect_execute(
+                    caster,
+                    spell,
+                    victim,
+                    eff_index,
+                    caster_level,
+                    bp,
+                    cast_item,
+                ),
             "spell_digging_claw" => {
                 self.digging_claw_on_effect_execute(caster, spell, victim, eff_index)
             }
@@ -719,37 +732,58 @@ impl Map {
     /// Fork quirk comments kept: damage coefficients 0.381% per 0.1
     /// speed / 15.244 per 4.0 speed observed; 3.85 factor used (at most
     /// one point off published values).
-    /// `weapon_delay_ms` = `m_CastItem->GetProto()->Delay`;
+    /// `weapon_delay_ms` is threaded as `m_CastItem->GetProto()->Delay`;
     /// `spell_damage` = `SpellBaseDamageBonusDone(GetSpellSchoolMask())`.
     /// Missing cast item logs `Spell::EffectDummy: spell %i requires
-    /// cast Item` and returns false — the caller (a future cast-item
-    /// threading) owns that gate.
-    #[allow(dead_code, clippy::too_many_arguments, clippy::cast_precision_loss)] // NO-DISPATCHER-YET (step-4 remainder)
+    /// cast Item` and returns false — no logger at this seam, the
+    /// skip is the observable half.
+    #[allow(clippy::too_many_arguments)] // fork hook context + cast-item lane
     fn shaman_flametongue_proc_dummy_on_effect_execute(
         &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         victim: ObjectGuid,
         eff_index: usize,
-        script_damage: &mut f32,
-        weapon_delay_ms: u32,
-        spell_damage: i32,
+        caster_level: u32,
+        bp_override: [Option<i32>; 3],
+        cast_item: Option<CastItemCtx>,
     ) -> bool {
         if eff_index != 0 {
             return true;
         }
-        // UNMODELED: `m_CastItem` (item `Delay`, missing-item `false`,
-        // cast-item identity on the 10444 cast) is not threaded through
-        // the effect dispatcher (`CastItemCtx` carries no delay); the
-        // params above are the seam until it is.
-        // UNMODELED: `spell_base_damage_bonus_done` (spells.rs) is
-        // private at lane time; `spell.school_mask` is the school-mask
-        // input (`GetSpellSchoolMask`).
-        let _ = 1u32 << spell.school; // GetSpellSchoolMask seam
+        let Some(item) = cast_item else {
+            return false;
+        };
+        // A missing prototype is the same missing-item case.
+        // Copied out before the `&mut self` damage seams below.
+        let Some(weapon_delay_ms) = self
+            .stores
+            .item_prototypes
+            .get(item.item_entry)
+            .map(|proto| proto.delay)
+        else {
+            return false;
+        };
+        // Fork input `spell->damage`: the effect's `CalculateDamage`
+        // result, computed by the handler after the script gate in
+        // this lane, so the arm reads it directly. The DUMMY handler
+        // recomputes the same value afterwards (identical inputs;
+        // zero RNG when the effect has no die sides, as here) and
+        // ignores it for this spell — a recorded deviation from the
+        // fork's single computation, confined to this arm.
+        let base_damage =
+            self.effect_value_bp(spell, eff_index, caster_level, bp_override[eff_index]);
+        // The versus-creature-type fold the Rust helper adds rides a
+        // zero mask here (the fork adds versus separately in
+        // `SpellDamageBonusDone`, not in this arm).
+        let school_mask = 1i32 << spell.school; // `GetSpellSchoolMask` seam
+        let spell_damage = self.spell_base_damage_bonus_done(caster, school_mask, 0);
+        #[allow(clippy::cast_precision_loss)]
         let weapon_speed = weapon_delay_ms as f32 / 1_000.0;
-        let total = (*script_damage + 3.85 * spell_damage as f32) * 0.01 * weapon_speed;
+        #[allow(clippy::cast_precision_loss)]
+        let total = (base_damage + 3.85 * spell_damage as f32) * 0.01 * weapon_speed;
         let bp = mangos_spells::entry::dither(total, self.spell_rng());
-        self.cast_custom_spell(caster, victim, 10444, [Some(bp), None, None]);
+        self.cast_custom_spell_item(caster, victim, 10444, [Some(bp), None, None], Some(item));
         true
     }
 
@@ -768,25 +802,38 @@ impl Map {
     /// note: Eviscerate scales with AP; rank 9 manual off Blackhand
     /// Assassins) is ACTIVE for this 1.12.1 target — transcribed
     /// unconditionally.
-    #[allow(clippy::unused_self)] // UNMODELED body
     fn rogue_eviscerate_on_effect_execute(
         &mut self,
         caster: ObjectGuid,
-        _spell: &SpellEntry,
+        spell: &SpellEntry,
         _victim: ObjectGuid,
         eff_index: usize,
-        _script_damage: &mut f32,
+        script_damage: &mut f32,
     ) -> bool {
         if eff_index != 0 {
             return true;
         }
-        // UNMODELED: combo points — the lane models no combo state
-        // (`spells.rs`: "no combos"); needs a `GetComboPoints` seam.
-        // UNMODELED: `IsFitToFamilyMask<CF_ROGUE_EVISCERATE>` family gate
-        // plus `damage += GetTotalAttackPowerValue(BASE_ATTACK) * combo
-        // * 0.03f` — needs the family-mask check and the AP seam from
-        // the bloodthirst arm.
-        let _ = caster;
+        // `IsFitToFamilyMask<CF_ROGUE_EVISCERATE>`
+        // (`SpellClassMask.h:224`: ROGUE family,
+        // CM0 0x00020000).
+        if spell.spell_family_name != 8 || (spell.spell_family_flags & 0x0002_0000) == 0 {
+            return true;
+        }
+        if !caster.is_player() {
+            return true;
+        }
+        let combo = self.combo_points(caster);
+        if combo > 0 {
+            let Some(u) = self.unit_base(caster) else {
+                return true;
+            };
+            // `GetTotalAttackPowerValue(BASE_ATTACK)`
+            // reachable subset (same as the bloodthirst
+            // arm; versus-aura folding unmodeled there).
+            let attack_power =
+                u.base_attack_power + u.attack_power_mods[0] + u.attack_power_mods[1];
+            *script_damage += attack_power * f32::from(combo) * 0.03;
+        }
         true
     }
 
@@ -1239,35 +1286,42 @@ impl Map {
     // energy is then set to 0. The `#else` (pre-1.7.1) branch casting per-rank
     // damage spells 22851/22853/22861/22862 is NOT transcribed (dead fork for the
     // 1.12.1 client). `spell->damage` rides the `script_damage` channel.
-    // if spell.script_name == "spell_druid_ferocious_bite" {
-    //     return self.druid_ferocious_bite_on_effect_execute(
-    //         caster, spell, victim, eff_index, script_damage,
-    //     );
     /// `DruidFerociousBiteScript::OnEffectExecute` (`spell_druid.cpp:22-71`).
-    #[allow(clippy::unused_self)] // UNMODELED combo-point body
     fn druid_ferocious_bite_on_effect_execute(
         &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         victim: ObjectGuid,
         eff_index: usize,
-        _script_damage: &mut f32,
+        script_damage: &mut f32,
     ) -> bool {
-        let _ = (caster, victim);
+        let _ = victim;
         if eff_index != 0 {
             return true;
         }
-        // UNMODELED: combo-point count (no combo store in the lane) and
-        // `POWER_ENERGY` read/reset (`unit_power` is private to `spells.rs`,
-        // and there is no power setter). The attack-power read itself exists
-        // (`unit_value_u32(caster, offsets::UNIT_FIELD_ATTACK_POWER)`, as in
-        // `customs.rs:274`). Fork-exact math for the host seam once combo +
-        // energy lands:
-        //   if !caster.is_player() { return true; }
-        //   if combo > 0 { *script_damage += ap * combo as f32 * 0.03; }
-        //   *script_damage += energy as f32 * spell.effects[eff_index].dmg_multiplier;
-        //   set energy to 0.
-        let _ = spell;
+        if !caster.is_player() {
+            return true;
+        }
+        let combo = self.combo_points(caster);
+        if combo > 0 {
+            let Some(u) = self.unit_base(caster) else {
+                return true;
+            };
+            // `GetTotalAttackPowerValue(BASE_ATTACK)`
+            // reachable subset (same as the bloodthirst
+            // arm).
+            let attack_power =
+                u.base_attack_power + u.attack_power_mods[0] + u.attack_power_mods[1];
+            *script_damage += attack_power * f32::from(combo) * 0.03;
+        }
+        // `damage += GetPower(POWER_ENERGY) *
+        // m_spellInfo.DmgMultiplier[effIdx]`, then the
+        // energy drains to 0 (`spell_druid.cpp:40-43`).
+        let energy = self.unit_power(caster, mangos_spells::defines::power::ENERGY);
+        #[allow(clippy::cast_precision_loss)]
+        let energy_f = energy as f32;
+        *script_damage += energy_f * spell.effects[eff_index].dmg_multiplier;
+        self.unit_set_power(caster, mangos_spells::defines::power::ENERGY, 0);
         true
     }
 
@@ -1870,13 +1924,13 @@ impl Map {
         spell: &SpellEntry,
         victim: ObjectGuid,
         eff_index: usize,
+        cast_item: Option<CastItemCtx>,
     ) -> bool {
         let _ = (spell, victim);
         if eff_index == 0 {
             // Fork double-checks `m_casterUnit` (redundant with the outer guard).
             if self.roll_chance_i(67) {
-                // UNMODELED: fork forwards `spell->m_CastItem` to the 8338 cast;
-                // the effect seam carries no cast-item context, mapped to `None`.
+                // Fork forwards `spell->m_CastItem` to the 8338 cast.
                 self.cast_spell(
                     caster,
                     8338,
@@ -1884,6 +1938,7 @@ impl Map {
                     CastOptions {
                         triggered: true,
                         skip_known: true,
+                        cast_item,
                         ..CastOptions::default()
                     },
                 );
@@ -1906,11 +1961,11 @@ impl Map {
         spell: &SpellEntry,
         victim: ObjectGuid,
         eff_index: usize,
+        cast_item: Option<CastItemCtx>,
     ) -> bool {
         let _ = (spell, victim);
         if eff_index == 0 && self.roll_chance_i(50) {
-            // UNMODELED: fork forwards `spell->m_CastItem` to the 23055 cast;
-            // the effect seam carries no cast-item context, mapped to `None`.
+            // Fork forwards `spell->m_CastItem` to the 23055 cast.
             self.cast_spell(
                 caster,
                 23055,
@@ -1918,6 +1973,7 @@ impl Map {
                 CastOptions {
                     triggered: true,
                     skip_known: true,
+                    cast_item,
                     ..CastOptions::default()
                 },
             );

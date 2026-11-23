@@ -85,7 +85,7 @@ impl Map {
     /// `MOD_FLAT_SPELL_DAMAGE_VERSUS` (wand equipped-item
     /// gates unmodeled — no equipped fields on the entry
     /// subset; pet `GetBonusDamage` unmodeled).
-    fn spell_base_damage_bonus_done(
+    pub(crate) fn spell_base_damage_bonus_done(
         &self,
         caster: ObjectGuid,
         school_mask: i32,
@@ -278,7 +278,7 @@ impl Map {
     }
 
     /// `GetMaxPositive/NegativeAuraModifier` over holders.
-    fn max_aura_modifier(&self, guid: ObjectGuid, kind: u32, positive: bool) -> i32 {
+    pub(crate) fn max_aura_modifier(&self, guid: ObjectGuid, kind: u32, positive: bool) -> i32 {
         let holders = self.aura_holders(guid);
         let amounts = holders
             .iter()
@@ -680,6 +680,30 @@ impl Map {
         }
     }
 
+    /// Fork `Spell::EffectHealMaxHealth` base (`SpellEffects.cpp:3414`):
+    /// the caster's max health (the victim's when the caster unit is
+    /// unavailable), through the done/taken percent modifiers only —
+    /// no spellpower benefit, unlike `spell_healing_bonus_done`.
+    #[allow(clippy::cast_precision_loss)]
+    pub(crate) fn heal_max_health_value(&self, caster: ObjectGuid, victim: ObjectGuid) -> f32 {
+        let base = if self.unit_is_alive(caster) {
+            self.unit_value_u32(caster, offsets::UNIT_FIELD_MAXHEALTH)
+        } else {
+            self.unit_value_u32(victim, offsets::UNIT_FIELD_MAXHEALTH)
+        } as f32;
+        let mut value =
+            base * self.total_aura_multiplier(caster, aura_type::MOD_HEALING_DONE_PERCENT, None);
+        let minval = self.max_aura_modifier(victim, aura_type::MOD_HEALING_PCT, false);
+        if minval != 0 {
+            value *= (100.0 + minval as f32) / 100.0;
+        }
+        let maxval = self.max_aura_modifier(victim, aura_type::MOD_HEALING_PCT, true);
+        if maxval != 0 {
+            value *= (100.0 + maxval as f32) / 100.0;
+        }
+        value
+    }
+
     /// Health increase clamped to max (heal log packet
     /// is a recorded slice deviation).
     pub(crate) fn heal_unit(&mut self, target: ObjectGuid, amount: u32) {
@@ -1027,10 +1051,18 @@ impl Map {
         // AI death hooks in the fork as well).
         if is_creature {
             self.reward_kill_xp(victim, killer);
+            // Kill reputation (`RewardReputation` runs
+            // between honor and XP in
+            // `RewardSinglePlayerAtKill`; grouped with XP
+            // here, after it).
+            self.reward_kill_reputation(victim, killer);
             self.quest_kill_credit(victim, killer);
             // Corpse loot generation (fork `Kill`
             // generates before `JustDied` hooks).
             self.generate_creature_loot(victim, killer);
+            // `JUST_DIED` skinnable flag (fork
+            // `Creature.cpp:2143-2146`).
+            self.set_skinnable_on_kill(victim);
         }
         // EventAI death/kill hooks run while the AI
         // state still exists (`JustDied`/`KilledUnit`).
@@ -1160,8 +1192,9 @@ impl Map {
                 creature.corpse_decay_timer = 0;
                 creature.unit.death_state = DeathState::Dead;
             }
-            self.loots.remove(&guid);
-            self.loot_taps.remove(&guid);
+            // Same drops as the respawn path (loot,
+            // taps, skinning timer/flag, open windows).
+            self.clear_loot_for_creature(guid);
         }
     }
 

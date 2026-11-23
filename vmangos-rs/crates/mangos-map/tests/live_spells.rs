@@ -158,6 +158,7 @@ const ASPECT_CHEETAH: u32 = 5118; // MOD_INCREASE_SPEED +30%
 const SPRINT_2983: u32 = 2983; // MOD_INCREASE_SPEED +50%
 const SLOW_50: u32 = 12548; // MOD_DECREASE_SPEED -50%
 const HAMMER_OF_JUSTICE: u32 = 853; // MOD_STUN
+const LAY_ON_HANDS: u32 = 10310; // HEAL_MAX_HEALTH (effect 67)
 const SILENCE_SPELL: u32 = 15487; // MOD_SILENCE
 const GROWL_THREAT: u32 = 2649; // THREAT effect ~50
 const GROWL_FORM_GATED: u32 = 6795; // bear-form stance mask
@@ -172,6 +173,9 @@ const LEARN_EXEMPLAR: u32 = 5210; // teaches 5209
 const LEARNED_ID: u32 = 5209;
 const DAMAGE_SHIELD_BIG: u32 = 23272; // DAMAGE_SHIELD ~555
 const SCALE_DOUBLE: u32 = 24244; // MOD_SCALE +100%
+const TRANQUILITY: u32 = 9863; // channeled self heal (8 s)
+const OMEN_OF_CLARITY: u32 = 16864; // cheap self aura, no cooldown
+const FAILED_SPELL_IN_PROGRESS: u8 = 97;
 
 #[test]
 #[ignore = "requires bench world+characters DBs, CHARACTER_LOAD_GUID, MANGOS_DBC_DIR"]
@@ -261,6 +265,8 @@ fn bench_spells_and_auras() {
                     items,
                     item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
                     factions: mangos_world_data::reputations::load_factions(conn)?,
+                    reputation_kills: mangos_world_data::reputations::ReputationKillStores::default(
+                    ),
                     gossip: mangos_world_data::gossip_menus::GossipStores::default(),
                     areas: mangos_world_data::areas::AreaStore::default(),
                     exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(
@@ -278,6 +284,8 @@ fn bench_spells_and_auras() {
                         mangos_world_data::script_waypoints::ScriptWaypointStore::default(),
                     game_events: mangos_world_data::game_events::GameEvents::default(),
                     loot: mangos_world_data::loot::LootStores::default(),
+                    locks: mangos_world_data::locks::LockStore::default(),
+                    fishing_base_skills: mangos_world_data::fishing::FishingBaseSkills::default(),
                     weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore {
@@ -944,6 +952,90 @@ fn bench_spells_and_auras() {
         "interrupt channel update 0 missing"
     );
     assert_eq!(post_interrupt_ticks, 0, "ticks after interrupt");
+
+    // --- Cancel interrupts channel (Tranquility) --------
+    // Fork `HandleCancelAuraOpcode` channeled arm
+    // (`SpellHandler.cpp`): cancelling a channeled aura
+    // interrupts the channel, so the next cast starts
+    // instead of failing SPELL_IN_PROGRESS (97). Druid
+    // campaign row 9885 failed exactly this way behind
+    // Tranquility 9863.
+    let tranq = stores.spells.get(TRANQUILITY).expect("tranquility entry");
+    assert!(tranq.is_channeled(), "tranquility must be channeled");
+    let tranq_duration = tranq.calculate_duration_ms(&stores.spells.tables);
+    assert!(tranq_duration > 0, "tranquility duration {tranq_duration}");
+    // The level-19 fixture has no max mana, so power is set
+    // immediately before each cast (Fire Blast pattern): any
+    // regen tick would clamp it back to the zero max.
+    tick(&mut map, 32);
+    let _ = map.drain_events();
+    map.player_mut(player_guid)
+        .expect("player")
+        .unit
+        .set_power(0, 2000);
+    let outcome = map.cast_spell(
+        player_guid,
+        TRANQUILITY,
+        CastTarget::SelfCast,
+        CastOptions {
+            skip_known: true,
+            ..CastOptions::default()
+        },
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    tick(&mut map, 10);
+    let _ = map.drain_events();
+    assert!(
+        map.aura_holders(player_guid)
+            .iter()
+            .any(|h| h.spell_id == TRANQUILITY),
+        "tranquility holder must land"
+    );
+    map.cancel_aura(player_guid, TRANQUILITY);
+    assert!(
+        map.aura_holders(player_guid)
+            .iter()
+            .all(|h| h.spell_id != TRANQUILITY),
+        "cancel must strip the tranquility holder"
+    );
+    {
+        let player = map.player(player_guid).expect("player");
+        assert_eq!(
+            player
+                .unit
+                .world
+                .object
+                .values()
+                .get_u32(offsets::UNIT_CHANNEL_SPELL),
+            0,
+            "cancel must clear the channel spell field"
+        );
+    }
+    tick(&mut map, 32);
+    let _ = map.drain_events();
+    map.player_mut(player_guid)
+        .expect("player")
+        .unit
+        .set_power(0, 2000);
+    // Any fresh cast must start after the interrupt (the
+    // campaign's MotW-behind-Tranquility shape); a different
+    // spell also sidesteps Tranquility's 300 s category
+    // cooldown, which is unrelated to the channel slot.
+    let recast = map.cast_spell(
+        player_guid,
+        OMEN_OF_CLARITY,
+        CastTarget::SelfCast,
+        CastOptions {
+            skip_known: true,
+            ..CastOptions::default()
+        },
+    );
+    assert_eq!(
+        recast,
+        CastOutcome::Started,
+        "recast after cancel must start, not fail {FAILED_SPELL_IN_PROGRESS}"
+    );
+    println!("CANCEL-CHANNEL duration={tranq_duration}");
 
     // --- Spell mods (Nature's Swiftness) ---------------
     // Control: Healing Touch is a timed cast — no heal
@@ -2807,5 +2899,60 @@ fn bench_spells_and_auras() {
     }
     assert!(died, "UnitDied never fired");
     assert!(store_event, "StoreCreatureRespawn never fired");
+
+    // --- Lay on Hands (EffectHealMaxHealth) ----
+    // Effect 67 had no SpellEffects arm: SPELL_GO with no outcome.
+    // Fork `EffectHealMaxHealth` heals the caster's max health
+    // through done/taken pct mods (none on this fixture), so a
+    // damaged caster must read full health after the cast.
+    tick(&mut map, 32); // outlast any prior GCD
+    let _ = map.drain_events();
+    map.player_mut(player_guid)
+        .expect("player")
+        .unit
+        .set_power(0, 1000);
+    map.player_mut(player_guid)
+        .expect("player")
+        .unit
+        .set_health(1_000);
+    let loh_max = map
+        .player(player_guid)
+        .expect("player")
+        .unit
+        .world
+        .object
+        .values()
+        .get_u32(offsets::UNIT_FIELD_MAXHEALTH);
+    assert!(loh_max > 1_000, "fixture max health too small: {loh_max}");
+    let outcome = map.cast_spell(
+        player_guid,
+        LAY_ON_HANDS,
+        CastTarget::Unit(player_guid),
+        CastOptions {
+            triggered: false,
+            triggered_by_aura: false,
+            skip_known: true,
+            cast_item: None,
+            custom_base_points: [None; 3],
+            triggered_by_aura_spell: 0,
+            triggered_by_spell: 0,
+        },
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    tick(&mut map, 8);
+    let _ = map.drain_events();
+    let loh_after = map
+        .player(player_guid)
+        .expect("player")
+        .unit
+        .world
+        .object
+        .values()
+        .get_u32(offsets::UNIT_FIELD_HEALTH);
+    println!("LAY-ON-HANDS before=1000 max={loh_max} after={loh_after}");
+    assert_eq!(
+        loh_after, loh_max,
+        "Lay on Hands did not heal to max health"
+    );
     println!("LIVE-SPELLS-PASS");
 }

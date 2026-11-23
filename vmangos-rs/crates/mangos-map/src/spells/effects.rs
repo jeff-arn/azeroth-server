@@ -75,6 +75,24 @@ impl Map {
         if spell.effects[eff_index].effect == effect::NONE {
             mode = tgt::UNIT_CASTER;
         }
+        // `SPELL_EFFECT_SKINNING` always lands on the
+        // explicit unit target (the corpse), independent
+        // of the DBC implicit target (fork
+        // `Spell::SetTargetMap` unit-target capture;
+        // the cast check already requires
+        // `CastTarget::Unit`). Pickpocket shares the
+        // shape: the live victim is the explicit unit
+        // target. `SKIN_PLAYER_CORPSE` rides the same
+        // capture (fork `Spell.cpp:3305` pushes the unit
+        // target): a corpse guid takes the corpse arm, a
+        // dead-player guid the `RemovedInsignia` arm.
+        if spell.effects.iter().any(|e| {
+            e.effect == effect::SKINNING
+                || e.effect == effect::PICKPOCKET
+                || e.effect == effect::SKIN_PLAYER_CORPSE
+        }) {
+            mode = tgt::UNIT;
+        }
         // `SpellScript::OnSetTargetMap` (fork
         // `Spell::SetTargetMap` head): script may
         // override mode/radius/max-targets/closest
@@ -250,6 +268,10 @@ impl Map {
                     _ => vec![caster],
                 }
             }
+            // Unmodeled location modes and
+            // `TARGET_LOCATION_CASTER_FISHING_SPOT`
+            // (fork `Spell.cpp:2945-2948` pushes the
+            // caster): the caster fallback.
             _ => vec![caster],
         };
         // `SpellScript::OnCheckTarget` per-candidate
@@ -313,12 +335,12 @@ impl Map {
         mut applied_mods: Option<&mut Vec<(u32, u8)>>,
         proc_ctx: Option<&ProcRaiseCtx>,
         bp: [Option<i32>; 3],
-        has_cast_item: bool,
+        cast_item: Option<CastItemCtx>,
         cast_counter: u8,
         triggered_by_aura_spell: u32,
         triggered_by_spell: u32,
         script_effect_pick: Option<u32>,
-    ) {
+    ) -> bool {
         // EventAI SpellHit hooks (Slice 6b), once per
         // hit target as in `DoAllEffectOnTarget`.
         if victim.is_creature() && victim != caster {
@@ -350,7 +372,7 @@ impl Map {
             // target (scripts); C++ would still apply
             // to a live object only.
             if !self.creatures.contains_key(&victim) {
-                return;
+                return true;
             }
         }
         // `SpellScript::OnHit` (fork `Spell.cpp:1489`
@@ -365,6 +387,12 @@ impl Map {
         // `Spell::damage` script channel for this
         // victim's effect pass (`OnEffectExecute` writes).
         let mut script_damage = 0.0f32;
+        // Fork `finish()` inside an effect aborts the
+        // cast (the fishing water gate); the flag rides
+        // out through `execute_cast`, which then skips
+        // the channel start and the successful-finish
+        // tail (the arm already sent the fail packet).
+        let mut effects_ok = true;
         for i in 0..3 {
             let eff = spell.effects[i];
             if eff.effect == effect::NONE {
@@ -384,6 +412,9 @@ impl Map {
                 triggered_by_aura_spell,
                 triggered_by_spell,
                 script_effect_pick,
+                cast_item,
+                caster_level,
+                bp,
             ) {
                 continue;
             }
@@ -625,6 +656,33 @@ impl Map {
                         }
                     }
                 }
+                effect::HEAL_MAX_HEALTH => {
+                    // `Spell::EffectHealMaxHealth` (fork
+                    // `SpellEffects.cpp:3414`): heal equals the
+                    // caster's max health (the victim's when the
+                    // caster unit is unavailable), through the
+                    // done/taken percent modifiers only — no
+                    // spellpower benefit, unlike HEAL.
+                    // `heal_unit` clamps to max.
+                    if self.unit_is_alive(victim) {
+                        let value = self.heal_max_health_value(caster, victim);
+                        if value > 0.0 {
+                            let amount = mangos_spells::ditheru(value, self.spell_rng());
+                            self.heal_unit(victim, amount);
+                            if let Some(ctx) = proc_ctx {
+                                self.raise_damage_procs(
+                                    caster,
+                                    victim,
+                                    Some(spell.id),
+                                    ctx,
+                                    proc_ex::NORMAL_HIT,
+                                    amount,
+                                    amount,
+                                );
+                            }
+                        }
+                    }
+                }
                 // `Spell::EffectEnergize` +
                 // `Unit::EnergizeBySpell`: direct power
                 // gain (the SMSG_SPELL_ENERGIZE_LOG rides
@@ -802,7 +860,7 @@ impl Map {
                         i,
                         victim,
                         damage,
-                        has_cast_item,
+                        cast_item,
                         cast_counter,
                         triggered_by_aura_spell,
                         triggered_by_spell,
@@ -810,7 +868,38 @@ impl Map {
                 }
                 effect::SCRIPT_EFFECT => {
                     let damage = self.effect_value_bp(spell, i, caster_level, bp[i]);
-                    self.effect_script_effect(caster, spell, victim, damage, has_cast_item);
+                    self.effect_script_effect(caster, spell, victim, damage, cast_item);
+                }
+                // SPELL_EFFECT_SKINNING (fork
+                // `SpellEffects.cpp:5265-5284`): corpse
+                // window + flag clear + gather gain.
+                effect::SKINNING => {
+                    self.effect_skinning(caster, victim);
+                }
+                // SPELL_EFFECT_PICKPOCKET (fork
+                // `SpellEffects.cpp:2580-2590`): live
+                // victim window; guards inside.
+                effect::PICKPOCKET => {
+                    self.effect_pickpocket(caster, victim);
+                }
+                // SPELL_EFFECT_SKIN_PLAYER_CORPSE
+                // (fork `SpellEffects.cpp:5735-5760`):
+                // corpse-guid convert + insignia window,
+                // or the `RemovedInsignia` dead-player
+                // arm; guards inside.
+                effect::SKIN_PLAYER_CORPSE => {
+                    self.effect_skin_player_corpse(caster, victim);
+                }
+                // SPELL_EFFECT_TRANS_DOOR (fork
+                // `SpellEffects.cpp:5538-5678`): the
+                // fishing slice models the FISHINGNODE
+                // arm only (other GO types stay
+                // no-ops); a failed water gate aborts
+                // the cast fork-exactly (`&=` keeps the
+                // arm running for every effect slot,
+                // like the fork's effect loop).
+                effect::TRANS_DOOR => {
+                    effects_ok &= self.effect_transmitted_fishing(caster, spell, i, client_dest);
                 }
                 // SPELL_EFFECT_PERSISTENT_AREA_AURA
                 // spawns once per cast in
@@ -819,13 +908,27 @@ impl Map {
                 // enumerate direct-hit victims too).
                 // Includes PERSISTENT_AREA_AURA (see
                 // above): no per-victim work.
+                // `EffectAddComboPoints` (fork
+                // SpellEffects.cpp:4513-4526): the count
+                // rides the effect value; non-positive
+                // counts and non-player casters do
+                // nothing. `SetComboPoints` runs inside
+                // `add_combo_points`.
+                effect::ADD_COMBO_POINTS => {
+                    #[allow(clippy::cast_possible_truncation)]
+                    let count = self.effect_value_bp(spell, i, caster_level, bp[i]) as i32;
+                    if count > 0 && caster.is_player() {
+                        self.add_combo_points(caster, victim, count);
+                    }
+                }
                 _ => {}
             }
         }
         // `SpellScript::OnAfterHit` (fork `Spell.cpp`
         // DoAllEffectOnTarget unit case, after the
         // effect pass and procs for this target).
-        self.spell_script_on_after_hit(caster, spell, victim);
+        self.spell_script_on_after_hit(caster, spell, victim, cast_item);
+        effects_ok
     }
 
     /// `Unit::NearTeleportTo` dispatch: players take

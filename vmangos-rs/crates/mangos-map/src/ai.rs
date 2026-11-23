@@ -24,6 +24,7 @@
 //! is existence+alive only.
 
 use mangos_entities::creature::Creature;
+use mangos_entities::unit::UnitVisibility;
 use mangos_guid::ObjectGuid;
 use mangos_movement::movement_info::Position;
 use mangos_protocol::buffer::PacketWriter;
@@ -1084,6 +1085,33 @@ impl Map {
         }
     }
 
+    /// `Unit::DoResetThreat` (`Unit.cpp`): zero every nonzero
+    /// online threat entry via `modifyThreatPercent(-100)`.
+    /// Fork-exact: the C++ `-100` arm keeps the reference at
+    /// zero threat (only `< -100` removes), so the entries
+    /// survive, the current victim is untouched, and a guid
+    /// with no AI entry is a silent no-op (the fork's
+    /// `CanHaveThreatList`/empty-list early return).
+    pub(crate) fn do_reset_threat(&mut self, guid: ObjectGuid) {
+        let Some(mut ai) = self.ai.remove(&guid) else {
+            return;
+        };
+        {
+            let targets: Vec<ObjectGuid> = ai
+                .threat
+                .threat_list()
+                .iter()
+                .filter(|r| r.threat() != 0.0)
+                .map(mangos_threat::HostileRef::target)
+                .collect();
+            let host = MapThreatHost { map: self };
+            for target in targets {
+                ai.threat.modify_threat_percent(&host, target, -100);
+            }
+        }
+        self.ai.insert(guid, ai);
+    }
+
     /// `SelectUnit(SELECT_TARGET_RANDOM, 0)` script shorthand
     /// (fork default flags `SELECT_FLAG_NO_TOTEM`).
     #[allow(dead_code)] // generated accessor; lane uses direct match
@@ -1635,8 +1663,9 @@ impl Map {
         if !self.unit_is_alive(guid) {
             return;
         }
-        // Hidden patrol spawns (Deadmines) stay inert.
-        if self.hidden_objects.contains(&guid) {
+        // Hidden patrol spawns (Deadmines) stay inert
+        // (legacy alias folded into `get_visibility`).
+        if self.get_visibility(guid) != UnitVisibility::On {
             return;
         }
         self.ensure_ai(guid);
@@ -3524,4 +3553,134 @@ enum MeleeOutcome {
     Block,
     Crit,
     Crushing,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use mangos_guid::ObjectGuid;
+    use mangos_threat::{AddDecision, ThreatHost};
+
+    use super::{AiKind, CreatureAi};
+    use crate::WorldRng;
+    use crate::map::{Map, MapConfig};
+    use crate::stores::WorldStores;
+
+    fn guid(n: u64) -> ObjectGuid {
+        ObjectGuid::from_raw(0xF130_0000_0000_0000 + n)
+    }
+
+    /// Seeding host: every gate open, no calc adjustments, so
+    /// the manager holds exactly the seeded refs.
+    struct OpenHost;
+
+    impl ThreatHost for OpenHost {
+        fn spellmod_threat(&self, _hated: ObjectGuid, _spell: u32, threat: f32) -> f32 {
+            threat
+        }
+        fn crit_threat_multiplier(&self, _hated: ObjectGuid, _mask: u32) -> f32 {
+            1.0
+        }
+        fn apply_total_threat_modifier(&self, _hated: ObjectGuid, threat: f32, _mask: u32) -> f32 {
+            threat
+        }
+        fn add_gate(
+            &self,
+            _owner: ObjectGuid,
+            _victim: ObjectGuid,
+            _is_assist: bool,
+        ) -> AddDecision {
+            AddDecision::Allow
+        }
+        fn direct_gate(&self, _owner: ObjectGuid, _victim: ObjectGuid) -> bool {
+            true
+        }
+        fn is_gamemaster_player(&self, _victim: ObjectGuid) -> bool {
+            false
+        }
+        fn refresh_online(&self, _owner: ObjectGuid, _victim: ObjectGuid) -> bool {
+            true
+        }
+        fn pet_owner_to_register(
+            &self,
+            _owner: ObjectGuid,
+            _victim: ObjectGuid,
+        ) -> Option<ObjectGuid> {
+            None
+        }
+        fn out_of_threat_area(&self, _attacker: ObjectGuid, _target: ObjectGuid) -> bool {
+            false
+        }
+        fn valid_attack_target(&self, _attacker: ObjectGuid, _target: ObjectGuid) -> bool {
+            true
+        }
+        fn low_priority_target(&self, _attacker: ObjectGuid, _target: ObjectGuid) -> bool {
+            false
+        }
+        fn can_reach_with_melee(&self, _attacker: ObjectGuid, _target: ObjectGuid) -> bool {
+            true
+        }
+        fn faction_id(&self, _unit: ObjectGuid) -> u32 {
+            0
+        }
+    }
+
+    fn map_with_threat(owner: ObjectGuid, entries: &[(u64, f32)]) -> Map {
+        let mut map = Map::new(
+            0,
+            0,
+            MapConfig::default(),
+            Arc::new(WorldStores::empty()),
+            WorldRng::from_seed(42),
+        );
+        map.ai
+            .insert(owner, CreatureAi::new(AiKind::Basic, owner, Vec::new()));
+        let host = OpenHost;
+        let Some(ai) = map.ai.get_mut(&owner) else {
+            panic!("seeded ai missing");
+        };
+        for (victim, threat) in entries {
+            ai.threat
+                .add_threat_directly(&host, guid(*victim), *threat, false);
+        }
+        map
+    }
+
+    /// `Unit::DoResetThreat` fork contract (`Unit.cpp`): every
+    /// nonzero online entry is zeroed via `modifyThreatPercent`
+    /// (`-100`); entries survive at zero (only `< -100`
+    /// removes), the victim selection and offline list are
+    /// untouched, and an unknown guid is a no-op.
+    #[test]
+    fn do_reset_threat_zeroes_nonzero_entries_fork_exact() {
+        let owner = guid(1);
+        let mut map = map_with_threat(owner, &[(10, 100.0), (11, 50.0), (12, 0.0)]);
+        assert_eq!(
+            map.ai.get(&owner).expect("ai").threat.threat_list().len(),
+            3
+        );
+
+        map.do_reset_threat(owner);
+
+        let ai = map.ai.get(&owner).expect("ai");
+        assert_eq!(ai.threat.threat_list().len(), 3, "refs survive at zero");
+        for victim in [10, 11, 12] {
+            assert_eq!(
+                ai.threat.get_threat(guid(victim), false).to_bits(),
+                0.0f32.to_bits(),
+                "victim {victim}"
+            );
+            assert!(
+                ai.threat.reference_by_target(guid(victim)).is_some(),
+                "victim {victim}"
+            );
+        }
+        assert!(ai.threat.offline_list().is_empty());
+        assert_eq!(ai.threat.current_victim(), None);
+
+        // Unknown guid: silent no-op, nothing inserted.
+        map.do_reset_threat(guid(99));
+        assert!(!map.ai.contains_key(&guid(99)));
+    }
 }

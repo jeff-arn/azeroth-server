@@ -628,7 +628,13 @@ impl Map {
             false
         };
         if landed {
-            self.aura_script_on_after_apply(victim, holder_spell_id, holder_caster_guid, true);
+            self.aura_script_on_after_apply(
+                victim,
+                holder_spell_id,
+                holder_caster_guid,
+                true,
+                AuraRemoveMode::Default,
+            );
             self.aura_dummy_for_spell(victim, holder_spell_id, true);
         }
         if has_stat || has_health_energy {
@@ -1474,7 +1480,7 @@ impl Map {
             }
         }
         if let Some((removed_caster, removed_spell_id)) = removed_holder {
-            self.aura_script_on_after_apply(victim, removed_spell_id, removed_caster, false);
+            self.aura_script_on_after_apply(victim, removed_spell_id, removed_caster, false, mode);
             self.aura_dummy_for_spell(victim, removed_spell_id, false);
         }
         if has_stat || has_health_energy {
@@ -1563,8 +1569,26 @@ impl Map {
     }
 
     /// `CMSG_CANCEL_AURA` (`RemoveAurasDueToSpell` with
-    /// the cancelable gate).
+    /// the cancelable gate). Fork `HandleCancelAuraOpcode`
+    /// channeled arm (`SpellHandler.cpp`): cancelling a
+    /// channeled spell interrupts the channel, so a later
+    /// cast does not fail `SPELL_IN_PROGRESS`. The holder
+    /// loop still runs so the aura is gone even with no
+    /// channel slot open (the interrupt itself strips the
+    /// aura through the channel-end path).
     pub fn cancel_aura(&mut self, victim: ObjectGuid, spell_id: u32) {
+        if self
+            .stores
+            .spells
+            .get(spell_id)
+            .is_some_and(mangos_spells::SpellEntry::is_channeled)
+            && self
+                .casts
+                .get(&victim)
+                .is_some_and(|cast| cast.spell_id == spell_id)
+        {
+            self.interrupt_non_melee_spells(victim, false, spell_id);
+        }
         loop {
             let found = self.unit_base_mut(victim).and_then(|u| {
                 u.auras

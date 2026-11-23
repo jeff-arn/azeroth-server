@@ -1225,4 +1225,33 @@ mod tests {
         ];
         assert_eq!(diff_reputation(&loaded, &current).len(), 1);
     }
+
+    #[test]
+    fn kill_reward_marks_rewarded_faction_row_dirty() {
+        // Post-kill deferred state: the rewarded faction
+        // gains a standing delta and the visible bit, so
+        // the save dirty set carries exactly that row
+        // alongside any other touched row.
+        let loaded = vec![ReputationRow {
+            faction: 72,
+            standing: 3000,
+            flags: 1,
+        }];
+        let current = vec![
+            ReputationRow {
+                faction: 72,
+                standing: 3000,
+                flags: 1,
+            },
+            ReputationRow {
+                faction: 47,
+                standing: 100,
+                flags: 1,
+            },
+        ];
+        let dirty = diff_reputation(&loaded, &current);
+        assert_eq!(dirty.len(), 1);
+        assert_eq!(dirty[0].faction, 47);
+        assert_eq!(dirty[0].standing, 100);
+    }
 }

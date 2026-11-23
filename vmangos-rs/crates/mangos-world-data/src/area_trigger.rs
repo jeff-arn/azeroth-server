@@ -126,6 +126,12 @@ impl AreaTriggerStore {
         self.triggers.get(&trigger_id)
     }
 
+    /// Test-fixture insertion of one trigger row
+    /// (Silithus drop-guard positions).
+    pub fn insert_trigger_for_tests(&mut self, entry: AreaTriggerEntry) {
+        self.triggers.insert(entry.id, entry);
+    }
+
     /// `ObjectMgr::GetAreaTriggerTeleport`.
     #[must_use]
     pub fn teleport(&self, trigger_id: u32) -> Option<&AreaTriggerTeleport> {

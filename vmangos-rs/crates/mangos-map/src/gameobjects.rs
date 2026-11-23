@@ -13,16 +13,20 @@
 //! existing use/despawn helpers (recorded at those
 //! sites); this module ticks dynamic objects fully
 //! and static traps for their trigger arm only.
-//! UNMODELED: FISHINGNODE expiry arm (no fishing
-//! runtime), GOOBER just-deactivated unique-user
+//! UNMODELED: GOOBER just-deactivated unique-user
 //! cast, pool/linked-trap respawn on static expiry,
 //! `JustSummoned` GO-AI notification (creature-AI
 //! arm wired, GO-AI arm has no ported consumer).
 
-use mangos_entities::gameobject::{GO_ANIMPROGRESS_DEFAULT, GO_STATE_READY, GameObject};
+use mangos_entities::gameobject::{
+    GO_ANIMPROGRESS_DEFAULT, GO_STATE_ACTIVE, GO_STATE_READY, GameObject,
+};
 use mangos_guid::ObjectGuid;
 use mangos_movement::movement_info::Position;
+use mangos_protocol::buffer::PacketWriter;
+use mangos_protocol::opcode_table::opcode_id;
 use mangos_protocol::update_field_table::offsets;
+use mangos_protocol::world::WorldPacket;
 use mangos_world_data::gameobject_template::GameObjectInfo;
 
 use crate::map::Map;
@@ -33,16 +37,29 @@ pub const GO_TYPE_TRAP: u32 = 6;
 const GO_TYPE_FLAGDROP: u32 = 26;
 /// `GAMEOBJECT_TYPE_FISHINGNODE`.
 const GO_TYPE_FISHINGNODE: u32 = 17;
+/// `GAMEOBJECT_TYPE_CHEST` (`GameObjectDefines.h:29`).
+const GO_TYPE_CHEST: u32 = 3;
 /// `GAMEOBJECT_TYPE_SUMMONING_RITUAL`.
 const GO_TYPE_SUMMONING_RITUAL: u32 = 18;
 /// `SPELL_ATTR_COOLDOWN_ON_EVENT`
 /// (`SpellDefines.h:802`).
 const ATTR_COOLDOWN_ON_EVENT: u32 = 0x0200_0000;
 
+/// `LootState` (`GameObjectDefines.h:109-115`),
+/// server-side only (never a client field at
+/// 1.12.1); only its wire effects (`GO_STATE`
+/// anims, despawn/spawn anims, loot packets)
+/// replicate.
+pub const GO_LOOT_NOT_READY: u8 = 0;
+pub const GO_LOOT_READY: u8 = 1;
+pub const GO_LOOT_ACTIVATED: u8 = 2;
+pub const GO_LOOT_JUST_DEACTIVATED: u8 = 3;
+
 /// Per-GO runtime state mirroring the fork members
 /// the entity aggregate does not carry: `m_spellId`,
 /// `m_cooldownTime` (unix seconds), `m_useTimes`,
-/// and the `GO_NOT_READY` -> `GO_READY` arming edge.
+/// `m_lootState`, and the `GO_NOT_READY` ->
+/// `GO_READY` arming edge.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GoRuntime {
     pub spell_id: u32,
@@ -52,6 +69,11 @@ pub struct GoRuntime {
     /// `GO_JUST_DEACTIVATED` pending (slotted
     /// replacement; deleted on the next tick).
     pub just_deactivated: bool,
+    /// `m_lootState` (`GameObject.h:280`): chest
+    /// loot windows fill only at `GO_LOOT_READY` on
+    /// a spawned GO; releases move to `ACTIVATED`
+    /// (partial) or `JUST_DEACTIVATED` (full).
+    pub loot_state: u8,
 }
 
 /// `trap` union words (`GameObjectDefines.h:292`).
@@ -389,6 +411,7 @@ impl Map {
     /// Dynamic subset of `GameObject::Update` plus
     /// the trap trigger arm for all trap GOs. Runs
     /// once per map tick beside `update_respawns`.
+    #[allow(clippy::too_many_lines)] // one fork Update pass incl. chest loot arms
     pub(crate) fn update_gameobjects(&mut self) {
         let now = self.now_unix;
         let guids: Vec<ObjectGuid> = self.gameobjects.keys().copied().collect();
@@ -423,6 +446,39 @@ impl Map {
                 self.go_delete_dynamic(guid);
                 continue;
             }
+            // `FISHINGNODE` bobber-ready splash (fork
+            // `GameObject::Update` `GO_NOT_READY` arm,
+            // `GameObject.cpp:344-365`): once past
+            // `respawn - FISHING_BOBBER_READY_TIME` the
+            // owner sees `GO_STATE_ACTIVE` + splash
+            // sound + custom anim, and the node turns
+            // `GO_READY`.
+            if dynamic
+                && go_type == GO_TYPE_FISHINGNODE
+                && self
+                    .go_runtime
+                    .get(&guid)
+                    .is_none_or(|r| r.loot_state == GO_LOOT_NOT_READY)
+                && self.gameobjects.get(&guid).is_some_and(|go| {
+                    go.respawn_time > 0
+                        && now > go.respawn_time.saturating_sub(FISHING_BOBBER_READY_TIME)
+                })
+            {
+                let _ = self.object_set_field(
+                    guid,
+                    u32::from(offsets::GAMEOBJECT_STATE),
+                    GO_STATE_ACTIVE,
+                );
+                if let Some(go) = self.gameobjects.get_mut(&guid) {
+                    go.world
+                        .object
+                        .force_values_update_at(offsets::GAMEOBJECT_STATE);
+                }
+                self.send_bobber_splash(guid);
+                if let Some(r) = self.go_runtime.get_mut(&guid) {
+                    r.loot_state = GO_LOOT_READY;
+                }
+            }
             if dynamic {
                 // GO_READY timer expiry.
                 let (expired, spawned_default) =
@@ -438,11 +494,28 @@ impl Map {
                     }
                     match go_type {
                         GO_TYPE_FISHINGNODE => {
-                            // UNMODELED: owner
-                            // FinishSpell/not-hooked
-                            // packet (no fishing
-                            // runtime).
-                            self.go_delete_dynamic(guid);
+                            // Fork `GameObject::Update`
+                            // `GO_READY` expiry
+                            // (`GameObject.cpp:399-411`):
+                            // the owner hooks its
+                            // channel and sees
+                            // `SMSG_FISH_NOT_HOOKED`,
+                            // then the node retires
+                            // (`GO_JUST_DEACTIVATED`,
+                            // deleted on the next tick).
+                            let owner = self.go_owner_guid(guid);
+                            if !owner.is_empty() && self.players.contains_key(&owner) {
+                                self.finish_channeled_spell(owner);
+                                let packet = WorldPacket::with_body(
+                                    opcode_id::SMSG_FISH_NOT_HOOKED,
+                                    Vec::new(),
+                                );
+                                self.send_to_player(owner, packet);
+                            }
+                            if let Some(r) = self.go_runtime.get_mut(&guid) {
+                                r.loot_state = GO_LOOT_JUST_DEACTIVATED;
+                            }
+                            self.go_set_just_deactivated(guid);
                             continue;
                         }
                         _ if !spawned_default => {
@@ -457,17 +530,117 @@ impl Map {
                 // Static GO_READY timer expiry (fork
                 // `Map::Add` show arm): clear the
                 // timer so `is_spawned` flips back.
-                // Door/button/chest/spell-focus/goober
+                // Door/button/spell-focus/goober
                 // extra arms (reset/linked trap) ride
-                // their existing Rust use paths.
+                // their existing Rust use paths; chests
+                // clear through the loot-state arm below.
                 let due = self.gameobjects.get(&guid).is_some_and(|g| {
                     g.spawned_by_default
                         && g.respawn_time > 0
                         && g.respawn_time <= now
-                        && !matches!(go_type, 0 | 1 | 3 | 8 | 10)
+                        // Chests and pools consume their
+                        // respawn timers in their own
+                        // loot-state arms below.
+                        && !matches!(go_type, 0 | 1 | 3 | 8 | 10 | 25)
                 });
                 if due && let Some(g) = self.gameobjects.get_mut(&guid) {
                     g.respawn_time = 0;
+                }
+            }
+            if !dynamic && go_type == GO_TYPE_CHEST {
+                // Static chest loot-state pass (fork
+                // `GameObject::Update` `GO_NOT_READY`
+                // and `GO_JUST_DEACTIVATED` chest arms,
+                // map-local: no persist write, no
+                // despawn-anim/flag-reset packets).
+                let restock = info.data_u32(2);
+                let consumable = info.data_u32(3) != 0;
+                let (loot_state, cooldown_until) = self
+                    .go_runtime
+                    .get(&guid)
+                    .map_or((GO_LOOT_NOT_READY, 0), |r| (r.loot_state, r.cooldown_until));
+                if loot_state == GO_LOOT_NOT_READY {
+                    if restock != 0 && !consumable {
+                        // Restock chest: `READY` when the
+                        // restock cooldown lapses (fork
+                        // also forces a dynflags update).
+                        if cooldown_until <= now {
+                            if let Some(r) = self.go_runtime.get_mut(&guid) {
+                                r.cooldown_until = 0;
+                                r.loot_state = GO_LOOT_READY;
+                            }
+                            if let Some(go) = self.gameobjects.get_mut(&guid) {
+                                go.world.object.force_values_update_at(
+                                    mangos_protocol::update_field_table::offsets::GAMEOBJECT_DYN_FLAGS,
+                                );
+                            }
+                        }
+                    } else if let Some(r) = self.go_runtime.get_mut(&guid) {
+                        r.loot_state = GO_LOOT_READY;
+                    } else {
+                        self.go_runtime.insert(
+                            guid,
+                            GoRuntime {
+                                loot_state: GO_LOOT_READY,
+                                ..GoRuntime::default()
+                            },
+                        );
+                    }
+                }
+                let loot_state = self
+                    .go_runtime
+                    .get(&guid)
+                    .map_or(GO_LOOT_NOT_READY, |r| r.loot_state);
+                if loot_state == GO_LOOT_JUST_DEACTIVATED {
+                    // Fork clears the loot, re-arms
+                    // `READY`, and (re)starts the
+                    // respawn delay at deactivation; the
+                    // delay was armed by the release arm,
+                    // so expiry here just re-shows.
+                    let due = self.gameobjects.get(&guid).is_some_and(|g| {
+                        g.spawned_by_default && g.respawn_time > 0 && g.respawn_time <= now
+                    });
+                    if due {
+                        self.loots.remove(&guid);
+                        if let Some(r) = self.go_runtime.get_mut(&guid) {
+                            r.loot_state = GO_LOOT_READY;
+                        }
+                        if let Some(g) = self.gameobjects.get_mut(&guid) {
+                            g.respawn_time = 0;
+                        }
+                    }
+                }
+            }
+            // Static + dynamic pool arming (fork
+            // `GameObject::Update` `GO_NOT_READY` default
+            // arm, `GameObject.cpp:382-383`, and the
+            // `GO_JUST_DEACTIVATED` re-show,
+            // `GameObject.cpp:655-671`): first sight
+            // flips `READY`; depleted delay-lapped
+            // statics clear and re-show (map-local, no
+            // persist write).
+            if go_type == mangos_world_data::gameobject_template::TYPE_FISHINGHOLE {
+                let loot_state = self
+                    .go_runtime
+                    .get(&guid)
+                    .map_or(GO_LOOT_NOT_READY, |r| r.loot_state);
+                if loot_state == GO_LOOT_NOT_READY {
+                    if let Some(r) = self.go_runtime.get_mut(&guid) {
+                        r.loot_state = GO_LOOT_READY;
+                    }
+                } else if !dynamic && loot_state == GO_LOOT_JUST_DEACTIVATED {
+                    let due = self.gameobjects.get(&guid).is_some_and(|g| {
+                        g.spawned_by_default && g.respawn_time > 0 && g.respawn_time <= now
+                    });
+                    if due {
+                        self.loots.remove(&guid);
+                        if let Some(r) = self.go_runtime.get_mut(&guid) {
+                            r.loot_state = GO_LOOT_READY;
+                        }
+                        if let Some(g) = self.gameobjects.get_mut(&guid) {
+                            g.respawn_time = 0;
+                        }
+                    }
                 }
             }
             if go_type == GO_TYPE_TRAP {
@@ -1108,5 +1281,255 @@ pub fn go_max_charges(info: &GameObjectInfo) -> u32 {
         GO_TYPE_TRAP => info.data_u32(4),
         21 | 22 => info.data_u32(1), // guardpost / spellcaster charges
         _ => 0,
+    }
+}
+
+/// `FISHING_BOBBER_READY_TIME`
+/// (`GameObjectDefines.h:199`): splash 5 s before
+/// the bobber timer lapses.
+const FISHING_BOBBER_READY_TIME: u64 = 5;
+/// Splash sound (`GameObject.cpp:354`).
+const FISHING_SPLASH_SOUND: u32 = 3355;
+/// Hole search range (fork `GameObject.cpp:1629` +
+/// `:1673`: `20.0f + CONTACT_DISTANCE`, with
+/// `CONTACT_DISTANCE` = 0.5 from `ObjectDefines.h:23`).
+pub(crate) const FISHING_HOLE_SEARCH_RANGE: f32 = 20.5;
+
+impl Map {
+    /// Fishable water at a bobber point (fork
+    /// `EffectTransmitted` swimmable gate,
+    /// `SpellEffects.cpp:5601-5612`, over
+    /// `TerrainInfo::IsSwimmable` /
+    /// `GridMap::getLiquidStatus`): the grid liquid
+    /// surface, or `None` when the tile has no
+    /// liquid, the surface sits below the ground, or
+    /// the fork's `abs(depth_level) < 1` ground gate
+    /// trips (`depth_level` is the ground level there,
+    /// `GridMap.cpp:603-613`). No liquid-type
+    /// discrimination: the fork accepts every
+    /// `MAP_ALL_LIQUIDS` type, and so does this.
+    /// LOS against the surface runs at the call site
+    /// (it needs the caster height too).
+    fn fishing_water_level(&mut self, x: f32, y: f32) -> Option<f32> {
+        use mangos_assets::gridmap::INVALID_HEIGHT_VALUE;
+        let level = self.heights.grid(x, y)?.liquid_level(x, y);
+        if level == INVALID_HEIGHT_VALUE {
+            return None;
+        }
+        let ground = self.ground_z(x, y, level);
+        if level < ground || ground.abs() < 1.0 {
+            return None;
+        }
+        Some(level)
+    }
+
+    /// `Spell::EffectTransmitted`
+    /// (`SpellEffects.cpp:5538-5678`) fishing subset:
+    /// the `FISHINGNODE` bobber summon. Returns false
+    /// exactly when the fork calls `finish()` after
+    /// `SendCastResult(NOT_FISHABLE)` (dry land or no
+    /// surface LOS). Other GO types stay no-ops (the
+    /// slice covers fishing only; ritual extras are
+    /// unmodeled with the ritual use path).
+    #[allow(clippy::too_many_lines)] // one fork EffectTransmitted port
+    pub(crate) fn effect_transmitted_fishing(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &mangos_spells::entry::SpellEntry,
+        eff_index: usize,
+        client_dest: Option<Position>,
+    ) -> bool {
+        use mangos_spells::defines::cast_result;
+        use mangos_world_data::gameobject_template::TYPE_FISHINGNODE;
+        let Some(caster_pos) = self.unit_position(caster) else {
+            return true;
+        };
+        let eff = spell.effects[eff_index];
+        #[allow(clippy::cast_sign_loss)]
+        let entry = eff.misc_value.max(0) as u32;
+        if entry == 0 {
+            return true;
+        }
+        let Some(info) = self.stores.gameobject_templates.get(entry).cloned() else {
+            return true;
+        };
+        if info.go_type != TYPE_FISHINGNODE {
+            return true;
+        }
+        // Placement (fork `:5555-5580`): client dest,
+        // else the radius point, else the random
+        // range/angle point; both computed points are
+        // LOS-clamped (`GetLosHitPosition`).
+        let (fx, fy, _fz_in) = if let Some(dest) = client_dest {
+            (dest.x, dest.y, dest.z)
+        } else if eff.radius_index != 0 && spell.speed == 0.0 {
+            let dis = self.effect_radius(spell, eff_index);
+            let (fx, fy) = (
+                caster_pos.x + dis * caster_pos.o.cos(),
+                caster_pos.y + dis * caster_pos.o.sin(),
+            );
+            let fz = caster_pos.z;
+            if let Some(hit) = self.get_los_hit_position(
+                caster_pos.x,
+                caster_pos.y,
+                caster_pos.z + 0.5,
+                fx,
+                fy,
+                fz,
+                -1.5,
+            ) {
+                hit
+            } else {
+                (fx, fy, fz)
+            }
+        } else {
+            let (rmin, rmax) = self
+                .stores
+                .spells
+                .tables
+                .ranges
+                .get(&spell.range_index)
+                .map_or((0.0, 0.0), |r| (r.min, r.max));
+            let dis = self.spell_rng().frand01() * (rmax - rmin) + rmin;
+            let bounding = self.bounding_radius_of(caster);
+            let max_angle = if rmax + bounding > 0.0 {
+                (rmax - rmin) / (rmax + bounding)
+            } else {
+                0.0
+            };
+            let angle_offset = max_angle * (self.spell_rng().frand01() - 0.5);
+            let (fx, fy) = (
+                caster_pos.x + dis * (caster_pos.o + angle_offset).cos(),
+                caster_pos.y + dis * (caster_pos.o + angle_offset).sin(),
+            );
+            let fz = caster_pos.z;
+            if let Some(hit) = self.get_los_hit_position(
+                caster_pos.x,
+                caster_pos.y,
+                caster_pos.z + 2.0,
+                fx,
+                fy,
+                fz,
+                -1.5,
+            ) {
+                hit
+            } else {
+                (fx, fy, fz)
+            }
+        };
+        // Swimmable gate (fork `:5601-5612`): fail when
+        // dry or when the caster has no surface LOS.
+        // `fz` rides the water surface on success
+        // (fork `:5611-5613`).
+        let Some(level) = self.fishing_water_level(fx, fy) else {
+            self.send_cast_result(caster, spell.id, cast_result::FAILED_NOT_FISHABLE);
+            return false;
+        };
+        if !self.is_in_line_of_sight(
+            caster_pos.x,
+            caster_pos.y,
+            caster_pos.z + 2.0,
+            fx,
+            fy,
+            level,
+            false,
+        ) {
+            self.send_cast_result(caster, spell.id, cast_result::FAILED_NOT_FISHABLE);
+            return false;
+        }
+        // The pre-surface height only feeds the LOS
+        // clamps above; the node rides the surface.
+        let fz = level;
+        // Summon (fork `:5615-5663`): dynamic GO at
+        // `GO_STATE_READY`, channel object on the
+        // caster, owner registration, `respawn =
+        // duration - lastSec + 5s`, owner/level/spell
+        // stamps, then map add. The owner-group stamp
+        // has no Rust surface; the summon sound has no
+        // fork packet here (the splash sound lands on
+        // the ready tick).
+        let pos = Position::new(fx, fy, fz, caster_pos.o);
+        let Some(bobber) = self.create_dynamic_gameobject(entry, pos, [0.0; 4]) else {
+            return true;
+        };
+        let duration_ms = spell.calculate_duration_ms(&self.stores.spells.tables);
+        let last_sec = [3, 7, 13, 17][self.spell_rng().irand(0, 3) as usize];
+        #[allow(clippy::cast_sign_loss)]
+        let secs = if duration_ms - last_sec * 1000 + 5_000 > 0 {
+            (duration_ms - last_sec * 1000 + 5_000) / 1000
+        } else {
+            0
+        };
+        let now = self.now_unix;
+        if let Some(go) = self.gameobjects.get_mut(&bobber) {
+            go.set_respawn_time(secs as u32, now);
+        }
+        if let Some(u) = self.unit_base_mut(caster) {
+            u.values().set_u64(
+                mangos_protocol::update_field_table::offsets::UNIT_FIELD_CHANNEL_OBJECT,
+                bobber.raw(),
+            );
+        }
+        self.unit_add_gameobject(caster, bobber);
+        self.go_set_spell_id(bobber, spell.id);
+        let level = self.unit_level(caster);
+        let _ = self.object_set_field(bobber, u32::from(offsets::GAMEOBJECT_LEVEL), level);
+        self.go_summon_linked_trap(bobber);
+        if caster.is_creature_or_pet() {
+            self.creature_script_just_summoned(caster, bobber);
+        }
+        true
+    }
+
+    /// `GameObject::LookupFishingHoleAround` (fork
+    /// `GameObject.cpp:1303-1312` over
+    /// `NearestGameObjectFishingHoleCheck`,
+    /// `GridNotifiers.h:702-727`): nearest spawned
+    /// `FISHINGHOLE` within range of the bobber and
+    /// within its own radius (3D, like
+    /// `IsWithinDistInMap`).
+    pub(crate) fn lookup_fishing_hole_around(
+        &self,
+        bobber: ObjectGuid,
+        range: f32,
+    ) -> Option<ObjectGuid> {
+        use mangos_world_data::gameobject_template::TYPE_FISHINGHOLE;
+        let bobber_pos = self.gameobjects.get(&bobber).map(|g| g.world.position())?;
+        let mut best: Option<(ObjectGuid, f32)> = None;
+        for (guid, go) in &self.gameobjects {
+            if go.info.go_type != TYPE_FISHINGHOLE || !go.is_spawned() {
+                continue;
+            }
+            let p = go.world.position();
+            let dist = ((p.x - bobber_pos.x).powi(2)
+                + (p.y - bobber_pos.y).powi(2)
+                + (p.z - bobber_pos.z).powi(2))
+            .sqrt();
+            #[allow(clippy::cast_precision_loss)] // DB radius words are small
+            let radius = go.info.data_u32(0) as f32;
+            if dist <= range && dist <= radius && best.is_none_or(|(_, bd)| dist < bd) {
+                best = Some((*guid, dist));
+            }
+        }
+        best.map(|(guid, _)| guid)
+    }
+
+    /// The `FISHINGNODE` splash broadcast (fork
+    /// `PlayDistanceSound` + `SendGameObjectCustomAnim`
+    /// to the set): packed-guid packets, matching the
+    /// `SMSG_PLAY_OBJECT_SOUND` / custom-anim wire
+    /// shapes.
+    fn send_bobber_splash(&mut self, bobber: ObjectGuid) {
+        let mut sound = PacketWriter::new();
+        sound.write_u32_le(FISHING_SPLASH_SOUND);
+        sound.write_bytes(&Self::packed_guid_bytes(bobber));
+        let packet = WorldPacket::with_body(opcode_id::SMSG_PLAY_OBJECT_SOUND, sound.into_vec());
+        self.broadcast_movement(bobber, &packet);
+        let mut anim = PacketWriter::new();
+        anim.write_bytes(&Self::packed_guid_bytes(bobber));
+        anim.write_u32_le(0);
+        let packet =
+            WorldPacket::with_body(opcode_id::SMSG_GAMEOBJECT_CUSTOM_ANIM, anim.into_vec());
+        self.broadcast_movement(bobber, &packet);
     }
 }

@@ -297,6 +297,10 @@ impl World {
                 quest: self.config.rate_xp_quest,
                 explore: self.config.rate_xp_explore,
             },
+            reputation_rates: mangos_map::map::ReputationRates {
+                gain: self.config.rate_reputation_gain,
+                lowlevel_kill: self.config.rate_reputation_lowlevel_kill,
+            },
             activate_weather: self.config.activate_weather,
             change_weather_interval_ms: self.config.change_weather_interval_ms,
             proc_delay_ms: self.config.spell_proc_delay_ms,

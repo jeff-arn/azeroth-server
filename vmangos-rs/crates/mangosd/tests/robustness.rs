@@ -246,6 +246,10 @@ impl QuestRewardStore for FakeQuestRewardStore {
     fn set_item_flags(&self, _item_guid: u32, _flags: u32) -> Result<(), mangos_db::DbError> {
         Ok(())
     }
+
+    fn gift_unwrap(&self, _item_guid: u32) -> Result<Option<(u32, u32)>, mangos_db::DbError> {
+        Ok(None)
+    }
 }
 
 struct FakePetitionStore;

@@ -33,10 +33,11 @@ pub const VISIBILITY_DISTANCE_LARGE: f32 = 200.0;
 /// (`ObjectDefines.h:29`).
 pub const MAX_VISIBILITY_DISTANCE: f32 = 533.333_3;
 
-/// `enum GOState` (`GameObject.h`): READY 0, ACTIVE 1,
-/// `ACTIVE_ALTERNATIVE` 2 (values ride the spawn row).
-pub const GO_STATE_READY: u32 = 0;
-pub const GO_STATE_ACTIVE: u32 = 1;
+/// `enum GOState` (`GameObjectDefines.h:177-182`):
+/// ACTIVE 0, READY 1, `ACTIVE_ALTERNATIVE` 2 (values
+/// ride the spawn row and the update field).
+pub const GO_STATE_READY: u32 = 1;
+pub const GO_STATE_ACTIVE: u32 = 0;
 
 /// Why a spawn was refused.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -9,23 +9,25 @@ use mangos_db::DbError;
 use mangos_db::character_load::ReputationRow;
 use mysql::prelude::Queryable;
 
+use crate::load_report::LoadReport;
+
 /// Client build whose `faction` rows are selected
 /// (`SUPPORTED_CLIENT_BUILD`).
 const SUPPORTED_CLIENT_BUILD: u32 = 5875;
 
 /// `FACTION_FLAG_*` (`ReputationMgr.h`).
-const FACTION_FLAG_VISIBLE: u32 = 0x01;
-const FACTION_FLAG_AT_WAR: u32 = 0x02;
-const FACTION_FLAG_HIDDEN: u32 = 0x04;
-const FACTION_FLAG_INVISIBLE_FORCED: u32 = 0x08;
-const FACTION_FLAG_PEACE_FORCED: u32 = 0x10;
-const FACTION_FLAG_INACTIVE: u32 = 0x20;
+pub const FACTION_FLAG_VISIBLE: u32 = 0x01;
+pub const FACTION_FLAG_AT_WAR: u32 = 0x02;
+pub const FACTION_FLAG_HIDDEN: u32 = 0x04;
+pub const FACTION_FLAG_INVISIBLE_FORCED: u32 = 0x08;
+pub const FACTION_FLAG_PEACE_FORCED: u32 = 0x10;
+pub const FACTION_FLAG_INACTIVE: u32 = 0x20;
 
 /// Stored `character_reputation.flags` bits
 /// (`ReputationMgr::LoadFromDB`).
-const FACTION_DB_VISIBLE: i32 = 0x01;
-const FACTION_DB_ATWAR: i32 = 0x02;
-const FACTION_DB_INACTIVE: i32 = 0x04;
+pub const FACTION_DB_VISIBLE: i32 = 0x01;
+pub const FACTION_DB_ATWAR: i32 = 0x02;
+pub const FACTION_DB_INACTIVE: i32 = 0x04;
 
 /// `SMSG_INITIALIZE_FACTIONS` always carries 64 slots.
 pub const INITIAL_FACTION_SLOTS: usize = 64;
@@ -39,6 +41,11 @@ pub struct FactionEntry {
     pub class_masks: [u32; 4],
     pub base_values: [i32; 4],
     pub flags: [u32; 4],
+    /// `team` (`DBCStructure.h:318`): the team/parent
+    /// faction id the reputation team-award half
+    /// (`RewardReputation`) resolves through
+    /// (`GetFactionEntry(pFactionEntry->team)`).
+    pub team: u32,
 }
 
 impl FactionEntry {
@@ -204,41 +211,21 @@ impl FactionStore {
     ) -> [(u8, i32); INITIAL_FACTION_SLOTS] {
         let race_mask = race_mask(race);
         let class_mask = class_mask(class);
+        let rows_by_faction: HashMap<u32, &ReputationRow> =
+            rows.iter().map(|row| (row.faction, row)).collect();
         let mut states: HashMap<u32, (u32, i32)> = HashMap::new();
 
         for entry in self.by_id.values() {
             if entry.reputation_index >= 0 {
-                states.insert(entry.id, (default_flags(entry, race_mask, class_mask), 0));
-            }
-        }
-
-        for row in rows {
-            let Some(entry) = self.by_id.get(&row.faction).copied() else {
-                continue;
-            };
-            let Some(state) = states.get_mut(&entry.id) else {
-                continue;
-            };
-            state.1 = row.standing;
-
-            if row.flags & FACTION_DB_VISIBLE != 0 && state.0 & FACTION_FLAG_INVISIBLE_FORCED == 0 {
-                state.0 |= FACTION_FLAG_VISIBLE;
-                state.0 &= !FACTION_FLAG_HIDDEN;
-            }
-            if row.flags & FACTION_DB_INACTIVE != 0 {
-                state.0 |= FACTION_FLAG_INACTIVE;
-            }
-            if row.flags & FACTION_DB_ATWAR != 0 {
-                set_at_war(state, true);
-            } else if row.flags & FACTION_DB_VISIBLE != 0 {
-                set_at_war(state, false);
-            }
-
-            let base = entry
-                .index_fit_to(race_mask, class_mask)
-                .map_or(0, |index| entry.base_values[index]);
-            if base.saturating_add(state.1) < -3000 {
-                set_at_war(state, true);
+                states.insert(
+                    entry.id,
+                    runtime_state(
+                        entry,
+                        race_mask,
+                        class_mask,
+                        rows_by_faction.get(&entry.id).copied(),
+                    ),
+                );
             }
         }
 
@@ -257,7 +244,49 @@ impl FactionStore {
     }
 }
 
-fn race_mask(race: u8) -> u32 {
+/// One faction's `(flags, standing)` runtime state
+/// (`ReputationMgr::Initialize` defaults overlaid with
+/// one `LoadFromDB` row): shared by the login projection
+/// (`FactionStore::initial_slots`) and the kill path, so
+/// both compute the same flags from the same inputs.
+#[must_use]
+pub fn runtime_state(
+    entry: &FactionEntry,
+    race_mask: u32,
+    class_mask: u32,
+    row: Option<&ReputationRow>,
+) -> (u32, i32) {
+    let mut flags = default_flags(entry, race_mask, class_mask);
+    let mut standing = 0;
+    let Some(row) = row else {
+        return (flags, standing);
+    };
+    standing = row.standing;
+
+    if row.flags & FACTION_DB_VISIBLE != 0 && flags & FACTION_FLAG_INVISIBLE_FORCED == 0 {
+        flags |= FACTION_FLAG_VISIBLE;
+        flags &= !FACTION_FLAG_HIDDEN;
+    }
+    if row.flags & FACTION_DB_INACTIVE != 0 {
+        flags |= FACTION_FLAG_INACTIVE;
+    }
+    if row.flags & FACTION_DB_ATWAR != 0 {
+        set_at_war(&mut flags, true);
+    } else if row.flags & FACTION_DB_VISIBLE != 0 {
+        set_at_war(&mut flags, false);
+    }
+
+    let base = entry
+        .index_fit_to(race_mask, class_mask)
+        .map_or(0, |index| entry.base_values[index]);
+    if base.saturating_add(standing) < -3000 {
+        set_at_war(&mut flags, true);
+    }
+    (flags, standing)
+}
+
+#[must_use]
+pub fn race_mask(race: u8) -> u32 {
     if race == 0 {
         0
     } else {
@@ -265,7 +294,8 @@ fn race_mask(race: u8) -> u32 {
     }
 }
 
-fn class_mask(class: u8) -> u32 {
+#[must_use]
+pub fn class_mask(class: u8) -> u32 {
     if class == 0 {
         0
     } else {
@@ -279,14 +309,14 @@ fn default_flags(entry: &FactionEntry, race_mask: u32, class_mask: u32) -> u32 {
         .map_or(0, |index| entry.flags[index])
 }
 
-fn set_at_war(state: &mut (u32, i32), on: bool) {
-    if state.0 & FACTION_FLAG_PEACE_FORCED != 0 {
+fn set_at_war(flags: &mut u32, on: bool) {
+    if *flags & FACTION_FLAG_PEACE_FORCED != 0 {
         return;
     }
     if on {
-        state.0 |= FACTION_FLAG_AT_WAR;
+        *flags |= FACTION_FLAG_AT_WAR;
     } else {
-        state.0 &= !FACTION_FLAG_AT_WAR;
+        *flags &= !FACTION_FLAG_AT_WAR;
     }
 }
 
@@ -302,7 +332,8 @@ pub fn load_factions(conn: &mut mysql::Conn) -> Result<FactionStore, DbError> {
          `base_rep_race_mask4`, `base_rep_class_mask1`, `base_rep_class_mask2`, \
          `base_rep_class_mask3`, `base_rep_class_mask4`, `base_rep_value1`, \
          `base_rep_value2`, `base_rep_value3`, `base_rep_value4`, \
-         `reputation_flags1`, `reputation_flags2`, `reputation_flags3`, `reputation_flags4` \
+         `reputation_flags1`, `reputation_flags2`, `reputation_flags3`, `reputation_flags4`, \
+         `team` \
          FROM `faction` t1 \
          WHERE `build` = (SELECT max(`build`) FROM `faction` t2 \
                           WHERE t1.`id` = t2.`id` AND `build` <= ?)",
@@ -317,6 +348,7 @@ pub fn load_factions(conn: &mut mysql::Conn) -> Result<FactionStore, DbError> {
             class_masks: [f.u32(6), f.u32(7), f.u32(8), f.u32(9)],
             base_values: [f.i32(10), f.i32(11), f.i32(12), f.i32(13)],
             flags: [f.u32(14), f.u32(15), f.u32(16), f.u32(17)],
+            team: f.u32(18),
         }
     }));
     // The `faction_template` half of `LoadFactions`
@@ -341,6 +373,358 @@ pub fn load_factions(conn: &mut mysql::Conn) -> Result<FactionStore, DbError> {
     Ok(store)
 }
 
+/// `MAX_SPILLOVER_FACTIONS` (`SharedDefines.h:130`).
+pub const MAX_SPILLOVER_FACTIONS: usize = 4;
+
+/// `ReputationOnKillEntry` (`ObjectMgr.h:290-301`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReputationOnKillEntry {
+    pub repfaction1: u32,
+    pub repfaction2: u32,
+    pub is_teamaward1: bool,
+    pub reputation_max_cap1: u32,
+    pub repvalue1: i32,
+    pub is_teamaward2: bool,
+    pub reputation_max_cap2: u32,
+    pub repvalue2: i32,
+    pub team_dependent: bool,
+}
+
+/// `RepRewardRate` (`ObjectMgr.h:283-288`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RepRewardRate {
+    pub quest_rate: f32,
+    pub creature_rate: f32,
+    pub spell_rate: f32,
+}
+
+/// `RepSpilloverTemplate` (`ObjectMgr.h:303-308`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RepSpilloverTemplate {
+    pub faction: [u32; MAX_SPILLOVER_FACTIONS],
+    pub faction_rate: [f32; MAX_SPILLOVER_FACTIONS],
+    pub faction_rank: [u32; MAX_SPILLOVER_FACTIONS],
+}
+
+/// `m_RepOnKillMap` / `m_RepRewardRateMap` /
+/// `m_RepSpilloverTemplateMap` (`ObjectMgr.h:1467-1469`).
+#[derive(Clone, Debug, Default)]
+pub struct ReputationKillStores {
+    on_kill: HashMap<u32, ReputationOnKillEntry>,
+    reward_rates: HashMap<u32, RepRewardRate>,
+    spillover: HashMap<u32, RepSpilloverTemplate>,
+}
+
+impl ReputationKillStores {
+    /// `GetReputationOnKillEntry`: `None` on miss, exactly
+    /// like the fork's null return (the kill then grants
+    /// no reputation).
+    #[must_use]
+    pub fn get_on_kill(&self, creature_entry: u32) -> Option<ReputationOnKillEntry> {
+        self.on_kill.get(&creature_entry).copied()
+    }
+
+    /// `GetRepRewardRate`: `None` on miss (no multiplier,
+    /// fork keeps `percent` unchanged).
+    #[must_use]
+    pub fn get_reward_rate(&self, faction_id: u32) -> Option<RepRewardRate> {
+        self.reward_rates.get(&faction_id).copied()
+    }
+
+    /// `GetRepSpilloverTemplate`: `None` on miss (no
+    /// spillover arms).
+    #[must_use]
+    pub fn get_spillover(&self, faction_id: u32) -> Option<RepSpilloverTemplate> {
+        self.spillover.get(&faction_id).copied()
+    }
+
+    #[must_use]
+    pub fn on_kill_len(&self) -> usize {
+        self.on_kill.len()
+    }
+
+    #[must_use]
+    pub fn reward_rate_len(&self) -> usize {
+        self.reward_rates.len()
+    }
+
+    #[must_use]
+    pub fn spillover_len(&self) -> usize {
+        self.spillover.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.on_kill.is_empty() && self.reward_rates.is_empty() && self.spillover.is_empty()
+    }
+
+    /// Test seam mirroring `FactionStore::from_entries`.
+    #[must_use]
+    pub fn from_parts_for_tests(
+        on_kill: Vec<(u32, ReputationOnKillEntry)>,
+        reward_rates: Vec<(u32, RepRewardRate)>,
+        spillover: Vec<(u32, RepSpilloverTemplate)>,
+    ) -> Self {
+        Self {
+            on_kill: on_kill.into_iter().collect(),
+            reward_rates: reward_rates.into_iter().collect(),
+            spillover: spillover.into_iter().collect(),
+        }
+    }
+}
+
+/// `MAX_REPUTATION_RANK` (`SharedDefines.h:128`).
+pub const MAX_REPUTATION_RANK: u32 = 8;
+
+/// All three reputation-gain stores in fork boot order
+/// (`World.cpp:1486-1492`: reward-rate, on-kill,
+/// spillover). Empty tables yield empty stores and boot
+/// continues, exactly like the fork's log-and-return.
+///
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+pub fn load_reputation_kill_stores(
+    conn: &mut mysql::Conn,
+    wow_patch: u32,
+    creature_templates: &crate::creature_template::CreatureTemplates,
+    factions: &FactionStore,
+    report: &mut LoadReport,
+) -> Result<ReputationKillStores, DbError> {
+    // `ObjectMgr::LoadAllIdentifiers`: every
+    // `creature_template` entry, including rows above the
+    // active patch (those skip silently below).
+    let id_rows: Vec<mysql::Row> =
+        conn.exec("SELECT DISTINCT `entry` FROM `creature_template`", ())?;
+    let creature_entries: std::collections::HashSet<u32> = id_rows
+        .into_iter()
+        .map(|row| mangos_db::row::Fields::from_row(row).u32(0))
+        .collect();
+    let reward_rates = load_rep_reward_rates(conn, factions, report)?;
+    let on_kill = load_reputation_on_kill(
+        conn,
+        wow_patch,
+        &creature_entries,
+        creature_templates,
+        factions,
+        report,
+    )?;
+    let spillover = load_rep_spillover_templates(conn, factions, report)?;
+    Ok(ReputationKillStores {
+        on_kill,
+        reward_rates,
+        spillover,
+    })
+}
+
+/// `ObjectMgr::LoadReputationRewardRate`
+/// (`ObjectMgr.cpp:8440-8505`): no patch gate; rows with
+/// an unknown faction or any negative rate are skipped.
+///
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+pub fn load_rep_reward_rates(
+    conn: &mut mysql::Conn,
+    factions: &FactionStore,
+    report: &mut LoadReport,
+) -> Result<HashMap<u32, RepRewardRate>, DbError> {
+    let rows: Vec<mysql::Row> = conn.exec(
+        "SELECT `faction`, `quest_rate`, `creature_rate`, `spell_rate` \
+         FROM `reputation_reward_rate`",
+        (),
+    )?;
+    let mut map = HashMap::new();
+    for row in rows {
+        let f = mangos_db::row::Fields::from_row(row);
+        let faction_id = f.u32(0);
+        let rate = RepRewardRate {
+            quest_rate: f.f32(1),
+            creature_rate: f.f32(2),
+            spell_rate: f.f32(3),
+        };
+        if factions.get(faction_id).is_none() {
+            report.error(format!(
+                "Faction (faction.dbc) {faction_id} does not exist but is used in \
+                 `reputation_reward_rate`, skipping"
+            ));
+            continue;
+        }
+        if rate.quest_rate < 0.0 || rate.creature_rate < 0.0 || rate.spell_rate < 0.0 {
+            report.error(format!(
+                "Table reputation_reward_rate has invalid rate for faction {faction_id}, skipping"
+            ));
+            continue;
+        }
+        map.insert(faction_id, rate);
+    }
+    Ok(map)
+}
+
+/// `ObjectMgr::LoadReputationOnKill`
+/// (`ObjectMgr.cpp:8507-8583`): patch-gated per creature;
+/// rows with an unknown creature or faction are skipped
+/// (silently when the creature id exists at another
+/// patch, mirroring `IsExistingCreatureId`).
+///
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+#[allow(clippy::implicit_hasher)] // callers use default sets like the other loaders
+pub fn load_reputation_on_kill(
+    conn: &mut mysql::Conn,
+    wow_patch: u32,
+    creature_entries: &std::collections::HashSet<u32>,
+    creature_templates: &crate::creature_template::CreatureTemplates,
+    factions: &FactionStore,
+    report: &mut LoadReport,
+) -> Result<HashMap<u32, ReputationOnKillEntry>, DbError> {
+    let rows: Vec<mysql::Row> = conn.exec(
+        "SELECT `creature_id`, `RewOnKillRepFaction1`, `RewOnKillRepFaction2`, \
+         `IsTeamAward1`, `MaxStanding1`, `RewOnKillRepValue1`, \
+         `IsTeamAward2`, `MaxStanding2`, `RewOnKillRepValue2`, `TeamDependent` \
+         FROM `creature_onkill_reputation` t1 \
+         WHERE `patch` = (SELECT max(`patch`) FROM `creature_onkill_reputation` t2 \
+                          WHERE t1.`creature_id` = t2.`creature_id` AND `patch` <= ?)",
+        (wow_patch,),
+    )?;
+    let mut map = HashMap::new();
+    for row in rows {
+        let f = mangos_db::row::Fields::from_row(row);
+        let creature_id = f.u32(0);
+        let entry = ReputationOnKillEntry {
+            repfaction1: f.u32(1),
+            repfaction2: f.u32(2),
+            is_teamaward1: f.u8(3) != 0,
+            reputation_max_cap1: f.u32(4),
+            repvalue1: f.i32(5),
+            is_teamaward2: f.u8(6) != 0,
+            reputation_max_cap2: f.u32(7),
+            repvalue2: f.i32(8),
+            team_dependent: f.u8(9) != 0,
+        };
+        if creature_templates.get(creature_id).is_none() {
+            if !creature_entries.contains(&creature_id) {
+                report.error(format!(
+                    "Table `creature_onkill_reputation` has data for nonexistent creature entry \
+                     ({creature_id}), skipped"
+                ));
+            }
+            continue;
+        }
+        if entry.repfaction1 != 0 && factions.get(entry.repfaction1).is_none() {
+            report.error(format!(
+                "Faction (faction.dbc) {} does not exist but is used in \
+                 `creature_onkill_reputation`, skipping",
+                entry.repfaction1
+            ));
+            continue;
+        }
+        if entry.repfaction2 != 0 && factions.get(entry.repfaction2).is_none() {
+            report.error(format!(
+                "Faction (faction.dbc) {} does not exist but is used in \
+                 `creature_onkill_reputation`, skipping",
+                entry.repfaction2
+            ));
+            continue;
+        }
+        map.insert(creature_id, entry);
+    }
+    Ok(map)
+}
+
+/// `ObjectMgr::LoadReputationSpilloverTemplate`
+/// (`ObjectMgr.cpp:8585-8693`): per-slot validation uses
+/// an inner continue (the row still loads); the redundant
+/// whole-row faction checks run after.
+///
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+pub fn load_rep_spillover_templates(
+    conn: &mut mysql::Conn,
+    factions: &FactionStore,
+    report: &mut LoadReport,
+) -> Result<HashMap<u32, RepSpilloverTemplate>, DbError> {
+    let rows: Vec<mysql::Row> = conn.exec(
+        "SELECT `faction`, `faction1`, `rate_1`, `rank_1`, \
+         `faction2`, `rate_2`, `rank_2`, `faction3`, `rate_3`, `rank_3`, \
+         `faction4`, `rate_4`, `rank_4` \
+         FROM `reputation_spillover_template`",
+        (),
+    )?;
+    let mut map = HashMap::new();
+    for row in rows {
+        let f = mangos_db::row::Fields::from_row(row);
+        let faction_id = f.u32(0);
+        if factions.get(faction_id).is_none() {
+            report.error(format!(
+                "Faction (faction.dbc) {faction_id} does not exist but is used in \
+                 `reputation_spillover_template`, skipping"
+            ));
+            continue;
+        }
+        let mut template = RepSpilloverTemplate {
+            faction: [0; MAX_SPILLOVER_FACTIONS],
+            faction_rate: [0.0; MAX_SPILLOVER_FACTIONS],
+            faction_rank: [0; MAX_SPILLOVER_FACTIONS],
+        };
+        for slot in 0..MAX_SPILLOVER_FACTIONS {
+            let base = 1 + slot * 3;
+            template.faction[slot] = f.u32(base);
+            template.faction_rate[slot] = f.f32(base + 1);
+            template.faction_rank[slot] = f.u32(base + 2);
+            if template.faction[slot] != 0 {
+                let Some(spill) = factions.get(template.faction[slot]) else {
+                    report.error(format!(
+                        "Spillover faction (faction.dbc) {} does not exist but is used in \
+                         `reputation_spillover_template` for faction {faction_id}, skipping",
+                        template.faction[slot]
+                    ));
+                    template.faction[slot] = 0;
+                    continue;
+                };
+                if spill.reputation_index < 0 {
+                    report.error(format!(
+                        "Spillover faction (faction.dbc) {} for faction {faction_id} in \
+                         `reputation_spillover_template` cannot be listed for client, skipping",
+                        template.faction[slot]
+                    ));
+                    template.faction[slot] = 0;
+                    continue;
+                }
+                if template.faction_rank[slot] >= MAX_REPUTATION_RANK {
+                    report.error(format!(
+                        "Rank {} used in `reputation_spillover_template` for spillover faction {} \
+                         is not valid, skipping",
+                        template.faction_rank[slot], template.faction[slot]
+                    ));
+                    template.faction[slot] = 0;
+                }
+            }
+        }
+        // Redundant whole-row checks (`ObjectMgr.cpp:8660-83`):
+        // every surviving slot re-resolves by construction,
+        // so this only re-reports a genuinely missing faction.
+        let mut skip_row = false;
+        for slot in 0..MAX_SPILLOVER_FACTIONS {
+            if template.faction[slot] != 0 && factions.get(template.faction[slot]).is_none() {
+                report.error(format!(
+                    "Faction (faction.dbc) {} does not exist but is used in \
+                     `reputation_spillover_template`, skipping",
+                    template.faction[slot]
+                ));
+                skip_row = true;
+            }
+        }
+        if skip_row {
+            continue;
+        }
+        map.insert(faction_id, template);
+    }
+    Ok(map)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,6 +737,7 @@ mod tests {
             class_masks: [0, 0, 0, 0],
             base_values: [base, 0, 0, 0],
             flags: [flags, 0, 0, 0],
+            team: 0,
         }
     }
 

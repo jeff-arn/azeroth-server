@@ -8,6 +8,7 @@ description = "Map/grid/visibility/update replication for the Rust mangosd (Phas
 
 [dependencies]
 mangos-assets = { path = "../mangos-assets" }
+mangos-db = { path = "../mangos-db" }
 mangos-detour = { path = "../mangos-detour" }
 mangos-entities = { path = "../mangos-entities" }
 mangos-guid = { path = "../mangos-guid" }
@@ -21,7 +22,6 @@ rand.workspace = true
 
 [dev-dependencies]
 mysql.workspace = true
-mangos-db = { path = "../mangos-db" }
 mangos-dbc = { path = "../mangos-dbc" }
 
 [lints]

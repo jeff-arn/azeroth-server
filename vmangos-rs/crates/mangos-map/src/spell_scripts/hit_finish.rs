@@ -99,12 +99,13 @@ impl Map {
         caster: ObjectGuid,
         spell: &SpellEntry,
         victim: ObjectGuid,
+        cast_item: Option<CastItemCtx>,
     ) {
         if spell.script_name == "spell_paladin_bubble" {
             self.paladin_bubble_on_after_hit(caster, spell, victim);
         }
         if spell.script_name == "spell_first_aid" {
-            self.first_aid_on_after_hit(caster, victim, spell);
+            self.first_aid_on_after_hit(caster, victim, spell, cast_item);
         }
     }
 
@@ -401,11 +402,11 @@ impl Map {
         caster: ObjectGuid,
         victim: ObjectGuid,
         spell: &SpellEntry,
+        cast_item: Option<CastItemCtx>,
     ) {
         let _ = spell;
-        // Fork casts 11196 Recently Bandaged on the unit target, triggered with
-        // `m_CastItem`; the effect seam carries no cast-item context here.
-        // UNMODELED: `m_CastItem` forwarding (mapped to `None`).
+        // Fork casts 11196 Recently Bandaged on the unit target,
+        // triggered with `m_CastItem`.
         self.cast_spell(
             caster,
             11196, // SPELL_RECENTLY_BANDAGED
@@ -413,6 +414,7 @@ impl Map {
             CastOptions {
                 triggered: true,
                 skip_known: true,
+                cast_item,
                 ..CastOptions::default()
             },
         );

@@ -115,10 +115,47 @@ impl Map {
                 }
             }
         }
+        // Finisher combo gate (`Spell::CheckCast`,
+        // `Spell.cpp:7108`): a player finisher with an
+        // explicitly selected unit target requires the
+        // combo target to be that unit. Warriors read
+        // `FAILED_BAD_TARGETS` (Overpower marking rides
+        // the same path client-side).
+        if caster.is_player() && spell.needs_combo_points() {
+            let explicit = matches!(
+                spell.effects[0].implicit_target_a,
+                tgt::UNIT_ENEMY
+                    | tgt::UNIT_FRIEND
+                    | tgt::UNIT
+                    | tgt::UNIT_PARTY
+                    | tgt::UNIT_FRIEND_CHAIN_HEAL
+                    | tgt::LOCATION_CASTER_TARGET_POSITION
+                    | tgt::UNIT_RAID
+                    | tgt::UNIT_RAID_AND_CLASS
+            );
+            if explicit {
+                let unit_target = match target {
+                    CastTarget::Unit(g) => Some(g),
+                    CastTarget::SelfCast | CastTarget::Dest(_) => None,
+                };
+                if unit_target != Some(self.combo_target(caster)) {
+                    let class =
+                        (self.unit_value_u32(caster, offsets::UNIT_FIELD_BYTES_0) >> 8) & 0xFF;
+                    return fail(
+                        self,
+                        if class == 1 {
+                            cast_result::FAILED_BAD_TARGETS
+                        } else {
+                            cast_result::FAILED_NO_COMBO_POINTS
+                        },
+                    );
+                }
+            }
+        }
         // Target validation (subset of CheckCast target
         // rules driven by effect 0's implicit target).
         if let CastOutcome::Failed(reason) =
-            self.check_target(caster, &spell, target, &mut applied_mods)
+            self.check_target(caster, &spell, target, &mut applied_mods, options.triggered)
         {
             return fail(self, reason);
         }
@@ -234,13 +271,136 @@ impl Map {
         outcome
     }
 
+    /// `SPELL_EFFECT_SKINNING` branch (fork
+    /// `Spell.cpp:6069-6094`): runs before every other
+    /// target check — corpses fail the alive gate below
+    /// by definition. The spell range still applies
+    /// (fork checks range at cast; `SendLoot` skips it
+    /// for skinning, `Player.cpp:7884`). Returns `None`
+    /// for non-skinning spells.
+    fn check_skinning_target(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        target: CastTarget,
+        applied_mods: &mut Vec<(u32, u8)>,
+        triggered: bool,
+    ) -> Option<CastOutcome> {
+        if !spell.effects.iter().any(|e| e.effect == effect::SKINNING) {
+            return None;
+        }
+        let CastTarget::Unit(victim) = target else {
+            return Some(CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS));
+        };
+        let Some(vpos) = self.unit_position(victim) else {
+            return Some(CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS));
+        };
+        let cpos = self.unit_position(caster).unwrap_or_default();
+        let range = self.apply_spell_mod(
+            caster,
+            spell,
+            spellmod::RANGE,
+            spell.range_max(&self.stores.spells.tables),
+            false,
+            Some(applied_mods),
+        ) + self.bounding_radius_of(caster)
+            + self.bounding_radius_of(victim);
+        let dist = ((cpos.x - vpos.x).powi(2) + (cpos.y - vpos.y).powi(2)).sqrt();
+        if dist > range {
+            return Some(CastOutcome::Failed(cast_result::FAILED_OUT_OF_RANGE));
+        }
+        if let Some(reason) = self.skinning_cast_error(caster, victim, triggered) {
+            return Some(CastOutcome::Failed(reason));
+        }
+        Some(CastOutcome::Started)
+    }
+
+    /// `SPELL_EFFECT_PICKPOCKET` branch (fork
+    /// `Spell.cpp:6188-6198`): the victim-side pockets
+    /// check. The alive/range/hostile gates stay in the
+    /// generic unit arm below; this returns `None` for
+    /// non-pickpocket spells and for victims that pass.
+    /// Explicit non-goal: no `TARGET_IN_COMBAT` gate
+    /// (compiled out at `SUPPORTED=5875`, 1.12.1 —
+    /// usable in combat while stealthed).
+    fn check_pickpocket_target(
+        &self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        target: CastTarget,
+    ) -> Option<CastOutcome> {
+        if !spell.effects.iter().any(|e| e.effect == effect::PICKPOCKET) {
+            return None;
+        }
+        let CastTarget::Unit(victim) = target else {
+            return Some(CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS));
+        };
+        if let Some(reason) = self.pickpocket_cast_error(caster, victim) {
+            return Some(CastOutcome::Failed(reason));
+        }
+        None
+    }
+
+    /// `SPELL_EFFECT_SKIN_PLAYER_CORPSE` branch (fork
+    /// `Spell.cpp:3305` + `:4870`): the effect carries
+    /// its own corpse/dead-player resolution (fork
+    /// `SpellEffects.cpp:5735-5760`) and has no
+    /// range/LOS corpse gate — every other check
+    /// (`CheckTarget` alive gates, `CheckRange`) would
+    /// reject the corpse guid or the dead player, so the
+    /// branch accepts any unit target here, exactly as
+    /// the fork's pass-through group does.
+    fn check_insignia_target(spell: &SpellEntry, target: CastTarget) -> Option<CastOutcome> {
+        if !spell
+            .effects
+            .iter()
+            .any(|e| e.effect == effect::SKIN_PLAYER_CORPSE)
+        {
+            return None;
+        }
+        let CastTarget::Unit(_) = target else {
+            return Some(CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS));
+        };
+        Some(CastOutcome::Started)
+    }
+
+    /// Spell-loot victim gates (fork `Spell.cpp:6069-6094`
+    /// skinning + `:6188-6198` pickpocket + `:3305`
+    /// insignia): run before every other target check —
+    /// corpses fail the alive gate below by definition,
+    /// and the pickpocket pockets check keys on the
+    /// victim only. Returns `None` for other spells and
+    /// passing victims.
+    fn check_spell_loot_target(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        target: CastTarget,
+        applied_mods: &mut Vec<(u32, u8)>,
+        triggered: bool,
+    ) -> Option<CastOutcome> {
+        if let Some(outcome) = Self::check_insignia_target(spell, target) {
+            return Some(outcome);
+        }
+        if let Some(outcome) = self.check_pickpocket_target(caster, spell, target) {
+            return Some(outcome);
+        }
+        self.check_skinning_target(caster, spell, target, applied_mods, triggered)
+    }
+
     fn check_target(
         &mut self,
         caster: ObjectGuid,
         spell: &SpellEntry,
         target: CastTarget,
         applied_mods: &mut Vec<(u32, u8)>,
+        triggered: bool,
     ) -> CastOutcome {
+        if let Some(outcome) =
+            self.check_spell_loot_target(caster, spell, target, applied_mods, triggered)
+        {
+            return outcome;
+        }
         let mode = spell
             .effects
             .iter()
@@ -268,12 +428,19 @@ impl Map {
             // from the client (or the caster for
             // scripted casts); range gates to the
             // destination like the fork's CheckRange.
+            // The fishing spot (39) rides along: the
+            // client sends the bobber destination and
+            // the water gate runs in the effect itself
+            // (fork `SpellEffects.cpp:5538-5678`), so a
+            // non-dest target starts unchecked here and
+            // the radius branch places it there.
             tgt::ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC
             | tgt::ENUM_UNITS_FRIEND_AOE_AT_DEST_LOC
             | tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC
             | tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC
             | tgt::ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOCATION
-            | tgt::ENUM_UNITS_FRIEND_AOE_AT_DYNOBJ_LOCATION => {
+            | tgt::ENUM_UNITS_FRIEND_AOE_AT_DYNOBJ_LOCATION
+            | tgt::LOCATION_CASTER_FISHING_SPOT => {
                 if let CastTarget::Dest(pos) = target {
                     let range = self.apply_spell_mod(
                         caster,
@@ -426,6 +593,80 @@ impl Map {
         }
         let packet = WorldPacket::with_body(op::SMSG_SPELL_FAILED_OTHER, payload.into_vec());
         self.broadcast_movement(caster, &packet);
+    }
+
+    /// `SpellCaster::InterruptNonMeleeSpells`
+    /// (`SpellCaster.cpp:1783-1796`): interrupts the
+    /// single-slot cast when present, filtered by
+    /// `spell_id` (0 = any). Divergences from the fork,
+    /// all recorded: `with_delayed` is a no-op (there is
+    /// no delayed spell state in this subset — the
+    /// `delay_spell_at_damage` comment shows the fork
+    /// delayed arm is unreachable, and `DelayedSpellHit`
+    /// is a separate hit list, matching the fork where
+    /// delayed hits are also not slot-interrupted);
+    /// there is no autorepeat or melee slot (hunter
+    /// auto-shot lives elsewhere); channeled casts close
+    /// via `end_channel` with no `SMSG_SPELL_FAILED_OTHER`
+    /// (consistent with the existing channel convention);
+    /// no GCD is reset (the GCD is added at execution,
+    /// so a preparing cast has none to clear — the same
+    /// outcome as the fork's `ResetGCD`).
+    pub fn interrupt_non_melee_spells(
+        &mut self,
+        caster: ObjectGuid,
+        with_delayed: bool,
+        spell_id: u32,
+    ) {
+        let _ = with_delayed;
+        let hit = self
+            .casts
+            .get(&caster)
+            .is_some_and(|cast| spell_id == 0 || cast.spell_id == spell_id);
+        if !hit {
+            return;
+        }
+        self.cancel_cast(caster, true);
+    }
+
+    /// `Unit::InterruptSpellsCastedOnMe`
+    /// (`Unit.cpp:10238-10268`): interrupts every
+    /// non-melee cast whose unit target is `target`.
+    /// Fork-flag mapping: the delayed-event half of
+    /// `killDelayed` is a no-op (no delayed spell state
+    /// in this subset); the friendliness skip
+    /// (`interruptPositiveSpells=false`) rides the
+    /// `is_hostile_pair` subset; the stalked exemption
+    /// (`onlyIfNotStalked`) is unmodeled — no stalked
+    /// tracking exists. Range is the fork's 100m
+    /// object-range check.
+    pub(crate) fn interrupt_spells_casted_on_me(&mut self, target: ObjectGuid, kill_delayed: bool) {
+        let _ = kill_delayed;
+        let Some(center) = self.unit_position(target) else {
+            return;
+        };
+        let casters: Vec<ObjectGuid> = self
+            .casts
+            .iter()
+            .filter_map(|(caster, cast)| {
+                if !matches!(cast.target, CastTarget::Unit(victim) if victim == target) {
+                    return None;
+                }
+                if !Self::is_hostile_pair(*caster, target) {
+                    return None;
+                }
+                let in_range = self.unit_position(*caster).is_some_and(|pos| {
+                    let dx = pos.x - center.x;
+                    let dy = pos.y - center.y;
+                    let dz = pos.z - center.z;
+                    dx * dx + dy * dy + dz * dz <= 100.0 * 100.0
+                });
+                in_range.then_some(*caster)
+            })
+            .collect();
+        for caster in casters {
+            self.interrupt_non_melee_spells(caster, true, 0);
+        }
     }
 
     /// The shared pushback resist total
@@ -689,7 +930,10 @@ impl Map {
             return;
         }
         if self.unit_base(hit.victim).is_some() {
-            self.apply_effects(
+            // Delayed hits never carry the aborting
+            // arm (channeled casts land immediately),
+            // so the flag is dropped here.
+            let _ = self.apply_effects(
                 hit.caster,
                 hit.original_caster.unwrap_or(hit.caster),
                 hit.caster_level,
@@ -702,7 +946,7 @@ impl Map {
                 Some(&mut hit.applied_mods),
                 Some(&hit.ctx),
                 hit.custom_base_points,
-                hit.from_cast_item,
+                hit.cast_item,
                 hit.cast_counter,
                 hit.triggered_by_aura_spell,
                 hit.triggered_by_spell,
@@ -710,6 +954,7 @@ impl Map {
             );
         }
         if hit.finish {
+            self.clear_combo_on_spell_finish(hit.caster, &spell, hit.missed_non_caster);
             self.spell_script_on_successful_finish(hit.caster, &spell, hit.target);
             self.remove_exhausted_spell_mods(hit.caster, &hit.applied_mods);
         }
@@ -869,6 +1114,20 @@ impl Map {
                 self.spell_script_on_hit(caster, &spell, *victim, false);
             }
         }
+        // `Spell::DoSpellHit` miss arm for pickpocket
+        // (fork `Spell.cpp:1393-1417`): a failed
+        // pickpocket breaks stealth and pulls aggro; a
+        // hit keeps stealth. Gated on the effect, not
+        // the DBC attribute row (the slice keys on
+        // effect 71 + unit target, DBC-agnostic).
+        if spell.effects.iter().any(|e| e.effect == effect::PICKPOCKET) && !misses.is_empty() {
+            self.remove_spells_causing_aura(caster, aura_type::MOD_STEALTH);
+            for (victim, _) in &misses {
+                if victim.is_creature() && self.creatures.contains_key(victim) {
+                    self.enter_combat(*victim, caster);
+                }
+            }
+        }
         // `TakeCastItem` runs in `cast()` right after
         // `SendSpellGo` (the item must outlive the GO
         // packet's cast-item GUID); triggered casts
@@ -926,6 +1185,10 @@ impl Map {
         // Channeled casts keep the immediate path (no
         // channeled spell in the modeled subset has a
         // projectile speed).
+        // `needDrop` input for the finisher tail
+        // (`Spell.cpp:4467-4478`): any non-caster miss
+        // keeps the combo points.
+        let missed_non_caster = misses.iter().any(|(missed, _)| *missed != caster);
         let mut delayed: Vec<DelayedSpellHit> = Vec::new();
         for victim in hit_victims {
             let delay = if cast.channeled {
@@ -943,7 +1206,7 @@ impl Map {
                     applied_mods: cast.applied_mods.clone(),
                     ctx: ctx.clone(),
                     custom_base_points: cast.custom_base_points,
-                    from_cast_item: cast.cast_item.is_some(),
+                    cast_item: cast.cast_item,
                     cast_counter: cast.cast_counter,
                     triggered_by_aura_spell: cast.triggered_by_aura_spell,
                     triggered_by_spell: cast.triggered_by_spell,
@@ -951,10 +1214,11 @@ impl Map {
                     original_caster: cast.original_caster,
                     remaining_ms: delay,
                     finish: false,
+                    missed_non_caster,
                 });
                 continue;
             }
-            self.apply_effects(
+            if !self.apply_effects(
                 caster,
                 cast.original_caster.unwrap_or(caster),
                 caster_level,
@@ -967,12 +1231,19 @@ impl Map {
                 Some(&mut cast.applied_mods),
                 Some(&ctx),
                 cast.custom_base_points,
-                cast.cast_item.is_some(),
+                cast.cast_item,
                 cast.cast_counter,
                 cast.triggered_by_aura_spell,
                 cast.triggered_by_spell,
                 cast.script_effect_pick,
-            );
+            ) {
+                // Fork `finish()` inside an effect (the
+                // fishing water gate): the arm already
+                // sent the fail packet; the cast ends
+                // here with no channel and no
+                // successful-finish tail.
+                return;
+            }
         }
         // Start channeling (the `handle_immediate`
         // tail). Effects are already applied in this
@@ -987,7 +1258,9 @@ impl Map {
             self.pending_delayed.extend(delayed);
         } else {
             // `SpellScript::OnSuccessfulFinish`
-            // (fork `Spell::finish`, `Spell.cpp:4519`).
+            // (fork `Spell::finish`, `Spell.cpp:4519`)
+            // with the finishing-move combo tail.
+            self.clear_combo_on_spell_finish(caster, &spell, missed_non_caster);
             self.spell_script_on_successful_finish(caster, &spell, cast.target);
             self.remove_exhausted_spell_mods(caster, &cast.applied_mods);
         }
@@ -1018,10 +1291,15 @@ impl Map {
         cast.channel_cost_ms = 1000;
         if let Some(u) = self.unit_base_mut(caster) {
             let values = u.values();
-            values.set_u64(
-                offsets::UNIT_FIELD_CHANNEL_OBJECT,
-                channel_target.map_or(0, ObjectGuid::raw),
-            );
+            // Fork `SendChannelStart` (`Spell.cpp:5123-5127`)
+            // only touches the channel object for a
+            // non-caster first hit; a null target leaves
+            // the field alone, so an effect-set object
+            // (the fishing bobber, set after this point
+            // in the fork and before it here) survives.
+            if let Some(target) = channel_target {
+                values.set_u64(offsets::UNIT_FIELD_CHANNEL_OBJECT, target.raw());
+            }
             values.set_u32(offsets::UNIT_CHANNEL_SPELL, spell.id);
         }
         if self.players.contains_key(&caster) {
@@ -1180,6 +1458,15 @@ impl Map {
             let packet = WorldPacket::with_body(op::MSG_CHANNEL_UPDATE, payload.into_vec());
             self.send_to_player(caster, packet);
         }
+    }
+
+    /// `Player::FinishSpell(CURRENT_CHANNELED_SPELL)`
+    /// (fork `GameObject.cpp` bobber arms): natural
+    /// channel end for a non-spell caller. No-op when
+    /// the caster channels nothing (the fork's missing
+    /// current-spell guard).
+    pub(crate) fn finish_channeled_spell(&mut self, caster: ObjectGuid) {
+        self.end_channel(caster, false);
     }
 
     /// Resolved cast destination (`m_targets` dest):

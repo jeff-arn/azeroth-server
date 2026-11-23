@@ -17,7 +17,7 @@ use std::sync::Arc;
 use mangos_entities::creature::{Creature, CreatureRates, DisplayResolver, VirtualItemPrototype};
 use mangos_entities::gameobject::GameObject;
 use mangos_entities::player::Player;
-use mangos_entities::unit::DeathState;
+use mangos_entities::unit::{DeathState, UnitVisibility};
 use mangos_entities::update::{
     BuildEffects, MovementSection, ObjectView, Viewer, build_create_block, build_values_block,
 };
@@ -31,6 +31,8 @@ use mangos_protocol::world::WorldPacket;
 use mangos_world_data::spawn_support::RespawnTimes;
 use mangos_world_data::spawns::{cell_id, compute_cell_pair};
 
+use crate::outdoor_pvp_ep::EpState;
+use crate::outdoor_pvp_si::SiState;
 use crate::stores::WorldStores;
 use crate::visibility;
 
@@ -179,6 +181,25 @@ impl Default for XpRates {
     }
 }
 
+/// `Rate.Reputation.Gain` / `.LowLevel.Kill`
+/// (`World.cpp:493-494`, both default 1.0).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ReputationRates {
+    /// `Rate.Reputation.Gain` (1.0).
+    pub gain: f32,
+    /// `Rate.Reputation.LowLevel.Kill` (1.0).
+    pub lowlevel_kill: f32,
+}
+
+impl Default for ReputationRates {
+    fn default() -> Self {
+        Self {
+            gain: 1.0,
+            lowlevel_kill: 1.0,
+        }
+    }
+}
+
 /// Map tuning (`mangosd.conf` values with their tree
 /// defaults).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -221,6 +242,8 @@ pub struct MapConfig {
     pub activate_weather: bool,
     /// `Rate.XP.*` kill/quest/explore rates (1.0).
     pub xp_rates: XpRates,
+    /// `Rate.Reputation.*` kill-gain rates (1.0).
+    pub reputation_rates: ReputationRates,
     /// `Spell.ProcDelay` batching window (ms; fork
     /// code default 400).
     pub proc_delay_ms: u32,
@@ -242,6 +265,14 @@ pub struct MapConfig {
     pub death_bones_world: bool,
     /// `Death.Bones.Battleground` (default true).
     pub death_bones_bg: bool,
+    /// `OutdoorPvP.SI.Enable` (`World.cpp:787`,
+    /// fork default true): Silithus turn-ins, world
+    /// states, dust bags and Cenarion Favor on map 1.
+    pub outdoor_pvp_si_enable: bool,
+    /// `OutdoorPvP.EP.Enable` (`World.cpp:786`,
+    /// fork default true): Eastern Plaguelands tower
+    /// sliders, world states and Echoes buffs on map 0.
+    pub outdoor_pvp_ep_enable: bool,
     /// `Rate.Respec*` + `Progression.NoRespecPriceDecay`
     /// (Tier 4 step 4g).
     pub respec: RespecConfig,
@@ -335,6 +366,7 @@ impl Default for MapConfig {
             compression: CompressionConfig::default(),
             activate_weather: true,
             xp_rates: XpRates::default(),
+            reputation_rates: ReputationRates::default(),
             proc_delay_ms: 400,
             pvp_realm: false,
             change_weather_interval_ms: 600_000,
@@ -344,6 +376,8 @@ impl Default for MapConfig {
             corpse_reclaim_delay_pve: true,
             death_bones_world: true,
             death_bones_bg: true,
+            outdoor_pvp_si_enable: true,
+            outdoor_pvp_ep_enable: true,
             respec: RespecConfig::default(),
             wow_patch: 0,
             accurate_pvp_timeline: true,
@@ -400,6 +434,19 @@ pub enum MapEvent {
     /// the actor drops the map and its manager handle
     /// (releasing the client-visible instance id).
     BgDelete,
+    /// `OutdoorPvP` zone/defense text. Non-defense is
+    /// Silithus `World::SendZoneText` (`CHAT_MSG_SYSTEM`
+    /// to players in the zone, resolved from
+    /// `mangos_string`); defense is Eastern
+    /// Plaguelands `Map::SendDefenseMessage`
+    /// (`SMSG_DEFENSE_MESSAGE` to every player on
+    /// the map, positive entries resolved as
+    /// broadcast texts per recipient gender).
+    OutdoorZoneText {
+        zone_id: u32,
+        entry: i32,
+        defense: bool,
+    },
     /// `PSendMessageToAll` with a `mangos_string` entry:
     /// the actor resolves + formats (%u single-arg
     /// forms) and sends to every BG player on this map.
@@ -635,12 +682,34 @@ pub struct Map {
     /// Creature corpse loot by creature guid (B0-10,
     /// fork `Creature::loot`).
     pub(crate) loots: HashMap<ObjectGuid, crate::loot::LootState>,
+    /// Item container loot by item-object guid
+    /// (fork `Item::loot` + `ItemLootUpdateState`;
+    /// absent is `ITEM_LOOT_NONE`).
+    pub(crate) item_loots:
+        HashMap<ObjectGuid, (crate::loot::LootState, crate::loot::ItemLootUpdateState)>,
     /// Loot taps by creature guid (fork
     /// `m_lootRecipientGuid` / group recipient id).
     pub(crate) loot_taps: HashMap<ObjectGuid, crate::loot::LootTap>,
     /// Open loot window per player (fork
     /// `Player::m_lootGuid`).
     pub(crate) player_loot_guid: HashMap<ObjectGuid, ObjectGuid>,
+    /// Skinning head-start deadlines by creature guid
+    /// (fork `Creature::skinningForOthersTimer`, set to
+    /// 5000 ms at `AllLootRemovedFromCorpse`, ticked in
+    /// the creature update; here an absolute `now_ms`
+    /// deadline — absent or expired means everyone may
+    /// skin, matching `!skinningForOthersTimer`).
+    /// Cleared with the loot/tap state on respawn and
+    /// despawn (fork `Creature.cpp:740-741`).
+    pub(crate) skinning_for_others: HashMap<ObjectGuid, u64>,
+    /// Pickpocketed creatures (fork
+    /// `Creature::lootForPickPocketed`): set on first
+    /// pickpocket fill, cleared by body generation
+    /// (fork `GenerateLootForBody`) and with the
+    /// loot/tap state on respawn/despawn — but NOT by
+    /// window release, so a reopen after full loot
+    /// refills quest-only (fork `Player.cpp:7923-7933`).
+    pub(crate) pickpocketed: HashSet<ObjectGuid>,
     /// `GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT)`
     /// counter (seeded past the DB guid space like
     /// `summon_counter`).
@@ -756,6 +825,12 @@ pub struct Map {
     /// manager through `init_battleground`
     /// (Tier 3 Slice 3).
     pub bg: Option<Box<crate::battlegrounds::BgState>>,
+    /// Silithus `OutdoorPvP` state (`OutdoorPvPSI`;
+    /// map-local, in-memory only).
+    pub(crate) outdoor_si: SiState,
+    /// Eastern Plaguelands towers state (`OutdoorPvPEP`;
+    /// map-local, in-memory only).
+    pub(crate) outdoor_ep: EpState,
 }
 
 /// `TempSummon` lifecycle (Slice 7 subset).
@@ -811,8 +886,11 @@ impl Map {
             escorts: HashMap::new(),
             active_game_events: std::collections::HashSet::new(),
             loots: HashMap::new(),
+            item_loots: HashMap::new(),
             loot_taps: HashMap::new(),
             player_loot_guid: HashMap::new(),
+            skinning_for_others: HashMap::new(),
+            pickpocketed: HashSet::new(),
             go_low_counter: 0x00F0_0000,
             unit_object_slots: HashMap::new(),
             dynobjects: HashMap::new(),
@@ -846,6 +924,8 @@ impl Map {
             instance_data64: HashMap::new(),
             despawns_due: HashMap::new(),
             summons: HashMap::new(),
+            outdoor_si: SiState::default(),
+            outdoor_ep: EpState::default(),
             pets: HashMap::new(),
             summon_counter: 0x00F0_0000,
             hidden_objects: std::collections::HashSet::new(),
@@ -1005,6 +1085,10 @@ impl Map {
             area_id: 0,
         };
         self.players.insert(guid, entry);
+        // Rebuild persisted container loot before the
+        // first visibility pass (fork
+        // `Player::_LoadItemLoot`, state UNCHANGED).
+        self.rebuild_item_loot(guid);
         // Fork players always carry a MotionMaster
         // (idle bottom); taxi flight (4f) is the first
         // human-player consumer.
@@ -1172,14 +1256,15 @@ impl Map {
             return;
         };
         let (zone_id, area_id) = self.zone_and_area_id(position);
-        let zone_changed = {
+        let (zone_changed, old_zone) = {
             let Some(entry) = self.players.get_mut(&guid) else {
                 return;
             };
             let changed = force || entry.zone_id != zone_id;
+            let old = entry.zone_id;
             entry.zone_id = zone_id;
             entry.area_id = area_id;
-            changed
+            (changed, old)
         };
         if !zone_changed {
             return;
@@ -1196,9 +1281,14 @@ impl Map {
             Some(3) => self
                 .ab_fill_initial_world_states(guid)
                 .unwrap_or_else(|| build_init_world_states(self.map_id, zone_id)),
-            _ => build_init_world_states(self.map_id, zone_id),
+            _ => self
+                .si_init_world_states(zone_id)
+                .or_else(|| self.ep_init_world_states(zone_id))
+                .unwrap_or_else(|| build_init_world_states(self.map_id, zone_id)),
         };
         self.events.push(MapEvent::Packet { to: guid, packet });
+        self.si_on_zone_change(guid, old_zone, zone_id);
+        self.ep_on_zone_change(guid, old_zone, zone_id);
         if self.config.activate_weather {
             let chances = self.stores.weather_chances.get(zone_id);
             let interval = self.config.change_weather_interval_ms;
@@ -1770,6 +1860,59 @@ impl Map {
         }
     }
 
+    /// `Unit::SetVisibility` (`Unit.cpp:6654-6660`):
+    /// writes the flag, then fans out to every player
+    /// viewer when the unit is in the world
+    /// (`UpdateVisibilityAndView` minus the unmodeled
+    /// BindSight/FarSight purge, owner-camera call, AI
+    /// notify and viewpoint-changed arms — no Rust
+    /// equivalents exist, recorded).
+    /// The legacy `hidden_objects` binary switch stays
+    /// in sync so pre-migration script sites keep
+    /// agreeing with the flag (single observable
+    /// state). A field write alone is NOT client-visible
+    /// (the Rust grid only re-evaluates on scans), so
+    /// the immediate per-viewer fan-out is mandatory.
+    pub(crate) fn set_visibility(&mut self, guid: ObjectGuid, visibility: UnitVisibility) {
+        let Some(unit) = self.unit_base_mut(guid) else {
+            return;
+        };
+        unit.visibility = visibility;
+        if visibility == UnitVisibility::Off {
+            self.hidden_objects.insert(guid);
+        } else {
+            self.hidden_objects.remove(&guid);
+        }
+        if !self.players.contains_key(&guid) && !self.creatures.contains_key(&guid) {
+            return;
+        }
+        let viewers: Vec<ObjectGuid> = self
+            .players
+            .keys()
+            .copied()
+            .filter(|viewer| *viewer != guid)
+            .collect();
+        for viewer in viewers {
+            let mut data = UpdateData::new();
+            let mut effects = BuildEffects::default();
+            self.update_visibility_of(viewer, guid, &mut data, &mut effects);
+            self.send_update_data(viewer, &mut data);
+        }
+    }
+
+    /// `Unit::GetVisibility` (`Unit.h:608`) with the
+    /// legacy alias folded in: a pre-migration
+    /// `hidden_objects` entry still reads back as `Off`.
+    pub(crate) fn get_visibility(&self, guid: ObjectGuid) -> UnitVisibility {
+        if self.hidden_objects.contains(&guid) {
+            return UnitVisibility::Off;
+        }
+        self.unit_base(guid).map_or(
+            UnitVisibility::On,
+            mangos_entities::unit::UnitBase::get_visibility,
+        )
+    }
+
     /// Camera-side visibility recomputation
     /// (`Player::UpdateObjectVisibility`): collects the
     /// full visible candidate set around the view point,
@@ -1837,7 +1980,10 @@ impl Map {
             .players
             .get(&viewer_guid)
             .is_some_and(|e| e.visible.contains(&target));
-        let visible_now = !self.hidden_objects.contains(&target)
+        // `get_visibility` already folds the legacy
+        // `hidden_objects` alias in, so both pre- and
+        // post-migration sites gate here identically.
+        let visible_now = visibility::unit_visibility_allows(self.get_visibility(target))
             && self.is_visible(viewer_guid, target, in_visible_list);
         match (in_visible_list, visible_now) {
             (false, true) => {
@@ -2388,6 +2534,8 @@ impl Map {
         self.instance_update(diff_ms);
         // Tier 3 Slice 3: battleground match update.
         self.bg_update(diff_ms);
+        // Eastern Plaguelands towers (`OutdoorPvPEP::Update`).
+        self.ep_update(diff_ms);
         self.go_ai_update(diff_ms);
         self.update_dynobjects(diff_ms);
         // Tier 4 B0-5: dynamic GO lifetime + trap

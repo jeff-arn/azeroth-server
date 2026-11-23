@@ -212,6 +212,12 @@ impl ItemPrototypes {
         self.by_entry.get(&entry)
     }
 
+    /// Test fixture mutation (mirrors
+    /// `from_entries_for_tests` for single rows).
+    pub fn insert_for_tests(&mut self, proto: ItemPrototype) {
+        self.by_entry.insert(proto.item_id, proto);
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.by_entry.len()

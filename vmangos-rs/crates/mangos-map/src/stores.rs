@@ -36,6 +36,12 @@ pub struct WorldStores {
     pub items: ItemPrototypesLite,
     pub item_prototypes: ItemPrototypes,
     pub factions: FactionStore,
+    /// The `creature_onkill_reputation`,
+    /// `reputation_reward_rate`, and
+    /// `reputation_spillover_template` products
+    /// (reputation-on-kill slice; empty until the world
+    /// DB loads them).
+    pub reputation_kills: mangos_world_data::reputations::ReputationKillStores,
     pub areas: AreaStore,
     pub weather_chances: WeatherChanceStore,
     pub waypoints: WaypointStore,
@@ -129,6 +135,13 @@ pub struct WorldStores {
     pub game_events: mangos_world_data::game_events::GameEvents,
     /// Loot templates (Tier 4 B0-10).
     pub loot: mangos_world_data::loot::LootStores,
+    /// `Lock.dbc` rows (`sLockStore`, chest/mining
+    /// lock gates; DBC-only, no DB/save change).
+    pub locks: mangos_world_data::locks::LockStore,
+    /// `skill_fishing_base_level` rows
+    /// (`ObjectMgr::m_FishingBaseSkillMap`; DB
+    /// read-only, no save change).
+    pub fishing_base_skills: mangos_world_data::fishing::FishingBaseSkills,
 }
 
 impl WorldStores {
@@ -147,6 +160,7 @@ impl WorldStores {
             items: ItemPrototypesLite::default(),
             item_prototypes: ItemPrototypes::default(),
             factions: FactionStore::default(),
+            reputation_kills: mangos_world_data::reputations::ReputationKillStores::default(),
             areas: AreaStore::default(),
             weather_chances: WeatherChanceStore::default(),
             waypoints: WaypointStore::default(),
@@ -187,6 +201,8 @@ impl WorldStores {
             script_waypoints: mangos_world_data::script_waypoints::ScriptWaypointStore::default(),
             game_events: mangos_world_data::game_events::GameEvents::default(),
             loot: mangos_world_data::loot::LootStores::default(),
+            locks: mangos_world_data::locks::LockStore::default(),
+            fishing_base_skills: mangos_world_data::fishing::FishingBaseSkills::default(),
         }
     }
 

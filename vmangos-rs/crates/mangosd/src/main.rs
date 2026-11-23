@@ -583,6 +583,12 @@ impl QuestRewardStore for MysqlQuestRewardStore {
             .actor()
             .call(move |conn| mangos_db::quest_reward::set_item_flags(conn, item_guid, flags))
     }
+
+    fn gift_unwrap(&self, item_guid: u32) -> Result<Option<(u32, u32)>, DbError> {
+        self.characters
+            .actor()
+            .call(move |conn| mangos_db::quest_reward::gift_unwrap(conn, item_guid))
+    }
 }
 
 struct MysqlPetStore {
@@ -1548,6 +1554,7 @@ struct DbcTables {
     skills: mangos_world_data::skill_info::SkillDbc,
     chat_channels: mangos_world_data::chat_channels::ChatChannelDbc,
     auction_houses: mangos_world_data::auction_house::AuctionHouseDbc,
+    locks: mangos_world_data::locks::LockStore,
     durability: mangos_world_data::durability::DurabilityTables,
     bank_bag_slot_prices: Vec<u32>,
     stable_slot_prices: Vec<u32>,
@@ -1722,6 +1729,7 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
         .collect();
     let chat_channels = read_chat_channel_dbc(&read_store, uint)?;
     let auction_houses = read_auction_house_dbc(&read_store, uint)?;
+    let locks = read_lock_dbc(&read_store)?;
     let durability = read_durability_dbc(&read_store, uint, float)?;
     let bank_bag_slot_prices = {
         let mut prices: Vec<u32> = Vec::new();
@@ -1789,6 +1797,7 @@ fn read_dbc_tables(data_dir: &DataDir, log: &Log) -> Result<DbcTables, ExitCode>
         skills: skill_dbc,
         chat_channels,
         auction_houses,
+        locks,
         durability,
         bank_bag_slot_prices,
         stable_slot_prices,
@@ -1868,6 +1877,32 @@ fn read_chat_channel_dbc(
     Ok(chat_channels)
 }
 
+/// `Lock.dbc` (chest lock gates): produced fields
+/// of fmt `niiiiiiiiiiiiiiiiiiiiiiiixxxxxxxx` are
+/// id + 8 `Type` + 8 `Index` + 8 `Skill` (the 8
+/// trailing `Action` words are skipped by the
+/// producer).
+fn read_lock_dbc(
+    read_store: &impl Fn(
+        mangos_dbc::formats::StoreDef,
+    ) -> Result<Vec<Vec<mangos_dbc::FieldValue>>, ExitCode>,
+) -> Result<mangos_world_data::locks::LockStore, ExitCode> {
+    use mangos_dbc::formats;
+    use mangos_world_data::locks::{LockEntry, LockStore};
+    let mut entries = Vec::new();
+    for row in read_store(formats::LOCK)? {
+        let words: Vec<u32> = row
+            .iter()
+            .map(|field| match field {
+                mangos_dbc::FieldValue::UInt(v) => *v,
+                _ => 0,
+            })
+            .collect();
+        entries.push(LockEntry::from_produced_row(&words));
+    }
+    Ok(LockStore::from_entries(entries))
+}
+
 /// Auction houses (Phase 5 B.7): produced fields of
 /// fmt `niiixxxxxxxxx` are house id, faction, deposit
 /// percent, cut percent.
@@ -1940,6 +1975,7 @@ fn load_world_db_stores(
         mangos_world_data::spawn_support::DisplayInfoAddons,
         mangos_world_data::item_prototype::ItemPrototypesLite,
         mangos_world_data::reputations::FactionStore,
+        mangos_world_data::reputations::ReputationKillStores,
         mangos_world_data::areas::AreaStore,
         mangos_world_data::exploration::ExplorationBaseXp,
         mangos_world_data::map_template::MapStore,
@@ -2005,6 +2041,17 @@ fn load_world_db_stores(
         let (creature_addons, r5) = load_creature_addons(conn, wow_patch, None, None, None)?;
         let items = load_item_prototypes_lite(conn, wow_patch)?;
         let factions = load_factions(conn)?;
+        // `LoadReputationRewardRate` / `LoadReputationOnKill` /
+        // `LoadReputationSpilloverTemplate` (`World.cpp:1486-1492`,
+        // after creature templates + factions for validation).
+        let mut r_rep = LoadReport::default();
+        let reputation_kills = mangos_world_data::reputations::load_reputation_kill_stores(
+            conn,
+            wow_patch,
+            &creature_templates,
+            &factions,
+            &mut r_rep,
+        )?;
         let areas = load_areas(conn, wow_patch)?;
         let exploration_base_xp = mangos_world_data::exploration::load_exploration_base_xp(conn)?;
         let maps = load_map_templates(conn, wow_patch, reset_rate)?;
@@ -2072,6 +2119,7 @@ fn load_world_db_stores(
             ("creature_spells", r11),
             ("script engine", r12),
             ("pet stores", r13),
+            ("reputation kill stores", r_rep),
         ]);
         Ok((
             creature_templates,
@@ -2083,6 +2131,7 @@ fn load_world_db_stores(
             display_addons,
             items,
             factions,
+            reputation_kills,
             areas,
             exploration_base_xp,
             maps,
@@ -2257,6 +2306,7 @@ fn load_phase4_stores(
         skills: skill_dbc,
         chat_channels,
         auction_houses,
+        locks,
         durability,
         bank_bag_slot_prices,
         stable_slot_prices,
@@ -2295,6 +2345,7 @@ fn load_phase4_stores(
         display_addons,
         items,
         factions,
+        reputation_kills,
         areas,
         exploration_base_xp,
         maps,
@@ -2480,6 +2531,65 @@ fn load_phase4_stores(
             script_stores.broadcast_texts.len()
         ),
     );
+    // Loot templates (B0-10): loaded before the
+    // battleground templates so the BG ref-loot zeroing
+    // (`ExistsRefLootTemplate`) can probe the reference
+    // store.
+    let loot_stores = {
+        let wow_patch = server_config.wow_patch;
+        match databases.world.actor.call(move |conn| {
+            let mut r = LoadReport::default();
+            let loaded = mangos_world_data::loot::load_loot_stores(conn, wow_patch, &mut r)?;
+            Ok::<_, mangos_db::DbError>((loaded, r))
+        }) {
+            Ok((loaded, r)) => {
+                report(&r, "loot templates");
+                log.out(
+                    Level::Minimal,
+                    &format!(
+                        ">> Loaded {} creature loot templates.",
+                        loaded.creature.template_count()
+                    ),
+                );
+                loaded
+            }
+            Err(e) => {
+                log.out(Level::Error, &format!("loot template load failed: {e}"));
+                return Err(ExitCode::from(ERROR_EXIT_CODE));
+            }
+        }
+    };
+    // Fishing base skills (`LoadFishingBaseSkillLevel`,
+    // `ObjectMgr.cpp:10024-10063`): read-only zone
+    // minimums, validated against the area store.
+    let fishing_base_skills = {
+        let skill_areas = areas.clone();
+        match databases.world.actor.call(move |conn| {
+            let mut r = LoadReport::default();
+            let loaded =
+                mangos_world_data::fishing::load_fishing_base_skills(conn, &skill_areas, &mut r)?;
+            Ok::<_, mangos_db::DbError>((loaded, r))
+        }) {
+            Ok((loaded, r)) => {
+                report(&r, "fishing base skills");
+                log.out(
+                    Level::Minimal,
+                    &format!(
+                        ">> Loaded {} areas for fishing base skill level.",
+                        loaded.len()
+                    ),
+                );
+                loaded
+            }
+            Err(e) => {
+                log.out(
+                    Level::Error,
+                    &format!("fishing base skill load failed: {e}"),
+                );
+                return Err(ExitCode::from(ERROR_EXIT_CODE));
+            }
+        }
+    };
     // Tier 3 Slice 3: safe-loc facings + battleground
     // templates (`LoadWorldSafeLocsFacing` /
     // `CreateInitialBattleGrounds`). Map names resolve
@@ -2488,6 +2598,7 @@ fn load_phase4_stores(
     let bg_maps = maps.clone();
     let bg_areas = areas.clone();
     let bg_area_triggers = area_triggers.clone();
+    let bg_reference = loot_stores.reference.clone();
     let (
         safe_locs,
         battlegrounds,
@@ -2510,6 +2621,7 @@ fn load_phase4_stores(
             &safe_locs,
             &|m| bg_maps.get(m).map(|e| e.name.clone()),
             &mut r,
+            &bg_reference,
         )?;
         let battlemasters = load_battlemasters(conn)?;
         let battle_event_indexes = load_battle_event_indexes(conn)?;
@@ -2654,31 +2766,6 @@ fn load_phase4_stores(
             }
         }
     };
-    // Loot templates (B0-10).
-    let loot_stores = {
-        let wow_patch = server_config.wow_patch;
-        match databases.world.actor.call(move |conn| {
-            let mut r = LoadReport::default();
-            let loaded = mangos_world_data::loot::load_loot_stores(conn, wow_patch, &mut r)?;
-            Ok::<_, mangos_db::DbError>((loaded, r))
-        }) {
-            Ok((loaded, r)) => {
-                report(&r, "loot templates");
-                log.out(
-                    Level::Minimal,
-                    &format!(
-                        ">> Loaded {} creature loot templates.",
-                        loaded.creature.template_count()
-                    ),
-                );
-                loaded
-            }
-            Err(e) => {
-                log.out(Level::Error, &format!("loot template load failed: {e}"));
-                return Err(ExitCode::from(ERROR_EXIT_CODE));
-            }
-        }
-    };
     let taxi_transitions = match databases
         .world
         .actor
@@ -2717,6 +2804,7 @@ fn load_phase4_stores(
         items,
         item_prototypes,
         factions,
+        reputation_kills,
         areas,
         weather_chances,
         waypoints,
@@ -2729,6 +2817,7 @@ fn load_phase4_stores(
         skills: skill_dbc,
         chat_channels,
         auction_houses,
+        locks,
         maps,
         safe_locs,
         battlegrounds,
@@ -2756,6 +2845,7 @@ fn load_phase4_stores(
         script_waypoints,
         game_events,
         loot: loot_stores,
+        fishing_base_skills,
     });
 
     // `ObjectMgr::LoadPetNumber` + cache seed: next

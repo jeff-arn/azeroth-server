@@ -703,6 +703,17 @@ pub trait QuestRewardStore: Send + Sync {
     ///
     /// Returns [`DbError`] on driver failure.
     fn set_item_flags(&self, item_guid: u32, flags: u32) -> Result<(), DbError>;
+
+    /// Wrapped-gift lookup (`HandleOpenItemOpcode`
+    /// `ITEM_DYNFLAG_WRAPPED` arm): the persisted
+    /// `(item_id, flags)` for one wrapped item, with
+    /// the gift row deleted on hit (`None` when no
+    /// gift row exists: destroy the wrapper).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError`] on driver failure.
+    fn gift_unwrap(&self, item_guid: u32) -> Result<Option<(u32, u32)>, DbError>;
 }
 
 /// Mail service: the `mail`-family statements, item
@@ -1962,6 +1973,15 @@ pub fn spawn_world(
     world.self_tx = Some(tx.clone());
     let handle = tokio::spawn(world.run(rx));
     (tx, handle, health)
+}
+
+/// `Map::SendDefenseMessage` packet body.
+fn build_defense_message_packet(zone_id: u32, text: &str) -> WorldPacket {
+    let mut writer = PacketWriter::new();
+    writer.write_u32_le(zone_id);
+    writer.write_u32_le(text.len() as u32 + 1);
+    writer.write_cstring(text);
+    WorldPacket::with_body(opcode_id::SMSG_DEFENSE_MESSAGE, writer.into_vec())
 }
 
 impl World {
@@ -5451,7 +5471,9 @@ impl World {
                 .get(row.item_id)
                 .cloned()
                 .is_some_and(|proto| crate::trade::can_be_traded(&row, &proto));
-            if !tradeable {
+            if !tradeable
+                || self.item_loot_blocks_trade(actor_low, row.item_guid, row.generated_loot)
+            {
                 self.send_trade_status(id, status::TRADE_CANCELED);
                 return;
             }
@@ -5589,7 +5611,9 @@ impl World {
                     .get(row.item_id)
                     .cloned()
                     .is_some_and(|proto| crate::trade::can_be_traded(&row, &proto));
-                if !tradeable {
+                if !tradeable
+                    || self.item_loot_blocks_trade(owner_low, row.item_guid, row.generated_loot)
+                {
                     self.send_trade_status(id, status::TRADE_CANCELED);
                     return;
                 }
@@ -6282,7 +6306,8 @@ impl World {
             .as_ref()
             .is_some_and(|proto| crate::trade::can_be_traded(&stored, proto));
         let conjured = proto.as_ref().is_some_and(|proto| proto.flags & 0x2 != 0);
-        if is_bank_pos || !tradeable || conjured || stored.duration != 0 {
+        let loot_blocked = self.item_loot_blocks_trade(actor_low, item_low, stored.generated_loot);
+        if is_bank_pos || !tradeable || loot_blocked || conjured || stored.duration != 0 {
             self.send_auction_result(
                 id,
                 None,
@@ -7279,6 +7304,34 @@ impl World {
         None
     }
 
+    /// Per-container loot save projection for one map
+    /// (`Item::SaveToDB` loot arms read the live item
+    /// the same way; empty when the map is gone).
+    fn map_item_loot_saves(
+        &self,
+        map_key: MapKey,
+    ) -> std::collections::HashMap<u32, (mangos_db::character_save::LootSave, bool)> {
+        self.maps
+            .get(&map_key)
+            .map(Map::item_loot_saves)
+            .unwrap_or_default()
+    }
+
+    /// Live `HasGeneratedLoot` for the trade/mail/
+    /// auction row guards: the map's unlooted window
+    /// state when the owner is online, else the
+    /// persisted bool (fork `Item::CanBeTraded` reads
+    /// the live item; offline rows only carry the
+    /// word).
+    fn item_loot_blocks_trade(&self, owner_low: u32, item_low: u32, stored_generated: u8) -> bool {
+        if let Some(map_key) = self.player_map.get(&owner_low).copied()
+            && let Some(map) = self.maps.get(&map_key)
+        {
+            return map.item_has_generated_loot(item_low);
+        }
+        stored_generated != 0
+    }
+
     /// Attachment validation for send-mail (the
     /// row-level `CanBeTraded` subset; `None` = the
     /// internal-error reply already applies).
@@ -7304,7 +7357,7 @@ impl World {
         let is_bag_pos = stored.bag == 0 && (19..23).contains(&stored.slot);
         let is_bank_pos = stored.bag == 0 && stored.slot >= 39;
         let untradeable = stored.flags & 0x1 != 0 // soulbound
-            || stored.generated_loot != 0
+            || self.item_loot_blocks_trade(actor_low, item_low, stored.generated_loot)
             || (proto.class == 1 && (is_bag_pos || stored.items_in_bag > 0))
             || proto.flags & 0x2 != 0 // ITEM_FLAG_CONJURED
             || stored.duration != 0;
@@ -16615,6 +16668,7 @@ impl World {
             save_stats: self.should_save_stats(level, logout),
             can_speak,
         };
+        let item_loots = self.map_item_loot_saves(map_key);
         let Some((bundle, stats, action_writes, projected_quests)) = self
             .maps
             .get(&map_key)
@@ -16622,7 +16676,7 @@ impl World {
             .map(|player| {
                 let action_writes = logout.then(|| build_action_writes(player));
                 let (bundle, stats, projected_quests) =
-                    build_save_bundle(player, auras, cooldowns, &ctx);
+                    build_save_bundle(player, auras, cooldowns, &ctx, &item_loots);
                 (bundle, stats, action_writes, projected_quests)
             })
         else {
@@ -16712,11 +16766,15 @@ impl World {
             save_stats: self.should_save_stats(level, logout),
             can_speak,
         };
+        // Teleport saves project the source map's
+        // container loot (the in-flight player copy
+        // carries no map-side loot state of its own).
+        let item_loots = self.map_item_loot_saves(source_key);
         let Some((bundle, stats, action_writes, projected_quests)) =
             self.pending_teleports.get(&session_id).map(|pending| {
                 let action_writes = logout.then(|| build_action_writes(&pending.player));
                 let (bundle, stats, projected_quests) =
-                    build_save_bundle(&pending.player, auras, cooldowns, &ctx);
+                    build_save_bundle(&pending.player, auras, cooldowns, &ctx, &item_loots);
                 (bundle, stats, action_writes, projected_quests)
             })
         else {
@@ -16996,7 +17054,13 @@ impl World {
                 quest: self.config.rate_xp_quest,
                 explore: self.config.rate_xp_explore,
             },
+            reputation_rates: mangos_map::map::ReputationRates {
+                gain: self.config.rate_reputation_gain,
+                lowlevel_kill: self.config.rate_reputation_lowlevel_kill,
+            },
             activate_weather: self.config.activate_weather,
+            outdoor_pvp_si_enable: self.config.outdoor_pvp_si_enable,
+            outdoor_pvp_ep_enable: self.config.outdoor_pvp_ep_enable,
             change_weather_interval_ms: self.config.change_weather_interval_ms,
             proc_delay_ms: self.config.spell_proc_delay_ms,
             death_sickness_level: self.config.death_sickness_level,
@@ -17260,6 +17324,13 @@ impl World {
                 }
                 MapEvent::BgWorldText { text } => {
                     self.bg_send_world_text(&text);
+                }
+                MapEvent::OutdoorZoneText {
+                    zone_id,
+                    entry,
+                    defense,
+                } => {
+                    self.outdoor_send_zone_text(source_key, zone_id, entry, defense);
                 }
                 MapEvent::BgRaidJoin { player, team } => {
                     self.bg_raid_join(source_key, player.counter(), team);
@@ -17838,7 +17909,14 @@ impl World {
         self.drain_map_events();
     }
 
-    /// `HandleCancelCastOpcode` subset.
+    /// `HandleCancelCastOpcode` subset
+    /// (`SpellHandler.cpp:355-367`): the spell id gates
+    /// the slot (`IsNonMeleeSpellCasted` +
+    /// `InterruptNonMeleeSpells(false, spellId)`), so a
+    /// mismatched id leaves the cast alone and the
+    /// interrupt emits `FAILED_INTERRUPTED`. The fork's
+    /// melee-swing arm (`IsNextSwingSpellCasted`) has no
+    /// Rust slot — recorded.
     fn on_cancel_cast(&mut self, id: SessionId, packet: &WorldPacket) {
         let Some((map_key, guid)) = self.player_map_guid(id) else {
             return;
@@ -17847,10 +17925,12 @@ impl World {
             self.bad_packet(id, packet.opcode());
             return;
         }
+        let body = packet.body();
+        let spell_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
         let Some(map) = self.maps.get_mut(&map_key) else {
             return;
         };
-        map.cancel_cast(guid, false);
+        map.interrupt_non_melee_spells(guid, false, spell_id);
         self.drain_map_events();
     }
 
@@ -18208,6 +18288,18 @@ impl World {
                 };
                 if let Some(map) = self.maps.get_mut(&map_key) {
                     map.handle_autostore_loot_item(guid, slot);
+                }
+            }
+            opcode_id::CMSG_OPEN_ITEM => {
+                let (Ok(bag), Ok(slot)) = (reader.read_u8(), reader.read_u8()) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                let quest_reward = Arc::clone(&self.deps.quest_reward);
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.handle_open_item(guid, bag, slot, &mut |item_low| {
+                        quest_reward.gift_unwrap(item_low)
+                    });
                 }
             }
             opcode_id::CMSG_LOOT_MASTER_GIVE => {
@@ -18654,6 +18746,95 @@ impl World {
         self.reply_packet(id, crate::player_login::build_area_trigger_message(text));
     }
 
+    /// `OutdoorPvP` text fan-out. Non-defense is
+    /// Silithus `World::SendZoneText`
+    /// (`OutdoorPvPSI.cpp:185/220`, `CHAT_MSG_SYSTEM`
+    /// to players in the zone); defense is Eastern
+    /// Plaguelands `Map::SendDefenseMessage`
+    /// (`Map.cpp:1818`, `SMSG_DEFENSE_MESSAGE` to
+    /// every player on the map, positive entries
+    /// resolved as broadcast texts by gender).
+    fn outdoor_send_zone_text(&mut self, key: MapKey, zone_id: u32, entry: i32, defense: bool) {
+        if defense {
+            let targets: Vec<u32> = self
+                .player_map
+                .iter()
+                .filter(|(_, k)| **k == key)
+                .map(|(guid_low, _)| *guid_low)
+                .collect();
+            for guid_low in targets {
+                let Some(id) = self.player_session.get(&guid_low).copied() else {
+                    continue;
+                };
+                let guid = player_guid(guid_low);
+                let gender = self
+                    .maps
+                    .get(&key)
+                    .and_then(|map| map.player(guid))
+                    .map_or(0, |player| player.unit.gender());
+                let text = self.defense_text(entry, gender);
+                self.reply_packet(id, build_defense_message_packet(zone_id, &text));
+            }
+            return;
+        }
+        let fallback = if entry == 10049 {
+            "[Silithus] Under Horde control"
+        } else {
+            "[Silithus] Under Alliance control"
+        };
+        let text = self
+            .strings
+            .get(entry)
+            .map_or_else(|| fallback.to_string(), |row| row.text(0).to_string());
+        let packet = mangos_map::battlegrounds::build_bg_chat_packet(
+            mangos_map::battlegrounds::CHAT_MSG_SYSTEM as u8,
+            &text,
+            None,
+        );
+        let targets: Vec<u32> = self
+            .player_map
+            .iter()
+            .filter(|(_, k)| **k == key)
+            .map(|(guid_low, _)| *guid_low)
+            .collect();
+        for guid_low in targets {
+            let in_zone = self
+                .maps
+                .get(&key)
+                .is_some_and(|map| map.player_zone_id(player_guid(guid_low)) == zone_id);
+            if in_zone && let Some(id) = self.player_session.get(&guid_low).copied() {
+                self.reply_packet(id, packet.clone());
+            }
+        }
+    }
+
+    /// `ObjectMgr::GetBroadcastText` / `GetMangosString`
+    /// for `Map::SendDefenseMessage`: positive ids are
+    /// broadcast texts (female text only when present),
+    /// non-positive ids are language strings.
+    fn defense_text(&self, entry: i32, gender: u8) -> String {
+        if entry > 0 {
+            let Some(bct) = self
+                .deps
+                .world_stores
+                .scripts
+                .broadcast_texts
+                .get(&(entry as u32))
+            else {
+                return "<error>".to_string();
+            };
+            if gender == 1 && !bct.female_text.is_empty() {
+                bct.female_text.clone()
+            } else {
+                bct.male_text.clone()
+            }
+        } else {
+            self.strings
+                .get(entry)
+                .map_or_else(|| "<error>".to_string(), |row| row.text(0).to_string())
+        }
+    }
+
     /// `HandleAreaTriggerOpcode` (`MiscHandler.cpp:675-851`)
     /// subset: trigger-script execution (C++
     /// `pAreaTrigger` by name, then DB
@@ -18849,6 +19030,18 @@ impl World {
             if handled {
                 return;
             }
+        }
+        // Silithus turn-ins (`OutdoorPvPSI::HandleAreaTrigger`):
+        // the zone-script arm runs on the trigger id +
+        // flag-aura state, independent of any script name,
+        // after the BG arm and before the teleport arm
+        // (`MiscHandler.cpp:751-754` zone-script lookup).
+        if matches!(trigger_id, 4162 | 4168)
+            && let Some(map) = self.maps.get_mut(&map_key)
+            && map.si_handle_area_trigger(guid, trigger_id)
+        {
+            self.drain_map_events();
+            return;
         }
         let Some(teleport) = stores.area_triggers.teleport(trigger_id).cloned() else {
             return;
@@ -19848,6 +20041,7 @@ impl World {
                                 | opcode_id::CMSG_LOOT_RELEASE
                                 | opcode_id::CMSG_LOOT_MONEY
                                 | opcode_id::CMSG_AUTOSTORE_LOOT_ITEM
+                                | opcode_id::CMSG_OPEN_ITEM
                                 | opcode_id::CMSG_LOOT_MASTER_GIVE
                                 | opcode_id::CMSG_LOOT_ROLL
                         ) =>
@@ -20641,6 +20835,16 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn defense_message_packet_bytes() {
+        let packet = build_defense_message_packet(139, "Taken");
+        assert_eq!(packet.opcode(), opcode_id::SMSG_DEFENSE_MESSAGE);
+        let mut expected = 139u32.to_le_bytes().to_vec();
+        expected.extend_from_slice(&6u32.to_le_bytes());
+        expected.extend_from_slice(b"Taken\0");
+        assert_eq!(packet.body(), expected.as_slice());
     }
 
     #[test]

@@ -604,4 +604,128 @@ mod tests {
     fn proto_shape_compiles() {
         let _ = ItemPrototype::default();
     }
+
+    fn ctx_with<'a>(
+        rng: &'a mut TestRng,
+        protos: &'a ItemPrototypes,
+        team: u32,
+        condition_team: &'a dyn Fn(u16) -> Option<u32>,
+    ) -> LootRollCtx<'a> {
+        LootRollCtx {
+            rng,
+            prototypes: protos,
+            rates: LootRates::default(),
+            team,
+            condition_team,
+        }
+    }
+
+    /// Unknown loot ids regenerate nothing: the
+    /// caller must not fabricate loot (anti-regen
+    /// contract for the container open path, which
+    /// releases instead of filling).
+    #[test]
+    fn unknown_loot_id_no_regen() {
+        let protos = ItemPrototypes::default();
+        let stores = LootStores::default();
+        let mut rng = TestRng;
+        let mut c = ctx_with(&mut rng, &protos, 0, &|_| Some(0));
+        assert!(generate_loot(&mut c, &stores, &stores.creature, 4242).is_none());
+        assert!(generate_loot(&mut c, &stores, &stores.item, 4242).is_none());
+    }
+
+    /// Fork caps pin the wire shape: at most
+    /// `MAX_NR_LOOT_ITEMS` plain and
+    /// `MAX_NR_QUEST_ITEMS` quest slots.
+    #[test]
+    fn max_caps() {
+        let protos = ItemPrototypes::default();
+        let mut rows = Vec::new();
+        for i in 0..20u32 {
+            rows.push((11, store_item(1000 + i, 100.0, 0, 1, 1)));
+        }
+        for i in 0..40u32 {
+            rows.push((11, store_item(2000 + i, -100.0, 0, 1, 1)));
+        }
+        let stores = LootStores {
+            creature: LootStore::from_fixtures_for_tests(rows, true),
+            ..LootStores::default()
+        };
+        let mut rng = TestRng;
+        let mut c = ctx_with(&mut rng, &protos, 0, &|_| Some(0));
+        let out = generate_loot(&mut c, &stores, &stores.creature, 11).expect("template");
+        assert_eq!(out.items.len(), MAX_NR_LOOT_ITEMS);
+        assert_eq!(out.quest_items.len(), MAX_NR_QUEST_ITEMS);
+    }
+
+    /// Team gate on grouped rolls: a Horde-only
+    /// condition drops out for Alliance, `Some(0)`
+    /// stays in, unknown (`None`) drops out.
+    #[test]
+    fn condition_team_gate() {
+        let protos = ItemPrototypes::default();
+        let conditioned = |itemid: u32, condition_id: u16| LootStoreItem {
+            itemid,
+            chance: 0.0,
+            mincount_or_ref: 1,
+            group: 1,
+            needs_quest: false,
+            maxcount: 1,
+            condition_id,
+        };
+        let stores = LootStores {
+            creature: LootStore::from_fixtures_for_tests(
+                vec![
+                    (12, conditioned(700, 1)),
+                    (12, conditioned(701, 2)),
+                    (12, conditioned(702, 3)),
+                ],
+                true,
+            ),
+            ..LootStores::default()
+        };
+        // Alliance viewer: 469-only drops, cross and
+        // unknown behave.
+        let mut rng = TestRng;
+        let mut c = ctx_with(&mut rng, &protos, 469, &|cid| match cid {
+            1 => Some(67),
+            2 => Some(0),
+            _ => None,
+        });
+        let out = generate_loot(&mut c, &stores, &stores.creature, 12).expect("template");
+        assert_eq!(out.items.len(), 1);
+        assert_eq!(out.items[0].itemid, 701);
+    }
+
+    /// Equal-chance groups pick exactly one winner.
+    #[test]
+    fn equal_chance_group_single_pick() {
+        let protos = ItemPrototypes::default();
+        let stores = LootStores {
+            creature: LootStore::from_fixtures_for_tests(
+                vec![
+                    (13, store_item(800, 0.0, 1, 1, 1)),
+                    (13, store_item(801, 0.0, 1, 1, 1)),
+                    (13, store_item(802, 0.0, 1, 1, 1)),
+                ],
+                true,
+            ),
+            ..LootStores::default()
+        };
+        let mut rng = TestRng;
+        let mut c = ctx_with(&mut rng, &protos, 0, &|_| Some(0));
+        let out = generate_loot(&mut c, &stores, &stores.creature, 13).expect("template");
+        assert_eq!(out.items.len(), 1);
+        assert!(matches!(out.items[0].itemid, 800..=802));
+    }
+
+    /// Zeroed money templates short-circuit to zero
+    /// (disenchant windows carry no coin).
+    #[test]
+    fn zero_template_no_gold_shortcut() {
+        let protos = ItemPrototypes::default();
+        let mut rng = TestRng;
+        let mut c = ctx_with(&mut rng, &protos, 0, &|_| Some(0));
+        assert_eq!(generate_money_loot(&mut c, 0, 0), 0);
+    }
 }

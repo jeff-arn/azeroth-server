@@ -103,6 +103,14 @@ impl AreaStore {
         (zone_id, entry.id)
     }
 
+    /// Test-fixture constructor (no linked zones or
+    /// names; unit tests resolve zones straight from
+    /// the rows).
+    #[must_use]
+    pub fn from_entries_for_tests(entries: Vec<AreaEntry>) -> Self {
+        Self::from_rows(entries, [], [])
+    }
+
     fn from_rows(
         entries: impl IntoIterator<Item = AreaEntry>,
         linked_zones: impl IntoIterator<Item = (u32, u32)>,

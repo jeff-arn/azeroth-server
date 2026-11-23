@@ -19,7 +19,7 @@
 use mangos_entities::creature::Creature;
 use mangos_entities::gameobject::{GameObject, is_server_only};
 use mangos_entities::player::Player;
-use mangos_entities::unit::{DeathState, Team};
+use mangos_entities::unit::{DeathState, Team, UnitVisibility};
 use mangos_movement::movement_info::Position;
 
 /// `CREATURE_FLAG_EXTRA_INVISIBLE`.
@@ -129,6 +129,20 @@ pub fn creature_visible_in_grid(
         }
     }
     target.info.static_flags1 & STATIC_FLAG_VISIBLE_TO_GHOSTS != 0
+}
+
+/// `Unit::IsVisibleForOrDetect` visibility-flag gate
+/// (`Unit.cpp:6495-6602`): `RESPAWN` never, `ON` always
+/// (past this point), `OFF` never (the GM-viewer bypass
+/// is unmodeled — no GM flag exists in this subset),
+/// `GROUP_NO_DETECT` never, `GROUP_STEALTH` /
+/// `GROUP_INVISIBILITY` never until invisibility masks
+/// and `CanDetect*` land (conservative false; the
+/// stealth/invisibility aura handlers are unmodeled —
+/// recorded in the module docs).
+#[must_use]
+pub fn unit_visibility_allows(visibility: UnitVisibility) -> bool {
+    matches!(visibility, UnitVisibility::On)
 }
 
 /// Unit state gate for a player viewer: phasing + grid

@@ -285,6 +285,27 @@ pub fn apply_percent_mod_float_var(var: &mut f32, val: f32, apply: bool) {
     }
 }
 
+/// `UnitVisibility` (`UnitDefines.h:527-535`):
+/// runtime-only visibility state, never persisted
+/// (the fork never saves `m_visibility`).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[repr(u8)]
+pub enum UnitVisibility {
+    /// Absolute, not detectable, GM-like.
+    Off = 0,
+    /// Normal visibility.
+    #[default]
+    On = 1,
+    /// Seen by group members on a detect roll.
+    GroupStealth = 2,
+    /// Seen by group members on a detect roll.
+    GroupInvisibility = 3,
+    /// Seen by nobody.
+    GroupNoDetect = 4,
+    /// Force-removed at respawn command.
+    Respawn = 5,
+}
+
 /// `Unit` state shared by players and creatures.
 #[derive(Clone, Debug)]
 pub struct UnitBase {
@@ -385,6 +406,10 @@ pub struct UnitBase {
     /// Creatures keep their template ranges on the
     /// `Creature` aggregate; this field serves players.
     pub base_weapon_damage: [(f32, f32); 3],
+    /// `m_visibility` (`Unit.h:601`): runtime-only,
+    /// default `VISIBILITY_ON` (`Unit.cpp:104`), never
+    /// persisted.
+    pub visibility: UnitVisibility,
 }
 
 impl UnitBase {
@@ -425,7 +450,14 @@ impl UnitBase {
             base_attack_power: 0.0,
             unit_state: 0,
             base_weapon_damage: [(1.0, 2.0); 3],
+            visibility: UnitVisibility::On,
         }
+    }
+
+    /// `GetVisibility` (`Unit.h:608`).
+    #[must_use]
+    pub fn get_visibility(&self) -> UnitVisibility {
+        self.visibility
     }
 
     /// `GetSpeed(type)` without aura modifiers:

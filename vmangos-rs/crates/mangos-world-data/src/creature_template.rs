@@ -35,8 +35,16 @@ pub const MAX_DISPLAY_IDS_PER_CREATURE: usize = 4;
 pub const CREATURE_MAX_SPELLS: usize = 4;
 /// `CREATURE_TYPE_BEAST` (`CreatureDefines.h:43`).
 pub const CREATURE_TYPE_BEAST: u32 = 1;
+/// `CREATURE_TYPE_UNDEAD` (`CreatureDefines.h:48`).
+pub const CREATURE_TYPE_UNDEAD: u32 = 6;
 /// `CREATURE_TYPE_HUMANOID` (`CreatureDefines.h:49`).
 pub const CREATURE_TYPE_HUMANOID: u32 = 7;
+/// `CREATURE_TYPE_CRITTER` (`CreatureDefines.h:50`).
+pub const CREATURE_TYPE_CRITTER: u32 = 8;
+/// `CREATURE_ELITE_NORMAL` (`CreatureDefines.h:90`).
+pub const CREATURE_ELITE_NORMAL: u32 = 0;
+/// `CREATURE_ELITE_RARE` (`CreatureDefines.h:94`).
+pub const CREATURE_ELITE_RARE: u32 = 4;
 /// `CREATURE_FAMILY_HORSE_CUSTOM` (`CreatureDefines.h:71`).
 pub const CREATURE_FAMILY_HORSE_CUSTOM: u32 = 10;
 /// `INHABIT_ANYWHERE` (`CreatureDefines.h:488`).
@@ -275,6 +283,14 @@ impl CreatureInfo {
     #[must_use]
     pub fn despawn_instantly(&self) -> bool {
         self.static_flags1 & STATIC_FLAG_DESPAWN_INSTANTLY != 0
+    }
+
+    /// `Creature::IsElite` (`Creature.h:197-204`):
+    /// pets never count; normal and rare ranks do not
+    /// either (rare-elite and above do).
+    #[must_use]
+    pub fn is_elite(&self) -> bool {
+        self.rank != CREATURE_ELITE_NORMAL && self.rank != CREATURE_ELITE_RARE
     }
 }
 

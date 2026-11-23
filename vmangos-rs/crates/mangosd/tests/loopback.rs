@@ -125,6 +125,10 @@ struct FakeCharQueries {
     /// value is the corpse age in seconds; the expired
     /// variant crosses the three-day resurrectable expiry.
     ghost_corpse_age_secs: Option<u64>,
+    /// Wrapped-gift probe: append the 9003 (gift row
+    /// present) + 9004 (no gift row) wrapped rows to
+    /// the hunter inventory.
+    gift_mode: bool,
 }
 
 fn seed_inventory() -> Vec<InventoryRow> {
@@ -150,6 +154,33 @@ fn seed_inventory() -> Vec<InventoryRow> {
     // Item 25 worn main-hand (slot 15) + a 3-stack
     // of linen (2589) in the backpack (slot 23).
     vec![row(9001, 25, 1, 11, 15), row(9002, 2589, 3, 0, 23)]
+}
+
+/// Wrapped-gift fixture rows (backpack slots 24-25):
+/// linen wrappers with the gift bit set. 9003 has a
+/// fake gift row (restores to a plain sword);
+/// 9004 has none (fork miss arm: destroy).
+fn gift_rows() -> Vec<InventoryRow> {
+    let row = |item_guid: u32, slot: u8| InventoryRow {
+        item: ItemInstanceRow {
+            creator_guid: 0,
+            gift_creator_guid: 9,
+            count: 1,
+            duration: 0,
+            charges: "0 0 0 0 0 ".to_string(),
+            flags: 0x8,
+            enchantments: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0".to_string(),
+            random_property_id: 0,
+            durability: 0,
+            text: 0,
+            item_guid,
+            item_id: 2589,
+            generated_loot: 0,
+        },
+        bag: 0,
+        slot,
+    };
+    vec![row(9003, 24), row(9004, 25)]
 }
 
 impl FakeCharQueries {
@@ -188,6 +219,7 @@ impl FakeCharQueries {
             hunter_mode: false,
             honor_mode: false,
             ghost_corpse_age_secs: None,
+            gift_mode: false,
         }
     }
 
@@ -300,6 +332,12 @@ impl FakeCharQueries {
         q
     }
 
+    fn new_gift_hunter() -> Self {
+        let mut q = Self::new_hunter();
+        q.gift_mode = true;
+        q
+    }
+
     /// Enumtest rebadged as a level-12 hunter with a
     /// current pet (id 501, entry 9101) and a stabled
     /// pet (id 502, entry 9102, stable slot 1); one
@@ -353,6 +391,27 @@ impl FakeCharQueries {
             spell: 9210,
             active: 1,
             disabled: 0,
+        });
+        // Slice 1 skinning fixture: the skinning cast
+        // plus a mid-rank skinning skill (60/75: orange
+        // for the level-14 beast, so the gain roll
+        // always lands when the cast goes through).
+        load.spells.push(SpellRow {
+            spell: 9211,
+            active: 1,
+            disabled: 0,
+        });
+        // Slice 2 pickpocket fixture: the pickpocket
+        // cast for the humanoid victims.
+        load.spells.push(SpellRow {
+            spell: 9212,
+            active: 1,
+            disabled: 0,
+        });
+        load.skills.push(mangos_db::character_load::SkillRow {
+            skill: 393,
+            value: 60,
+            max: 75,
         });
         load
     }
@@ -508,7 +567,11 @@ impl CharQueries for FakeCharQueries {
         } else if self.honor_mode {
             Self::honor_load()
         } else if self.hunter_mode {
-            Self::hunter_load()
+            let mut load = Self::hunter_load();
+            if self.gift_mode {
+                load.inventory.extend(gift_rows());
+            }
+            load
         } else {
             Self::enumtest_load()
         }))
@@ -942,12 +1005,21 @@ impl mangosd::world_actor::PetStore for FakePetStore {
 
 struct FakeQuestRewardStore {
     next_item_guid: std::sync::atomic::AtomicU32,
+    /// In-memory `character_gifts` stand-in: the
+    /// wrapped-gift fixture rows (`item_guid` ->
+    /// `(item_id, flags)`). `gift_unwrap` removes on
+    /// hit, mirroring the fork's unwrap-time delete.
+    gifts: Mutex<HashMap<u32, (u32, u32)>>,
 }
 
 impl FakeQuestRewardStore {
     fn new() -> Self {
         Self {
             next_item_guid: std::sync::atomic::AtomicU32::new(990_001),
+            // Wrapped-gift fixture: 9003 restores to a
+            // plain sword (25, flags 0); 9004 has no
+            // gift row (fork miss arm: destroy).
+            gifts: Mutex::new(HashMap::from([(9003, (25, 0))])),
         }
     }
 }
@@ -982,6 +1054,10 @@ impl mangosd::world_actor::QuestRewardStore for FakeQuestRewardStore {
 
     fn set_item_flags(&self, _item_guid: u32, _flags: u32) -> Result<(), mangos_db::DbError> {
         Ok(())
+    }
+
+    fn gift_unwrap(&self, item_guid: u32) -> Result<Option<(u32, u32)>, mangos_db::DbError> {
+        Ok(self.gifts.lock().expect("gifts mutex").remove(&item_guid))
     }
 }
 
@@ -1232,14 +1308,29 @@ impl mangosd::world_actor::GameEventStatusStore for FakeGameEventStatus {
     }
 }
 
-struct FakeCharacterSaver;
+/// Capturing saver: records every bundle so tests
+/// can observe the persisted shape (append-only
+/// observation, no save-shape change).
+#[derive(Default)]
+struct FakeCharacterSaver {
+    saved: Mutex<
+        Vec<(
+            mangos_db::character_save::CharacterSaveBundle,
+            Option<mangos_db::character_save::CharacterStatsRow>,
+        )>,
+    >,
+}
 
 impl mangosd::world_actor::CharacterSaver for FakeCharacterSaver {
     fn save_character(
         &self,
-        _bundle: mangos_db::character_save::CharacterSaveBundle,
-        _stats: Option<mangos_db::character_save::CharacterStatsRow>,
+        bundle: mangos_db::character_save::CharacterSaveBundle,
+        stats: Option<mangos_db::character_save::CharacterStatsRow>,
     ) -> Result<(), DbError> {
+        self.saved
+            .lock()
+            .expect("saver mutex")
+            .push((bundle, stats));
         Ok(())
     }
 
@@ -2088,12 +2179,49 @@ async fn start_server_with_queries(
     .await
 }
 
+async fn start_server_with_capture(
+    backend: Arc<FakeBackend>,
+    world_stores: mangos_map::WorldStores,
+    queries: Arc<FakeCharQueries>,
+) -> (u16, Arc<FakeCharacterSaver>) {
+    let saver = Arc::new(FakeCharacterSaver::default());
+    let port = Box::pin(start_server_with_queries_cfg_with_saver(
+        backend,
+        world_stores,
+        queries,
+        test_config(),
+        0,
+        Arc::clone(&saver),
+    ))
+    .await;
+    (port, saver)
+}
+
 async fn start_server_with_queries_cfg(
     backend: Arc<FakeBackend>,
     world_stores: mangos_map::WorldStores,
     queries: Arc<FakeCharQueries>,
     config: ServerConfig,
     honor_week_begin: u32,
+) -> u16 {
+    Box::pin(start_server_with_queries_cfg_with_saver(
+        backend,
+        world_stores,
+        queries,
+        config,
+        honor_week_begin,
+        Arc::new(FakeCharacterSaver::default()),
+    ))
+    .await
+}
+
+async fn start_server_with_queries_cfg_with_saver(
+    backend: Arc<FakeBackend>,
+    world_stores: mangos_map::WorldStores,
+    queries: Arc<FakeCharQueries>,
+    config: ServerConfig,
+    honor_week_begin: u32,
+    saver: Arc<FakeCharacterSaver>,
 ) -> u16 {
     let log = Arc::new(
         Log::open(
@@ -2120,7 +2248,7 @@ async fn start_server_with_queries_cfg(
             race_class_dbc: Arc::new(fake_race_class_dbc()),
             respawn_times: mangos_world_data::spawn_support::RespawnTimes::default(),
             presence: Arc::new(FakePresence),
-            character_saver: Arc::new(FakeCharacterSaver),
+            character_saver: saver,
             social: Arc::new(FakeSocialStore),
             group: Arc::new(FakeGroupStore),
             initial_groups: mangos_db::group::LoadedGroups::default(),
@@ -5902,8 +6030,55 @@ fn fake_loot_world_stores() -> mangos_map::WorldStores {
         display_total_probability: 100,
         ..Default::default()
     };
-    stores.creature_templates =
-        CreatureTemplates::from_entries_for_tests(vec![master, beast(9101), beast(9102), critter]);
+    // Skinning fixture (Slice 1): a level-14 beast with
+    // the shared body template plus a skinning template
+    // (1x hide 2934 at 100%). Civilian so it never
+    // fights back during the scripted kill.
+    let mut skinbeast = beast(9103);
+    skinbeast.name = "Skintest".into();
+    skinbeast.pet_family = 0;
+    skinbeast.static_flags1 = 0;
+    skinbeast.civilian = true;
+    skinbeast.level_min = 14;
+    skinbeast.level_max = 14;
+    skinbeast.loot_id = 9301;
+    skinbeast.gold_min = 137;
+    skinbeast.gold_max = 137;
+    skinbeast.skinning_loot_id = 9302;
+    // Pickpocket fixture (Slice 2): a level-14 humanoid
+    // with the shared body template plus a pickpocket
+    // template (1x linen 2589 at 100%), and a
+    // template-less humanoid fellow. Civilian so neither
+    // fights back during the scripted casts.
+    let mut pickbeast = beast(9104);
+    pickbeast.name = "Picktest".into();
+    pickbeast.pet_family = 0;
+    pickbeast.static_flags1 = 0;
+    pickbeast.civilian = true;
+    pickbeast.creature_type = 7;
+    pickbeast.level_min = 14;
+    pickbeast.level_max = 14;
+    pickbeast.loot_id = 9301;
+    pickbeast.gold_min = 137;
+    pickbeast.gold_max = 137;
+    pickbeast.pickpocket_loot_id = 9303;
+    let mut pickfellow = beast(9105);
+    pickfellow.name = "Pickfellow".into();
+    pickfellow.pet_family = 0;
+    pickfellow.static_flags1 = 0;
+    pickfellow.civilian = true;
+    pickfellow.creature_type = 7;
+    pickfellow.level_min = 14;
+    pickfellow.level_max = 14;
+    stores.creature_templates = CreatureTemplates::from_entries_for_tests(vec![
+        master,
+        beast(9101),
+        beast(9102),
+        critter,
+        skinbeast,
+        pickbeast,
+        pickfellow,
+    ]);
     // Respawn in an hour: the GO fixture spawn has a
     // zero respawn time, so the corpse would
     // re-materialize before the loot window opens.
@@ -5920,7 +6095,45 @@ fn fake_loot_world_stores() -> mangos_map::WorldStores {
             z: 83.5312,
             o: 0.0,
         };
-        let mut spawns = SpawnData::from_creatures_for_tests(vec![(4247, critter_spawn)]);
+        let mut beast_spawn = CreatureSpawn::default();
+        beast_spawn.creature_id[0] = 9103;
+        beast_spawn.spawntimesecsmin = 3600;
+        beast_spawn.spawntimesecsmax = 3600;
+        beast_spawn.position = WorldLocation {
+            map_id: 0,
+            x: -8947.5,
+            y: -130.0,
+            z: 83.5312,
+            o: 0.0,
+        };
+        let mut pick_spawn = CreatureSpawn::default();
+        pick_spawn.creature_id[0] = 9104;
+        pick_spawn.spawntimesecsmin = 3600;
+        pick_spawn.spawntimesecsmax = 3600;
+        pick_spawn.position = WorldLocation {
+            map_id: 0,
+            x: -8948.0,
+            y: -130.5,
+            z: 83.5312,
+            o: 0.0,
+        };
+        let mut fellow_spawn = CreatureSpawn::default();
+        fellow_spawn.creature_id[0] = 9105;
+        fellow_spawn.spawntimesecsmin = 3600;
+        fellow_spawn.spawntimesecsmax = 3600;
+        fellow_spawn.position = WorldLocation {
+            map_id: 0,
+            x: -8947.0,
+            y: -131.5,
+            z: 83.5312,
+            o: 0.0,
+        };
+        let mut spawns = SpawnData::from_creatures_for_tests(vec![
+            (4247, critter_spawn),
+            (4248, beast_spawn),
+            (4249, pick_spawn),
+            (4250, fellow_spawn),
+        ]);
         spawns.insert_gameobject_for_tests(
             4246,
             GameObjectSpawn {
@@ -5975,6 +6188,103 @@ fn fake_loot_world_stores() -> mangos_map::WorldStores {
         )],
         true,
     );
+    // Skinning store: hide 2934 (see the proto below in
+    // the round-trip test).
+    stores.loot.skinning = LootStore::from_fixtures_for_tests(
+        vec![(
+            9302,
+            LootStoreItem {
+                itemid: 2934,
+                chance: 100.0,
+                mincount_or_ref: 1,
+                group: 0,
+                needs_quest: false,
+                maxcount: 1,
+                condition_id: 0,
+            },
+        )],
+        true,
+    );
+    // Skinning cast (Slice 1): effect 95 on the unit
+    // target, spell range 100 like the kill spell,
+    // always-hit for a deterministic scripted hit
+    // (the orange-attempt roll stays live).
+    stores.spells.spells.insert(
+        9211,
+        SpellEntry {
+            id: 9211,
+            range_index: 9001,
+            attributes_ex3: 0x0004_0000, // SPELL_ATTR_EX3_ALWAYS_HIT
+            dmg_class: 1,                // MAGIC
+            effects: [
+                SpellEffectData {
+                    effect: 95,            // SPELL_EFFECT_SKINNING
+                    implicit_target_a: 25, // TARGET_UNIT
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Pickpocket store (Slice 2): linen 2589 (proto from
+    // the base fixture).
+    stores.loot.pickpocketing = LootStore::from_fixtures_for_tests(
+        vec![(
+            9303,
+            LootStoreItem {
+                itemid: 2589,
+                chance: 100.0,
+                mincount_or_ref: 1,
+                group: 0,
+                needs_quest: false,
+                maxcount: 1,
+                condition_id: 0,
+            },
+        )],
+        true,
+    );
+    // Pickpocket cast (Slice 2): effect 71 on the unit
+    // target, spell range 100 like the kill spell,
+    // always-hit for a deterministic scripted hit (the
+    // miss-path stealth break stays uncovered by this
+    // fixture).
+    stores.spells.spells.insert(
+        9212,
+        SpellEntry {
+            id: 9212,
+            range_index: 9001,
+            attributes_ex3: 0x0004_0000, // SPELL_ATTR_EX3_ALWAYS_HIT
+            dmg_class: 1,                // MAGIC
+            effects: [
+                SpellEffectData {
+                    effect: 71,            // SPELL_EFFECT_PICKPOCKET
+                    implicit_target_a: 25, // TARGET_UNIT
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Skill-line rows so the login projection emits the
+    // skinning triplet (`write_skill_fields` needs the
+    // category + race/class rows; Rank keeps row max).
+    stores.skills.categories.insert(393, 11);
+    stores
+        .skills
+        .race_class
+        .push(mangos_world_data::skill_info::RaceClassSkill {
+            skill_id: 393,
+            race_mask: 0,
+            class_mask: 0,
+            flags: 0,
+            req_level: 0,
+            skill_tier_id: 7,
+        });
+    stores.skills.tiers.insert(7);
     stores
 }
 
@@ -6127,4 +6437,1183 @@ async fn loot_round_trip() {
         }
     }
     assert!(released, "loot release response");
+}
+
+/// Skinning round trip (Slice 1, fork
+/// `Spell.cpp:6069-6094` + `SpellEffects.cpp:5265-5284`
+/// + `Player.cpp:7985-8068`): the level-14 beast
+/// (entry 9103, spawn 4248) carries body template 9301
+/// and skinning template 9302 (1x hide 2934).
+/// `UNSKINNABLE` on the live, unskinnable critter;
+/// `NOT_LOOTED` while the body is full; the skinning
+/// window (wire byte 2, fork `:8054-8056`) after full
+/// loot + release; skill in [60, 61] (orange band, so
+/// the gain roll always lands when the cast goes
+/// through; the `TRY_AGAIN` roll itself stays live and
+/// is retried); `UNSKINNABLE` on the second cast; the
+/// shared slot shows the emptied skin window on
+/// re-open.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(clippy::too_many_lines)] // scripted packet sequence
+async fn skinning_round_trip() {
+    use mangos_protocol::opcode_table::opcode_id;
+    use mangos_protocol::update_field_table::offsets;
+    use mangos_world_data::item_prototype::ItemPrototype;
+
+    async fn cast_at(client: &mut Client, spell: u32, target: u64) {
+        let mut body = spell.to_le_bytes().to_vec();
+        body.extend_from_slice(&0x0002u16.to_le_bytes());
+        let mut packed = Vec::new();
+        mangos_guid::ObjectGuid::from_raw(target).write_packed(&mut packed);
+        body.extend_from_slice(&packed);
+        client.send_packet(opcode_id::CMSG_CAST_SPELL, &body).await;
+    }
+
+    // Fail result for one cast (panics on a window or a
+    // different reason).
+    async fn expect_cast_fail(
+        client: &mut Client,
+        spell: u32,
+        target: u64,
+        reason: u8,
+        what: &str,
+    ) {
+        cast_at(client, spell, target).await;
+        for _ in 0..6 {
+            let batch = flush_packets(client).await;
+            if batch
+                .iter()
+                .any(|(op, b)| *op == opcode_id::SMSG_LOOT_RESPONSE && b.get(8) == Some(&2))
+            {
+                panic!("{what}: unexpected skinning window");
+            }
+            if let Some((_, b)) = batch.iter().find(|(op, b)| {
+                *op == opcode_id::SMSG_CAST_RESULT
+                    && b.len() >= 5
+                    && u32::from_le_bytes(b[0..4].try_into().expect("spell")) == spell
+            }) {
+                assert_eq!(b[4], reason, "{what}: cast result");
+                return;
+            }
+        }
+        panic!("{what}: no cast result");
+    }
+
+    // The slot-id word only replicates at create (which
+    // `values_field` cannot parse), so match the packed
+    // value word directly: only changed words replicate
+    // after login.
+    fn skill_packed_in(bodies: &[(u16, Vec<u8>)], value: u32, max: u32) -> bool {
+        let want = value | (max << 16);
+        for slot in 0..127u16 {
+            let packed_at = offsets::PLAYER_SKILL_INFO_1_1 + slot * 3 + 1;
+            if values_field(bodies, 7, packed_at) == Some(want) {
+                return true;
+            }
+        }
+        false
+    }
+
+    let backend = FakeBackend::with_test_user();
+    let mut stores = fake_loot_world_stores();
+    // Hide proto for the skinning template (mirrors
+    // the linen fields the grant path needs).
+    stores.item_prototypes.insert_for_tests(ItemPrototype {
+        item_id: 2934,
+        class: 7,
+        display_id: 2112,
+        stackable: 20,
+        buy_count: 1,
+        buy_price: 40,
+        sell_price: 10,
+        allowable_class: u32::MAX,
+        allowable_race: u32::MAX,
+        ..Default::default()
+    });
+    let port =
+        start_server_with_queries(backend, stores, Arc::new(FakeCharQueries::new_hunter())).await;
+    let (mut client, seed) = Client::connect(port).await;
+
+    client.send_auth(seed, "TESTUSER", good_digest(seed)).await;
+    client.crypt.init(SESSIONKEY_HEX);
+    let (op, _) = client.read_packet().await.expect("auth ok");
+    assert_eq!(op, opcode::SMSG_AUTH_RESPONSE);
+    client.send_packet(opcode::CMSG_CHAR_ENUM, &[]).await;
+    let _ = client.read_until_opcode(opcode::SMSG_CHAR_ENUM).await;
+    client
+        .send_packet(opcode::CMSG_PLAYER_LOGIN, &7u64.to_le_bytes())
+        .await;
+    let _ = client
+        .read_until_opcode(opcode_id::SMSG_LOGIN_VERIFY_WORLD)
+        .await;
+    let login_a = flush_packets(&mut client).await;
+    let login_b = flush_packets(&mut client).await;
+
+    let critter_guid = mangos_guid::ObjectGuid::with_entry(mangos_guid::HighGuid::UNIT, 9207, 4247);
+    let critter = critter_guid.raw();
+    let beast_guid = mangos_guid::ObjectGuid::with_entry(mangos_guid::HighGuid::UNIT, 9103, 4248);
+    let beast = beast_guid.raw();
+
+    // NOTE: the login create block is not parseable by
+    // `values_field` (not even the pre-existing axes
+    // triplet shows), so the pre-gain skill is not
+    // asserted here; the post-gain values update below
+    // proves the projection and the +1 together (the
+    // fixture seeds the row at 60/75).
+    let _ = (login_a, login_b);
+    // Every batch from the skinning cast on: the skill
+    // update replicates here.
+    let mut post_cast: Vec<(u16, Vec<u8>)> = Vec::new();
+
+    // The live, unskinnable critter fails with
+    // UNSKINNABLE (116): no skinning template, so the
+    // kill-time flag was never set.
+    expect_cast_fail(&mut client, 9211, critter, 116, "live critter skin").await;
+
+    // One-shot the beast.
+    cast_at(&mut client, 9210, beast).await;
+    // Death proof is the body window (mirror the loot
+    // round trip).
+    let mut body: Option<Vec<u8>> = None;
+    for _ in 0..10 {
+        let _ = flush_packets(&mut client).await;
+        client
+            .send_packet(opcode_id::CMSG_LOOT, &beast.to_le_bytes())
+            .await;
+        let batch = flush_packets(&mut client).await;
+        if let Some((_, b)) = batch
+            .iter()
+            .find(|(op, b)| *op == opcode_id::SMSG_LOOT_RESPONSE && b.get(8) == Some(&1))
+        {
+            body = Some(b.clone());
+            break;
+        }
+    }
+    let body = body.expect("beast body response");
+    let rd32 = |at: usize| u32::from_le_bytes(body[at..at + 4].try_into().expect("u32"));
+    assert_eq!(rd32(9), 137, "body gold");
+    assert_eq!(body[13], 1, "one body item shown");
+    assert_eq!(rd32(15), 2589, "body linen");
+
+    // Skinning the full body fails with NOT_LOOTED
+    // (112): non-critter bodies skin only once fully
+    // looted.
+    expect_cast_fail(&mut client, 9211, beast, 112, "full body skin").await;
+
+    // Take the body item and money, then release.
+    client
+        .send_packet(opcode_id::CMSG_AUTOSTORE_LOOT_ITEM, &[0])
+        .await;
+    let mut removed = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        removed |= batch
+            .iter()
+            .any(|(op, b)| *op == opcode_id::SMSG_LOOT_REMOVED && b.first() == Some(&0));
+        if removed {
+            break;
+        }
+    }
+    assert!(removed, "body loot removed");
+    client.send_packet(opcode_id::CMSG_LOOT_MONEY, &[]).await;
+    let mut cleared = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        cleared |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_LOOT_CLEAR_MONEY);
+        if cleared {
+            break;
+        }
+    }
+    assert!(cleared, "body money cleared");
+    client
+        .send_packet(opcode_id::CMSG_LOOT_RELEASE, &beast.to_le_bytes())
+        .await;
+    let mut released = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        released |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_LOOT_RELEASE_RESPONSE);
+        if released {
+            break;
+        }
+    }
+    assert!(released, "body release response");
+
+    // Skin the emptied corpse: TRY_AGAIN (122) retries,
+    // any other failure is fatal.
+    let mut view: Option<Vec<u8>> = None;
+    for _ in 0..10 {
+        cast_at(&mut client, 9211, beast).await;
+        for _ in 0..6 {
+            let batch = flush_packets(&mut client).await;
+            if let Some((_, b)) = batch
+                .iter()
+                .find(|(op, b)| *op == opcode_id::SMSG_LOOT_RESPONSE && b.get(8) == Some(&2))
+            {
+                view = Some(b.clone());
+                post_cast.extend(batch);
+                break;
+            }
+            if let Some((_, b)) = batch.iter().find(|(op, b)| {
+                *op == opcode_id::SMSG_CAST_RESULT
+                    && b.len() >= 5
+                    && u32::from_le_bytes(b[0..4].try_into().expect("spell")) == 9211
+            }) {
+                // TRY_AGAIN is the only legal failure
+                // here; the next cast retries it.
+                assert_eq!(b[4], 122, "skinning retry reason");
+                post_cast.extend(batch);
+                break;
+            }
+            post_cast.extend(batch);
+        }
+        if view.is_some() {
+            break;
+        }
+    }
+    let view = view.expect("skinning window");
+    let rd32 = |at: usize| u32::from_le_bytes(view[at..at + 4].try_into().expect("u32"));
+    assert_eq!(
+        u64::from_le_bytes(view[0..8].try_into().expect("guid")),
+        beast,
+        "skin loot guid"
+    );
+    assert_eq!(view[8], 2, "LOOT_PICKPOCKETING wire byte");
+    assert_eq!(rd32(9), 0, "skin gold");
+    assert_eq!(view[13], 1, "one skin item shown");
+    assert_eq!(view[14], 0, "slot 0");
+    assert_eq!(rd32(15), 2934, "hide");
+    assert_eq!(rd32(19), 1, "stack of 1");
+    assert_eq!(view[35], 0, "ALLOW_LOOT slot type");
+
+    // Take the hide and release the skin window.
+    client
+        .send_packet(opcode_id::CMSG_AUTOSTORE_LOOT_ITEM, &[0])
+        .await;
+    let mut removed = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        removed |= batch
+            .iter()
+            .any(|(op, b)| *op == opcode_id::SMSG_LOOT_REMOVED && b.first() == Some(&0));
+        post_cast.extend(batch);
+        if removed {
+            break;
+        }
+    }
+    assert!(removed, "skin loot removed");
+    // Orange band: the gain roll always lands, so the
+    // replicated packed word moves 60 -> 61 at the same
+    // trained max 75.
+    assert!(skill_packed_in(&post_cast, 61, 75), "skinning skill after");
+    client
+        .send_packet(opcode_id::CMSG_LOOT_RELEASE, &beast.to_le_bytes())
+        .await;
+    let mut released = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        released |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_LOOT_RELEASE_RESPONSE);
+        if released {
+            break;
+        }
+    }
+    assert!(released, "skin release response");
+
+    // The flag died with the effect: UNSKINNABLE (116).
+    expect_cast_fail(&mut client, 9211, beast, 116, "reskin").await;
+
+    // The shared slot serves the emptied skin window on
+    // re-open (corpse wire byte, no resurrected body
+    // loot).
+    client
+        .send_packet(opcode_id::CMSG_LOOT, &beast.to_le_bytes())
+        .await;
+    let mut reopened: Option<Vec<u8>> = None;
+    for _ in 0..6 {
+        let batch = flush_packets(&mut client).await;
+        if let Some((_, b)) = batch.iter().find(|(op, b)| {
+            *op == opcode_id::SMSG_LOOT_RESPONSE
+                && b.len() > 13
+                && u64::from_le_bytes(b[0..8].try_into().expect("guid")) == beast
+        }) {
+            reopened = Some(b.clone());
+            break;
+        }
+    }
+    let reopened = reopened.expect("corpse re-open");
+    assert_eq!(reopened[8], 1, "LOOT_CORPSE wire byte");
+    assert_eq!(
+        u32::from_le_bytes(reopened[9..13].try_into().expect("u32")),
+        0,
+        "no gold on re-open"
+    );
+    assert_eq!(reopened[13], 0, "no items on re-open");
+}
+
+/// Pickpocket round trip (Slice 2, fork
+/// `Spell.cpp:6188-6198` + `SpellEffects.cpp:2580-2590`
+/// + `Player.cpp:7872-7939`): the level-14 humanoid
+/// (entry 9104, spawn 4249) carries pickpocket template
+/// 9303 (1x linen 2589). `NO_POCKETS` on the critter;
+/// the template-less fellow humanoid (9105) still opens
+/// a money-only window; first open fills items + extra
+/// money (wire byte 2); a same-looter re-cast re-serves
+/// untouched; take + release then re-cast refills
+/// quest-only (gold 0, no items); the kill wipes the
+/// mark and the body loots; pickpocketing the corpse
+/// fails at cast with `TARGETS_DEAD`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(clippy::too_many_lines)] // scripted packet sequence
+async fn pickpocket_round_trip() {
+    use mangos_protocol::opcode_table::opcode_id;
+
+    async fn cast_at(client: &mut Client, spell: u32, target: u64) {
+        let mut body = spell.to_le_bytes().to_vec();
+        body.extend_from_slice(&0x0002u16.to_le_bytes());
+        let mut packed = Vec::new();
+        mangos_guid::ObjectGuid::from_raw(target).write_packed(&mut packed);
+        body.extend_from_slice(&packed);
+        client.send_packet(opcode_id::CMSG_CAST_SPELL, &body).await;
+    }
+
+    async fn expect_cast_fail(
+        client: &mut Client,
+        spell: u32,
+        target: u64,
+        reason: u8,
+        what: &str,
+    ) {
+        cast_at(client, spell, target).await;
+        for _ in 0..6 {
+            let batch = flush_packets(client).await;
+            if batch
+                .iter()
+                .any(|(op, b)| *op == opcode_id::SMSG_LOOT_RESPONSE && b.get(8) == Some(&2))
+            {
+                panic!("{what}: unexpected pickpocket window");
+            }
+            if let Some((_, b)) = batch.iter().find(|(op, b)| {
+                *op == opcode_id::SMSG_CAST_RESULT
+                    && b.len() >= 5
+                    && u32::from_le_bytes(b[0..4].try_into().expect("spell")) == spell
+            }) {
+                assert_eq!(b[4], reason, "{what}: cast result");
+                return;
+            }
+        }
+        panic!("{what}: no cast result");
+    }
+
+    // Window bytes for one guid: the first
+    // `SMSG_LOOT_RESPONSE` for it within the flushes.
+    async fn open_window(client: &mut Client, spell: u32, target: u64) -> Vec<u8> {
+        for _ in 0..10 {
+            let _ = flush_packets(client).await;
+            cast_at(client, spell, target).await;
+            let batch = flush_packets(client).await;
+            if let Some((_, b)) = batch.iter().find(|(op, b)| {
+                *op == opcode_id::SMSG_LOOT_RESPONSE
+                    && b.len() > 13
+                    && u64::from_le_bytes(b[0..8].try_into().expect("guid")) == target
+            }) {
+                return b.clone();
+            }
+        }
+        panic!("no loot window for {target:#x}");
+    }
+
+    async fn release_window(client: &mut Client, target: u64, what: &str) {
+        client
+            .send_packet(opcode_id::CMSG_LOOT_RELEASE, &target.to_le_bytes())
+            .await;
+        let mut released = false;
+        for _ in 0..8 {
+            let batch = flush_packets(client).await;
+            released |= batch
+                .iter()
+                .any(|(op, _)| *op == opcode_id::SMSG_LOOT_RELEASE_RESPONSE);
+            if released {
+                break;
+            }
+        }
+        assert!(released, "{what}: release response");
+    }
+
+    let backend = FakeBackend::with_test_user();
+    let stores = fake_loot_world_stores();
+    let port =
+        start_server_with_queries(backend, stores, Arc::new(FakeCharQueries::new_hunter())).await;
+    let (mut client, seed) = Client::connect(port).await;
+
+    client.send_auth(seed, "TESTUSER", good_digest(seed)).await;
+    client.crypt.init(SESSIONKEY_HEX);
+    let (op, _) = client.read_packet().await.expect("auth ok");
+    assert_eq!(op, opcode::SMSG_AUTH_RESPONSE);
+    client.send_packet(opcode::CMSG_CHAR_ENUM, &[]).await;
+    let _ = client.read_until_opcode(opcode::SMSG_CHAR_ENUM).await;
+    client
+        .send_packet(opcode::CMSG_PLAYER_LOGIN, &7u64.to_le_bytes())
+        .await;
+    let _ = client
+        .read_until_opcode(opcode_id::SMSG_LOGIN_VERIFY_WORLD)
+        .await;
+    let _ = flush_packets(&mut client).await;
+    let _ = flush_packets(&mut client).await;
+
+    let critter =
+        mangos_guid::ObjectGuid::with_entry(mangos_guid::HighGuid::UNIT, 9207, 4247).raw();
+    let pick = mangos_guid::ObjectGuid::with_entry(mangos_guid::HighGuid::UNIT, 9104, 4249).raw();
+    let fellow = mangos_guid::ObjectGuid::with_entry(mangos_guid::HighGuid::UNIT, 9105, 4250).raw();
+    let rd32 = |at: usize, b: &[u8]| u32::from_le_bytes(b[at..at + 4].try_into().expect("u32"));
+
+    // No template, no humanoid/undead mask: the critter
+    // has NO_POCKETS (114).
+    expect_cast_fail(&mut client, 9212, critter, 114, "critter pickpocket").await;
+
+    // The template-less fellow humanoid still opens a
+    // money-only window (fork accepts humanoids without
+    // a template id).
+    let fellow_view = open_window(&mut client, 9212, fellow).await;
+    assert_eq!(fellow_view[8], 2, "fellow wire byte");
+    assert!(rd32(9, &fellow_view) <= 130, "fellow extra money bound");
+    assert_eq!(fellow_view[13], 0, "fellow no items");
+    release_window(&mut client, fellow, "fellow").await;
+
+    // First open: items + extra money on wire byte 2.
+    // Victim 14 (half 7), hunter 12 (half 6): gold in
+    // [0, 10 * (7 + 6)] at rate 1.0.
+    let first = open_window(&mut client, 9212, pick).await;
+    assert_eq!(first[8], 2, "LOOT_PICKPOCKETING wire byte");
+    let first_gold = rd32(9, &first);
+    assert!(first_gold <= 130, "extra money bound, got {first_gold}");
+    assert_eq!(first[13], 1, "one pickpocket item shown");
+    assert_eq!(rd32(15, &first), 2589, "linen");
+    release_window(&mut client, pick, "first pick").await;
+
+    // Same-looter re-cast with a live window re-serves
+    // it untouched (no refill: non-empty, original
+    // looter).
+    let second = open_window(&mut client, 9212, pick).await;
+    assert_eq!(second[8], 2, "re-open wire byte");
+    assert_eq!(rd32(9, &second), first_gold, "gold untouched");
+    assert_eq!(second[13], 1, "item still shown");
+
+    // Take the linen and the money, then release: the
+    // emptied entry drops but the mark survives.
+    client
+        .send_packet(opcode_id::CMSG_AUTOSTORE_LOOT_ITEM, &[0])
+        .await;
+    let mut removed = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        removed |= batch
+            .iter()
+            .any(|(op, b)| *op == opcode_id::SMSG_LOOT_REMOVED && b.first() == Some(&0));
+        if removed {
+            break;
+        }
+    }
+    assert!(removed, "pickpocket loot removed");
+    client.send_packet(opcode_id::CMSG_LOOT_MONEY, &[]).await;
+    let mut cleared = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        cleared |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_LOOT_CLEAR_MONEY);
+        if cleared {
+            break;
+        }
+    }
+    assert!(cleared, "pickpocket money cleared");
+    release_window(&mut client, pick, "emptied pick").await;
+
+    // Re-cast after full take + release refills
+    // quest-only: no money, no items (no quest rows in
+    // this fixture), still wire byte 2.
+    let quest_only = open_window(&mut client, 9212, pick).await;
+    assert_eq!(quest_only[8], 2, "quest-only wire byte");
+    assert_eq!(rd32(9, &quest_only), 0, "no money on stale reopen");
+    assert_eq!(quest_only[13], 0, "no items on stale reopen");
+    release_window(&mut client, pick, "quest-only pick").await;
+
+    // Killing the victim wipes the mark
+    // (`GenerateLootForBody` parity) and generates the
+    // body: the corpse window carries body gold.
+    cast_at(&mut client, 9210, pick).await;
+    let mut body: Option<Vec<u8>> = None;
+    for _ in 0..10 {
+        let _ = flush_packets(&mut client).await;
+        client
+            .send_packet(opcode_id::CMSG_LOOT, &pick.to_le_bytes())
+            .await;
+        let batch = flush_packets(&mut client).await;
+        if let Some((_, b)) = batch
+            .iter()
+            .find(|(op, b)| *op == opcode_id::SMSG_LOOT_RESPONSE && b.get(8) == Some(&1))
+        {
+            body = Some(b.clone());
+            break;
+        }
+    }
+    let body = body.expect("pick victim body response");
+    assert_eq!(rd32(9, &body), 137, "body gold");
+    release_window(&mut client, pick, "pick victim body").await;
+
+    // The corpse is no longer pickpocketable: the
+    // generic alive gate fails the cast with
+    // TARGETS_DEAD (101).
+    expect_cast_fail(&mut client, 9212, pick, 101, "corpse pickpocket").await;
+}
+
+/// GO chest loot (`CMSG_GAMEOBJ_USE` 177 +
+/// `Player::SendLoot` GO arm, fork
+/// `Player.cpp:7726-7793` + `DoLootRelease` GO arm,
+/// `LootHandler.cpp:398-523`): the unlocked static
+/// chest (entry 9300, spawn 4251) opens through
+/// direct use with wire byte 2, fills 1x linen 2589
+/// + 50 copper from the `gameobject` store, takes +
+/// money + release deplete it, and a reopen while
+/// the respawn delay runs serves an empty window
+/// (no refill); the vein chest (9301, min2/max5)
+/// re-fills after one full release (uses 1 < min).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(clippy::too_many_lines)] // scripted packet sequence
+async fn go_chest_loot_round_trip() {
+    use mangos_protocol::opcode_table::opcode_id;
+    use mangos_world_data::gameobject_template::{GameObjectInfo, GameObjectTemplates};
+    use mangos_world_data::loot::{LootStore, LootStoreItem};
+    use mangos_world_data::spawns::{GameObjectSpawn, SpawnData, WorldLocation};
+
+    fn chest_info(id: u32, loot: u32, min: i32, max: i32) -> GameObjectInfo {
+        let mut data = [0i32; 24];
+        data[0] = 0; // lockId: unlocked
+        #[allow(clippy::cast_possible_wrap)]
+        let loot_word = loot as i32;
+        data[1] = loot_word; // lootId
+        data[4] = min; // minSuccessOpens
+        data[5] = max; // maxSuccessOpens
+        data[9] = 1; // level: under the opener gate
+        GameObjectInfo {
+            id,
+            go_type: 3,
+            display_id: 49,
+            name: "Chesttest".into(),
+            faction: 35,
+            size: 1.0,
+            data,
+            min_money_loot: 50,
+            max_money_loot: 50,
+            ..Default::default()
+        }
+    }
+
+    fn chest_spawn(id: u32, x: f32) -> GameObjectSpawn {
+        GameObjectSpawn {
+            id,
+            position: WorldLocation {
+                map_id: 0,
+                x,
+                y: -132.493,
+                z: 83.5312,
+                o: 0.0,
+            },
+            spawntimesecsmin: 25,
+            spawntimesecsmax: 25,
+            animprogress: 100,
+            ..Default::default()
+        }
+    }
+
+    async fn open_chest(client: &mut Client, guid: u64, what: &str) -> Vec<u8> {
+        // Direct use (the OpenLock-spell indirection
+        // lands in the same window).
+        client
+            .send_packet(opcode_id::CMSG_GAMEOBJ_USE, &guid.to_le_bytes())
+            .await;
+        for _ in 0..10 {
+            let batch = flush_packets(client).await;
+            if let Some((_, b)) = batch
+                .iter()
+                .find(|(op, b)| *op == opcode_id::SMSG_LOOT_RESPONSE && b.get(8) == Some(&2))
+            {
+                return b.clone();
+            }
+        }
+        panic!("{what}: no chest window");
+    }
+
+    async fn open_loot(client: &mut Client, guid: u64, what: &str) -> Vec<u8> {
+        for _ in 0..10 {
+            client
+                .send_packet(opcode_id::CMSG_LOOT, &guid.to_le_bytes())
+                .await;
+            let batch = flush_packets(client).await;
+            if let Some((_, b)) = batch
+                .iter()
+                .find(|(op, b)| *op == opcode_id::SMSG_LOOT_RESPONSE && b.get(8) == Some(&2))
+            {
+                return b.clone();
+            }
+        }
+        panic!("{what}: no chest window");
+    }
+
+    async fn release_window(client: &mut Client, guid: u64, what: &str) {
+        client
+            .send_packet(opcode_id::CMSG_LOOT_RELEASE, &guid.to_le_bytes())
+            .await;
+        for _ in 0..8 {
+            let batch = flush_packets(client).await;
+            if batch
+                .iter()
+                .any(|(op, _)| *op == opcode_id::SMSG_LOOT_RELEASE_RESPONSE)
+            {
+                return;
+            }
+        }
+        panic!("{what}: no release response");
+    }
+
+    let mut stores = fake_go_world_stores();
+    let mut templates: Vec<GameObjectInfo> = Vec::new();
+    for info in stores
+        .gameobject_templates
+        .iter()
+        .map(|(_, info)| info.clone())
+    {
+        templates.push(info);
+    }
+    templates.push(chest_info(9300, 9400, 0, 0));
+    templates.push(chest_info(9301, 9401, 2, 5));
+    stores.gameobject_templates = GameObjectTemplates::from_entries_for_tests(templates);
+    let mut spawns = SpawnData::from_creatures_for_tests(Vec::new());
+    spawns.insert_gameobject_for_tests(4251, chest_spawn(9300, -8948.95));
+    spawns.insert_gameobject_for_tests(4252, chest_spawn(9301, -8947.95));
+    stores.spawns = spawns;
+    let linen = |loot_id: u32| {
+        (
+            loot_id,
+            LootStoreItem {
+                itemid: 2589,
+                chance: 100.0,
+                mincount_or_ref: 1,
+                group: 0,
+                needs_quest: false,
+                maxcount: 1,
+                condition_id: 0,
+            },
+        )
+    };
+    stores.loot.gameobject =
+        LootStore::from_fixtures_for_tests(vec![linen(9400), linen(9401)], true);
+
+    let backend = FakeBackend::with_test_user();
+    let port =
+        start_server_with_queries(backend, stores, Arc::new(FakeCharQueries::new_hunter())).await;
+    let (mut client, seed) = Client::connect(port).await;
+
+    client.send_auth(seed, "TESTUSER", good_digest(seed)).await;
+    client.crypt.init(SESSIONKEY_HEX);
+    let (op, _) = client.read_packet().await.expect("auth ok");
+    assert_eq!(op, opcode::SMSG_AUTH_RESPONSE);
+    client.send_packet(opcode::CMSG_CHAR_ENUM, &[]).await;
+    let _ = client.read_until_opcode(opcode::SMSG_CHAR_ENUM).await;
+    client
+        .send_packet(opcode::CMSG_PLAYER_LOGIN, &7u64.to_le_bytes())
+        .await;
+    let _ = client
+        .read_until_opcode(opcode_id::SMSG_LOGIN_VERIFY_WORLD)
+        .await;
+    let _ = flush_packets(&mut client).await;
+
+    let chest =
+        mangos_guid::ObjectGuid::with_entry(mangos_guid::HighGuid::GAMEOBJECT, 9300, 4251).raw();
+    let vein =
+        mangos_guid::ObjectGuid::with_entry(mangos_guid::HighGuid::GAMEOBJECT, 9301, 4252).raw();
+    let rd32 =
+        |at: usize, body: &[u8]| u32::from_le_bytes(body[at..at + 4].try_into().expect("u32"));
+
+    // A. Plain chest: use opens the window (wire
+    // byte 2), 1x linen + 50 copper.
+    let view = open_chest(&mut client, chest, "plain chest").await;
+    assert_eq!(rd32(9, &view), 50, "chest gold");
+    assert_eq!(view[13], 1, "one chest item shown");
+    assert_eq!(rd32(15, &view), 2589, "chest linen");
+
+    // Take + money, then release depletes it.
+    client
+        .send_packet(opcode_id::CMSG_AUTOSTORE_LOOT_ITEM, &[0])
+        .await;
+    let mut removed = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        removed |= batch
+            .iter()
+            .any(|(op, b)| *op == opcode_id::SMSG_LOOT_REMOVED && b.first() == Some(&0));
+        if removed {
+            break;
+        }
+    }
+    assert!(removed, "chest loot removed");
+    client.send_packet(opcode_id::CMSG_LOOT_MONEY, &[]).await;
+    let mut cleared = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        cleared |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_LOOT_CLEAR_MONEY);
+        if cleared {
+            break;
+        }
+    }
+    assert!(cleared, "chest money cleared");
+    release_window(&mut client, chest, "plain chest release").await;
+
+    // Reopen while the 25s respawn delay runs: empty
+    // window, no refill.
+    let empty = open_loot(&mut client, chest, "depleted chest").await;
+    assert_eq!(rd32(9, &empty), 0, "no gold while despawned");
+    assert_eq!(empty[13], 0, "no items while despawned");
+    release_window(&mut client, chest, "depleted release").await;
+
+    // B. Vein: first full release leaves uses 1 <
+    // min 2, so the next open re-fills.
+    let first = open_chest(&mut client, vein, "vein first").await;
+    assert_eq!(first[13], 1, "vein first fill");
+    client
+        .send_packet(opcode_id::CMSG_AUTOSTORE_LOOT_ITEM, &[0])
+        .await;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        if batch
+            .iter()
+            .any(|(op, b)| *op == opcode_id::SMSG_LOOT_REMOVED && b.first() == Some(&0))
+        {
+            break;
+        }
+    }
+    client.send_packet(opcode_id::CMSG_LOOT_MONEY, &[]).await;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        if batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_LOOT_CLEAR_MONEY)
+        {
+            break;
+        }
+    }
+    release_window(&mut client, vein, "vein first release").await;
+    let second = open_loot(&mut client, vein, "vein second").await;
+    assert_eq!(rd32(15, &second), 2589, "vein re-fills below min");
+    assert_eq!(second[13], 1, "vein second fill shown");
+    release_window(&mut client, vein, "vein second release").await;
+}
+
+/// Item container open (`CMSG_OPEN_ITEM` 172,
+/// fork `HandleOpenItemOpcode` + `Player::SendLoot`
+/// item arm): the seeded linen stack
+/// (guid 9002, slot 23) carries an item-loot
+/// template (1x sword 25) plus 137 copper. Open,
+/// take, re-open mid-window (no regen), double-take
+/// (rejected), money twice (idempotent), release
+/// (an emptied non-bag container is destroyed), and
+/// the logout save is observed through the
+/// capturing saver.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(clippy::too_many_lines)] // scripted packet sequence
+async fn item_open_round_trip() {
+    use mangos_protocol::opcode_table::opcode_id;
+    use mangos_protocol::update_field_table::offsets::PLAYER_FIELD_COINAGE;
+    use mangos_world_data::loot::{LootStore, LootStoreItem};
+
+    let backend = FakeBackend::with_test_user();
+    let mut stores = fake_loot_world_stores();
+    stores.loot.item = LootStore::from_fixtures_for_tests(
+        vec![(
+            2589,
+            LootStoreItem {
+                itemid: 25,
+                chance: 100.0,
+                mincount_or_ref: 1,
+                group: 0,
+                needs_quest: false,
+                maxcount: 1,
+                condition_id: 0,
+            },
+        )],
+        true,
+    );
+    let mut linen = stores
+        .item_prototypes
+        .get(2589)
+        .expect("linen proto")
+        .clone();
+    linen.min_money_loot = 137;
+    linen.max_money_loot = 137;
+    // Open-item always uses the item template in the
+    // fork; a nonzero disenchant id must not reroute
+    // generation to the disenchant template.
+    linen.disenchant_id = 9999;
+    stores.item_prototypes.insert_for_tests(linen);
+    let (port, saver) =
+        start_server_with_capture(backend, stores, Arc::new(FakeCharQueries::new_hunter())).await;
+    let (mut client, seed) = Client::connect(port).await;
+
+    client.send_auth(seed, "TESTUSER", good_digest(seed)).await;
+    client.crypt.init(SESSIONKEY_HEX);
+    let (op, _) = client.read_packet().await.expect("auth ok");
+    assert_eq!(op, opcode::SMSG_AUTH_RESPONSE);
+    client.send_packet(opcode::CMSG_CHAR_ENUM, &[]).await;
+    let _ = client.read_until_opcode(opcode::SMSG_CHAR_ENUM).await;
+    client
+        .send_packet(opcode::CMSG_PLAYER_LOGIN, &7u64.to_le_bytes())
+        .await;
+    let _ = client
+        .read_until_opcode(opcode_id::SMSG_LOGIN_VERIFY_WORLD)
+        .await;
+    let _ = flush_packets(&mut client).await;
+    let _ = flush_packets(&mut client).await;
+
+    let container_guid = mangos_guid::ObjectGuid::with_entry(mangos_guid::HighGuid::ITEM, 0, 9002);
+    let container = container_guid.raw();
+
+    // Open the container (bag 255, slot 23).
+    let mut view: Option<Vec<u8>> = None;
+    for _ in 0..10 {
+        let _ = flush_packets(&mut client).await;
+        client
+            .send_packet(opcode_id::CMSG_OPEN_ITEM, &[255, 23])
+            .await;
+        let batch = flush_packets(&mut client).await;
+        if let Some((_, b)) = batch.iter().find(|(op, b)| {
+            *op == opcode_id::SMSG_LOOT_RESPONSE
+                && b.len() > 13
+                && u64::from_le_bytes(b[0..8].try_into().expect("guid")) == container
+                && b[8] == 1
+        }) {
+            view = Some(b.clone());
+            break;
+        }
+    }
+    let view = view.expect("item loot response");
+    let rd32 = |at: usize| u32::from_le_bytes(view[at..at + 4].try_into().expect("u32"));
+    assert_eq!(
+        u64::from_le_bytes(view[0..8].try_into().expect("guid")),
+        container,
+        "loot guid"
+    );
+    assert_eq!(view[8], 1, "LOOT_CORPSE");
+    assert_eq!(rd32(9), 137, "gold");
+    assert_eq!(view[13], 1, "one item shown");
+    assert_eq!(view[14], 0, "slot 0");
+    assert_eq!(rd32(15), 25, "sword");
+    assert_eq!(rd32(19), 1, "stack of 1");
+    assert_eq!(rd32(23), 1542, "sword display");
+    assert_eq!(view[35], 0, "ALLOW_LOOT slot type");
+
+    // Take the item.
+    client
+        .send_packet(opcode_id::CMSG_AUTOSTORE_LOOT_ITEM, &[0])
+        .await;
+    let mut removed = false;
+    let mut pushed = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        removed |= batch
+            .iter()
+            .any(|(op, b)| *op == opcode_id::SMSG_LOOT_REMOVED && b.first() == Some(&0));
+        pushed |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_ITEM_PUSH_RESULT);
+        if removed && pushed {
+            break;
+        }
+    }
+    assert!(removed, "loot removed notify");
+    assert!(pushed, "item push result");
+
+    // Re-open mid-window: the served state is the
+    // stored one (gold kept, taken slot hidden),
+    // never regenerated.
+    client
+        .send_packet(opcode_id::CMSG_OPEN_ITEM, &[255, 23])
+        .await;
+    let mut reopened: Option<Vec<u8>> = None;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        if let Some((_, b)) = batch.iter().find(|(op, b)| {
+            *op == opcode_id::SMSG_LOOT_RESPONSE
+                && b.len() > 13
+                && u64::from_le_bytes(b[0..8].try_into().expect("guid")) == container
+        }) {
+            reopened = Some(b.clone());
+            break;
+        }
+    }
+    let reopened = reopened.expect("reopen response");
+    assert_eq!(
+        u32::from_le_bytes(reopened[9..13].try_into().expect("u32")),
+        137
+    );
+    assert_eq!(reopened[13], 0, "taken slot hidden");
+
+    // Double-take the same slot: rejected, no
+    // second push.
+    client
+        .send_packet(opcode_id::CMSG_AUTOSTORE_LOOT_ITEM, &[0])
+        .await;
+    let mut already_looted = false;
+    let mut repushed = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        already_looted |= batch.iter().any(|(op, b)| {
+            *op == opcode_id::SMSG_INVENTORY_CHANGE_FAILURE && b.first() == Some(&49)
+        });
+        repushed |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_ITEM_PUSH_RESULT);
+        if already_looted {
+            break;
+        }
+    }
+    assert!(already_looted, "double take rejected");
+    assert!(!repushed, "no second push");
+
+    // Take the money (hunter seed money is 100_000).
+    client.send_packet(opcode_id::CMSG_LOOT_MONEY, &[]).await;
+    let mut cleared = false;
+    let mut coinage: Option<u32> = None;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        cleared |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_LOOT_CLEAR_MONEY);
+        if let Some(v) = values_field(&batch, 7, PLAYER_FIELD_COINAGE) {
+            coinage = Some(v);
+        }
+        if cleared && coinage == Some(100_137) {
+            break;
+        }
+    }
+    assert!(cleared, "loot clear money");
+    assert_eq!(coinage, Some(100_137), "coinage after loot money");
+
+    // Second money: idempotent, no extra credit.
+    client.send_packet(opcode_id::CMSG_LOOT_MONEY, &[]).await;
+    let mut cleared_twice = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        cleared_twice |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_LOOT_CLEAR_MONEY);
+        if let Some(v) = values_field(&batch, 7, PLAYER_FIELD_COINAGE) {
+            coinage = Some(v);
+        }
+        if cleared_twice {
+            break;
+        }
+    }
+    assert_eq!(coinage, Some(100_137), "no extra credit");
+
+    // Release the emptied container: a fully looted
+    // non-bag is destroyed (fork `DoLootRelease`).
+    client
+        .send_packet(opcode_id::CMSG_LOOT_RELEASE, &container.to_le_bytes())
+        .await;
+    let mut released = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        released |= batch
+            .iter()
+            .any(|(op, _)| *op == opcode_id::SMSG_LOOT_RELEASE_RESPONSE);
+        if released {
+            break;
+        }
+    }
+    assert!(released, "loot release response");
+
+    // Re-open after destruction: the container is
+    // gone (`EQUIP_ERR_ITEM_NOT_FOUND`).
+    client
+        .send_packet(opcode_id::CMSG_OPEN_ITEM, &[255, 23])
+        .await;
+    let mut gone = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        gone |= batch.iter().any(|(op, b)| {
+            *op == opcode_id::SMSG_INVENTORY_CHANGE_FAILURE && b.first() == Some(&23)
+        });
+        if gone {
+            break;
+        }
+    }
+    assert!(gone, "destroyed container not found");
+
+    // Logout: the capturing saver observes the
+    // granted sword, the coinage, and the removed
+    // container (whose loot rows never reached the
+    // DB, so no `item_loot` delete is armed).
+    client
+        .send_packet(opcode_id::CMSG_LOGOUT_REQUEST, &[])
+        .await;
+    let _ = client
+        .read_until_opcode(opcode_id::SMSG_LOGOUT_COMPLETE)
+        .await;
+    let bundles = saver.saved.lock().expect("saver mutex");
+    let (bundle, _) = bundles.last().expect("logout save");
+    assert_eq!(bundle.row.money, 100_137);
+    let granted = bundle
+        .inventory
+        .iter()
+        .find(|i| i.row.item.item_id == 25 && i.row.item.item_guid != 9001)
+        .expect("granted sword row");
+    assert_eq!(granted.state, mangos_db::character_save::ItemSaveState::New);
+    assert_eq!(granted.row.item.count, 1);
+    let removed = bundle
+        .inventory
+        .iter()
+        .find(|i| i.row.item.item_guid == 9002)
+        .expect("removed container row");
+    assert_eq!(
+        removed.state,
+        mangos_db::character_save::ItemSaveState::Removed
+    );
+    assert!(matches!(
+        removed.loot,
+        mangos_db::character_save::LootSave::Unchanged
+    ));
+    assert!(!removed.has_saved_loot);
+}
+
+/// Wrapped-gift unwrap (`CMSG_OPEN_ITEM` on an
+/// `ITEM_DYNFLAG_WRAPPED` row, fork
+/// `HandleOpenItemOpcode` wrapped arm,
+/// `SpellHandler.cpp:221-246`): 9003 carries a gift
+/// row and restores to its real entry/flags with the
+/// gift row deleted (no loot window opens for an
+/// unwrap); 9004 has no gift row and is destroyed
+/// (fork miss arm). The logout save observes the
+/// restored row as `Changed` and the destroyed
+/// wrapper as `Removed` with its saved wrapped bit.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(clippy::too_many_lines)] // scripted packet sequence
+async fn gift_unwrap_round_trip() {
+    use mangos_protocol::opcode_table::opcode_id;
+
+    let backend = FakeBackend::with_test_user();
+    let stores = fake_loot_world_stores();
+    let (port, saver) = start_server_with_capture(
+        backend,
+        stores,
+        Arc::new(FakeCharQueries::new_gift_hunter()),
+    )
+    .await;
+    let (mut client, seed) = Client::connect(port).await;
+
+    client.send_auth(seed, "TESTUSER", good_digest(seed)).await;
+    client.crypt.init(SESSIONKEY_HEX);
+    let (op, _) = client.read_packet().await.expect("auth ok");
+    assert_eq!(op, opcode::SMSG_AUTH_RESPONSE);
+    client.send_packet(opcode::CMSG_CHAR_ENUM, &[]).await;
+    let _ = client.read_until_opcode(opcode::SMSG_CHAR_ENUM).await;
+    client
+        .send_packet(opcode::CMSG_PLAYER_LOGIN, &7u64.to_le_bytes())
+        .await;
+    let _ = client
+        .read_until_opcode(opcode_id::SMSG_LOGIN_VERIFY_WORLD)
+        .await;
+    let _ = flush_packets(&mut client).await;
+    let _ = flush_packets(&mut client).await;
+
+    let is_window_for = |batch: &Vec<(u16, Vec<u8>)>, low: u32| {
+        let guid = mangos_guid::ObjectGuid::with_entry(mangos_guid::HighGuid::ITEM, 0, low).raw();
+        batch.iter().any(|(op, b)| {
+            *op == opcode_id::SMSG_LOOT_RESPONSE
+                && b.len() > 8
+                && u64::from_le_bytes(b[0..8].try_into().expect("guid")) == guid
+        })
+    };
+
+    // Open the gifted wrapper (bag 255, slot 24): an
+    // unwrap restores the row and opens no window.
+    client
+        .send_packet(opcode_id::CMSG_OPEN_ITEM, &[255, 24])
+        .await;
+    let mut windowed = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        windowed |= is_window_for(&batch, 9003);
+    }
+    assert!(!windowed, "unwrap opens no loot window");
+
+    // Open the gift-less wrapper (slot 25): the fork
+    // miss arm destroys it, so no window either, and
+    // a re-open reports it missing.
+    client
+        .send_packet(opcode_id::CMSG_OPEN_ITEM, &[255, 25])
+        .await;
+    let mut miss_windowed = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        miss_windowed |= is_window_for(&batch, 9004);
+    }
+    assert!(!miss_windowed, "miss opens no loot window");
+    client
+        .send_packet(opcode_id::CMSG_OPEN_ITEM, &[255, 25])
+        .await;
+    let mut gone = false;
+    for _ in 0..8 {
+        let batch = flush_packets(&mut client).await;
+        gone |= batch.iter().any(|(op, b)| {
+            *op == opcode_id::SMSG_INVENTORY_CHANGE_FAILURE && b.first() == Some(&23)
+        });
+        if gone {
+            break;
+        }
+    }
+    assert!(gone, "gift-less wrapper destroyed");
+
+    // Logout: the capturing saver observes the
+    // restored row (`Changed` with the real
+    // entry/flags and a zeroed creator) and the
+    // destroyed wrapper (`Removed` with its saved
+    // wrapped bit, so the save deletes the gift row
+    // exactly as forked).
+    client
+        .send_packet(opcode_id::CMSG_LOGOUT_REQUEST, &[])
+        .await;
+    let _ = client
+        .read_until_opcode(opcode_id::SMSG_LOGOUT_COMPLETE)
+        .await;
+    let bundles = saver.saved.lock().expect("saver mutex");
+    let (bundle, _) = bundles.last().expect("logout save");
+    let restored = bundle
+        .inventory
+        .iter()
+        .find(|i| i.row.item.item_guid == 9003)
+        .expect("restored gift row");
+    assert_eq!(
+        restored.state,
+        mangos_db::character_save::ItemSaveState::Changed
+    );
+    assert_eq!(restored.row.item.item_id, 25);
+    assert_eq!(restored.row.item.flags, 0);
+    assert_eq!(restored.row.item.gift_creator_guid, 0);
+    assert!(!restored.wrapped);
+    let removed = bundle
+        .inventory
+        .iter()
+        .find(|i| i.row.item.item_guid == 9004)
+        .expect("removed wrapper row");
+    assert_eq!(
+        removed.state,
+        mangos_db::character_save::ItemSaveState::Removed
+    );
+    assert!(removed.wrapped);
 }

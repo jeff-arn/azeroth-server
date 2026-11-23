@@ -8,6 +8,10 @@ pub mod effect {
     pub const NONE: u32 = 0;
     pub const INSTAKILL: u32 = 1;
     pub const THREAT: u32 = 63;
+    /// `SPELL_EFFECT_SKINNING` (`SpellDefines.h:306`).
+    pub const SKINNING: u32 = 95;
+    /// `SPELL_EFFECT_PICKPOCKET` (`SpellDefines.h:282`).
+    pub const PICKPOCKET: u32 = 71;
     pub const DISPEL: u32 = 38;
     pub const LEARN_SPELL: u32 = 36;
     pub const SUMMON_PET: u32 = 56;
@@ -27,6 +31,9 @@ pub mod effect {
     pub const POWER_BURN: u32 = 62;
     pub const APPLY_AURA: u32 = 6;
     pub const HEAL: u32 = 10;
+    /// `SPELL_EFFECT_HEAL_MAX_HEALTH` (`SpellDefines.h:329`,
+    /// `Spell.cpp` effect table slot 67): Lay on Hands.
+    pub const HEAL_MAX_HEALTH: u32 = 67;
     pub const WEAPON_DAMAGE_NOSCHOOL: u32 = 17;
     pub const RESURRECT: u32 = 18;
     pub const ENCHANT_ITEM_TEMPORARY: u32 = 54;
@@ -35,12 +42,25 @@ pub mod effect {
     /// `SPELL_EFFECT_SKILL` (`SpellDefines.h:329`):
     /// profession-rank spells carry it at index 1.
     pub const SKILL: u32 = 118;
+    /// `SPELL_EFFECT_SKIN_PLAYER_CORPSE`
+    /// (`SpellDefines.h:327`): the Remove-Insignia
+    /// battleground effect.
+    pub const SKIN_PLAYER_CORPSE: u32 = 116;
     /// `SPELL_EFFECT_SEND_TAXI` (`SpellDefines.h`):
     /// misc value is the taxi path id.
     pub const SEND_TAXI: u32 = 123;
     /// `SPELL_EFFECT_SUMMON_OBJECT_WILD`
     /// (`SpellDefines.h:287`).
     pub const SUMMON_OBJECT_WILD: u32 = 76;
+    /// `SPELL_EFFECT_OPEN_LOCK` (`SpellDefines.h:244`):
+    /// chest/door opening (misc value is the
+    /// `LockType` skill case).
+    pub const OPEN_LOCK: u32 = 33;
+    /// `SPELL_EFFECT_TRANS_DOOR` (`SpellDefines.h:261`):
+    /// bobber/gameobject summon (misc value is the
+    /// summoned entry; the fishing slice models the
+    /// `FISHINGNODE` arm only).
+    pub const TRANS_DOOR: u32 = 50;
     /// `SPELL_EFFECT_SUMMON_OBJECT_SLOT1..4`
     /// (`SpellDefines.h:315-318`).
     pub const SUMMON_OBJECT_SLOT1: u32 = 104;
@@ -48,6 +68,10 @@ pub mod effect {
     pub const SUMMON_OBJECT_SLOT3: u32 = 106;
     pub const SUMMON_OBJECT_SLOT4: u32 = 107;
     pub const PERSISTENT_AREA_AURA: u32 = 27;
+    /// `SPELL_EFFECT_ADD_COMBO_POINTS`
+    /// (`SpellDefines.h:290`): Sinister-Strike-style
+    /// combo builders.
+    pub const ADD_COMBO_POINTS: u32 = 80;
     pub const ENERGIZE: u32 = 30;
     pub const TRIGGER_SPELL: u32 = 64;
     pub const APPLY_AREA_AURA_PARTY: u32 = 35;
@@ -128,6 +152,10 @@ pub mod aura {
     pub const MOD_FEAR: u32 = 7;
     pub const MOD_INCREASE_HEALTH: u32 = 34;
     pub const MOD_INCREASE_ENERGY: u32 = 35;
+    /// `SPELL_AURA_MOD_REPUTATION_GAIN` (`SpellAuraDefines.h:294`).
+    pub const MOD_REPUTATION_GAIN: u32 = 156;
+    /// `SPELL_AURA_MOD_FACTION_REPUTATION_GAIN` (`SpellAuraDefines.h:328`).
+    pub const MOD_FACTION_REPUTATION_GAIN: u32 = 190;
     pub const MOD_SHAPESHIFT: u32 = 36;
     pub const MOD_STEALTH: u32 = 16;
     pub const MOD_INCREASE_ENERGY_PERCENT: u32 = 132;
@@ -301,6 +329,14 @@ pub mod target {
     pub const LOCATION_CASTER_LEFT: u32 = 49;
     pub const LOCATION_CASTER_RIGHT: u32 = 50;
     pub const LOCATION_CASTER_FRONT_LEAP: u32 = 55;
+    /// `TARGET_LOCATION_CASTER_FISHING_SPOT`
+    /// (`SpellDefines.h:64`): the fishing cast pushes
+    /// the caster as unit target (fork `Spell.cpp:2945`).
+    pub const LOCATION_CASTER_FISHING_SPOT: u32 = 39;
+    pub const UNIT_FRIEND_CHAIN_HEAL: u32 = 45;
+    pub const LOCATION_CASTER_TARGET_POSITION: u32 = 53;
+    pub const UNIT_RAID: u32 = 57;
+    pub const UNIT_RAID_AND_CLASS: u32 = 61;
 }
 
 /// `enum Powers` (`SharedDefines.h:152`).
@@ -355,6 +391,9 @@ pub mod cast_result {
     pub const FAILED_NOT_KNOWN: u8 = 56;
     pub const FAILED_NO_MOUNTS_ALLOWED: u8 = 75;
     pub const FAILED_INTERRUPTED: u8 = 35;
+    /// `SPELL_FAILED_NO_COMBO_POINTS` (70, counted over
+    /// the `SpellDefines.h:351+` enum at 1.12.1).
+    pub const FAILED_NO_COMBO_POINTS: u8 = 70;
     pub const FAILED_NO_POWER: u8 = 77;
     pub const FAILED_ONLY_SHAPESHIFT: u8 = 86;
     pub const FAILED_OUT_OF_RANGE: u8 = 89;
@@ -366,6 +405,23 @@ pub mod cast_result {
     pub const FAILED_SPELL_IN_PROGRESS: u8 = 97;
     pub const FAILED_TARGETS_DEAD: u8 = 101;
     pub const FAILED_TARGET_AURASTATE: u8 = 103;
+    /// `SPELL_FAILED_LOW_CASTLEVEL` (44, counted over
+    /// the `SpellDefines.h:351+` enum at 1.12.1).
+    pub const FAILED_LOW_CASTLEVEL: u8 = 44;
+    /// `SPELL_FAILED_TARGET_NOT_LOOTED` (112).
+    pub const FAILED_TARGET_NOT_LOOTED: u8 = 112;
+    /// `SPELL_FAILED_TARGET_NO_POCKETS` (114).
+    pub const FAILED_TARGET_NO_POCKETS: u8 = 114;
+    /// `SPELL_FAILED_TARGET_UNSKINNABLE` (116).
+    pub const FAILED_TARGET_UNSKINNABLE: u8 = 116;
+    /// `SPELL_FAILED_TRY_AGAIN` (122).
+    pub const FAILED_TRY_AGAIN: u8 = 122;
+    /// `SPELL_FAILED_NOT_FISHABLE` (52, counted over
+    /// the `SpellDefines.h:352+` enum at 1.12.1;
+    /// anchored by `INTERRUPTED = 35` and
+    /// `LOW_CASTLEVEL = 44`): the bobber missed
+    /// fishable water.
+    pub const FAILED_NOT_FISHABLE: u8 = 52;
     pub const FAILED_UNKNOWN: u8 = 145;
     pub const FAILED_UNIT_NOT_INFRONT: u8 = 124;
 }

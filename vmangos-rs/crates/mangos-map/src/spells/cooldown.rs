@@ -102,7 +102,7 @@ impl Map {
     }
 
     /// `SendCastResult(Player*)` (failures only here).
-    pub(super) fn send_cast_result(&mut self, caster: ObjectGuid, spell_id: u32, result: u8) {
+    pub(crate) fn send_cast_result(&mut self, caster: ObjectGuid, spell_id: u32, result: u8) {
         let mut payload = PacketWriter::new();
         payload.write_u32_le(spell_id);
         payload.write_u8(result);

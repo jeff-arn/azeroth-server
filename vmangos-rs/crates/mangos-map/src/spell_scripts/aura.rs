@@ -156,6 +156,7 @@ impl Map {
         spell_id: u32,
         holder_caster: ObjectGuid,
         apply: bool,
+        remove_mode: AuraRemoveMode,
     ) {
         // Wyvern Sting ranks: on remove the holder
         // caster (captured pre-removal) casts the
@@ -187,7 +188,7 @@ impl Map {
                 self.stoneform_on_after_apply(victim, spell_id, apply);
             }
             Some("spell_silithyst") => {
-                self.silithyst_on_after_apply(victim, spell_id, apply);
+                self.silithyst_on_after_apply(victim, spell_id, apply, remove_mode);
             }
             Some("spell_controlling_steam_tonk") => {
                 self.controlling_steam_tonk_on_after_apply(victim, spell_id, apply);
@@ -905,18 +906,20 @@ impl Map {
     // ===== spell_silithyst (spell_special.cpp:286) spells: 29519
 
     /// `SilithystAuraScript::OnAfterApply` (`spell_special.cpp:295-333`):
-    /// fork gates on `GetEffIndex() == EFFECT_INDEX_1` (1.12.1+ only, per
-    /// the fork's `#if SUPPORTED_CLIENT_BUILD >= CLIENT_BUILD_1_12_1`;
-    /// Silithyst `PvP` was added in 1.12) + player target in zone 1377
-    /// (Silithus); on apply casts the team buff (29894 Alliance / 29895
-    /// Horde), on removal drops it, and on cancel/death/dispel removal
-    /// notifies the zone script (`HandleDropFlag`).
-    /// UNMODELED: zone ids, player teams, team-buff removal gating and the
-    /// zone-script `HandleDropFlag` callback have no Rust runtime.
-    /// Reachable part: the buff spell ids 29894 / 29895 and zone 1377.
-    #[allow(clippy::unused_self)] // UNMODELED body
-    fn silithyst_on_after_apply(&mut self, victim: ObjectGuid, spell_id: u32, apply: bool) {
-        let _ = (victim, spell_id, apply);
+    /// fork gates on `GetEffIndex() == EFFECT_INDEX_1` + player target in
+    /// zone 1377 (Silithus); on apply casts the team buff (29894 Alliance
+    /// / 29895 Horde), on removal drops it, and on cancel/death/dispel
+    /// removal notifies the zone script (`HandleDropFlag`). Body lives in
+    /// `outdoor_pvp_si` (`si_silithyst_aura`); the effect-index gate is
+    /// dropped (GO-hello precedent: spell-id presence only, recorded).
+    fn silithyst_on_after_apply(
+        &mut self,
+        victim: ObjectGuid,
+        spell_id: u32,
+        apply: bool,
+        remove_mode: AuraRemoveMode,
+    ) {
+        self.si_silithyst_aura(victim, spell_id, apply, remove_mode);
     }
 
     // ===== spell_controlling_steam_tonk (spell_special.cpp:367) spells: 24937
@@ -1191,8 +1194,9 @@ impl Map {
         )]
         let idx = self.spell_rng().irand(0, possible.len() as i32 - 1) as usize;
         let target = possible[idx];
-        // UNMODELED: pMage->InterruptNonMeleeSpells(false): no pub
-        // interrupt seam in the Rust runtime.
+        // `pMage->InterruptNonMeleeSpells(false)`
+        // (boss_nefarian.cpp:695).
+        self.interrupt_non_melee_spells(victim, false, 0);
         // Fork casts 23603 non-triggered (boss_nefarian.cpp:696); the
         // known-spell gate applies (skip_known unset, as in the fork).
         self.cast_spell(

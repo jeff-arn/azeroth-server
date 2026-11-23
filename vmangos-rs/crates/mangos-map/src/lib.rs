@@ -16,6 +16,7 @@ pub mod battlegrounds;
 pub mod bg_ab;
 pub mod bg_av;
 pub mod bg_ws;
+pub mod combo;
 pub mod content;
 pub mod customs;
 pub mod death;
@@ -30,10 +31,13 @@ pub mod inventory;
 pub mod loot;
 pub mod map;
 pub mod motion;
+pub mod outdoor_pvp_ep;
+pub mod outdoor_pvp_si;
 pub mod pets;
 pub mod process_events;
 pub mod procs;
 pub mod regen;
+pub mod reputation;
 pub mod scripts;
 pub mod spell_scripts;
 pub mod spells;
@@ -47,6 +51,21 @@ pub mod visibility;
 pub mod vmaps;
 pub mod weather;
 pub mod xp;
+
+#[cfg(test)]
+mod insignia_tests;
+
+#[cfg(test)]
+mod fishing_tests;
+
+#[cfg(test)]
+mod visibility_tests;
+
+#[cfg(test)]
+mod combo_tests;
+
+#[cfg(test)]
+mod cast_item_tests;
 
 pub use map::{Map, MapConfig, MapEvent, PlayerSlotId};
 pub use stores::WorldStores;

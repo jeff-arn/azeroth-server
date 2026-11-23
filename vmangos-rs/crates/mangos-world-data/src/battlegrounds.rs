@@ -168,16 +168,39 @@ impl BattlegroundTemplates {
     }
 }
 
+/// `BattleGroundMgr::LoadBattleGroundTemplates`
+/// ref-loot arm (`BattleGroundMgr.cpp:1367-1375`):
+/// a `player_loot_id` with no `reference_loot_template`
+/// row is zeroed with a report line, exactly as the
+/// fork zeroes it (the fork also records kept ids in
+/// `m_usedRefloot`; no used-set exists on this path, so
+/// that insert has no equivalent).
+pub fn zero_missing_player_skin_ref_loot(
+    templates: &mut BattlegroundTemplates,
+    reference: &crate::loot::LootStore,
+    report: &mut crate::load_report::LoadReport,
+) {
+    for template in templates.by_type.values_mut() {
+        if template.player_skin_ref_loot_id != 0
+            && !reference.have_loot_for(template.player_skin_ref_loot_id)
+        {
+            report.error(format!(
+                "battleground_template id {} associated with nonexistent refloot id {}. Setting to 0.",
+                template.bg_type_id, template.player_skin_ref_loot_id
+            ));
+            template.player_skin_ref_loot_id = 0;
+        }
+    }
+}
+
 /// Loads the progression-selected `battleground_template`
 /// rows (`CreateInitialBattleGrounds` query), resolving
 /// start locations through `safe_locs` and map names
-/// through `map_name` (fork `sMapStorage`). Rows with an
+/// through `map_name` (fork `sMapStorage`), then zeroing
+/// dangling `player_loot_id` values against `reference`
+/// (fork `ExistsRefLootTemplate`). Rows with an
 /// unresolvable start location or map are skipped with a
 /// report line, exactly as the fork skips them.
-///
-/// UNMODELED: `ExistsRefLootTemplate` zeroing of
-/// `player_loot_id` (no ref-loot existence set on this
-/// path yet; value carried verbatim).
 ///
 /// # Errors
 ///
@@ -188,6 +211,7 @@ pub fn load_battleground_templates(
     safe_locs: &SafeLocStore,
     map_name: &dyn Fn(u32) -> Option<String>,
     report: &mut crate::load_report::LoadReport,
+    reference: &crate::loot::LootStore,
 ) -> Result<BattlegroundTemplates, DbError> {
     let rows: Vec<mysql::Row> = conn.exec(
         "SELECT `id`, `min_players_per_team`, `max_players_per_team`, \
@@ -244,7 +268,9 @@ pub fn load_battleground_templates(
             },
         );
     }
-    Ok(BattlegroundTemplates { by_type })
+    let mut templates = BattlegroundTemplates { by_type };
+    zero_missing_player_skin_ref_loot(&mut templates, reference, report);
+    Ok(templates)
 }
 
 /// `battlemaster_entry` creature entry -> battleground
@@ -603,5 +629,75 @@ mod tests {
             })
         );
         assert_eq!(store.get(8), None);
+    }
+
+    fn template_with_ref_loot(bg_type_id: u32, ref_loot_id: u32) -> BattlegroundTemplate {
+        BattlegroundTemplate {
+            bg_type_id,
+            min_players_per_team: 10,
+            max_players_per_team: 10,
+            min_level: 10,
+            max_level: 60,
+            alliance_win_spell: 0,
+            alliance_lose_spell: 0,
+            horde_win_spell: 0,
+            horde_lose_spell: 0,
+            alliance_start: WorldSafeLoc {
+                id: 1,
+                map_id: 489,
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                orientation: 0.0,
+            },
+            horde_start: WorldSafeLoc {
+                id: 2,
+                map_id: 489,
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                orientation: 0.0,
+            },
+            player_skin_ref_loot_id: ref_loot_id,
+            map_id: 489,
+            name: "Warsong Gulch".to_string(),
+        }
+    }
+
+    /// Fork `BattleGroundMgr.cpp:1367-1375`: a kept id
+    /// survives, a dangling id zeroes with a report
+    /// line, and zero stays zero without a report line.
+    #[test]
+    fn ref_loot_zeroing_keeps_valid_zeroes_dangling() {
+        use crate::loot::{LootStore, LootStoreItem};
+        let reference = LootStore::from_fixtures_for_tests(
+            vec![(
+                77,
+                LootStoreItem {
+                    itemid: 2589,
+                    chance: 100.0,
+                    mincount_or_ref: 1,
+                    group: 0,
+                    needs_quest: false,
+                    maxcount: 1,
+                    condition_id: 0,
+                },
+            )],
+            true,
+        );
+        let mut templates = BattlegroundTemplates {
+            by_type: HashMap::from([
+                (2, template_with_ref_loot(2, 77)),
+                (3, template_with_ref_loot(3, 78)),
+                (1, template_with_ref_loot(1, 0)),
+            ]),
+        };
+        let mut report = crate::load_report::LoadReport::default();
+        zero_missing_player_skin_ref_loot(&mut templates, &reference, &mut report);
+        assert_eq!(templates.get(2).expect("ws").player_skin_ref_loot_id, 77);
+        assert_eq!(templates.get(3).expect("ab").player_skin_ref_loot_id, 0);
+        assert_eq!(templates.get(1).expect("av").player_skin_ref_loot_id, 0);
+        assert_eq!(report.errors.len(), 1, "only the dangling id logs");
+        assert!(report.errors[0].contains("78"), "names the dangling id");
     }
 }

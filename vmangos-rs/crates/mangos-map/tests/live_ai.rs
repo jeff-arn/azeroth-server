@@ -167,6 +167,8 @@ fn bench_creature_ai_and_melee() {
                     items,
                     item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
                     factions: mangos_world_data::reputations::load_factions(conn)?,
+                    reputation_kills: mangos_world_data::reputations::ReputationKillStores::default(
+                    ),
                     gossip: mangos_world_data::gossip_menus::GossipStores::default(),
                     areas: mangos_world_data::areas::AreaStore::default(),
                     exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(
@@ -184,6 +186,8 @@ fn bench_creature_ai_and_melee() {
                         mangos_world_data::script_waypoints::ScriptWaypointStore::default(),
                     game_events: mangos_world_data::game_events::GameEvents::default(),
                     loot: mangos_world_data::loot::LootStores::default(),
+                    locks: mangos_world_data::locks::LockStore::default(),
+                    fishing_base_skills: mangos_world_data::fishing::FishingBaseSkills::default(),
                     weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
                     waypoints,
                     spells: mangos_spells::SpellStore {

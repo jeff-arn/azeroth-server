@@ -117,12 +117,14 @@ mod tests {
     fn generated_lists_match_repo_census() {
         // Census from the architecture document section 5 and the
         // Phase 3 inventory: 1005 world / 18 characters / 6 logon /
-        // 6 logs. A drift here means migration files were added or
-        // removed; update the census deliberately.
+        // 7 logs (the dashboard client-report inbox migration
+        // `20261121175904_logs.sql` landed in `a7b4bfaf`). A drift
+        // here means migration files were added or removed; update
+        // the census deliberately.
         assert_eq!(MIGRATIONS_WORLD.len(), 1005);
         assert_eq!(MIGRATIONS_CHARACTERS.len(), 18);
         assert_eq!(MIGRATIONS_LOGON.len(), 6);
-        assert_eq!(MIGRATIONS_LOGS.len(), 6);
+        assert_eq!(MIGRATIONS_LOGS.len(), 7);
         // Names are timestamps without the _db.sql suffix.
         assert!(
             MIGRATIONS_WORLD

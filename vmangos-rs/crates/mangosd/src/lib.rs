@@ -357,6 +357,11 @@ pub struct ServerConfig {
     pub rate_drop_money: f32,
     /// `Rate.XP.Explore` (default 1.0, `World.cpp:509`).
     pub rate_xp_explore: f32,
+    /// `Rate.Reputation.Gain` (default 1.0, `World.cpp:493`).
+    pub rate_reputation_gain: f32,
+    /// `Rate.Reputation.LowLevel.Kill` (default 1.0,
+    /// `World.cpp:494`).
+    pub rate_reputation_lowlevel_kill: f32,
     /// `Spell.ProcDelay` batching window in ms (fork
     /// code default 400; example conf ships 800).
     pub spell_proc_delay_ms: u32,
@@ -403,6 +408,12 @@ pub struct ServerConfig {
     pub prevent_item_datamining: bool,
     /// `ActivateWeather` (default true).
     pub activate_weather: bool,
+    /// `OutdoorPvP.SI.Enable` (`mangosd.conf.dist.in:2747`,
+    /// fork default true): Silithus turn-ins on map 1.
+    pub outdoor_pvp_si_enable: bool,
+    /// `OutdoorPvP.EP.Enable` (fork `World.cpp:786`, default
+    /// true): Eastern Plaguelands tower sliders on map 0.
+    pub outdoor_pvp_ep_enable: bool,
     /// `vmap.enableLOS` (fork default false).
     pub vmap_enable_los: bool,
     /// `vmap.enableHeight` (fork default false).
@@ -716,6 +727,8 @@ impl ServerConfig {
             rate_xp_quest: cfg.float_default("Rate.XP.Quest", 1.0),
             rate_drop_money: cfg.float_default("Rate.Drop.Money", 1.0),
             rate_xp_explore: cfg.float_default("Rate.XP.Explore", 1.0),
+            rate_reputation_gain: cfg.float_default("Rate.Reputation.Gain", 1.0),
+            rate_reputation_lowlevel_kill: cfg.float_default("Rate.Reputation.LowLevel.Kill", 1.0),
             spell_proc_delay_ms: to_u32(cfg.int_default("Spell.ProcDelay", 400)),
             anticheat: crate::anticheat::AnticheatConfig::from_config(cfg),
             instance_ignore_level: cfg.bool_default("Instance.IgnoreLevel", false),
@@ -745,6 +758,8 @@ impl ServerConfig {
             ) as u8,
             prevent_item_datamining: cfg.bool_default("Item.PreventDataMining", true),
             activate_weather: cfg.bool_default("ActivateWeather", true),
+            outdoor_pvp_si_enable: cfg.bool_default("OutdoorPvP.SI.Enable", true),
+            outdoor_pvp_ep_enable: cfg.bool_default("OutdoorPvP.EP.Enable", true),
             vmap_enable_los: cfg.bool_default("vmap.enableLOS", false),
             vmap_enable_height: cfg.bool_default("vmap.enableHeight", false),
             change_weather_interval_ms: to_u32(cfg.int_default("ChangeWeatherInterval", 600_000)),

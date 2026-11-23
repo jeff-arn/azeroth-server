@@ -15,6 +15,7 @@
 //! stun/AoE are inert there).
 
 use mangos_entities::creature::{SpawnRng, VirtualItemPrototype};
+use mangos_entities::unit::UnitVisibility;
 use mangos_guid::ObjectGuid;
 use mangos_movement::movement_info::Position;
 use mangos_protocol::update_field_table::offsets;
@@ -5323,8 +5324,8 @@ const KT_SAY_SUMMON_MINIONS: i32 = 12_999;
 // `do_cast_spell_if_can` (self-aura upkeep as `apply_aura_by_id`);
 // the integrator threads the triggered flag. Fork
 // `HandleEvadeOutOfHome` failure arms map to
-// `should_leash_evade` + `enter_evade_mode`. `DoResetThreat` has
-// no helper (NEEDS-MAP-HELPER at each site). `AttackStart`
+// `should_leash_evade` + `enter_evade_mode`. `DoResetThreat`
+// maps to `Map::do_reset_threat`. `AttackStart`
 // overrides map to `<snake>_attack_start` helpers
 // (NO-DISPATCHER-YET). `EnterCombat` override maps to
 // `<snake>_enter_combat` (NO-DISPATCHER-YET).
@@ -8393,16 +8394,15 @@ impl DashelAi {
 }
 
 // ---- `npc_malfurion_stormrage` (`sunken_temple.cpp:57-138`) ----
-// `EMOTE_MALFURION1` (11191) is only read by the ctor one-time temple arm
-// (NEEDS-MAP-HELPER); dropped here.
+const MALF_EMOTE_MALFURION1: i32 = 11_191;
 const MALF_SAY_MALFURION1: i32 = 11_193;
 const MALF_SAY_MALFURION2: i32 = 11_194;
 const MALF_SAY_MALFURION3: i32 = 11_195;
 const MALF_SAY_MALFURION4: i32 = 11_196;
 const MALF_MAX_TEMPLE_SPEECHES: u32 = 7;
 const MALF_SPELL_RESURRECT_VISUAL: u32 = 20_761;
-// `VISIBILITY_OFF` 0 / `VISIBILITY_ON` 1 (`UnitDefines.h:529-530`) are only
-// read by `SetVisibility` (NEEDS-MAP-HELPER); dropped here.
+// `VISIBILITY_OFF` 0 / `VISIBILITY_ON` 1 (`UnitDefines.h:529-530`):
+// `UnitVisibility` (`mangos_entities::unit`) owns the values now.
 // `UNIT_NPC_FLAG_QUESTGIVER` / `UNIT_NPC_FLAG_GOSSIP` (`UnitDefines.h`);
 // read-modify-write through `UNIT_NPC_FLAGS`.
 const MALF_UNIT_NPC_FLAG_QUESTGIVER: u32 = 0x02;
@@ -8596,8 +8596,8 @@ const ANNO_MOVE_Z: f32 = -49.572;
 // (`UnitDefines.h`); read-modify-write through `UNIT_FIELD_FLAGS`.
 const ANNO_UNIT_FLAG_IMMUNE_TO_PLAYER: u32 = 0x100;
 const ANNO_UNIT_FLAG_IMMUNE_TO_NPC: u32 = 0x200;
-// `VISIBILITY_OFF` 0 / `VISIBILITY_ON` 1 are only read by `SetVisibility`
-// (NEEDS-MAP-HELPER); dropped here.
+// `VISIBILITY_OFF` 0 / `VISIBILITY_ON` 1 (`UnitDefines.h:529-530`):
+// `UnitVisibility` (`mangos_entities::unit`) owns the values now.
 
 /// `AnnoraAI` state (fork member order).
 pub(crate) struct AnnoraAi {
@@ -10435,9 +10435,9 @@ const OURO_NPC_OURO: u32 = 15_517;
 const OURO_SUBMERGE_ANIMATION_INVIS_MS: u32 = 2000;
 const OURO_SWEEP_TIMER_MS: u32 = 20_500;
 // `UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_SPAWNING` (`UnitDefines.h:566/542`);
-// read-modify-write through `UNIT_FIELD_FLAGS` (no flag helper on `Map`).
-// `UNIT_FLAG_NOT_SELECTABLE/SPAWNING`: only read by NEEDS-MAP-HELPER flag
-// writes (cpp 213, 367-378); dropped (see unresolved).
+// read-modify-write through `UNIT_FIELD_FLAGS` (cpp 213, 367, 378, 481).
+const OURO_UNIT_FLAG_NOT_SELECTABLE: u32 = 0x0200_0000;
+const OURO_UNIT_FLAG_SPAWNING: u32 = 0x0000_0002;
 
 /// `boss_ouroAI` state (fork member order; `WorldLocation` start loc dropped,
 /// never read — see unresolved).
@@ -10537,8 +10537,12 @@ const VISCIDUS_SPELL_WEAKNESS: u32 = 25_926;
 const VISCIDUS_SPELL_SHRINKS: u32 = 25_893;
 const VISCIDUS_SPELL_SHRINKS_HP: u32 = 27_934;
 const VISCIDUS_SPELL_GROWS: u32 = 25_897;
-// `SPELL_VISCIDUS_TELEPORT` (25904): only read by the NEEDS-MAP-HELPER
-// visibility-off teleport (cpp 275); dropped (see unresolved).
+// `SPELL_VISCIDUS_TELEPORT` (25904): visibility-off reposition (cpp 275).
+const VISCIDUS_SPELL_TELEPORT: u32 = 25_904;
+// `UNIT_FLAG_SPAWNING` (`UnitDefines.h:542`);
+// `UNIT_DYNFLAG_DEAD` (`SharedDefines.h:1171`).
+const VISCIDUS_UNIT_FLAG_SPAWNING: u32 = 0x0000_0002;
+const VISCIDUS_UNIT_DYNFLAG_DEAD: u32 = 0x20;
 const VISCIDUS_SPELL_GLOB_SPEED: u32 = 26_633;
 // Toxin visual (26601) + `SPELL_WAND_SHOOT` (5019): only read by
 // NEEDS-MAP-HELPER sites (cpp 369-383, 528); dropped (see unresolved).
@@ -12552,6 +12556,9 @@ const MURKDEEP_GO_BONFIRE: u32 = 61_927;
 // glue only; dropped.
 const MURKDEEP_SPELL_SUNDER_ARMOR: u32 = 11_971;
 const MURKDEEP_SPELL_NET: u32 = 6533;
+// `UNIT_FLAG_IMMUNE_TO_NPC/PLAYER` (`UnitDefines.h:549-550`).
+const MURKDEEP_UNIT_FLAG_IMMUNE_TO_NPC: u32 = 0x0000_0200;
+const MURKDEEP_UNIT_FLAG_IMMUNE_TO_PLAYER: u32 = 0x0000_0100;
 // `TEMPSUMMON_TIMED_OR_DEAD_DESPAWN` kind 1 reuses
 // `FOULWEALD_TEMPSUMMON_TIMED_OR_DEAD`; summon-coords table (cpp 936).
 const MURKDEEP_SUMMON_POINTS: [(f32, f32, f32); 3] = [
@@ -13046,6 +13053,11 @@ const PLUCKY_UNIT_NPC_FLAG_GOSSIP: u32 = 0x01;
 // ---- `npc_grenka_bloodscreech` (`thousand_needles.cpp`, cpp 332-336) ----
 const GRENKA_NPC_GRENKA: u32 = 4490;
 const GRENKA_NPC_HARPY: u32 = 4100;
+// `UNIT_FLAG_SPAWNING | UNIT_FLAG_PACIFIED | UNIT_FLAG_IMMUNE_TO_NPC`
+// (`UnitDefines.h:542/558/550`).
+const GRENKA_UNIT_FLAG_SPAWNING: u32 = 0x0000_0002;
+const GRENKA_UNIT_FLAG_PACIFIED: u32 = 0x0002_0000;
+const GRENKA_UNIT_FLAG_IMMUNE_TO_NPC: u32 = 0x0000_0200;
 const GRENKA_HARPIES: [(u32, f32, f32, f32, f32); 5] = [
     (GRENKA_NPC_HARPY, -5_587.69, -1_571.45, 11.21, 6.14),
     (GRENKA_NPC_HARPY, -5_587.69, -1_571.45, 11.21, 6.14),
@@ -19789,7 +19801,7 @@ impl Map {
                     .map_or(0, |s| s.encounter[MAR_TYPE_CELEBRAS as usize])
                     != DONE
                 {
-                    self.hidden_objects.insert(guid);
+                    self.set_visibility(guid, UnitVisibility::Off);
                 }
             }
             MAR_NPC_SPEWED_LARVA => {
@@ -19876,7 +19888,7 @@ impl Map {
                         .maraudon()
                         .map_or(ObjectGuid::EMPTY, |s| s.celebras_redeemed);
                     if celebras != ObjectGuid::EMPTY {
-                        self.hidden_objects.remove(&celebras);
+                        self.set_visibility(celebras, UnitVisibility::On);
                     }
                 }
                 if let Some(s) = self.maraudon_mut() {
@@ -23362,7 +23374,7 @@ impl Map {
                     .unwrap_or(ST_NOT_STARTED);
                 if circle != ST_SPECIAL && circle != DONE {
                     // `SetVisibility(VISIBILITY_OFF)`.
-                    self.hidden_objects.insert(guid);
+                    self.set_visibility(guid, UnitVisibility::Off);
                     self.st_set_unit_flag(guid, ST_UNIT_FLAG_NOT_SELECTABLE);
                     self.st_set_unit_flag(guid, ST_UNIT_FLAG_SPAWNING);
                     self.st_set_unit_flag(guid, ST_UNIT_FLAG_IMMUNE_TO_NPC);
@@ -23386,7 +23398,7 @@ impl Map {
                 }
                 if self.st_get_data(ST_TYPE_JAMMALAN) != Some(DONE) {
                     // `SetVisibility(VISIBILITY_OFF)`.
-                    self.hidden_objects.insert(guid);
+                    self.set_visibility(guid, UnitVisibility::Off);
                     self.st_set_unit_flag(guid, ST_UNIT_FLAG_NOT_SELECTABLE);
                     self.st_set_unit_flag(guid, ST_UNIT_FLAG_SPAWNING);
                     self.st_set_unit_flag(guid, ST_UNIT_FLAG_IMMUNE_TO_NPC);
@@ -23399,7 +23411,7 @@ impl Map {
                 }
                 if self.st_get_data(ST_TYPE_JAMMALAN) != Some(DONE) {
                     // `SetVisibility(VISIBILITY_OFF)`.
-                    self.hidden_objects.insert(guid);
+                    self.set_visibility(guid, UnitVisibility::Off);
                     self.st_set_unit_flag(guid, ST_UNIT_FLAG_NOT_SELECTABLE);
                     self.st_set_unit_flag(guid, ST_UNIT_FLAG_SPAWNING);
                     self.st_set_unit_flag(guid, ST_UNIT_FLAG_IMMUNE_TO_NPC);
@@ -23422,13 +23434,13 @@ impl Map {
             ST_NPC_ATALARION => {
                 // Hidden (fork `GetVisibility() != VISIBILITY_ON`):
                 // evade and re-freeze instead of the aggro yell.
-                if self.hidden_objects.contains(&creature) {
+                if self.get_visibility(creature) == UnitVisibility::On {
+                    self.do_script_text(ST_SAY_ATALALARION_AGGRO, creature, None, -1);
+                } else {
                     self.enter_evade_mode(creature);
                     self.st_set_unit_flag(creature, ST_UNIT_FLAG_NOT_SELECTABLE);
                     self.st_set_unit_flag(creature, ST_UNIT_FLAG_SPAWNING);
                     self.st_set_unit_flag(creature, ST_UNIT_FLAG_IMMUNE_TO_NPC);
-                } else {
-                    self.do_script_text(ST_SAY_ATALALARION_AGGRO, creature, None, -1);
                 }
             }
             ST_NPC_SHADE_OF_ERANIKUS => {
@@ -23522,7 +23534,7 @@ impl Map {
                         .map_or(ObjectGuid::EMPTY, |s| s.dreamscyth);
                     if self.creatures.contains_key(&dream) {
                         // `SetVisibility(VISIBILITY_ON)`.
-                        self.hidden_objects.remove(&dream);
+                        self.set_visibility(dream, UnitVisibility::On);
                         self.st_remove_unit_flag(dream, ST_UNIT_FLAG_NOT_SELECTABLE);
                         self.st_remove_unit_flag(dream, ST_UNIT_FLAG_SPAWNING);
                         self.st_remove_unit_flag(dream, ST_UNIT_FLAG_IMMUNE_TO_NPC);
@@ -23533,7 +23545,7 @@ impl Map {
                     let weaver = self.sunken_temple().map_or(ObjectGuid::EMPTY, |s| s.weaver);
                     if self.creatures.contains_key(&weaver) {
                         // `SetVisibility(VISIBILITY_ON)`.
-                        self.hidden_objects.remove(&weaver);
+                        self.set_visibility(weaver, UnitVisibility::On);
                         self.st_remove_unit_flag(weaver, ST_UNIT_FLAG_NOT_SELECTABLE);
                         self.st_remove_unit_flag(weaver, ST_UNIT_FLAG_SPAWNING);
                         self.st_remove_unit_flag(weaver, ST_UNIT_FLAG_IMMUNE_TO_NPC);
@@ -23758,7 +23770,7 @@ impl Map {
         }
         self.do_script_text(ST_SAY_ATALALARION_SPAWN, atalarion, None, -1);
         // `SetVisibility(VISIBILITY_ON)`.
-        self.hidden_objects.remove(&atalarion);
+        self.set_visibility(atalarion, UnitVisibility::On);
         self.st_remove_unit_flag(atalarion, ST_UNIT_FLAG_NOT_SELECTABLE);
         self.st_remove_unit_flag(atalarion, ST_UNIT_FLAG_SPAWNING);
         self.st_remove_unit_flag(atalarion, ST_UNIT_FLAG_IMMUNE_TO_NPC);
@@ -30208,7 +30220,7 @@ impl Map {
                     // so the FAIL arm below can still recover these whelps
                     // (see unresolved). `ForcedDespawn(1000)` (cpp 354) has no
                     // delayed-despawn helper.
-                    self.hidden_objects.insert(guid);
+                    self.set_visibility(guid, UnitVisibility::Off);
                     self.bwl_set_unit_flag(
                         guid,
                         BWL_UNIT_FLAG_NOT_SELECTABLE
@@ -30217,7 +30229,7 @@ impl Map {
                     );
                 } else if lashlayer == BWL_FAIL {
                     // Respawn FAIL arm (cpp 356-360).
-                    self.hidden_objects.remove(&guid);
+                    self.set_visibility(guid, UnitVisibility::On);
                     self.bwl_remove_unit_flag(
                         guid,
                         BWL_UNIT_FLAG_NOT_SELECTABLE
@@ -33592,9 +33604,222 @@ impl Map {
             self.go_use_goober(player, go_guid);
             return;
         }
+        if go_type == 3 {
+            self.go_use_chest(player, go_guid);
+            return;
+        }
+        if go_type == mangos_world_data::gameobject_template::TYPE_FISHINGNODE {
+            self.go_use_fishing_bobber(player, go_guid);
+            return;
+        }
+        if go_type == mangos_world_data::gameobject_template::TYPE_FISHINGHOLE {
+            self.go_use_fishing_hole(player, go_guid);
+            return;
+        }
         if go_type == 13 {
             self.go_use_camera(player, go_guid);
         }
+    }
+
+    /// `GAMEOBJECT_TYPE_CHEST` use subset (fork
+    /// `HandleGameObjectUseOpcode` gates +
+    /// `GameObject::Use` chest arm,
+    /// `GameObject.cpp:1426-1433`): is-spawned
+    /// exploit guard, `NO_INTERACT` gate (the
+    /// `IsAtInteractDistance` band already gates at
+    /// the top of `gameobject_use`; `PlayerCanUse`
+    /// has no chest arm beyond
+    /// `IsUseRequirementMet`, whose requirement
+    /// table is unmodeled), looting-cancel aura
+    /// strip, DB script start + linked trap, then
+    /// the `GetSpellForLock` `OpenLock` indirection
+    /// into the GO loot window (fork opens chests
+    /// through the `OpenLock` spell's `SendLoot`; the
+    /// cast pipeline has no GO target yet, so direct
+    /// use validates the lock the same way).
+    fn go_use_chest(&mut self, player: ObjectGuid, go_guid: ObjectGuid) {
+        // `GO_FLAG_NO_INTERACT` (`GameObjectDefines.h:79`).
+        const GO_FLAG_NO_INTERACT: u32 = 0x10;
+        const AURA_INTERRUPT_LOOTING_CANCELS: u32 = 0x0000_0800;
+        let Some(info) = self.gameobjects.get(&go_guid).map(|g| g.info.clone()) else {
+            return;
+        };
+        // Additional exploit guard (fork
+        // `SpellHandler.cpp:261`): despawned chests
+        // never open.
+        if !self
+            .gameobjects
+            .get(&go_guid)
+            .is_some_and(mangos_entities::gameobject::GameObject::is_spawned)
+        {
+            return;
+        }
+        // Never expect this opcode for non-intractable
+        // GOs (fork `:270`).
+        if self.object_get_field(go_guid, offsets::GAMEOBJECT_FLAGS) & GO_FLAG_NO_INTERACT != 0 {
+            return;
+        }
+        self.remove_auras_with_interrupt_flags(player, AURA_INTERRUPT_LOOTING_CANCELS, 0);
+        // Fork `Use` chest arm: script start + linked
+        // trap, then return (the window below is the
+        // OpenLock-spell indirection).
+        self.scripts_start_gameobject(go_guid.counter(), player, go_guid);
+        self.go_trigger_linked(player, go_guid);
+        if !self.go_open_lock_known(player, info.data_u32(0)) {
+            return;
+        }
+        self.open_go_loot_window(player, go_guid);
+    }
+
+    /// `GAMEOBJECT_TYPE_FISHINGNODE` use (fork
+    /// `GameObject::Use`, `GameObject.cpp:1589-1686`):
+    /// owner-only; at `GO_READY` the zone-skill roll
+    /// (`skill - zone + 5` vs `irand(1, 100)`, subzone
+    /// row else zone row, fork `:1603-1622`) decides
+    /// the catch. A success near a pool redirects to
+    /// that hole (`:1672-1678`); with the fork
+    /// `SkillFail` defaults (loot/gain false,
+    /// pool-rescue true) a failure escapes with no
+    /// window and no gain (`:1680-1687`). Every arm
+    /// but the owner reject ends the channel
+    /// (`FinishSpell`, fork `:1690`); the bobber
+    /// retires on escape, redirect, and (through the
+    /// window release) on catch.
+    fn go_use_fishing_bobber(&mut self, player: ObjectGuid, go_guid: ObjectGuid) {
+        use crate::gameobjects::{
+            FISHING_HOLE_SEARCH_RANGE, GO_LOOT_JUST_DEACTIVATED, GO_LOOT_NOT_READY, GO_LOOT_READY,
+        };
+        use crate::loot::{LOOT_FISHING, LOOT_FISHING_FAIL, LOOT_FISHINGHOLE, SKILL_FISHING};
+        use mangos_protocol::opcode_table::opcode_id;
+        use mangos_protocol::world::WorldPacket;
+        /// `SkillFail.Loot.Fishing` (`World.cpp:699`):
+        /// fork default false. The junk window only
+        /// opens under a non-default config, so the
+        /// slice keeps the arm fork-shaped but never
+        /// takes it (config plumbing is out of slice).
+        const SKILL_FAIL_LOOT_FISHING: bool = false;
+        // `HandleGameObjectUseOpcode` gates (fork
+        // `SpellHandler.cpp:261-270`): despawned and
+        // `NO_INTERACT` objects never reach `Use`
+        // (`PlayerCanUse` has no fishing arm beyond
+        // the unmodeled requirement table).
+        const GO_FLAG_NO_INTERACT: u32 = 0x10;
+        if !self
+            .gameobjects
+            .get(&go_guid)
+            .is_some_and(mangos_entities::gameobject::GameObject::is_spawned)
+            || self.object_get_field(go_guid, offsets::GAMEOBJECT_FLAGS) & GO_FLAG_NO_INTERACT != 0
+        {
+            return;
+        }
+        // Fork `:1592-1596`: players only (the
+        // dispatcher is player-only) and owner-only.
+        if self.go_owner_guid(go_guid) != player {
+            return;
+        }
+        let loot_state = self
+            .go_runtime
+            .get(&go_guid)
+            .map_or(GO_LOOT_NOT_READY, |r| r.loot_state);
+        // Fork `:1693-1694`: a spent bobber ignores
+        // the use (the tick deletes it).
+        if loot_state == GO_LOOT_JUST_DEACTIVATED {
+            self.finish_channeled_spell(player);
+            return;
+        }
+        if loot_state != GO_LOOT_READY {
+            // Fork `:1696-1704`: pre-splash uses hook
+            // the channel, notify, and retire.
+            if let Some(r) = self.go_runtime.get_mut(&go_guid) {
+                r.loot_state = GO_LOOT_JUST_DEACTIVATED;
+            }
+            self.go_set_just_deactivated(go_guid);
+            self.finish_channeled_spell(player);
+            let packet = WorldPacket::with_body(opcode_id::SMSG_FISH_NOT_HOOKED, Vec::new());
+            self.send_to_player(player, packet);
+            return;
+        }
+        let Some(go_pos) = self.object_position(go_guid) else {
+            self.finish_channeled_spell(player);
+            return;
+        };
+        let (zone, subzone) = self.zone_and_area_id(go_pos);
+        let mut zone_skill = self.stores.fishing_base_skills.get(subzone);
+        if zone_skill == 0 {
+            zone_skill = self.stores.fishing_base_skills.get(zone);
+        }
+        #[allow(clippy::cast_possible_wrap)]
+        let skill = self
+            .players
+            .get(&player)
+            .map_or(0, |e| Self::skill_value(&e.player, SKILL_FISHING)) as i32;
+        let chance = skill - zone_skill + 5;
+        let roll = self.spell_rng().irand(1, 100);
+        // Fork `:1624`: the roll only matters past
+        // the base skill.
+        let success = skill >= zone_skill && chance >= roll;
+        // Fork `:1628-1645`: with the
+        // `SkillFail.Possible.FishingPool` default
+        // (true) a failed roll stands — only a success
+        // looks for a pool to redirect to.
+        let hole = if success {
+            self.lookup_fishing_hole_around(go_guid, FISHING_HOLE_SEARCH_RANGE)
+        } else {
+            None
+        };
+        // Fork `:1647` (`SkillFail.Gain.Fishing`
+        // default false): gains on success only.
+        if success {
+            self.update_fishing_skill(player);
+        }
+        // Fork `:1650-1687`: the junk window only
+        // opens under `SkillFail.Loot.Fishing`
+        // (default false); otherwise a failure
+        // escapes with no window.
+        if success {
+            self.unit_remove_gameobject_ref(player, go_guid);
+            self.go_set_owner_guid(go_guid, player);
+            if let Some(hole) = hole {
+                self.open_fishing_loot_window(player, hole, LOOT_FISHINGHOLE);
+                if let Some(r) = self.go_runtime.get_mut(&go_guid) {
+                    r.loot_state = GO_LOOT_JUST_DEACTIVATED;
+                }
+                self.go_set_just_deactivated(go_guid);
+            } else {
+                self.open_fishing_loot_window(player, go_guid, LOOT_FISHING);
+            }
+        } else if SKILL_FAIL_LOOT_FISHING {
+            self.unit_remove_gameobject_ref(player, go_guid);
+            self.go_set_owner_guid(go_guid, player);
+            self.open_fishing_loot_window(player, go_guid, LOOT_FISHING_FAIL);
+        } else {
+            if let Some(r) = self.go_runtime.get_mut(&go_guid) {
+                r.loot_state = GO_LOOT_JUST_DEACTIVATED;
+            }
+            self.go_set_just_deactivated(go_guid);
+            let packet = WorldPacket::with_body(opcode_id::SMSG_FISH_ESCAPED, Vec::new());
+            self.send_to_player(player, packet);
+        }
+        self.finish_channeled_spell(player);
+    }
+
+    /// `GAMEOBJECT_TYPE_FISHINGHOLE` use (fork
+    /// `GameObject::Use`, `GameObject.cpp:1802-1811`):
+    /// straight into the pool window.
+    fn go_use_fishing_hole(&mut self, player: ObjectGuid, go_guid: ObjectGuid) {
+        use crate::loot::LOOT_FISHINGHOLE;
+        // Same opcode gates as the bobber arm (fork
+        // `SpellHandler.cpp:261-270`).
+        const GO_FLAG_NO_INTERACT: u32 = 0x10;
+        if !self
+            .gameobjects
+            .get(&go_guid)
+            .is_some_and(mangos_entities::gameobject::GameObject::is_spawned)
+            || self.object_get_field(go_guid, offsets::GAMEOBJECT_FLAGS) & GO_FLAG_NO_INTERACT != 0
+        {
+            return;
+        }
+        self.open_fishing_loot_window(player, go_guid, LOOT_FISHINGHOLE);
     }
 
     /// `GAMEOBJECT_TYPE_GOOBER` use subset
@@ -42716,7 +42941,8 @@ impl Map {
         }
         // Restore Razorgore onto the possessor (cpp 387-399).
         if let Some(razorgore) = self.instance_get_data64(BWL_DATA_RAZORGORE_GUID) {
-            // NEEDS-MAP-HELPER: `DoResetThreat()` + `SetCombatMovement(true)` (cpp 390-391).
+            // NEEDS-MAP-HELPER: `SetCombatMovement(true)` (cpp 391).
+            self.do_reset_threat(razorgore);
             let possesseur = self
                 .ai
                 .get(&guid)
@@ -42912,11 +43138,16 @@ impl Map {
             if !possesseur.is_empty() {
                 // NEEDS-MAP-HELPER: max-health restore to
                 // `RAZORGORE_MAX_HEALTH_DURING_POSSESSION`, motion re-init,
-                // channel clear, threat wipe + `DoResetThreat`, re-chase with
-                // 1000000 threat (cpp 620-648).
+                // channel clear (cpp 620-648).
                 let _ = RAZORGORE_MAX_HEALTH_DURING_POSSESSION;
                 if let Some(s) = self.trigger_orb_state_mut(guid) {
                     s.possesseur_guid = ObjectGuid::EMPTY;
+                }
+                // Threat wipe + re-chase with 1000000 threat (cpp 640-648).
+                if let Some(razorgore) = self.instance_get_data64(BWL_DATA_RAZORGORE_GUID) {
+                    self.do_reset_threat(razorgore);
+                    self.attack_start(razorgore, possesseur);
+                    self.add_threat(razorgore, possesseur, 1_000_000.0);
                 }
             }
         }
@@ -43812,7 +44043,10 @@ impl Map {
             u32::from(offsets::UNIT_NPC_FLAGS),
             npc | VAEL_UNIT_NPC_FLAG_GOSSIP,
         );
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` restore (cpp 177-178).
+        // Make visible if needed (cpp 177-178).
+        if self.get_visibility(guid) != UnitVisibility::On {
+            self.set_visibility(guid, UnitVisibility::On);
+        }
         self.victor_nefarius_load_scepter_run(guid);
     }
 
@@ -44218,7 +44452,8 @@ impl Map {
         }
         // Begin phase 2 by spawning Nefarian (cpp 384-411).
         if killed >= NEFARIUS_MAX_DRAKE_KILLED - 2 {
-            // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 388).
+            // `InterruptNonMeleeSpells(false)` (cpp 388).
+            self.interrupt_non_melee_spells(guid, false, 0);
             let _ = self.cast_spell(
                 guid,
                 NEFARIUS_SPELL_ROOT,
@@ -44229,7 +44464,11 @@ impl Map {
                     ..Default::default()
                 },
             );
-            // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` (cpp 394-395).
+            // Make super invis (cpp 394-395): Victor himself,
+            // not the summon below.
+            if self.get_visibility(guid) != UnitVisibility::Off {
+                self.set_visibility(guid, UnitVisibility::Off);
+            }
             if let Some(summoned) = self.summon_creature(
                 BWL_NPC_NEFARIAN,
                 Position::new(-7515.644, -1222.698, 534.716_9, 0.0),
@@ -44394,8 +44633,9 @@ impl Map {
                     }
                 }
             } else {
-                // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` +
-                // `SendSpellGo(VISUAL_EFFECT)` (cpp 460-461).
+                // `InterruptNonMeleeSpells(false)` (cpp 460)
+                // + `SendSpellGo(VISUAL_EFFECT)` (cpp 461, unmodeled).
+                self.interrupt_non_melee_spells(guid, false, 0);
                 if let Some(s) = self.victor_nefarius_state_mut(guid) {
                     s.shadow_blink_timer_ms = 1000;
                     s.smoke = true;
@@ -46164,8 +46404,7 @@ impl Map {
                             CastTarget::Unit(target),
                         )
                     {
-                        // NEEDS-MAP-HELPER: `DoResetThreat()` (cpp 505);
-                        // no threat-reset helper on `Map`.
+                        self.do_reset_threat(guid);
                         let next = 20_000 + self.rng.urand(0, 9_999);
                         if let Some(s) = self.majordomo_state_mut(guid) {
                             s.tp_domo_timer_ms = next;
@@ -46180,8 +46419,7 @@ impl Map {
                         CastTarget::Unit(target),
                     )
                 {
-                    // NEEDS-MAP-HELPER: `DoResetThreat()` (cpp 513); no
-                    // threat-reset helper on `Map`.
+                    self.do_reset_threat(guid);
                     let next = 20_000 + self.rng.urand(0, 9_999);
                     if let Some(s) = self.majordomo_state_mut(guid) {
                         s.tp_domo_timer_ms = next;
@@ -46886,8 +47124,7 @@ impl Map {
                 CastTarget::SelfCast,
             )
         {
-            // NEEDS-MAP-HELPER: `DoResetThreat()` (cpp 404); no
-            // threat-reset helper on `Map`.
+            self.do_reset_threat(guid);
             let next = self.rng.urand(25_000, 30_000);
             if let Some(s) = self.ragnaros_state_mut(guid) {
                 s.wrath_timer_ms = next;
@@ -47229,8 +47466,7 @@ impl Map {
             // SELECT_FLAG_PLAYER)` (cpp 124) + `NearTeleportTo` (cpp 127);
             // interim is the threat-list player pick.
             if let Some(target) = self.mc_random_player_target(guid) {
-                // NEEDS-MAP-HELPER: `DoResetThreat()` (cpp 126); no
-                // threat-reset helper on `Map`.
+                self.do_reset_threat(guid);
                 // NEEDS-MAP-HELPER: `NearTeleportTo(pTarget)` (cpp 127).
                 self.attack_start(guid, target);
             }
@@ -49417,7 +49653,7 @@ impl Map {
             s.player_aggro = [0.0; 10];
         }
         // `SetVisibility(VISIBILITY_ON)`.
-        self.hidden_objects.remove(&guid);
+        self.set_visibility(guid, UnitVisibility::On);
         let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
         let _ = self.object_set_field(
             guid,
@@ -49437,7 +49673,7 @@ impl Map {
     fn anastari_just_died(&mut self, guid: ObjectGuid) {
         self.strat_set_data(STRAT_TYPE_BARONESS, DONE);
         // `SetVisibility(VISIBILITY_ON)`.
-        self.hidden_objects.remove(&guid);
+        self.set_visibility(guid, UnitVisibility::On);
         let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
         let _ = self.object_set_field(
             guid,
@@ -49496,7 +49732,9 @@ impl Map {
         }
         // `if (GetVisibility() != VISIBILITY_ON) SetVisibility(VISIBILITY_ON)`
         // (cpp 164-165).
-        self.hidden_objects.remove(&guid);
+        if self.get_visibility(guid) != UnitVisibility::On {
+            self.set_visibility(guid, UnitVisibility::On);
+        }
         // Possess (cpp 167-235): needs 2+ players (TOPAGGRO,1 present),
         // then a random target above 30% health.
         let mut start_possess = false;
@@ -49633,7 +49871,7 @@ impl Map {
         // health-set helper on `Map`).
         let _ = old.1;
         // `SetVisibility(VISIBILITY_ON)`.
-        self.hidden_objects.remove(&guid);
+        self.set_visibility(guid, UnitVisibility::On);
         let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
         let _ = self.object_set_field(
             guid,
@@ -49738,7 +49976,7 @@ impl Map {
                 flags | STRAT_UNIT_FLAG_NOT_SELECTABLE,
             );
             // `SetVisibility(VISIBILITY_OFF)`.
-            self.hidden_objects.insert(guid);
+            self.set_visibility(guid, UnitVisibility::Off);
             let snap = self.ai.get(&guid).and_then(|ai| ai.anastari()).map_or(
                 ([ObjectGuid::EMPTY; 10], [0.0; 10], ObjectGuid::EMPTY),
                 |s| (s.player_guids, s.player_aggro, s.possessed_player),
@@ -52352,7 +52590,7 @@ impl Map {
                 s.is_enraged = true;
             }
         }
-        // Web (also `DoResetThreat` on success — no helper).
+        // Web (also `DoResetThreat` on success).
         let web_due = {
             let Some(s) = self.cryptguard_state_mut(guid) else {
                 return;
@@ -52367,7 +52605,7 @@ impl Map {
         if web_due
             && self.do_cast_spell_if_can(guid, ANUB_SPELL_CRYPTGUARD_WEB, CastTarget::SelfCast)
         {
-            // NEEDS-MAP-HELPER: `DoResetThreat` on web success.
+            self.do_reset_threat(guid);
             if let Some(s) = self.cryptguard_state_mut(guid) {
                 s.web_timer_ms = ANUB_CRYPTGUARD_WEB_CD;
             }
@@ -54095,9 +54333,9 @@ impl Map {
     }
 
     fn gothik_reset_threat_and_attack_nearest(&mut self, guid: ObjectGuid) {
-        // NEEDS-MAP-HELPER: `DoResetThreat` + nearest
-        // in-LOS target `AttackStart` + 300 threat (cpp
-        // 573-581). Random-hostile approximation:
+        // `DoResetThreat` + nearest in-LOS target `AttackStart` +
+        // 300 threat (cpp 573-581). Random-hostile approximation:
+        self.do_reset_threat(guid);
         let target = self.select_random_hostile(guid);
         if let Some(t) = target {
             self.attack_start(guid, t);
@@ -54867,10 +55105,11 @@ impl Map {
             s.manaburn_timer_ms = 10_000;
             s.port_player_timer_ms = 18_000;
             s.eruption_phase = 0;
-            // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)`
-            // + `SetReactState(REACT_AGGRESSIVE)` + second
+            // `InterruptNonMeleeSpells(false)` (cpp dance-end)
+            // + `SetReactState(REACT_AGGRESSIVE)` (unmodeled) + second
             // `EVENT_PORT_PLAYER` at 48s (single timer slot;
             // second wave unmodeled — see unresolved).
+            self.interrupt_non_melee_spells(guid, false, 0);
         }
         // NEEDS-MAP-HELPER: fork re-chases the victim
         // (`MoveChase`) when a hostile target exists.
@@ -55472,14 +55711,15 @@ impl Map {
             self.remove_auras_due_to_spell(guid, KT_SPELL_VISUAL_CHANNEL);
             // NEEDS-MAP-HELPER: clear immune flags
             // (`RemoveFlag(IMMUNE_TO_PLAYER | NOT_SELECTABLE)`),
-            // `InterruptNonMeleeSpells(true)`,
-            // `DoResetThreat`, zone combat + nearest attack.
+            // zone combat + nearest attack.
+            self.interrupt_non_melee_spells(guid, true, 0);
+            self.do_reset_threat(guid);
         }
     }
 
     fn kelthuzad_do_chains(&mut self, guid: ObjectGuid) {
         if self.do_cast_spell_if_can(guid, KT_SPELL_CHAINS_OF_KELTHUZAD, CastTarget::SelfCast) {
-            // NEEDS-MAP-HELPER: `DoResetThreat` on success.
+            self.do_reset_threat(guid);
             let say = if self.rng.urand(0, 1) == 0 {
                 KT_SAY_CHAIN1
             } else {
@@ -57255,8 +57495,7 @@ impl Map {
         if let Some(s) = self.noth_state_mut(guid) {
             s.blink_timer_ms = next;
         }
-        // NEEDS-MAP-HELPER: `DoResetThreat` + `AttackStart` on
-        // a random target.
+        self.do_reset_threat(guid);
         if let Some(t) = self.select_random_hostile(guid) {
             self.attack_start(guid, t);
         }
@@ -57397,8 +57636,11 @@ impl Map {
     }
 
     fn noth_on_remove_vulnerability(&mut self, guid: ObjectGuid) {
-        // NEEDS-MAP-HELPER: `DoResetThreat` + random-target
-        // `AttackStart` (cpp 317-319).
+        // `DoResetThreat` + random-target `AttackStart` (cpp 317-319).
+        self.do_reset_threat(guid);
+        if let Some(t) = self.select_random_hostile(guid) {
+            self.attack_start(guid, t);
+        }
         let blink = self.rng.urand(2000, 10_000);
         let curse = self.rng.urand(2000, 10_000);
         let warriors = self.rng.urand(2000, 10_000);
@@ -58321,12 +58563,15 @@ impl Map {
     }
 
     fn sapphiron_set_hover(&mut self, guid: ObjectGuid, on: bool, on_reset: bool) {
-        // NEEDS-MAP-HELPER: the whole hover dance (cpp 259-299):
-        // `InterruptNonMeleeSpells`, `AttackStop`,
-        // `RemoveAllAttackers`, combat-movement off, `REACT_*`
-        // swaps, liftoff/land emotes, `SetHover`, melee-Z-limit
-        // set/clear, `UpdateCombatState`. Combat movement is
-        // mirrored on the ai field:
+        // NEEDS-MAP-HELPER: the hover dance remainder (cpp 259-299):
+        // `RemoveAllAttackers`, `REACT_*` swaps, liftoff/land
+        // emotes, `SetHover`, melee-Z-limit set/clear,
+        // `UpdateCombatState`. Combat movement is mirrored
+        // on the ai field:
+        if on {
+            self.interrupt_non_melee_spells(guid, false, 0);
+            self.attack_stop(guid);
+        }
         if let Some(ai) = self.ai.get_mut(&guid) {
             ai.combat_movement = !on;
         }
@@ -58851,7 +59096,8 @@ impl Map {
             _ => false,
         };
         if far {
-            // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(true)`.
+            // `InterruptNonMeleeSpells(true)` (cpp tesla link-loss).
+            self.interrupt_non_melee_spells(guid, true, 0);
             if self
                 .ai
                 .get(&guid)
@@ -59073,11 +59319,11 @@ impl Map {
             self.do_script_text(THAD_SAY_FEUG_DEATH, guid, None, -1);
         }
         *damage = 0;
-        // NEEDS-MAP-HELPER: fake-death tableau (cpp 503-515):
-        // `InterruptNonMeleeSpells(false)`, health 0, stop,
-        // `RemoveAllAurasOnDeath`, `NOT_SELECTABLE`,
-        // motion clear+idle, `UNIT_STAND_STATE_DEAD`,
-        // `AttackStop`.
+        // NEEDS-MAP-HELPER: fake-death tableau remainder (cpp 503-515):
+        // health 0, stop, `RemoveAllAurasOnDeath`,
+        // `NOT_SELECTABLE`, motion clear+idle,
+        // `UNIT_STAND_STATE_DEAD`, `AttackStop`.
+        self.interrupt_non_melee_spells(guid, false, 0);
         if let Some(s) = self.stalagg_state_mut(guid) {
             if is_stalagg {
                 s.fake_death_timer_ms = 5000;
@@ -59094,8 +59340,9 @@ impl Map {
 
     fn thaddius_adds_handle_revive(&mut self, guid: ObjectGuid, is_stalagg: bool) {
         self.thaddius_adds_reset(guid, is_stalagg);
-        // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 388);
-        // revive re-aggros the nearest target like a fresh pull.
+        // `DoResetThreat` (cpp 388); revive re-aggros the
+        // nearest target like a fresh pull.
+        self.do_reset_threat(guid);
         if let Some(t) = self.select_random_hostile(guid) {
             self.thaddius_adds_aggro(guid, t, is_stalagg);
         }
@@ -59145,7 +59392,9 @@ impl Map {
         self.add_threat(guid, mine, other_mine - my_tank);
         self.add_threat(other_add, mine, my_tank - other_mine);
         self.add_threat(other_add, theirs, my_other - other_tank);
-        // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(true)` x2.
+        // `InterruptNonMeleeSpells(true)` x2 (cpp magnetic pull).
+        self.interrupt_non_melee_spells(guid, true, 0);
+        self.interrupt_non_melee_spells(other_add, true, 0);
         self.do_cast_spell_if_can(guid, THAD_SPELL_MAGNETIC_PULL, CastTarget::Unit(theirs));
         self.do_cast_spell_if_can(other_add, THAD_SPELL_MAGNETIC_PULL, CastTarget::Unit(mine));
         self.attack_start(guid, theirs);
@@ -59650,7 +59899,7 @@ impl Map {
                 }
             }
             _ => {
-                // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 772).
+                self.do_reset_threat(guid);
                 let shift = self.rng.urand(10_000, 15_000);
                 let chain = self.rng.urand(10_000, 15_000);
                 if let Some(t) = self.select_random_hostile(guid) {
@@ -60744,7 +60993,8 @@ impl Map {
             u32::from(offsets::UNIT_FIELD_FLAGS),
             flags & !JANDICE_UNIT_FLAG_NOT_SELECTABLE,
         );
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` (cpp 85).
+        // `SetVisibility(VISIBILITY_ON)` (cpp 85).
+        self.set_visibility(guid, UnitVisibility::On);
         // NEEDS-MAP-HELPER: `sWorld.GetWowPatch() >= WOW_PATCH_109` gate (cpp 87).
         let _ = self.cast_spell(
             guid,
@@ -60815,7 +61065,8 @@ impl Map {
                     u32::from(offsets::UNIT_FIELD_FLAGS),
                     flags & !JANDICE_UNIT_FLAG_NOT_SELECTABLE,
                 );
-                // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` (cpp 111).
+                // `SetVisibility(VISIBILITY_ON)` (cpp 111).
+                self.set_visibility(guid, UnitVisibility::On);
                 if let Some(s) = self.jandice_state_mut(guid) {
                     s.invisible = false;
                     s.damage_taken = 0;
@@ -60860,7 +61111,8 @@ impl Map {
             }
         };
         if illusion_due {
-            // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 138).
+            // `InterruptNonMeleeSpells(false)` (cpp 138).
+            self.interrupt_non_melee_spells(guid, false, 0);
             let _ = self.object_set_field(
                 guid,
                 u32::from(offsets::UNIT_FIELD_FACTIONTEMPLATE),
@@ -60873,7 +61125,8 @@ impl Map {
                 flags | JANDICE_UNIT_FLAG_NOT_SELECTABLE,
             );
             self.modify_threat_percent_of(guid, victim, -99);
-            // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` (cpp 142).
+            // `SetVisibility(VISIBILITY_OFF)` (cpp 142).
+            self.set_visibility(guid, UnitVisibility::Off);
             if let Some(s) = self.jandice_state_mut(guid) {
                 s.damage_taken = 0;
                 s.invisible = true;
@@ -62985,8 +63238,7 @@ impl Map {
                     if let Some(s) = self.gahzranka_state_mut(guid) {
                         s.massive_geyser_timer_ms = next;
                     }
-                    // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 130); no
-                    // threat-wipe helper on `Map`.
+                    self.do_reset_threat(guid);
                 }
             }
         }
@@ -63415,7 +63667,7 @@ impl Map {
             self.cancel_aura(guid, JEKLIK_SPELL_BAT_FORM);
             // NEEDS-MAP-HELPER: `SetFly(false)` + `SetObjectScale(1.5)`
             // (cpp 157-158).
-            // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 159).
+            self.do_reset_threat(guid);
             if let Some(s) = self.jeklik_state_mut(guid) {
                 s.phase_two = true;
             }
@@ -63570,8 +63822,8 @@ impl Map {
             if due {
                 let started = self.jeklik_state_mut(guid).is_some_and(|s| s.skill_started);
                 if !started {
-                    // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)`
-                    // (cpp 337).
+                    // `InterruptNonMeleeSpells(false)` (cpp 337).
+                    self.interrupt_non_melee_spells(guid, false, 0);
                     if self.do_cast_spell_if_can(
                         guid,
                         JEKLIK_SPELL_GREAT_HEAL,
@@ -63601,8 +63853,10 @@ impl Map {
             if due {
                 let started = self.jeklik_state_mut(guid).is_some_and(|s| s.skill_started);
                 if !started {
-                    // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)`
-                    // (cpp 354) + exact random-target semantics (cpp 355).
+                    // `InterruptNonMeleeSpells(false)` (cpp 354)
+                    // + exact random-target semantics (cpp 355,
+                    // unmodeled).
+                    self.interrupt_non_melee_spells(guid, false, 0);
                     if let Some(target) = self.select_random_hostile(guid) {
                         if self.do_cast_spell_if_can(
                             guid,
@@ -63633,8 +63887,10 @@ impl Map {
             if due {
                 let started = self.jeklik_state_mut(guid).is_some_and(|s| s.skill_started);
                 if !started {
-                    // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)`
-                    // (cpp 373) + exact random-target semantics (cpp 374).
+                    // `InterruptNonMeleeSpells(false)` (cpp 373)
+                    // + exact random-target semantics (cpp 374,
+                    // unmodeled).
+                    self.interrupt_non_melee_spells(guid, false, 0);
                     if let Some(target) = self.select_random_hostile(guid) {
                         if self.do_cast_spell_if_can(
                             guid,
@@ -65569,7 +65825,7 @@ impl Map {
                 // but no mana-user search is implemented, cpp 272-290).
                 if let Some(target) = self.threat_targets_sorted(guid).first().copied() {
                     self.do_cast_spell_if_can(guid, MARLI_SPELL_CHARGE, CastTarget::Unit(target));
-                    // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 275).
+                    self.do_reset_threat(guid);
                     self.attack_start(guid, target);
                     if let Some(s) = self.marli_state_mut(guid) {
                         s.has_webbed = false;
@@ -65706,7 +65962,8 @@ impl Map {
             }
         };
         if due {
-            // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 309/329).
+            // `InterruptNonMeleeSpells(false)` (cpp 309/329).
+            self.interrupt_non_melee_spells(guid, false, 0);
             let phase_two = self.marli_state_mut(guid).is_some_and(|s| s.phase_two);
             if phase_two {
                 self.do_cast_spell_if_can(guid, MARLI_SPELL_TRANSFORM_BACK, CastTarget::SelfCast);
@@ -65721,7 +65978,7 @@ impl Map {
                 self.do_cast_spell_if_can(guid, MARLI_SPELL_SPIDER_FORM, CastTarget::SelfCast);
                 // NEEDS-MAP-HELPER: `GetDefaultDamageRange`/
                 // `SetBaseWeaponDamage(+35%)`/`UpdateDamagePhysical` (cpp 318-320).
-                // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 322).
+                self.do_reset_threat(guid);
                 if let Some(s) = self.marli_state_mut(guid) {
                     s.phase_two = true;
                 }
@@ -66072,7 +66329,8 @@ impl Map {
             && self.creature_health_percent(guid) < 50.0
         {
             self.do_script_text(VENOXIS_SAY_TRANSFORM, guid, None, -1);
-            // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 189).
+            // `InterruptNonMeleeSpells(false)` (cpp 189).
+            self.interrupt_non_melee_spells(guid, false, 0);
             let _ = self.cast_spell(
                 guid,
                 VENOXIS_SPELL_SNAKE_FORM,
@@ -66085,7 +66343,7 @@ impl Map {
             );
             // NEEDS-MAP-HELPER: `SetFloatValue(OBJECT_FIELD_SCALE_X,
             // m_fDefaultSize * 2)` (cpp 192).
-            // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 193).
+            self.do_reset_threat(guid);
             if let Some(s) = self.venoxis_state_mut(guid) {
                 s.phase_two = true;
             }
@@ -66438,7 +66696,7 @@ impl Map {
         if due
             && self.do_cast_spell_if_can(guid, BERSERKER_SPELL_KNOCKBACK, CastTarget::Unit(victim))
         {
-            // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 113).
+            self.do_reset_threat(guid);
             if let Some(s) = self.berserker_state_mut(guid) {
                 s.knockback_timer_ms = 10_000;
             }
@@ -66478,7 +66736,7 @@ impl Map {
             }
         };
         if due && self.do_cast_spell_if_can(guid, BERSERKER_SPELL_FEAR, CastTarget::Unit(victim)) {
-            // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 131).
+            self.do_reset_threat(guid);
             let next = self.rng.urand(25_000, 30_000);
             if let Some(s) = self.berserker_state_mut(guid) {
                 s.fear_timer_ms = next;
@@ -69074,9 +69332,15 @@ impl Map {
             u32::from(offsets::UNIT_NPC_FLAGS),
             flags & !(MALF_UNIT_NPC_FLAG_QUESTGIVER | MALF_UNIT_NPC_FLAG_GOSSIP),
         );
-        // NEEDS-MAP-HELPER: one-time spawn arm (cpp 68-73):
-        // `SetVisibility(VISIBILITY_OFF)` + `DoScriptText(EMOTE_MALFURION1)`
-        // when in the dungeon; no visibility helper.
+        // One-time spawn arm (fork ctor, cpp 66-72): invisible +
+        // emote in the dungeon. `in_dungeon` is still never
+        // seeded (map-dungeon helper missing), so this stays
+        // inert until then — recorded. Runs per reset here,
+        // once per spawn in the fork — recorded.
+        if self.malfurion_state_mut(guid).is_some_and(|s| s.in_dungeon) {
+            self.set_visibility(guid, UnitVisibility::Off);
+            self.do_script_text(MALF_EMOTE_MALFURION1, guid, None, -1);
+        }
     }
 
     /// `npc_malfurionAI::UpdateAI` (cpp 82-137).
@@ -69107,7 +69371,8 @@ impl Map {
         }
         match speech {
             0 => {
-                // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` (cpp 94).
+                // `SetVisibility(VISIBILITY_ON)` (cpp 94).
+                self.set_visibility(guid, UnitVisibility::On);
                 self.handle_emote_command(guid, MALF_EMOTE_ONESHOT_ROAR);
                 self.cast_spell(
                     guid,
@@ -69919,8 +70184,8 @@ impl Map {
             u32::from(offsets::UNIT_FIELD_FLAGS),
             flags | (ANNO_UNIT_FLAG_IMMUNE_TO_PLAYER | ANNO_UNIT_FLAG_IMMUNE_TO_NPC),
         );
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` (cpp 175);
-        // no visibility helper.
+        // `SetVisibility(VISIBILITY_OFF)` (cpp 175).
+        self.set_visibility(guid, UnitVisibility::Off);
     }
 
     /// `AnnoraAI::Aggro` (cpp 187: explicit no-op).
@@ -69958,7 +70223,8 @@ impl Map {
                 .annora_state_mut(guid)
                 .is_some_and(|s| s.scorpion_count == 0);
             if empty {
-                // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` (cpp 208).
+                // `SetVisibility(VISIBILITY_ON)` (cpp 208).
+                self.set_visibility(guid, UnitVisibility::On);
                 self.creature_move_point(
                     guid,
                     1,
@@ -75563,13 +75829,14 @@ impl Map {
         let arcane = self.rng.urand(6000, 8000);
         let fulfill = self.rng.urand(10_000, 15_000);
         let blink = self.rng.urand(15_000, 20_000);
+        // `SetVisibility(VISIBILITY_ON)` (cpp 96).
+        self.set_visibility(guid, UnitVisibility::On);
         if let Some(s) = self.skeram_state_mut(guid) {
             s.arcane_explosion_timer_ms = arcane;
             s.earth_shock_timer_ms = 2000;
             s.fulfillment_timer_ms = fulfill;
             s.blink_timer_ms = blink;
             s.next_split_percent = 75.0;
-            // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)`.
             s.image_a = ObjectGuid::EMPTY;
             // Fork clears `ImageA` twice and never `ImageB` (cpp 98-99);
             // transcribed as-is.
@@ -75867,7 +76134,8 @@ impl Map {
         // NEEDS-MAP-HELPER: `SetMaxHealth(GetMaxHealth() * pct)` +
         // `SetHealthPercent` on the image (cpp 304-305).
         self.set_in_combat_with_zone(created);
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` on the image.
+        // `SetVisibility(VISIBILITY_OFF)` on the image (cpp 307).
+        self.set_visibility(created, UnitVisibility::Off);
         let full = self.ai.get(&guid).and_then(|ai| match &ai.script {
             Some(CreatureScriptAi::Skeram(s)) => Some((s.image_a, s.image_b)),
             _ => None,
@@ -75889,11 +76157,13 @@ impl Map {
 
     /// `boss_skeramAI::UnisonBlink` (cpp 318-340).
     fn skeram_unison_blink(&mut self, guid: ObjectGuid) {
-        // NEEDS-MAP-HELPER: `RemoveAllAuras` (mapped below), `ClearTargetIcon`,
-        // `ClearComboPointHolders`, `InterruptSpellsCastedOnMe`,
-        // `RemoveAllAttackers`, `SetVisibility(VISIBILITY_OFF)` (cpp 327-332).
+        // NEEDS-MAP-HELPER: `ClearTargetIcon` (cpp 327) and
+        // `RemoveAllAttackers` (cpp 330) stay unmodeled.
         self.remove_all_auras(guid);
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` on self.
+        self.clear_combo_point_holders(guid);
+        self.interrupt_spells_casted_on_me(guid, true);
+        // `SetVisibility(VISIBILITY_OFF)` on self (cpp 332).
+        self.set_visibility(guid, UnitVisibility::Off);
         let (a, b) = self
             .ai
             .get(&guid)
@@ -75931,13 +76201,14 @@ impl Map {
                 self.aq_triggered_cast(caster, SKERAM_SPELL_BLINK_2, CastTarget::SelfCast);
             }
         }
-        // NEEDS-MAP-HELPER: `DoResetThreat` on the caster (cpp 376).
+        self.do_reset_threat(caster);
         if let Some(ai) = self.ai.get_mut(&caster) {
             if let Some(CreatureScriptAi::Skeram(s)) = &mut ai.script {
                 s.earth_shock_timer_ms = 2000;
             }
         }
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` on the caster.
+        // `SetVisibility(VISIBILITY_ON)` on the caster (cpp 379).
+        self.set_visibility(caster, UnitVisibility::On);
         let _ = guid;
     }
 
@@ -76818,7 +77089,7 @@ impl Map {
             })
             .unwrap_or(0);
         if timer < diff_ms {
-            // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 177).
+            self.do_reset_threat(guid);
             let victim = self.unit_victim(guid);
             let apply = |base: &mut BugTrioBase| {
                 base.is_eating = false;
@@ -77072,7 +77343,7 @@ impl Map {
             }
         };
         if due && self.do_cast_spell_if_can(guid, BUGTRIO_SPELL_FEAR, CastTarget::SelfCast) {
-            // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 328).
+            self.do_reset_threat(guid);
             if let Some(s) = self.yauj_state_mut(guid) {
                 s.fear_timer_ms = 20_000;
             }
@@ -77281,7 +77552,8 @@ impl Map {
     #[allow(clippy::cast_precision_loss)]
     fn sartura_assign_random_threat(&mut self, guid: ObjectGuid) {
         // `IsWithinDist(pTarget, VISIBLE_RANGE)` (cpp 138): visibility-range
-        // check unmodeled; `DoResetThreat` NEEDS-MAP-HELPER (cpp 139).
+        // `IsWithinDist` visibility-range check unmodeled (cpp 138).
+        self.do_reset_threat(guid);
         if let Some(target) = self.select_random_hostile(guid) {
             let amount = self.rng.urand(1000, 2000) as f32;
             self.add_threat(guid, target, amount);
@@ -77499,7 +77771,7 @@ impl Map {
     /// `mob_sartura_royal_guardAI::AssignRandomThreat` (cpp 300-307).
     #[allow(clippy::cast_precision_loss)]
     fn sartura_royal_guard_assign_random_threat(&mut self, guid: ObjectGuid) {
-        // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 304).
+        self.do_reset_threat(guid);
         if let Some(target) = self.select_random_hostile(guid) {
             let amount = self.rng.urand(1000, 2000) as f32;
             self.add_threat(guid, target, amount);
@@ -78289,7 +78561,7 @@ impl Map {
                 s.no_melee_timer_ms = 10_000;
                 s.submerge_invis_timer_ms = OURO_SUBMERGE_ANIMATION_INVIS_MS;
             }
-            // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 222).
+            self.do_reset_threat(guid);
         }
     }
 
@@ -78330,9 +78602,16 @@ impl Map {
                 }
             };
             if due {
-                // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` +
+                // `SetVisibility(VISIBILITY_ON)` +
                 // `RemoveFlag(UNIT_FIELD_FLAGS, NOT_SELECTABLE | SPAWNING)`
                 // (cpp 366-367); teleport itself:
+                self.set_visibility(guid, UnitVisibility::On);
+                let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
+                let _ = self.object_set_field(
+                    guid,
+                    u32::from(offsets::UNIT_FIELD_FLAGS),
+                    flags & !(OURO_UNIT_FLAG_NOT_SELECTABLE | OURO_UNIT_FLAG_SPAWNING),
+                );
                 let trigger = self
                     .ai
                     .get(&guid)
@@ -78348,8 +78627,14 @@ impl Map {
                 }
                 if self.do_cast_spell_if_can(guid, OURO_SPELL_BIRTH, CastTarget::SelfCast) {
                     self.remove_auras_due_to_spell(guid, OURO_SPELL_SUBMERGE_VISUAL);
-                    // NEEDS-MAP-HELPER: `RemoveFlag(UNIT_FIELD_FLAGS,
+                    // `RemoveFlag(UNIT_FIELD_FLAGS,
                     // UNIT_FLAG_NOT_SELECTABLE)` (cpp 378).
+                    let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
+                    let _ = self.object_set_field(
+                        guid,
+                        u32::from(offsets::UNIT_FIELD_FLAGS),
+                        flags & !OURO_UNIT_FLAG_NOT_SELECTABLE,
+                    );
                     // Ground Rupture on threat members within 20yd (cpp 380-390):
                     // NEEDS-MAP-HELPER: `CastSpell(target, 26100, true)` per
                     // member — triggered cast approximation:
@@ -78391,12 +78676,14 @@ impl Map {
                     // (cpp 401).
                 }
             } else {
-                // NEEDS-MAP-HELPER: `GetVisibility()` read (cpp 406).
+                // `GetVisibility() == VISIBILITY_ON` gate (cpp 406):
+                // the invis timer only ticks while visible.
                 let invis = self
                     .ouro_state_mut(guid)
                     .map_or(0, |s| s.submerge_invis_timer_ms);
-                if invis < diff_ms {
-                    // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` (cpp 410).
+                if invis < diff_ms && self.get_visibility(guid) != UnitVisibility::Off {
+                    // `SetVisibility(VISIBILITY_OFF)` (cpp 410).
+                    self.set_visibility(guid, UnitVisibility::Off);
                     if let Some(s) = self.ouro_state_mut(guid) {
                         s.submerge_invis_timer_ms = 0;
                     }
@@ -78933,10 +79220,40 @@ impl Map {
 
     /// `boss_viscidusAI::ResetViscidusState` (cpp 271-287).
     fn viscidus_reset_state(&mut self, guid: ObjectGuid) {
-        // NEEDS-MAP-HELPER: visibility-off teleport (cpp 273-275),
-        // `DoResetThreat` (cpp 278), `SetVisibility(VISIBILITY_ON)`,
+        // Visibility-off reposition (cpp 273-275): teleport only
+        // when invisible.
+        if self.get_visibility(guid) == UnitVisibility::Off {
+            let _ = self.cast_spell(
+                guid,
+                VISCIDUS_SPELL_TELEPORT,
+                CastTarget::SelfCast,
+                CastOptions {
+                    triggered: true,
+                    skip_known: true,
+                    ..Default::default()
+                },
+            );
+        }
+        // `SetVisibility(VISIBILITY_ON)`,
         // `ClearUnitState(FEIGN_DEATH)`, `RemoveFlag(DYNFLAG_DEAD)`,
         // `RemoveFlag(UNIT_FIELD_FLAGS, SPAWNING)` (cpp 279-282).
+        self.set_visibility(guid, UnitVisibility::On);
+        if let Some(unit) = self.unit_base_mut(guid) {
+            unit.clear_unit_state(mangos_entities::unit::UNIT_STATE_FEIGN_DEATH);
+        }
+        let dynflags = self.object_get_field(guid, offsets::UNIT_DYNAMIC_FLAGS);
+        let _ = self.object_set_field(
+            guid,
+            u32::from(offsets::UNIT_DYNAMIC_FLAGS),
+            dynflags & !VISCIDUS_UNIT_DYNFLAG_DEAD,
+        );
+        let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
+        let _ = self.object_set_field(
+            guid,
+            u32::from(offsets::UNIT_FIELD_FLAGS),
+            flags & !VISCIDUS_UNIT_FLAG_SPAWNING,
+        );
+        self.do_reset_threat(guid);
         if let Some(s) = self.viscidus_state_mut(guid) {
             s.phase = VISCIDUS_PHASE_NORMAL;
             s.hit_count = 0;
@@ -79043,8 +79360,10 @@ impl Map {
             return;
         }
         if self.creature_health_percent(guid) < 5.0 {
-            // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` +
-            // `SetInvincibilityHpThreshold(0)` (cpp 340-341); damage itself:
+            // `SetVisibility(VISIBILITY_ON)` (cpp 340);
+            // `SetInvincibilityHpThreshold(0)` (cpp 341)
+            // unmodeled — no threshold seam. Damage itself:
+            self.set_visibility(guid, UnitVisibility::On);
             if self.aq_triggered_cast(guid, VISCIDUS_SPELL_SUICIDE, CastTarget::SelfCast) {
                 // NEEDS-MAP-HELPER: `DealDamage(self, health)` exact-shape
                 // self-kill (cpp 344).
@@ -79125,8 +79444,10 @@ impl Map {
             .map_or(0, |s| s.explode_delay_timer_ms);
         if explode != 0 {
             if explode <= diff_ms {
-                // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` +
-                // `SetObjectScale(-0.04 * glob_count)` (cpp 465-470).
+                // `SetVisibility(VISIBILITY_OFF)` (cpp 465-466);
+                // `SetObjectScale(-0.04 * glob_count)` (cpp 469-470)
+                // unmodeled — no scale seam.
+                self.set_visibility(guid, UnitVisibility::Off);
                 if let Some(s) = self.viscidus_state_mut(guid) {
                     s.explode_delay_timer_ms = 0;
                 }
@@ -79662,8 +79983,12 @@ impl Map {
                 _ => {}
             }
         }
-        // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells` + `DoStopAttack` +
-        // `DoResetThreat` + `StopMoving` (cpp 473-475); teleport itself:
+        // `InterruptNonMeleeSpells(true)` + `DoStopAttack` +
+        // `StopMoving` (cpp 473-475); teleport itself:
+        self.interrupt_non_melee_spells(guid, true, 0);
+        self.attack_stop(guid);
+        self.stop_moving(guid);
+        self.do_reset_threat(guid);
         self.teleport_creature_in_map(guid, Position::new(x, y, z, o));
         if let Some(ai) = self.ai.get_mut(&guid) {
             match &mut ai.script {
@@ -80630,8 +80955,11 @@ impl Map {
             CTHUN_CLAW_STATE_FEIGN => {
                 // `updateFeign` (cpp 683-695).
                 if feign_ms < diff_ms {
-                    // NEEDS-MAP-HELPER: portal + self `SetVisibility(OFF)`
-                    // (cpp 689).
+                    // `setVisibility(false)` (cpp 689): self OFF;
+                    // the portal twin has no Rust guid (recorded),
+                    // and the buried-expiry ON (cpp 708) has no
+                    // Rust tick arm.
+                    self.set_visibility(guid, UnitVisibility::Off);
                     return (
                         birth,
                         done,
@@ -80660,10 +80988,10 @@ impl Map {
                     // `SelectRandomAliveNotStomach` + `GetRandomPoint(0.5)` +
                     // `NearTeleportTo` (cpp 721-727): NEEDS-MAP-HELPER for the
                     // random-point teleport; state restore itself:
-                    // NEEDS-MAP-HELPER: `DoResetThreat` (cpp 706),
-                    // visibility restores (cpp 708-709).
+                    // NEEDS-MAP-HELPER: visibility restores (cpp 708-709).
                     self.remove_auras_due_to_spell(guid, CTHUN_SPELL_SUBMERGE_VISUAL);
                     self.remove_auras_due_to_spell(guid, CTHUN_SPELL_SUBMERGE_EFFECT);
+                    self.do_reset_threat(guid);
                     return (
                         CTHUN_TENTACLE_BIRTH_MS,
                         false,
@@ -80992,12 +81320,15 @@ impl Map {
 
     /// `eye_of_cthunAI::EnterDarkGlarePhase` (cpp 1157-1177).
     fn eye_of_cthun_enter_dark_glare(&mut self, guid: ObjectGuid) -> bool {
-        // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells` + `DoStopAttack` +
-        // `SetFacingToObject` + `SetTargetGuid` (cpp 1159-1172).
+        // `InterruptNonMeleeSpells(false)` (cpp 1159).
+        self.interrupt_non_melee_spells(guid, false, 0);
         // `SelectAttackingTarget(RANDOM, 0)` (cpp 1161).
         if self.select_random_hostile(guid).is_none() {
             return false;
         }
+        // `DoStopAttack` (cpp 1164); `SetFacingToObject` +
+        // `SetTargetGuid` (cpp 1165-1172) unmodeled.
+        self.attack_stop(guid);
         if self.do_cast_spell_if_can(guid, CTHUN_SPELL_ROTATE_TRIGGER, CastTarget::SelfCast) {
             self.aq_triggered_cast(guid, CTHUN_SPELL_FREEZE_ANIMATION, CastTarget::SelfCast);
             return true;
@@ -81186,12 +81517,17 @@ impl Map {
             s.eye_tentacle_timer_ms = CTHUN_P2_FIRST_EYE_MS;
             s.giant_eye_timer_ms = CTHUN_P2_FIRST_GIANT_EYE_MS;
         }
-        // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells`, aura strips
-        // (VULNERABLE/TRANSFORM), `DeMorph`, visibility + flag writes,
-        // `SetHealth(max)` (cpp 1336-1359). The ctor `DoSpawnCreature`
-        // (`MOB_CTHUN_PORTAL`, cpp 1256-1260) has no summon-in-ctor helper
-        // and is NOT repeated here (fork ctor runs once; Reset runs per
-        // evade) — see unresolved.
+        // Reset visibility dance (cpp 1336-1346): OFF + interrupt,
+        // VULNERABLE strip, then ON.
+        // NEEDS-MAP-HELPER: TRANSFORM strip (26232, const dropped),
+        // `DeMorph`, flag writes, `SetHealth(max)` (cpp 1342-1359).
+        // The ctor `DoSpawnCreature` (`MOB_CTHUN_PORTAL`, cpp 1256-1260)
+        // has no summon-in-ctor helper and is NOT repeated here
+        // (fork ctor runs once; Reset runs per evade) — see unresolved.
+        self.set_visibility(guid, UnitVisibility::Off);
+        self.interrupt_non_melee_spells(guid, false, 0);
+        self.remove_auras_due_to_spell(guid, CTHUN_SPELL_VULNERABLE);
+        self.set_visibility(guid, UnitVisibility::On);
         // Fork skips the eye check while a wipe respawn is pending (cpp 1353).
         let wipe = self
             .cthun_state_mut(guid)
@@ -81524,8 +81860,10 @@ impl Map {
         if grab < diff_ms {
             // `SelectRandomAliveNotStomach`: stomach exclusion unmodeled.
             if let Some(target) = self.select_random_hostile(guid) {
-                // NEEDS-MAP-HELPER: victim `InterruptNonMeleeSpells` +
-                // victim-cast MOUTH_TENTACLE channeled by the body (cpp 1751-1752).
+                // Victim `InterruptNonMeleeSpells(false)` (cpp 1751);
+                // victim-cast MOUTH_TENTACLE channeled by the body
+                // (cpp 1752, NEEDS-MAP-HELPER).
+                self.interrupt_non_melee_spells(target, false, 0);
                 if let Some(s) = self.cthun_state_mut(guid) {
                     s.stomach_port_timer_ms = CTHUN_STOMACH_GRAB_DURATION_MS;
                     s.stomach_target = target;
@@ -84110,7 +84448,7 @@ impl Map {
                 CastTarget::Unit(victim),
             )
         {
-            // NEEDS-MAP-HELPER: `DoResetThreat()` (cpp 1619).
+            self.do_reset_threat(guid);
             let hoist30 = self.rng.urand(10_000, 15_000);
             if let Some(s) = self.prince_tortheldrin_state_mut(guid) {
                 s.arcane_blast_timer_ms = hoist30;
@@ -84345,8 +84683,10 @@ impl Map {
                 }
             });
             if let Some(phase) = ooc {
-                // `InterruptNonMeleeSpells(false)` (cpp 1833).
-                self.cancel_cast(guid, false);
+                // `InterruptNonMeleeSpells(false)` (cpp 1833):
+                // the helper (not a silent cancel) so the
+                // victim's cast fails with `INTERRUPTED`.
+                self.interrupt_non_melee_spells(guid, false, 0);
                 let point = ALZZIN_COORDS[phase as usize % ALZZIN_COORDS.len()];
                 self.creature_move_point(
                     guid,
@@ -85634,7 +85974,8 @@ impl Map {
             }
         };
         if corrupt_due {
-            // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 106).
+            // `InterruptNonMeleeSpells(false)` (cpp 106).
+            self.interrupt_non_melee_spells(guid, false, 0);
             self.do_cast_spell_if_can(guid, CELEBRAS_SPELL_CORRUPT_FORCES, CastTarget::SelfCast);
             if let Some(s) = self.celebras_the_cursed_state_mut(guid) {
                 s.corrupt_forces_timer_ms = 20_000;
@@ -85707,7 +86048,8 @@ impl Map {
                 }
             };
             if quake_due {
-                // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 73).
+                // `InterruptNonMeleeSpells(false)` (cpp 73).
+                self.interrupt_non_melee_spells(guid, false, 0);
                 self.do_cast_spell_if_can(guid, LANDSLIDE_SPELL_LANDSLIDE, CastTarget::SelfCast);
                 if let Some(s) = self.landslide_state_mut(guid) {
                     s.landslide_timer_ms = 60_000;
@@ -85847,7 +86189,8 @@ impl Map {
             due
         };
         if adds_due {
-            // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 107).
+            // `InterruptNonMeleeSpells(false)` (cpp 107).
+            self.interrupt_non_melee_spells(guid, false, 0);
             // Fork `SetFactionTemplateId(35)` (cpp 108, literal).
             let _ = self.object_set_field(guid, u32::from(offsets::UNIT_FIELD_FACTIONTEMPLATE), 35);
             let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
@@ -86270,7 +86613,8 @@ impl Map {
     /// the Deep Breath arm. The breath cast uses the PRE-update row
     /// (`m_pPointData` re-get happens after the cast, cpp 516-518).
     fn onyxia_do_movement(&mut self, guid: ObjectGuid) -> bool {
-        // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 497).
+        // `InterruptNonMeleeSpells(false)` (cpp 497).
+        self.interrupt_non_melee_spells(guid, false, 0);
         let move_point = self
             .ai
             .get(&guid)
@@ -86580,7 +86924,8 @@ impl Map {
                     ai.combat_movement = false;
                 }
                 self.do_script_text(ONY_SAY_PHASE_2_TRANS, guid, None, -1);
-                // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 576).
+                // `InterruptNonMeleeSpells(false)` (cpp 576).
+                self.interrupt_non_melee_spells(guid, false, 0);
                 // `GetMotionMaster()->Clear(false)` + `MoveIdle()` (cpp 578-579).
                 self.creature_move_idle(guid);
                 self.set_speed_rate(guid, mangos_entities::unit::MOVE_RUN, ONY_NORMAL_SPEED);
@@ -86641,10 +86986,11 @@ impl Map {
         } else if phase == ONY_PHASE_THREE {
             // P3 landing event (cpp 606-650).
             if debut && trans_count == 2 {
-                // NEEDS-MAP-HELPER: `DoResetThreat()` (cpp 612).
+                self.do_reset_threat(guid);
                 self.do_script_text(ONY_SAY_PHASE_3_TRANS, guid, None, -1);
                 self.set_speed_rate(guid, mangos_entities::unit::MOVE_RUN, ONY_NORMAL_SPEED);
-                // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp 615).
+                // `InterruptNonMeleeSpells(false)` (cpp 615).
+                self.interrupt_non_melee_spells(guid, false, 0);
                 let south = self.unit_position(guid).is_some_and(|p| p.x < -40.0);
                 if south {
                     self.creature_move_point(
@@ -88011,12 +88357,28 @@ impl Map {
     fn murkdeep_reset(&mut self, guid: ObjectGuid) {
         let sunder = self.rng.urand(0, 5);
         let net = self.rng.urand(0, 20);
+        // Fork ctor (cpp 944): spawn invisible + immune. `Reset`
+        // itself does not touch visibility, so this arm only
+        // fires pre-event (no evade mid-event re-hide).
+        let fresh = self.ai.get(&guid).and_then(|ai| match &ai.script {
+            Some(CreatureScriptAi::Murkdeep(s)) => Some(s.event_phase == 0 && !s.event_state),
+            _ => None,
+        });
         if let Some(s) = self.murkdeep_state_mut(guid) {
             s.event_phase = 0;
             s.event_state = false;
             s.has_fled = false;
             s.sunder_armor_timer_ms = sunder;
             s.net_timer_ms = net;
+        }
+        if fresh == Some(true) {
+            self.set_visibility(guid, UnitVisibility::Off);
+            let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
+            let _ = self.object_set_field(
+                guid,
+                u32::from(offsets::UNIT_FIELD_FLAGS),
+                flags | MURKDEEP_UNIT_FLAG_IMMUNE_TO_NPC | MURKDEEP_UNIT_FLAG_IMMUNE_TO_PLAYER,
+            );
         }
     }
 
@@ -88197,8 +88559,7 @@ impl Map {
     /// `npc_murkdeepAI::UpdateAI` (`darkshore.cpp:1062-1129`).
     fn murkdeep_update(&mut self, guid: ObjectGuid, diff_ms: u32) {
         if self.get_hostile_target(guid).is_none() {
-            // NEEDS-MAP-HELPER: `GetVisibility() == VISIBILITY_OFF` gate
-            // (cpp 1066, 1096-1098); visibility has no helper.
+            // `GetVisibility() == VISIBILITY_OFF` gate (cpp 1066).
             let (phase, event_state) = self
                 .ai
                 .get(&guid)
@@ -88207,7 +88568,7 @@ impl Map {
                     _ => None,
                 })
                 .unwrap_or((0, false));
-            if phase == 0 && event_state {
+            if phase == 0 && event_state && self.get_visibility(guid) == UnitVisibility::Off {
                 self.despawn_creature_now(guid, 0);
                 // NEEDS-MAP-HELPER: `RemoveCorpse` (cpp 1068).
                 return;
@@ -88240,10 +88601,19 @@ impl Map {
                         }
                         3 => {
                             self.murkdeep_do_summon(guid);
-                            // NEEDS-MAP-HELPER: `RemoveFlag(UNIT_FIELD_FLAGS,
+                            // `RemoveFlag(UNIT_FIELD_FLAGS,
                             // UNIT_FLAG_IMMUNE_TO_NPC |
                             // UNIT_FLAG_IMMUNE_TO_PLAYER)` + visibility ON
                             // (cpp 1096-1098).
+                            self.set_visibility(guid, UnitVisibility::On);
+                            let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
+                            let _ = self.object_set_field(
+                                guid,
+                                u32::from(offsets::UNIT_FIELD_FLAGS),
+                                flags
+                                    & !(MURKDEEP_UNIT_FLAG_IMMUNE_TO_NPC
+                                        | MURKDEEP_UNIT_FLAG_IMMUNE_TO_PLAYER),
+                            );
                             if let Some(player) = self.murkdeep_get_player(guid) {
                                 self.attack_start(guid, player);
                             } else {
@@ -88474,7 +88844,8 @@ impl Map {
                     }
                 };
                 if due {
-                    // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` (cpp 95).
+                    // `SetVisibility(VISIBILITY_ON)` (cpp 95).
+                    self.set_visibility(guid, UnitVisibility::On);
                     if let Some(s) = self.tervosh_state_mut(guid) {
                         s.next_phase_delay_timer_ms = 1000;
                         s.event_phase = TERVOSH_PHASE_ARRIVE;
@@ -89248,8 +89619,8 @@ impl Map {
             0 => {
                 // Make Tyrande kneel and stop casting (cpp 1151-1163).
                 if self.creatures.contains_key(&tyrande) {
-                    // NEEDS-MAP-HELPER: `InterruptNonMeleeSpells(false)` (cpp
-                    // 1154).
+                    // `InterruptNonMeleeSpells(false)` (cpp 1154).
+                    self.interrupt_non_melee_spells(tyrande, false, 0);
                     self.unit_set_byte(tyrande, offsets::UNIT_FIELD_BYTES_1, 0, STAND_STATE_KNEEL);
                     self.do_script_text(ERANIKUS_EMOTE_TYRANDE_KNEEL, tyrande, None, -1);
                 }
@@ -90407,8 +90778,10 @@ impl Map {
         self.anachronos_animate_gate(guid, barrier, ANACHRONOS_AQ_CLOSE_QUIETLY);
         self.anachronos_animate_gate(guid, runes, ANACHRONOS_AQ_CLOSE_QUIETLY);
         self.anachronos_animate_gate(guid, roots, ANACHRONOS_AQ_CLOSE_QUIETLY);
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` +
-        // `ForcedDespawn(SCENE_BLOCK_TIME)` timed arm, 900_000 (cpp 1287-1288).
+        // `SetVisibility(VISIBILITY_OFF)` (cpp 1287) is subsumed by the
+        // immediate despawn below (both end client-invisible; the
+        // fork's 900s `ForcedDespawn(SCENE_BLOCK_TIME)` delay has no
+        // helper — NEEDS-MAP-HELPER timed arm, cpp 1288).
         self.despawn_creature_now(guid, 0);
     }
 
@@ -92061,7 +92434,8 @@ impl Map {
         if let Some(s) = self.precious_state_mut(guid) {
             s.split_check_timer_ms = 7500;
         }
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` (cpp 434).
+        // `SetVisibility(VISIBILITY_ON)` (cpp 434).
+        self.set_visibility(guid, UnitVisibility::On);
     }
 
     /// `npc_precious_the_devourerAI::Aggro` (`ungoro_crater.cpp:437-441`).
@@ -92097,8 +92471,9 @@ impl Map {
         if self.creature_health_percent(guid) > 35.0 {
             return;
         }
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` + `EnterEvadeMode`
-        // (cpp 457-458): the evade chain is transcribed as its Rust entry.
+        // No visibility/evade arm here: the pinned fork's
+        // `DamageTaken` only extends Simone's leash (no
+        // `SetVisibility`, no `EnterEvadeMode`).
         let _ = guid;
     }
 
@@ -92152,7 +92527,8 @@ impl Map {
             s.split_check_timer_ms = 7500;
             s.despawn_timer_ms = 1_200_000;
         }
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_ON)` (cpp 523).
+        // `SetVisibility(VISIBILITY_ON)` (fork `Reset`).
+        self.set_visibility(guid, UnitVisibility::On);
     }
 
     /// `npc_simone_seductressAI::JustReachedHome` (`ungoro_crater.cpp:526-545`).
@@ -92198,8 +92574,9 @@ impl Map {
         if self.creature_health_percent(guid) > 35.0 {
             return;
         }
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` + `EnterEvadeMode`
-        // (cpp 571-573).
+        // No visibility/evade arm here: the pinned fork's
+        // `DamageTaken` only extends Precious's leash (no
+        // `SetVisibility`, no `EnterEvadeMode`).
         let _ = guid;
     }
 
@@ -92238,8 +92615,12 @@ impl Map {
                 self.add_threat(hunter, guid, 100.0);
             }
         }
-        // NEEDS-MAP-HELPER: `SetVisibility(VISIBILITY_OFF)` +
-        // `RemoveCorpse` (cpp 602-603).
+        // Self `SetVisibility(VISIBILITY_OFF)` (fork `DemonDespawn`)
+        // is subsumed by the immediate despawn below (both end
+        // client-invisible).
+        // NEEDS-MAP-HELPER: precious-twin OFF + `ForcedDespawn` +
+        // `RemoveFromWorld`, simone `SetRespawnDelay/Time` +
+        // `SaveRespawnTime` (respawn-scheduling cluster).
         self.despawn_creature_now(guid, 0);
     }
 
@@ -93249,10 +93630,20 @@ impl Map {
                 }
                 2 => {
                     self.grenka_do_summon(guid, 3);
-                    // NEEDS-MAP-HELPER: `RemoveFlag(UNIT_FIELD_FLAGS,
+                    // `RemoveFlag(UNIT_FIELD_FLAGS,
                     // UNIT_FLAG_SPAWNING | UNIT_FLAG_PACIFIED |
                     // UNIT_FLAG_IMMUNE_TO_NPC)` + `SetVisibility(
                     // VISIBILITY_ON)` (cpp 405-406).
+                    self.set_visibility(guid, UnitVisibility::On);
+                    let flags = self.object_get_field(guid, offsets::UNIT_FIELD_FLAGS);
+                    let _ = self.object_set_field(
+                        guid,
+                        u32::from(offsets::UNIT_FIELD_FLAGS),
+                        flags
+                            & !(GRENKA_UNIT_FLAG_SPAWNING
+                                | GRENKA_UNIT_FLAG_PACIFIED
+                                | GRENKA_UNIT_FLAG_IMMUNE_TO_NPC),
+                    );
                     let player = self
                         .grenka_state_mut(guid)
                         .map_or(ObjectGuid::EMPTY, |s| s.player_guid);
@@ -93339,7 +93730,7 @@ impl Map {
     // `PET_FOLLOW_DIST`=2.0, `PET_FOLLOW_ANGLE`=pi/2) / `SetWalk(false)`;
     // `SetFacingToObject`; `HandleEmoteState` vs one-shot `handle_emote_command`;
     // `SetFly`; `SetStandState` (transcribed where possible via `unit_set_byte`);
-    // `LoadCreatureAddon`; `SetVirtualItem`; `InterruptNonMeleeSpells`;
+    // `LoadCreatureAddon`; `SetVirtualItem`;
     // `SetLootRecipient`/loot.clear; `RemoveAllAttackers`/`DeleteThreatList`/
     // `CombatStop`; `AddCreatureState`/`ClearCreatureState`/`SetPower`/mana
     // percent; `RemoveGuardians`; `UpdateLeashExtensionTime`; threat-list size
@@ -93502,10 +93893,10 @@ impl Map {
             }
         };
         if due {
-            // NEEDS-MAP-HELPER: fork `InterruptNonMeleeSpells(true)`; no
-            // interrupt helper found.
+            // Fork `InterruptNonMeleeSpells(true)` before the casts.
             // Fork casts are triggered/non-triggered `CastSpell` (not
             // `DoCastSpellIfCan`); triggered-ness is not modeled here.
+            self.interrupt_non_melee_spells(guid, true, 0);
             self.do_cast_spell_if_can(guid, SPIRIT_GUIDE_SPELL_HEAL, CastTarget::SelfCast);
             self.do_cast_spell_if_can(guid, SPIRIT_GUIDE_SPELL_HEAL_CHANNEL, CastTarget::SelfCast);
             if let Some(s) = self.spirit_guide_state_mut(guid) {
@@ -95288,9 +95679,10 @@ impl Map {
             |ai| matches!(&ai.script, Some(CreatureScriptAi::FrostwolfShaman(s)) if s.first_aggro),
         );
         if first {
-            // NEEDS-MAP-HELPER: fork reads `IsMounted()` / `HasAura(INVOCATION)`
-            // into `b_isUsingMount`/`b_isChanneling`, `InterruptNonMeleeSpells
-            // (true)`, then `Unmount()`; none found.
+            // NEEDS-MAP-HELPER: fork reads `IsMounted()` /
+            // `HasAura(INVOCATION)` into
+            // `b_isUsingMount`/`b_isChanneling`, then `Unmount()`.
+            self.interrupt_non_melee_spells(guid, true, 0);
             if let Some(s) = self.frostwolf_shaman_state_mut(guid) {
                 s.first_aggro = false;
             }
@@ -96549,7 +96941,8 @@ impl Map {
         if let Some(s) = self.spirit_shade_state_mut(guid) {
             s.delay_ms = 2500;
         }
-        // NEEDS-MAP-HELPER: fork `SetVisibility(VISIBILITY_OFF)`; none found.
+        // `SetVisibility(VISIBILITY_OFF)` (fork `Reset`).
+        self.set_visibility(guid, UnitVisibility::Off);
     }
 
     /// `npc_spirit_shadeAI::SpellHitTarget`: dark offering lands -> despawn.
@@ -96582,7 +96975,8 @@ impl Map {
         if let Some(s) = self.spirit_shade_state_mut(guid) {
             s.delay_ms = 0;
         }
-        // NEEDS-MAP-HELPER: fork `SetVisibility(VISIBILITY_ON)`; none found.
+        // `SetVisibility(VISIBILITY_ON)` on delay expiry (fork `UpdateAI`).
+        self.set_visibility(guid, UnitVisibility::On);
         let lethon = self
             .spirit_shade_state_mut(guid)
             .and_then(|s| s.lethon_guid)

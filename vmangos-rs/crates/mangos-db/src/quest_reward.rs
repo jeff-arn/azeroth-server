@@ -134,6 +134,44 @@ pub fn set_item_charges(
     Ok(())
 }
 
+/// Wrapped-gift lookup (`HandleOpenItemOpcode`
+/// `ITEM_DYNFLAG_WRAPPED` arm, `SpellHandler.cpp:221-246`):
+/// the persisted `(item_id, flags)` for one wrapped
+/// item, with the gift row deleted on hit. The delete
+/// runs here at unwrap time (fork order: live-row
+/// restore first by the caller, then this call's
+/// delete); a save-only design would leave a stale
+/// `character_gifts` row because the save diff keys
+/// `wrapped` off the live flags word. `None` when no
+/// gift row exists (fork miss arm: destroy the
+/// wrapper; the save `Removed` arm already deletes a
+/// gift row keyed off the saved flags, so the miss
+/// path needs no extra write).
+///
+/// # Errors
+///
+/// Returns [`DbError`] on driver failure.
+pub fn gift_unwrap(conn: &mut mysql::Conn, item_guid: u32) -> Result<Option<(u32, u32)>, DbError> {
+    let row: Option<mysql::Row> = conn
+        .exec_first(
+            "SELECT `item_id`, `flags` FROM `character_gifts` WHERE `item_guid` = ?",
+            (item_guid,),
+        )
+        .map_err(DbError::Driver)?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let fields = Fields::from_row(row);
+    let entry = fields.u32(0);
+    let flags = fields.u32(1);
+    conn.exec_drop(
+        "DELETE FROM `character_gifts` WHERE `item_guid` = ?",
+        (item_guid,),
+    )
+    .map_err(DbError::Driver)?;
+    Ok(Some((entry, flags)))
+}
+
 /// Item dynamic flags write (bind-on-use stamp).
 ///
 /// # Errors

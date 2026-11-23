@@ -9,6 +9,7 @@
 //! regardless (several fork scripts act and still return
 //! `false`).
 
+use mangos_entities::unit::UnitVisibility;
 use mangos_guid::ObjectGuid;
 use mangos_protocol::update_field_table::offsets;
 
@@ -834,10 +835,11 @@ impl Map {
                     ) else {
                         return false;
                     };
-                    // UNMODELED: `SetFlag(...)` + `SetVisibility(VISIBILITY_OFF)` +
+                    // UNMODELED: `SetFlag(...)` (cpp 249) +
                     // `m_nextPhaseDelayTimer = 3000`, `m_eventPhase =
-                    // MDQP_PREPARE_TO_ARRIVE`, `m_eventStarted = true` (cpp 249-256).
-                    let _ = new_tervosh;
+                    // MDQP_PREPARE_TO_ARRIVE`, `m_eventStarted = true`
+                    // (cpp 253-256, no begin-event helper).
+                    self.set_visibility(new_tervosh, UnitVisibility::Off);
                 }
             }
         }

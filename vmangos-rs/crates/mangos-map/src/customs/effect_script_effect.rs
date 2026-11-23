@@ -12,7 +12,7 @@ impl Map {
         spell: &SpellEntry,
         victim: ObjectGuid,
         damage: f32,
-        has_cast_item: bool,
+        cast_item: Option<CastItemCtx>,
     ) {
         // Family arms (fork switches on family
         // first; generic ids never overlap).
@@ -42,7 +42,7 @@ impl Map {
             // *target* gate approximated by the
             // cast-item flag (see 17271).
             8856 => {
-                if !has_cast_item && !caster.is_player() {
+                if cast_item.is_none() && !caster.is_player() {
                     return;
                 }
                 let spell_id = if self.urand(1, 5) == 1 { 8854 } else { 8855 };
@@ -471,6 +471,43 @@ impl Map {
             // (SpellEffects.cpp:4190-4198).
             30918 => {
                 self.remove_auras_at_mechanic_immunity(victim, ROOT_AND_SNARE_MASK, 30918, true);
+            }
+            // EPL tower capture test: the tower buffer casts on
+            // itself; every friendly active player in range casts
+            // the capture spell on themselves
+            // (SpellEffects.cpp:4305-4322). Friendly is the
+            // buffer's team (17794 Alliance / 17795 Horde);
+            // `VISIBILITY_DISTANCE_NORMAL` rides the map
+            // visibility distance.
+            30882 => {
+                use mangos_entities::unit::Team;
+                let buffer_team = match self.creatures.get(&caster).map(|c| c.info.entry) {
+                    Some(crate::outdoor_pvp_ep::EP_BUFFER_ENTRY_A) => Team::Alliance,
+                    Some(crate::outdoor_pvp_ep::EP_BUFFER_ENTRY_H) => Team::Horde,
+                    _ => return,
+                };
+                let Some(origin) = self.creatures.get(&caster).map(|c| c.unit.world.position())
+                else {
+                    return;
+                };
+                let range = self.config.visibility_distance;
+                let targets: Vec<ObjectGuid> = self
+                    .players
+                    .iter()
+                    .filter(|(_, entry)| entry.player.team == buffer_team)
+                    .map(|(guid, entry)| (*guid, entry.player.unit.world.position()))
+                    .filter(|(guid, pos)| {
+                        let dx = f64::from(pos.x) - f64::from(origin.x);
+                        let dy = f64::from(pos.y) - f64::from(origin.y);
+                        let dz = f64::from(pos.z) - f64::from(origin.z);
+                        let reach = f64::from(range);
+                        dx * dx + dy * dy + dz * dz <= reach * reach && self.ep_player_active(*guid)
+                    })
+                    .map(|(guid, _)| guid)
+                    .collect();
+                for target in targets {
+                    self.cast_custom_spell(target, target, 31929, [None; 3]);
+                }
             }
             // EPL tower capture
             // (SpellEffects.cpp:4325-4330).

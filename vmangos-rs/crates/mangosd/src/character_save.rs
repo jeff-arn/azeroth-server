@@ -343,11 +343,13 @@ fn quest_projection(
 }
 
 #[must_use]
+#[allow(clippy::implicit_hasher)] // default-hash maps like the other save diffs
 pub fn build_save_bundle(
     player: &Player,
     auras: Vec<SavableAura>,
     cooldowns: Vec<CooldownSnapshot>,
     ctx: &SaveContext,
+    item_loots: &std::collections::HashMap<u32, (LootSave, bool)>,
 ) -> (
     CharacterSaveBundle,
     Option<CharacterStatsRow>,
@@ -409,7 +411,11 @@ pub fn build_save_bundle(
     // clean. Wrapped/saved-loot markers stay at their
     // load-time defaults (gift wrap + container loot
     // persistence unmodeled).
-    let inventory = diff_inventory(&player.saved.inventory, &player.deferred.inventory);
+    let inventory = diff_inventory(
+        &player.saved.inventory,
+        &player.deferred.inventory,
+        item_loots,
+    );
     let bundle = CharacterSaveBundle {
         row: character_row(player, ctx),
         // `_SaveBGData`: outer None skips the delete
@@ -497,9 +503,16 @@ pub fn homebind_row(player: &Player) -> mangos_db::character_load::HomebindRow {
 /// are `New`, value-changed rows `Changed`,
 /// baseline-only rows `Removed`, identical rows
 /// `Unchanged` (no statements).
+/// `ITEM_DYNFLAG_WRAPPED` in the stored flags word
+/// (gift rows; the trade display path carries its
+/// own copy).
+const ITEM_DYNFLAG_WRAPPED: u32 = 0x8;
+
+#[allow(clippy::implicit_hasher)] // default-hash maps like the other save diffs
 fn diff_inventory(
     saved: &[mangos_db::character_load::InventoryRow],
     live: &[mangos_db::character_load::InventoryRow],
+    item_loots: &std::collections::HashMap<u32, (LootSave, bool)>,
 ) -> Vec<InventorySaveItem> {
     let mut out = Vec::with_capacity(live.len());
     for row in live {
@@ -511,22 +524,36 @@ fn diff_inventory(
             Some(old) if old == row => ItemSaveState::Unchanged,
             Some(_) => ItemSaveState::Changed,
         };
+        // The gift UPDATE/DELETE arms key off the
+        // live flags word (fork `Item::SaveToDB`
+        // wrapped branch); the loot arms key off the
+        // map's per-container save projection, with
+        // the persisted `generated_loot` word as the
+        // `DeleteAllFromDB` fallback exactly as forked.
+        let (loot, saved_loot) = item_loots
+            .get(&row.item.item_guid)
+            .cloned()
+            .unwrap_or((LootSave::Unchanged, false));
         out.push(InventorySaveItem {
             row: row.clone(),
             state,
-            wrapped: false,
-            has_saved_loot: false,
-            loot: LootSave::Unchanged,
+            wrapped: row.item.flags & ITEM_DYNFLAG_WRAPPED != 0,
+            has_saved_loot: saved_loot || row.item.generated_loot != 0,
+            loot,
         });
     }
     for row in saved {
         if live.iter().all(|r| r.item.item_guid != row.item.item_guid) {
+            let (loot, saved_loot) = item_loots
+                .get(&row.item.item_guid)
+                .cloned()
+                .unwrap_or((LootSave::Unchanged, false));
             out.push(InventorySaveItem {
                 row: row.clone(),
                 state: ItemSaveState::Removed,
-                wrapped: false,
-                has_saved_loot: false,
-                loot: LootSave::Unchanged,
+                wrapped: row.item.flags & ITEM_DYNFLAG_WRAPPED != 0,
+                has_saved_loot: saved_loot || row.item.generated_loot != 0,
+                loot,
             });
         }
     }
@@ -611,7 +638,9 @@ mod tests {
         let mut moved = row(1, 1, 9);
         moved.item.count = 1;
         let live = vec![moved, row(2, 23, 5), row(4, 25, 3)];
-        let diff = diff_inventory(&saved, &live);
+        let empty: std::collections::HashMap<u32, (LootSave, bool)> =
+            std::collections::HashMap::new();
+        let diff = diff_inventory(&saved, &live, &empty);
         let state_of = |guid: u32| {
             diff.iter()
                 .find(|i| i.row.item.item_guid == guid)
@@ -622,7 +651,64 @@ mod tests {
         assert_eq!(state_of(3), Some(ItemSaveState::Removed));
         assert_eq!(state_of(4), Some(ItemSaveState::New));
         // Identical sets diff to all-Unchanged.
-        let diff = diff_inventory(&saved, &saved);
+        let diff = diff_inventory(&saved, &saved, &empty);
         assert!(diff.iter().all(|i| i.state == ItemSaveState::Unchanged));
+        // Wrapped flags and loot projections flow
+        // through: a wrapped live row arms the gift
+        // UPDATE/DELETE pair, and a map-projected loot
+        // save lands on its item.
+        let mut wrapped_row = row(5, 26, 3);
+        wrapped_row.item.flags |= ITEM_DYNFLAG_WRAPPED;
+        let mut projected: std::collections::HashMap<u32, (LootSave, bool)> =
+            std::collections::HashMap::new();
+        projected.insert(
+            5,
+            (
+                LootSave::Replace {
+                    gold: 10,
+                    rows: Vec::new(),
+                },
+                true,
+            ),
+        );
+        let diff = diff_inventory(&saved, &[wrapped_row], &projected);
+        let item = diff
+            .iter()
+            .find(|i| i.row.item.item_guid == 5)
+            .expect("new wrapped row");
+        assert_eq!(item.state, ItemSaveState::New);
+        assert!(item.wrapped);
+        assert!(item.has_saved_loot);
+        assert!(matches!(item.loot, LootSave::Replace { gold: 10, .. }));
+    }
+
+    #[test]
+    fn unwrap_diff_carries_restored_entry() {
+        // `HandleOpenItemOpcode` wrapped hit arm: the
+        // saved row is still the wrapper (gift bit set,
+        // wrapper entry, giver recorded) while the live
+        // row carries the restored entry/flags and a
+        // zeroed giver. The diff must emit `Changed`
+        // with the restored fields and `wrapped`
+        // cleared, so the save writes the plain
+        // `item_instance` UPDATE and no gift UPDATE.
+        let mut saved_row = row(6, 26, 0);
+        saved_row.item.item_id = 2589;
+        saved_row.item.flags |= ITEM_DYNFLAG_WRAPPED;
+        saved_row.item.gift_creator_guid = 9;
+        let mut live_row = row(6, 26, 0);
+        live_row.item.item_id = 25;
+        let empty: std::collections::HashMap<u32, (LootSave, bool)> =
+            std::collections::HashMap::new();
+        let diff = diff_inventory(&[saved_row], &[live_row], &empty);
+        let item = diff
+            .iter()
+            .find(|i| i.row.item.item_guid == 6)
+            .expect("unwrapped gift row");
+        assert_eq!(item.state, ItemSaveState::Changed);
+        assert_eq!(item.row.item.item_id, 25);
+        assert_eq!(item.row.item.flags, 0);
+        assert_eq!(item.row.item.gift_creator_guid, 0);
+        assert!(!item.wrapped);
     }
 }

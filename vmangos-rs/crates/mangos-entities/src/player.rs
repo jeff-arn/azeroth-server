@@ -489,6 +489,13 @@ pub struct Player {
     pub battleground: crate::battleground::BgPlayerState,
     /// Save-diff baseline (see [`SavedBaseline`]).
     pub saved: SavedBaseline,
+    /// `m_comboPoints` (`Player.h:1458`): finisher
+    /// resource, 0-5. Runtime-only (never in
+    /// `character_save` — the fork never persists it).
+    pub combo_points: u8,
+    /// `m_comboTargetGuid` (`Player.h:1457`):
+    /// the unit the combo points sit on.
+    pub combo_target: ObjectGuid,
 }
 
 /// Why materialization refused the character (C++ returns
@@ -791,6 +798,8 @@ impl Player {
                 actions: load.actions.clone(),
             },
             battleground: crate::battleground::BgPlayerState::from_row(load.bg_data.as_ref()),
+            combo_points: 0,
+            combo_target: ObjectGuid::EMPTY,
             deferred: DeferredLoad {
                 auras: std::mem::take(&mut load.auras),
                 spells: std::mem::take(&mut load.spells),
