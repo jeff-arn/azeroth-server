@@ -45,6 +45,7 @@ docs/*
 !docs/RUST_MIGRATION_ARCHITECTURE.md
 !docs/rust-migration-evidence/
 !docs/rust-migration-evidence/**
+!docs/migration-map/
 
 # ============ Addon zip uploads ============
 dashboard/static/addons/*.zip
