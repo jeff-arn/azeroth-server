@@ -64,12 +64,15 @@ mod tests {
             assert_eq!(b.total_ranks(), 51, "{} {} ranks", b.class as u8, b.name);
             assert!(!b.points.is_empty());
         }
-        // First row: Warrior fury starts with Cruelty 5 (talent 157).
+        // First row: Warrior fury (legalized 2026-11: spend order
+        // is tab-page/row/col, so it opens with an Arms row-0 point
+        // and still carries Cruelty 5 (talent 157).
         let first = TALENT_BUILDS[0];
         assert_eq!(first.class, Class::Warrior);
         assert_eq!(first.role, Role::MeleeDps);
         assert_eq!(first.name, "fury");
-        assert_eq!(first.points[0], (157, 5));
+        assert_eq!(first.points[0], (124, 1));
+        assert!(first.points.contains(&(157, 5)));
     }
 
     #[test]
