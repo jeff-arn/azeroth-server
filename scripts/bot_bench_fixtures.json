@@ -1,0 +1,60 @@
+{
+  "comment": "Golden bench characters for the bot leveling eval bench (docs/BOT_LEVELING_DESIGN.md). Donors are existing server-created bot characters copied (read-only) from a source characters DB into a bench DB and morphed: quest/social/group state wiped, level/money/position/homebind set from here, gear/spells completed at spawn by bot runtime morphing (GiveLevel + spell learning), as existing bot AIs already do.",
+  "zone": {
+    "name": "Silverpine Forest",
+    "zone_id": 130,
+    "map_id": 0,
+    "spawn": {
+      "comment": "Outdoors at the Sepulcher by High Executor Hadrec (522.449, 1626.15, 104.997 in world DB creature spawns, verified 2026-11-23). Per-fixture offsets avoid exact stacking.",
+      "position_x": 522.449,
+      "position_y": 1626.15,
+      "position_z": 104.997,
+      "orientation": 0.0
+    },
+    "homebind": {
+      "comment": "Innkeeper Bates spawn in the Sepulcher crypt (510.916, 1636.47, 126.027), same source.",
+      "position_x": 510.916,
+      "position_y": 1636.47,
+      "position_z": 126.027
+    }
+  },
+  "fixtures": [
+    {
+      "fixture_id": "silverpine_warrior",
+      "name": "Brannock",
+      "class_id": 1,
+      "class_name": "Warrior",
+      "race_preference": [5, 2, 8, 6],
+      "level": 11,
+      "money_copper": 5000,
+      "spawn_offset": { "x": 0.0, "y": 0.0 },
+      "ai": "PlayerBotAI",
+      "chance": 100
+    },
+    {
+      "fixture_id": "silverpine_hunter",
+      "name": "Selvara",
+      "class_id": 3,
+      "class_name": "Hunter",
+      "race_preference": [8, 2, 6],
+      "level": 11,
+      "money_copper": 5000,
+      "spawn_offset": { "x": -2.5, "y": 1.5 },
+      "ai": "PlayerBotAI",
+      "chance": 100,
+      "notes": "No Forsaken hunters exist in 1.12; Troll preferred. Pet rows are NOT copied: the bench must tame/summon a pet at runtime (open question, see design doc)."
+    },
+    {
+      "fixture_id": "silverpine_priest",
+      "name": "Morwyn",
+      "class_id": 5,
+      "class_name": "Priest",
+      "race_preference": [5, 8],
+      "level": 11,
+      "money_copper": 5000,
+      "spawn_offset": { "x": 2.5, "y": 1.5 },
+      "ai": "PlayerBotAI",
+      "chance": 100
+    }
+  ]
+}
