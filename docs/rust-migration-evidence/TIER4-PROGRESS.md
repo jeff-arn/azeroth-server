@@ -2173,3 +2173,22 @@ PASS rows. Owner rule change recorded the same
 day: production compatibility no longer gates
 implementation work, and commit/push/deploy are
 pre-authorized (credential hygiene stands).
+
+Post-parity deploy (2026-11-23, pre-authorized):
+the full parity tree (582822c2 engine/systems,
+20609416 campaign, 243b8f18 talent legalization)
+was built in the ubuntu:22.04 amd64 recipe
+(mangosd cf583736…, realmd 1582565b…; container
+side-port boot to listening first), the droplet
+was backed up (`*_20261123_070357.sql.gz`, gzip
+verified), the dashboard logs migration
+`20261121175904` was applied (logs gate 6 -> 7;
+world/characters/logon already at census), and
+the pair was swapped binary-only with the
+stance-gate pair preserved as `mangosd.a8c3-bak`
+/ `realmd.eb92-bak`. Both units active, 3724/8085
+listening, fresh boot log clean (2 persisted
+corpses). Side finding: `azeroth-discord-bot`
+is in a long-standing crash loop
+(`LoginFailure: Improper token`), unrelated to
+the swap; needs an owner-issued token.
