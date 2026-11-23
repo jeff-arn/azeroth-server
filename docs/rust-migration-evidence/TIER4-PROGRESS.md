@@ -1989,3 +1989,187 @@ aura row, and no corpse row; the new
 errors. Tier 4 canary closeout now awaits the
 separate owner commit/cutover decision; no
 commit or push was made.
+
+Paladin spell campaign full run (2026-11-22, bench
+127.0.0.1:18099): 84 rows — PASS 45,
+PASSIVE-VERIFIED 11, BLOCKED 28, FAIL 0
+(`SPELL-CAMPAIGN-RUN-CLASS-PALADIN-PASS`).
+Failure clusters from the first full run, all
+fixed test-first in shared-root-cause order:
+(1) unsettlable 178-spell seed (talent cost 55
+> 51; fork `InitTalentForLevel` wiped 18 spells
+on login → CAST_RESULT 145 on 20066/20218):
+generator now excludes the 4 merged-chain
+talent ranks no legal book holds
+(20473/20911/20925/26573), seed 174 cost 51,
+cast set byte-identical; (2) full-ally heals
+(9 rows): ally re-damaged per heal leg;
+(3) dummy pool exhaustion (12 rows): reuse of
+observably-clean dummies; (4) Blessing of
+Freedom 1044 NOT_READY (20 s RecoveryTime):
+cooldown wait + retry; (5) passive talents
+(11 rows): learned-only PASSIVE-VERIFIED;
+(6) Lay on Hands 10310: engine had no Effect 67
+arm → implemented fork-exact
+`EffectHealMaxHealth` (heal_max_health_value +
+live `bench_spells_and_auras` section, failed
+first); (7) Consecration 20924: periodic ticks
+ride 590 not 592 → harness parses both;
+(8) Holy Shock 25913/25914 OUT_OF_RANGE: heal
+leg approaches the ally; (9) five 1-HP heals
+(19968/19980-19982/19993): generator marks
+sub-observable heals marker-only. Honest
+BLOCKED remainder: 9 script-evidence-unknown,
+8 effect-marker-only, 7 fixture-reagent (engine
+has no reagent gate; no harness grant path),
+3 no-party, 1 fixture-gear. Reagent gate is the
+next engine seam. No commit or push was made.
+
+Druid spell campaign full run (2026-11-22/23, bench
+127.0.0.1:18099, fan-out matrix 63 last-rank rows
+over merged S7 chains: seed G1 union 187 + balance
+talent 15, cost exactly 51, excluded [5570, 16857]):
+first full run 14 PASS / 15 PASSIVE-VERIFIED /
+21 BLOCKED / 13 FAIL, final reruns 27 PASS /
+15 PASSIVE-VERIFIED / 21 BLOCKED / 0 FAIL
+(`run-class Druid: 63 rows`, zero failure
+clusters; the class gate still lists the 13
+engine-totem + 1 wire-target-unsupported BLOCKED
+rows, which are honest no-scenario BLOCKED, not
+FAILs). Failure clusters from the first full run,
+all fixed test-first in shared-root-cause order:
+(1) mana starvation (NO_POWER 77 on Dire Bear
+9634, Hurricane 17402, MotW 9885 and Abolish
+Poison 2893 ally legs): the 999999 seed clamps to
+max ~2464 on the first fork-exact regen tick and
+percent-cost shapeshifts plus Tranquility drain
+the pool, so the harness now paces every cast leg
+(POWER_RETRIES 12 shared by the self/unit/hostile/
+ground/blessing/heal retries; blessing legs ride
+the power retry too), never an engine change;
+(2) Tranquility channel blocked the next cast
+(97 on 9885): ENGINE FIX fork-exactly —
+`HandleCancelAuraOpcode`'s channeled arm
+(`SpellHandler.cpp`) interrupts the channel, so
+`cancel_aura` (`spells/aura.rs`) now interrupts
+the matching current cast; live `bench_spells_and_
+auras` CANCEL-CHANNEL section (Tranquility cast,
+cancel, channel-field 0, recast Started) observed
+FAILING first (channel field stuck 9863) and
+passing after; live wire probe confirmed the
+recast GO on the rebuilt bench;
+(3) Teleport: Moonglade 18960 moved the caster to
+map 1 mid-run and wedged the session (transfer
+packets observed, worldport never ACKed), failing
+that row plus the next 8 with timeouts: generator
+now derives a `teleport` kind for teleport-only
+ground rows (Paladin/pilot artifacts byte-stable)
+and the harness runs a teleport leg (bound GO +
+TRANSFER_PENDING/NEW_WORLD verify, then reseed +
+fresh login back on the bench map);
+(4) dead-dummy TARGETS_DEAD 101 (Insect Swarm
+24977 picked a Hurricane-killed counter on stale
+WorldState): hostile leg re-picks a live counter
+within the attempt cap (shared);
+(5) damaging-DoT aura race (24977 killed the
+100-hp dummy before the aura check): the shared
+verdict now accepts death with attributed
+damage/periodic logs for rows with no direct-
+damage effect (Paladin rows keep the strict
+aura-only gate);
+(6) Innervate 29166 360 s cooldown (NOT_READY 60
+on the second leg): blessing legs run ally-first
+and the shared second-leg retry waits out the
+full DBC cooldown plus margin (390 s, expiry
+proven like Freedom's 20 s);
+(7) Hurricane's holder-less 8 s channel blocked
+the teleport row (97): ground casts register for
+the next row's cancel and the cancel path sends
+even with no visible holder, firing the new
+channel interrupt (proves the engine arm live).
+Honest BLOCKED remainder: 13 engine-totem
+(stance/form scenarios unbuilt), 1 wire-target-
+unsupported (Rebirth 20748: the three-layer
+RESURRECT gap stands — effect routes but has no
+resurrect body, the cast alive-gate rejects dead
+targets, and the wire/parser drops corpse GUIDs;
+left BLOCKED per the attempt-only-if-complete
+rule), 1 fixture-reagent (Gift of the Wild 21850;
+engine has no reagent gate, no harness grant
+path), 6 effect-marker-only (2 dispels, 4 form
+threat markers). Reagent rows and Rebirth behave
+exactly as the Paladin synthesis predicted.
+No regression: pilot SPELL-CAMPAIGN-PILOT-PASS
+before and after (also after the engine
+rebuild), Paladin full rerun on the final tree
+84 rows 45/11/28/0 with gate PASS, generator and
+campaign self-tests PASS, Paladin/pilot matrix
+artifacts byte-identical, cargo fmt clean, clippy
+-D warnings clean on mangos-map, 96 unit tests
+pass, live bench_spells_and_auras passes with
+CHARACTER_LOAD_GUID=1. One engine file changed
+(spells/aura.rs channeled cancel arm + live
+regression), else scripts + evidence only; bench
+mangosd rebuilt from the current tree and the
+proven bench-lan.conf pair restarted once (a
+prior outage had taken the old bench down; the
+side-bench pair was never touched). The 302
+ByteBufferException seen twice in Server.log
+comes from malformed CMSG_CAST_SPELL traffic
+during cancel/cast races and is non-fatal
+(runs complete). No commit or push was made.
+
+Central completion of the Druid slice (the
+workflow runner went silent for 62 minutes after
+writing the entry above and was stopped; the
+parent finished the fix loop directly):
+(1) the 13 engine-totem rows now cast through a
+new harness `form_gated` leg (enter the required
+shapeshift form per the row's Stances bits, cast
+through the natural self/hostile leg, exit the
+form; a stuck form downgrades PASS to FAIL);
+actual totem rows (totem fields set) stay
+engine-totem BLOCKED for Shaman later;
+(2) generator aura-side fix: stance-gated rows
+derived aura_on_caster unconditionally, so
+Growl/Bash/Rip-class debuffs would have been
+checked on the wrong unit — side now follows the
+row's targets (Paladin artifact unchanged);
+(3) short auras (Growl's 3 s taunt) are latched
+by sliced polling in the hostile leg instead of
+one long poll that outlived them; bear rage rows
+get a Growl-pull + Enrage setup that waits on the
+observed rage field; areaselect-at-caster rows
+stand at melee standoff (Demoralizing Roar at
+13 yd landed on nobody);
+(4) engine divergence found by the feral rows
+and fixed test-first: finishers (Rip 9896,
+Ferocious Bite 31018, Mangle 22570) landed at
+0 combo points while the fork rejects them in
+CheckCast (`Spell.cpp:7108`). Rust now returns
+`SPELL_FAILED_NO_COMBO_POINTS` (70; warriors read
+BAD_TARGETS per the fork) when a player finisher's
+explicit unit target is not the combo target;
+regression `finisher_without_combo_target_
+rejected` observed failing first (Started) and
+passing after. The generator emits
+`needs_combo_points` per row plus the class's
+lowest-rank combo builder (Druid Claw 1082);
+the harness builds one point on a sturdy Ice
+Claw Bear dummy (a rank-1 Claw kills the 100 hp
+wolves) and walks back to the arena afterwards;
+(5) bench-only speedup: campaign dummy entries
+(705/707/724/1196) now respawn in 2-3 s in the
+bench world DB (spawn times load at boot; stale
+creature_respawn rows cleared).
+Final Druid run on the rebuilt bench: 63 rows,
+PASS=40, PASSIVE-VERIFIED=15, BLOCKED=8
+(6 effect-marker-only, 1 wire-target-unsupported
+Rebirth, 1 fixture-reagent), FAIL=0,
+SPELL-CAMPAIGN-RUN-CLASS-DRUID-PASS; pilot
+SPELL-CAMPAIGN-PILOT-PASS on the same binary;
+independent artifact audit 1:1 with zero vacuous
+PASS rows. Owner rule change recorded the same
+day: production compatibility no longer gates
+implementation work, and commit/push/deploy are
+pre-authorized (credential hygiene stands).

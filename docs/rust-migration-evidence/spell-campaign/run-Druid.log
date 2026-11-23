@@ -1,17 +1,86 @@
+SEEDED guid=900017 spells=202 pos=(-6295.0,315.0,377.5)
 AUTH-OK + ADDON-INFO
-LOGIN-OK account=SPELLCAMP09 guid=900017 map=0 pos=(-6270.00,292.00,380.00)
-DRIFT-OK guid=900017 level=60 spells=6 health=1993
+LOGIN-OK account=SPELLCAMP09 guid=900017 map=0 pos=(-6295.00,315.00,377.50)
+DRIFT-OK guid=900017 level=60 spells=202 health=1993
+ROW Druid 768 form: PASS  | bound SPELL_GO + form aura 768 on self, cancelled after (pre-cleared {})
+ROW Druid 783 form: PASS  | bound SPELL_GO + form aura 783 on self, cancelled after (pre-cleared {})
+ROW Druid 1066 form: PASS  | bound SPELL_GO + form aura 1066 on self, cancelled after (pre-cleared {})
+ROW Druid 2782 friendly: BLOCKED effect-marker-only | classify_only
+SEEDED guid=900015 spells=3 pos=(-6268.0,290.0,380.0)
 AUTH-OK + ADDON-INFO
 LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
-ROW Druid 5187 friendly: PASS  | Healing Touch rank 3 bound GO + regen-baselined jump 199 within observed band 170-288 (oracle heal band 204-254, rate 22.9/s, 640->709 pre, got 1058)
-LOGOUT-OK druid-ally
-ROW Druid 6795 form: FAIL CAST_RESULT(86) | expected wrong-form rejection for Growl: CAST_RESULT(86) after 1 attempt(s)
-ROW Druid 5487 form: PASS  | bound SPELL_GO + form aura 5487 on self
-LOGOUT-OK druid-form-persist
+ROW Druid 2893 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Druid 3025 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 5229 form_totem: PASS  | observable outcome: caster_aura=True; form 9634 setup verified, exited=True
+ROW Druid 5421 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 6795 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 9634 setup verified, exited=True
+ROW Druid 8946 friendly: BLOCKED effect-marker-only | classify_only
+ROW Druid 8983 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 9634 setup verified, exited=True
+ROW Druid 9634 form: PASS  | bound SPELL_GO + form aura 9634 on self, cancelled after (pre-cleared {}) after 5 mana wait(s)
+ROW Druid 9827 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 768 setup verified, exited=True
+ROW Druid 9830 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Druid 9835 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=204 after 1 attempt(s)
+ROW Druid 9850 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Druid 9853 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+LOGOUT-OK Druid-ally
+SEEDED guid=900015 spells=3 pos=(-6268.0,290.0,380.0)
 AUTH-OK + ADDON-INFO
-LOGIN-OK account=SPELLCAMP09 guid=900017 map=0 pos=(-6289.54,322.50,376.74)
-DRIFT-OK guid=900017 level=60 spells=6 health=1993
-ROW Druid 768 form: PASS  | bound SPELL_GO + form aura 768 on self (bear gone) after 2 mana wait(s); cancelled Bear first (bear_aura_after_cancel=False); before relog bear=False, after relog bear=False cat=True
-ROW Druid 20484 corpse: BLOCKED wire-target-unsupported | corpse-mask cast: no bound SPELL_GO or CAST_RESULT (parser discards corpse GUIDs); socket alive=True
-ROW Druid 8921 hostile_dummy: PASS  | dummy-reset leg: first guid=17379390973850681688 health 100->0 aura8921=True matching_damage=34; second guid=17379390973850681689 health 100->64 aura8921=True matching_damage=11
-LOGOUT-OK druid-pilot
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Druid 9858 friendly: PASS  | bound GO + regen-baselined jump 1221 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 743->811 pre, got 2373)
+ROW Druid 9863 self: PASS  | observable outcome: caster_aura=True after 5 mana wait(s)
+ROW Druid 9867 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Druid 9881 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Druid 9885 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Druid 9896 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 768 setup verified, exited=True
+ROW Druid 9898 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 9634 setup verified, exited=True
+ROW Druid 9901 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Druid 9904 form_totem: PASS  | observable outcome: health 100->0, matching damage=58 after 1 attempt(s); form 768 setup verified, exited=True
+ROW Druid 9907 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Druid 9908 form_totem: PASS  | observable outcome: health 100->0, matching damage=83 after 1 attempt(s); form 9634 setup verified, exited=True
+ROW Druid 9910 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Druid 9912 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=277 after 1 attempt(s); reused observably-clean dummy (alive, full he
+ROW Druid 9913 form_totem: PASS  | observable outcome: caster_aura=True; form 768 setup verified, exited=True
+ROW Druid 16818 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 16820 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 16825 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 16835 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 16847 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 16864 self: PASS  | observable outcome: caster_aura=True
+ROW Druid 16880 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 16901 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 16906 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 16913 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 16926 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 17055 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 17249 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 17329 self: PASS  | observable outcome: caster_aura=True
+ROW Druid 17392 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free); 
+ROW Druid 17402 ground_area: PASS  | observable outcome: object_seen=False, health 100->0, matching damage=268
+ROW Druid 18658 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+SEEDED guid=900017 spells=202 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP09 guid=900017 map=0 pos=(-6295.00,315.00,377.50)
+DRIFT-OK guid=900017 level=60 spells=202 health=1993
+ROW Druid 18960 ground_area: PASS  | bound GO + far-transfer packets [62, 63, 169, 221, 305, 306, 502, 811]; reseeded to bench map, session fresh
+ROW Druid 20748 corpse: BLOCKED wire-target-unsupported | no live scenario
+ROW Druid 21178 passive: PASSIVE-VERIFIED | learned=True
+ROW Druid 21850 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17026 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Druid 22570 form_totem: PASS  | observable outcome: health 100->70, matching damage=3 after 1 attempt(s); form 768 setup verified, exited=True
+ROW Druid 22812 self: PASS  | observable outcome: caster_aura=True
+ROW Druid 22839 self: PASS  | observable outcome: caster_aura=True
+ROW Druid 22896 form_totem: PASS  | observable outcome: caster_aura=True; form 9634 setup verified, exited=True
+ROW Druid 24858 form: PASS  | bound SPELL_GO + form aura 24858 on self, cancelled after (pre-cleared {})
+ROW Druid 24977 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+LOGOUT-OK Druid-ally
+SEEDED guid=900015 spells=3 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Druid 25297 friendly: PASS  | bound GO + regen-baselined jump 1423 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 743->811 pre, got 2609)
+ROW Druid 25298 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=556 after 1 attempt(s)
+ROW Druid 25299 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Druid 29166 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True cooldown_wai
+ROW Druid 31018 form_totem: PASS  | observable outcome: health 100->0, matching damage=216 after 1 attempt(s); form 768 setup verified, exited=True
+LOGOUT-OK Druid-ally
+LOGOUT-OK Druid-run
+run-class Druid: 63 rows, BLOCKED=8, PASS=40, PASSIVE-VERIFIED=15
+SPELL-CAMPAIGN-RUN-CLASS-DRUID-PASS

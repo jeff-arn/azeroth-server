@@ -11,8 +11,9 @@ Subcommands (run from the repository root):
 
 * `preflight` -- loopback guards, bench reachability, entry-327 probe,
   both probe self-tests. Exit 2 on any guard refusal.
-* `fixtures` -- idempotent `ensure` of the pilot accounts/characters
-  (Warrior/Mage/Druid): account rows and the `CMSG_CHAR_CREATE`
+* `fixtures` -- idempotent `ensure` of all nine §2 fixture
+  accounts/characters (slot order; pilot legs only use their own
+  three): account rows and the `CMSG_CHAR_CREATE`
   sender for missing characters only. Level/placement/spell seeding
   and drift checks run inside `pilot` before each leg. No `GM`
   opcodes exist server-side; all resets are logout + SQL + login.
@@ -23,6 +24,14 @@ Subcommands (run from the repository root):
   only when no unexpected FAIL/BLOCKED row remains.
 * `run --spell <id> --char <name>` -- single-spell repro for the §8
   fix loop (same verdict/record path as the pilot).
+* `run-class <Class> [--matrix <path>] [--only <id> ...]` --
+  data-driven full-class run: every generated cast row for the class,
+  serially, with per-bucket senders (self/hostile/ally/ground/item),
+  the class gate, and `results-<Class>.jsonl` / `run-<Class>.log` /
+  `manifest-<Class>.json` artifacts. Pilot classes read the pilot
+  matrix; other classes read `spell_campaign_matrix-<Class>.json`
+  unless `--matrix` overrides it. `--only` restricts to a smoke
+  subset. Classify-only rows ride as BLOCKED without a cast.
 * `--self-test` -- offline invariant checks (verdict enum, artifact
   writers, packet builders, raw-guid math). No server needed. Prints
   `SPELL-CAMPAIGN-SELFTEST-PASS`.
@@ -49,27 +58,63 @@ import sys
 import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-import two_client_smoke as smoke  # noqa: E402
 import phase3_scripted_login as p3  # noqa: E402
+import two_client_smoke as smoke  # noqa: E402
 from scripted_driver import (  # noqa: E402
-    ScriptedDriver,
     SMSG_CAST_RESULT,
     SMSG_SPELL_GO,
     UNIT_FIELD_HEALTH,
     UNIT_FIELD_LEVEL,
     UNIT_FIELD_MAXHEALTH,
+    ScriptedDriver,
 )
+
 UNIT_FIELD_POWER1 = 23
 UNIT_FIELD_MAXPOWER1 = 30
+#: Far-transfer train the cross-map leg verifies instead of an
+#: object/damage outcome (`world_actor.teleport_player_to_key`:
+#: TRANSFER_PENDING then NEW_WORLD; the scripted driver never ACKs
+#: the worldport, so the session is always reseeded after).
+SMSG_TRANSFER_PENDING = 63
+SMSG_NEW_WORLD = 62
 SPELL_FAILED_NO_POWER = 77
 SPELL_FAILED_ONLY_SHAPESHIFT = 86
 SPELL_FAILED_NOT_SHAPESHIFT = 61
 SPELL_FAILED_OUT_OF_RANGE = 89
+SPELL_FAILED_NOT_READY = 60
+SPELL_FAILED_TARGETS_DEAD = 101
+#: NO_POWER retry budget shared by every cast leg (self, unit,
+#: hostile, ground, blessing, heal). A fixture's pool refills from
+#: empty in ~100 s at bench regen, so rows behind expensive
+#: shapeshift/channeled casts (Dire Bear, Hurricane) pace out
+#: instead of failing. Rows that pass first try pay nothing, so
+#: pilot behavior is unchanged.
+POWER_RETRIES = 12
 
 SCRIPT_DIR = pathlib.Path(__file__).parent
 EVIDENCE_DIR = pathlib.Path("docs/rust-migration-evidence/spell-campaign")
 MATRIX_PATH = SCRIPT_DIR / "spell_campaign_matrix.json"
 LOCK_PATH = EVIDENCE_DIR / "RUNNING.lock"
+
+# Pilot classes read the pilot matrix (byte-stable); every other
+# class reads its per-class fan-out artifact, which full mode writes
+# without ever touching MATRIX_PATH (mirrors the generator's
+# class_matrix_path).
+PILOT_MATRIX_CLASSES = ("Warrior", "Mage", "Druid")
+
+
+def matrix_path_for(class_name: str) -> pathlib.Path:
+    """Default matrix file backing one class: the pilot matrix for
+    pilot classes, else the generator's per-class fan-out path."""
+    if class_name in PILOT_MATRIX_CLASSES:
+        return MATRIX_PATH
+    try:
+        import spell_matrix_gen as gen  # noqa: PLC0415
+
+        return gen.class_matrix_path(class_name)
+    except (ImportError, AttributeError):
+        return SCRIPT_DIR / f"spell_campaign_matrix-{class_name}.json"
+
 
 CMSG_CHAR_CREATE = 54
 SMSG_CHAR_CREATE = 58
@@ -78,17 +123,66 @@ SMSG_CHAR_ENUM = 59
 CHAR_CREATE_SUCCESS = 46
 SMSG_SPELL_START = 305
 SMSG_SPELLNONMELEEDAMAGELOG = 592
+SMSG_PERIODICAURALOG = 590
 CMSG_SET_ACTIVE_MOVER = 618
 
 AURA_FIELD_FIRST = 47
 AURA_FIELD_LAST = 102
 
 # (account, char name, race, class) per architecture §2 fixture table.
+# Camppaladin (SPELLCAMP02, Human Paladin) is the union-seeded
+# single-race fixture for the Paladin full-rank audit: per-race G1
+# sets are both 160 (Human 1 and Dwarf 3 identical), so union ==
+# intersection and one Human fixture legally covers the trainable set.
 PILOT_FIXTURES = [
-    ("SPELLCAMP01", "Campwarrior", 1, 1),   # Human Warrior
-    ("SPELLCAMP07", "Campmage", 1, 8),      # Human Mage
-    ("SPELLCAMP09", "Campdruid", 4, 11),    # NightElf Druid
+    ("SPELLCAMP01", "Campwarrior", 1, 1),  # Human Warrior
+    ("SPELLCAMP07", "Campmage", 1, 8),  # Human Mage
+    ("SPELLCAMP09", "Campdruid", 4, 11),  # NightElf Druid
+    ("SPELLCAMP02", "Camppaladin", 1, 2),  # Human Paladin
 ]
+
+# Full 9-class fixture table per architecture §2 (slot order). Only
+# the Paladin slot is fanned out in this phase; the other slots are
+# seeded identically (offline SQL + login) so later classes need no
+# fixture-format change. The pilot legs keep using PILOT_FIXTURES
+# rows verbatim, so `pilot` behavior is unchanged.
+CLASS_FIXTURES = [
+    ("SPELLCAMP01", "Campwarrior", 1, 1),  # Human Warrior
+    ("SPELLCAMP02", "Camppaladin", 1, 2),  # Human Paladin
+    ("SPELLCAMP03", "Camphunter", 3, 3),  # Dwarf Hunter
+    ("SPELLCAMP04", "Camprogue", 1, 4),  # Human Rogue
+    ("SPELLCAMP05", "Camppriest", 1, 5),  # Human Priest
+    ("SPELLCAMP06", "Campshaman", 2, 7),  # Orc Shaman
+    ("SPELLCAMP07", "Campmage", 1, 8),  # Human Mage
+    ("SPELLCAMP08", "Campwarlock", 1, 9),  # Human Warlock
+    ("SPELLCAMP09", "Campdruid", 4, 11),  # NightElf Druid
+]
+FIXTURE_BY_CLASS = {
+    cls: {"account": account, "char": name, "race": race} for account, name, race, cls in CLASS_FIXTURES
+}
+# Class names keyed by the matrix "class" field.
+CLASS_ACCOUNT = {
+    "Warrior": "SPELLCAMP01",
+    "Paladin": "SPELLCAMP02",
+    "Hunter": "SPELLCAMP03",
+    "Rogue": "SPELLCAMP04",
+    "Priest": "SPELLCAMP05",
+    "Shaman": "SPELLCAMP06",
+    "Mage": "SPELLCAMP07",
+    "Warlock": "SPELLCAMP08",
+    "Druid": "SPELLCAMP09",
+}
+CLASS_CHAR = {
+    "Warrior": "Campwarrior",
+    "Paladin": "Camppaladin",
+    "Hunter": "Camphunter",
+    "Rogue": "Camprogue",
+    "Priest": "Camppriest",
+    "Shaman": "Campshaman",
+    "Mage": "Campmage",
+    "Warlock": "Campwarlock",
+    "Druid": "Campdruid",
+}
 
 # Coldridge arena state (map 0, beside the proven 705/707 spawns).
 CASTER_POS = (-6295.0, 315.0, 377.5)
@@ -99,14 +193,43 @@ ALLY_POS = (-6268.0, 290.0, 380.0)
 WOLF_COUNTERS = [344, 345, 346, 347, 1525, 1526]
 TROGG_COUNTERS = [335, 340, 341, 342]
 
-VERDICTS = {"PASS", "FAIL", "BLOCKED", "PASSIVE-VERIFIED",
-            "PASSIVE-UNVERIFIED"}
+#: Finisher dummies: Ice Claw Bear spawns (entry 1196, level 8)
+#: east of the arena. A combo builder must land on the finisher's
+#: own target first, and even rank-1 Claw kills a 100 hp wolf
+#: outright; the bears survive builder + finisher. (guid counter,
+#: spawn xyz from the bench `creature` table; the driver walks to
+#: the fallback position until the spawn is visible.)
+FINISHER_DUMMIES = (
+    (3092, (-5833.81, 300.745, 420.966)),
+    (2965, (-5722.07, 487.089, 394.889)),
+)
+
+
+def finisher_dummy(used: set[int]) -> tuple[int, tuple]:
+    """First unused finisher bear as (raw guid, fallback xyz)."""
+    for counter, xyz in FINISHER_DUMMIES:
+        guid = raw_guid(1196, counter)
+        if guid not in used:
+            return guid, xyz
+    counter, xyz = FINISHER_DUMMIES[0]
+    return raw_guid(1196, counter), xyz
+
+
+VERDICTS = {"PASS", "FAIL", "BLOCKED", "PASSIVE-VERIFIED", "PASSIVE-UNVERIFIED"}
 BLOCKED_REASONS = {
-    "scenario-missing-ally", "no-pet", "no-party",
-    "wire-target-unsupported", "engine-totem", "fixture-gear",
-    "fixture-reagent", "dummy-immune", "dummy-unavailable",
-    "area-or-quest-gated", "effect-marker-only",
-    "script-evidence-unknown", "target-not-dead",
+    "scenario-missing-ally",
+    "no-pet",
+    "no-party",
+    "wire-target-unsupported",
+    "engine-totem",
+    "fixture-gear",
+    "fixture-reagent",
+    "dummy-immune",
+    "dummy-unavailable",
+    "area-or-quest-gated",
+    "effect-marker-only",
+    "script-evidence-unknown",
+    "target-not-dead",
 }
 
 
@@ -117,8 +240,7 @@ def raw_guid(entry: int, counter: int) -> int:
 
 def char_create_body(name: str, race: int, cls: int) -> bytes:
     """Wire shape `world_actor.rs::on_char_create` parses."""
-    return (name.encode() + b"\x00"
-            + struct.pack("<9B", race, cls, 0, 0, 0, 0, 0, 0, 0))
+    return name.encode() + b"\x00" + struct.pack("<9B", race, cls, 0, 0, 0, 0, 0, 0, 0)
 
 
 def cast_self_body(spell_id: int) -> bytes:
@@ -145,30 +267,44 @@ def cast_corpse_body(spell_id: int, target_raw: int) -> bytes:
 # Verdicts and artifacts (§6)
 # --------------------------------------------------------------------------
 
-def make_verdict(row: dict, verdict: str, attempts: int = 1,
-                 reason: str | None = None, phase: str | None = None,
-                 evidence: str = "", pre: str = "", post: str = "",
-                 packets: list[int] | None = None,
-                 target_guid: int | None = None,
-                 expected_failure: bool = False) -> dict:
+
+def make_verdict(
+    row: dict,
+    verdict: str,
+    attempts: int = 1,
+    reason: str | None = None,
+    phase: str | None = None,
+    evidence: str = "",
+    pre: str = "",
+    post: str = "",
+    packets: list[int] | None = None,
+    target_guid: int | None = None,
+    expected_failure: bool = False,
+) -> dict:
     assert verdict in VERDICTS, verdict
     if verdict == "BLOCKED":
         assert reason in BLOCKED_REASONS, reason
     if verdict == "FAIL":
         assert phase in {"prepare", "go", "flight", "apply", "persist"}, phase
     if expected_failure:
-        assert verdict == "FAIL" and phase == "prepare", (
-            verdict, phase)
+        assert verdict == "FAIL" and phase == "prepare", (verdict, phase)
     return {
-        "class": row.get("class"), "spell_id": row.get("spell_id"),
-        "name": row.get("name", ""), "bucket": row.get("bucket"),
-        "rank": row.get("rank"), "rank_count": row.get("rank_count"),
+        "class": row.get("class"),
+        "spell_id": row.get("spell_id"),
+        "name": row.get("name", ""),
+        "bucket": row.get("bucket"),
+        "rank": row.get("rank"),
+        "rank_count": row.get("rank_count"),
         "is_last_rank": row.get("is_last_rank"),
         "attempts": attempts,
-        "verdict": verdict, "reason": reason, "phase": phase,
+        "verdict": verdict,
+        "reason": reason,
+        "phase": phase,
         "expected_failure": expected_failure,
         "target_guid": target_guid,
-        "evidence": evidence, "pre": pre, "post": post,
+        "evidence": evidence,
+        "pre": pre,
+        "post": post,
         "packets": sorted(set(packets or [])),
     }
 
@@ -194,11 +330,11 @@ def write_summary(all_verdicts: dict[str, list[dict]]) -> pathlib.Path:
             counts[v["verdict"]] = counts.get(v["verdict"], 0) + 1
             key = (str(v.get("bucket")), v["verdict"])
             bucket_counts[key] = bucket_counts.get(key, 0) + 1
-        lines.append("counts: " + ", ".join(
-            f"{k}={counts.get(k, 0)}" for k in sorted(counts)))
-        lines.append("bucket counts: " + ", ".join(
-            f"{bucket}/{verdict}={count}"
-            for (bucket, verdict), count in sorted(bucket_counts.items())))
+        lines.append("counts: " + ", ".join(f"{k}={counts.get(k, 0)}" for k in sorted(counts)))
+        lines.append(
+            "bucket counts: "
+            + ", ".join(f"{bucket}/{verdict}={count}" for (bucket, verdict), count in sorted(bucket_counts.items()))
+        )
         for v in verdicts:
             if v["verdict"] in ("FAIL", "BLOCKED"):
                 lines.append(
@@ -208,7 +344,8 @@ def write_summary(all_verdicts: dict[str, list[dict]]) -> pathlib.Path:
                     f"{v['verdict']} "
                     f"{v.get('reason') or ''} {v.get('phase') or ''} "
                     f"expected_failure={v.get('expected_failure')} "
-                    f"| {v['evidence']}")
+                    f"| {v['evidence']}"
+                )
         lines.append("")
     path = EVIDENCE_DIR / "summary.md"
     path.write_text("\n".join(lines))
@@ -224,9 +361,9 @@ def write_manifest(extra: dict) -> pathlib.Path:
     manifest = {
         "git_head": head,
         "git_dirty": subprocess_dirty(),
-        "binary_build": "unknown: bench mangosd was already running; "
-        "this harness neither builds nor starts it",
-        "world_host": p3.HOST, "world_port": p3.PORT,
+        "binary_build": "unknown: bench mangosd was already running; this harness neither builds nor starts it",
+        "world_host": p3.HOST,
+        "world_port": p3.PORT,
         "db_host": os.environ.get("MYSQL_HOST", "127.0.0.1"),
         "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "ended": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -240,16 +377,14 @@ def write_manifest(extra: dict) -> pathlib.Path:
 def subprocess_head() -> str:
     import subprocess
 
-    r = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
-                       capture_output=True, text=True)
+    r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
     return r.stdout.strip()
 
 
 def subprocess_dirty() -> bool:
     import subprocess
 
-    r = subprocess.run(["git", "status", "--porcelain"],
-                       capture_output=True, text=True)
+    r = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
     return bool(r.stdout.strip())
 
 
@@ -257,17 +392,15 @@ def subprocess_dirty() -> bool:
 # Guards and preflight (§1, §7)
 # --------------------------------------------------------------------------
 
+
 def guard_loopback() -> None:
     host = p3.HOST
-    assert host in ("127.0.0.1", "localhost"), \
-        f"refusing non-loopback world host {host!r}"
+    assert host in ("127.0.0.1", "localhost"), f"refusing non-loopback world host {host!r}"
     resolved = socket.gethostbyname(host)
     assert resolved.startswith("127."), f"refusing {host=}->{resolved=}"
     db_host = os.environ.setdefault("MYSQL_HOST", "127.0.0.1")
-    assert socket.gethostbyname(db_host).startswith("127."), \
-        f"refusing non-loopback MYSQL_HOST={db_host!r}"
-    print(f"GUARD-OK world={host}:{p3.PORT} resolved={resolved} "
-          f"mysql_host={db_host}")
+    assert socket.gethostbyname(db_host).startswith("127."), f"refusing non-loopback MYSQL_HOST={db_host!r}"
+    print(f"GUARD-OK world={host}:{p3.PORT} resolved={resolved} mysql_host={db_host}")
 
 
 def preflight() -> int:
@@ -275,24 +408,28 @@ def preflight() -> int:
 
     guard_loopback()
     for probe, marker in (
-            ("scripted_driver.py", "SCRIPTED-DRIVER-SELFTEST-PASS"),
-            ("two_client_smoke.py", "TWO-CLIENT-SELFTEST-PASS")):
-        r = _subprocess.run(
-            [sys.executable, str(SCRIPT_DIR / probe), "--self-test"],
-            capture_output=True, text=True)
+        ("scripted_driver.py", "SCRIPTED-DRIVER-SELFTEST-PASS"),
+        ("two_client_smoke.py", "TWO-CLIENT-SELFTEST-PASS"),
+    ):
+        r = _subprocess.run([sys.executable, str(SCRIPT_DIR / probe), "--self-test"], capture_output=True, text=True)
+        if r.returncode != 0 or marker not in (r.stdout + r.stderr):
+            print(f"PREFLIGHT-FAIL {probe}:\n{r.stdout}\n{r.stderr}")
+            return 2
+        print(f"PREFLIGHT-OK {probe} {marker}")
+    for probe, marker in (
+        ("spell_matrix_gen.py", "SPELL-MATRIX-GEN-SELFTEST-PASS"),
+        ("spell_campaign.py", "SPELL-CAMPAIGN-SELFTEST-PASS"),
+    ):
+        r = _subprocess.run([sys.executable, str(SCRIPT_DIR / probe), "--self-test"], capture_output=True, text=True)
         if r.returncode != 0 or marker not in (r.stdout + r.stderr):
             print(f"PREFLIGHT-FAIL {probe}:\n{r.stdout}\n{r.stderr}")
             return 2
         print(f"PREFLIGHT-OK {probe} {marker}")
     hostname = smoke.sql_scalar("realmd", "SELECT @@hostname")
     print(f"DB-OK @@hostname={hostname}")
-    row = smoke.sql_scalar(
-        "mangos",
-        "SELECT COUNT(*) FROM creature_template WHERE entry=327")
-    spawns = smoke.sql_scalar(
-        "mangos", "SELECT COUNT(*) FROM creature WHERE id=327")
-    print(f"PROBE-ENTRY-327 template={row} spawns={spawns} "
-          f"(informational; pilot runs on 705/707 regardless)")
+    row = smoke.sql_scalar("mangos", "SELECT COUNT(*) FROM creature_template WHERE entry=327")
+    spawns = smoke.sql_scalar("mangos", "SELECT COUNT(*) FROM creature WHERE id=327")
+    print(f"PROBE-ENTRY-327 template={row} spawns={spawns} (informational; pilot runs on 705/707 regardless)")
     return 0
 
 
@@ -300,24 +437,19 @@ def preflight() -> int:
 # Fixtures (§2)
 # --------------------------------------------------------------------------
 
+
 def ensure_account(username: str) -> int:
-    found = smoke.sql_scalar(
-        "realmd",
-        f"SELECT id FROM account WHERE username='{username}'")
+    found = smoke.sql_scalar("realmd", f"SELECT id FROM account WHERE username='{username}'")
     if found:
         return int(found)
-    smoke.sql_scalar(
-        "realmd", f"INSERT INTO account (username) VALUES ('{username}')")
-    found = smoke.sql_scalar(
-        "realmd", f"SELECT id FROM account WHERE username='{username}'")
+    smoke.sql_scalar("realmd", f"INSERT INTO account (username) VALUES ('{username}')")
+    found = smoke.sql_scalar("realmd", f"SELECT id FROM account WHERE username='{username}'")
     print(f"ACCOUNT-CREATED {username} id={found}")
     return int(found)
 
 
-def ensure_character(account: str, account_id: int, name: str,
-                     race: int, cls: int) -> int:
-    found = smoke.sql_scalar(
-        "characters", f"SELECT guid FROM characters WHERE name='{name}'")
+def ensure_character(account: str, account_id: int, name: str, race: int, cls: int) -> int:
+    found = smoke.sql_scalar("characters", f"SELECT guid FROM characters WHERE name='{name}'")
     if found:
         return int(found)
     p3.ACCOUNT = account
@@ -336,22 +468,19 @@ def ensure_character(account: str, account_id: int, name: str,
         if opcode == SMSG_CHAR_ENUM:
             break
     client.send_packet(CMSG_CHAR_CREATE, char_create_body(name, race, cls))
-    body, _ = smoke.read_until_opcode(client, SMSG_CHAR_CREATE, 10,
-                                      f"create {name}")
+    body, _ = smoke.read_until_opcode(client, SMSG_CHAR_CREATE, 10, f"create {name}")
     code = body[0] if body else None
     client.sock.close()
     if code != CHAR_CREATE_SUCCESS:
         raise AssertionError(f"CMSG_CHAR_CREATE {name} refused: code={code}")
-    found = smoke.sql_scalar(
-        "characters", f"SELECT guid FROM characters WHERE name='{name}'")
+    found = smoke.sql_scalar("characters", f"SELECT guid FROM characters WHERE name='{name}'")
     if not found:
         raise AssertionError(f"character {name} missing after code 46")
     print(f"CHAR-CREATED {name} guid={found} race={race} class={cls}")
     return int(found)
 
 
-def seed_character(guid: int, spells: list[int],
-                   pos: tuple[float, float, float] = CASTER_POS) -> None:
+def seed_character(guid: int, spells: list[int], pos: tuple[float, float, float] = CASTER_POS) -> None:
     x, y, z = pos
     smoke.ensure_offline(guid)
     smoke.sql_scalar(
@@ -362,20 +491,16 @@ def seed_character(guid: int, spells: list[int],
         f"position_x={x}, position_y={y}, position_z={z}, orientation=0, "
         "death_expire_time=0, "
         "character_flags=character_flags & ~8192, online=0 "
-        f"WHERE guid={guid}")
-    smoke.sql_scalar(
-        "characters", f"DELETE FROM character_spell WHERE guid={guid}")
+        f"WHERE guid={guid}",
+    )
+    smoke.sql_scalar("characters", f"DELETE FROM character_spell WHERE guid={guid}")
     for spell in spells:
         smoke.sql_scalar(
-            "characters",
-            f"INSERT INTO character_spell (guid,spell,active,disabled) "
-            f"VALUES ({guid},{spell},1,0)")
-    smoke.sql_scalar(
-        "characters", f"DELETE FROM character_spell_cooldown WHERE guid={guid}")
-    smoke.sql_scalar(
-        "characters", f"DELETE FROM character_aura WHERE guid={guid}")
-    smoke.sql_scalar(
-        "characters", f"DELETE FROM corpse WHERE player_guid={guid}")
+            "characters", f"INSERT INTO character_spell (guid,spell,active,disabled) VALUES ({guid},{spell},1,0)"
+        )
+    smoke.sql_scalar("characters", f"DELETE FROM character_spell_cooldown WHERE guid={guid}")
+    smoke.sql_scalar("characters", f"DELETE FROM character_aura WHERE guid={guid}")
+    smoke.sql_scalar("characters", f"DELETE FROM corpse WHERE player_guid={guid}")
     print(f"SEEDED guid={guid} spells={len(spells)} pos=({x},{y},{z})")
 
 
@@ -385,40 +510,122 @@ SETUP_SPELLS: dict[str, tuple[int, ...]] = {
     "Warrior": (2457,),
 }
 
+#: Druid shapeshift form spells (the fan-out cast set's `form`-bucket
+#: rows: Cat, Travel, Aquatic, Dire Bear, Moonkin). The form leg
+#: pre-clears any of these still active and post-cancels the entered
+#: form (CMSG_CANCEL_AURA 310, the pilot Bear->Cat pattern) so later
+#: caster-form rows gate cleanly.
+DRUID_FORM_SPELLS = (768, 783, 1066, 5487, 9634, 24858)
+
+#: Stances bit k means ShapeshiftForm k+1 (Cat 1, Travel 3, Aquatic
+#: 4, Bear 5, DireBear 8, Moonkin 31): the form spell that enters
+#: each, in preference order for stance-gated rows whose mask allows
+#: more than one form (Bear|DireBear rows take Dire Bear).
+FORM_SPELL_BY_STANCE_BIT = ((0, 768), (7, 9634), (4, 5487), (30, 24858), (2, 783), (3, 1066))
+
+
+def required_form_spell(row: dict) -> int | None:
+    """Form-entry spell for a stance-gated row, or None when the row
+    is not form-enterable here (actual totem rows, no stance bits the
+    harness can enter). Pure: reads only the matrix row."""
+    if any(row.get("totem") or ()):
+        return None
+    stances = int(row.get("stances") or 0)
+    for bit, spell in FORM_SPELL_BY_STANCE_BIT:
+        if stances & (1 << bit):
+            return spell
+    return None
+
 
 def pilot_spells_for(class_name: str) -> list[int]:
     doc = json.loads(MATRIX_PATH.read_text())
-    spells = {r["spell_id"] for r in doc["rows"]
-              if r["class"] == class_name}
+    spells = {r["spell_id"] for r in doc["rows"] if r["class"] == class_name}
     spells.update(SETUP_SPELLS.get(class_name, ()))
     return sorted(spells)
 
 
-def drift_gate(driver: ScriptedDriver, guid: int,
-               expect_spells: int) -> None:
-    level = driver.world.get(guid).values.get(UNIT_FIELD_LEVEL) \
-        if driver.world.get(guid) else None
+def matrix_doc_for(class_name: str) -> dict:
+    """Matrix doc backing one class: the per-class fan-out artifact
+    when the generator wrote one, else the main matrix. Pilot classes
+    always come from the main matrix, so pilot behavior is unchanged."""
+    try:
+        import spell_matrix_gen as gen  # noqa: PLC0415
+
+        path = gen.class_matrix_path(class_name)
+        if path.exists():
+            return json.loads(path.read_text())
+    except (OSError, ValueError):
+        pass
+    return json.loads(MATRIX_PATH.read_text())
+
+
+def matrix_rows_for(class_name: str) -> list[dict]:
+    return [r for r in matrix_doc_for(class_name).get("rows", []) if r["class"] == class_name]
+
+
+def talent_known_spells(class_name: str) -> list[int]:
+    """Selected-build known_spell_ids for one class (G2); [] when the
+    class has no legal selected build."""
+    try:
+        doc = matrix_doc_for(class_name)
+        full_known = doc.get("full_talent_known_spell_ids") or (doc.get("full_seed_spell_ids") or {})
+        if isinstance(full_known, list):
+            return sorted(full_known)
+        selected = (doc.get("talent_builds") or {}).get("selected") or {}
+        entry = selected.get(class_name) or {}
+        return sorted(entry.get("known_spell_ids") or [])
+    except (OSError, ValueError):
+        return []
+
+
+def seed_spells_for(class_name: str) -> list[int]:
+    """Full seed list for one class (arch §2.4): the per-class
+    artifact's recorded seed list when present (G1 union ranks plus
+    the selected talent known spells), else the union of every cast
+    row's ranks plus talent known plus setup. Pilot classes keep
+    their exact legacy seed through pilot_spells_for; only fan-out
+    classes use this."""
+    doc = matrix_doc_for(class_name)
+    seed_lists = doc.get("full_seed_spell_ids") or {}
+    if isinstance(seed_lists, dict) and seed_lists.get(class_name):
+        spells = set(seed_lists[class_name])
+    else:
+        spells = set()
+        for r in doc.get("rows", []):
+            if r["class"] != class_name:
+                continue
+            merged = (r.get("merged_chain") or {}).get("members")
+            if merged:
+                spells.update(merged)
+            else:
+                spells.update(r.get("all_rank_ids") or [r["spell_id"]])
+    spells.update(talent_known_spells(class_name))
+    spells.update(SETUP_SPELLS.get(class_name, ()))
+    return sorted(spells)
+
+
+def drift_gate(driver: ScriptedDriver, guid: int, expect_spells: int) -> None:
+    level = driver.world.get(guid).values.get(UNIT_FIELD_LEVEL) if driver.world.get(guid) else None
     if level != 60:
         raise AssertionError(f"fixture drift: level={level} want 60")
-    have = smoke.sql_scalar(
-        "characters",
-        f"SELECT COUNT(*) FROM character_spell WHERE guid={guid}")
+    have = smoke.sql_scalar("characters", f"SELECT COUNT(*) FROM character_spell WHERE guid={guid}")
     if int(have) != expect_spells:
-        raise AssertionError(
-            f"fixture drift: character_spell={have} want {expect_spells}")
+        raise AssertionError(f"fixture drift: character_spell={have} want {expect_spells}")
     health = driver.self_health()
-    max_health = driver.world.get(driver.own_guid).values.get(
-        UNIT_FIELD_MAXHEALTH) if driver.own_guid else None
+    max_health = driver.world.get(driver.own_guid).values.get(UNIT_FIELD_MAXHEALTH) if driver.own_guid else None
     if health != max_health or not health:
-        raise AssertionError(
-            f"fixture drift: health={health} max={max_health}")
-    print(f"DRIFT-OK guid={guid} level=60 spells={have} "
-          f"health={health}")
+        raise AssertionError(f"fixture drift: health={health} max={max_health}")
+    print(f"DRIFT-OK guid={guid} level=60 spells={have} health={health}")
 
 
 def fixtures_ensure() -> int:
+    """Idempotent ensure of all nine §2 fixture characters (slot order).
+
+    Pilot legs only ever address their own three characters by name, so
+    `pilot` behavior is unchanged; fan-out classes find their fixture
+    (notably Camppaladin) already present."""
     guids: dict[str, int] = {}
-    for account, name, race, cls in PILOT_FIXTURES:
+    for account, name, race, cls in CLASS_FIXTURES:
         account_id = ensure_account(account)
         guid = ensure_character(account, account_id, name, race, cls)
         guids[name] = guid
@@ -429,6 +636,7 @@ def fixtures_ensure() -> int:
 # Cast helpers (§5)
 # --------------------------------------------------------------------------
 
+
 def aura_present(driver: ScriptedDriver, guid: int, spell_id: int) -> bool:
     obj = driver.world.get(guid)
     if obj is None:
@@ -437,6 +645,41 @@ def aura_present(driver: ScriptedDriver, guid: int, spell_id: int) -> bool:
         if obj.values.get(field) == spell_id:
             return True
     return False
+
+
+def heal_rise_ok(
+    h0: float | None, h1: float | None, h2: float | None, t0: float, t1: float, t2: float, minimum_rise: float = 50.0
+) -> tuple[float, bool]:
+    """Regen-baselined heal rise (the heal_leg gate, pure part).
+
+    h0/h1 bracket the pre-cast regen rate, h2 is post-cast; the rise
+    is h2 minus the extrapolated baseline. A full ally yields a zero
+    rise and is a scenario FAIL, never PASS. Returns (rise, ok).
+    """
+    if h0 is None or h1 is None or h2 is None or t1 <= t0:
+        return (0.0, False)
+    rate = (h1 - h0) / (t1 - t0)
+    rise = h2 - (h1 + rate * (t2 - t1))
+    return (rise, rise > minimum_rise)
+
+
+def dummy_reusable(health: int | None, max_health: int | None, has_aura: bool) -> bool:
+    """Clean-dummy reuse predicate (pure part of pick_dummy).
+
+    Only an alive, full-health, aura-free dummy may be reused: DoTs,
+    CC, and prior damage all leave either a health deficit or an
+    aura holder, so both are required clean.
+    """
+    return health is not None and max_health is not None and 0 < health == max_health and not has_aura
+
+
+def passive_learn_verdict(passive: bool, learned: bool, aura_ok: bool) -> str:
+    """PASSIVE-VERIFIED rule: passive spells have no aura holder by
+    design, so learned alone verifies; non-passive learned rows
+    still need the aura observed."""
+    if passive:
+        return "PASSIVE-VERIFIED" if learned else "PASSIVE-UNVERIFIED"
+    return "PASSIVE-VERIFIED" if (learned and aura_ok) else "PASSIVE-UNVERIFIED"
 
 
 def parse_cast_result_body(body: bytes) -> tuple[int, int] | None:
@@ -476,22 +719,24 @@ def parse_spell_go_body(body: bytes) -> dict | None:
     except (IndexError, struct.error):
         return None
     return {
-        "caster_guid": caster_guid, "target_guid": target_guid,
-        "cast_counter": cast_counter, "spell_id": spell_id,
-        "hits": hits, "misses": misses,
+        "caster_guid": caster_guid,
+        "target_guid": target_guid,
+        "cast_counter": cast_counter,
+        "spell_id": spell_id,
+        "hits": hits,
+        "misses": misses,
     }
 
 
-def spell_go_matches(parsed: dict | None, spell_id: int,
-                     caster_guid: int | None,
-                     target_guid: int | None = None) -> bool:
+def spell_go_matches(
+    parsed: dict | None, spell_id: int, caster_guid: int | None, target_guid: int | None = None
+) -> bool:
     if parsed is None or parsed["spell_id"] != spell_id:
         return False
     if caster_guid is not None and parsed["caster_guid"] != caster_guid:
         return False
     if target_guid is not None:
-        return (parsed["target_guid"] == target_guid
-                or target_guid in parsed["hits"])
+        return parsed["target_guid"] == target_guid or target_guid in parsed["hits"]
     return True
 
 
@@ -504,8 +749,10 @@ def parse_damage_log_body(body: bytes) -> dict | None:
     except (IndexError, struct.error):
         return None
     return {
-        "target_guid": target_guid, "attacker_guid": attacker_guid,
-        "spell_id": spell_id, "damage": damage,
+        "target_guid": target_guid,
+        "attacker_guid": attacker_guid,
+        "spell_id": spell_id,
+        "damage": damage,
     }
 
 
@@ -517,31 +764,54 @@ def events_since(driver: ScriptedDriver, mark: int) -> list[tuple[int, bytes]]:
     return driver.events[mark:]
 
 
-def matching_damage_logs(events: list[tuple[int, bytes]], spell_id: int,
-                         target_guid: int,
-                         attacker_guid: int | None = None) -> list[dict]:
+def parse_periodicaura_log_body(body: bytes) -> dict | None:
+    """Parse SMSG_PERIODICAURALOG (590): packed(target)
+    packed(caster) spell count auraType damage school absorb
+    resisted. Ticks land here; direct hits use 592."""
+    try:
+        target_guid, offset = smoke.parse_packed_guid(body, 0)
+        attacker_guid, offset = smoke.parse_packed_guid(body, offset)
+        spell_id, _count, _aura, damage = struct.unpack_from("<IIII", body, offset)
+    except (IndexError, struct.error):
+        return None
+    return {
+        "target_guid": target_guid,
+        "attacker_guid": attacker_guid,
+        "spell_id": spell_id,
+        "damage": damage,
+    }
+
+
+def matching_damage_logs(
+    events: list[tuple[int, bytes]], spell_id: int, target_guid: int, attacker_guid: int | None = None
+) -> list[dict]:
     logs = []
     for opcode, body in events:
-        if opcode != SMSG_SPELLNONMELEEDAMAGELOG:
+        if opcode == SMSG_SPELLNONMELEEDAMAGELOG:
+            parsed = parse_damage_log_body(body)
+        elif opcode == SMSG_PERIODICAURALOG:
+            parsed = parse_periodicaura_log_body(body)
+        else:
             continue
-        parsed = parse_damage_log_body(body)
         if parsed is None:
             continue
         if parsed["spell_id"] != spell_id:
             continue
         if parsed["target_guid"] != target_guid:
             continue
-        if (attacker_guid is not None
-                and parsed["attacker_guid"] != attacker_guid):
+        if attacker_guid is not None and parsed["attacker_guid"] != attacker_guid:
             continue
         logs.append(parsed)
     return logs
 
 
-def send_and_wait(driver: ScriptedDriver, body: bytes, spell_id: int,
-                  timeout: float = 10.0,
-                  target_guid: int | None = None,
-                  ) -> tuple[bool, int | None, list[int]]:
+def send_and_wait(
+    driver: ScriptedDriver,
+    body: bytes,
+    spell_id: int,
+    timeout: float = 10.0,
+    target_guid: int | None = None,
+) -> tuple[bool, int | None, list[int]]:
     """One cast over the real wire; returns (go, result_reason, opcodes).
 
     Only a SPELL_GO/CAST_RESULT body naming this spell (and, for GO,
@@ -562,8 +832,7 @@ def send_and_wait(driver: ScriptedDriver, body: bytes, spell_id: int,
         ops.append(opcode)
         if opcode == SMSG_SPELL_GO:
             parsed = parse_spell_go_body(pkt)
-            if spell_go_matches(parsed, spell_id, driver.own_guid,
-                                target_guid):
+            if spell_go_matches(parsed, spell_id, driver.own_guid, target_guid):
                 return True, None, ops
         if opcode == SMSG_CAST_RESULT:
             parsed = parse_cast_result_body(pkt)
@@ -572,8 +841,11 @@ def send_and_wait(driver: ScriptedDriver, body: bytes, spell_id: int,
     return False, None, ops
 
 
-def login_as(account: str, account_id: int, guid: int,
-             ) -> tuple[object, ScriptedDriver]:
+def login_as(
+    account: str,
+    account_id: int,
+    guid: int,
+) -> tuple[object, ScriptedDriver]:
     """Login like `two_client_smoke.login_client`, but every packet of
     the entry burst is fed to the driver's `WorldState` first: the
     stock helper drains the burst into a throwaway list, which would
@@ -598,8 +870,7 @@ def login_as(account: str, account_id: int, guid: int,
     while time.monotonic() < deadline:
         ready, _, _ = select.select([client.sock], [], [], 0.25)
         if not ready:
-            if verify is not None and seen_update \
-                    and time.monotonic() - last_packet_at >= 1.5:
+            if verify is not None and seen_update and time.monotonic() - last_packet_at >= 1.5:
                 break
             continue
         op, body = client.read_packet()
@@ -607,16 +878,14 @@ def login_as(account: str, account_id: int, guid: int,
         driver.observe(op, body)
         if op == smoke.SMSG_LOGIN_VERIFY_WORLD:
             verify = body
-        if op in (smoke.SMSG_UPDATE_OBJECT,
-                  smoke.SMSG_COMPRESSED_UPDATE_OBJECT):
+        if op in (smoke.SMSG_UPDATE_OBJECT, smoke.SMSG_COMPRESSED_UPDATE_OBJECT):
             seen_update = True
     if verify is None:
         raise AssertionError(f"{account}: no SMSG_LOGIN_VERIFY_WORLD")
     map_id, x, y, z, orientation = struct.unpack("<Iffff", verify)
     driver.position = (x, y, z, orientation)
     client.send_packet(smoke.CMSG_SET_ACTIVE_MOVER, struct.pack("<Q", guid))
-    print(f"LOGIN-OK account={account} guid={guid} map={map_id} "
-          f"pos=({x:.2f},{y:.2f},{z:.2f})")
+    print(f"LOGIN-OK account={account} guid={guid} map={map_id} pos=({x:.2f},{y:.2f},{z:.2f})")
     return client, driver
 
 
@@ -631,27 +900,27 @@ def face_guid(driver: ScriptedDriver, guid: int) -> None:
         driver.face(pos[0], pos[1])
 
 
-def cast_unit_faced(driver: ScriptedDriver, spell_id: int, target: int,
-                    timeout: float = 10.0) -> tuple[bool, int | None,
-                                                   list[int]]:
+def cast_unit_faced(
+    driver: ScriptedDriver, spell_id: int, target: int, timeout: float = 10.0
+) -> tuple[bool, int | None, list[int]]:
     """Face the target first (1.12.1 casts require facing); otherwise
     identical to `send_and_wait`."""
     face_guid(driver, target)
-    return send_and_wait(driver, cast_unit_body(spell_id, target), spell_id,
-                         timeout, target_guid=target)
+    return send_and_wait(driver, cast_unit_body(spell_id, target), spell_id, timeout, target_guid=target)
 
 
-def cast_self_retry_power(driver: ScriptedDriver, spell_id: int,
-                          timeout: float = 10.0,
-                          retries: int = 3) -> tuple[bool, int | None,
-                                                   list[int], int]:
+def cast_self_retry_power(
+    driver: ScriptedDriver,
+    spell_id: int,
+    timeout: float = 10.0,
+    retries: int = POWER_RETRIES,
+) -> tuple[bool, int | None, list[int], int]:
     """Self cast with the `cast_until_dead` mana pacing treatment:
     NO_POWER(77) waits 9 s (five-second rule + regen tick) and retries.
     Returns (go, reason, ops, power_retries)."""
     waited = 0
     for _ in range(retries + 1):
-        go, reason, ops = send_and_wait(driver, cast_self_body(spell_id),
-                                        spell_id, timeout)
+        go, reason, ops = send_and_wait(driver, cast_self_body(spell_id), spell_id, timeout)
         if go or reason != SPELL_FAILED_NO_POWER or waited >= retries:
             return go, reason, ops, waited
         waited += 1
@@ -663,14 +932,14 @@ def snapshot(driver: ScriptedDriver, guid: int) -> str:
     obj = driver.world.get(guid)
     if obj is None:
         return "absent"
-    return (f"health={obj.values.get(UNIT_FIELD_HEALTH)} "
-            f"max={obj.values.get(UNIT_FIELD_MAXHEALTH)} "
-            f"power1={obj.values.get(UNIT_FIELD_POWER1)}")
+    return (
+        f"health={obj.values.get(UNIT_FIELD_HEALTH)} "
+        f"max={obj.values.get(UNIT_FIELD_MAXHEALTH)} "
+        f"power1={obj.values.get(UNIT_FIELD_POWER1)}"
+    )
 
 
-def live_dummy(driver: ScriptedDriver, entry: int,
-               counters: list[int],
-               exclude: int | None = None) -> int | None:
+def live_dummy(driver: ScriptedDriver, entry: int, counters: list[int], exclude: int | None = None) -> int | None:
     """First counter of `entry` tracked with health > 0, else None."""
     for counter in counters:
         guid = raw_guid(entry, counter)
@@ -681,21 +950,22 @@ def live_dummy(driver: ScriptedDriver, entry: int,
     return None
 
 
-def ensure_battle_stance(driver: ScriptedDriver, guid: int,
-                         ) -> tuple[bool, int | None, list[int]]:
+def ensure_battle_stance(
+    driver: ScriptedDriver,
+    guid: int,
+) -> tuple[bool, int | None, list[int]]:
     """Enter Battle Stance (2457) so stance-gated Warrior rows are
     cast under fork-legal conditions, and verify its aura landed."""
     if aura_present(driver, guid, 2457):
         return True, None, []
-    go, reason, ops = send_and_wait(
-        driver, cast_self_body(2457), 2457, target_guid=guid)
+    go, reason, ops = send_and_wait(driver, cast_self_body(2457), 2457, target_guid=guid)
     driver.poll(1.5)
     return bool(go and aura_present(driver, guid, 2457)), reason, ops
 
 
-def expected_failure_verdict(row: dict, go: bool, reason: int | None,
-                             packets: list[int], target_guid: int,
-                             attempts: int = 1) -> dict:
+def expected_failure_verdict(
+    row: dict, go: bool, reason: int | None, packets: list[int], target_guid: int, attempts: int = 1
+) -> dict:
     """Verdict for a matrix `expect_cast_failure` row.
 
     This row can never PASS. A shapeshift rejection is the pilot
@@ -704,31 +974,35 @@ def expected_failure_verdict(row: dict, go: bool, reason: int | None,
     spell_label = row.get("name") or f"spell {row.get('spell_id')}"
     if go:
         return make_verdict(
-            row, "FAIL", attempts=attempts, phase="prepare",
+            row,
+            "FAIL",
+            attempts=attempts,
+            phase="prepare",
             evidence=f"{spell_label} landed from the wrong form; "
             "stance/shape gate missing (engine finding, not a pass)",
-            packets=packets, target_guid=target_guid)
-    expected = reason in (SPELL_FAILED_ONLY_SHAPESHIFT,
-                          SPELL_FAILED_NOT_SHAPESHIFT)
+            packets=packets,
+            target_guid=target_guid,
+        )
+    expected = reason in (SPELL_FAILED_ONLY_SHAPESHIFT, SPELL_FAILED_NOT_SHAPESHIFT)
     if expected:
-        evidence = (
-            f"expected wrong-form rejection for {spell_label}: "
-            f"CAST_RESULT({reason}) after {attempts} attempt(s)")
+        evidence = f"expected wrong-form rejection for {spell_label}: CAST_RESULT({reason}) after {attempts} attempt(s)"
     elif reason == SPELL_FAILED_OUT_OF_RANGE:
-        evidence = (
-            f"wrong-form premise untested for {spell_label}: "
-            f"all {attempts} attempt(s) ended OUT_OF_RANGE(89)")
+        evidence = f"wrong-form premise untested for {spell_label}: all {attempts} attempt(s) ended OUT_OF_RANGE(89)"
     elif reason is None:
         evidence = f"no bound cast answer for {spell_label}"
     else:
-        evidence = (
-            f"wrong-form cast for {spell_label} failed for an "
-            f"unclassified reason CAST_RESULT({reason})")
+        evidence = f"wrong-form cast for {spell_label} failed for an unclassified reason CAST_RESULT({reason})"
     return make_verdict(
-        row, "FAIL", attempts=attempts, phase="prepare",
+        row,
+        "FAIL",
+        attempts=attempts,
+        phase="prepare",
         reason=(f"CAST_RESULT({reason})" if reason is not None else None),
-        evidence=evidence, packets=packets, target_guid=target_guid,
-        expected_failure=expected)
+        evidence=evidence,
+        packets=packets,
+        target_guid=target_guid,
+        expected_failure=expected,
+    )
 
 
 def _reset_target_ok(item: dict | None, require_dead: bool) -> bool:
@@ -739,16 +1013,14 @@ def _reset_target_ok(item: dict | None, require_dead: bool) -> bool:
     if pre_hp is None or post_hp is None:
         return False
     health_ok = post_hp == 0 if require_dead else post_hp < pre_hp
-    return health_ok and bool(item.get("aura_seen")
-                              or item.get("damage_logs"))
+    return health_ok and bool(item.get("aura_seen") or item.get("damage_logs"))
 
 
 def reset_evidence_ok(first: dict | None, second: dict | None) -> bool:
     """A reset is proven only by attributed damage to two counters."""
     if not first or not second or first.get("guid") == second.get("guid"):
         return False
-    return (_reset_target_ok(first, require_dead=True)
-            and _reset_target_ok(second, require_dead=False))
+    return _reset_target_ok(first, require_dead=True) and _reset_target_ok(second, require_dead=False)
 
 
 def heal_jump_in_band(jump: float, band: list[int] | tuple[int, int]) -> bool:
@@ -766,40 +1038,51 @@ def single_outcome_verdict(row: dict, observed: dict) -> dict:
     kind = expected.get("kind")
     pre_hp = observed.get("pre_hp")
     post_hp = observed.get("post_hp")
-    health_fell = (pre_hp is not None and post_hp is not None
-                   and post_hp < pre_hp)
+    health_fell = pre_hp is not None and post_hp is not None and post_hp < pre_hp
     damage_logs = observed.get("damage_logs", [])
     damage_total = sum(int(log.get("damage", 0)) for log in damage_logs)
     pre = observed.get("pre", "")
     post = observed.get("post", "")
 
     if kind == "expect_cast_failure":
-        return expected_failure_verdict(
-            row, go, reason, packets, target_guid, attempts=attempts)
+        return expected_failure_verdict(row, go, reason, packets, target_guid, attempts=attempts)
     if kind == "resurrect_request":
         return make_verdict(
-            row, "BLOCKED", attempts=attempts,
+            row,
+            "BLOCKED",
+            attempts=attempts,
             reason="wire-target-unsupported",
-            evidence="single repro has no corpse-target scenario; "
-            "use the pilot classification leg",
-            pre=pre, post=post, packets=packets,
-            target_guid=target_guid)
+            evidence="single repro has no corpse-target scenario; use the pilot classification leg",
+            pre=pre,
+            post=post,
+            packets=packets,
+            target_guid=target_guid,
+        )
     if kind == "heal_delta_target":
         return make_verdict(
-            row, "BLOCKED", attempts=attempts,
+            row,
+            "BLOCKED",
+            attempts=attempts,
             reason="scenario-missing-ally",
-            evidence="single repro has no damaged-ally scenario; "
-            "use the pilot heal leg",
-            pre=pre, post=post, packets=packets,
-            target_guid=target_guid)
+            evidence="single repro has no damaged-ally scenario; use the pilot heal leg",
+            pre=pre,
+            post=post,
+            packets=packets,
+            target_guid=target_guid,
+        )
     if not go:
         return make_verdict(
-            row, "FAIL", attempts=attempts, phase="prepare",
-            reason=(f"CAST_RESULT({reason})"
-                    if reason is not None else None),
-            evidence=f"no bound SPELL_GO for spell {row.get('spell_id')} "
-            f"(reason={reason})", pre=pre, post=post, packets=packets,
-            target_guid=target_guid)
+            row,
+            "FAIL",
+            attempts=attempts,
+            phase="prepare",
+            reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+            evidence=f"no bound SPELL_GO for spell {row.get('spell_id')} (reason={reason})",
+            pre=pre,
+            post=post,
+            packets=packets,
+            target_guid=target_guid,
+        )
 
     if kind in ("aura_on_caster", "form_change"):
         outcome_ok = bool(observed.get("caster_aura"))
@@ -807,37 +1090,107 @@ def single_outcome_verdict(row: dict, observed: dict) -> dict:
     elif kind == "aura_on_target":
         outcome_ok = bool(observed.get("target_aura"))
         detail = f"target_aura={observed.get('target_aura')}"
+        if (
+            not outcome_ok
+            and observed.get("pre_hp") not in (None, 0)
+            and observed.get("post_hp") == 0
+            and damage_logs
+            and 2 not in (row.get("effect_ids") or [])
+        ):
+            # A damaging aura killed the 100-hp dummy before the
+            # aura check ran: attributed damage logs prove the aura
+            # applied (all damage rides the periodic aura; rows with
+            # a direct-damage effect keep the aura-only gate).
+            outcome_ok = True
+            detail += f"; dummy died with {len(damage_logs)} attributed logs"
     elif kind == "health_delta_target":
         attribution = bool(observed.get("target_aura") or damage_logs)
         if not expected.get("aura"):
             attribution = True
         outcome_ok = health_fell and attribution
-        detail = (f"health {pre_hp}->{post_hp}, "
-                  f"target_aura={observed.get('target_aura')}, "
-                  f"damage_logs={len(damage_logs)}")
+        detail = (
+            f"health {pre_hp}->{post_hp}, target_aura={observed.get('target_aura')}, damage_logs={len(damage_logs)}"
+        )
     elif kind == "damage_log":
         outcome_ok = health_fell and bool(damage_logs)
-        detail = (f"health {pre_hp}->{post_hp}, "
-                  f"matching damage={damage_total}")
+        detail = f"health {pre_hp}->{post_hp}, matching damage={damage_total}"
+    elif kind == "object_created":
+        if "object_seen" not in observed and not damage_logs:
+            return make_verdict(
+                row,
+                "BLOCKED",
+                attempts=attempts,
+                reason="effect-marker-only",
+                evidence="single repro cannot observe expected kind object_created (no dummy-in-radius setup)",
+                pre=pre,
+                post=post,
+                packets=packets,
+                target_guid=target_guid,
+            )
+        outcome_ok = bool(observed.get("object_seen")) or (health_fell and bool(damage_logs))
+        detail = (
+            f"object_seen={observed.get('object_seen')}, health {pre_hp}->{post_hp}, matching damage={damage_total}"
+        )
+    elif kind == "item_consumed":
+        if "reagent_before" not in observed:
+            return make_verdict(
+                row,
+                "BLOCKED",
+                attempts=attempts,
+                reason="effect-marker-only",
+                evidence="single repro cannot observe expected kind item_consumed (no reagent count read)",
+                pre=pre,
+                post=post,
+                packets=packets,
+                target_guid=target_guid,
+            )
+        before = observed.get("reagent_before")
+        after = observed.get("reagent_after")
+        outcome_ok = before is not None and after is not None and after < before
+        detail = f"reagent {before}->{after}"
+    elif kind == "dual_outcome":
+        return make_verdict(
+            row,
+            "BLOCKED",
+            attempts=attempts,
+            reason="script-evidence-unknown",
+            evidence="T25 dual row: needs both the friendly heal leg "
+            "and the hostile damage leg; no single-bucket home until "
+            "both legs pass",
+            pre=pre,
+            post=post,
+            packets=packets,
+            target_guid=target_guid,
+        )
     else:
         return make_verdict(
-            row, "BLOCKED", attempts=attempts,
+            row,
+            "BLOCKED",
+            attempts=attempts,
             reason="effect-marker-only",
             evidence=f"single repro cannot observe expected kind {kind}",
-            pre=pre, post=post, packets=packets,
-            target_guid=target_guid)
+            pre=pre,
+            post=post,
+            packets=packets,
+            target_guid=target_guid,
+        )
     return make_verdict(
-        row, "PASS" if outcome_ok else "FAIL", attempts=attempts,
+        row,
+        "PASS" if outcome_ok else "FAIL",
+        attempts=attempts,
         phase=None if outcome_ok else "apply",
-        evidence=("observable outcome: " if outcome_ok else
-                  "SPELL_GO without required observable outcome: ")
-        + detail, pre=pre, post=post, packets=packets,
-        target_guid=target_guid)
+        evidence=("observable outcome: " if outcome_ok else "SPELL_GO without required observable outcome: ") + detail,
+        pre=pre,
+        post=post,
+        packets=packets,
+        target_guid=target_guid,
+    )
 
 
 # --------------------------------------------------------------------------
 # Pilot legs (§7)
 # --------------------------------------------------------------------------
+
 
 class Pilot:
     def __init__(self) -> None:
@@ -853,8 +1206,7 @@ class Pilot:
         self.verdicts.setdefault(class_name, []).append(v)
         status = v["verdict"]
         extra = v.get("reason") or v.get("phase") or ""
-        print(f"ROW {class_name} {v['spell_id']} {v['bucket']}: "
-              f"{status} {extra} | {v['evidence']}")
+        print(f"ROW {class_name} {v['spell_id']} {v['bucket']}: {status} {extra} | {v['evidence']}")
 
     def matrix_row(self, class_name: str, spell_id: int) -> dict:
         doc = json.loads(MATRIX_PATH.read_text())
@@ -866,8 +1218,7 @@ class Pilot:
     # -- leg 1: Warrior -----------------------------------------------------
     def leg_warrior(self, guid: int) -> None:
         row = self.matrix_row("Warrior", 5242)
-        client, driver = login_as("SPELLCAMP01", self.account_id("SPELLCAMP01"),
-                                  guid)
+        client, driver = login_as("SPELLCAMP01", self.account_id("SPELLCAMP01"), guid)
         try:
             drift_gate(driver, guid, len(pilot_spells_for("Warrior")))
             pre = snapshot(driver, guid)
@@ -875,36 +1226,61 @@ class Pilot:
             driver.poll(2.0)
             post = snapshot(driver, guid)
             if go and aura_present(driver, guid, 5242):
-                self.record("Warrior", make_verdict(
-                    row, "PASS", evidence="bound SPELL_GO + aura "
-                    f"5242 in self fields 47-94", pre=pre, post=post,
-                    packets=ops, target_guid=guid))
+                self.record(
+                    "Warrior",
+                    make_verdict(
+                        row,
+                        "PASS",
+                        evidence="bound SPELL_GO + aura 5242 in self fields 47-94",
+                        pre=pre,
+                        post=post,
+                        packets=ops,
+                        target_guid=guid,
+                    ),
+                )
             else:
-                self.record("Warrior", make_verdict(
-                    row, "FAIL", phase="prepare" if not go else "apply",
-                    reason=(f"CAST_RESULT({reason})" if reason is not None
-                            else None),
-                    evidence=f"go={go} reason={reason} "
-                    f"aura5242={aura_present(driver, guid, 5242)}",
-                    pre=pre, post=post, packets=ops, target_guid=guid))
+                self.record(
+                    "Warrior",
+                    make_verdict(
+                        row,
+                        "FAIL",
+                        phase="prepare" if not go else "apply",
+                        reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+                        evidence=f"go={go} reason={reason} aura5242={aura_present(driver, guid, 5242)}",
+                        pre=pre,
+                        post=post,
+                        packets=ops,
+                        target_guid=guid,
+                    ),
+                )
 
             row = self.matrix_row("Warrior", 6546)
             dummy = live_dummy(driver, 705, WOLF_COUNTERS)
             if dummy is None:
-                self.record("Warrior", make_verdict(
-                    row, "BLOCKED", reason="dummy-unavailable",
-                    evidence="no 705 counter with health>0 in WorldState"))
+                self.record(
+                    "Warrior",
+                    make_verdict(
+                        row,
+                        "BLOCKED",
+                        reason="dummy-unavailable",
+                        evidence="no 705 counter with health>0 in WorldState",
+                    ),
+                )
                 return
-            stance_ok, stance_reason, stance_ops = ensure_battle_stance(
-                driver, guid)
+            stance_ok, stance_reason, stance_ops = ensure_battle_stance(driver, guid)
             if not stance_ok:
-                self.record("Warrior", make_verdict(
-                    row, "FAIL", phase="prepare",
-                    reason=(f"CAST_RESULT({stance_reason})"
-                            if stance_reason is not None else None),
-                    evidence="Battle Stance setup did not verify aura "
-                    "2457; Rend not cast under invalid conditions",
-                    packets=stance_ops, target_guid=dummy))
+                self.record(
+                    "Warrior",
+                    make_verdict(
+                        row,
+                        "FAIL",
+                        phase="prepare",
+                        reason=(f"CAST_RESULT({stance_reason})" if stance_reason is not None else None),
+                        evidence="Battle Stance setup did not verify aura 2457; Rend not cast under invalid conditions",
+                        packets=stance_ops,
+                        target_guid=dummy,
+                    ),
+                )
                 return
             driver.approach_guid(dummy, 2.0)
             pre_hp = driver.target_health(dummy)
@@ -912,8 +1288,7 @@ class Pilot:
             go, reason, ops = cast_unit_faced(driver, 6546, dummy)
             ops = stance_ops + ops
             attempts = 1
-            while go and attempts < 5 and not aura_present(
-                    driver, dummy, 6546):
+            while go and attempts < 5 and not aura_present(driver, dummy, 6546):
                 driver.poll(1.6)
                 attempts += 1
                 if not aura_present(driver, dummy, 6546):
@@ -922,33 +1297,45 @@ class Pilot:
             driver.poll(4.0)  # Rend ticks
             post_hp = driver.target_health(dummy)
             dot = aura_present(driver, dummy, 6546)
-            if (go and dot and pre_hp is not None and post_hp is not None
-                    and post_hp < pre_hp):
-                self.record("Warrior", make_verdict(
-                    row, "PASS", attempts=attempts,
-                    evidence="Battle Stance aura 2457 verified, then "
-                    f"DoT aura 6546 on dummy guid={dummy} + health "
-                    f"{pre_hp}->{post_hp}", pre=pre,
-                    post=f"dummy guid={dummy} health={post_hp}",
-                    packets=ops, target_guid=dummy))
+            if go and dot and pre_hp is not None and post_hp is not None and post_hp < pre_hp:
+                self.record(
+                    "Warrior",
+                    make_verdict(
+                        row,
+                        "PASS",
+                        attempts=attempts,
+                        evidence="Battle Stance aura 2457 verified, then "
+                        f"DoT aura 6546 on dummy guid={dummy} + health "
+                        f"{pre_hp}->{post_hp}",
+                        pre=pre,
+                        post=f"dummy guid={dummy} health={post_hp}",
+                        packets=ops,
+                        target_guid=dummy,
+                    ),
+                )
             else:
-                self.record("Warrior", make_verdict(
-                    row, "FAIL", attempts=attempts,
-                    phase="apply" if go else "prepare",
-                    reason=(f"CAST_RESULT({reason})"
-                            if not go and reason is not None else None),
-                    evidence=f"stance_ok=True go={go} dot={dot} health "
-                    f"{pre_hp}->{post_hp}", pre=pre,
-                    post=f"dummy guid={dummy} health={post_hp}",
-                    packets=ops, target_guid=dummy))
+                self.record(
+                    "Warrior",
+                    make_verdict(
+                        row,
+                        "FAIL",
+                        attempts=attempts,
+                        phase="apply" if go else "prepare",
+                        reason=(f"CAST_RESULT({reason})" if not go and reason is not None else None),
+                        evidence=f"stance_ok=True go={go} dot={dot} health {pre_hp}->{post_hp}",
+                        pre=pre,
+                        post=f"dummy guid={dummy} health={post_hp}",
+                        packets=ops,
+                        target_guid=dummy,
+                    ),
+                )
         finally:
             smoke.logout(client, "warrior-pilot")
 
     # -- leg 2: Mage --------------------------------------------------------
     def leg_mage(self, guid: int) -> None:
         row = self.matrix_row("Mage", 168)
-        client, driver = login_as("SPELLCAMP07", self.account_id("SPELLCAMP07"),
-                                  guid)
+        client, driver = login_as("SPELLCAMP07", self.account_id("SPELLCAMP07"), guid)
         try:
             drift_gate(driver, guid, len(pilot_spells_for("Mage")))
             pre = snapshot(driver, guid)
@@ -958,46 +1345,66 @@ class Pilot:
             if go and aura_present(driver, guid, 168):
                 seeded_count = len(pilot_spells_for("Mage"))
                 smoke.logout(client, "mage-168-persist")
-                total_rows = int(smoke.sql_scalar(
-                    "characters",
-                    f"SELECT COUNT(*) FROM character_spell WHERE guid={guid}"))
-                rows_168 = int(smoke.sql_scalar(
-                    "characters",
-                    f"SELECT COUNT(*) FROM character_spell WHERE guid={guid} "
-                    f"AND spell=168"))
-                client, driver = login_as(
-                    "SPELLCAMP07", self.account_id("SPELLCAMP07"), guid)
+                total_rows = int(
+                    smoke.sql_scalar("characters", f"SELECT COUNT(*) FROM character_spell WHERE guid={guid}")
+                )
+                rows_168 = int(
+                    smoke.sql_scalar(
+                        "characters", f"SELECT COUNT(*) FROM character_spell WHERE guid={guid} AND spell=168"
+                    )
+                )
+                client, driver = login_as("SPELLCAMP07", self.account_id("SPELLCAMP07"), guid)
                 drift_gate(driver, guid, seeded_count)
                 persist_ok = total_rows == seeded_count and rows_168 == 1
-                self.record("Mage", make_verdict(
-                    row, "PASS" if persist_ok else "FAIL",
-                    phase=None if persist_ok else "persist",
-                    evidence="bound SPELL_GO + aura 168 on self; after "
-                    f"logout character_spell total={total_rows} "
-                    f"(seeded={seeded_count}), spell168 rows={rows_168}",
-                    pre=pre, post=post, packets=ops, target_guid=guid))
+                self.record(
+                    "Mage",
+                    make_verdict(
+                        row,
+                        "PASS" if persist_ok else "FAIL",
+                        phase=None if persist_ok else "persist",
+                        evidence="bound SPELL_GO + aura 168 on self; after "
+                        f"logout character_spell total={total_rows} "
+                        f"(seeded={seeded_count}), spell168 rows={rows_168}",
+                        pre=pre,
+                        post=post,
+                        packets=ops,
+                        target_guid=guid,
+                    ),
+                )
             else:
-                self.record("Mage", make_verdict(
-                    row, "FAIL", phase="prepare" if not go else "apply",
-                    reason=(f"CAST_RESULT({reason})" if reason is not None
-                            else None),
-                    evidence=f"go={go} aura168="
-                    f"{aura_present(driver, guid, 168)}", pre=pre, post=post,
-                    packets=ops, target_guid=guid))
+                self.record(
+                    "Mage",
+                    make_verdict(
+                        row,
+                        "FAIL",
+                        phase="prepare" if not go else "apply",
+                        reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+                        evidence=f"go={go} aura168={aura_present(driver, guid, 168)}",
+                        pre=pre,
+                        post=post,
+                        packets=ops,
+                        target_guid=guid,
+                    ),
+                )
 
             row = self.matrix_row("Mage", 133)
             dummy = live_dummy(driver, 705, WOLF_COUNTERS)
             if dummy is None:
-                self.record("Mage", make_verdict(
-                    row, "BLOCKED", reason="dummy-unavailable",
-                    evidence="no 705 counter with health>0 in WorldState"))
+                self.record(
+                    "Mage",
+                    make_verdict(
+                        row,
+                        "BLOCKED",
+                        reason="dummy-unavailable",
+                        evidence="no 705 counter with health>0 in WorldState",
+                    ),
+                )
                 return
             driver.approach_guid(dummy, 13.0)
             pre_hp = driver.target_health(dummy)
             pre = f"dummy guid={dummy} health={pre_hp}"
             mark = event_mark(driver)
-            go, reason, _ops = cast_unit_faced(driver, 133, dummy,
-                                               timeout=15.0)
+            go, reason, _ops = cast_unit_faced(driver, 133, dummy, timeout=15.0)
             driver.poll(6.0)  # flight + damage log
             window = events_since(driver, mark)
             flight_ops = [op for op, _ in window]
@@ -1005,40 +1412,51 @@ class Pilot:
             logs = matching_damage_logs(window, 133, dummy, guid)
             damage_total = sum(log["damage"] for log in logs)
             post_hp = driver.target_health(dummy)
-            if go and start_seen and logs and pre_hp is not None \
-                    and post_hp is not None and post_hp < pre_hp:
-                self.record("Mage", make_verdict(
-                    row, "PASS",
-                    evidence="bound SPELL_START+SPELL_GO, then opcode "
-                    f"592 body spell=133 target={dummy} attacker={guid} "
-                    f"damage={damage_total}; dummy health "
-                    f"{pre_hp}->{post_hp}", pre=pre,
-                    post=f"dummy guid={dummy} health={post_hp}",
-                    packets=flight_ops, target_guid=dummy))
+            if go and start_seen and logs and pre_hp is not None and post_hp is not None and post_hp < pre_hp:
+                self.record(
+                    "Mage",
+                    make_verdict(
+                        row,
+                        "PASS",
+                        evidence="bound SPELL_START+SPELL_GO, then opcode "
+                        f"592 body spell=133 target={dummy} attacker={guid} "
+                        f"damage={damage_total}; dummy health "
+                        f"{pre_hp}->{post_hp}",
+                        pre=pre,
+                        post=f"dummy guid={dummy} health={post_hp}",
+                        packets=flight_ops,
+                        target_guid=dummy,
+                    ),
+                )
             else:
-                self.record("Mage", make_verdict(
-                    row, "FAIL", phase="flight" if go else "prepare",
-                    reason=(f"CAST_RESULT({reason})"
-                            if not go and reason is not None else None),
-                    evidence=f"go={go} start={start_seen} "
-                    f"matching_logs={len(logs)} damage={damage_total} "
-                    f"health {pre_hp}->{post_hp}", pre=pre,
-                    post=f"dummy guid={dummy} health={post_hp}",
-                    packets=flight_ops, target_guid=dummy))
+                self.record(
+                    "Mage",
+                    make_verdict(
+                        row,
+                        "FAIL",
+                        phase="flight" if go else "prepare",
+                        reason=(f"CAST_RESULT({reason})" if not go and reason is not None else None),
+                        evidence=f"go={go} start={start_seen} "
+                        f"matching_logs={len(logs)} damage={damage_total} "
+                        f"health {pre_hp}->{post_hp}",
+                        pre=pre,
+                        post=f"dummy guid={dummy} health={post_hp}",
+                        packets=flight_ops,
+                        target_guid=dummy,
+                    ),
+                )
         finally:
             smoke.logout(client, "mage-pilot")
 
     # -- legs 3-5: Druid ----------------------------------------------------
     def leg_druid(self, guid: int, ally_guid: int) -> None:
-        client, driver = login_as("SPELLCAMP09", self.account_id("SPELLCAMP09"),
-                                  guid)
+        client, driver = login_as("SPELLCAMP09", self.account_id("SPELLCAMP09"), guid)
         try:
             drift_gate(driver, guid, len(pilot_spells_for("Druid")))
             # Healing leg needs a damaged ally: ally was SQL-damaged
             # while offline (saved low health persists through load,
             # which only clamps downward-overshoot to the max).
-            ally_client, ally_driver = login_as(
-                "SPELLCAMP01", self.account_id("SPELLCAMP01"), ally_guid)
+            ally_client, ally_driver = login_as("SPELLCAMP01", self.account_id("SPELLCAMP01"), ally_guid)
             try:
                 # Regen-baselined heal measurement on the ally's own
                 # socket (its updates are authoritative; the caster's
@@ -1056,58 +1474,73 @@ class Pilot:
                 t1 = time.monotonic()
                 h1 = ally_driver.self_health()
                 pre = f"ally guid={ally_guid} health={h0}->{h1}"
-                go, reason, ops = cast_unit_faced(
-                    driver, 5187, ally_guid, timeout=12.0)
+                go, reason, ops = cast_unit_faced(driver, 5187, ally_guid, timeout=12.0)
                 if not go and reason == SPELL_FAILED_NO_POWER:
                     driver.poll(9.0)
-                    go, reason, ops = cast_unit_faced(
-                        driver, 5187, ally_guid, timeout=12.0)
+                    go, reason, ops = cast_unit_faced(driver, 5187, ally_guid, timeout=12.0)
                 ally_driver.poll(4.0)
                 t2 = time.monotonic()
                 h2 = ally_driver.self_health()
-                if go and h0 is not None and h1 is not None \
-                        and h2 is not None and t1 > t0:
+                if go and h0 is not None and h1 is not None and h2 is not None and t1 > t0:
                     rate = (h1 - h0) / (t1 - t0)
                     jump = h2 - (h1 + rate * (t2 - t1))
-                    heal_band = row["expected"].get(
-                        "heal_band", [204, 254])
-                    jump_band = row["expected"].get(
-                        "observed_jump_band", [170, 288])
+                    heal_band = row["expected"].get("heal_band", [204, 254])
+                    jump_band = row["expected"].get("observed_jump_band", [170, 288])
                     # Oracle heal is 204-254; a discrete regen tick
                     # can phase-shift the baselined jump by one tick
                     # (+34), hence the generated observed band. The
                     # check is bounded on both sides.
                     if heal_jump_in_band(jump, jump_band):
-                        self.record("Druid", make_verdict(
-                            row, "PASS",
-                            evidence="Healing Touch rank 3 bound GO + "
-                            "regen-baselined jump "
-                            f"{jump:.0f} within observed band "
-                            f"{jump_band[0]}-{jump_band[1]} (oracle heal "
-                            f"band {heal_band[0]}-{heal_band[1]}, rate "
-                            f"{rate:.1f}/s, {h0}->{h1} pre, got {h2})",
-                            pre=pre, post=f"ally health={h2}",
-                            packets=ops, target_guid=ally_guid))
+                        self.record(
+                            "Druid",
+                            make_verdict(
+                                row,
+                                "PASS",
+                                evidence="Healing Touch rank 3 bound GO + "
+                                "regen-baselined jump "
+                                f"{jump:.0f} within observed band "
+                                f"{jump_band[0]}-{jump_band[1]} (oracle heal "
+                                f"band {heal_band[0]}-{heal_band[1]}, rate "
+                                f"{rate:.1f}/s, {h0}->{h1} pre, got {h2})",
+                                pre=pre,
+                                post=f"ally health={h2}",
+                                packets=ops,
+                                target_guid=ally_guid,
+                            ),
+                        )
                     else:
-                        self.record("Druid", make_verdict(
-                            row, "FAIL", phase="apply",
-                            evidence=f"GO but jump {jump:.0f} outside "
-                            f"observed band {jump_band[0]}-{jump_band[1]} "
-                            f"(oracle heal band {heal_band[0]}-"
-                            f"{heal_band[1]}, rate {rate:.1f}/s, "
-                            f"{h0}->{h1} pre, got {h2})",
-                            pre=pre, post=f"ally health={h2}",
-                            packets=ops, target_guid=ally_guid))
+                        self.record(
+                            "Druid",
+                            make_verdict(
+                                row,
+                                "FAIL",
+                                phase="apply",
+                                evidence=f"GO but jump {jump:.0f} outside "
+                                f"observed band {jump_band[0]}-{jump_band[1]} "
+                                f"(oracle heal band {heal_band[0]}-"
+                                f"{heal_band[1]}, rate {rate:.1f}/s, "
+                                f"{h0}->{h1} pre, got {h2})",
+                                pre=pre,
+                                post=f"ally health={h2}",
+                                packets=ops,
+                                target_guid=ally_guid,
+                            ),
+                        )
                 else:
-                    self.record("Druid", make_verdict(
-                        row, "FAIL", phase="prepare",
-                        reason=(f"CAST_RESULT({reason})"
-                                if not go and reason is not None else None),
-                        evidence=f"cast failed or missing update: go={go} "
-                        f"reason={reason} h={h0}->{h1}->{h2}",
-                        pre=pre,
-                        post=f"ally health={h2 or '?'}", packets=ops,
-                        target_guid=ally_guid))
+                    self.record(
+                        "Druid",
+                        make_verdict(
+                            row,
+                            "FAIL",
+                            phase="prepare",
+                            reason=(f"CAST_RESULT({reason})" if not go and reason is not None else None),
+                            evidence=f"cast failed or missing update: go={go} reason={reason} h={h0}->{h1}->{h2}",
+                            pre=pre,
+                            post=f"ally health={h2 or '?'}",
+                            packets=ops,
+                            target_guid=ally_guid,
+                        ),
+                    )
             finally:
                 smoke.logout(ally_client, "druid-ally")
 
@@ -1117,21 +1550,30 @@ class Pilot:
             # the gate's expected FAIL/prepare. A landed cast is an
             # unexpected engine FAIL, never PASS.
             row = self.matrix_row("Druid", 6795)
-            if aura_present(driver, guid, 5487) or aura_present(
-                    driver, guid, 768):
-                self.record("Druid", make_verdict(
-                    row, "BLOCKED", reason="scenario-missing-ally",
-                    evidence="already shapeshifted; wrong-form premise "
-                    "unusable", target_guid=guid))
+            if aura_present(driver, guid, 5487) or aura_present(driver, guid, 768):
+                self.record(
+                    "Druid",
+                    make_verdict(
+                        row,
+                        "BLOCKED",
+                        reason="scenario-missing-ally",
+                        evidence="already shapeshifted; wrong-form premise unusable",
+                        target_guid=guid,
+                    ),
+                )
             else:
                 candidates = [
-                    raw_guid(705, counter) for counter in WOLF_COUNTERS
-                    if driver.target_health(raw_guid(705, counter))
-                    not in (None, 0)]
+                    raw_guid(705, counter)
+                    for counter in WOLF_COUNTERS
+                    if driver.target_health(raw_guid(705, counter)) not in (None, 0)
+                ]
                 if not candidates:
-                    self.record("Druid", make_verdict(
-                        row, "BLOCKED", reason="dummy-unavailable",
-                        evidence="no live 705 for wrong-form Growl"))
+                    self.record(
+                        "Druid",
+                        make_verdict(
+                            row, "BLOCKED", reason="dummy-unavailable", evidence="no live 705 for wrong-form Growl"
+                        ),
+                    )
                 else:
                     # Roaming wolves can drift out of Growl range
                     # between approach and cast. Re-approach and then
@@ -1145,23 +1587,19 @@ class Pilot:
                         for _retry in range(2):
                             attempts += 1
                             driver.approach_guid(dummy, 1.0)
-                            go, reason, ops = cast_unit_faced(
-                                driver, 6795, dummy)
+                            go, reason, ops = cast_unit_faced(driver, 6795, dummy)
                             all_ops += ops
                             if go or reason != SPELL_FAILED_OUT_OF_RANGE:
                                 break
                             driver.poll(1.0)
                         if go or reason != SPELL_FAILED_OUT_OF_RANGE:
                             break
-                    self.record("Druid", expected_failure_verdict(
-                        row, go, reason, all_ops, dummy,
-                        attempts=attempts))
+                    self.record("Druid", expected_failure_verdict(row, go, reason, all_ops, dummy, attempts=attempts))
 
             # Form legs: Bear then Cat replaces it. Cat is followed
             # by logout/login (§7.4) and the relog aura state is
             # recorded in its verdict either way.
-            for spell, aura, label in ((5487, 5487, "bear"),
-                                       (768, 768, "cat")):
+            for spell, aura, label in ((5487, 5487, "bear"), (768, 768, "cat")):
                 row = self.matrix_row("Druid", spell)
                 pre = snapshot(driver, guid)
                 cancel_note = ""
@@ -1170,15 +1608,10 @@ class Pilot:
                     # SPELL_ATTR_NOT_SHAPESHIFT, so the fork gate
                     # rejects a direct Bear -> Cat cast. Cancel
                     # Bear (CMSG_CANCEL_AURA 310) first.
-                    driver.client.send_packet(
-                        310, struct.pack("<I", 5487))
+                    driver.client.send_packet(310, struct.pack("<I", 5487))
                     driver.poll(1.5)
-                    cancel_note = (
-                        "; cancelled Bear first "
-                        f"(bear_aura_after_cancel="
-                        f"{aura_present(driver, guid, 5487)})")
-                go, reason, ops, waited = cast_self_retry_power(
-                    driver, spell)
+                    cancel_note = f"; cancelled Bear first (bear_aura_after_cancel={aura_present(driver, guid, 5487)})"
+                go, reason, ops, waited = cast_self_retry_power(driver, spell)
                 _ = label
                 driver.poll(1.5)
                 post = snapshot(driver, guid)
@@ -1186,50 +1619,63 @@ class Pilot:
                     relog_note = ""
                     relog_bear = False
                     if spell == 768:
-                        bear_before_relog = aura_present(
-                            driver, guid, 5487)
+                        bear_before_relog = aura_present(driver, guid, 5487)
                         smoke.logout(client, "druid-form-persist")
-                        client, driver = login_as(
-                            "SPELLCAMP09",
-                            self.account_id("SPELLCAMP09"), guid)
-                        drift_gate(driver, guid,
-                                   len(pilot_spells_for("Druid")))
+                        client, driver = login_as("SPELLCAMP09", self.account_id("SPELLCAMP09"), guid)
+                        drift_gate(driver, guid, len(pilot_spells_for("Druid")))
                         relog_bear = aura_present(driver, guid, 5487)
                         relog_cat = aura_present(driver, guid, 768)
                         relog_note = (
-                            f"; before relog bear={bear_before_relog}, "
-                            f"after relog bear={relog_bear} "
-                            f"cat={relog_cat}")
+                            f"; before relog bear={bear_before_relog}, after relog bear={relog_bear} cat={relog_cat}"
+                        )
                         post = snapshot(driver, guid)
-                    if (spell == 768
-                            and (aura_present(driver, guid, 5487)
-                                 or relog_bear)):
-                        self.record("Druid", make_verdict(
-                            row, "FAIL", phase="apply",
-                            evidence="cat aura present but bear aura "
-                            "stuck" + relog_note,
-                            pre=pre, post=post, packets=ops,
-                            target_guid=guid))
+                    if spell == 768 and (aura_present(driver, guid, 5487) or relog_bear):
+                        self.record(
+                            "Druid",
+                            make_verdict(
+                                row,
+                                "FAIL",
+                                phase="apply",
+                                evidence="cat aura present but bear aura stuck" + relog_note,
+                                pre=pre,
+                                post=post,
+                                packets=ops,
+                                target_guid=guid,
+                            ),
+                        )
                     else:
-                        self.record("Druid", make_verdict(
-                            row, "PASS",
-                            evidence=f"bound SPELL_GO + form aura {aura} "
-                            "on self"
-                            + (" (bear gone)" if spell == 768 else "")
-                            + (f" after {waited} mana wait(s)"
-                               if waited else "")
-                            + cancel_note
-                            + relog_note,
-                            pre=pre, post=post, packets=ops,
-                            target_guid=guid))
+                        self.record(
+                            "Druid",
+                            make_verdict(
+                                row,
+                                "PASS",
+                                evidence=f"bound SPELL_GO + form aura {aura} "
+                                "on self"
+                                + (" (bear gone)" if spell == 768 else "")
+                                + (f" after {waited} mana wait(s)" if waited else "")
+                                + cancel_note
+                                + relog_note,
+                                pre=pre,
+                                post=post,
+                                packets=ops,
+                                target_guid=guid,
+                            ),
+                        )
                 else:
-                    self.record("Druid", make_verdict(
-                        row, "FAIL", phase="prepare" if not go else "apply",
-                        reason=(f"CAST_RESULT({reason})"
-                                if reason is not None else None),
-                        evidence=f"go={go} aura{aura}="
-                        f"{aura_present(driver, guid, aura)}", pre=pre,
-                        post=post, packets=ops, target_guid=guid))
+                    self.record(
+                        "Druid",
+                        make_verdict(
+                            row,
+                            "FAIL",
+                            phase="prepare" if not go else "apply",
+                            reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+                            evidence=f"go={go} aura{aura}={aura_present(driver, guid, aura)}",
+                            pre=pre,
+                            post=post,
+                            packets=ops,
+                            target_guid=guid,
+                        ),
+                    )
 
             # Corpse-bucket classification: fork-shaped corpse packet.
             # The parser skips-but-discards corpse GUIDs, so no SPELL_GO
@@ -1237,39 +1683,56 @@ class Pilot:
             # guid because the discard happens before any state check;
             # recorded either way, never silently passed.
             row = self.matrix_row("Druid", 20484)
-            go, reason, ops = send_and_wait(
-                driver, cast_corpse_body(20484, ally_guid), 20484,
-                timeout=6.0)
+            go, reason, ops = send_and_wait(driver, cast_corpse_body(20484, ally_guid), 20484, timeout=6.0)
             driver.poll(0.5)
             alive = True
             try:
-                driver.client.send_packet(
-                    CMSG_SET_ACTIVE_MOVER, struct.pack("<Q", guid))
+                driver.client.send_packet(CMSG_SET_ACTIVE_MOVER, struct.pack("<Q", guid))
                 driver.poll(0.5)
             except Exception:
                 alive = False
             if not go and reason is None:
-                self.record("Druid", make_verdict(
-                    row, "BLOCKED", reason="wire-target-unsupported",
-                    evidence="corpse-mask cast: no bound SPELL_GO or "
-                    "CAST_RESULT (parser discards corpse GUIDs); socket "
-                    f"alive={alive}", packets=ops,
-                    target_guid=ally_guid))
+                self.record(
+                    "Druid",
+                    make_verdict(
+                        row,
+                        "BLOCKED",
+                        reason="wire-target-unsupported",
+                        evidence="corpse-mask cast: no bound SPELL_GO or "
+                        "CAST_RESULT (parser discards corpse GUIDs); socket "
+                        f"alive={alive}",
+                        packets=ops,
+                        target_guid=ally_guid,
+                    ),
+                )
             elif go:
-                self.record("Druid", make_verdict(
-                    row, "FAIL", phase="apply",
-                    evidence="corpse-target cast reached bound SPELL_GO "
-                    "against a live stand-in; parser behavior changed, "
-                    "but this scenario has no resurrect-request evidence "
-                    "and cannot PASS", packets=ops,
-                    target_guid=ally_guid))
+                self.record(
+                    "Druid",
+                    make_verdict(
+                        row,
+                        "FAIL",
+                        phase="apply",
+                        evidence="corpse-target cast reached bound SPELL_GO "
+                        "against a live stand-in; parser behavior changed, "
+                        "but this scenario has no resurrect-request evidence "
+                        "and cannot PASS",
+                        packets=ops,
+                        target_guid=ally_guid,
+                    ),
+                )
             else:
-                self.record("Druid", make_verdict(
-                    row, "FAIL", phase="prepare",
-                    reason=f"CAST_RESULT({reason})",
-                    evidence="corpse cast answered CAST_RESULT; parser or "
-                    "gate changed — needs §8 triage", packets=ops,
-                    target_guid=ally_guid))
+                self.record(
+                    "Druid",
+                    make_verdict(
+                        row,
+                        "FAIL",
+                        phase="prepare",
+                        reason=f"CAST_RESULT({reason})",
+                        evidence="corpse cast answered CAST_RESULT; parser or gate changed — needs §8 triage",
+                        packets=ops,
+                        target_guid=ally_guid,
+                    ),
+                )
 
             # Dummy-reset leg (§7.6, Druid-local equivalent): kill
             # one wolf with Moonfire, then prove a different counter
@@ -1285,76 +1748,84 @@ class Pilot:
             def describe(item: dict) -> str:
                 if not item:
                     return "missing"
-                damage = sum(log["damage"]
-                             for log in item.get("damage_logs", []))
-                return (f"guid={item.get('guid')} health "
-                        f"{item.get('pre_hp')}->{item.get('post_hp')} "
-                        f"aura8921={item.get('aura_seen')} "
-                        f"matching_damage={damage}")
+                damage = sum(log["damage"] for log in item.get("damage_logs", []))
+                return (
+                    f"guid={item.get('guid')} health "
+                    f"{item.get('pre_hp')}->{item.get('post_hp')} "
+                    f"aura8921={item.get('aura_seen')} "
+                    f"matching_damage={damage}"
+                )
 
             reset_ok = bool(reset.get("ok"))
-            self.record("Druid", make_verdict(
-                row, "PASS" if reset_ok else "FAIL",
-                attempts=int(reset.get("attempts", 1)),
-                phase=None if reset_ok else "apply",
-                evidence="dummy-reset leg: first "
-                + describe(first) + "; second " + describe(second),
-                pre=(f"first guid={first.get('guid')} "
-                     f"health={first.get('pre_hp')}"
-                     if first else "no first dummy"),
-                post=(f"second guid={second.get('guid')} "
-                      f"health={second.get('post_hp')}"
-                      if second else "no second dummy"),
-                packets=reset.get("packets", []),
-                target_guid=first.get("guid")))
+            self.record(
+                "Druid",
+                make_verdict(
+                    row,
+                    "PASS" if reset_ok else "FAIL",
+                    attempts=int(reset.get("attempts", 1)),
+                    phase=None if reset_ok else "apply",
+                    evidence="dummy-reset leg: first " + describe(first) + "; second " + describe(second),
+                    pre=(f"first guid={first.get('guid')} health={first.get('pre_hp')}" if first else "no first dummy"),
+                    post=(
+                        f"second guid={second.get('guid')} health={second.get('post_hp')}"
+                        if second
+                        else "no second dummy"
+                    ),
+                    packets=reset.get("packets", []),
+                    target_guid=first.get("guid"),
+                ),
+            )
         finally:
             smoke.logout(client, "druid-pilot")
 
-    def moonfire_evidence(self, driver: ScriptedDriver, caster_guid: int,
-                          dummy: int, *, kill: bool,
-                          max_casts: int = 6) -> dict:
+    def moonfire_evidence(
+        self, driver: ScriptedDriver, caster_guid: int, dummy: int, *, kill: bool, max_casts: int = 6
+    ) -> dict:
         driver.approach_guid(dummy, 13.0)
         pre_hp = driver.target_health(dummy)
         evidence = {
-            "guid": dummy, "pre_hp": pre_hp, "post_hp": pre_hp,
-            "aura_seen": False, "damage_logs": [], "packets": [],
-            "attempts": 0, "go": False, "reason": None,
+            "guid": dummy,
+            "pre_hp": pre_hp,
+            "post_hp": pre_hp,
+            "aura_seen": False,
+            "damage_logs": [],
+            "packets": [],
+            "attempts": 0,
+            "go": False,
+            "reason": None,
         }
         for _ in range(max_casts):
             if driver.target_health(dummy) == 0:
                 break
             mark = event_mark(driver)
-            go, reason, ops = cast_unit_faced(
-                driver, 8921, dummy, timeout=15.0)
+            go, reason, ops = cast_unit_faced(driver, 8921, dummy, timeout=15.0)
             evidence["attempts"] += 1
             evidence["go"] = go
             evidence["reason"] = reason
             evidence["packets"] += ops
             for _poll in range(3):
                 driver.poll(1.0)
-                evidence["aura_seen"] = bool(
-                    evidence["aura_seen"]
-                    or aura_present(driver, dummy, 8921))
+                evidence["aura_seen"] = bool(evidence["aura_seen"] or aura_present(driver, dummy, 8921))
             window = events_since(driver, mark)
             evidence["packets"] += [op for op, _ in window]
-            evidence["damage_logs"] += matching_damage_logs(
-                window, 8921, dummy, caster_guid)
+            evidence["damage_logs"] += matching_damage_logs(window, 8921, dummy, caster_guid)
             evidence["post_hp"] = driver.target_health(dummy)
             if kill and evidence["post_hp"] == 0:
                 break
-            if (not kill and evidence["post_hp"] is not None
-                    and pre_hp is not None
-                    and evidence["post_hp"] < pre_hp
-                    and (evidence["aura_seen"]
-                         or evidence["damage_logs"])):
+            if (
+                not kill
+                and evidence["post_hp"] is not None
+                and pre_hp is not None
+                and evidence["post_hp"] < pre_hp
+                and (evidence["aura_seen"] or evidence["damage_logs"])
+            ):
                 break
             if not go:
                 driver.poll(1.6)
         evidence["post_hp"] = driver.target_health(dummy)
         return evidence
 
-    def dummy_reset_leg(self, driver: ScriptedDriver,
-                        guid: int) -> dict:
+    def dummy_reset_leg(self, driver: ScriptedDriver, guid: int) -> dict:
         # Leave cat form first (Moonfire is caster-form-only): the
         # stock client cancels shapeshift with CMSG_CANCEL_AURA (310).
         if aura_present(driver, guid, 768) or aura_present(driver, guid, 5487):
@@ -1363,31 +1834,27 @@ class Pilot:
             driver.poll(1.5)
         first_guid = live_dummy(driver, 705, WOLF_COUNTERS)
         if first_guid is None:
-            return {"ok": False, "first": None, "second": None,
-                    "packets": [], "attempts": 0}
+            return {"ok": False, "first": None, "second": None, "packets": [], "attempts": 0}
         first = self.moonfire_evidence(driver, guid, first_guid, kill=True)
-        second_guid = live_dummy(
-            driver, 705, WOLF_COUNTERS, exclude=first_guid)
+        second_guid = live_dummy(driver, 705, WOLF_COUNTERS, exclude=first_guid)
         second = None
         if second_guid is not None:
-            second = self.moonfire_evidence(
-                driver, guid, second_guid, kill=False, max_casts=3)
+            second = self.moonfire_evidence(driver, guid, second_guid, kill=False, max_casts=3)
         return {
             "ok": reset_evidence_ok(first, second),
-            "first": first, "second": second,
+            "first": first,
+            "second": second,
             "packets": first["packets"] + (second or {}).get("packets", []),
             "attempts": first["attempts"] + (second or {}).get("attempts", 0),
         }
 
     def account_id(self, account: str) -> int:
-        found = smoke.sql_scalar(
-            "realmd", f"SELECT id FROM account WHERE username='{account}'")
+        found = smoke.sql_scalar("realmd", f"SELECT id FROM account WHERE username='{account}'")
         return int(found)
 
 
 def guid_of(name: str) -> int:
-    found = smoke.sql_scalar(
-        "characters", f"SELECT guid FROM characters WHERE name='{name}'")
+    found = smoke.sql_scalar("characters", f"SELECT guid FROM characters WHERE name='{name}'")
     if not found:
         raise AssertionError(f"no character named {name}; run fixtures first")
     return int(found)
@@ -1399,8 +1866,7 @@ def acquire_lock() -> None:
         try:
             pid = int(LOCK_PATH.read_text().split()[0])
             os.kill(pid, 0)
-            raise SystemExit(
-                f"campaign lock held by live pid {pid}; refusing to run")
+            raise SystemExit(f"campaign lock held by live pid {pid}; refusing to run")
         except (OSError, ValueError):
             pass
     LOCK_PATH.write_text(f"{os.getpid()} {time.time()}\n")
@@ -1431,10 +1897,59 @@ def run_leg_with_log(class_name: str, leg: object) -> str:
 
 EXPECTED_PILOT_COUNTS = {"Warrior": 2, "Mage": 2, "Druid": 6}
 
+CLASSIFY_BLOCKED_REASONS = {
+    "script-evidence-unknown",
+    "effect-marker-only",
+    "no-party",
+    "no-pet",
+    "fixture-gear",
+    "fixture-reagent",
+    "target-not-dead",
+    # Corpse-target rows ride classify-only until the RESURRECT wire
+    # seam lands (the pilot gate's pinned Rebirth, generalized).
+    "wire-target-unsupported",
+}
 
-def pilot_gate_failures(all_verdicts: dict[str, list[dict]],
-                        expected_counts: dict[str, int] | None = None,
-                        ) -> list[tuple[str, int, str]]:
+
+def class_gate_failures(
+    all_verdicts: dict[str, list[dict]],
+    expected_counts: dict[str, int],
+) -> list[tuple[str, int, str]]:
+    """Fan-out gate for run_class rows. A PASS row is gate-compatible
+    only with non-empty evidence and a bound SPELL_GO (306) in its
+    packets: GO is necessary but never sufficient, and a PASS without
+    the bound GO is a vacuous claim. FAIL rows stop the gate except
+    the expected-failure shapeshift form; BLOCKED rows are compatible
+    only for classify-only buckets (left uncast by design)."""
+    failures: list[tuple[str, int, str]] = []
+    for class_name, expected in expected_counts.items():
+        rows = all_verdicts.get(class_name, [])
+        if len(rows) != expected:
+            failures.append((class_name, 0, f"row count {len(rows)} != expected {expected}"))
+        for verdict in rows:
+            status = verdict["verdict"]
+            if status == "PASS":
+                if not verdict.get("evidence"):
+                    failures.append((class_name, int(verdict["spell_id"]), "PASS with empty evidence"))
+                elif SMSG_SPELL_GO not in (verdict.get("packets") or []):
+                    failures.append(
+                        (class_name, int(verdict["spell_id"]), "PASS with no bound SPELL_GO (306) in packets")
+                    )
+            elif status == "FAIL" and verdict.get("expected_failure"):
+                continue
+            elif status == "BLOCKED" and verdict.get("reason") in CLASSIFY_BLOCKED_REASONS:
+                continue
+            elif status == "PASSIVE-VERIFIED":
+                continue
+            else:
+                failures.append((class_name, int(verdict["spell_id"]), f"{status}: {verdict.get('evidence')}"))
+    return failures
+
+
+def pilot_gate_failures(
+    all_verdicts: dict[str, list[dict]],
+    expected_counts: dict[str, int] | None = None,
+) -> list[tuple[str, int, str]]:
     """Rows that must stop fan-out. Only a generated expected
     shapeshift FAIL and the pinned corpse-target BLOCKED are gate-
     compatible non-PASS classifications."""
@@ -1443,45 +1958,35 @@ def pilot_gate_failures(all_verdicts: dict[str, list[dict]],
     for class_name, expected in expected_counts.items():
         rows = all_verdicts.get(class_name, [])
         if len(rows) != expected:
-            failures.append((
-                class_name, 0,
-                f"row count {len(rows)} != expected {expected}"))
+            failures.append((class_name, 0, f"row count {len(rows)} != expected {expected}"))
         for verdict in rows:
             if verdict["verdict"] == "PASS":
                 continue
-            if (verdict["verdict"] == "FAIL"
-                    and verdict.get("expected_failure")):
+            if verdict["verdict"] == "FAIL" and verdict.get("expected_failure"):
                 continue
-            if (verdict["verdict"] == "BLOCKED"
-                    and verdict["spell_id"] == 20484
-                    and verdict.get("reason") == "wire-target-unsupported"):
+            if (
+                verdict["verdict"] == "BLOCKED"
+                and verdict["spell_id"] == 20484
+                and verdict.get("reason") == "wire-target-unsupported"
+            ):
                 continue
-            failures.append((
-                class_name, int(verdict["spell_id"]),
-                f"{verdict['verdict']}: {verdict['evidence']}"))
+            failures.append((class_name, int(verdict["spell_id"]), f"{verdict['verdict']}: {verdict['evidence']}"))
     return failures
 
 
 def run_pilot() -> int:
     if not MATRIX_PATH.exists():
-        print("matrix missing; run spell_matrix_gen.py --pilot first",
-              file=sys.stderr)
+        print("matrix missing; run spell_matrix_gen.py --pilot first", file=sys.stderr)
         return 2
     acquire_lock()
     pilot = Pilot()
     pilot.manifest_extra["started"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-    pilot.manifest_extra["setup_spells"] = {
-        name: list(spells) for name, spells in SETUP_SPELLS.items()}
+    pilot.manifest_extra["setup_spells"] = {name: list(spells) for name, spells in SETUP_SPELLS.items()}
     try:
-        pilot.manifest_extra["db_hostname"] = smoke.sql_scalar(
-            "realmd", "SELECT @@hostname")
-        entry = smoke.sql_scalar(
-            "mangos",
-            "SELECT COUNT(*) FROM creature_template WHERE entry=327")
-        spawns = smoke.sql_scalar(
-            "mangos", "SELECT COUNT(*) FROM creature WHERE id=327")
-        pilot.manifest_extra["entry_327"] = {
-            "template": entry, "spawns": spawns}
+        pilot.manifest_extra["db_hostname"] = smoke.sql_scalar("realmd", "SELECT @@hostname")
+        entry = smoke.sql_scalar("mangos", "SELECT COUNT(*) FROM creature_template WHERE entry=327")
+        spawns = smoke.sql_scalar("mangos", "SELECT COUNT(*) FROM creature WHERE id=327")
+        pilot.manifest_extra["entry_327"] = {"template": entry, "spawns": spawns}
         warrior = guid_of("Campwarrior")
         mage = guid_of("Campmage")
         druid = guid_of("Campdruid")
@@ -1490,8 +1995,7 @@ def run_pilot() -> int:
             "SPELLCAMP07": pilot.account_id("SPELLCAMP07"),
             "SPELLCAMP09": pilot.account_id("SPELLCAMP09"),
         }
-        pilot.manifest_extra["guids"] = {
-            "Campwarrior": warrior, "Campmage": mage, "Campdruid": druid}
+        pilot.manifest_extra["guids"] = {"Campwarrior": warrior, "Campmage": mage, "Campdruid": druid}
         pilot.manifest_extra["matrix_classes"] = ["Warrior", "Mage", "Druid"]
 
         seed_character(warrior, pilot_spells_for("Warrior"))
@@ -1503,9 +2007,7 @@ def run_pilot() -> int:
         # Ally must be offline for the SQL damage write, then online
         # beside the druid at a damaged value.
         seed_character(warrior, pilot_spells_for("Warrior"), pos=ALLY_POS)
-        smoke.sql_scalar(
-            "characters",
-            f"UPDATE characters SET health=300 WHERE guid={warrior}")
+        smoke.sql_scalar("characters", f"UPDATE characters SET health=300 WHERE guid={warrior}")
         seed_character(druid, pilot_spells_for("Druid"), pos=HEAL_CASTER_POS)
         run_leg_with_log("Druid", lambda: pilot.leg_druid(druid, warrior))
     finally:
@@ -1540,18 +2042,25 @@ def run_pilot() -> int:
         "and only the enum burst lowers it (fixtures ensure sends "
         "enum first)",
     ]
-    write_manifest({**pilot.manifest_extra,
-                    "talent_builds": doc.get("talent_builds", {}),
-                    "per_class_counts": doc.get("per_class_counts", {}),
-                    "matrix_mode": doc.get("mode"),
-                    "g1_skillraceclassinfo": doc.get(
-                        "g1_skillraceclassinfo", ""),
-                    "g2_talent_builds": doc.get("g2_talent_builds", ""),
-                    "caveats": [doc.get("g3_isspellvalid", ""),
-                                doc.get("g4_script_evidence", ""),
-                                doc.get("g5_trainer_equivalence", "")]})
+    write_manifest(
+        {
+            **pilot.manifest_extra,
+            "talent_builds": doc.get("talent_builds", {}),
+            "per_class_counts": doc.get("per_class_counts", {}),
+            "matrix_mode": doc.get("mode"),
+            "g1_skillraceclassinfo": doc.get("g1_skillraceclassinfo", ""),
+            "g2_talent_builds": doc.get("g2_talent_builds", ""),
+            "caveats": [
+                doc.get("g3_isspellvalid", ""),
+                doc.get("g4_script_evidence", ""),
+                doc.get("g5_trainer_equivalence", ""),
+            ],
+        }
+    )
+    per_class = doc.get("per_class_counts", {})
     unexpected = pilot_gate_failures(
-        pilot.verdicts, doc.get("per_class_counts", {}))
+        pilot.verdicts, {name: per_class.get(name, EXPECTED_PILOT_COUNTS[name]) for name in EXPECTED_PILOT_COUNTS}
+    )
     if unexpected:
         print(f"PILOT-LEG-FAILED {unexpected}")
         return 1
@@ -1566,36 +2075,131 @@ def run_single(spell_id: int, char_name: str) -> int:
     SPELL_GO is necessary but never sufficient for PASS.
     """
     if not MATRIX_PATH.exists():
-        print("matrix missing; run spell_matrix_gen.py --pilot first",
-              file=sys.stderr)
+        print("matrix missing; run spell_matrix_gen.py --pilot first", file=sys.stderr)
         return 2
     guid = guid_of(char_name)
     doc = json.loads(MATRIX_PATH.read_text())
     rows = [r for r in doc["rows"] if r["spell_id"] == spell_id]
+    for fanout_class in ("Paladin", "Druid"):
+        try:
+            extra = matrix_doc_for(fanout_class).get("rows", [])
+        except (OSError, ValueError):
+            extra = []
+        seen = {(r.get("class"), r.get("spell_id")) for r in rows}
+        rows += [r for r in extra if r["spell_id"] == spell_id and (r.get("class"), r.get("spell_id")) not in seen]
     if not rows:
         print(f"spell {spell_id} not in pilot matrix", file=sys.stderr)
         return 2
-    row = rows[0]
-    account = {"Warrior": "SPELLCAMP01", "Mage": "SPELLCAMP07",
-               "Druid": "SPELLCAMP09"}[row["class"]]
+    row = [r for r in rows if r["class"] in ("Warrior", "Mage", "Druid", "Paladin")][0]
+    account = CLASS_ACCOUNT[row["class"]]
     expected = row.get("expected", {})
+    bucket = row.get("bucket")
+    if expected.get("kind") == "learned_spell":
+        have = smoke.sql_scalar(
+            "characters", f"SELECT COUNT(*) FROM character_spell WHERE guid={guid} AND spell={spell_id}"
+        )
+        verified = int(have or 0) > 0
+        verdict = make_verdict(
+            row,
+            "PASSIVE-VERIFIED" if verified else "PASSIVE-UNVERIFIED",
+            evidence=f"character_spell rows for {spell_id}={have}",
+        )
+        print(json.dumps(verdict, indent=1))
+        return 0 if verified else 1
+    if bucket == "friendly":
+        print(
+            json.dumps(
+                make_verdict(
+                    row,
+                    "BLOCKED",
+                    reason="scenario-missing-ally",
+                    evidence="single repro has no damaged-ally session; use run-class for the ally leg",
+                ),
+                indent=1,
+            )
+        )
+        return 1
+    if bucket == "party_duel":
+        print(
+            json.dumps(
+                make_verdict(row, "BLOCKED", reason="no-party", evidence="single repro has no party; use run-class"),
+                indent=1,
+            )
+        )
+        return 1
+    if bucket in ("ground_area", "dual"):
+        print(
+            json.dumps(
+                single_outcome_verdict(
+                    row,
+                    {
+                        "go": False,
+                        "reason": None,
+                        "packets": [],
+                        "target_guid": None,
+                    },
+                ),
+                indent=1,
+            )
+        )
+        return 1
+    if bucket == "corpse":
+        print(
+            json.dumps(
+                make_verdict(
+                    row,
+                    "BLOCKED",
+                    reason="wire-target-unsupported",
+                    evidence="single repro has no corpse-target scenario",
+                ),
+                indent=1,
+            )
+        )
+        return 1
+    if expected.get("kind") == "none_marker":
+        print(
+            json.dumps(
+                make_verdict(
+                    row,
+                    "BLOCKED",
+                    reason="effect-marker-only",
+                    evidence=row.get("expected", {}).get("note", "classify-only"),
+                    pre="",
+                    post="",
+                ),
+                indent=1,
+            )
+        )
+        return 1
+    if bucket == "item_reagent_ammo":
+        targets = set(row.get("target_a", []) + row.get("target_b", []))
+        if targets & {35, 37, 57, 58, 61}:
+            print(
+                json.dumps(
+                    make_verdict(row, "BLOCKED", reason="no-party", evidence="single repro has no raid/party target"),
+                    indent=1,
+                )
+            )
+            return 1
     acquire_lock()
     try:
-        client, driver = login_as(account, int(smoke.sql_scalar(
-            "realmd",
-            f"SELECT id FROM account WHERE username='{account}'")), guid)
+        client, driver = login_as(
+            account, int(smoke.sql_scalar("realmd", f"SELECT id FROM account WHERE username='{account}'")), guid
+        )
         try:
             pre = snapshot(driver, guid)
             target: int | None = guid
             pre_hp = None
-            if row["bucket"] == "hostile_dummy" or (
-                    expected.get("kind") == "expect_cast_failure"):
+            if row["bucket"] == "hostile_dummy" or (expected.get("kind") == "expect_cast_failure"):
                 target = live_dummy(driver, 705, WOLF_COUNTERS)
                 if target is None:
                     verdict = make_verdict(
-                        row, "BLOCKED", reason="dummy-unavailable",
-                        evidence="no 705 counter with health>0 in "
-                        "WorldState", pre=pre)
+                        row,
+                        "BLOCKED",
+                        reason="dummy-unavailable",
+                        evidence="no 705 counter with health>0 in WorldState",
+                        pre=pre,
+                    )
                     print(json.dumps(verdict, indent=1))
                     return 1
                 standoff = 2.0 if row.get("range_index") == 2 else 13.0
@@ -1603,55 +2207,1421 @@ def run_single(spell_id: int, char_name: str) -> int:
                 pre_hp = driver.target_health(target)
                 pre = f"target guid={target} health={pre_hp}; caster {pre}"
                 if spell_id == 6546:
-                    stance_ok, stance_reason, stance_ops = (
-                        ensure_battle_stance(driver, guid))
+                    stance_ok, stance_reason, stance_ops = ensure_battle_stance(driver, guid)
                     if not stance_ok:
                         verdict = make_verdict(
-                            row, "FAIL", phase="prepare",
-                            reason=(f"CAST_RESULT({stance_reason})"
-                                    if stance_reason is not None else None),
-                            evidence="Battle Stance setup did not verify "
-                            "aura 2457; Rend not cast",
-                            pre=pre, packets=stance_ops,
-                            target_guid=target)
+                            row,
+                            "FAIL",
+                            phase="prepare",
+                            reason=(f"CAST_RESULT({stance_reason})" if stance_reason is not None else None),
+                            evidence="Battle Stance setup did not verify aura 2457; Rend not cast",
+                            pre=pre,
+                            packets=stance_ops,
+                            target_guid=target,
+                        )
                         print(json.dumps(verdict, indent=1))
                         return 1
                 mark = event_mark(driver)
-                go, reason, _ops = cast_unit_faced(
-                    driver, spell_id, target, timeout=15.0)
+                go, reason, _ops = cast_unit_faced(driver, spell_id, target, timeout=15.0)
             else:
                 mark = event_mark(driver)
                 go, reason, _ops = send_and_wait(
-                    driver, cast_self_body(spell_id), spell_id,
-                    timeout=15.0, target_guid=guid)
+                    driver, cast_self_body(spell_id), spell_id, timeout=15.0, target_guid=guid
+                )
             driver.poll(6.0 if float(row.get("speed") or 0) > 0 else 4.0)
             window = events_since(driver, mark)
-            post_hp = (driver.target_health(target)
-                       if target is not None and target != guid else None)
+            post_hp = driver.target_health(target) if target is not None and target != guid else None
             post = snapshot(driver, guid)
             if target is not None and target != guid:
                 post = f"target guid={target} health={post_hp}; caster {post}"
             expected_aura = int(expected.get("aura", spell_id))
-            verdict = single_outcome_verdict(row, {
-                "go": go, "reason": reason,
-                "caster_aura": aura_present(driver, guid, expected_aura),
-                "target_guid": target,
-                "target_aura": (aura_present(driver, target, expected_aura)
-                                if target is not None else False),
-                "pre_hp": pre_hp, "post_hp": post_hp,
-                "damage_logs": (matching_damage_logs(
-                    window, spell_id, target, guid)
-                    if target is not None else []),
-                "pre": pre, "post": post,
-                "packets": [op for op, _ in window],
-            })
+            verdict = single_outcome_verdict(
+                row,
+                {
+                    "go": go,
+                    "reason": reason,
+                    "caster_aura": aura_present(driver, guid, expected_aura),
+                    "target_guid": target,
+                    "target_aura": (aura_present(driver, target, expected_aura) if target is not None else False),
+                    "pre_hp": pre_hp,
+                    "post_hp": post_hp,
+                    "damage_logs": (matching_damage_logs(window, spell_id, target, guid) if target is not None else []),
+                    "pre": pre,
+                    "post": post,
+                    "packets": [op for op, _ in window],
+                },
+            )
             print(json.dumps(verdict, indent=1))
-            return 0 if (verdict["verdict"] == "PASS"
-                         or verdict.get("expected_failure")) else 1
+            return 0 if (verdict["verdict"] == "PASS" or verdict.get("expected_failure")) else 1
         finally:
             smoke.logout(client, f"run-{spell_id}")
     finally:
         release_lock()
+
+
+def cancel_auras(
+    driver: ScriptedDriver, guid: int, spell_ids: list[int], force: tuple[int, ...] = ()
+) -> dict[int, bool]:
+    """Cancel cancelable auras (CMSG_CANCEL_AURA 310) and poll gone.
+    Forced ids are sent even with no visible holder: the fork
+    interrupts a matching channeled cast slot-side, which is how a
+    holder-less channel (Hurricane's radius) is stopped."""
+    cleared: dict[int, bool] = {}
+    for spell_id in spell_ids:
+        if spell_id in force or aura_present(driver, guid, spell_id):
+            driver.client.send_packet(310, struct.pack("<I", spell_id))
+            driver.poll(1.5)
+            cleared[spell_id] = not aura_present(driver, guid, spell_id)
+    return cleared
+
+
+def cast_unit_retry_power(
+    driver: ScriptedDriver,
+    spell_id: int,
+    target: int,
+    timeout: float = 10.0,
+    retries: int = POWER_RETRIES,
+) -> tuple[bool, int | None, list[int], int]:
+    """Unit-cast twin of cast_self_retry_power (NO_POWER pacing)."""
+    waited = 0
+    go, reason, ops = cast_unit_faced(driver, spell_id, target, timeout)
+    while not go and reason == SPELL_FAILED_NO_POWER and waited < retries:
+        waited += 1
+        driver.poll(9.0)
+        go, reason, ops = cast_unit_faced(driver, spell_id, target, timeout)
+    return go, reason, ops, waited
+
+
+def not_ready_retry(
+    driver: ScriptedDriver,
+    guid: int,
+    spell_id: int,
+    cooldown_ms: object,
+    ops: list[int],
+) -> tuple[bool, int | None, list[int], str]:
+    """Second-leg second chance after NOT_READY (shared by blessing
+    legs): the full DBC cooldown plus margin is waited out, so the
+    recast proves both the cooldown (NOT_READY observed first) and
+    its expiry (the Freedom pattern, extended to long rows like
+    Innervate 29166). Capped at 600 s; longer cooldowns stay FAIL.
+    Returns (go, reason, ops, evidence_note)."""
+    wait_s = min(float(cooldown_ms or 1500) / 1000.0 + 30.0, 600.0)
+    driver.poll(wait_s)
+    go, reason, chunk, _waited = cast_unit_retry_power(driver, spell_id, guid, timeout=10.0)
+    return go, reason, ops + chunk, f" cooldown_wait={wait_s:.1f}s"
+
+
+def bag_reagent_count(player_guid: int, entry: int) -> int | None:
+    """Read-only reagent count in the fixture's bags (no writes)."""
+    try:
+        return int(
+            smoke.sql_scalar(
+                "characters",
+                "SELECT COALESCE(SUM(ii.count),0) FROM character_inventory ci "
+                "JOIN item_instance ii ON ii.guid=ci.item_guid "
+                f"WHERE ci.guid={player_guid} AND ii.item_id={entry}",
+            )
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def equipped_item_class(
+    player_guid: int,
+    slot: int = 16,
+) -> tuple[int, int] | None:
+    """(class, subclass) of the equipped item in an equipment slot
+    (default offhand/16, where a shield sits), or None."""
+    try:
+        row = smoke.sql_scalar(
+            "mangos",
+            "SELECT CONCAT_WS(',',class,subclass) FROM item_template "
+            f"WHERE entry=(SELECT ci.item_id FROM "
+            f"characters.character_inventory ci WHERE ci.guid={player_guid} "
+            f"AND ci.bag=0 AND ci.slot={slot})",
+        )
+    except (TypeError, ValueError):
+        return None
+    if not row or "," not in str(row):
+        return None
+    first, second = str(row).split(",", 1)
+    return int(first), int(second)
+
+
+def dummy_world_state(driver: ScriptedDriver, guid: int) -> tuple[int | None, int | None, bool]:
+    """(health, max_health, has_aura) for a dummy guid, for the
+    clean-reuse gate."""
+    obj = driver.world.get(guid)
+    if obj is None:
+        return (None, None, False)
+    max_health = obj.values.get(UNIT_FIELD_MAXHEALTH)
+    has_aura = any(obj.values.get(field) for field in range(AURA_FIELD_FIRST, AURA_FIELD_LAST + 1))
+    return (driver.target_health(guid), max_health, has_aura)
+
+
+def pick_dummy(
+    driver: ScriptedDriver,
+    used: set[int],
+) -> tuple[int | None, bool]:
+    """Live dummy per spell: round-robin 705/707 counters, preferring
+    an unused one. Falls back to reusing a used dummy only when it is
+    observably clean (alive, full health, aura-free), since DoTs, CC,
+    and prior damage all leave a health deficit or an aura holder.
+    Returns (guid, reused); (None, False) when no counter is live."""
+    order = []
+    for entry in (705, 707):
+        counters = WOLF_COUNTERS if entry == 705 else TROGG_COUNTERS
+        for counter in counters:
+            order.append(raw_guid(entry, counter))
+    for guid in order:
+        if guid in used:
+            continue
+        if driver.target_health(guid) not in (None, 0):
+            return (guid, False)
+    for guid in order:
+        if guid not in used:
+            continue
+        health, max_health, has_aura = dummy_world_state(driver, guid)
+        if dummy_reusable(health, max_health, has_aura):
+            return (guid, True)
+    return (None, False)
+
+
+def self_alive(driver: ScriptedDriver, guid: int) -> bool:
+    obj = driver.world.get(guid)
+    if obj is None:
+        return False
+    health = obj.values.get(UNIT_FIELD_HEALTH)
+    return bool(health)
+
+
+def self_leg(row: dict, driver: ScriptedDriver, guid: int, applied_auras: list[int]) -> dict:
+    """Solo self cast with NO_POWER pacing (spec §5)."""
+    spell_id = row["spell_id"]
+    expected = row.get("expected", {})
+    pre = snapshot(driver, guid)
+    mark = event_mark(driver)
+    go, reason, ops, waited = cast_self_retry_power(driver, spell_id)
+    if not go and reason == SPELL_FAILED_NO_POWER:
+        return make_verdict(
+            row,
+            "FAIL",
+            phase="prepare",
+            reason=f"CAST_RESULT({reason})",
+            evidence=f"power-starved after {waited} 9s waits",
+            pre=pre,
+            post=snapshot(driver, guid),
+            packets=ops,
+            target_guid=guid,
+        )
+    driver.poll(2.0)
+    window = events_since(driver, mark)
+    aura_id = int(expected.get("aura", spell_id))
+    caster_aura = aura_present(driver, guid, aura_id)
+    if caster_aura and aura_id not in applied_auras:
+        applied_auras.append(aura_id)
+    post = snapshot(driver, guid)
+    packets = ops + [op for op, _ in window]
+    note = f" after {waited} mana wait(s)" if waited else ""
+    verdict = single_outcome_verdict(
+        row,
+        {
+            "go": go,
+            "reason": reason,
+            "caster_aura": caster_aura,
+            "target_guid": guid,
+            "target_aura": False,
+            "pre_hp": None,
+            "post_hp": None,
+            "damage_logs": [],
+            "pre": pre,
+            "post": post,
+            "packets": packets,
+        },
+    )
+    if verdict["verdict"] == "PASS":
+        verdict["evidence"] += note
+    return verdict
+
+
+def form_leg(row: dict, driver: ScriptedDriver, guid: int) -> dict:
+    """Shapeshift entry leg for Druid `form`-bucket rows.
+
+    Pre-clears any lingering form aura, casts the form from caster
+    form, verifies its aura on self (the pilot Bear/Cat pattern),
+    then cancels it and verifies it is gone so later caster-form rows
+    gate cleanly. A stuck form is an apply-phase FAIL, never PASS:
+    the row's observable outcome includes the clean exit.
+    """
+    spell_id = row["spell_id"]
+    pre = snapshot(driver, guid)
+    cleared = cancel_auras(driver, guid, list(DRUID_FORM_SPELLS))
+    mark = event_mark(driver)
+    go, reason, ops, waited = cast_self_retry_power(driver, spell_id)
+    driver.poll(1.5)
+    post = snapshot(driver, guid)
+    packets = ops + [op for op, _ in events_since(driver, mark)]
+    if not go:
+        return make_verdict(
+            row,
+            "FAIL",
+            phase="prepare",
+            reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+            evidence=f"form {spell_id} did not reach SPELL_GO (reason={reason}); pre-cleared {cleared}",
+            pre=pre,
+            post=post,
+            packets=packets,
+            target_guid=guid,
+        )
+    if not aura_present(driver, guid, spell_id):
+        return make_verdict(
+            row,
+            "FAIL",
+            phase="apply",
+            evidence=f"bound SPELL_GO for form {spell_id} without the form aura on self; pre-cleared {cleared}",
+            pre=pre,
+            post=post,
+            packets=packets,
+            target_guid=guid,
+        )
+    note = f" after {waited} mana wait(s)" if waited else ""
+    gone = cancel_auras(driver, guid, [spell_id])
+    if gone.get(spell_id):
+        verdict = make_verdict(
+            row,
+            "PASS",
+            evidence=f"bound SPELL_GO + form aura {spell_id} on self, cancelled after (pre-cleared {cleared}){note}",
+            pre=pre,
+            post=snapshot(driver, guid),
+            packets=packets,
+            target_guid=guid,
+        )
+        return verdict
+    return make_verdict(
+        row,
+        "FAIL",
+        phase="apply",
+        evidence=f"form aura {spell_id} present but stuck after cancel (pre-cleared {cleared}){note}",
+        pre=pre,
+        post=snapshot(driver, guid),
+        packets=packets,
+        target_guid=guid,
+    )
+
+
+def combo_builder_setup(builder_id: int):
+    """pre_cast_setup factory: land one combo builder (lowest rank,
+    e.g. Claw 1082) on the dummy so a finisher row passes the fork
+    NO_COMBO_POINTS cast gate with a point on that target."""
+
+    def setup(driver: ScriptedDriver, dummy: int) -> str:
+        go, reason, _ops = cast_unit_faced(driver, builder_id, dummy)
+        driver.poll(1.6)
+        return f"; combo builder {builder_id} go={go} reason={reason}"
+
+    return setup
+
+
+def form_gated_leg(
+    row: dict,
+    driver: ScriptedDriver,
+    guid: int,
+    used_dummies: set[int],
+    applied_auras: list[int],
+    combo_builder: int | None = None,
+) -> dict:
+    """Stance-gated ability leg: enter the required shapeshift form,
+    verify its aura, cast the row through its natural self/hostile
+    leg, then exit the form so caster-form rows gate cleanly. A form
+    that will not enter is a prepare FAIL; a form stuck after the row
+    downgrades a PASS to an apply FAIL (the form_leg contract)."""
+    spell_id = row["spell_id"]
+    form_spell = required_form_spell(row)
+    pre = snapshot(driver, guid)
+    cancel_auras(driver, guid, list(DRUID_FORM_SPELLS))
+    go, reason, ops, _waited = cast_self_retry_power(driver, form_spell)
+    driver.poll(1.5)
+    if not (go and aura_present(driver, guid, form_spell)):
+        return make_verdict(
+            row,
+            "FAIL",
+            phase="prepare",
+            reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+            evidence=f"form entry {form_spell} did not verify "
+            f"(go={go} reason={reason}); gated spell {spell_id} not "
+            "cast under invalid conditions (not a pass)",
+            pre=pre,
+            post=snapshot(driver, guid),
+            packets=ops,
+            target_guid=guid,
+        )
+    # Bear abilities spend rage, which does not regenerate out of
+    # combat. The fork-legal source is Enrage (5229, itself a matrix
+    # row): periodic energize ~20/s (2 rage) for 10 s. It must be cast
+    # after the dummy is approached (aura window is short) and the
+    # dummy engaged with a free Growl pull so damage-taken rage adds
+    # up while the energize ticks; hostile_leg runs this setup right
+    # before its cast loop.
+    setup = None
+    if (
+        form_spell in (5487, 9634)
+        and spell_id != 5229
+        and int(row.get("power_type") or 0) == 1
+        and int(row.get("mana_cost") or 0) > 0
+    ):
+        rage_cost = int(row.get("mana_cost") or 0)
+
+        def setup(driver: ScriptedDriver, dummy: int) -> str:
+            cast_unit_faced(driver, 6795, dummy)
+            go, _r, _o, _w = cast_self_retry_power(driver, 5229)
+            # Wait on the observed rage field (POWER2=24), not a
+            # fixed sleep: Swipe needs the full Enrage window.
+            waited = 0.0
+            rage = 0
+            while waited < 14.0:
+                driver.poll(0.5)
+                waited += 0.5
+                obj = driver.world.get(guid)
+                rage = (obj.values.get(24) or 0) if obj else 0
+                if rage >= rage_cost:
+                    break
+            return f"; growl pull + enrage go={go}, rage {rage}/{rage_cost} after {waited:.1f}s"
+
+    override = None
+    if setup is None and row.get("needs_combo_points") and combo_builder:
+        setup = combo_builder_setup(combo_builder)
+        override = finisher_dummy(used_dummies)
+    targets = {int(t) for t in (row.get("target_a") or [])}
+    if targets & {6, 22}:
+        verdict = hostile_leg(
+            row, driver, guid, used_dummies, applied_auras, pre_cast_setup=setup, dummy_override=override
+        )
+    else:
+        verdict = self_leg(row, driver, guid, applied_auras)
+    gone = cancel_auras(driver, guid, [form_spell])
+    exited = bool(gone.get(form_spell)) and not aura_present(driver, guid, form_spell)
+    verdict["evidence"] += f"; form {form_spell} setup verified, exited={exited}"
+    if verdict["verdict"] == "PASS" and not exited:
+        verdict["verdict"] = "FAIL"
+        verdict["phase"] = "apply"
+        verdict["evidence"] += "; form stuck after cancel"
+    return verdict
+
+
+def hostile_leg(
+    row: dict,
+    driver: ScriptedDriver,
+    guid: int,
+    used_dummies: set[int],
+    applied_auras: list[int],
+    pre_cast_setup=None,
+    dummy_override: tuple | None = None,
+) -> dict:
+    """Hostile cast on a fresh live dummy (never reused), with seal
+    setup-verify for Judgement rows and a 5-recast retry cap.
+    `dummy_override` pins (guid, fallback xyz) instead of the
+    705/707 rotation (finisher bears: the builder must land on the
+    finisher's own target and the wolf dies to it)."""
+    spell_id = row["spell_id"]
+    expected = row.get("expected", {})
+    kind = expected.get("kind")
+    name = row.get("name") or ""
+    pre = snapshot(driver, guid)
+    setup_note = ""
+    if name.startswith("Judgement") and kind in ("aura_on_target", "damage_log"):
+        if not aura_present(driver, guid, 20154):
+            mark0 = event_mark(driver)
+            setup_go, setup_reason, _sops, _waited = cast_self_retry_power(driver, 20154)
+            driver.poll(1.5)
+            if not (setup_go and aura_present(driver, guid, 20154)):
+                return make_verdict(
+                    row,
+                    "FAIL",
+                    phase="prepare",
+                    reason=(f"CAST_RESULT({setup_reason})" if not setup_go and setup_reason is not None else None),
+                    evidence="seal setup 20154 did not verify; judgement "
+                    "not cast under invalid conditions (not a pass)",
+                    pre=pre,
+                    post=snapshot(driver, guid),
+                    packets=[op for op, _ in events_since(driver, mark0)],
+                    target_guid=None,
+                )
+            applied_auras.append(20154)
+        setup_note = "; seal 20154 setup verified"
+    fallback = None
+    if dummy_override is not None:
+        dummy, fallback = dummy_override
+        reused = dummy in used_dummies
+    else:
+        dummy, reused = pick_dummy(driver, used_dummies)
+    if dummy is None:
+        return make_verdict(
+            row, "BLOCKED", reason="dummy-unavailable", evidence="no live 705/707 counter left in WorldState", pre=pre
+        )
+    used_dummies.add(dummy)
+    reuse_note = "; reused observably-clean dummy (alive, full health, aura-free)" if reused else ""
+    # Self-range rows (range_index 1, areaselect-at-caster 22) only
+    # reach a dummy standing inside the effect radius: at the ranged
+    # standoff the cast lands on nobody (Demoralizing Roar at 13 yd
+    # vs its 10 yd radius reads as a landed-but-empty GO).
+    standoff = 2.0 if (row.get("range_index") in (1, 2) or 22 in (row.get("target_a") or [])) else 13.0
+    driver.approach_guid(dummy, standoff, fallback=fallback, attempts=6 if fallback else 3)
+    if driver.target_health(dummy) in (None, 0):
+        return make_verdict(
+            row,
+            "BLOCKED",
+            reason="dummy-unavailable",
+            evidence=f"pinned dummy guid={dummy} not live after approach (dead or never visible)",
+            pre=pre,
+            target_guid=dummy,
+        )
+    pre_hp = driver.target_health(dummy)
+    pre = f"dummy guid={dummy} health={pre_hp}; {pre}{setup_note}"
+    if pre_cast_setup is not None:
+        setup_note += pre_cast_setup(driver, dummy)
+        pre += setup_note
+    attempts = 0
+    go, reason, ops = False, None, []
+    post_hp, target_aura, logs = pre_hp, False, []
+    aura_id = int(expected.get("aura", spell_id))
+    range_step = standoff
+    while attempts < 5:
+        attempts += 1
+        mark = event_mark(driver)
+        go, reason, cast_ops, waited = cast_unit_retry_power(driver, spell_id, dummy, timeout=15.0)
+        ops += cast_ops
+        if not go and reason == SPELL_FAILED_OUT_OF_RANGE:
+            # Roaming dummy drifted out of range between approach and
+            # cast (pilot Growl pattern): step closer and retry within
+            # the same cap instead of failing the row.
+            range_step = max(2.0, range_step / 2.0)
+            driver.approach_guid(dummy, range_step)
+            driver.poll(1.0)
+            continue
+        if not go and reason == SPELL_FAILED_TARGETS_DEAD:
+            # The picked dummy died under us (stale WorldState or a
+            # neighbor's AoE, e.g. Hurricane's radius): take a
+            # different counter within the same cap. The dead one
+            # stays in used_dummies, never reused.
+            driver.poll(1.6)
+            fresh, fresh_reused = pick_dummy(driver, used_dummies)
+            if fresh is None:
+                return make_verdict(
+                    row,
+                    "BLOCKED",
+                    reason="dummy-unavailable",
+                    evidence="picked dummy died and no live 705/707 counter remains",
+                    pre=pre,
+                    post=snapshot(driver, guid),
+                    packets=ops,
+                    target_guid=dummy,
+                )
+            dummy, reused = fresh, fresh_reused
+            used_dummies.add(dummy)
+            reuse_note = "; re-picked after a dead dummy" + (
+                "; reused observably-clean dummy (alive, full health, aura-free)" if reused else ""
+            )
+            range_step = standoff
+            driver.approach_guid(dummy, range_step)
+            driver.poll(1.0)
+            pre_hp = driver.target_health(dummy)
+            pre = f"dummy guid={dummy} health={pre_hp}; {pre}"
+            continue
+        # Poll in slices and latch the aura: short auras (Growl's 3 s
+        # taunt, Bash's stun) expire inside one long poll and would
+        # read as never applied, then the recast dies on cooldown.
+        observe_s = 6.0 if float(row.get("speed") or 0) > 0 else 4.0
+        target_aura = False
+        sliced = 0.0
+        while sliced < observe_s:
+            driver.poll(0.5)
+            sliced += 0.5
+            if aura_present(driver, dummy, aura_id):
+                target_aura = True
+                if kind == "aura_on_target":
+                    break
+        window = events_since(driver, mark)
+        ops += [op for op, _ in window]
+        post_hp = driver.target_health(dummy)
+        logs = matching_damage_logs(window, spell_id, dummy, guid)
+        if not go:
+            break
+        if kind == "aura_on_target" and target_aura:
+            break
+        if kind == "damage_log" and logs and post_hp is not None and pre_hp is not None and post_hp < pre_hp:
+            break
+        if kind not in ("aura_on_target", "damage_log"):
+            break
+        driver.poll(1.6)
+    post = f"dummy guid={dummy} health={post_hp}"
+    consumed = ""
+    if name.startswith("Judgement") and go and not aura_present(driver, guid, 20154):
+        consumed = "; seal 20154 consumed by the judgement"
+        if 20154 in applied_auras:
+            applied_auras.remove(20154)
+    verdict = single_outcome_verdict(
+        row,
+        {
+            "go": go,
+            "reason": reason,
+            "caster_aura": False,
+            "target_guid": dummy,
+            "target_aura": target_aura,
+            "pre_hp": pre_hp,
+            "post_hp": post_hp,
+            "damage_logs": logs,
+            "pre": pre,
+            "post": post,
+            "packets": ops,
+            "attempts": attempts,
+        },
+    )
+    verdict["evidence"] += f" after {attempts} attempt(s)" + consumed + reuse_note
+    if dummy_override is not None:
+        # Pinned dummies live far from the arena (finisher bears):
+        # walk back so later rows still see the 705/707 counters
+        # and the ally position. Without this every following
+        # arena row reads dummy-unavailable / OUT_OF_RANGE.
+        driver.walk_to(*CASTER_POS)
+    return verdict
+
+
+def blessing_leg(
+    row: dict, driver: ScriptedDriver, guid: int, ally_driver: ScriptedDriver, ally_guid: int, applied_auras: list[int]
+) -> dict:
+    """Blessing ally leg + self leg with aura-bounce reset
+    tracking. PASS only when both legs verify. The ally leg runs
+    first so the row's own cooldown (Innervate 29166: 360 s) can
+    never fail the second leg with NOT_READY."""
+    spell_id = row["spell_id"]
+    expected = row.get("expected", {})
+    aura_id = int(expected.get("aura", spell_id))
+    pre = f"caster {snapshot(driver, guid)}; ally {ally_guid}"
+    mark = event_mark(driver)
+    # The ally parks ~37 yd from the caster spot: close to blessing
+    # range before the friendly leg, and re-approach once on
+    # OUT_OF_RANGE like the pilot Growl leg.
+    ops2: list[int] = []
+    go_ally, reason_ally = False, None
+    cooldown_waited = 0.0
+    standoff = 10.0
+    for _ in range(2):
+        driver.approach_guid(ally_guid, standoff)
+        go_ally, reason_ally, chunk, _ally_waited = cast_unit_retry_power(driver, spell_id, ally_guid, timeout=10.0)
+        ops2 += chunk
+        if go_ally or reason_ally != SPELL_FAILED_OUT_OF_RANGE:
+            break
+        standoff = 5.0
+        driver.poll(1.0)
+    if not go_ally and reason_ally == SPELL_FAILED_NOT_READY:
+        # Cooldown-gated blessing (e.g. Freedom 1044, RecoveryTime
+        # 20s, when a previous row left the same cooldown behind):
+        # wait it out once and retry. Capped at 30s; longer
+        # cooldowns stay FAIL.
+        cooldown_waited = min(float(row.get("cooldown_ms") or 1500) / 1000.0, 30.0)
+        driver.poll(max(cooldown_waited, 2.0))
+        driver.approach_guid(ally_guid, 5.0)
+        go_ally, reason_ally, chunk = cast_unit_faced(driver, spell_id, ally_guid, timeout=10.0)
+        ops2 += chunk
+    ally_driver.poll(2.0)
+    driver.poll(1.0)
+    ally_aura = aura_present(ally_driver, ally_guid, aura_id)
+    face_guid(driver, guid)
+    go_self, reason_self, ops1, _self_waited = cast_unit_retry_power(driver, spell_id, guid, timeout=10.0)
+    self_cooldown_note = ""
+    if not go_self and reason_self == SPELL_FAILED_NOT_READY:
+        go_self, reason_self, ops1, self_cooldown_note = not_ready_retry(
+            driver, guid, spell_id, row.get("cooldown_ms"), ops1
+        )
+    driver.poll(2.0)
+    self_aura = aura_present(driver, guid, aura_id)
+    if self_aura and aura_id not in applied_auras:
+        applied_auras.append(aura_id)
+    packets = ops1 + ops2 + [op for op, _ in events_since(driver, mark)]
+    detail = (
+        f"self leg go={go_self} reason={reason_self} "
+        f"aura={self_aura}; ally leg go={go_ally} "
+        f"reason={reason_ally} aura={ally_aura}"
+    )
+    if cooldown_waited:
+        detail += f" cooldown_wait={cooldown_waited:.1f}s"
+    detail += self_cooldown_note
+    if go_self and self_aura and go_ally and ally_aura:
+        return make_verdict(
+            row,
+            "PASS",
+            evidence="self + friendly legs verify: " + detail,
+            pre=pre,
+            post=f"ally aura={ally_aura}",
+            packets=packets,
+            target_guid=ally_guid,
+        )
+    phase = None
+    if not (go_self and go_ally):
+        phase = "prepare"
+    else:
+        phase = "apply"
+    return make_verdict(
+        row,
+        "FAIL",
+        phase=phase,
+        reason=(f"CAST_RESULT({reason_self}/{reason_ally})" if not (go_self and go_ally) else None),
+        evidence="blessing legs incomplete: " + detail,
+        pre=pre,
+        post=f"ally aura={ally_aura}",
+        packets=packets,
+        target_guid=ally_guid,
+    )
+
+
+def heal_leg(row: dict, driver: ScriptedDriver, guid: int, ally_driver: ScriptedDriver, ally_guid: int) -> dict:
+    """Regen-baselined heal on the ally's own socket (Druid-5187
+    lesson). No oracle band exists for Paladin heals, so the gate is
+    rise-over-baseline above one discrete regen tick (+34): a bounded,
+    band-less check, stated as such in the evidence."""
+    spell_id = row["spell_id"]
+    # The ally parks out of short-range heal reach; close to 10 yd
+    # first (blessing legs already do), with one closer retry on
+    # OUT_OF_RANGE instead of failing the row.
+    driver.approach_guid(ally_guid, 10.0)
+    ally_driver.poll(1.0)
+    t0 = time.monotonic()
+    h0 = ally_driver.self_health()
+    ally_driver.poll(3.0)
+    t1 = time.monotonic()
+    h1 = ally_driver.self_health()
+    pre = f"ally guid={ally_guid} health={h0}->{h1}"
+    mark = event_mark(driver)
+    go, reason, ops, waited = cast_unit_retry_power(driver, spell_id, ally_guid, timeout=12.0)
+    if not go and reason == SPELL_FAILED_OUT_OF_RANGE:
+        driver.approach_guid(ally_guid, 4.0)
+        driver.poll(1.0)
+        go, reason, ops2, waited = cast_unit_retry_power(driver, spell_id, ally_guid, timeout=12.0)
+        ops += ops2
+    ally_driver.poll(4.0)
+    t2 = time.monotonic()
+    h2 = ally_driver.self_health()
+    window = [op for op, _ in events_since(driver, mark)]
+    if not go:
+        phase = "prepare"
+        if reason == SPELL_FAILED_NO_POWER:
+            detail = f"power-starved after {waited} 9s waits"
+        else:
+            detail = f"no bound SPELL_GO (reason={reason})"
+        return make_verdict(
+            row,
+            "FAIL",
+            phase=phase,
+            reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+            evidence=detail,
+            pre=pre,
+            post=f"ally health={h2 or '?'}",
+            packets=ops + window,
+            target_guid=ally_guid,
+        )
+    jump, rise_ok = heal_rise_ok(h0, h1, h2, t0, t1, t2)
+    if h0 is None or h1 is None or h2 is None or t1 <= t0:
+        return make_verdict(
+            row,
+            "FAIL",
+            phase="apply",
+            evidence=f"GO but ally health unreadable {h0}->{h1}->{h2}",
+            pre=pre,
+            post=f"ally health={h2 or '?'}",
+            packets=ops + window,
+            target_guid=ally_guid,
+        )
+    rate = (h1 - h0) / (t1 - t0) if t1 > t0 else 0.0
+    if rise_ok:
+        return make_verdict(
+            row,
+            "PASS",
+            evidence=f"bound GO + regen-baselined jump {jump:.0f} "
+            f"> 50 (no oracle band; band-less rise gate, rate "
+            f"{rate:.1f}/s, {h0}->{h1} pre, got {h2})",
+            pre=pre,
+            post=f"ally health={h2}",
+            packets=ops + window,
+            target_guid=ally_guid,
+        )
+    return make_verdict(
+        row,
+        "FAIL",
+        phase="apply",
+        evidence=f"GO but jump {jump:.0f} <= 50 above baseline "
+        f"(no oracle band; rate {rate:.1f}/s, {h0}->{h1} pre, got {h2})",
+        pre=pre,
+        post=f"ally health={h2}",
+        packets=ops + window,
+        target_guid=ally_guid,
+    )
+
+
+def teleport_leg(
+    row: dict,
+    driver: ScriptedDriver,
+    guid: int,
+    client: object,
+    seed_all: list[int],
+    account: str,
+    account_id: int,
+) -> tuple[dict, tuple | None]:
+    """Cross-map teleport row (Teleport: Moonglade): dest-cast at the
+    caster's feet, PASS iff the server starts the far transfer (bound
+    SPELL_GO plus TRANSFER_PENDING/NEW_WORLD in the window). The
+    driver never ACKs the worldport, so the session cannot continue
+    on the new map: the leg reseeds and fresh-logins back on the
+    bench map and returns the new session. The second item is None
+    only when the row fails (old session still usable).
+    """
+    spell_id = row["spell_id"]
+    pos = driver.position
+    pre = snapshot(driver, guid)
+    mark = event_mark(driver)
+    go, reason, ops = False, None, []
+    waited = 0
+    while True:
+        go, reason, cast_ops = send_and_wait(
+            driver, cast_dest_body(spell_id, pos[0], pos[1], pos[2]), spell_id, timeout=15.0, target_guid=guid
+        )
+        ops += cast_ops
+        if go or reason != SPELL_FAILED_NO_POWER or waited >= POWER_RETRIES:
+            break
+        waited += 1
+        driver.poll(9.0)
+    driver.poll(6.0)
+    window = [op for op, _ in events_since(driver, mark)]
+    packets = ops + window
+    transferred = SMSG_TRANSFER_PENDING in window or SMSG_NEW_WORLD in window
+    if not go or not transferred:
+        phase = None if go else "prepare"
+        if go:
+            detail = "SPELL_GO without transfer packets: the engine did not start the far transfer"
+            why = None
+        elif reason == SPELL_FAILED_NO_POWER:
+            detail = f"power-starved after {waited} 9s waits; teleport never cast"
+            why = f"CAST_RESULT({reason})"
+        else:
+            detail = f"no bound SPELL_GO (reason={reason})"
+            why = f"CAST_RESULT({reason})" if reason is not None else None
+        return (
+            make_verdict(
+                row,
+                "FAIL",
+                phase=phase,
+                reason=why,
+                evidence=detail,
+                pre=pre,
+                post=snapshot(driver, guid),
+                packets=packets,
+                target_guid=guid,
+            ),
+            None,
+        )
+    try:
+        smoke.logout(client, "Druid-teleport")
+    except Exception:
+        pass
+    # The wedged session never ACKs the worldport, so the server only
+    # releases the character once the socket goes away: close it here
+    # (logout alone cannot finish) and wait for the online flag to
+    # clear before reseeding.
+    try:
+        client.sock.close()
+    except Exception:
+        pass
+    for _ in range(10):
+        try:
+            online = smoke.sql_scalar("characters", f"SELECT online FROM characters WHERE guid={guid}")
+        except RuntimeError:
+            online = "1"
+        if online != "1":
+            break
+        time.sleep(8.0)
+    seed_character(guid, seed_all, pos=CASTER_POS)
+    new_client, new_driver = login_as(account, account_id, guid)
+    drift_gate(new_driver, guid, len(seed_all))
+    return (
+        make_verdict(
+            row,
+            "PASS",
+            evidence=f"bound GO + far-transfer packets {sorted(set(packets))}; reseeded to bench map, session fresh",
+            pre=pre,
+            post=snapshot(new_driver, guid),
+            packets=packets,
+            target_guid=guid,
+        ),
+        (new_client, new_driver),
+    )
+
+
+def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int], applied_auras: list[int]) -> dict:
+    """Ground cast at the caster's feet with a dummy inside the
+    radius; outcome is dummy damage attributed to the spell. A
+    landed cast registers for the next row's cancel so a channeled
+    radius spell (Hurricane) cannot hold the slot open into the
+    following row (the cancel-aura channel interrupt)."""
+    spell_id = row["spell_id"]
+    pre = snapshot(driver, guid)
+    dummy, reused = pick_dummy(driver, used_dummies)
+    if dummy is None:
+        return make_verdict(
+            row, "BLOCKED", reason="dummy-unavailable", evidence="no live dummy for the radius leg", pre=pre
+        )
+    used_dummies.add(dummy)
+    if reused:
+        pre = f"{pre}; reused observably-clean dummy (alive, full health, aura-free)"
+    driver.approach_guid(dummy, 2.0)
+    pos = driver.position
+    pre_hp = driver.target_health(dummy)
+    pre = f"dummy guid={dummy} health={pre_hp}; caster {pre}"
+    mark = event_mark(driver)
+    # One cast with the dest-target sender (mask 0x0040 + xyz at the
+    # caster's feet), with NO_POWER pacing, not a self cast plus a
+    # dest cast.
+    go, reason, ops = False, None, []
+    waited = 0
+    while True:
+        go, reason, cast_ops = send_and_wait(
+            driver, cast_dest_body(spell_id, pos[0], pos[1], pos[2]), spell_id, timeout=15.0, target_guid=guid
+        )
+        ops += cast_ops
+        if go or reason != SPELL_FAILED_NO_POWER or waited >= POWER_RETRIES:
+            break
+        waited += 1
+        driver.poll(9.0)
+    if not go and reason == SPELL_FAILED_NO_POWER:
+        return make_verdict(
+            row,
+            "FAIL",
+            phase="prepare",
+            reason=f"CAST_RESULT({reason})",
+            evidence=f"power-starved after {waited} 9s waits",
+            pre=pre,
+            post=snapshot(driver, guid),
+            packets=ops,
+            target_guid=dummy,
+        )
+    driver.poll(6.0)
+    window = events_since(driver, mark)
+    ops += [op for op, _ in window]
+    post_hp = driver.target_health(dummy)
+    logs = matching_damage_logs(window, spell_id, dummy, guid)
+    if go and spell_id not in applied_auras:
+        applied_auras.append(spell_id)
+    return single_outcome_verdict(
+        row,
+        {
+            "go": go,
+            "reason": reason,
+            "caster_aura": False,
+            "target_guid": dummy,
+            "target_aura": False,
+            "pre_hp": pre_hp,
+            "post_hp": post_hp,
+            "damage_logs": logs,
+            "object_seen": False,
+            "pre": pre,
+            "post": f"dummy guid={dummy} health={post_hp}",
+            "packets": ops,
+        },
+    )
+
+
+def item_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int], applied_auras: list[int]) -> dict:
+    """Reagent rows verify the count decremented; equipped-item rows
+    (Holy Shield) verify the aura with a fixture-gear gate."""
+    spell_id = row["spell_id"]
+    expected = row.get("expected", {})
+    pre = snapshot(driver, guid)
+    reagent = expected.get("reagent")
+    if reagent:
+        before = bag_reagent_count(guid, reagent)
+        if before is None:
+            return make_verdict(
+                row,
+                "BLOCKED",
+                reason="effect-marker-only",
+                evidence="reagent count unreadable; no decrement leg",
+                pre=pre,
+            )
+        if before <= 0:
+            return make_verdict(
+                row,
+                "BLOCKED",
+                reason="fixture-reagent",
+                evidence=f"reagent {reagent} absent from bags and the "
+                "engine has no reagent gate; scenario-inapplicable",
+                pre=pre,
+            )
+        mark = event_mark(driver)
+        go, reason, ops, _waited = cast_unit_retry_power(driver, spell_id, guid, timeout=15.0)
+        driver.poll(4.0)
+        after = bag_reagent_count(guid, reagent)
+        window = [op for op, _ in events_since(driver, mark)]
+        alive = self_alive(driver, guid)
+        detail = "" if alive else "; caster died casting (death reset next)"
+        verdict = single_outcome_verdict(
+            row,
+            {
+                "go": go,
+                "reason": reason,
+                "caster_aura": False,
+                "target_guid": guid,
+                "target_aura": False,
+                "pre_hp": None,
+                "post_hp": None,
+                "damage_logs": [],
+                "reagent_before": before,
+                "reagent_after": after,
+                "pre": pre,
+                "post": snapshot(driver, guid) + detail,
+                "packets": ops + window,
+            },
+        )
+        if verdict["verdict"] == "PASS":
+            verdict["evidence"] += detail
+        return verdict
+    gear = equipped_item_class(guid)
+    if gear is None or gear[0] != 4:
+        return make_verdict(
+            row,
+            "BLOCKED",
+            reason="fixture-gear",
+            evidence=f"offhand is not armor-class (class 4): {gear}; starter lacks a shield",
+            pre=pre,
+        )
+    verdict = self_leg(row, driver, guid, applied_auras)
+    verdict["evidence"] += f"; shield equipped {gear}"
+    return verdict
+
+
+def pre_dispatch(row: dict) -> tuple[str, str | None]:
+    """Pure per-row dispatch: matrix row -> (action, payload).
+
+    "blocked" carries a closed-enum BLOCKED reason (the row is never
+    cast, and can never PASS); "passive" means a learned_spell
+    character_spell check without casting; "cast" carries the leg name
+    ("friendly", "hostile", "ground", "item", "form", "form_gated",
+    or "self"). Every bucket any fan-out matrix contains maps here;
+    buckets no wire/engine scenario can execute (corpse/pet/actual
+    totems) map to honest BLOCKED reasons, never to a cast leg, while
+    stance-gated form_totem rows ride form_gated. Mirrors the
+    run_class branch order so the self-test can assert totality over a
+    real artifact."""
+    campaign = row.get("campaign", "")
+    kind = (row.get("expected") or {}).get("kind")
+    bucket = row.get("bucket")
+    if campaign.startswith("classify_only"):
+        if campaign == "classify_only_script" or kind == "dual_outcome":
+            return ("blocked", "script-evidence-unknown")
+        return ("blocked", "effect-marker-only")
+    if kind == "dual_outcome":
+        return ("blocked", "script-evidence-unknown")
+    if kind == "learned_spell":
+        return ("passive", None)
+    if bucket == "party_duel":
+        return ("blocked", "no-party")
+    if bucket == "corpse":
+        return ("blocked", "wire-target-unsupported")
+    if bucket == "pet":
+        return ("blocked", "no-pet")
+    if bucket == "form_totem":
+        if required_form_spell(row) is not None:
+            return ("cast", "form_gated")
+        return ("blocked", "engine-totem")
+    if bucket == "form":
+        return ("cast", "form")
+    if bucket == "friendly":
+        return ("cast", "friendly")
+    if bucket == "hostile_dummy":
+        return ("cast", "hostile")
+    if bucket == "ground_area":
+        return ("cast", "ground")
+    if bucket == "item_reagent_ammo":
+        return ("cast", "item")
+    return ("cast", "self")
+
+
+# Honest BLOCKED evidence for buckets no live scenario can execute.
+UNSCENARIOED_EVIDENCE = {
+    "wire-target-unsupported": "no corpse-target scenario in a live class "
+    "run; the parser discards corpse GUIDs (correction 2)",
+    "no-pet": "no pet scenario for this class in a live run; nothing to observe",
+    "engine-totem": "totem/stance hardware scenario not implemented in this harness; engine-totem",
+}
+
+
+def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathlib.Path | str | None = None) -> int:
+    """Data-driven full-class run: every generated cast row for the
+    class, serially, one harness process under RUNNING.lock. Rows
+    sorted by spell_id; classify_only rows ride as BLOCKED without a
+    cast. `matrix_path` overrides the class's default artifact (used by
+    `--matrix` and tests). Returns 0 only when the class gate holds."""
+    if matrix_path is not None:
+        matrix_file = pathlib.Path(matrix_path)
+        if not matrix_file.exists():
+            print(f"run-class {class_name}: matrix file missing: {matrix_file}", file=sys.stderr)
+            return 2
+        doc = json.loads(matrix_file.read_text())
+    else:
+        matrix_file = matrix_path_for(class_name)
+        doc = matrix_doc_for(class_name)
+    rows = sorted((r for r in doc.get("rows", []) if r["class"] == class_name), key=lambda r: r["spell_id"])
+    if only:
+        wanted = set(only)
+        rows = [r for r in rows if r["spell_id"] in wanted]
+        missing = wanted - {r["spell_id"] for r in rows}
+        if missing:
+            print(f"run-class {class_name}: spells not in matrix: {sorted(missing)}", file=sys.stderr)
+            return 2
+    if not rows:
+        print(f"run-class {class_name}: no matrix rows; run spell_matrix_gen.py --full first", file=sys.stderr)
+        return 2
+    try:
+        account = CLASS_ACCOUNT[class_name]
+        char_name = CLASS_CHAR[class_name]
+    except KeyError:
+        print(f"run-class {class_name}: no §2 fixture; want one of {sorted(CLASS_ACCOUNT)}", file=sys.stderr)
+        return 2
+    seed_all = seed_spells_for(class_name)
+    combo_builder = doc.get("full_combo_builder_spell")
+    acquire_lock()
+    verdicts: list[dict] = []
+    manifest_extra: dict = {
+        "mode": "run-class",
+        "class": class_name,
+        "matrix_file": str(matrix_file),
+        "matrix_mode": doc.get("mode"),
+        "matrix_counts": doc.get("per_class_counts", {}),
+        "talent_build": ((doc.get("talent_builds") or {}).get("selected") or {}).get(class_name),
+        "fixture_note": (
+            "union-seeded single-race fixture; not a legal "
+            "single-race spellbook claim where union exceeds "
+            "any one race (Paladin Human==Dwarf==160, "
+            "numerically equal)"
+        ),
+        "seed_count": len(seed_all),
+        "talent_seed_checks": [],
+    }
+    try:
+        guid = guid_of(char_name)
+        account_id = int(smoke.sql_scalar("realmd", f"SELECT id FROM account WHERE username='{account}'"))
+
+        def fresh_login(pos: tuple | None = None):
+            seed_character(guid, seed_all, pos=pos or CASTER_POS)
+            client, driver = login_as(account, account_id, guid)
+            drift_gate(driver, guid, len(seed_all))
+            return client, driver
+
+        client, driver = fresh_login()
+        try:
+            # Talent seed check: every selected known spell learned.
+            for known in talent_known_spells(class_name):
+                have = smoke.sql_scalar(
+                    "characters", f"SELECT COUNT(*) FROM character_spell WHERE guid={guid} AND spell={known}"
+                )
+                manifest_extra["talent_seed_checks"].append({"spell_id": known, "learned": int(have or 0) > 0})
+            used_dummies: set[int] = set()
+            applied_auras: list[int] = []
+            ally: tuple | None = None
+
+            def need_ally(heal_rows: bool, force: bool = False) -> tuple:
+                """Second client (Campwarrior) for friendly legs; the
+                ally is SQL-damaged offline first when heals need it.
+                Heal legs pass force=True: a regen-topped ally makes
+                every heal after the first unobservable, so each heal
+                row re-damages a freshly logged-in ally."""
+                nonlocal ally
+                if ally is not None and not force:
+                    return ally
+                if ally is not None:
+                    old_client, _old_driver, _old_guid = ally
+                    try:
+                        smoke.logout(old_client, f"{class_name}-ally")
+                    except Exception as exc:
+                        print(f"WARN ally relog logout: {exc}")
+                    ally = None
+                ally_guid = guid_of("Campwarrior")
+                ally_seed = seed_spells_for("Warrior") or pilot_spells_for("Warrior")
+                seed_character(ally_guid, ally_seed, pos=ALLY_POS)
+                if heal_rows:
+                    smoke.sql_scalar("characters", f"UPDATE characters SET health=300 WHERE guid={ally_guid}")
+                ally_id = int(smoke.sql_scalar("realmd", "SELECT id FROM account WHERE username='SPELLCAMP01'"))
+                ally_client, ally_driver = login_as("SPELLCAMP01", ally_id, ally_guid)
+                ally = (ally_client, ally_driver, ally_guid)
+                return ally
+
+            def cancel_tracked(target_guid: int, force: tuple[int, ...] = ()) -> None:
+                pending = list(applied_auras)
+                for forced in force:
+                    if forced not in pending:
+                        pending.append(forced)
+                if pending:
+                    cancel_auras(driver, target_guid, pending, force=force)
+                    applied_auras.clear()
+                driver.poll(1.6)
+
+            for row in rows:
+                spell_id = row["spell_id"]
+                bucket = row.get("bucket")
+                expected = row.get("expected", {})
+                kind = expected.get("kind")
+                campaign = row.get("campaign", "")
+                if not self_alive(driver, guid):
+                    client, driver = fresh_login()
+                    used_dummies.clear()
+                    applied_auras.clear()
+                # A landed ground cast may still be channeling with
+                # no holder on the caster (Hurricane's radius): force
+                # its cancel so the next row never meets a busy slot.
+                # Other buckets ride applied_auras alone (a forced
+                # cancel there could strip a seal a later leg needs).
+                force: tuple[int, ...] = ()
+                if verdicts and verdicts[-1]["verdict"] == "PASS" and verdicts[-1].get("bucket") == "ground_area":
+                    force = (int(verdicts[-1]["spell_id"]),)
+                cancel_tracked(guid, force)
+                if campaign.startswith("classify_only"):
+                    reason = (
+                        "script-evidence-unknown"
+                        if campaign == "classify_only_script" or kind == "dual_outcome"
+                        else "effect-marker-only"
+                    )
+                    verdicts.append(
+                        make_verdict(
+                            row,
+                            "BLOCKED",
+                            reason=reason,
+                            evidence=expected.get("note", "classify-only bucket; left uncast"),
+                            target_guid=None,
+                        )
+                    )
+                    print(f"ROW {class_name} {spell_id} {bucket}: BLOCKED {reason} | classify_only")
+                    continue
+                if kind == "dual_outcome":
+                    verdicts.append(
+                        single_outcome_verdict(row, {"go": False, "reason": None, "packets": [], "target_guid": None})
+                    )
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: BLOCKED script-evidence-unknown | dual needs both legs"
+                    )
+                    continue
+                if kind == "learned_spell":
+                    have = smoke.sql_scalar(
+                        "characters", f"SELECT COUNT(*) FROM character_spell WHERE guid={guid} AND spell={spell_id}"
+                    )
+                    learned = int(have or 0) > 0
+                    aura_ok = aura_present(driver, guid, spell_id)
+                    status = passive_learn_verdict(row.get("passive", False), learned, aura_ok)
+                    note = "passive spell: no aura holder by design" if row.get("passive", False) else "aura gated"
+                    verdicts.append(make_verdict(row, status, evidence=f"learned={learned} aura={aura_ok}; {note}"))
+                    print(f"ROW {class_name} {spell_id} {bucket}: {verdicts[-1]['verdict']} | learned={learned}")
+                    continue
+                if bucket == "party_duel":
+                    verdicts.append(
+                        make_verdict(
+                            row,
+                            "BLOCKED",
+                            reason="no-party",
+                            evidence="solo character with no party; scenario-inapplicable",
+                        )
+                    )
+                    print(f"ROW {class_name} {spell_id} {bucket}: BLOCKED no-party | solo repro")
+                    continue
+                action, payload = pre_dispatch(row)
+                if action == "blocked" and payload in UNSCENARIOED_EVIDENCE:
+                    verdicts.append(
+                        make_verdict(
+                            row, "BLOCKED", reason=payload, evidence=UNSCENARIOED_EVIDENCE[payload], target_guid=None
+                        )
+                    )
+                    print(f"ROW {class_name} {spell_id} {bucket}: BLOCKED {payload} | no live scenario")
+                    continue
+                if action == "cast" and payload == "form_gated":
+                    verdicts.append(
+                        form_gated_leg(row, driver, guid, used_dummies, applied_auras, combo_builder=combo_builder)
+                    )
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                if bucket == "form":
+                    verdicts.append(form_leg(row, driver, guid))
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                if bucket == "friendly":
+                    heal_row = kind == "heal_delta_target"
+                    ally_client, ally_driver, ally_guid = need_ally(heal_row, force=heal_row)
+                    if kind == "heal_delta_target":
+                        verdicts.append(heal_leg(row, driver, guid, ally_driver, ally_guid))
+                    else:
+                        verdicts.append(blessing_leg(row, driver, guid, ally_driver, ally_guid, applied_auras))
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                if bucket == "hostile_dummy":
+                    finisher_setup = (
+                        combo_builder_setup(combo_builder) if row.get("needs_combo_points") and combo_builder else None
+                    )
+                    override = finisher_dummy(used_dummies) if finisher_setup else None
+                    verdicts.append(
+                        hostile_leg(
+                            row,
+                            driver,
+                            guid,
+                            used_dummies,
+                            applied_auras,
+                            pre_cast_setup=finisher_setup,
+                            dummy_override=override,
+                        )
+                    )
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                if bucket == "ground_area" and kind == "teleport":
+                    verdict, session = teleport_leg(row, driver, guid, client, seed_all, account, account_id)
+                    verdicts.append(verdict)
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    if session is not None:
+                        client, driver = session
+                        used_dummies.clear()
+                        applied_auras.clear()
+                    continue
+                if bucket == "ground_area":
+                    verdicts.append(ground_leg(row, driver, guid, used_dummies, applied_auras))
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                if bucket == "item_reagent_ammo":
+                    verdicts.append(item_leg(row, driver, guid, used_dummies, applied_auras))
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                # self default: solo self cast (unlisted buckets;
+                # corpse/pet/unenterable form_totem rows are BLOCKED
+                # above via pre_dispatch, stance-gated rows rode the
+                # form_gated leg).
+                verdicts.append(self_leg(row, driver, guid, applied_auras))
+                print(
+                    f"ROW {class_name} {spell_id} {bucket}: "
+                    f"{verdicts[-1]['verdict']} "
+                    f"{verdicts[-1].get('reason') or ''} | "
+                    f"{verdicts[-1]['evidence'][:120]}"
+                )
+        finally:
+            if ally is not None:
+                try:
+                    smoke.logout(ally[0], f"{class_name}-ally")
+                except Exception as exc:
+                    print(f"WARN ally logout: {exc}")
+            try:
+                smoke.logout(client, f"{class_name}-run")
+            except Exception as exc:
+                print(f"WARN logout: {exc}")
+    finally:
+        release_lock()
+    cluster = cluster_failures(verdicts)
+    manifest_extra["failure_clusters"] = cluster
+    manifest_extra["verdict_counts"] = {
+        status: sum(1 for v in verdicts if v["verdict"] == status)
+        for status in sorted({v["verdict"] for v in verdicts})
+    }
+    write_results(class_name, verdicts)
+    run_leg_line = f"run-class {class_name}: {len(verdicts)} rows, " + ", ".join(
+        f"{k}={v}" for k, v in sorted(manifest_extra["verdict_counts"].items())
+    )
+    print(run_leg_line)
+    (EVIDENCE_DIR / f"manifest-{class_name}.json").write_text(
+        json.dumps({**manifest_extra, "git_head": subprocess_head(), "git_dirty": subprocess_dirty()}, indent=1) + "\n"
+    )
+    append_summary(class_name, verdicts, cluster)
+    gate = class_gate_failures({class_name: verdicts}, {class_name: len(verdicts)})
+    if gate:
+        print(f"CLASS-GATE-FAILED {gate}")
+        return 1
+    print(f"SPELL-CAMPAIGN-RUN-CLASS-{class_name.upper()}-PASS")
+    return 0
+
+
+def cluster_failures(
+    verdicts: list[dict],
+) -> list[dict]:
+    """Group FAIL rows by (phase, CAST_RESULT reason, bucket) so a
+    shared gate shows as one cluster before spell-specific triage."""
+    groups: dict[tuple, list[int]] = {}
+    for v in verdicts:
+        if v["verdict"] != "FAIL":
+            continue
+        key = (v.get("phase"), v.get("reason"), v.get("bucket"))
+        groups.setdefault(key, []).append(int(v["spell_id"]))
+    return [
+        {"phase": phase, "reason": reason, "bucket": bucket, "count": len(spells), "spells": sorted(spells)}
+        for (phase, reason, bucket), spells in sorted(groups.items(), key=lambda item: (-len(item[1]), str(item[0])))
+    ]
+
+
+def append_summary(class_name: str, verdicts: list[dict], cluster: list[dict]) -> pathlib.Path:
+    """Append one class section to summary.md (never rewrite pilot
+    sections)."""
+    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    path = EVIDENCE_DIR / "summary.md"
+    if not path.exists():
+        path.write_text("# Spell campaign summary\n\n")
+    counts: dict[str, int] = {}
+    for v in verdicts:
+        counts[v["verdict"]] = counts.get(v["verdict"], 0) + 1
+    lines = [f"## {class_name} run-class ({len(verdicts)} rows)", ""]
+    lines.append("counts: " + ", ".join(f"{k}={counts.get(k, 0)}" for k in sorted(counts)))
+    for v in verdicts:
+        if v["verdict"] in ("FAIL", "BLOCKED"):
+            lines.append(
+                f"- {v['spell_id']} {v.get('name') or ''} "
+                f"{v['bucket']} target={v.get('target_guid')}: "
+                f"{v['verdict']} {v.get('reason') or ''} "
+                f"{v.get('phase') or ''} | {v['evidence']}"
+            )
+    if cluster:
+        lines.append("")
+        lines.append("failure clusters:")
+        for entry in cluster:
+            lines.append(
+                f"- phase={entry['phase']} reason={entry['reason']} "
+                f"bucket={entry['bucket']} count={entry['count']} "
+                f"spells={entry['spells']}"
+            )
+    lines.append("")
+    with open(path, "a") as fh:
+        fh.write("\n".join(lines))
+    return path
 
 
 def run_self_test() -> int:
@@ -1681,137 +3651,655 @@ def run_self_test() -> int:
     else:
         raise AssertionError("bad FAIL phase accepted")
     # Packet builders match the shapes world_actor parses.
-    assert char_create_body("Campwarrior", 1, 1) == (
-        b"Campwarrior\x00" + bytes([1, 1, 0, 0, 0, 0, 0, 0, 0]))
+    assert char_create_body("Campwarrior", 1, 1) == (b"Campwarrior\x00" + bytes([1, 1, 0, 0, 0, 0, 0, 0, 0]))
     assert cast_self_body(5242) == struct.pack("<IH", 5242, 0)
     assert cast_unit_body(133, 0xF1300002C1000158) == (
-        struct.pack("<IH", 133, 0x0002)
-        + smoke.pack_guid(0xF1300002C1000158))
+        struct.pack("<IH", 133, 0x0002) + smoke.pack_guid(0xF1300002C1000158)
+    )
     dest = cast_dest_body(133, 1.0, 2.0, 3.0)
-    assert dest == struct.pack("<IH", 133, 0x0040) + struct.pack(
-        "<fff", 1.0, 2.0, 3.0)
+    assert dest == struct.pack("<IH", 133, 0x0040) + struct.pack("<fff", 1.0, 2.0, 3.0)
     corpse = cast_corpse_body(20484, 0xF1300002C1000158)
-    assert corpse == (struct.pack("<IH", 20484, 0x0200)
-                      + smoke.pack_guid(0xF1300002C1000158))
+    assert corpse == (struct.pack("<IH", 20484, 0x0200) + smoke.pack_guid(0xF1300002C1000158))
     assert raw_guid(705, 344) == 0xF1300002C1000158
     # Packet verdicts bind to spell/caster/target bodies, not opcode
     # presence alone (the shipped send_and_wait accepted any 306/304).
     caster = 900017
     dummy = 0xF1300002C1000158
     assert parse_cast_result_body(struct.pack("<IB", 6795, 86)) == (6795, 86)
-    assert parse_cast_result_body(
-        struct.pack("<IBB", 6795, 2, 86)) == (6795, 86)
+    assert parse_cast_result_body(struct.pack("<IBB", 6795, 2, 86)) == (6795, 86)
     assert parse_cast_result_body(b"\x01") is None
     go_body = (
-        smoke.pack_guid(caster) + smoke.pack_guid(dummy)
+        smoke.pack_guid(caster)
+        + smoke.pack_guid(dummy)
         + struct.pack("<BIII", 0, 6795, 0, 12345)
-        + bytes([1]) + struct.pack("<Q", dummy) + bytes([0]))
+        + bytes([1])
+        + struct.pack("<Q", dummy)
+        + bytes([0])
+    )
     go = parse_spell_go_body(go_body)
     assert go == {
-        "caster_guid": caster, "target_guid": dummy,
-        "cast_counter": 0, "spell_id": 6795, "hits": [dummy],
+        "caster_guid": caster,
+        "target_guid": dummy,
+        "cast_counter": 0,
+        "spell_id": 6795,
+        "hits": [dummy],
         "misses": [],
     }, go
     assert spell_go_matches(go, 6795, caster, dummy)
     assert not spell_go_matches(go, 133, caster, dummy)
     assert not spell_go_matches(go, 6795, 900016, dummy)
-    dmg_body = (
-        smoke.pack_guid(dummy) + smoke.pack_guid(caster)
-        + struct.pack("<III", 133, 46, 0))
+    dmg_body = smoke.pack_guid(dummy) + smoke.pack_guid(caster) + struct.pack("<III", 133, 46, 0)
     assert parse_damage_log_body(dmg_body) == {
-        "target_guid": dummy, "attacker_guid": caster,
-        "spell_id": 133, "damage": 46,
+        "target_guid": dummy,
+        "attacker_guid": caster,
+        "spell_id": 133,
+        "damage": 46,
     }
-    window = [(592, dmg_body), (592, smoke.pack_guid(dummy)
-                                + smoke.pack_guid(900016)
-                                + struct.pack("<III", 133, 999, 0))]
+    window = [
+        (592, dmg_body),
+        (592, smoke.pack_guid(dummy) + smoke.pack_guid(900016) + struct.pack("<III", 133, 999, 0)),
+    ]
     assert matching_damage_logs(window, 133, dummy, caster)[0]["damage"] == 46
     assert matching_damage_logs(window, 133, dummy, 900015) == []
+    # Periodic ticks ride 590, not 592: a Consecration-style tick
+    # must attribute the same way, and 592 bodies still match.
+    tick_body = smoke.pack_guid(dummy) + smoke.pack_guid(caster) + struct.pack("<IIIIIII", 20924, 1, 3, 12, 2, 0, 0)
+    assert parse_periodicaura_log_body(tick_body) == {
+        "target_guid": dummy,
+        "attacker_guid": caster,
+        "spell_id": 20924,
+        "damage": 12,
+    }, parse_periodicaura_log_body(tick_body)
+    assert parse_periodicaura_log_body(b"\x01") is None
+    tick_window = [(590, tick_body), (592, dmg_body)]
+    assert matching_damage_logs(tick_window, 20924, dummy, caster)[0]["damage"] == 12
+    assert matching_damage_logs(tick_window, 20924, dummy, 900015) == []
+    assert matching_damage_logs(tick_window, 133, dummy, caster)[0]["damage"] == 46
     # An expected-failure row is never PASS. A rejection is the gate's
     # expected FAIL; a landed wrong-form cast is an unexpected FAIL.
-    fail_row = {"class": "Druid", "spell_id": 6795, "bucket": "form",
-                "expected": {"kind": "expect_cast_failure"}}
-    rejected = expected_failure_verdict(
-        fail_row, False, 86, [304], dummy, attempts=2)
+    fail_row = {"class": "Druid", "spell_id": 6795, "bucket": "form", "expected": {"kind": "expect_cast_failure"}}
+    rejected = expected_failure_verdict(fail_row, False, 86, [304], dummy, attempts=2)
     assert rejected["verdict"] == "FAIL" and rejected["phase"] == "prepare"
     assert rejected["expected_failure"] is True
     assert rejected["target_guid"] == dummy
-    landed = expected_failure_verdict(
-        fail_row, True, None, [306], dummy, attempts=1)
+    landed = expected_failure_verdict(fail_row, True, None, [306], dummy, attempts=1)
     assert landed["verdict"] == "FAIL" and landed["expected_failure"] is False
-    out_of_range = expected_failure_verdict(
-        fail_row, False, 89, [304], dummy, attempts=3)
+    out_of_range = expected_failure_verdict(fail_row, False, 89, [304], dummy, attempts=3)
     assert out_of_range["verdict"] == "FAIL"
     assert out_of_range["expected_failure"] is False
     # Dummy reset needs attributed first-kill and second-target damage;
     # the mere existence of another live counter is not evidence.
-    first = {"guid": dummy, "pre_hp": 100, "post_hp": 0,
-             "damage_logs": [{"damage": 46}], "aura_seen": False}
-    second = {"guid": raw_guid(705, 345), "pre_hp": 100, "post_hp": 54,
-              "damage_logs": [], "aura_seen": True}
+    first = {"guid": dummy, "pre_hp": 100, "post_hp": 0, "damage_logs": [{"damage": 46}], "aura_seen": False}
+    second = {"guid": raw_guid(705, 345), "pre_hp": 100, "post_hp": 54, "damage_logs": [], "aura_seen": True}
     assert reset_evidence_ok(first, second)
     assert not reset_evidence_ok(first, {**second, "post_hp": 100})
     assert not reset_evidence_ok(first, {**second, "guid": dummy})
-    assert not reset_evidence_ok(
-        {**first, "damage_logs": []}, second)
+    assert not reset_evidence_ok({**first, "damage_logs": []}, second)
     # Single-spell repro uses the row's observable outcome; SPELL_GO
     # alone (the shipped run_single rule) cannot produce PASS.
-    fireball = {"class": "Mage", "spell_id": 133,
-                "bucket": "hostile_dummy",
-                "expected": {"kind": "damage_log", "opcode": 592}}
-    unobserved = single_outcome_verdict(fireball, {
-        "go": True, "reason": None, "caster_aura": False,
-        "target_guid": dummy, "target_aura": False,
-        "pre_hp": 100, "post_hp": 54, "damage_logs": [],
-        "packets": [306],
-    })
+    fireball = {
+        "class": "Mage",
+        "spell_id": 133,
+        "bucket": "hostile_dummy",
+        "expected": {"kind": "damage_log", "opcode": 592},
+    }
+    unobserved = single_outcome_verdict(
+        fireball,
+        {
+            "go": True,
+            "reason": None,
+            "caster_aura": False,
+            "target_guid": dummy,
+            "target_aura": False,
+            "pre_hp": 100,
+            "post_hp": 54,
+            "damage_logs": [],
+            "packets": [306],
+        },
+    )
     assert unobserved["verdict"] == "FAIL", unobserved
-    observed = single_outcome_verdict(fireball, {
-        "go": True, "reason": None, "caster_aura": False,
-        "target_guid": dummy, "target_aura": False,
-        "pre_hp": 100, "post_hp": 54,
-        "damage_logs": [{"damage": 46}], "packets": [306, 592],
-    })
+    observed = single_outcome_verdict(
+        fireball,
+        {
+            "go": True,
+            "reason": None,
+            "caster_aura": False,
+            "target_guid": dummy,
+            "target_aura": False,
+            "pre_hp": 100,
+            "post_hp": 54,
+            "damage_logs": [{"damage": 46}],
+            "packets": [306, 592],
+        },
+    )
     assert observed["verdict"] == "PASS", observed
     # Pilot gate: only the expected shapeshift FAIL and pinned corpse
     # BLOCKED are compatible; a core-row BLOCKED stops the gate.
     gate_rows = {
         "Warrior": [
-            make_verdict({"class": "Warrior", "spell_id": 5242,
-                          "bucket": "self"}, "PASS", evidence="ok"),
-            make_verdict({"class": "Warrior", "spell_id": 6546,
-                          "bucket": "hostile_dummy"}, "PASS", evidence="ok"),
+            make_verdict({"class": "Warrior", "spell_id": 5242, "bucket": "self"}, "PASS", evidence="ok"),
+            make_verdict({"class": "Warrior", "spell_id": 6546, "bucket": "hostile_dummy"}, "PASS", evidence="ok"),
         ],
         "Mage": [
-            make_verdict({"class": "Mage", "spell_id": 168,
-                          "bucket": "self"}, "PASS", evidence="ok"),
-            make_verdict({"class": "Mage", "spell_id": 133,
-                          "bucket": "hostile_dummy"}, "PASS", evidence="ok"),
+            make_verdict({"class": "Mage", "spell_id": 168, "bucket": "self"}, "PASS", evidence="ok"),
+            make_verdict({"class": "Mage", "spell_id": 133, "bucket": "hostile_dummy"}, "PASS", evidence="ok"),
         ],
         "Druid": [
-            make_verdict({"class": "Druid", "spell_id": 5187,
-                          "bucket": "friendly"}, "PASS", evidence="ok"),
+            make_verdict({"class": "Druid", "spell_id": 5187, "bucket": "friendly"}, "PASS", evidence="ok"),
             rejected,
-            make_verdict({"class": "Druid", "spell_id": 5487,
-                          "bucket": "form"}, "PASS", evidence="ok"),
-            make_verdict({"class": "Druid", "spell_id": 768,
-                          "bucket": "form"}, "PASS", evidence="ok"),
-            make_verdict({"class": "Druid", "spell_id": 20484,
-                          "bucket": "corpse"}, "BLOCKED",
-                         reason="wire-target-unsupported", evidence="ok"),
-            make_verdict({"class": "Druid", "spell_id": 8921,
-                          "bucket": "hostile_dummy"}, "PASS", evidence="ok"),
+            make_verdict({"class": "Druid", "spell_id": 5487, "bucket": "form"}, "PASS", evidence="ok"),
+            make_verdict({"class": "Druid", "spell_id": 768, "bucket": "form"}, "PASS", evidence="ok"),
+            make_verdict(
+                {"class": "Druid", "spell_id": 20484, "bucket": "corpse"},
+                "BLOCKED",
+                reason="wire-target-unsupported",
+                evidence="ok",
+            ),
+            make_verdict({"class": "Druid", "spell_id": 8921, "bucket": "hostile_dummy"}, "PASS", evidence="ok"),
         ],
     }
     assert pilot_gate_failures(gate_rows) == []
     gate_rows["Warrior"][1] = make_verdict(
-        {"class": "Warrior", "spell_id": 6546,
-         "bucket": "hostile_dummy"}, "BLOCKED",
-        reason="dummy-unavailable", evidence="no dummy")
+        {"class": "Warrior", "spell_id": 6546, "bucket": "hostile_dummy"},
+        "BLOCKED",
+        reason="dummy-unavailable",
+        evidence="no dummy",
+    )
     assert pilot_gate_failures(gate_rows)
     gate_rows["Druid"][1] = landed
-    assert any(spell == 6795 for _, spell, _ in
-               pilot_gate_failures(gate_rows))
+    assert any(spell == 6795 for _, spell, _ in pilot_gate_failures(gate_rows))
+    # Anti-vacuity: GO alone (or Started alone) is never PASS, for
+    # every expected kind including the Paladin fan-out kinds.
+    all_kinds = [
+        "aura_on_caster",
+        "aura_on_target",
+        "health_delta_target",
+        "heal_delta_target",
+        "damage_log",
+        "object_created",
+        "pet_created",
+        "form_change",
+        "item_consumed",
+        "learned_spell",
+        "teleport",
+        "dual_outcome",
+        "none_marker",
+    ]
+    for kind in all_kinds:
+        kind_row = {"class": "Paladin", "spell_id": 20293, "bucket": "self", "expected": {"kind": kind, "aura": 20293}}
+        vacuous = single_outcome_verdict(
+            kind_row,
+            {
+                "go": True,
+                "reason": None,
+                "caster_aura": False,
+                "target_guid": caster,
+                "target_aura": False,
+                "pre_hp": 100,
+                "post_hp": 100,
+                "damage_logs": [],
+                "pre": "pre",
+                "post": "post",
+                "packets": [306],
+            },
+        )
+        assert vacuous["verdict"] != "PASS", (kind, vacuous)
+    started_only = single_outcome_verdict(
+        fireball,
+        {
+            "go": False,
+            "reason": None,
+            "caster_aura": False,
+            "target_guid": dummy,
+            "target_aura": False,
+            "pre_hp": 100,
+            "post_hp": 100,
+            "damage_logs": [],
+            "packets": [305],
+        },
+    )
+    assert started_only["verdict"] == "FAIL"
+    assert started_only["phase"] == "prepare"
+    # Class gate: a PASS row without evidence or without a bound
+    # SPELL_GO (306) in its packets stops the class gate.
+    gate_ok = [make_verdict(row, "PASS", evidence="bound GO + aura", packets=[306, 592], target_guid=dummy)]
+    assert class_gate_failures({"Paladin": gate_ok}, {"Paladin": 1}) == []
+    gate_no_evidence = [make_verdict(row, "PASS", packets=[306], target_guid=dummy)]
+    assert class_gate_failures({"Paladin": gate_no_evidence}, {"Paladin": 1})
+    gate_no_go = [make_verdict(row, "PASS", evidence="stale claim", packets=[592], target_guid=dummy)]
+    assert class_gate_failures({"Paladin": gate_no_go}, {"Paladin": 1})
+    gate_count = [make_verdict(row, "PASS", evidence="ok", packets=[306], target_guid=dummy)]
+    assert class_gate_failures({"Paladin": gate_count}, {"Paladin": 2})
+    print("SELFTEST anti-vacuity + class gate ok")
+    # Per-class matrix paths: pilot classes stay on the pilot matrix;
+    # fan-out classes resolve to their own artifact (never MATRIX_PATH).
+    assert matrix_path_for("Warrior") == MATRIX_PATH
+    assert matrix_path_for("Mage") == MATRIX_PATH
+    assert matrix_path_for("Druid") == MATRIX_PATH
+    paladin_path = matrix_path_for("Paladin")
+    assert paladin_path != MATRIX_PATH
+    assert paladin_path.name == "spell_campaign_matrix-Paladin.json"
+    # Generic per-row dispatch: every Paladin bucket maps to a cast leg
+    # or to an honest closed-enum BLOCKED reason; nothing unmapped can
+    # reach a cast sender.
+    dispatch_table = [
+        (
+            {
+                "class": "Paladin",
+                "spell_id": 10293,
+                "bucket": "self",
+                "expected": {"kind": "aura_on_caster", "aura": 10293},
+            },
+            ("cast", "self"),
+        ),
+        (
+            {
+                "class": "Paladin",
+                "spell_id": 1038,
+                "bucket": "party_duel",
+                "expected": {"kind": "aura_on_target", "aura": 1038},
+            },
+            ("blocked", "no-party"),
+        ),
+        (
+            {
+                "class": "Paladin",
+                "spell_id": 1044,
+                "bucket": "friendly",
+                "expected": {"kind": "aura_on_target", "aura": 1044},
+            },
+            ("cast", "friendly"),
+        ),
+        (
+            {"class": "Paladin", "spell_id": 10310, "bucket": "friendly", "expected": {"kind": "heal_delta_target"}},
+            ("cast", "friendly"),
+        ),
+        (
+            {
+                "class": "Paladin",
+                "spell_id": 10308,
+                "bucket": "hostile_dummy",
+                "expected": {"kind": "aura_on_target", "aura": 10308},
+            },
+            ("cast", "hostile"),
+        ),
+        (
+            {"class": "Paladin", "spell_id": 20924, "bucket": "ground_area", "expected": {"kind": "object_created"}},
+            ("cast", "ground"),
+        ),
+        (
+            {
+                "class": "Paladin",
+                "spell_id": 19752,
+                "bucket": "item_reagent_ammo",
+                "expected": {"kind": "item_consumed", "reagent": 21177},
+            },
+            ("cast", "item"),
+        ),
+        (
+            {"class": "Paladin", "spell_id": 20048, "bucket": "passive", "expected": {"kind": "learned_spell"}},
+            ("passive", None),
+        ),
+        (
+            {
+                "class": "Paladin",
+                "spell_id": 1152,
+                "bucket": "friendly",
+                "campaign": "classify_only",
+                "expected": {"kind": "none_marker", "note": "dispel"},
+            },
+            ("blocked", "effect-marker-only"),
+        ),
+        (
+            {
+                "class": "Paladin",
+                "spell_id": 20271,
+                "bucket": "hostile_dummy",
+                "campaign": "classify_only_script",
+                "expected": {"kind": "damage_log", "opcode": 592},
+            },
+            ("blocked", "script-evidence-unknown"),
+        ),
+        (
+            {
+                "class": "Paladin",
+                "spell_id": 20930,
+                "bucket": "dual",
+                "campaign": "classify_only",
+                "expected": {"kind": "dual_outcome"},
+            },
+            ("blocked", "script-evidence-unknown"),
+        ),
+        (
+            {"class": "Paladin", "spell_id": 20930, "bucket": "dual", "expected": {"kind": "dual_outcome"}},
+            ("blocked", "script-evidence-unknown"),
+        ),
+        (
+            {"class": "Paladin", "spell_id": 0, "bucket": "corpse", "expected": {"kind": "resurrect_request"}},
+            ("blocked", "wire-target-unsupported"),
+        ),
+        (
+            {"class": "Paladin", "spell_id": 0, "bucket": "pet", "expected": {"kind": "none_marker"}},
+            ("blocked", "no-pet"),
+        ),
+        (
+            {"class": "Paladin", "spell_id": 0, "bucket": "form_totem", "expected": {"kind": "none_marker"}},
+            ("blocked", "engine-totem"),
+        ),
+    ]
+    for synth_row, want in dispatch_table:
+        got = pre_dispatch(synth_row)
+        assert got == want, (synth_row, got, want)
+        if got[0] == "blocked":
+            assert got[1] in BLOCKED_REASONS, got
+    for reason in UNSCENARIOED_EVIDENCE:
+        assert reason in BLOCKED_REASONS, reason
+    print("SELFTEST per-class dispatch table ok")
+    # Druid fan-out dispatch: form rows ride the form leg; stance-gated
+    # non-forms ride the form_gated leg (enter form, cast, exit);
+    # actual totem rows stay engine-totem; corpse-with-reagent
+    # (Rebirth) stays wire-target-unsupported and never reaches the
+    # item leg; taught caster-form rows ride the proven
+    # friendly/hostile/ground/item legs; form passives ride the
+    # learned_spell check.
+    assert required_form_spell({"stances": 144, "totem": [0, 0]}) == 9634
+    assert required_form_spell({"stances": 16, "totem": [0, 0]}) == 5487
+    assert required_form_spell({"stances": 1, "totem": [0, 0]}) == 768
+    assert required_form_spell({"stances": 1 << 30, "totem": [0, 0]}) == 24858
+    assert required_form_spell({"stances": 144, "totem": [5174, 0]}) is None
+    assert required_form_spell({"stances": 0, "totem": [0, 0]}) is None
+    druid_dispatch = [
+        ({"class": "Druid", "spell_id": 9634, "bucket": "form", "expected": {"kind": "form_change"}}, ("cast", "form")),
+        (
+            {
+                "class": "Druid",
+                "spell_id": 6795,
+                "bucket": "form_totem",
+                "stances": 144,
+                "totem": [0, 0],
+                "expected": {"kind": "aura_on_target", "aura": 6795},
+            },
+            ("cast", "form_gated"),
+        ),
+        (
+            {
+                "class": "Shaman",
+                "spell_id": 0,
+                "bucket": "form_totem",
+                "stances": 0,
+                "totem": [5174, 0],
+                "expected": {"kind": "object_created"},
+            },
+            ("blocked", "engine-totem"),
+        ),
+        (
+            {"class": "Druid", "spell_id": 20748, "bucket": "corpse", "expected": {"kind": "resurrect_request"}},
+            ("blocked", "wire-target-unsupported"),
+        ),
+        (
+            {"class": "Druid", "spell_id": 25297, "bucket": "friendly", "expected": {"kind": "heal_delta_target"}},
+            ("cast", "friendly"),
+        ),
+        (
+            {
+                "class": "Druid",
+                "spell_id": 25299,
+                "bucket": "friendly",
+                "expected": {"kind": "aura_on_target", "aura": 25299},
+            },
+            ("cast", "friendly"),
+        ),
+        (
+            {
+                "class": "Druid",
+                "spell_id": 9835,
+                "bucket": "hostile_dummy",
+                "expected": {"kind": "damage_log", "opcode": 592},
+            },
+            ("cast", "hostile"),
+        ),
+        (
+            {"class": "Druid", "spell_id": 18960, "bucket": "ground_area", "expected": {"kind": "teleport"}},
+            ("cast", "ground"),
+        ),
+        (
+            {
+                "class": "Druid",
+                "spell_id": 21850,
+                "bucket": "item_reagent_ammo",
+                "expected": {"kind": "item_consumed", "reagent": 17026},
+            },
+            ("cast", "item"),
+        ),
+        (
+            {
+                "class": "Druid",
+                "spell_id": 22812,
+                "bucket": "self",
+                "expected": {"kind": "aura_on_caster", "aura": 22812},
+            },
+            ("cast", "self"),
+        ),
+        (
+            {"class": "Druid", "spell_id": 3025, "bucket": "passive", "expected": {"kind": "learned_spell"}},
+            ("passive", None),
+        ),
+    ]
+    for synth_row, want in druid_dispatch:
+        got = pre_dispatch(synth_row)
+        assert got == want, (synth_row, got, want)
+        if got[0] == "blocked":
+            assert got[1] in BLOCKED_REASONS, got
+    print("SELFTEST Druid dispatch table ok")
+    # GO-only anti-vacuity for the form_change mapping: a bound GO
+    # without the form aura on the caster is an apply FAIL, while the
+    # same GO with the aura observed is PASS.
+    form_row = {"class": "Druid", "spell_id": 9634, "bucket": "form", "expected": {"kind": "form_change"}}
+    go_alone_form = single_outcome_verdict(
+        form_row,
+        {
+            "go": True,
+            "reason": None,
+            "caster_aura": False,
+            "target_guid": caster,
+            "target_aura": False,
+            "pre_hp": None,
+            "post_hp": None,
+            "damage_logs": [],
+            "pre": "pre",
+            "post": "post",
+            "packets": [306],
+        },
+    )
+    assert go_alone_form["verdict"] == "FAIL", go_alone_form
+    assert go_alone_form["phase"] == "apply", go_alone_form
+    go_observed_form = single_outcome_verdict(
+        form_row,
+        {
+            "go": True,
+            "reason": None,
+            "caster_aura": True,
+            "target_guid": caster,
+            "target_aura": False,
+            "pre_hp": None,
+            "post_hp": None,
+            "damage_logs": [],
+            "pre": "pre",
+            "post": "post",
+            "packets": [306],
+        },
+    )
+    assert go_observed_form["verdict"] == "PASS", go_observed_form
+    print("SELFTEST GO-alone cannot PASS form row ok")
+    # SPELL_GO alone cannot PASS a generic row: a bound GO with no
+    # observed outcome is an apply-phase FAIL, while the same GO with
+    # the aura observed is PASS. The discriminator is the observable,
+    # never the GO.
+    generic_row = {
+        "class": "Paladin",
+        "spell_id": 10293,
+        "bucket": "self",
+        "expected": {"kind": "aura_on_caster", "aura": 10293},
+    }
+    go_alone = single_outcome_verdict(
+        generic_row,
+        {
+            "go": True,
+            "reason": None,
+            "caster_aura": False,
+            "target_guid": caster,
+            "target_aura": False,
+            "pre_hp": None,
+            "post_hp": None,
+            "damage_logs": [],
+            "pre": "pre",
+            "post": "post",
+            "packets": [306],
+        },
+    )
+    assert go_alone["verdict"] == "FAIL", go_alone
+    assert go_alone["phase"] == "apply", go_alone
+    go_observed = single_outcome_verdict(
+        generic_row,
+        {
+            "go": True,
+            "reason": None,
+            "caster_aura": True,
+            "target_guid": caster,
+            "target_aura": False,
+            "pre_hp": None,
+            "post_hp": None,
+            "damage_logs": [],
+            "pre": "pre",
+            "post": "post",
+            "packets": [306],
+        },
+    )
+    assert go_observed["verdict"] == "PASS", go_observed
+    print("SELFTEST GO-alone cannot PASS generic row ok")
+    # Settlable-seed castability (the live 145 regression): every
+    # castable row's spell is in the artifact seed, and the seed
+    # talent cost settles at or under the level-60 cap, else fork
+    # login wipes the talent book and every talent cast fails 145.
+    if paladin_path.exists():
+        paladin_seed_doc = json.loads(paladin_path.read_text())
+        paladin_seed = set(paladin_seed_doc.get("full_seed_spell_ids", {}).get("Paladin", []))
+        assert paladin_seed, "Paladin artifact seed empty"
+        assert paladin_seed_doc.get("full_seed_talent_cost", 99) <= 51, paladin_seed_doc.get("full_seed_talent_cost")
+        castable = [
+            r
+            for r in paladin_seed_doc.get("rows", [])
+            if r.get("class") == "Paladin"
+            and not (r.get("campaign", "") or "").startswith("classify_only")
+            and (r.get("expected") or {}).get("kind") not in ("none_marker", "dual_outcome", "learned_spell")
+        ]
+        assert castable, "no castable Paladin rows"
+        for cast_row in castable:
+            assert cast_row["spell_id"] in paladin_seed, cast_row["spell_id"]
+            assert isinstance(cast_row.get("cooldown_ms"), int), cast_row
+        print(
+            f"SELFTEST Paladin seed castability ok "
+            f"({len(castable)} cast rows seeded, "
+            f"cost={paladin_seed_doc.get('full_seed_talent_cost')})"
+        )
+    else:
+        print("SELFTEST Paladin artifact absent; skipping castability")
+    # Pure heal-rise gate: regen-baselined rise over one discrete
+    # tick; a full ally (jump 0) is a scenario FAIL, never PASS.
+    assert heal_rise_ok(2609.0, 2609.0, 2609.0, 0.0, 3.0, 7.0)[1] is False
+    rise, ok = heal_rise_ok(300.0, 310.0, 900.0, 0.0, 3.0, 7.0)
+    assert ok and rise > 50, (rise, ok)
+    rise2, ok2 = heal_rise_ok(300.0, 300.0, 340.0, 0.0, 3.0, 7.0)
+    assert not ok2 and rise2 <= 50, (rise2, ok2)
+    # Clean-dummy reuse predicate: only alive, full-health, aura-free
+    # dummies are reusable; DoT/CC/dead holders never are.
+    assert dummy_reusable(100, 100, False) is True
+    assert dummy_reusable(100, 100, True) is False
+    assert dummy_reusable(54, 100, False) is False
+    assert dummy_reusable(0, 100, False) is False
+    assert dummy_reusable(None, 100, False) is False
+    assert dummy_reusable(100, None, False) is False
+    # Passive learned rule: passive spells have no aura holder by
+    # design, so learned alone verifies; non-passive rows still need
+    # the aura.
+    assert passive_learn_verdict(True, True, False) == "PASSIVE-VERIFIED"
+    assert passive_learn_verdict(True, False, False) == "PASSIVE-UNVERIFIED"
+    assert passive_learn_verdict(False, True, True) == "PASSIVE-VERIFIED"
+    assert passive_learn_verdict(False, True, False) == "PASSIVE-UNVERIFIED"
+    print("SELFTEST seed castability + heal + dummy + passive ok")
+    # Totality over the real per-class artifact when present: every
+    # row dispatches to a known cast leg, the passive check, or a
+    # closed-enum BLOCKED reason.
+    if paladin_path.exists():
+        paladin_doc = json.loads(paladin_path.read_text())
+        paladin_rows = [r for r in paladin_doc.get("rows", []) if r.get("class") == "Paladin"]
+        assert paladin_rows, "Paladin artifact has no Paladin rows"
+        seen_legs: set[str] = set()
+        seen_blocked: set[str] = set()
+        for real_row in paladin_rows:
+            act, pay = pre_dispatch(real_row)
+            if act == "cast":
+                assert pay in ("self", "friendly", "hostile", "ground", "item"), (real_row, pay)
+                seen_legs.add(pay)
+            elif act == "blocked":
+                assert pay in BLOCKED_REASONS, (real_row, pay)
+                seen_blocked.add(pay)
+            else:
+                assert act == "passive" and pay is None, real_row
+        assert {"self", "friendly", "hostile", "ground", "item"} <= seen_legs, seen_legs
+        assert "script-evidence-unknown" in seen_blocked, seen_blocked
+        assert "effect-marker-only" in seen_blocked, seen_blocked
+        assert "no-party" in seen_blocked, seen_blocked
+        print(
+            f"SELFTEST Paladin artifact dispatch totality ok "
+            f"({len(paladin_rows)} rows, legs={sorted(seen_legs)}, "
+            f"blocked={sorted(seen_blocked)})"
+        )
+    else:
+        print("SELFTEST Paladin artifact absent; skipping totality")
+    # Totality over the real Druid fan-out artifact when present:
+    # every row dispatches to a cast leg, the passive check, or a
+    # closed-enum BLOCKED reason; the form leg is exercised and the
+    # stance/corpse BLOCKED reasons are present.
+    druid_path = matrix_path_for("Druid")
+    try:
+        import spell_matrix_gen as gen  # noqa: PLC0415
+
+        druid_path = gen.class_matrix_path("Druid")
+    except (ImportError, AttributeError):
+        pass
+    if druid_path.exists():
+        druid_doc = json.loads(druid_path.read_text())
+        druid_rows = [r for r in druid_doc.get("rows", []) if r.get("class") == "Druid"]
+        assert druid_rows, "Druid artifact has no Druid rows"
+        seen_legs: set[str] = set()
+        seen_blocked: set[str] = set()
+        for real_row in druid_rows:
+            act, pay = pre_dispatch(real_row)
+            if act == "cast":
+                assert pay in ("self", "friendly", "hostile", "ground", "item", "form", "form_gated"), (real_row, pay)
+                seen_legs.add(pay)
+            elif act == "blocked":
+                assert pay in BLOCKED_REASONS, (real_row, pay)
+                seen_blocked.add(pay)
+            else:
+                assert act == "passive" and pay is None, real_row
+        assert {"self", "friendly", "hostile", "ground", "item", "form", "form_gated"} <= seen_legs, seen_legs
+        # Druid has no totems: stance-gated rows ride form_gated, so
+        # engine-totem must not appear for this class at all.
+        assert "engine-totem" not in seen_blocked, seen_blocked
+        assert "wire-target-unsupported" in seen_blocked, seen_blocked
+        assert "effect-marker-only" in seen_blocked, seen_blocked
+        assert not [r for r in druid_rows if (r.get("expected") or {}).get("kind") == "expect_cast_failure"], (
+            "full Druid matrix must not invent expect_cast_failure rows"
+        )
+        print(
+            f"SELFTEST Druid artifact dispatch totality ok "
+            f"({len(druid_rows)} rows, legs={sorted(seen_legs)}, "
+            f"blocked={sorted(seen_blocked)})"
+        )
+    else:
+        print("SELFTEST Druid artifact absent; skipping totality")
     # Artifact writers round-trip.
     tmp = [make_verdict(row, "PASS", evidence="t", packets=[306, 169, 306])]
     assert tmp[0]["packets"] == [169, 306]
@@ -1833,13 +4321,29 @@ def run_self_test() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command",
-                        choices=["preflight", "fixtures", "pilot", "run"],
-                        nargs="?", default="pilot")
+    parser.add_argument(
+        "command", choices=["preflight", "fixtures", "pilot", "run", "run-class"], nargs="?", default="pilot"
+    )
+    parser.add_argument("class_arg", nargs="?", help="class for run-class (e.g. Paladin)")
     parser.add_argument("--spell", type=int, default=None)
     parser.add_argument("--char", default=None)
-    parser.add_argument("--self-test", action="store_true",
-                        help="offline invariant checks, no server needed")
+    parser.add_argument("--class", dest="class_name", default="Paladin", help="class fanned out by run-class")
+    parser.add_argument(
+        "--matrix",
+        default=None,
+        help="run-class matrix artifact override "
+        "(default: the class's own artifact, "
+        "spell_campaign_matrix-<class>.json for fan-out "
+        "classes, the pilot matrix for pilot classes)",
+    )
+    parser.add_argument(
+        "--only",
+        type=int,
+        action="append",
+        default=None,
+        help="restrict run-class to these spell ids (repeatable; smoke subsets)",
+    )
+    parser.add_argument("--self-test", action="store_true", help="offline invariant checks, no server needed")
     args = parser.parse_args()
     if args.self_test:
         return run_self_test()
@@ -1854,6 +4358,16 @@ def main() -> int:
             return 2
         guard_loopback()
         return run_single(args.spell, args.char)
+    if args.command == "run-class":
+        guard_loopback()
+        holder: list[int] = []
+        which = args.class_arg or args.class_name
+
+        def _leg() -> None:
+            holder.append(run_class(which, args.only, matrix_path=args.matrix))
+
+        run_leg_with_log(which, _leg)
+        return holder[0] if holder else 2
     guard_loopback()
     return run_pilot()
 

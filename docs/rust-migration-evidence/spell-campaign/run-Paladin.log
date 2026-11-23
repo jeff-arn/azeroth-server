@@ -1,0 +1,111 @@
+SEEDED guid=900018 spells=174 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP02 guid=900018 map=0 pos=(-6295.00,315.00,377.50)
+DRIFT-OK guid=900018 level=60 spells=174 health=2201
+ROW Paladin 1038 party_duel: BLOCKED no-party | solo repro
+SEEDED guid=900015 spells=3 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Paladin 1044 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True cooldown_wai
+ROW Paladin 1152 friendly: BLOCKED effect-marker-only | classify_only
+ROW Paladin 4987 friendly: BLOCKED effect-marker-only | classify_only
+ROW Paladin 10278 party_duel: BLOCKED no-party | solo repro
+ROW Paladin 10293 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 10301 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 10308 hostile_dummy: PASS  | observable outcome: target_aura=True after 2 attempt(s)
+LOGOUT-OK Paladin-ally
+SEEDED guid=900015 spells=3 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Paladin 10310 friendly: PASS  | bound GO + regen-baselined jump 1707 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 743->811 pre, got 2609)
+ROW Paladin 19746 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 19752 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17033 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Paladin 19896 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 19898 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 19900 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 19943 friendly: BLOCKED script-evidence-unknown | classify_only
+ROW Paladin 19968 friendly: BLOCKED effect-marker-only | classify_only
+ROW Paladin 19979 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Paladin 19980 friendly: BLOCKED effect-marker-only | classify_only
+ROW Paladin 19981 friendly: BLOCKED effect-marker-only | classify_only
+ROW Paladin 19982 friendly: BLOCKED effect-marker-only | classify_only
+ROW Paladin 19993 friendly: BLOCKED effect-marker-only | classify_only
+ROW Paladin 20048 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 20059 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 20064 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 20066 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Paladin 20105 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 20113 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 20121 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 20164 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 20184 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Paladin 20185 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Paladin 20186 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Paladin 20188 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Paladin 20208 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 20218 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 20261 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 20266 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 20271 hostile_dummy: BLOCKED script-evidence-unknown | classify_only
+ROW Paladin 20286 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=260 after 1 attempt(s)
+ROW Paladin 20293 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 20300 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Paladin 20301 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Paladin 20302 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Paladin 20303 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Paladin 20308 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 20344 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Paladin 20345 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Paladin 20346 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Paladin 20349 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 20354 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Paladin 20355 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Paladin 20357 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 20425 hostile_dummy: BLOCKED script-evidence-unknown | classify_only
+ROW Paladin 20729 party_duel: BLOCKED no-party | solo repro
+ROW Paladin 20914 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Paladin 20920 self: PASS  | observable outcome: caster_aura=True
+ROW Paladin 20924 ground_area: PASS  | observable outcome: object_seen=False, health 100->0, matching damage=48
+ROW Paladin 20928 item_reagent_ammo: BLOCKED fixture-gear | offhand is not armor-class (class 4): None; starter lacks a shield
+ROW Paladin 20930 dual: BLOCKED script-evidence-unknown | classify_only
+ROW Paladin 20961 hostile_dummy: BLOCKED script-evidence-unknown | classify_only
+ROW Paladin 20962 hostile_dummy: BLOCKED script-evidence-unknown | classify_only
+ROW Paladin 20967 hostile_dummy: BLOCKED script-evidence-unknown | classify_only
+ROW Paladin 20968 hostile_dummy: BLOCKED script-evidence-unknown | classify_only
+ROW Paladin 24239 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=543 after 1 attempt(s); reused observably-clean dummy (alive, full he
+ROW Paladin 25290 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Paladin 25291 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Paladin 25292 friendly: BLOCKED script-evidence-unknown | classify_only
+ROW Paladin 25780 self: PASS  | observable outcome: caster_aura=True after 1 mana wait(s)
+ROW Paladin 25781 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Paladin 25890 item_reagent_ammo: BLOCKED fixture-reagent | reagent 21177 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Paladin 25895 item_reagent_ammo: BLOCKED fixture-reagent | reagent 21177 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Paladin 25898 item_reagent_ammo: BLOCKED fixture-reagent | reagent 21177 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Paladin 25899 item_reagent_ammo: BLOCKED fixture-reagent | reagent 21177 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Paladin 25902 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=367 after 1 attempt(s); reused observably-clean dummy (alive, full he
+LOGOUT-OK Paladin-ally
+SEEDED guid=900015 spells=3 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Paladin 25903 friendly: PASS  | bound GO + regen-baselined jump 346 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 675->743 pre, got 1180)
+ROW Paladin 25911 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=288 after 1 attempt(s); reused observably-clean dummy (alive, full he
+ROW Paladin 25912 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=208 after 1 attempt(s); reused observably-clean dummy (alive, full he
+LOGOUT-OK Paladin-ally
+SEEDED guid=900015 spells=3 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Paladin 25913 friendly: PASS  | bound GO + regen-baselined jump 297 > 50 (no oracle band; band-less rise gate, rate 22.7/s, 743->811 pre, got 1200)
+LOGOUT-OK Paladin-ally
+SEEDED guid=900015 spells=3 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Paladin 25914 friendly: PASS  | bound GO + regen-baselined jump 262 > 50 (no oracle band; band-less rise gate, rate 11.3/s, 675->709 pre, got 1017)
+ROW Paladin 25916 item_reagent_ammo: BLOCKED fixture-reagent | reagent 21177 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Paladin 25918 item_reagent_ammo: BLOCKED fixture-reagent | reagent 21177 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Paladin 25997 hostile_dummy: PASS  | observable outcome: health 100->97, matching damage=1 after 1 attempt(s); reused observably-clean dummy (alive, full hea
+ROW Paladin 26021 passive: PASSIVE-VERIFIED | learned=True
+ROW Paladin 26023 passive: PASSIVE-VERIFIED | learned=True
+LOGOUT-OK Paladin-ally
+LOGOUT-OK Paladin-run
+run-class Paladin: 84 rows, BLOCKED=28, PASS=45, PASSIVE-VERIFIED=11
+SPELL-CAMPAIGN-RUN-CLASS-PALADIN-PASS

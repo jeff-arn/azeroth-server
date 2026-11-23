@@ -1,0 +1,99 @@
+{
+ "mode": "run-class",
+ "class": "Paladin",
+ "matrix_file": "/Users/jeffarn/Programming/azeroth-server/vmangos-rs/scripts/spell_campaign_matrix-Paladin.json",
+ "matrix_mode": "full",
+ "matrix_counts": {
+  "Paladin": 84
+ },
+ "talent_build": {
+  "name": "ret",
+  "role": "MeleeDps",
+  "total_points": 51,
+  "known_spell_ids": [
+   20048,
+   20059,
+   20064,
+   20066,
+   20105,
+   20113,
+   20121,
+   20208,
+   20218,
+   20261,
+   20266,
+   20375,
+   26021,
+   26023
+  ],
+  "required_spell_ids": []
+ },
+ "fixture_note": "union-seeded single-race fixture; not a legal single-race spellbook claim where union exceeds any one race (Paladin Human==Dwarf==160, numerically equal)",
+ "seed_count": 174,
+ "talent_seed_checks": [
+  {
+   "spell_id": 20048,
+   "learned": true
+  },
+  {
+   "spell_id": 20059,
+   "learned": true
+  },
+  {
+   "spell_id": 20064,
+   "learned": true
+  },
+  {
+   "spell_id": 20066,
+   "learned": true
+  },
+  {
+   "spell_id": 20105,
+   "learned": true
+  },
+  {
+   "spell_id": 20113,
+   "learned": true
+  },
+  {
+   "spell_id": 20121,
+   "learned": true
+  },
+  {
+   "spell_id": 20208,
+   "learned": true
+  },
+  {
+   "spell_id": 20218,
+   "learned": true
+  },
+  {
+   "spell_id": 20261,
+   "learned": true
+  },
+  {
+   "spell_id": 20266,
+   "learned": true
+  },
+  {
+   "spell_id": 20375,
+   "learned": true
+  },
+  {
+   "spell_id": 26021,
+   "learned": true
+  },
+  {
+   "spell_id": 26023,
+   "learned": true
+  }
+ ],
+ "failure_clusters": [],
+ "verdict_counts": {
+  "BLOCKED": 28,
+  "PASS": 45,
+  "PASSIVE-VERIFIED": 11
+ },
+ "git_head": "f593d4bd",
+ "git_dirty": true
+}
