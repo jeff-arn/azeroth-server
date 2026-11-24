@@ -2423,3 +2423,9 @@ PASS with CHARACTER_LOAD_GUID=1. Totem rows
 riding classify-only stay tracked in
 PARITY-LONG-TAIL section 2 (totem engine
 completion converts them).
+Shaman deploy (same day): mangosd dd746fb3 built
+in the ubuntu:22.04 amd64 recipe, side-port
+boot-checked, droplet backed up, swapped
+binary-only (previous pair preserved as
+mangosd.6d28-bak; realmd unchanged), 8085
+listening on the fresh boot.
