@@ -93,6 +93,10 @@ pub struct SpellEntry {
     pub stances_not: u32,
     /// fields[14] (target mask bits).
     pub targets: u32,
+    /// fields[17] (`casterAuraState` column).
+    pub caster_aura_state: u32,
+    /// fields[18] (`targetAuraState` column).
+    pub target_aura_state: u32,
     /// fields[19].
     pub casting_time_index: u32,
     /// fields[20].

@@ -67,6 +67,9 @@ mod combo_tests;
 #[cfg(test)]
 mod cast_item_tests;
 
+#[cfg(test)]
+mod target_exemption_tests;
+
 pub use map::{Map, MapConfig, MapEvent, PlayerSlotId};
 pub use stores::WorldStores;
 

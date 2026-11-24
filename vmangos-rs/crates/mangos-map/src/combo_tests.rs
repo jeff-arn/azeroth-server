@@ -41,6 +41,8 @@ const FINISHER_SPELL: u32 = 9204;
 /// `TARGET_UNIT_CASTER` instakill that must land on the caster
 /// (Sacrifice shape).
 const MIXED_SELF_KILL_SPELL: u32 = 9205;
+/// Execute stand-in: `TargetAuraState` `HEALTHLESS_20` gate.
+const EXECUTE_SPELL: u32 = 9206;
 /// Creature template entry for victims.
 const VICTIM_ENTRY: u32 = 9301;
 /// `TARGET_UNIT` implicit target (see insignia fixture).
@@ -267,6 +269,21 @@ fn combo_stores() -> WorldStores {
             dmg_class: dmg_class::MELEE,
             attributes: 0x0400_0000,    // ATTR_AURA_IS_DEBUFF
             attributes_ex: 0x0010_0000, // FINISHING_MOVE_DAMAGE
+            effects: [
+                unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Execute stand-in: unit damage gated on the target
+    // being under 20% health (fork TargetAuraState).
+    stores.spells.spells.insert(
+        EXECUTE_SPELL,
+        SpellEntry {
+            id: EXECUTE_SPELL,
+            target_aura_state: mangos_spells::defines::aura_state::HEALTHLESS_20_PERCENT,
             effects: [
                 unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
                 SpellEffectData::default(),
@@ -659,4 +676,53 @@ fn unit_caster_effect_lands_on_caster_not_victim() {
         victim_after < victim_before && victim_after > 0,
         "victim takes only the unit-target damage ({victim_before} -> {victim_after})"
     );
+}
+
+#[test]
+fn execute_gate_rejects_above_20_percent_health() {
+    // Fork `CheckCast` TargetAuraState gate
+    // (`Spell.cpp:5868`): Execute on a target at or above
+    // 20% health fails `SPELL_FAILED_BAD_TARGETS`; found
+    // live by the Warrior campaign, whose Execute rows
+    // passed at full dummy health.
+    use mangos_spells::defines::cast_result;
+    let Fixture {
+        mut map,
+        caster,
+        victim,
+    } = setup(11);
+    let outcome = map.cast_spell(
+        caster,
+        EXECUTE_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(
+        outcome,
+        CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS),
+        "Execute above 20% target health must be rejected"
+    );
+    // Wound the victim below 20% directly (builder bites
+    // overshoot a 100 hp fixture and kill it outright).
+    let max_hp = map.unit_value_u32(victim, offsets::UNIT_FIELD_MAXHEALTH);
+    map.creatures
+        .get_mut(&victim)
+        .expect("victim creature")
+        .unit
+        .world
+        .object
+        .values_mut()
+        .set_u32(offsets::UNIT_FIELD_HEALTH, max_hp / 10);
+    assert!(
+        victim_health(&map, victim) * 5 < max_hp,
+        "victim must be below 20% for the open-gate cast (hp {} max {max_hp})",
+        victim_health(&map, victim)
+    );
+    let outcome = map.cast_spell(
+        caster,
+        EXECUTE_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
 }

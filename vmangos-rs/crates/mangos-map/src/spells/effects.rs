@@ -3,6 +3,26 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+/// Area victim modes (fork fill-time `CheckTarget` scope):
+/// the per-effect main-target exclusion applies to these,
+/// never to explicit-unit modes (`PushTarget` bypasses the
+/// fill-time script check for the explicit unit target).
+fn is_area_target_mode(mode: u32) -> bool {
+    matches!(
+        mode,
+        tgt::ENEMY_AOE_AT_SRC_LOC_SCRIPT
+            | tgt::ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC
+            | tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC
+            | tgt::ENUM_UNITS_ENEMY_IN_CONE
+            | tgt::ENUM_UNITS_PARTY_WITHIN_CASTER_RANGE
+            | tgt::LOCATION_CASTER_SRC
+            | tgt::ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOCATION
+            | tgt::ENUM_UNITS_FRIEND_AOE_AT_DYNOBJ_LOCATION
+            | tgt::ENUM_UNITS_FRIEND_AOE_AT_DEST_LOC
+            | tgt::ENUM_UNITS_FRIEND_AOE_AT_SRC_LOC
+    )
+}
+
 impl Map {
     /// `ComputeEffectRadius` data half: radius entry
     /// for one effect (spellmod applied by callers
@@ -307,10 +327,17 @@ impl Map {
         // filter (fork `Spell::CheckTarget` during
         // target-map fill; eff-index granularity is
         // the first-effect subset of this merged
-        // victim list).
+        // victim list). The explicit unit target always
+        // survives: the fork carries it on the separate
+        // main-target path (`PushTarget`), which bypasses
+        // the fill-time script check, so unit-targeted
+        // effects (Intimidating Shout's 20511 trigger) still
+        // land on it; area effects exclude it per effect
+        // below instead.
         let main_target = Self::script_unit_target(target);
         targets.retain(|v| {
-            self.spell_script_on_check_target(caster, spell, main_target, *v, eff_index)
+            Some(*v) == main_target
+                || self.spell_script_on_check_target(caster, spell, main_target, *v, eff_index)
         });
         // Fork max-target trim (`Spell.cpp` tail of
         // SetTargetMap): closest-first when the
@@ -361,6 +388,7 @@ impl Map {
         spell: &SpellEntry,
         victim: ObjectGuid,
         client_dest: Option<Position>,
+        main_target: Option<ObjectGuid>,
         mut applied_mods: Option<&mut Vec<(u32, u8)>>,
         proc_ctx: Option<&ProcRaiseCtx>,
         bp: [Option<i32>; 3],
@@ -440,6 +468,22 @@ impl Map {
             } else {
                 victim
             };
+            // Per-effect main-target exclusion (fork
+            // per-effect `CheckTarget` during fill):
+            // area effects skip the explicit unit target
+            // when the script rejects it (Intimidating
+            // Shout 5246: the main target is stunned by
+            // the trigger, never feared). Unit-mode
+            // effects always land on it — the merged list
+            // keeps it unconditionally above (fork
+            // `PushTarget`). Script-less spells return
+            // true here, so nothing else changes.
+            if Some(victim) == main_target
+                && is_area_target_mode(eff.implicit_target_a)
+                && !self.spell_script_on_check_target(caster, spell, main_target, victim, i)
+            {
+                continue;
+            }
             // Per-effect immunity (fork strips the
             // effect from the target's effectMask).
             if self.is_immune_to_spell_effect(victim, spell, i, victim == caster) {

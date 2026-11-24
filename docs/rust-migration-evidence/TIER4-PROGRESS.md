@@ -2429,3 +2429,197 @@ boot-checked, droplet backed up, swapped
 binary-only (previous pair preserved as
 mangosd.6d28-bak; realmd unchanged), 8085
 listening on the fresh boot.
+
+Warrior spell campaign full run (2026-11-24, bench
+127.0.0.1:18099, fan-out matrix 85 cast rows over
+merged S7 chains: seed G1 union 121 + fury talent
+17 known, cost exactly 51, overlap [], excluded []):
+first full run 30 PASS / 19 PASSIVE-VERIFIED /
+16 BLOCKED / 20 FAIL, final rerun 54 PASS /
+19 PASSIVE-VERIFIED / 12 BLOCKED / 0 FAIL
+(`run-class Warrior: 85 rows`, zero failure
+clusters; honest BLOCKED remainder 12
+effect-marker-only, zero FAILs). Failure clusters
+from the runs, all fixed test-first in
+shared-root-cause order:
+(1) rage-blind setup (16 rows NO_POWER): the harness
+read UNIT_FIELD_POWER1 (23, the mana slot, absent
+for a rage user) instead of field 24, so every
+setup saw 0 rage; the field fix plus a
+cooldown-aware Bloodrage loop (live 65 s waits on
+NOT_READY, up to 8 cycles) recovered 10 rows, and
+the rest needed combat maintenance — rage drains
+2/tick out of combat (fork-exact) and a 60 s
+cooldown wait with nothing referencing the warrior
+wipes the pool faster than Bloodrage refills it
+(probe: pool 0 after 3 Bloodrages +268 s waits,
+tap never engaged because Rend is stance-gated
+and stanceless rows read 86). Fix: an Execute
+(20647, stanceless, 1 rage, ~1 damage) tap on the
+row dummy (spare counter borrowed for dummy-less
+self/ground rows) the moment Bloodrage answers
+NOT_READY, so retaliation holds combat through
+the wait; verified live on 250- and 300-cost rows
+before the rerun.
+(2) mixed unit+area targeting (Intimidating Shout
+5246 ground→hostile reroute still read 9 then
+GO-no-aura): the merged victim list dropped the
+explicit unit target in `collect_targets` (fill-time
+script check), so the 20511 stun trigger never
+fired. Fork-exact engine fix with a live-before
+regression pair (`target_exemption_tests`: trigger
+lands on the exempt main target, area fear
+skips it): the explicit unit target now survives
+the fill-time check (fork `PushTarget` path) while
+area effects still exclude it per effect (fork
+per-effect `CheckTarget`); the hostile leg checks
+the triggered holder (live_oracle 20511) when the
+derivation is vacuous. No other fan-out matrix
+has a ground-bucket row with a hostile unit
+target, so no shipped routing changes.
+(3) shared 30-min category (Shield Wall 871 arms
+category 132/1800 s, so Recklessness 1719 reads
+NOT_READY): the self leg now waits the live
+oracle category total in capped chunks and
+retries (one ~30 min wait, then PASS).
+(4) self-heal rows (Bloodthirst restores 23880/89/
+90/91, cost 0, heal 10-20): a relog self-heal leg
+(SQL-damage to 300 offline like the ally legs,
+relog, cast, heal-log bind against the oracle
+band) — all four PASS with logs 10/13/17 in band.
+(5) wounded-warrior deaths (7386 read CASTER_DEAD
+at 48 hp after a 101 s setup): ambient dummy
+retaliation grinds health down across the run, so
+rows below 1200 hp relog SQL-topped-up before
+casting (rage persists across the relog; stances
+are entered per row afterwards).
+(6) aura-lag flakes (Shield Block 2565 GO with no
+aura twice; Recklessness once; Piercing Howl 6 s
+daze vs the 6 s ground window): self-leg and
+stance entries poll for the aura (8 s) and the
+ground leg latches short auras in-window (plus
+the post-window check), and form entry retries
+once from a verified-bare caster form.
+Stance/rage/gear scenario outcomes: Battle (2457)
+first with Defensive (71) and Berserker (2458)
+seeded, warrior cancel set, stance-gated rows
+ride form_gated with setup verification (one
+2457 entry flaked GO-no-aura, passed on the
+verified-bare retry; one Berserker entry flaked
+once the same way); rage via Bloodrage cycles +
+tap-engaged beater (3-cycle 300-cost rows verified
+live); fixture gear (1161 mainhand + 1166 shield
+offhand) seeds every run with the honest
+fixture-gear BLOCKED path intact (no Warrior
+row routes the item leg); Charge/Intercept stay
+BLOCKED effect-marker-only (no movement leg);
+Thunder Clap/Demoralizing ride hostile/ground
+areaselect correctly (Demoralizing 11556 PASS);
+Overpower needs no combo gate (none-marker, no
+combo path); Execute 20647 unstanced PASS
+(1 damage, rage drained fork-exactly, no <20%
+gate in the engine so no pre-damage scenario);
+Taunt/Mocking Blow left as derived (aura/damage
+present, castable; marker-only disposition stays
+open). Mocking Blow 20560 needed one dummy
+re-pick after repeated OUT_OF_RANGE (new hostile
+re-pick arm, like the dead-dummy arm).
+Bench provenance: rebuilt mangosd debug from the
+current tree (target-exemption engine fix) and
+restarted ONLY the proven bench-lan pair on 18099
+(listener verified; the side-bench pair and realmd
+never touched). Pilot SPELL-CAMPAIGN-PILOT-PASS
+before and after (known flakes: Druid 8921
+dummy-reset twice and the 5187 heal-band edge
+once, then clean); P/D/W/H/S regression smokes
+(10310+20924, 6795+9896, 688+7812+980, 136+3044,
+8042+331) PASS on the final binary and tree;
+generator + campaign self-tests PASS; ruff clean;
+cargo fmt clean; clippy -D warnings clean
+(mangos-map); cargo test -p mangos-map lib 101
+pass (incl. the 2 new exemption tests, failing
+before the fix); full live_spells (4 tests incl.
+bench_spells_and_auras) PASS with
+CHARACTER_LOAD_GUID=1. Shipped results files
+byte-identical (restored after every smoke; only
+the Warrior artifacts and this section added).
+No commit or push was made.
+
+Warrior correction — Execute HEALTHLESS_20 gate
+(2026-11-24, same bench/tree): the verifier
+falsified the section above's Execute claim.
+Row 20647 had PASSed at dummy health 100->98
+and the record called the missing <20% gate
+fork behavior; the fork `Spell::CheckCast`
+TargetAuraState gate (`Spell.cpp:5868-5875`)
+rejects Execute unless the target carries
+HEALTHLESS_20 (health strictly below 20%, the
+bit `SetHealth` maintains). The Rust engine
+loaded neither aura-state field: fixed by
+loading `casterAuraState`/`targetAuraState`
+(spell_template select positions 17/18) into
+`SpellEntry`, adding
+`aura_state::HEALTHLESS_20_PERCENT = 2`, and
+gating the cast in `cast.rs` (computed live
+from unit health — no aura-state field is
+maintained; only HEALTHLESS_20 is modeled):
+unit target at/above 20% reads
+`FAILED_BAD_TARGETS` (10), a non-unit cast
+reads `FAILED_BAD_IMPLICIT_TARGETS`.
+Regression `execute_gate_rejects_above_20_
+percent_health` (`combo_tests`): observed
+`Started != Failed(10)` before the fix, green
+after, including the open-gate cast on a
+directly wounded sub-20% victim. The matrix
+now flags `requires_low_health_target` (only
+the three Execute rows 5308/20647/20662); the
+live 20647 scenario enters Battle Stance and
+pre-damages with repeated Rend (6546) to an
+alive sub-20% read before casting — final
+row pre shows 4 Rend casts to hp 10/100, then
+the bound Execute damage log. A full-health
+smoke reads CAST_RESULT(10). Rows 5308 and
+20662 stay effect-marker-only BLOCKED.
+Follow-on harness break, fixed test-first:
+the first corrected full rerun read 50 PASS /
+19 PASSIVE-VERIFIED / 12 BLOCKED / 4 FAIL, one
+NO_POWER cluster (20569, 23923, 23925, 25286)
+— the rage setup's combat tap had been
+Execute itself (1 rage, ~1 damage at full
+health), illegal after the gate, and its
+Rend/Hamstring replacement never landed on
+stanceless rows (86), so every Bloodrage grant
+decayed through the 65 s cooldown wait
+(`bloodrage short: rage 0 after 4 cast(s)
++286s`). A damage-free Demoralizing Shout tap
+was tried and falsified live (aura landed,
+dummy never attacked, rage 680->0 in 60 s).
+The tap is now stance-aware damage: Rend in
+Battle/Defensive, Hamstring in Berserker,
+Battle entry first when stanceless (the
+affected rows carry stance mask 0), melee
+approach first, engagement proven by the tap
+aura on the dummy; a 60 s live probe then held
+rage flat with the dummy attacking and alive.
+Final rerun: 85 rows, 54 PASS / 19
+PASSIVE-VERIFIED / 12 BLOCKED
+(effect-marker-only) / 0 FAIL, class-gate
+PASS; the six-row failure subset (incl.
+Execute and a 300-cost Mortal Strike) passed
+first with `tap-engaged` on the previously
+failing rows. Gates on the final tree: pilot
+PASS before the first rerun and after the
+final (temp-root artifacts; one Druid 8921
+dummy-reset flake, clean on rerun); both
+Python self-tests and ruff clean; full
+`./ci.sh` with the `.env.test` environment
+exit 0 (fmt, workspace clippy -D warnings,
+workspace build/tests, and the env-gated live
+suites incl. live_spells 4/4, no skip lines);
+independent artifact audit PASS (row set ==
+matrix, manifest == results, every PASS
+carries evidence + SPELL_GO, Execute predamage
+alive below 20%). Pilot-clobbered shipped
+artifacts were restored to HEAD before the
+final run, so the summary diff is only the
+appended Warrior section.

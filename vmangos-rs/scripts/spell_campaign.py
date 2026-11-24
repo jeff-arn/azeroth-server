@@ -558,12 +558,25 @@ HUNTER_PET_DISPLAY_ID = 604
 #: melee-weapon rows. Fixed item guids keep the fixture idempotent
 #: and fixture-scoped (seed_character never touches other guids).
 EQUIPMENT_SLOT_MAINHAND = 15
+EQUIPMENT_SLOT_OFFHAND = 16
 EQUIPMENT_SLOT_RANGED = 17
 HUNTER_GEAR_ROWS = (
     # (item_guid, entry, bag, slot, count)
     (910001, 5596, 0, EQUIPMENT_SLOT_RANGED, 1),
     (910002, 2512, 0, 23, 200),
     (910003, 1161, 0, EQUIPMENT_SLOT_MAINHAND, 1),
+)
+#: Warrior fixture gear (fork honesty; the engine has no equipment
+#: gate, so no audited Warrior row routes to the item leg's shield
+#: gate — Shield Slam verifies on the dummy via the hostile leg).
+#: Militia Shortsword 1161 in the mainhand and a Bark Shield 1166
+#: in the offhand, so shield-gated rows cast shielded as the fork
+#: requires. Fixed item guids keep the fixture idempotent and
+#: fixture-scoped, like the Hunter gear above.
+WARRIOR_GEAR_ROWS = (
+    # (item_guid, entry, bag, slot, count)
+    (920001, 1161, 0, EQUIPMENT_SLOT_MAINHAND, 1),
+    (920002, 1166, 0, EQUIPMENT_SLOT_OFFHAND, 1),
 )
 
 
@@ -633,6 +646,39 @@ def seed_hunter_gear(guid: int) -> None:
     print(f"SEEDED hunter gear guid={guid} rows={len(HUNTER_GEAR_ROWS)}")
 
 
+def seed_warrior_gear(guid: int) -> None:
+    """Equip the Warrior shield fixture (idempotent, fixture-scoped).
+
+    Deletes only this owner's mainhand/offhand slot rows plus our
+    fixed item guids, then inserts the sword/shield. Mirrors
+    seed_hunter_gear; the engine never gates on equipment, but
+    shield-gated rows (Shield Slam/Shield Bash) cast shielded as
+    the fork requires.
+    """
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM character_inventory WHERE guid={guid} AND bag=0 AND slot IN ({EQUIPMENT_SLOT_MAINHAND}, "
+        f"{EQUIPMENT_SLOT_OFFHAND})",
+    )
+    fixed = ",".join(str(item_guid) for item_guid, _entry, _bag, _slot, _count in WARRIOR_GEAR_ROWS)
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM item_instance WHERE guid IN ({fixed}) AND owner_guid={guid}",
+    )
+    for item_guid, entry, bag, slot, count in WARRIOR_GEAR_ROWS:
+        smoke.sql_scalar(
+            "characters",
+            "INSERT INTO item_instance (guid, item_id, owner_guid, count, enchantments) VALUES "
+            f"({item_guid}, {entry}, {guid}, {count}, '')",
+        )
+        smoke.sql_scalar(
+            "characters",
+            "INSERT INTO character_inventory (guid, bag, slot, item_guid, item_id) VALUES "
+            f"({guid}, {bag}, {slot}, {item_guid}, {entry})",
+        )
+    print(f"SEEDED warrior gear guid={guid} rows={len(WARRIOR_GEAR_ROWS)}")
+
+
 def seed_character(
     guid: int, spells: list[int], pos: tuple[float, float, float] = CASTER_POS, hunter_pet: bool = False
 ) -> None:
@@ -673,9 +719,12 @@ def seed_character(
 
 
 SETUP_SPELLS: dict[str, tuple[int, ...]] = {
-    # Battle Stance is scenario setup for stance-gated Rend, not a
-    # verdict row. It is seeded and counted explicitly.
-    "Warrior": (2457,),
+    # Stance entries + Bloodrage are scenario setup, not verdict
+    # rows (Battle Stance seeds the stance-gated Rend pilot; 71 and
+    # 2458 seed the Defensive/Berserker-gated fan-out rows;
+    # Bloodrage 2687 tops rage up via the generic energize lane).
+    # All are seeded and counted explicitly.
+    "Warrior": (2457, 71, 2458, 2687),
     # Grimoire teach wrappers for Sacrifice ranks (7885 -> 7812,
     # 19447 -> 19443): a fresh voidwalker only knows Torment, so
     # the pet-cast leg teaches before ordering the cast, exactly
@@ -700,15 +749,31 @@ DRUID_FORM_SPELLS = (768, 783, 1066, 5487, 9634, 24858)
 #: more than one form (Bear|DireBear rows take Dire Bear).
 FORM_SPELL_BY_STANCE_BIT = ((0, 768), (7, 9634), (4, 5487), (30, 24858), (2, 783), (3, 1066))
 
+#: Warrior stance-entry spells (same Stances-bit machinery as Druid
+#: forms, disjoint bits). Bit -> stance from the singleton-row
+#: names: 16 Battle (Charge/Thunder Clap/Overpower/Mocking Blow),
+#: 17 Defensive (Taunt/Disarm/Revenge/Shield Wall/Shield Block),
+#: 18 Berserker (Whirlwind/Recklessness/Pummel/Intercept). The
+#: audited cast set carries no other stance bits; dual-stance rows
+#: (16+17 Shield Bash/Rend, 16+18 Hamstring/Execute) admit Battle
+#: first, which satisfies either mask.
+WARRIOR_STANCE_SPELLS = (2457, 71, 2458)
+WARRIOR_STANCE_BY_BIT = ((16, 2457), (17, 71), (18, 2458))
+
 
 def required_form_spell(row: dict) -> int | None:
     """Form-entry spell for a stance-gated row, or None when the row
     is not form-enterable here (actual totem rows, no stance bits the
-    harness can enter). Pure: reads only the matrix row."""
+    harness can enter). Druid bits resolve first so Druid behavior
+    is unchanged; Warrior stance bits resolve after. Pure: reads
+    only the matrix row."""
     if any(row.get("totem") or ()):
         return None
     stances = int(row.get("stances") or 0)
     for bit, spell in FORM_SPELL_BY_STANCE_BIT:
+        if stances & (1 << bit):
+            return spell
+    for bit, spell in WARRIOR_STANCE_BY_BIT:
         if stances & (1 << bit):
             return spell
     return None
@@ -1242,8 +1307,7 @@ def ensure_battle_stance(
     if aura_present(driver, guid, 2457):
         return True, None, []
     go, reason, ops = send_and_wait(driver, cast_self_body(2457), 2457, target_guid=guid)
-    driver.poll(1.5)
-    return bool(go and aura_present(driver, guid, 2457)), reason, ops
+    return bool(go and wait_for_aura(driver, guid, 2457)), reason, ops
 
 
 def expected_failure_verdict(
@@ -2562,6 +2626,22 @@ def run_single(spell_id: int, char_name: str) -> int:
         release_lock()
 
 
+def wait_for_aura(driver: ScriptedDriver, guid: int, spell_id: int, timeout_s: float = 8.0) -> bool:
+    """Poll until the aura is observable. A single post-cast check
+    races slow applies under bench load (one Berserker Stance entry
+    bound GO with the aura arriving late; one Recklessness with the
+    holder still missing at +5 s); a truly missing aura still reads
+    absent after the timeout, so this only converts timing flakes,
+    never verdicts."""
+    waited = 0.0
+    while waited < timeout_s:
+        if aura_present(driver, guid, spell_id):
+            return True
+        driver.poll(0.5)
+        waited += 0.5
+    return aura_present(driver, guid, spell_id)
+
+
 def cancel_auras(
     driver: ScriptedDriver, guid: int, spell_ids: list[int], force: tuple[int, ...] = ()
 ) -> dict[int, bool]:
@@ -2611,13 +2691,16 @@ def cooldown_wait_s(recovery_ms: object, category_ms: object, margin_s: float = 
     return min(max(wait_s, margin_s), cap_s)
 
 
-def live_cooldown_wait_s(spell_id: int) -> float:
+def live_cooldown_wait_s(spell_id: int, cap_s: float = 600.0) -> float:
     """Full fork cooldown wait for a NOT_READY row (live bench oracle).
 
     Resolves max(recoveryTime, categoryRecoveryTime) over the
     spell_template builds and waits it out plus margin. Bench-only
     read on a rare path (first NOT_READY per row); failure falls
-    back to the margin so the row still retries once.
+    back to the margin so the row still retries once. The cap keeps
+    one row from stalling the campaign; callers that can prove an
+    oracle-bounded longer wait (in-session category cooldowns) pass
+    cap_s=inf explicitly.
     """
     try:
         row = smoke.sql_scalar(
@@ -2626,11 +2709,41 @@ def live_cooldown_wait_s(spell_id: int) -> float:
             f"FROM spell_template WHERE entry={int(spell_id)}",
         )
         parts = str(row).split("\t")
-        return cooldown_wait_s(parts[0] if len(parts) > 0 else 0, parts[1] if len(parts) > 1 else 0)
+        return cooldown_wait_s(parts[0] if len(parts) > 0 else 0, parts[1] if len(parts) > 1 else 0, cap_s=cap_s)
     except Exception:
         # Bench oracle unreachable: still retry once after the
         # margin rather than failing the row on a read error.
-        return cooldown_wait_s(0, 0)
+        return cooldown_wait_s(0, 0, cap_s=cap_s)
+
+
+def live_trigger_holder(spell_id: int) -> int | None:
+    """Holder spell id for a trigger-first row's main-target aura
+    (live bench oracle): the row's effectTriggerSpell1 when that
+    triggered spell's first effect applies an aura. None when the
+    trigger is not an aura applier or the oracle is unreadable, so
+    the caller keeps its own (vacuous) expectation and fails
+    loudly instead of checking a wrong holder."""
+    try:
+        trig = smoke.sql_scalar(
+            "mangos",
+            "SELECT effectTriggerSpell1 FROM spell_template "
+            f"WHERE entry={int(spell_id)} AND build=("
+            f"SELECT MAX(build) FROM spell_template s WHERE s.entry={int(spell_id)} AND s.build<=5875)",
+        )
+        trigger_id = int(str(trig).split("\t")[0])
+        if not trigger_id:
+            return None
+        eff = smoke.sql_scalar(
+            "mangos",
+            "SELECT effect1 FROM spell_template "
+            f"WHERE entry={trigger_id} AND build=("
+            f"SELECT MAX(build) FROM spell_template s WHERE s.entry={trigger_id} AND s.build<=5875)",
+        )
+        if int(str(eff).split("\t")[0]) != 6:
+            return None
+        return trigger_id
+    except Exception:
+        return None
 
 
 def live_heal_band(spell_id: int, caster_level: int = 60) -> tuple[int, int] | None:
@@ -2795,13 +2908,54 @@ def self_alive(driver: ScriptedDriver, guid: int) -> bool:
     return bool(health)
 
 
-def self_leg(row: dict, driver: ScriptedDriver, guid: int, applied_auras: list[int]) -> dict:
-    """Solo self cast with NO_POWER pacing (spec §5)."""
+def self_leg(
+    row: dict,
+    driver: ScriptedDriver,
+    guid: int,
+    applied_auras: list[int],
+    pre_cast_setup=None,
+) -> dict:
+    """Solo self cast with NO_POWER pacing (spec §5). An optional
+    pre_cast_setup(driver) runs first (Warrior Bloodrage rage
+    top-up); its note joins the pre evidence like the hostile
+    leg's setup."""
     spell_id = row["spell_id"]
     expected = row.get("expected", {})
     pre = snapshot(driver, guid)
+    if pre_cast_setup is not None:
+        pre += pre_cast_setup(driver)
     mark = event_mark(driver)
     go, reason, ops, waited = cast_self_retry_power(driver, spell_id)
+    if not go and reason == SPELL_FAILED_NOT_READY:
+        # Shared category cooldown (Warrior Shield Wall 871 arms
+        # category 132/1800 s, so Recklessness 1719 reads NOT_READY
+        # even on a fresh character): wait out the live fork
+        # cooldown in capped chunks and retry, like the hostile
+        # leg's single wait but extended to the oracle total. The
+        # total is oracle-bounded (max recovery/category + margin),
+        # never open-ended; longer category cooldowns stay FAIL.
+        total_s = live_cooldown_wait_s(spell_id, cap_s=float("inf"))
+        waited_s = 0.0
+        chunks = 0
+        while not go and reason == SPELL_FAILED_NOT_READY and waited_s < total_s and chunks < 6:
+            chunk = min(600.0, total_s - waited_s)
+            driver.poll(chunk)
+            waited_s += chunk
+            chunks += 1
+            go, reason, chunk_ops, _waited = cast_self_retry_power(driver, spell_id)
+            ops += chunk_ops
+        if not go and reason == SPELL_FAILED_NOT_READY:
+            return make_verdict(
+                row,
+                "FAIL",
+                phase="prepare",
+                reason=f"CAST_RESULT({reason})",
+                evidence=f"cooldown-blocked after +{waited_s:.0f}s oracle waits",
+                pre=pre,
+                post=snapshot(driver, guid),
+                packets=ops,
+                target_guid=guid,
+            )
     if not go and reason == SPELL_FAILED_NO_POWER:
         return make_verdict(
             row,
@@ -2817,7 +2971,11 @@ def self_leg(row: dict, driver: ScriptedDriver, guid: int, applied_auras: list[i
     driver.poll(2.0)
     window = events_since(driver, mark)
     aura_id = int(expected.get("aura", spell_id))
-    caster_aura = aura_present(driver, guid, aura_id)
+    # Poll for the aura instead of a single check: under bench
+    # load the holder can arrive seconds after SPELL_GO (Shield
+    # Block's 5 s holder read absent at +2 s twice), and only a
+    # truly missing aura still reads absent after the timeout.
+    caster_aura = wait_for_aura(driver, guid, aura_id) if go else False
     if caster_aura and aura_id not in applied_auras:
         applied_auras.append(aura_id)
     post = snapshot(driver, guid)
@@ -2855,10 +3013,10 @@ def form_leg(row: dict, driver: ScriptedDriver, guid: int) -> dict:
     """
     spell_id = row["spell_id"]
     pre = snapshot(driver, guid)
-    cleared = cancel_auras(driver, guid, list(DRUID_FORM_SPELLS))
+    cleared = cancel_auras(driver, guid, list(DRUID_FORM_SPELLS) + list(WARRIOR_STANCE_SPELLS))
     mark = event_mark(driver)
     go, reason, ops, waited = cast_self_retry_power(driver, spell_id)
-    driver.poll(1.5)
+    aura_ok = go and wait_for_aura(driver, guid, spell_id)
     post = snapshot(driver, guid)
     packets = ops + [op for op, _ in events_since(driver, mark)]
     if not go:
@@ -2873,7 +3031,7 @@ def form_leg(row: dict, driver: ScriptedDriver, guid: int) -> dict:
             packets=packets,
             target_guid=guid,
         )
-    if not aura_present(driver, guid, spell_id):
+    if not aura_ok:
         return make_verdict(
             row,
             "FAIL",
@@ -2909,6 +3067,42 @@ def form_leg(row: dict, driver: ScriptedDriver, guid: int) -> dict:
     )
 
 
+def low_health_setup(driver: ScriptedDriver, dummy: int) -> str:
+    """pre_cast_setup for HEALTHLESS_20 rows (Execute): enter
+    Battle Stance, top up Rend's rage cost, and Rend (6546) the
+    dummy repeatedly as the aura expires until it falls strictly
+    below 20% health so the fork TargetAuraState gate opens.
+    Rend is stance-gated, so the predamage cast is only
+    fork-legal after the stance verifies. The loop breaks on the
+    first alive sub-20% read so the next Rend tick cannot spend
+    the scenario: the dummy staying alive is the scenario's job
+    (one Rend's total is well under a fresh counter's pool)."""
+    stance_ok, stance_reason, _stance_ops = ensure_battle_stance(driver, driver.own_guid)
+    if not stance_ok:
+        return f"; predamage stance FAILED reason={stance_reason}"
+    rage_note = ""
+    go, reason = False, None
+    casts = 0
+    waited = 0.0
+    hp = max_hp = None
+    while waited < 180.0:
+        hp, max_hp, _aura = dummy_world_state(driver, dummy)
+        if hp is not None and max_hp and 0 < hp * 5 < max_hp:
+            break
+        if hp == 0:
+            break
+        if not aura_present(driver, dummy, 6546):
+            rage_note = warrior_rage_setup(100)(driver, dummy)
+            driver.approach_guid(dummy, 2.0)
+            go, reason, _ops = cast_unit_faced(driver, 6546, dummy, timeout=10.0)
+            casts += 1
+            if not go:
+                break
+        driver.poll(1.0)
+        waited += 1.0
+    return rage_note + f"; predamage rend casts={casts} go={go} reason={reason} hp {hp}/{max_hp} after {waited:.0f}s"
+
+
 def combo_builder_setup(builder_id: int):
     """pre_cast_setup factory: land one combo builder (lowest rank,
     e.g. Claw 1082) on the dummy so a finisher row passes the fork
@@ -2942,6 +3136,178 @@ def immolate_setup(immolate_id: int):
     return setup
 
 
+#: Bloodrage setup spell: the fork-legal rage source for Warrior
+#: rows. Its Effect-30 energize grants rage through the generic
+#: engine lane (the engine's Bloodrage arm itself only flags
+#: in-combat); the row itself stays marker-only and never casts as
+#: a verdict row.
+WARRIOR_RAGE_SPELL = 2687
+#: Combat-maintenance taps for Bloodrage cooldown waits. The
+#: tap must deal damage: a damage-free shout aura lands but
+#: never aggros the dummy (live probe: caster never hit, rage
+#: decayed to zero through the wait). Rend serves Battle and
+#: Defensive, Hamstring serves Berserker (and Battle); a
+#: stanceless caster enters Battle first. Execute itself is
+#: health-gated and can no longer serve as the tap.
+WARRIOR_TAP_REND = 6546
+WARRIOR_TAP_HAMSTRING = 1715
+WARRIOR_TAP_COST = 100
+# Rage lives in the second power slot (field 24), like the Bear
+# arm's POWER2=24: UNIT_FIELD_POWER1 (23) is the mana slot, which a
+# compressed update omits for a rage user (reads None). Reading 23
+# made every setup see 0 rage and burn Bloodrage blindly while the
+# real pool was invisible.
+WARRIOR_RAGE_FIELD = 24
+
+
+def warrior_rage_cycles(pool: int, cost: int, grant: int = 100) -> int:
+    """Pure Bloodrage-cycle math: casts needed to reach `cost` from
+    `pool` when each cast grants `grant` power (Bloodrage 2687 =
+    +100 power/10 rage at DBC basePoints 99+1). Zero when the pool
+    already covers the cost."""
+    if pool >= cost:
+        return 0
+    short = cost - pool
+    return (short + grant - 1) // grant
+
+
+def warrior_rage_setup(cost: int):
+    """pre_cast_setup factory: top rage up via Bloodrage (2687) so a
+    rage-cost Warrior row passes the fork NO_POWER gate.
+
+    Check-first on the real rage field (WARRIOR_RAGE_FIELD): when
+    the pool already covers the cost (combat income from the
+    engaged dummy plus earlier Bloodrages) no Bloodrage is burned —
+    its 60 s cooldown is then still up for a later starving row.
+    Otherwise loop: cast Bloodrage, and when it answers NOT_READY
+    (still on its 60 s cooldown) wait out the live cooldown before
+    the next cycle, until the pool covers the cost (buffered by 50
+    power) or 8 cycles are spent. A pool that never fills rides
+    the row's honest NO_POWER, never a pass.
+
+    Combat maintenance: rage drains 2/tick out of combat
+    (fork-exact), and a 60 s cooldown wait with nothing
+    referencing the warrior wipes the pool faster than Bloodrage
+    refills it. So when Bloodrage answers NOT_READY (its 60 s
+    cooldown is live), the setup first taps a dummy with a
+    damaging stance-legal ability (Rend in Battle/Defensive,
+    Hamstring in Berserker, Battle entry first when
+    stanceless): small damage — it cannot quickly kill the
+    counter but keeps it aggroed and swinging, holding combat
+    (and its damage-taken income) up through the wait. The
+    tap drains the pool, but
+    the coming wait would decay ~650 power off an unreferenced
+    pool anyway, so firing it is free or better whenever the
+    wait is certain — which the NOT_READY itself proves.
+    Dummy-less legs borrow a spare counter the same way (serial
+    rows never contend for it); a missing spare skips the tap
+    and the row rides ambient combat as before."""
+
+    def setup(driver: ScriptedDriver, dummy: int | None = None) -> str:
+        guid = driver.own_guid
+        cycles = 0
+        casts = 0
+        waits = 0.0
+        engaged = False
+        taps = 0
+        # Let any incoming GCD expire before the first cast: a
+        # GCD-masked Bloodrage would read NOT_READY and burn a
+        # 65 s cooldown wait needlessly.
+        driver.poll(2.0)
+        waits += 2.0
+        while cycles < 8:
+            driver.poll(1.0)
+            waits += 1.0
+            obj = driver.world.get(guid) if guid is not None else None
+            rage = (obj.values.get(WARRIOR_RAGE_FIELD) or 0) if obj else 0
+            if rage >= cost + 50:
+                return (
+                    f"; rage {rage}>={cost} (no Bloodrage)"
+                    if cycles == 0
+                    else (
+                        f"; rage {rage}/{cost} after {casts} bloodrage(s) +{waits:.0f}s waits"
+                        + ("; tap-engaged" if engaged else "")
+                    )
+                )
+            go, reason, _o, _w = cast_self_retry_power(driver, WARRIOR_RAGE_SPELL)
+            if go:
+                casts += 1
+                driver.poll(2.0)
+                waits += 2.0
+            elif reason == SPELL_FAILED_NOT_READY:
+                if not engaged and taps < 4 and rage >= WARRIOR_TAP_COST:
+                    tap_target = dummy
+                    if tap_target is None:
+                        tap_target = live_dummy(driver, 705, WOLF_COUNTERS) or live_dummy(driver, 707, TROGG_COUNTERS)
+                    if tap_target is not None:
+                        # Close to melee first: the tap is a
+                        # melee ability, so a cast from a ranged
+                        # standoff would only read OUT_OF_RANGE
+                        # (the pool is about to decay through the
+                        # wait anyway).
+                        t0 = time.monotonic()
+                        driver.approach_guid(tap_target, 2.0)
+                        waits += time.monotonic() - t0
+                        taps += 1
+                        # Stance-legal damaging tap: Rend in
+                        # Battle/Defensive, Hamstring in
+                        # Berserker, Battle entry first when
+                        # stanceless (the stanceless rows this
+                        # setup serves cast legally from Battle:
+                        # their stance mask is 0). The tap aura
+                        # on the dummy, not the GO alone, proves
+                        # the engagement.
+                        if aura_present(driver, guid, 2457) or aura_present(driver, guid, 71):
+                            tap_spell = WARRIOR_TAP_REND
+                        elif aura_present(driver, guid, 2458):
+                            tap_spell = WARRIOR_TAP_HAMSTRING
+                        else:
+                            stance_ok, _stance_reason, _stance_ops = ensure_battle_stance(driver, guid)
+                            tap_spell = WARRIOR_TAP_REND if stance_ok else None
+                            if stance_ok:
+                                # Outlast the stance-entry GCD
+                                # before the tap cast.
+                                driver.poll(1.6)
+                                waits += 1.6
+                        if tap_spell is not None:
+                            tap_go, _tap_reason, _t = cast_unit_faced(driver, tap_spell, tap_target, timeout=10.0)
+                            if tap_go and wait_for_aura(driver, tap_target, tap_spell):
+                                engaged = True
+                        driver.poll(2.0)
+                        waits += 2.0
+                wait_s = live_cooldown_wait_s(WARRIOR_RAGE_SPELL)
+                driver.poll(wait_s)
+                waits += wait_s
+            else:
+                driver.poll(2.0)
+                waits += 2.0
+            cycles += 1
+        obj = driver.world.get(guid) if guid is not None else None
+        rage = (obj.values.get(WARRIOR_RAGE_FIELD) or 0) if obj else 0
+        return f"; bloodrage short: rage {rage}/{cost} after {casts} cast(s) +{waits:.0f}s waits"
+
+    return setup
+
+
+def warrior_rage_setup_for_row(class_name: str, row: dict):
+    """Bloodrage setup for one rage-cost Warrior row, else None.
+
+    Pure routing over the matrix row (the setup itself is live):
+    Bloodrage itself, non-rage rows, and other classes never take
+    the setup. Shared by the run-class legs; the form_gated leg
+    applies the same rule via the entered stance."""
+    if class_name != "Warrior":
+        return None
+    if int(row.get("spell_id") or 0) == WARRIOR_RAGE_SPELL:
+        return None
+    if int(row.get("power_type") or 0) != 1:
+        return None
+    cost = int(row.get("mana_cost") or 0)
+    if cost <= 0:
+        return None
+    return warrior_rage_setup(cost)
+
+
 def form_gated_leg(
     row: dict,
     driver: ScriptedDriver,
@@ -2958,23 +3324,31 @@ def form_gated_leg(
     spell_id = row["spell_id"]
     form_spell = required_form_spell(row)
     pre = snapshot(driver, guid)
-    cancel_auras(driver, guid, list(DRUID_FORM_SPELLS))
+    cleared = cancel_auras(driver, guid, list(DRUID_FORM_SPELLS) + list(WARRIOR_STANCE_SPELLS))
     go, reason, ops, _waited = cast_self_retry_power(driver, form_spell)
-    driver.poll(1.5)
-    if not (go and aura_present(driver, guid, form_spell)):
-        return make_verdict(
-            row,
-            "FAIL",
-            phase="prepare",
-            reason=(f"CAST_RESULT({reason})" if reason is not None else None),
-            evidence=f"form entry {form_spell} did not verify "
-            f"(go={go} reason={reason}); gated spell {spell_id} not "
-            "cast under invalid conditions (not a pass)",
-            pre=pre,
-            post=snapshot(driver, guid),
-            packets=ops,
-            target_guid=guid,
-        )
+    if not (go and wait_for_aura(driver, guid, form_spell)):
+        # One retry from a verified-bare caster form: a GO without
+        # the aura is a slow apply (or a stale exit cancel) far more
+        # often than a dead gate, but a second miss fails loudly.
+        cleared2 = cancel_auras(driver, guid, list(DRUID_FORM_SPELLS) + list(WARRIOR_STANCE_SPELLS))
+        bare = not any(aura_present(driver, guid, s) for s in list(DRUID_FORM_SPELLS) + list(WARRIOR_STANCE_SPELLS))
+        go2, reason2, ops2, _waited2 = cast_self_retry_power(driver, form_spell)
+        ops += ops2
+        if not (go2 and wait_for_aura(driver, guid, form_spell)):
+            return make_verdict(
+                row,
+                "FAIL",
+                phase="prepare",
+                reason=(f"CAST_RESULT({reason2})" if reason2 is not None else None),
+                evidence=f"form entry {form_spell} did not verify "
+                f"(go={go}/{go2} reason={reason}/{reason2} cleared={cleared}/{cleared2} bare={bare}); "
+                f"gated spell {spell_id} not cast under invalid conditions (not a pass)",
+                pre=pre,
+                post=snapshot(driver, guid),
+                packets=ops,
+                target_guid=guid,
+            )
+        go, reason = go2, reason2
     # Bear abilities spend rage, which does not regenerate out of
     # combat. The fork-legal source is Enrage (5229, itself a matrix
     # row): periodic energize ~20/s (2 rage) for 10 s. It must be cast
@@ -3007,17 +3381,29 @@ def form_gated_leg(
                     break
             return f"; growl pull + enrage go={go}, rage {rage}/{rage_cost} after {waited:.1f}s"
 
+    if setup is None and form_spell in WARRIOR_STANCE_SPELLS:
+        # Warrior stance rows spend rage, which does not regen out
+        # of combat: top up via Bloodrage before the row's natural
+        # leg (hostile or self), mirroring the Bear Enrage arm.
+        setup = warrior_rage_setup_for_row(row.get("class", ""), row)
     override = None
     if setup is None and row.get("needs_combo_points") and combo_builder:
         setup = combo_builder_setup(combo_builder)
         override = finisher_dummy(used_dummies)
+    if row.get("requires_low_health_target"):
+        rage_first = setup
+
+        def setup(driver: ScriptedDriver, dummy: int, _first=rage_first) -> str:
+            note = _first(driver, dummy) if _first is not None else ""
+            return note + low_health_setup(driver, dummy)
+
     targets = {int(t) for t in (row.get("target_a") or [])}
     if targets & {6, 22}:
         verdict = hostile_leg(
             row, driver, guid, used_dummies, applied_auras, pre_cast_setup=setup, dummy_override=override
         )
     else:
-        verdict = self_leg(row, driver, guid, applied_auras)
+        verdict = self_leg(row, driver, guid, applied_auras, pre_cast_setup=setup)
     gone = cancel_auras(driver, guid, [form_spell])
     exited = bool(gone.get(form_spell)) and not aura_present(driver, guid, form_spell)
     verdict["evidence"] += f"; form {form_spell} setup verified, exited={exited}"
@@ -3108,11 +3494,20 @@ def hostile_leg(
     post_hp, target_aura, logs = pre_hp, False, []
     min_hp = pre_hp
     aura_id = int(expected.get("aura", spell_id))
+    if aura_id == spell_id and (row.get("effect_ids") or [None])[0] == 64:
+        # Vacuous derivation fallback (no direct aura on the row)
+        # with a trigger first effect: the main-target observable
+        # is the triggered spell's holder (Intimidating Shout
+        # 5246's 20511 stun; the area fear/surround explicitly
+        # exempts the main target via the fork script). Resolved
+        # live so a non-aura trigger fails loudly below instead.
+        aura_id = live_trigger_holder(spell_id) or aura_id
     range_step = standoff
     landed_go = False
     cooldown_waited_s = 0.0
     cooldown_note = ""
-    while attempts < 5:
+    range_misses = 0
+    while attempts < 7:
         attempts += 1
         mark = event_mark(driver)
         go, reason, cast_ops, waited = cast_unit_retry_power(driver, spell_id, dummy, timeout=15.0)
@@ -3133,7 +3528,38 @@ def hostile_leg(
         if not go and reason == SPELL_FAILED_OUT_OF_RANGE:
             # Roaming dummy drifted out of range between approach and
             # cast (pilot Growl pattern): step closer and retry within
-            # the same cap instead of failing the row.
+            # the same cap instead of failing the row. Past two
+            # consecutive misses the approach itself is not closing
+            # (unpathable counter): take a different counter like
+            # the dead-dummy arm instead of casting at geometry
+            # that never resolves.
+            range_misses += 1
+            if range_misses >= 3:
+                driver.poll(1.6)
+                fresh, fresh_reused = pick_dummy(driver, used_dummies)
+                if fresh is None:
+                    return make_verdict(
+                        row,
+                        "BLOCKED",
+                        reason="dummy-unavailable",
+                        evidence="out of range of picked dummy and no live 705/707 counter remains",
+                        pre=pre,
+                        post=snapshot(driver, guid),
+                        packets=ops,
+                        target_guid=dummy,
+                    )
+                dummy, reused = fresh, fresh_reused
+                used_dummies.add(dummy)
+                reuse_note = "; re-picked after out-of-range geometry" + (
+                    "; reused observably-clean dummy (alive, full health, aura-free)" if reused else ""
+                )
+                range_step = standoff
+                range_misses = 0
+                driver.approach_guid(dummy, range_step)
+                driver.poll(1.0)
+                pre_hp = driver.target_health(dummy)
+                pre = f"dummy guid={dummy} health={pre_hp}; {pre}"
+                continue
             range_step = max(2.0, range_step / 2.0)
             driver.approach_guid(dummy, range_step)
             driver.poll(1.0)
@@ -3174,7 +3600,11 @@ def hostile_leg(
         # hit before the post read, and a kill respawns the dummy
         # (full health) before the post read, so the single final
         # read alone cannot tell landed damage from a clean miss.
+        # Aura rows hold the window open past the hp gate: an 8 s
+        # stun applied 4+ s late under bench load still verifies.
         observe_s = 6.0 if float(row.get("speed") or 0) > 0 else 4.0
+        if kind == "aura_on_target":
+            observe_s = max(observe_s, 8.0)
         target_aura = False
         sliced = 0.0
         min_hp = pre_hp
@@ -3485,6 +3915,147 @@ def heal_leg(row: dict, driver: ScriptedDriver, guid: int, ally_driver: Scripted
     )
 
 
+def self_heal_leg(
+    row: dict,
+    driver: ScriptedDriver,
+    guid: int,
+    client: object,
+    seed_all: list[int],
+    account: str,
+    account_id: int,
+) -> tuple[dict, tuple | None]:
+    """Self-targeted heal rows (Warrior Bloodthirst restore ranks):
+    a full-health caster shows no delta, so the caster relogs
+    SQL-damaged (health=300, the ally-leg pattern) and casts on
+    itself. Verification mirrors heal_leg: regen-baselined rise
+    first, then the sub-noise heal-log path against the live oracle
+    band (these restores are 10-20, far below the rise gate). The
+    old session is gone, so the second item is the fresh session
+    whenever the relog succeeds (even when the row fails); None
+    only when the relog itself fails and the caller must stop."""
+    spell_id = row["spell_id"]
+    try:
+        smoke.logout(client, "warrior-selfheal")
+    except Exception:
+        pass
+    try:
+        client.sock.close()
+    except Exception:
+        pass
+    for _ in range(10):
+        try:
+            online = smoke.sql_scalar("characters", f"SELECT online FROM characters WHERE guid={guid}")
+        except RuntimeError:
+            online = "1"
+        if online != "1":
+            break
+        time.sleep(8.0)
+    seed_character(guid, seed_all, pos=CASTER_POS)
+    smoke.sql_scalar("characters", f"UPDATE characters SET health=300 WHERE guid={guid}")
+    try:
+        new_client, driver = login_as(account, account_id, guid)
+    except Exception as exc:
+        return (
+            make_verdict(
+                row,
+                "FAIL",
+                phase="prepare",
+                evidence=f"self-heal relog failed: {exc}",
+                pre="",
+                post="",
+                packets=[],
+                target_guid=guid,
+            ),
+            None,
+        )
+    session: tuple | None = (new_client, driver)
+    driver.poll(1.0)
+    t0 = time.monotonic()
+    h0 = driver.self_health()
+    driver.poll(3.0)
+    t1 = time.monotonic()
+    h1 = driver.self_health()
+    pre = f"self guid={guid} health={h0}->{h1} (SQL-damaged)"
+    mark = event_mark(driver)
+    go, reason, ops, waited = cast_self_retry_power(driver, spell_id, timeout=12.0)
+    if not go:
+        phase = "prepare"
+        if reason == SPELL_FAILED_NO_POWER:
+            detail = f"power-starved after {waited} 9s waits"
+        else:
+            detail = f"no bound SPELL_GO (reason={reason})"
+        return (
+            make_verdict(
+                row,
+                "FAIL",
+                phase=phase,
+                reason=(f"CAST_RESULT({reason})" if reason is not None else None),
+                evidence=detail,
+                pre=pre,
+                post=f"self health={driver.self_health()}",
+                packets=ops,
+                target_guid=guid,
+            ),
+            session,
+        )
+    driver.poll(4.0)
+    t2 = time.monotonic()
+    h2 = driver.self_health()
+    driver.poll(1.0)
+    window = [op for op, _ in events_since(driver, mark)]
+    jump, rise_ok = heal_rise_ok(h0, h1, h2, t0, t1, t2)
+    rate = (h1 - h0) / (t1 - t0) if h0 is not None and h1 is not None and t1 > t0 else 0.0
+    if rise_ok:
+        return (
+            make_verdict(
+                row,
+                "PASS",
+                evidence=f"bound GO + self heal rise {jump:.0f} > 50 (rate {rate:.1f}/s, {h0}->{h1} pre, got {h2})",
+                pre=pre,
+                post=f"self health={h2}",
+                packets=ops + window,
+                target_guid=guid,
+            ),
+            session,
+        )
+    heal_logs = matching_heal_logs(events_since(driver, mark), spell_id, guid, guid)
+    band = live_heal_band(spell_id)
+    logged = [log["amount"] for log in heal_logs if band is not None and band[0] <= log["amount"] <= band[1]]
+    if logged and h2 is not None and h0 is not None and h2 >= h0:
+        return (
+            make_verdict(
+                row,
+                "PASS",
+                evidence=f"bound GO + self heal log {logged[0]} in oracle band "
+                f"[{band[0]}-{band[1]}] (sub-noise heal; rate "
+                f"{rate:.1f}/s, {h0}->{h1} pre, got {h2})",
+                pre=pre,
+                post=f"self health={h2}",
+                packets=ops + window,
+                target_guid=guid,
+            ),
+            session,
+        )
+    detail = f"GO but self jump {jump:.0f} <= 50 (rate {rate:.1f}/s, {h0}->{h1} pre, got {h2})"
+    if heal_logs:
+        detail += f"; heal logs (out of band {band}): {[(log['spell_id'], log['amount']) for log in heal_logs]}"
+    else:
+        detail += f"; no heal log for spell {spell_id} (band {band})"
+    return (
+        make_verdict(
+            row,
+            "FAIL",
+            phase="apply",
+            evidence=detail,
+            pre=pre,
+            post=f"self health={h2}",
+            packets=ops + window,
+            target_guid=guid,
+        ),
+        session,
+    )
+
+
 def teleport_leg(
     row: dict,
     driver: ScriptedDriver,
@@ -3583,12 +4154,21 @@ def teleport_leg(
     )
 
 
-def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int], applied_auras: list[int]) -> dict:
+def ground_leg(
+    row: dict,
+    driver: ScriptedDriver,
+    guid: int,
+    used_dummies: set[int],
+    applied_auras: list[int],
+    pre_cast_setup=None,
+) -> dict:
     """Ground cast at the caster's feet with a dummy inside the
     radius; outcome is dummy damage attributed to the spell. A
     landed cast registers for the next row's cancel so a channeled
     radius spell (Hurricane) cannot hold the slot open into the
-    following row (the cancel-aura channel interrupt)."""
+    following row (the cancel-aura channel interrupt). An optional
+    pre_cast_setup(driver) runs after the approach (Warrior
+    Bloodrage rage top-up for the shout rows)."""
     spell_id = row["spell_id"]
     pre = snapshot(driver, guid)
     dummy, reused, dummy_waited = wait_for_dummy(driver, used_dummies)
@@ -3602,9 +4182,18 @@ def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[i
     if dummy_waited:
         pre = f"{pre}; pool wait +{dummy_waited:.0f}s"
     driver.approach_guid(dummy, 2.0)
-    pos = driver.position
     pre_hp = driver.target_health(dummy)
     pre = f"dummy guid={dummy} health={pre_hp}; caster {pre}"
+    if pre_cast_setup is not None:
+        # The setup gets the row dummy so a tap engages it in
+        # place: tapping a far spare would walk the caster out of
+        # the row dummy's radius and the dest cast (taken below)
+        # would land on nobody (Piercing Howl at 25 yd).
+        pre += pre_cast_setup(driver, dummy)
+    # Fresh position: the setup may have moved (spare tap for a
+    # dummy-less leg), so the dest must center on where the
+    # caster stands now, not where the approach left it.
+    pos = driver.position
     mark = event_mark(driver)
     # One cast with the dest-target sender (mask 0x0040 + xyz at the
     # caster's feet), with NO_POWER pacing, not a self cast plus a
@@ -3635,8 +4224,14 @@ def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[i
     # Sliced low-water hp like the hostile leg: a kill respawns
     # the dummy (full health) and fast regen erases small hits,
     # so the single final read cannot tell landed damage apart
-    # from a clean miss.
+    # from a clean miss. Latch short auras the same way: a 6 s
+    # daze (Piercing Howl) expires inside one long poll and a
+    # single post-window check reads never-applied.
+    want_aura_id = None
+    if (row.get("expected") or {}).get("kind") == "aura_on_target":
+        want_aura_id = int((row.get("expected") or {}).get("aura", spell_id))
     min_hp = pre_hp
+    target_aura = False
     sliced = 0.0
     while sliced < 6.0:
         driver.poll(1.0)
@@ -3644,6 +4239,8 @@ def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[i
         probe_hp = driver.target_health(dummy)
         if probe_hp is not None and (min_hp is None or probe_hp < min_hp):
             min_hp = probe_hp
+        if want_aura_id is not None and not target_aura and aura_present(driver, dummy, want_aura_id):
+            target_aura = True
     window = events_since(driver, mark)
     ops += [op for op, _ in window]
     post_hp = driver.target_health(dummy)
@@ -3653,13 +4250,13 @@ def ground_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[i
     if go and spell_id not in applied_auras:
         applied_auras.append(spell_id)
     # Instant area-aura rows (Howl of Terror) land fear on the
-    # in-radius dummy instead of a dynobject: check the aura.
-    target_aura = False
-    if (row.get("expected") or {}).get("kind") == "aura_on_target":
-        aura_id = int((row.get("expected") or {}).get("aura", spell_id))
-        target_aura = aura_present(driver, dummy, aura_id)
-        if target_aura and aura_id not in applied_auras:
-            applied_auras.append(aura_id)
+    # in-radius dummy instead of a dynobject: the latched aura
+    # above is the outcome, with the old post-window check as a
+    # fallback for server-slow applies landing after the slices.
+    if not target_aura and want_aura_id is not None:
+        target_aura = aura_present(driver, dummy, want_aura_id)
+    if target_aura and want_aura_id is not None and want_aura_id not in applied_auras:
+        applied_auras.append(want_aura_id)
     return single_outcome_verdict(
         row,
         {
@@ -4155,9 +4752,25 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
         return ("cast", "form")
     if bucket == "friendly":
         return ("cast", "friendly")
+    if bucket == "self" and kind == "heal_delta_target":
+        # Self-targeted heals (Warrior Bloodthirst restore rows):
+        # the single-repro self leg has no damaged-caster scenario,
+        # so they ride the relog self-heal leg, which SQL-damages
+        # the caster offline first like the ally heal legs.
+        return ("cast", "self_heal")
     if bucket == "hostile_dummy":
         return ("cast", "hostile")
     if bucket == "ground_area":
+        if 6 in (row.get("target_a") or []):
+            # Mixed unit-target + areaselect rows (Warrior
+            # Intimidating Shout 5246: trigger on the hostile unit
+            # target plus the area fear): the dest-only ground leg
+            # sends no unit target, so the engine honestly answers
+            # BAD_IMPLICIT_TARGETS. They ride the hostile leg, whose
+            # targ-22 standoff closes to 2 yd so the area component
+            # still lands. No other fan-out matrix has a
+            # ground-bucket row with a hostile unit target.
+            return ("cast", "hostile")
         if kind == "heal_delta_target":
             # Unit-targeted heals filed under ground_area by the
             # target-45 first-match order (Shaman Chain Heal /
@@ -4222,8 +4835,19 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
             return 2
         doc = json.loads(matrix_file.read_text())
     else:
-        matrix_file = matrix_path_for(class_name)
+        # matrix_doc_for prefers the per-class fan-out artifact when
+        # the generator wrote one (Warrior is a pilot class, so
+        # matrix_path_for alone would record the pilot matrix while
+        # the run executes fan-out rows): record the same file the
+        # rows come from.
         doc = matrix_doc_for(class_name)
+        try:
+            import spell_matrix_gen as _gen  # noqa: PLC0415
+
+            _per_class = _gen.class_matrix_path(class_name)
+            matrix_file = _per_class if _per_class.exists() else matrix_path_for(class_name)
+        except (ImportError, AttributeError):
+            matrix_file = matrix_path_for(class_name)
     rows = sorted((r for r in doc.get("rows", []) if r["class"] == class_name), key=lambda r: r["spell_id"])
     if only:
         wanted = set(only)
@@ -4282,6 +4906,8 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
             seed_character(guid, seed_all, pos=pos or CASTER_POS, hunter_pet=(class_name == "Hunter"))
             if class_name == "Hunter":
                 seed_hunter_gear(guid)
+            if class_name == "Warrior":
+                seed_warrior_gear(guid)
             client, driver = login_as(account, account_id, guid)
             drift_gate(driver, guid, len(seed_all))
             return client, driver
@@ -4465,6 +5091,41 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     # A dead master dismisses the pet: force a
                     # re-summon before the next pet row.
                     pet_guid = None
+                if class_name == "Warrior" and self_alive(driver, guid):
+                    # Wounded-warrior top-up: ambient dummy
+                    # retaliation grinds health down across the run
+                    # (a row died mid-setup at 48 hp), and a long
+                    # rage setup at low health dies the same way.
+                    # Relog SQL-topped-up like the heal legs; rage
+                    # persists across the relog, stances are entered
+                    # per row afterwards, and the dummy pool is
+                    # world state, so nothing else resets.
+                    driver.poll(1.0)
+                    wobj = driver.world.get(guid)
+                    hp = wobj.values.get(UNIT_FIELD_HEALTH) if wobj else None
+                    maxhp = wobj.values.get(UNIT_FIELD_MAXHEALTH) if wobj else None
+                    if hp is not None and maxhp and hp < 1200:
+                        try:
+                            smoke.logout(client, f"{class_name}-topup")
+                        except Exception as exc:
+                            print(f"WARN topup logout: {exc}")
+                        try:
+                            client.sock.close()
+                        except Exception:
+                            pass
+                        for _ in range(10):
+                            try:
+                                online = smoke.sql_scalar(
+                                    "characters", f"SELECT online FROM characters WHERE guid={guid}"
+                                )
+                            except RuntimeError:
+                                online = "1"
+                            if online != "1":
+                                break
+                            time.sleep(8.0)
+                        smoke.sql_scalar("characters", f"UPDATE characters SET health={int(maxhp)} WHERE guid={guid}")
+                        client, driver = login_as(account, account_id, guid)
+                        print(f"ROW {class_name} {spell_id}: topped up {hp}->{maxhp}")
                 # A landed ground cast may still be channeling with
                 # no holder on the caster (Hurricane's radius): force
                 # its cancel so the next row never meets a busy slot.
@@ -4614,6 +5275,8 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     finisher_setup = (
                         combo_builder_setup(combo_builder) if row.get("needs_combo_points") and combo_builder else None
                     )
+                    if row.get("requires_low_health_target"):
+                        finisher_setup = low_health_setup
                     if finisher_setup is None and (row.get("name") or "").startswith("Conflagrate"):
                         immolate_id = min(
                             (r["spell_id"] for r in class_rows if r.get("name") == "Immolate"),
@@ -4622,6 +5285,10 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                         if immolate_id is not None:
                             finisher_setup = immolate_setup(immolate_id)
                     override = finisher_dummy(used_dummies) if finisher_setup else None
+                    if finisher_setup is None:
+                        # Warrior rage top-up (None for every other
+                        # class and every non-rage row).
+                        finisher_setup = warrior_rage_setup_for_row(class_name, row)
                     verdicts.append(
                         hostile_leg(
                             row,
@@ -4655,7 +5322,32 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                         applied_auras.clear()
                     continue
                 if bucket == "ground_area":
-                    verdicts.append(ground_leg(row, driver, guid, used_dummies, applied_auras))
+                    if action == "cast" and payload == "hostile":
+                        # Mixed unit-target + areaselect rows (Warrior
+                        # Intimidating Shout): the unit target rides
+                        # the hostile leg, whose targ-22 standoff
+                        # closes to 2 yd for the area component.
+                        verdicts.append(
+                            hostile_leg(
+                                row,
+                                driver,
+                                guid,
+                                used_dummies,
+                                applied_auras,
+                                pre_cast_setup=warrior_rage_setup_for_row(class_name, row),
+                            )
+                        )
+                    else:
+                        verdicts.append(
+                            ground_leg(
+                                row,
+                                driver,
+                                guid,
+                                used_dummies,
+                                applied_auras,
+                                pre_cast_setup=warrior_rage_setup_for_row(class_name, row),
+                            )
+                        )
                     print(
                         f"ROW {class_name} {spell_id} {bucket}: "
                         f"{verdicts[-1]['verdict']} "
@@ -4665,16 +5357,49 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     continue
                 if bucket == "item_reagent_ammo":
                     if action == "cast" and payload == "hostile":
-                        # Ranged-weapon unit rows (Hunter): the
+                        # Ranged-weapon unit rows (Hunter) and
+                        # reagent-free weapon rows (Warrior): the
                         # pre_dispatch routes them off the item leg
                         # to the dummy, like hostile-bucket rows.
-                        verdicts.append(hostile_leg(row, driver, guid, used_dummies, applied_auras))
+                        verdicts.append(
+                            hostile_leg(
+                                row,
+                                driver,
+                                guid,
+                                used_dummies,
+                                applied_auras,
+                                pre_cast_setup=warrior_rage_setup_for_row(class_name, row),
+                            )
+                        )
                     elif action == "cast" and payload == "ground":
                         # Area-only weapon rows (Hunter Volley):
                         # the dest leg, like ground-bucket rows.
-                        verdicts.append(ground_leg(row, driver, guid, used_dummies, applied_auras))
+                        verdicts.append(
+                            ground_leg(
+                                row,
+                                driver,
+                                guid,
+                                used_dummies,
+                                applied_auras,
+                                pre_cast_setup=warrior_rage_setup_for_row(class_name, row),
+                            )
+                        )
                     else:
                         verdicts.append(item_leg(row, driver, guid, used_dummies, applied_auras))
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                if action == "cast" and payload == "self_heal":
+                    verdict, session = self_heal_leg(row, driver, guid, client, seed_all, account, account_id)
+                    verdicts.append(verdict)
+                    if session is not None:
+                        client, driver = session
+                        used_dummies.clear()
+                        applied_auras.clear()
                     print(
                         f"ROW {class_name} {spell_id} {bucket}: "
                         f"{verdicts[-1]['verdict']} "
@@ -4686,7 +5411,11 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                 # corpse/unenterable form_totem rows are BLOCKED above
                 # via pre_dispatch and pet rows rode the pet leg,
                 # stance-gated rows the form_gated leg).
-                verdicts.append(self_leg(row, driver, guid, applied_auras))
+                verdicts.append(
+                    self_leg(
+                        row, driver, guid, applied_auras, pre_cast_setup=warrior_rage_setup_for_row(class_name, row)
+                    )
+                )
                 print(
                     f"ROW {class_name} {spell_id} {bucket}: "
                     f"{verdicts[-1]['verdict']} "
@@ -5319,6 +6048,18 @@ def run_self_test() -> int:
     assert required_form_spell({"stances": 1 << 30, "totem": [0, 0]}) == 24858
     assert required_form_spell({"stances": 144, "totem": [5174, 0]}) is None
     assert required_form_spell({"stances": 0, "totem": [0, 0]}) is None
+    # Warrior stance bits resolve after the Druid table: singleton
+    # bits to their stance, dual-stance rows preferring Battle, and
+    # totem rows staying unenterable even with stance bits.
+    assert required_form_spell({"stances": 65536, "totem": [0, 0]}) == 2457
+    assert required_form_spell({"stances": 131072, "totem": [0, 0]}) == 71
+    assert required_form_spell({"stances": 262144, "totem": [0, 0]}) == 2458
+    assert required_form_spell({"stances": 196608, "totem": [0, 0]}) == 2457
+    assert required_form_spell({"stances": 327680, "totem": [0, 0]}) == 2457
+    assert required_form_spell({"stances": 65536, "totem": [5174, 0]}) is None
+    # Druid bits still win when both families are set (disjoint in
+    # practice; the order pins Druid behavior unchanged).
+    assert required_form_spell({"stances": 144 | 65536, "totem": [0, 0]}) == 9634
     druid_dispatch = [
         ({"class": "Druid", "spell_id": 9634, "bucket": "form", "expected": {"kind": "form_change"}}, ("cast", "form")),
         (
@@ -5402,6 +6143,327 @@ def run_self_test() -> int:
         if got[0] == "blocked":
             assert got[1] in BLOCKED_REASONS, got
     print("SELFTEST Druid dispatch table ok")
+    # Warrior dispatch: stance entries ride the form leg;
+    # stance-gated rows ride form_gated; movement/script-dummy
+    # rows stay honestly BLOCKED; the focus-cost Thunderstomp
+    # rows are marker-only (the classify_only gate fires first);
+    # reagent-free weapon rows verify on the dummy.
+    warrior_dispatch = [
+        (
+            {"class": "Warrior", "spell_id": 2457, "bucket": "form", "expected": {"kind": "form_change"}},
+            ("cast", "form"),
+        ),
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 772,
+                "bucket": "form_totem",
+                "stances": 196608,
+                "totem": [0, 0],
+                "expected": {"kind": "aura_on_target", "aura": 772},
+            },
+            ("cast", "form_gated"),
+        ),
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 871,
+                "bucket": "form_totem",
+                "stances": 131072,
+                "totem": [0, 0],
+                "expected": {"kind": "aura_on_caster", "aura": 871},
+            },
+            ("cast", "form_gated"),
+        ),
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 5308,
+                "bucket": "form_totem",
+                "expected": {"kind": "none_marker"},
+                "campaign": "classify_only",
+            },
+            ("blocked", "effect-marker-only"),
+        ),
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 100,
+                "bucket": "form_totem",
+                "expected": {"kind": "none_marker"},
+                "campaign": "classify_only",
+            },
+            ("blocked", "effect-marker-only"),
+        ),
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 26090,
+                "bucket": "ground_area",
+                "power_type": 2,
+                "mana_cost": 60,
+                "expected": {"kind": "none_marker"},
+                "campaign": "classify_only",
+            },
+            ("blocked", "effect-marker-only"),
+        ),
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 23923,
+                "bucket": "item_reagent_ammo",
+                "target_a": [6, 6, 0],
+                "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+                "equipped_item_class": 4,
+                "expected": {"kind": "damage_log", "opcode": 592},
+            },
+            ("cast", "hostile"),
+        ),
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 20647,
+                "bucket": "hostile_dummy",
+                "power_type": 1,
+                "mana_cost": 1,
+                "expected": {"kind": "damage_log", "opcode": 592},
+            },
+            ("cast", "hostile"),
+        ),
+        # Mixed unit-target + areaselect ground rows ride hostile:
+        # the dest-only ground leg sends no unit target (Intimidating
+        # Shout 5246 honestly answers BAD_IMPLICIT_TARGETS there).
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 5246,
+                "bucket": "ground_area",
+                "power_type": 1,
+                "mana_cost": 250,
+                "target_a": [6, 22, 22],
+                "expected": {"kind": "aura_on_target", "aura": 7},
+            },
+            ("cast", "hostile"),
+        ),
+        # Pure-areaselect ground rows keep the dest leg.
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 1160,
+                "bucket": "ground_area",
+                "power_type": 1,
+                "mana_cost": 100,
+                "target_a": [22, 0, 0],
+                "expected": {"kind": "aura_on_target", "aura": 99},
+            },
+            ("cast", "ground"),
+        ),
+        # Self-targeted heals ride the relog self-heal leg: the solo
+        # self leg has no damaged-caster scenario (Bloodthirst 23880).
+        (
+            {
+                "class": "Warrior",
+                "spell_id": 23880,
+                "bucket": "self",
+                "power_type": 1,
+                "mana_cost": 0,
+                "target_a": [1, 0, 0],
+                "expected": {"kind": "heal_delta_target"},
+            },
+            ("cast", "self_heal"),
+        ),
+    ]
+    for synth_row, want in warrior_dispatch:
+        got = pre_dispatch(synth_row)
+        assert got == want, (synth_row, got, want)
+        if got[0] == "blocked":
+            assert got[1] in BLOCKED_REASONS, got
+    # Rage-setup routing: rage-cost Warrior rows take the
+    # Bloodrage setup everywhere; Bloodrage itself, non-rage
+    # rows, and other classes never do.
+    assert warrior_rage_setup_for_row("Warrior", {"spell_id": 772, "power_type": 1, "mana_cost": 100}) is not None
+    assert warrior_rage_setup_for_row("Warrior", {"spell_id": 20647, "power_type": 1, "mana_cost": 1}) is not None
+    assert warrior_rage_setup_for_row("Warrior", {"spell_id": 2687, "power_type": 0, "mana_cost": 0}) is None
+    assert warrior_rage_setup_for_row("Warrior", {"spell_id": 871, "power_type": 1, "mana_cost": 0}) is None
+    assert warrior_rage_setup_for_row("Warrior", {"spell_id": 2458, "power_type": 1, "mana_cost": 0}) is None
+    assert warrior_rage_setup_for_row("Druid", {"spell_id": 772, "power_type": 1, "mana_cost": 100}) is None
+    assert warrior_rage_setup_for_row("Paladin", {"spell_id": 20154, "power_type": 0, "mana_cost": 60}) is None
+
+    # Low-health setup: Rend is stance-gated, so Battle Stance and a
+    # Rend-sized rage top-up must both land before the predamage cast;
+    # a stance miss must stop before Rend instead of riding a doomed
+    # full-health Execute.
+    class _LowHealthDriver:
+        own_guid = 900015
+
+        def __init__(self, calls):
+            self.calls = calls
+            self.polls = []
+
+        def approach_guid(self, dummy, standoff):
+            self.calls.append(("approach", dummy, standoff))
+
+        def poll(self, seconds):
+            self.polls.append(seconds)
+
+    def _run_low_health(stance_ok):
+        calls = []
+        originals = {
+            name: globals()[name]
+            for name in (
+                "ensure_battle_stance",
+                "warrior_rage_setup",
+                "cast_unit_faced",
+                "dummy_world_state",
+                "aura_present",
+            )
+        }
+        states = iter([(100, 100, False), (85, 100, True), (85, 100, False), (19, 100, True)])
+        aura_states = iter([False, True, False])
+
+        def fake_ensure(driver, guid):
+            calls.append(("stance", guid))
+            return stance_ok, None if stance_ok else 86, []
+
+        def fake_rage_factory(cost):
+            def fake_rage(driver, dummy=None):
+                calls.append(("rage", cost, dummy))
+                return "; fake rage"
+
+            return fake_rage
+
+        def fake_cast(driver, spell_id, dummy, timeout=0.0):
+            calls.append(("rend", spell_id, dummy))
+            return True, None, []
+
+        def fake_state(driver, dummy):
+            calls.append(("state", dummy))
+            return next(states, (19, 100, True))
+
+        def fake_aura(driver, guid, spell_id):
+            calls.append(("aura", guid, spell_id))
+            return next(aura_states, True)
+
+        globals()["ensure_battle_stance"] = fake_ensure
+        globals()["warrior_rage_setup"] = fake_rage_factory
+        globals()["cast_unit_faced"] = fake_cast
+        globals()["dummy_world_state"] = fake_state
+        globals()["aura_present"] = fake_aura
+        try:
+            note = low_health_setup(_LowHealthDriver(calls), 4242)
+        finally:
+            globals().update(originals)
+        return calls, note
+
+    low_calls, low_note = _run_low_health(True)
+    assert low_calls[0] == ("stance", 900015), low_calls
+    assert [call for call in low_calls if call[0] == "rage"] == [("rage", 100, 4242)] * 2, low_calls
+    assert [call for call in low_calls if call[0] == "approach"] == [("approach", 4242, 2.0)] * 2, low_calls
+    assert [call for call in low_calls if call[0] == "rend"] == [("rend", 6546, 4242)] * 2, low_calls
+    assert "casts=2" in low_note and "hp 19/100" in low_note, low_note
+    low_calls, low_note = _run_low_health(False)
+    assert low_calls == [("stance", 900015)], low_calls
+    assert "stance FAILED" in low_note and "reason=86" in low_note, low_note
+    # Battle Stance verification rides the aura-wait helper: a bound
+    # GO whose aura lands after the first read still verifies.
+    stance_calls = []
+    stance_originals = {name: globals()[name] for name in ("aura_present", "send_and_wait", "wait_for_aura")}
+
+    def fake_aura_absent(driver, guid, spell_id):
+        stance_calls.append(("aura", guid, spell_id))
+        return False
+
+    def fake_stance_cast(driver, body, spell_id, target_guid=None):
+        stance_calls.append(("cast", spell_id, target_guid))
+        return True, None, [306]
+
+    def fake_wait_aura(driver, guid, spell_id, timeout_s=8.0):
+        stance_calls.append(("wait", guid, spell_id))
+        return True
+
+    globals()["aura_present"] = fake_aura_absent
+    globals()["send_and_wait"] = fake_stance_cast
+    globals()["wait_for_aura"] = fake_wait_aura
+    try:
+        stance_result = ensure_battle_stance(_LowHealthDriver([]), 900015)
+    finally:
+        globals().update(stance_originals)
+    assert stance_result == (True, None, [306]), stance_result
+    assert stance_calls == [("aura", 900015, 2457), ("cast", 2457, 900015), ("wait", 900015, 2457)], stance_calls
+    # Rage-setup combat tap: Rend/Hamstring are stance-gated, so a
+    # stanceless row's tap never lands and every Bloodrage grant
+    # decays through the cooldown wait (live 4-row NO_POWER
+    # cluster); a damage-free shout aura lands but never aggros
+    # the dummy (live probe: rage decayed 680->0, caster never
+    # hit). The tap therefore enters Battle Stance when
+    # stanceless, then Rends: damaging, stance-legal, engaging.
+    from types import SimpleNamespace as _TapNS
+
+    tap_calls = []
+    tap_obj = _TapNS(values={WARRIOR_RAGE_FIELD: 0})
+    tap_driver = _TapNS(
+        own_guid=900015,
+        world=_TapNS(get=lambda guid: tap_obj),
+        poll=lambda seconds: None,
+        approach_guid=lambda dummy, standoff: tap_calls.append(("approach", dummy, standoff)),
+    )
+    tap_originals = {
+        name: globals()[name]
+        for name in (
+            "cast_self_retry_power",
+            "cast_unit_faced",
+            "send_and_wait",
+            "live_cooldown_wait_s",
+            "wait_for_aura",
+            "ensure_battle_stance",
+        )
+    }
+    bloodrage_results = iter([(True, None, [], 0), (False, SPELL_FAILED_NOT_READY, [], 0)])
+
+    def fake_bloodrage(driver, spell_id, timeout=10.0, retries=POWER_RETRIES):
+        tap_calls.append(("bloodrage", spell_id))
+        result = next(bloodrage_results, (False, SPELL_FAILED_NOT_READY, [], 0))
+        if result[0]:
+            tap_obj.values[WARRIOR_RAGE_FIELD] = 100
+        return result
+
+    def fake_unit_cast(driver, spell_id, dummy, timeout=0.0):
+        tap_calls.append(("unit", spell_id, dummy))
+        tap_obj.values[WARRIOR_RAGE_FIELD] = 260
+        return True, None, []
+
+    def fake_tap_cast(driver, body, spell_id, timeout=10.0, target_guid=None):
+        tap_calls.append(("tap", spell_id, body))
+        return True, None, [306]
+
+    def fake_tap_stance(driver, guid):
+        tap_calls.append(("stance", guid))
+        return True, None, []
+
+    def fake_tap_aura(driver, guid, spell_id, timeout_s=8.0):
+        tap_calls.append(("wait-aura", guid, spell_id))
+        return True
+
+    globals()["cast_self_retry_power"] = fake_bloodrage
+    globals()["cast_unit_faced"] = fake_unit_cast
+    globals()["send_and_wait"] = fake_tap_cast
+    globals()["live_cooldown_wait_s"] = lambda spell_id, cap_s=65.0: 65.0
+    globals()["wait_for_aura"] = fake_tap_aura
+    globals()["ensure_battle_stance"] = fake_tap_stance
+    try:
+        tap_note = warrior_rage_setup(200)(tap_driver, 4242)
+    finally:
+        globals().update(tap_originals)
+    assert tap_calls == [
+        ("bloodrage", WARRIOR_RAGE_SPELL),
+        ("bloodrage", WARRIOR_RAGE_SPELL),
+        ("approach", 4242, 2.0),
+        ("stance", 900015),
+        ("unit", 6546, 4242),
+        ("wait-aura", 4242, 6546),
+    ], tap_calls
+    assert "rage 260/200" in tap_note and "tap-engaged" in tap_note, tap_note
+    print("SELFTEST Warrior dispatch table ok")
     # Pet dispatch: the summon row itself always rides the pet leg;
     # other pet rows ride it only when a summon scenario exists for
     # the class, else they stay honestly BLOCKED no-pet.
@@ -5844,6 +6906,30 @@ def run_self_test() -> int:
     assert [entry for _guid, entry, _bag, _slot, _count in HUNTER_GEAR_ROWS] == [5596, 2512, 1161]
     assert EQUIPMENT_SLOT_RANGED == 17
     assert EQUIPMENT_SLOT_MAINHAND == 15
+    # Warrior fixture vocabulary: all stance entries plus the
+    # Bloodrage rage source seed as setup; the shield fixture pins
+    # the fork-honest offhand for shield-gated rows.
+    assert SETUP_SPELLS["Warrior"] == (2457, 71, 2458, 2687)
+    assert WARRIOR_STANCE_SPELLS == (2457, 71, 2458)
+    assert WARRIOR_RAGE_SPELL == 2687
+    assert WARRIOR_TAP_REND == 6546
+    assert WARRIOR_TAP_HAMSTRING == 1715
+    assert WARRIOR_TAP_COST == 100
+    # Rage is the second power slot (field 24): field 23 is mana and
+    # reads None for a rage user, which once blinded every setup.
+    assert WARRIOR_RAGE_FIELD == 24
+    assert UNIT_FIELD_POWER1 == 23
+    assert warrior_rage_cycles(0, 100) == 1
+    assert warrior_rage_cycles(100, 100) == 0
+    assert warrior_rage_cycles(0, 300) == 3
+    assert warrior_rage_cycles(250, 300) == 1
+    assert warrior_rage_cycles(0, 0) == 0
+    assert [entry for _guid, entry, _bag, _slot, _count in WARRIOR_GEAR_ROWS] == [1161, 1166]
+    assert [slot for _guid, _entry, _bag, slot, _count in WARRIOR_GEAR_ROWS] == [
+        EQUIPMENT_SLOT_MAINHAND,
+        EQUIPMENT_SLOT_OFFHAND,
+    ]
+    assert EQUIPMENT_SLOT_OFFHAND == 16
     for reason in ("effect-marker-only", "target-not-dead"):
         assert reason in BLOCKED_REASONS, reason
         assert reason in UNSCENARIOED_EVIDENCE, reason
@@ -6050,6 +7136,102 @@ def run_self_test() -> int:
         )
     else:
         print("SELFTEST Shaman artifact absent; skipping totality")
+    # Totality over the real Warrior fan-out artifact when present:
+    # every row dispatches to a cast leg, the passive check, or a
+    # closed-enum BLOCKED reason. Stance-gated rows ride
+    # form_gated (never engine-totem); the three stance entries
+    # ride form; Execute-dummy/Overpower/Charge/Intercept rows stay
+    # honestly BLOCKED (no movement or threshold scenario exists);
+    # the focus-cost Thunderstomp rows are marker-only; no item
+    # row reaches the item leg (all verify on the dummy), so the
+    # shield fixture is fork honesty, never a gate.
+    try:
+        import spell_matrix_gen as _gen  # noqa: PLC0415
+
+        _warrior_fanout = _gen.class_matrix_path("Warrior")
+    except (ImportError, AttributeError):
+        _warrior_fanout = None
+    # Warrior is a pilot class, so matrix_path_for falls back to
+    # the pilot matrix: totality needs the fan-out artifact itself,
+    # and skips until the generator writes it.
+    if _warrior_fanout is not None and _warrior_fanout.exists():
+        warrior_doc = json.loads(_warrior_fanout.read_text())
+        warrior_rows = [r for r in warrior_doc.get("rows", []) if r.get("class") == "Warrior"]
+        assert warrior_rows, "Warrior artifact has no Warrior rows"
+        assert class_summon_spell(warrior_rows) is None
+        assert warrior_doc.get("full_talent_build") == "fury", warrior_doc.get("full_talent_build")
+        seen_legs: set[str] = set()
+        seen_blocked: set[str] = set()
+        for real_row in warrior_rows:
+            act, pay = pre_dispatch(real_row)
+            if act == "cast":
+                assert pay in ("self", "hostile", "ground", "form", "form_gated", "self_heal"), (real_row, pay)
+                seen_legs.add(pay)
+            elif act == "blocked":
+                assert pay in BLOCKED_REASONS, (real_row, pay)
+                seen_blocked.add(pay)
+            else:
+                assert act == "passive" and pay is None, real_row
+        assert {"self", "hostile", "ground", "form", "form_gated", "self_heal"} <= seen_legs, seen_legs
+        assert "item" not in seen_legs, seen_legs
+        assert seen_blocked == {"effect-marker-only"}, seen_blocked
+        for real_row in warrior_rows:
+            if real_row.get("bucket") == "form":
+                assert real_row["spell_id"] in WARRIOR_STANCE_SPELLS, real_row
+                assert pre_dispatch(real_row) == ("cast", "form"), real_row
+            if real_row.get("bucket") == "form_totem" and not (real_row.get("campaign", "") or "").startswith(
+                "classify_only"
+            ):
+                assert pre_dispatch(real_row) == ("cast", "form_gated"), real_row
+                assert required_form_spell(real_row) in WARRIOR_STANCE_SPELLS, real_row
+        # Movement/threshold rows the harness cannot scenario stay
+        # BLOCKED: Charge/Intercept teleports, Execute dummies
+        # (NEEDS-HOST, no <20% gate in the engine), Overpower
+        # (no aura outcome), Whirlwind, Thunderstomps.
+        marker_blocked = sorted(
+            r["spell_id"] for r in warrior_rows if pre_dispatch(r) == ("blocked", "effect-marker-only")
+        )
+        # Rank coverage keeps only the first + last Execute ranks
+        # (5308 + 20662 share one signature), so the interior
+        # ranks 20658/20660/20661 never reach the cast set.
+        assert marker_blocked == [
+            100,
+            1680,
+            2687,
+            5308,
+            7384,
+            11578,
+            11585,
+            20252,
+            20617,
+            20662,
+            26090,
+            26188,
+        ], marker_blocked
+        # Seed castability (the live 145 regression): every castable
+        # row's spell is seeded, all stance entries plus Bloodrage
+        # seed as setup, and talent cost settles at the cap.
+        warrior_seed = set(warrior_doc.get("full_seed_spell_ids", {}).get("Warrior", []))
+        assert warrior_seed, "Warrior artifact seed empty"
+        assert warrior_doc.get("full_seed_talent_cost", 99) <= 51, warrior_doc.get("full_seed_talent_cost")
+        assert set(SETUP_SPELLS["Warrior"]) <= warrior_seed, SETUP_SPELLS["Warrior"]
+        castable = [
+            r
+            for r in warrior_rows
+            if not (r.get("campaign", "") or "").startswith("classify_only")
+            and (r.get("expected") or {}).get("kind") not in ("none_marker", "dual_outcome", "learned_spell")
+        ]
+        assert castable, "no castable Warrior rows"
+        for cast_row in castable:
+            assert cast_row["spell_id"] in warrior_seed, cast_row["spell_id"]
+            assert isinstance(cast_row.get("cooldown_ms"), int), cast_row
+        print(
+            f"SELFTEST Warrior artifact dispatch totality ok "
+            f"({len(warrior_rows)} rows, legs={sorted(seen_legs)}, "
+            f"blocked={sorted(seen_blocked)})"
+        )
+    else:
+        print("SELFTEST Warrior artifact absent; skipping totality")
     # Artifact writers round-trip.
     tmp = [make_verdict(row, "PASS", evidence="t", packets=[306, 169, 306])]
     assert tmp[0]["packets"] == [169, 306]

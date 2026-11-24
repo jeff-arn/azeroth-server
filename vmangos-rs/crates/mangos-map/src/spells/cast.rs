@@ -152,6 +152,27 @@ impl Map {
                 }
             }
         }
+        // TargetAuraState gate (`Spell::CheckCast`,
+        // `Spell.cpp:5868-5875`): HEALTHLESS_20 requires
+        // the unit target strictly below 20% health (the
+        // fork maintains the bit in `SetHealth`; computed
+        // live here — no aura-state field is maintained).
+        if spell.target_aura_state == aura_state::HEALTHLESS_20_PERCENT {
+            match target {
+                CastTarget::Unit(victim) => {
+                    let hp = self.unit_value_u32(victim, offsets::UNIT_FIELD_HEALTH);
+                    let max = self.unit_value_u32(victim, offsets::UNIT_FIELD_MAXHEALTH);
+                    #[allow(clippy::cast_precision_loss)]
+                    let below = max > 0 && (hp as f32) < (max as f32) * 0.20;
+                    if !below {
+                        return fail(self, cast_result::FAILED_BAD_TARGETS);
+                    }
+                }
+                CastTarget::SelfCast | CastTarget::Dest(_) => {
+                    return fail(self, cast_result::FAILED_BAD_IMPLICIT_TARGETS);
+                }
+            }
+        }
         // Target validation (subset of CheckCast target
         // rules driven by effect 0's implicit target).
         if let CastOutcome::Failed(reason) =
@@ -975,6 +996,7 @@ impl Map {
                     CastTarget::Dest(pos) => Some(pos),
                     _ => None,
                 },
+                Self::script_unit_target(hit.target),
                 Some(&mut hit.applied_mods),
                 Some(&hit.ctx),
                 hit.custom_base_points,
@@ -1260,6 +1282,7 @@ impl Map {
                     CastTarget::Dest(pos) => Some(pos),
                     _ => None,
                 },
+                Self::script_unit_target(cast.target),
                 Some(&mut cast.applied_mods),
                 Some(&ctx),
                 cast.custom_base_points,

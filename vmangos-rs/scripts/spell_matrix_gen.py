@@ -222,6 +222,16 @@ CLASS_FANOUT_EXPECTATIONS = {
         "overlap": [],
         "excluded": [16190],
     },
+    "Warrior": {
+        # fury (first legal build by role preference): no merged
+        # extras outside the audited sets, so the book settles at
+        # the 51 cap with an empty exclusion list (audited live:
+        # G1 union 121, fury known 17, no overlap).
+        "union": 121,
+        "talent_known": 17,
+        "overlap": [],
+        "excluded": [],
+    },
 }
 
 #: Per-class G1-union bucket distributions under derive_bucket's
@@ -303,6 +313,26 @@ CLASS_FULL_BUCKET_COUNTS = {
         "form_totem": 72,
         "passive": 2,
         "form": 1,
+    },
+    "Warrior": {
+        # fury fan-out (audited over the exact G1 union): stance
+        # rows file under form_totem (the fork gate rejects them
+        # from caster form); the three stance entries file under
+        # form; no friendly/dual/corpse/pet rows for this class.
+        # Thunderstomp (pet-focus autocast shape) files under
+        # ground_area by the LOCATION-first match order.
+        "self": 16,
+        "friendly": 0,
+        "hostile_dummy": 4,
+        "item_reagent_ammo": 29,
+        "party_duel": 0,
+        "ground_area": 10,
+        "dual": 0,
+        "corpse": 0,
+        "pet": 0,
+        "form_totem": 54,
+        "passive": 5,
+        "form": 3,
     },
 }
 
@@ -500,6 +530,7 @@ def effective_row(spell_id: int) -> dict:
         ("effect_amplitude2", int),
         ("effect_amplitude3", int),
         ("script_name", str),
+        ("target_aura_state", int),
     ]
     out = _query(
         "SELECT entry,build,name,attributes,attributesEx,attributesEx2,"
@@ -519,7 +550,7 @@ def effective_row(spell_id: int) -> dict:
         "maxLevel,baseLevel,spellLevel,"
         "effectDicePerLevel1,effectDicePerLevel2,effectDicePerLevel3,"
         "effectRealPointsPerLevel1,effectRealPointsPerLevel2,effectRealPointsPerLevel3,"
-        "effectAmplitude1,effectAmplitude2,effectAmplitude3,script_name "
+        "effectAmplitude1,effectAmplitude2,effectAmplitude3,script_name,targetAuraState "
         f"FROM spell_template t1 WHERE entry={spell_id} AND "
         f"build=(SELECT max(build) FROM spell_template t2 "
         f"WHERE t1.entry=t2.entry AND build <= {SUPPORTED_BUILD})"
@@ -645,6 +676,10 @@ def validate_row(spell_id: int, spec: dict, eff: dict) -> dict:
         # rejected at cast time without combo on the target, so the
         # harness must build a point first.
         "needs_combo_points": bool(eff["attributes_ex"] & FINISHING_MOVE_EX),
+        # Fork TargetAuraState HEALTHLESS_20 (Execute family):
+        # rejected at cast time unless the target is strictly
+        # below 20% health, so the harness pre-damages the dummy.
+        "requires_low_health_target": int(eff.get("target_aura_state", 0) or 0) == 2,
         "cooldown_ms": eff["recovery_time"],
         "script_name": eff["script_name"],
         "build": eff["build"],
@@ -2054,6 +2089,7 @@ def run_self_test() -> int:
                 assert rank_id in seed_set or rank_id in excluded_set, (row["spell_id"], rank_id)
             assert isinstance(row.get("cooldown_ms"), int), row
             assert isinstance(row.get("needs_combo_points"), bool), row
+            assert isinstance(row.get("requires_low_health_target"), bool), row
             assert row["bucket"] in VALID_BUCKETS, row
             assert row["expected"]["kind"] in VALID_EXPECTED, row
             assert row["all_rank_ids"][row["rank"] - 1] == row["spell_id"]
@@ -2086,6 +2122,21 @@ def run_self_test() -> int:
                 assert row["expected"]["kind"] == "resurrect_request", row
             assert not [r for r in full_rows if r["expected"]["kind"] == "expect_cast_failure"]
             assert excluded_set == {5570, 16689}, excluded_set
+        if class_name == "Warrior":
+            # Warrior-correctness over the real artifact: the three
+            # stance entries are aura-36 form rows with form_change
+            # outcomes; no row invents expect_cast_failure; the seed
+            # settles at the cap with no exclusions; the selected
+            # build is fury.
+            form_rows = [r for r in full_rows if r["bucket"] == "form"]
+            assert sorted(r["spell_id"] for r in form_rows) == [71, 2457, 2458], [r["spell_id"] for r in form_rows]
+            for row in form_rows:
+                assert 36 in row["aura_ids"], row["spell_id"]
+                assert row["expected"]["kind"] == "form_change", row
+            assert not [r for r in full_rows if r["expected"]["kind"] == "expect_cast_failure"]
+            assert excluded_set == set(), excluded_set
+            assert full_doc["full_talent_build"] == "fury", full_doc["full_talent_build"]
+            assert full_doc["full_cast_count"] == 85, full_doc["full_cast_count"]
         print(f"SELFTEST per-class artifact {class_name} cast={len(full_rows)} seed={len(seed_set)} ok")
     # G1 artifact, if generated, must reproduce the derived
     # matrix's exact level-60 union counts with no exclusions.
@@ -2202,6 +2253,7 @@ def run_self_test() -> int:
             "attributes": 0x50000,
             "attributes_ex": 0,
             "attributes_ex2": 0,
+            "target_aura_state": 0,
             "power_type": 0,
             "mana_cost": 0,
             "stances": 0,
@@ -2467,6 +2519,69 @@ def run_self_test() -> int:
         "form": 1,
     }
     print("SELFTEST Shaman pins ok")
+    # Warrior pins: the audited fury fan-out literals above.
+    assert CLASS_FANOUT_EXPECTATIONS["Warrior"] == {
+        "union": 121,
+        "talent_known": 17,
+        "overlap": [],
+        "excluded": [],
+    }
+    assert CLASS_FULL_BUCKET_COUNTS["Warrior"] == {
+        "self": 16,
+        "friendly": 0,
+        "hostile_dummy": 4,
+        "item_reagent_ammo": 29,
+        "party_duel": 0,
+        "ground_area": 10,
+        "dual": 0,
+        "corpse": 0,
+        "pet": 0,
+        "form_totem": 54,
+        "passive": 5,
+        "form": 3,
+    }
+    print("SELFTEST Warrior pins ok")
+    # Warrior derivation: stance gates, shield rows, script dummies.
+    # Stance-gated melee rows file under form_totem (the fork gate
+    # rejects them from caster form); the aura side follows the
+    # targets (Rend's DoT lands on the enemy).
+    rend = _eff(effect1=6, aura1=4, targ_a1=6, stances=196608, name="Rend")
+    assert derive_bucket(772, rend) == "form_totem"
+    assert derive_expected(772, rend, "form_totem") == {"kind": "aura_on_target", "aura": 772}
+    # Shield rows carry the equip-4 gate but verify on the dummy:
+    # dispel + school damage is still a damage outcome.
+    slam = _eff(effect1=38, effect2=2, targ_a1=6, targ_a2=6, equipped_item_class=4, name="Shield Slam")
+    assert derive_bucket(23923, slam) == "item_reagent_ammo"
+    assert derive_expected(23923, slam, "item_reagent_ammo") == {"kind": "damage_log", "opcode": 592}
+    # Execute-dummy rows (script without Effect 77) have no
+    # wire-observable outcome: marker-only, never a script
+    # classify_only.
+    dummy_exec = _eff(
+        effect1=3,
+        effect2=64,
+        targ_a1=6,
+        targ_a2=1,
+        stances=327680,
+        name="Execute",
+        script_name="spell_warrior_execute_dummy",
+    )
+    assert derive_bucket(5308, dummy_exec) == "form_totem"
+    assert derive_expected(5308, dummy_exec, "form_totem") == {
+        "kind": "none_marker",
+        "note": "EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only",
+    }
+    # Overpower (normalized weapon damage, no aura) is the same
+    # marker-only shape through the stance gate.
+    overpower = _eff(effect1=121, targ_a1=6, stances=65536, name="Overpower")
+    assert derive_bucket(7384, overpower) == "form_totem"
+    assert derive_expected(7384, overpower, "form_totem")["kind"] == "none_marker"
+    # Charge (Effect 96 movement + energize + dummy) is marker-only
+    # too: Effect 96 is in no outcome set (the teleport branch
+    # covers Effect 5 only), so movement rows fall through.
+    charge = _eff(effect1=96, effect2=30, effect3=64, targ_a1=6, targ_a2=1, targ_a3=6, stances=65536, name="Charge")
+    assert derive_bucket(100, charge) == "form_totem"
+    assert derive_expected(100, charge, "form_totem")["kind"] == "none_marker"
+    print("SELFTEST Warrior derivation cases ok")
     # Rank-coverage selector: first + last plus interiors that differ
     # from the previous rank; identical chains keep two rows.
     sig_a = ((6, 0, 0), (3, 0, 0), "")

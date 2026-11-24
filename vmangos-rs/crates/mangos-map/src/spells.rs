@@ -65,8 +65,8 @@ const UNIT_FLAG_CC_MASK: u32 = UNIT_FLAG_SILENCED
     | UNIT_FLAG_FLEEING;
 
 use mangos_spells::defines::{
-    aura as aura_type, aura_interrupt_flag, cast_result, dmg_class, effect, power, proc_ex,
-    proc_flag, school, spell_interrupt_flag, spellmod, target as tgt,
+    aura as aura_type, aura_interrupt_flag, aura_state, cast_result, dmg_class, effect, power,
+    proc_ex, proc_flag, school, spell_interrupt_flag, spellmod, target as tgt,
 };
 
 use crate::procs::{ProcArgs, ProcRaiseCtx, att_type as proc_att_type};

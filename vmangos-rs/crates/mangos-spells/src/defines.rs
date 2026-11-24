@@ -376,6 +376,12 @@ pub mod dmg_class {
     pub const RANGED: u32 = 3;
 }
 
+/// `AuraState` (`SpellDefines.h` health-percent states used
+/// by `TargetAuraState`/`CasterAuraState` gates).
+pub mod aura_state {
+    pub const HEALTHLESS_20_PERCENT: u32 = 2;
+}
+
 /// `SpellCastResult` subset (`SpellDefines.h:350+`,
 /// counted from the header), the cast-fail reasons the
 /// slice can emit. `SPELL_CAST_OK = 0xFF` is internal

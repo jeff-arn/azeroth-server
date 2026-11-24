@@ -1,6 +1,149 @@
+SEEDED guid=900015 spells=138 pos=(-6295.0,315.0,377.5)
+SEEDED warrior gear guid=900015 rows=2
 AUTH-OK + ADDON-INFO
 LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
-DRIFT-OK guid=900015 level=60 spells=3 health=2609
-ROW Warrior 5242 self: PASS  | bound SPELL_GO + aura 5242 in self fields 47-94
-ROW Warrior 6546 hostile_dummy: PASS  | Battle Stance aura 2457 verified, then DoT aura 6546 on dummy guid=17379390973850682870 + health 100->83
-LOGOUT-OK warrior-pilot
+DRIFT-OK guid=900015 level=60 spells=138 health=2609
+ROW Warrior 71 form: PASS  | bound SPELL_GO + form aura 71 on self, cancelled after (pre-cleared {})
+ROW Warrior 72 form_totem: PASS  | observable outcome: health 100->85, matching damage=6 after 1 attempt(s); form 2457 setup verified, exited=True
+ROW Warrior 78 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=70 after 1 attempt(s)
+ROW Warrior 100 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Warrior 355 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 71 setup verified, exited=True
+ROW Warrior 676 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 71 setup verified, exited=True
+ROW Warrior 694 form_totem: PASS  | observable outcome: health 100->47, matching damage=22 after 2 attempt(s); form 2457 setup verified, exited=True
+ROW Warrior 772 form_totem: PASS  | observable outcome: target_aura=True; ticks 2/3 in oracle band [5-5] (required>=2, target_alive=True, out_of_band=0, amo
+ROW Warrior 845 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=64 after 1 attempt(s)
+ROW Warrior 871 form_totem: PASS  | observable outcome: caster_aura=True; form 71 setup verified, exited=True
+ROW Warrior 1160 ground_area: PASS  | observable outcome: target_aura=True
+ROW Warrior 1161 ground_area: PASS  | observable outcome: target_aura=True
+ROW Warrior 1464 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=90 after 1 attempt(s)
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6329.38,288.04,380.13)
+ROW Warrior 1672: topped up 1005->2609
+ROW Warrior 1672 form_totem: PASS  | observable outcome: health 100->0, matching damage=45 after 1 attempt(s); form 2457 setup verified, exited=True
+ROW Warrior 1680 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Warrior 1715 form_totem: PASS  | observable outcome: health 100->21, matching damage=5 after 1 attempt(s); form 2457 setup verified, exited=True
+ROW Warrior 1719 form_totem: PASS  | observable outcome: caster_aura=True; form 2458 setup verified, exited=True
+ROW Warrior 2457 form: PASS  | bound SPELL_GO + form aura 2457 on self, cancelled after (pre-cleared {})
+ROW Warrior 2458 form: PASS  | bound SPELL_GO + form aura 2458 on self, cancelled after (pre-cleared {})
+ROW Warrior 2565 form_totem: PASS  | observable outcome: caster_aura=True; form 71 setup verified, exited=True
+ROW Warrior 2687 self: BLOCKED effect-marker-only | classify_only
+ROW Warrior 5246 ground_area: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warrior 5308 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Warrior 6343 form_totem: PASS  | observable outcome: health 100->9, matching damage=10 after 1 attempt(s); form 2457 setup verified, exited=True
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6329.34,356.22,377.57)
+ROW Warrior 6552: topped up 1056->2609
+ROW Warrior 6552 form_totem: PASS  | observable outcome: health 100->40, matching damage=20 after 1 attempt(s); form 2458 setup verified, exited=True
+ROW Warrior 6554 form_totem: PASS  | observable outcome: health 100->0, matching damage=50 after 1 attempt(s); form 2458 setup verified, exited=True
+ROW Warrior 6572 form_totem: PASS  | observable outcome: health 100->66, matching damage=14 after 1 attempt(s); form 71 setup verified, exited=True
+ROW Warrior 6673 self: PASS  | observable outcome: caster_aura=True
+ROW Warrior 7373 form_totem: PASS  | observable outcome: health 100->0, matching damage=45 after 1 attempt(s); form 2457 setup verified, exited=True
+ROW Warrior 7384 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Warrior 7386 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6312.85,391.08,380.68)
+ROW Warrior 11556: topped up 1041->2609
+ROW Warrior 11556 ground_area: PASS  | observable outcome: target_aura=True
+ROW Warrior 11574 form_totem: PASS  | observable outcome: target_aura=True; ticks 2/7 in oracle band [21-21] (required>=1, target_alive=False, out_of_band=0, 
+ROW Warrior 11578 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Warrior 11581 form_totem: PASS  | observable outcome: health 100->0, matching damage=103 after 1 attempt(s); form 2457 setup verified, exited=True
+ROW Warrior 11585 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Warrior 11597 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Warrior 11605 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=145 after 1 attempt(s)
+ROW Warrior 12282 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12288 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12323 ground_area: PASS  | observable outcome: target_aura=True
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6374.11,339.03,386.22)
+ROW Warrior 12327: topped up 1178->2609
+ROW Warrior 12327 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12328 self: PASS  | observable outcome: caster_aura=True
+ROW Warrior 12659 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12679 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12707 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12708 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12713 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12836 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12856 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12861 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12867 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12886 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 12973 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 13002 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 13048 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 16464 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 16493 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 18499 form_totem: PASS  | observable outcome: caster_aura=True; form 2458 setup verified, exited=True
+ROW Warrior 20252 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Warrior 20500 passive: PASSIVE-VERIFIED | learned=True
+ROW Warrior 20560 form_totem: PASS  | observable outcome: health 100->0, matching damage=93 after 1 attempt(s); form 2457 setup verified, exited=True
+ROW Warrior 20569 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=108 after 1 attempt(s)
+ROW Warrior 20617 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Warrior 20647 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=1 after 2 attempt(s); cooldown wait +5s
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+ROW Warrior 20662: topped up 511->2609
+ROW Warrior 20662 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Warrior 21551 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=168 after 1 attempt(s)
+ROW Warrior 21553 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=218 after 1 attempt(s)
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6340.98,301.55,380.02)
+ROW Warrior 23880: topped up 1084->2609
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900015 spells=138 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+ROW Warrior 23880 self: PASS  | bound GO + self heal log 10 in oracle band [9-11] (sub-noise heal; rate 22.9/s, 640->709 pre, got 821)
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+ROW Warrior 23881: topped up 855->2609
+ROW Warrior 23881 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=180 after 1 attempt(s)
+ROW Warrior 23885 self: PASS  | observable outcome: caster_aura=True
+ROW Warrior 23886 self: PASS  | observable outcome: caster_aura=True
+ROW Warrior 23887 self: PASS  | observable outcome: caster_aura=True
+ROW Warrior 23888 self: PASS  | observable outcome: caster_aura=True
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900015 spells=138 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+ROW Warrior 23889 self: PASS  | bound GO + self heal log 13 in oracle band [12-14] (sub-noise heal; rate 22.9/s, 640->709 pre, got 824)
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+ROW Warrior 23890: topped up 858->2609
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900015 spells=138 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+ROW Warrior 23890 self: PASS  | bound GO + self heal log 17 in oracle band [16-18] (sub-noise heal; rate 23.0/s, 640->709 pre, got 828)
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+ROW Warrior 23891: topped up 862->2609
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900015 spells=138 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+ROW Warrior 23891 self: PASS  | bound GO + self heal log 20 in oracle band [19-21] (sub-noise heal; rate 23.0/s, 640->709 pre, got 831)
+LOGOUT-OK Warrior-topup
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6295.00,315.00,377.50)
+ROW Warrior 23894: topped up 865->2609
+ROW Warrior 23894 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=180 after 1 attempt(s)
+ROW Warrior 23923 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=279 after 1 attempt(s)
+ROW Warrior 23925 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=362 after 1 attempt(s)
+ROW Warrior 25286 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=215 after 1 attempt(s)
+ROW Warrior 25288 form_totem: PASS  | observable outcome: health 100->0, matching damage=88 after 1 attempt(s); form 71 setup verified, exited=True
+ROW Warrior 25289 self: PASS  | observable outcome: caster_aura=True
+ROW Warrior 26090 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Warrior 26188 ground_area: BLOCKED effect-marker-only | classify_only
+LOGOUT-OK Warrior-run
+run-class Warrior: 85 rows, BLOCKED=12, PASS=54, PASSIVE-VERIFIED=19
+SPELL-CAMPAIGN-RUN-CLASS-WARRIOR-PASS
