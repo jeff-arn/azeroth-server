@@ -1,0 +1,104 @@
+{
+ "mode": "run-class",
+ "class": "Shaman",
+ "matrix_file": "/Users/jeffarn/Programming/azeroth-server/vmangos-rs/scripts/spell_campaign_matrix-Shaman.json",
+ "matrix_mode": "full",
+ "matrix_counts": {
+  "Shaman": 93
+ },
+ "talent_build": {
+  "name": "enhance",
+  "role": "MeleeDps",
+  "total_points": 51,
+  "known_spell_ids": [
+   16108,
+   16109,
+   16116,
+   16119,
+   16161,
+   16164,
+   16268,
+   16284,
+   16287,
+   16301,
+   16305,
+   17364,
+   17489,
+   29080,
+   29087
+  ],
+  "required_spell_ids": []
+ },
+ "fixture_note": "union-seeded single-race fixture; not a legal single-race spellbook claim where union exceeds any one race (Paladin Human==Dwarf==160, numerically equal)",
+ "seed_count": 174,
+ "talent_seed_checks": [
+  {
+   "spell_id": 16108,
+   "learned": true
+  },
+  {
+   "spell_id": 16109,
+   "learned": true
+  },
+  {
+   "spell_id": 16116,
+   "learned": true
+  },
+  {
+   "spell_id": 16119,
+   "learned": true
+  },
+  {
+   "spell_id": 16161,
+   "learned": true
+  },
+  {
+   "spell_id": 16164,
+   "learned": true
+  },
+  {
+   "spell_id": 16268,
+   "learned": true
+  },
+  {
+   "spell_id": 16284,
+   "learned": true
+  },
+  {
+   "spell_id": 16287,
+   "learned": true
+  },
+  {
+   "spell_id": 16301,
+   "learned": true
+  },
+  {
+   "spell_id": 16305,
+   "learned": true
+  },
+  {
+   "spell_id": 17364,
+   "learned": true
+  },
+  {
+   "spell_id": 17489,
+   "learned": true
+  },
+  {
+   "spell_id": 29080,
+   "learned": true
+  },
+  {
+   "spell_id": 29087,
+   "learned": true
+  }
+ ],
+ "failure_clusters": [],
+ "verdict_counts": {
+  "BLOCKED": 51,
+  "PASS": 27,
+  "PASSIVE-VERIFIED": 15
+ },
+ "git_head": "33ae7ae8",
+ "git_dirty": true
+}

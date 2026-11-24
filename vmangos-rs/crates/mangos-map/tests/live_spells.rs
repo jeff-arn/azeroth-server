@@ -176,6 +176,7 @@ const SCALE_DOUBLE: u32 = 24244; // MOD_SCALE +100%
 const TRANQUILITY: u32 = 9863; // channeled self heal (8 s)
 const OMEN_OF_CLARITY: u32 = 16864; // cheap self aura, no cooldown
 const FAILED_SPELL_IN_PROGRESS: u8 = 97;
+const CHAIN_HEAL_R1: u32 = 1064; // TARGET_UNIT_FRIEND_CHAIN_HEAL (45)
 
 #[test]
 #[ignore = "requires bench world+characters DBs, CHARACTER_LOAD_GUID, MANGOS_DBC_DIR"]
@@ -3503,4 +3504,243 @@ fn bench_pet_target_modes() {
     println!("HELLFIRE-EFFECT hp {hp_before}->{hp_after}");
     assert_eq!(hp_before, hp_after, "dest damage hit the caster");
     println!("PET-TARGETS-PASS");
+}
+
+#[test]
+#[ignore = "requires bench world+characters DBs, CHARACTER_LOAD_GUID, MANGOS_DBC_DIR"]
+#[allow(clippy::too_many_lines)] // one end-to-end scenario
+fn bench_chain_heal_target_mode() {
+    // TARGET_UNIT_FRIEND_CHAIN_HEAL (45) must validate like an
+    // explicit friendly unit target (fork `SpellEntry.h`
+    // IsExplicitPositiveTarget + `Spell.cpp` FillTargetMap: the
+    // single-target component is the unit target; jumps are
+    // execution-time only). Regression: mode 45 fell through
+    // check_target into FAILED_UNKNOWN (145), failing the
+    // Shaman Chain/Healing Wave heal legs (331/1064/10623/25357).
+    let world_url = std::env::var("TEST_MYSQL_URL_WORLD").expect("TEST_MYSQL_URL_WORLD");
+    let chars_url = std::env::var("TEST_MYSQL_URL_CHARACTERS").expect("TEST_MYSQL_URL_CHARACTERS");
+    let guid: u32 = std::env::var("CHARACTER_LOAD_GUID")
+        .expect("CHARACTER_LOAD_GUID")
+        .parse()
+        .expect("guid");
+    let dbc_dir: PathBuf = std::env::var_os("MANGOS_DBC_DIR")
+        .expect("MANGOS_DBC_DIR")
+        .into();
+    let dbc = race_class_dbc(&dbc_dir);
+
+    let world = DbActor::spawn("test-world", &world_url).expect("world");
+    let stores = world
+        .call(move |conn| {
+            let (creature_templates, _) =
+                load_creature_templates(conn, 10, &TemplateValidation::default())?;
+            let (gameobject_templates, _) =
+                load_gameobject_templates(conn, 10, &GameObjectValidation::default())?;
+            let map_ids = load_map_ids(conn)?;
+            let mut spawns = SpawnData::new();
+            spawns.load_creatures(conn, 10, &creature_templates, Some(&map_ids), false)?;
+            spawns.load_gameobjects(
+                conn,
+                10,
+                &gameobject_templates,
+                Some(&map_ids),
+                None,
+                false,
+            )?;
+            let (creature_addons, _) = load_creature_addons(conn, 10, None, None, None)?;
+            let (equipment, _) = load_equipment_templates(conn, 10, None)?;
+            let (cls, _) = load_class_level_stats(conn)?;
+            let (display_addons, _) = load_display_info_addons(conn, 5875, None, None)?;
+            let (player_infos, _) = load_player_infos(conn, 60, None, Some(&map_ids), None)?;
+            let items = load_item_prototypes_lite(conn, 10)?;
+            let mut report = LoadReport::default();
+            let waypoints = load_waypoints(conn, &mut report)?;
+            let mut spell_report = LoadReport::default();
+            let spell_entries = load_spell_templates(conn, 5875, &mut spell_report)?;
+            let proc_events = mangos_world_data::proc_events::load_spell_proc_events(conn, 5875)?;
+            Ok(WorldStores {
+                creature_templates,
+                gameobject_templates,
+                spawns,
+                creature_addons,
+                equipment,
+                cls,
+                display_addons,
+                player_infos,
+                items,
+                item_prototypes: mangos_world_data::item_prototype::ItemPrototypes::default(),
+                factions: mangos_world_data::reputations::load_factions(conn)?,
+                reputation_kills: mangos_world_data::reputations::ReputationKillStores::default(),
+                gossip: mangos_world_data::gossip_menus::GossipStores::default(),
+                areas: mangos_world_data::areas::AreaStore::default(),
+                exploration_base_xp: mangos_world_data::exploration::ExplorationBaseXp::default(),
+                pets: mangos_world_data::pet_data::PetStores::default(),
+                next_pet_number: std::sync::atomic::AtomicU32::new(1),
+                next_item_guid: std::sync::atomic::AtomicU32::new(1),
+                vendor_items: mangos_world_data::vendor_items::VendorItemStores::default(),
+                durability: mangos_world_data::durability::DurabilityTables::default(),
+                bank_bag_slot_prices: Vec::new(),
+                stable_slot_prices: Vec::new(),
+                trainer_spells: mangos_world_data::trainer_spells::TrainerStores::default(),
+                taxi: mangos_world_data::taxi::TaxiStore::default(),
+                script_waypoints: mangos_world_data::script_waypoints::ScriptWaypointStore::default(
+                ),
+                game_events: mangos_world_data::game_events::GameEvents::default(),
+                loot: mangos_world_data::loot::LootStores::default(),
+                locks: mangos_world_data::locks::LockStore::default(),
+                fishing_base_skills: mangos_world_data::fishing::FishingBaseSkills::default(),
+                weather_chances: mangos_world_data::weather::WeatherChanceStore::default(),
+                waypoints,
+                spells: mangos_spells::SpellStore {
+                    spells: spell_entries,
+                    skill_line_abilities: Vec::new(),
+                    spell_chains: std::collections::HashMap::new(),
+                    talents: std::collections::HashMap::new(),
+                    talent_tabs: std::collections::HashMap::new(),
+                    talent_spell_pos: std::collections::HashMap::new(),
+                    proc_events,
+                    cones: std::collections::HashMap::new(),
+                    tables: mangos_spells::load_spell_dbc_tables(std::path::Path::new(
+                        &std::env::var("MANGOS_DBC_DIR").expect("MANGOS_DBC_DIR"),
+                    ))
+                    .expect("spell dbc tables"),
+                },
+                spell_target_positions:
+                    mangos_world_data::spell_target_position::SpellTargetPositions::default(),
+                creature_spells: mangos_world_data::creature_spells::CreatureSpellsMap::new(),
+                scripts: mangos_scripts_engine::ScriptStores::default(),
+                display_scales: HashMap::new(),
+                model_data: HashMap::new(),
+                shapeshift_forms: HashMap::new(),
+                skills: mangos_world_data::skill_info::SkillDbc::default(),
+                chat_channels: mangos_world_data::chat_channels::ChatChannelDbc::default(),
+                auction_houses: mangos_world_data::auction_house::AuctionHouseDbc::default(),
+                maps: mangos_world_data::map_template::MapStore::default(),
+                safe_locs: mangos_world_data::battlegrounds::SafeLocStore::default(),
+                battlegrounds: mangos_world_data::battlegrounds::BattlegroundTemplates::default(),
+                battlemasters: mangos_world_data::battlegrounds::BattleMasters::default(),
+                battle_event_indexes: mangos_world_data::battlegrounds::BattleEventIndexes::default(
+                ),
+                graveyard_links: mangos_world_data::battlegrounds::GraveyardLinks::default(),
+                bg_entrances: mangos_world_data::battlegrounds::BattlegroundEntrances::default(),
+                area_triggers: mangos_world_data::area_trigger::AreaTriggerStore::default(),
+                quests: mangos_world_data::quest_template::QuestTemplatesLite::default(),
+                quest_templates: mangos_world_data::quest_template::QuestTemplates::default(),
+                quest_relations: mangos_world_data::quest_template::QuestRelations::default(),
+                tavern_triggers: std::collections::HashSet::new(),
+            })
+        })
+        .expect("stores");
+    let stores = Arc::new(stores);
+    let chars = DbActor::spawn("test-chars", &chars_url).expect("chars");
+    let load = chars
+        .call(move |conn| load_character(conn, guid))
+        .expect("load")
+        .expect("fixture exists");
+    let inputs = MaterializeInputs {
+        infos: &stores.player_infos,
+        race: dbc.races.get(&1),
+        power_type: 1,
+        display_scale: 1.0,
+        model: None,
+        saved_map_known: true,
+        saved_map_is_instance: false,
+        max_money: MAX_MONEY_AMOUNT,
+        now_unix: 1_800_000_000,
+        rest_rates: mangos_entities::player::RestRates::default(),
+        skills: None,
+        item_prototypes: None,
+        quest_templates: None,
+        taxi: None,
+    };
+    let player = Player::materialize(load, &inputs).expect("player");
+    let player_guid: ObjectGuid = player.unit.guid();
+    let mut map = Map::new(
+        0,
+        0,
+        MapConfig::default(),
+        Arc::clone(&stores),
+        WorldRng::from_seed(11),
+    );
+    let respawns = RespawnTimes::default();
+    map.add_player(player, &respawns, 1_800_000_000, 1000);
+    let _ = map.drain_events();
+
+    let mut now_ms = 1000u32;
+    let mut tick = |map: &mut Map, n: u32| {
+        for _ in 0..n {
+            now_ms += 50;
+            map.tick(50, now_ms, 1_800_000_000);
+        }
+    };
+    let known_opt = || CastOptions {
+        triggered: false,
+        triggered_by_aura: false,
+        skip_known: true,
+        cast_item: None,
+        custom_base_points: [None; 3],
+        triggered_by_aura_spell: 0,
+        triggered_by_spell: 0,
+    };
+    {
+        let p = map.player_mut(player_guid).expect("player");
+        p.unit.set_max_power(0, 100_000);
+        p.unit.set_power(0, 100_000);
+    }
+    // Mode-45 self cast must start (was FAILED_UNKNOWN).
+    let ch = map.cast_spell(
+        player_guid,
+        CHAIN_HEAL_R1,
+        CastTarget::Unit(player_guid),
+        known_opt(),
+    );
+    println!("CHAIN-HEAL-SELF outcome={ch:?}");
+    assert!(
+        matches!(ch, CastOutcome::Started),
+        "Chain Heal on self must start, got {ch:?}"
+    );
+    tick(&mut map, 80); // outlast the GCD plus the 2.5 s cast
+    // The landed self heal must emit SMSG_SPELLHEALLOG (fork
+    // `DealHeal` -> `SendHealSpellLog`): victim, caster, spell,
+    // amount, crit. The campaign binds this log for sub-noise
+    // heals (Healing Wave r1) that health deltas cannot resolve.
+    let mut heal_logs: Vec<(u32, u32)> = Vec::new();
+    for event in map.drain_events() {
+        if let MapEvent::Packet { to: _, packet } = event
+            && packet.opcode() == opcode_id::SMSG_SPELLHEALLOG
+        {
+            let body = packet.body();
+            let (_, used1) = ObjectGuid::read_packed(body).expect("packed victim");
+            let (_, used2) = ObjectGuid::read_packed(&body[used1..]).expect("packed caster");
+            let off = used1 + used2;
+            let spell = u32::from_le_bytes(body[off..off + 4].try_into().expect("spell id"));
+            let amount = u32::from_le_bytes(body[off + 4..off + 8].try_into().expect("amount"));
+            heal_logs.push((spell, amount));
+        }
+    }
+    println!("CHAIN-HEAL-LOGS {heal_logs:?}");
+    assert!(
+        heal_logs
+            .iter()
+            .any(|(spell, amount)| *spell == CHAIN_HEAL_R1 && *amount > 0),
+        "no SMSG_SPELLHEALLOG for Chain Heal: {heal_logs:?}"
+    );
+    // A dest target for a unit-targeted chain heal cannot start.
+    let self_pos = map
+        .player(player_guid)
+        .expect("player")
+        .unit
+        .world
+        .position();
+    let dest = map.cast_spell(
+        player_guid,
+        CHAIN_HEAL_R1,
+        CastTarget::Dest(self_pos),
+        known_opt(),
+    );
+    println!("CHAIN-HEAL-DEST outcome={dest:?}");
+    assert!(
+        matches!(dest, CastOutcome::Failed(_)),
+        "Chain Heal at a dest target must fail, got {dest:?}"
+    );
+    println!("CHAIN-HEAL-TARGETS-PASS");
 }

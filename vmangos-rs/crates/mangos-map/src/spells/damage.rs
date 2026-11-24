@@ -709,8 +709,31 @@ impl Map {
         value
     }
 
-    /// Health increase clamped to max (heal log packet
-    /// is a recorded slice deviation).
+    /// `SpellCaster::SendHealSpellLog` (fork
+    /// `SpellCaster.cpp:772`): victim, caster, spell,
+    /// amount, crit. Sent when the caster or the victim
+    /// is a player; the campaign binds this log for
+    /// heals health deltas cannot resolve.
+    pub(crate) fn send_heal_log(
+        &mut self,
+        caster: ObjectGuid,
+        victim: ObjectGuid,
+        spell: &SpellEntry,
+        amount: u32,
+    ) {
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&Self::packed_guid_bytes(victim));
+        payload.write_bytes(&Self::packed_guid_bytes(caster));
+        payload.write_u32_le(spell.id);
+        payload.write_u32_le(amount);
+        payload.write_u8(0); // critical
+        let packet = WorldPacket::with_body(op::SMSG_SPELLHEALLOG, payload.into_vec());
+        self.broadcast_movement(caster, &packet);
+    }
+
+    /// Health increase clamped to max. Callers that model
+    /// `DealHeal` (direct heal effects) emit the heal log
+    /// via `send_heal_log`.
     pub(crate) fn heal_unit(&mut self, target: ObjectGuid, amount: u32) {
         if amount == 0 {
             return;

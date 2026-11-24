@@ -472,7 +472,7 @@ impl Map {
                 }
                 CastOutcome::Started
             }
-            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT => {
+            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT | tgt::UNIT_FRIEND_CHAIN_HEAL => {
                 let CastTarget::Unit(victim) = target else {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_IMPLICIT_TARGETS);
                 };
@@ -507,7 +507,12 @@ impl Map {
                 if mode == tgt::UNIT_ENEMY && !Self::is_hostile_pair(caster, victim) {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS);
                 }
-                if mode == tgt::UNIT_FRIEND && Self::is_hostile_pair(caster, victim) {
+                // Chain heal is an explicit friendly unit target
+                // (fork `SpellEntry.h` IsExplicitPositiveTarget):
+                // the single-target component is the unit target.
+                if (mode == tgt::UNIT_FRIEND || mode == tgt::UNIT_FRIEND_CHAIN_HEAL)
+                    && Self::is_hostile_pair(caster, victim)
+                {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS);
                 }
                 let cpos = self.unit_position(caster).unwrap_or_default();

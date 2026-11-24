@@ -28,7 +28,7 @@ Two modes:
   SPELL-MATRIX-GEN-SELFTEST-PASS.
 
 `--full --class <Class>` (per-class fan-out over the pinned classes
-Paladin, Druid, Warlock, and Hunter): emit `spell_campaign_matrix-<Class>.json`
+Paladin, Druid, Warlock, Hunter, and Shaman): emit `spell_campaign_matrix-<Class>.json`
 with first + last rank rows per merged S7 component over the G1 union
 plus the selected 51-point talent build's known spells (plus interior
 ranks whose signature differs), plus the all-rank seed list. Full mode
@@ -212,6 +212,16 @@ CLASS_FANOUT_EXPECTATIONS = {
         "overlap": [],
         "excluded": [19306, 19386],
     },
+    "Shaman": {
+        # enhance (first legal build by role preference): the
+        # merged extra is Mana Tide Totem 16190 (rank 1, cost 1),
+        # keeping the seed at the 51 cap exactly like the
+        # earlier classes.
+        "union": 159,
+        "talent_known": 15,
+        "overlap": [],
+        "excluded": [16190],
+    },
 }
 
 #: Per-class G1-union bucket distributions under derive_bucket's
@@ -271,6 +281,28 @@ CLASS_FULL_BUCKET_COUNTS = {
         "form_totem": 0,
         "passive": 0,
         "form": 0,
+    },
+    "Shaman": {
+        # enhance fan-out (audited over the exact G1 union): the
+        # totem bucket holds all 72 totem spells (39 cast rows:
+        # Sentry plus 38 marker-only); friendly is 6 Lesser
+        # Healing Wave ranks + 2 cures (Chain/Healing Wave
+        # target 45 file under ground_area by the first-match
+        # order); self is Lightning Shield + Windfury ranks; no
+        # party/duel/pet rows; one form (Ghost Wolf); corpse is
+        # 5 Ancestral Spirit ranks.
+        "self": 11,
+        "friendly": 8,
+        "hostile_dummy": 46,
+        "item_reagent_ammo": 1,
+        "party_duel": 0,
+        "ground_area": 13,
+        "dual": 0,
+        "corpse": 5,
+        "pet": 0,
+        "form_totem": 72,
+        "passive": 2,
+        "form": 1,
     },
 }
 
@@ -2367,6 +2399,74 @@ def run_self_test() -> int:
     finally:
         globals()["chain_metadata"] = real_chain_metadata
     print("SELFTEST Hunter pins + best-in-book ok")
+    # Shaman derivation: target-45 heals file under ground_area by
+    # the LOCATION-first match order (Chain Heal / Healing Wave
+    # shape) while target-21 heals stay friendly; totem-slot
+    # rows file under form_totem; Ghost Wolf's aura 36 files
+    # under form; Windfury's effect 54 has no observable outcome.
+    chain_heal = _eff(
+        effect1=10, targ_a1=45, name="Chain Heal", effect_base_points1=50, effect_die_sides1=1, effect_base_dice1=1
+    )
+    assert derive_bucket(1064, chain_heal) == "ground_area"
+    assert derive_expected(1064, chain_heal, "ground_area") == {"kind": "heal_delta_target"}
+    lesser_hw = _eff(effect1=10, targ_a1=21, name="Lesser Healing Wave")
+    assert derive_bucket(8004, lesser_hw) == "friendly"
+    ghost_wolf = _eff(effect1=6, effect2=6, aura1=36, aura2=31, targ_a1=1, targ_a2=1, name="Ghost Wolf")
+    assert derive_bucket(2645, ghost_wolf) == "form"
+    assert derive_expected(2645, ghost_wolf, "form") == {"kind": "form_change"}
+    windfury = _eff(effect1=54, name="Windfury Weapon")
+    assert derive_bucket(8232, windfury) == "self"
+    assert derive_expected(8232, windfury, "self") == {
+        "kind": "none_marker",
+        "note": "EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only",
+    }
+    sentry = _eff(effect1=90, effect2=6, aura2=4, targ_a1=43, targ_a2=1, totem1=5178, name="Sentry Totem")
+    assert derive_bucket(6495, sentry) == "form_totem"
+    assert derive_expected(6495, sentry, "form_totem") == {"kind": "aura_on_caster", "aura": 6495}
+    earthbind = _eff(effect1=88, targ_a1=41, totem1=5175, name="Earthbind Totem")
+    assert derive_bucket(2484, earthbind) == "form_totem"
+    assert derive_expected(2484, earthbind, "form_totem") == {
+        "kind": "none_marker",
+        "note": "EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only",
+    }
+    stormstrike = _eff(effect1=58, effect2=6, aura2=87, targ_a1=6, targ_a2=6, name="Stormstrike")
+    assert derive_bucket(17364, stormstrike) == "hostile_dummy"
+    assert derive_expected(17364, stormstrike, "hostile_dummy") == {"kind": "aura_on_target", "aura": 17364}
+    flame_shock = _eff(effect1=2, effect2=6, aura2=3, targ_a1=6, targ_a2=6, name="Flame Shock")
+    assert derive_bucket(8050, flame_shock) == "hostile_dummy"
+    assert derive_expected(8050, flame_shock, "hostile_dummy") == {"kind": "damage_log", "opcode": 592}
+    reincarnation = _eff(effect1=94, reagent1=17030, name="Reincarnation")
+    assert derive_bucket(21169, reincarnation) == "item_reagent_ammo"
+    assert derive_expected(21169, reincarnation, "item_reagent_ammo") == {"kind": "item_consumed", "reagent": 17030}
+    ancestral = _eff(effect1=113, name="Ancestral Spirit")
+    assert derive_bucket(2008, ancestral) == "corpse"
+    assert derive_expected(2008, ancestral, "corpse") == {"kind": "resurrect_request"}
+    purge = _eff(effect1=38, targ_a1=6, name="Purge")
+    assert derive_bucket(370, purge) == "hostile_dummy"
+    assert derive_expected(370, purge, "hostile_dummy")["kind"] == "none_marker"
+    print("SELFTEST Shaman derivation cases ok")
+    # Shaman pins: the audited enhance fan-out literals above.
+    assert CLASS_FANOUT_EXPECTATIONS["Shaman"] == {
+        "union": 159,
+        "talent_known": 15,
+        "overlap": [],
+        "excluded": [16190],
+    }
+    assert CLASS_FULL_BUCKET_COUNTS["Shaman"] == {
+        "self": 11,
+        "friendly": 8,
+        "hostile_dummy": 46,
+        "item_reagent_ammo": 1,
+        "party_duel": 0,
+        "ground_area": 13,
+        "dual": 0,
+        "corpse": 5,
+        "pet": 0,
+        "form_totem": 72,
+        "passive": 2,
+        "form": 1,
+    }
+    print("SELFTEST Shaman pins ok")
     # Rank-coverage selector: first + last plus interiors that differ
     # from the previous rank; identical chains keep two rows.
     sig_a = ((6, 0, 0), (3, 0, 0), "")

@@ -115,10 +115,17 @@ impl Map {
             &mut select_closest,
         );
         let mut targets = match mode {
-            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT => match target {
-                CastTarget::Unit(g) => vec![g],
-                CastTarget::SelfCast | CastTarget::Dest(_) => vec![caster],
-            },
+            // Chain heal rides the unit-target fill: the
+            // single-target component is the explicit unit
+            // target (fork `Spell.cpp:2949` pushes
+            // `pUnitTarget`; jumps are execution-time and
+            // stay unverified).
+            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT | tgt::UNIT_FRIEND_CHAIN_HEAL => {
+                match target {
+                    CastTarget::Unit(g) => vec![g],
+                    CastTarget::SelfCast | CastTarget::Dest(_) => vec![caster],
+                }
+            }
             tgt::ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC | tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC => {
                 let center = if mode == tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC {
                     self.world_object_position(caster).unwrap_or_default()
@@ -678,6 +685,14 @@ impl Map {
                     if value > 0.0 {
                         let amount = mangos_spells::ditheru(value, self.spell_rng());
                         self.heal_unit(victim, amount);
+                        // Fork `DealHeal` sends the heal log
+                        // when the caster or the victim is a
+                        // player (`SpellCaster.cpp:767`); the
+                        // log carries the applied amount even
+                        // when the health gain clamps at max.
+                        if amount > 0 && (caster.is_player() || victim.is_player()) {
+                            self.send_heal_log(caster, victim, spell, amount);
+                        }
                         if let Some(ctx) = proc_ctx {
                             self.raise_damage_procs(
                                 caster,

@@ -2323,3 +2323,103 @@ current tree (debug binary newer than every .rs;
 listener 18099 verified, no restart), the
 side-bench pair never touched. No commit or push
 was made.
+
+Shaman spell campaign full run (2026-11-23/24, bench
+127.0.0.1:18099, fan-out matrix 93 cast rows over
+merged S7 chains: seed G1 union 159 + enhance talent
+15 known, cost exactly 51, excluded [16190];
+seed_all 174): first full run 23 PASS /
+15 PASSIVE-VERIFIED / 49 BLOCKED / 6 FAIL, final
+rerun 27 PASS / 15 PASSIVE-VERIFIED / 51 BLOCKED /
+0 FAIL (`SPELL-CAMPAIGN-RUN-CLASS-SHAMAN-PASS`).
+Failure clusters from the first full run, all fixed
+test-first in shared-root-cause order:
+(1) target-45 unit heals (Healing Wave 331/25357,
+Chain Heal 1064/10623): the engine `check_target`
+had no mode-45 arm, so every cast died
+`FAILED_UNKNOWN` (145); implemented the fork-exact
+arm (`SpellEntry.h` IsExplicitPositiveTarget treats
+45 as an explicit friendly unit target, hostile →
+BAD_TARGETS) plus the execution-time unit-target
+fill (fork `Spell.cpp:2949` pushes `pUnitTarget`;
+chain jumps stay explicitly unverified). Live Rust
+regression `bench_chain_heal_target_mode` failed
+145 first, now asserts Started on self-cast and
+Failed(9) on a dest target.
+(2) The same rows then healed the caster, not the
+ally (the fill fallback `vec![caster]`): GO with no
+ally rise; the fill arm in (1) covers it.
+(3) Healing Wave r1 (331, oracle band ≈35-45) sits
+inside the +34 regen-tick quantum (the pilot's
+pinned-5187-rather-than-5185 precedent for exactly
+this): the engine now emits the fork's
+SMSG_SPELLHEALLOG from the direct-heal effect
+(`DealHeal` → `SendHealSpellLog`: victim, caster,
+spell, amount, crit 0) whenever the caster or the
+victim is a player; the heal leg binds the log
+against a live-oracle fork band (331 band [35,48];
+logs 41 and 45 observed) with a no-health-drop
+sanity, and flushes the caster socket post-cast
+(the first bind missed because completion packets
+arrived while only the ally was polled).
+(4) Lightning Breath 24844/25012 are wind-serpent
+autocasts (powerType focus): the engine honestly
+answers NO_POWER (77), so a shared `pre_dispatch`
+rule routes focus-cost rows to no-pet BLOCKED (no
+shipped matrix carries a focus-cost row; the
+self-test totality pins exactly these two).
+The class gate now accepts the documented
+engine-totem blocker (Sentry stays BLOCKED with
+live failing-cast evidence). Honest BLOCKED
+remainder: 45 effect-marker-only (38 totems +
+Windfury x2, Parry, Purge x2, Cure x2), 2 no-pet
+(Lightning Breath), 2 wire-target-unsupported
+(Ancestral Spirit x2, RESURRECT seam), 1
+fixture-reagent (Reincarnation 21169, no 17030 in
+bags), 1 engine-totem (Sentry 6495). Totem engine
+outcome: NO slice implemented — all 39 totem rows
+stay BLOCKED; a live Sentry probe (dest-cast 6495
+→ CAST_RESULT(145), opcodes [169,221,304,502] with
+no GO, no new objects, no aura 6495) is the
+failing-cast evidence. Slot bookkeeping, passive
+casts, active pulse AI, and lifetime remain the
+described future slice. Flakes noted, none
+reproduced: the first pilot attempt failed Warrior
+6546 (stance aura) and Druid 8921 (dummy reset),
+then passed clean; Chain Heal r3 read CASTER_DEAD
+once, then passed twice; one full-run attempt
+aborted on the drift gate (health=1350 after a
+dummy-battered run; manual reseed verified
+999999, rerun green). Bench provenance: rebuilt
+mangosd debug from the current tree twice
+(mode-45 check+fill; heal log) and restarted ONLY
+the proven bench-lan pair on 18099 (listener
+verified each time); the side-bench pair and
+realmd were never touched. Pilot
+SPELL-CAMPAIGN-PILOT-PASS before and after;
+P/D/W/H regression smokes (10310+20924,
+6795+9896, 688+7812+980, 136+3044) PASS on the
+final binary; generator + campaign self-tests
+PASS; cargo fmt clean; clippy -D warnings clean
+(mangos-map); cargo test -p mangos-map lib 99
+pass; full live_spells (4 tests including the new
+chain-heal target test) PASS with
+CHARACTER_LOAD_GUID=1; ruff check + format clean.
+Shipped results files byte-identical (restored
+after every smoke; only the Shaman artifacts and
+one summary section added). No commit or push was
+made.
+Central verification of the Shaman slice (the
+workflow verifier went silent and was stopped at
+the owner's restart point; parent verified
+centrally): results 1:1 vs the 93-row matrix,
+zero vacuous PASS rows, BLOCKED all in the
+closed enum (45 effect-marker-only covers the
+totem-placement shapes, 2 wire-target, 1 each
+engine-totem/fixture-reagent/no-pet pair),
+fmt/clippy/self-tests/ruff clean, mangos-map
+99 unit tests pass, live bench_spells_and_auras
+PASS with CHARACTER_LOAD_GUID=1. Totem rows
+riding classify-only stay tracked in
+PARITY-LONG-TAIL section 2 (totem engine
+completion converts them).

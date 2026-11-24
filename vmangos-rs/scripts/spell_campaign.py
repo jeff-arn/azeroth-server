@@ -125,6 +125,7 @@ CHAR_CREATE_SUCCESS = 46
 SMSG_SPELL_START = 305
 SMSG_SPELLNONMELEEDAMAGELOG = 592
 SMSG_PERIODICAURALOG = 590
+SMSG_SPELLHEALLOG = 336
 CMSG_SET_ACTIVE_MOVER = 618
 
 AURA_FIELD_FIRST = 47
@@ -930,6 +931,52 @@ def parse_damage_log_body(body: bytes) -> dict | None:
         "spell_id": spell_id,
         "damage": damage,
     }
+
+
+def parse_heal_log_body(body: bytes) -> dict | None:
+    """Parse SMSG_SPELLHEALLOG (336): packed(victim)
+    packed(caster) spell amount crit. The engine emits it from
+    the direct-heal effect when the caster or victim is a player
+    (fork `DealHeal` -> `SendHealSpellLog`); the heal leg binds
+    it for heals health deltas cannot resolve."""
+    try:
+        target_guid, offset = smoke.parse_packed_guid(body, 0)
+        caster_guid, offset = smoke.parse_packed_guid(body, offset)
+        spell_id, amount = struct.unpack_from("<II", body, offset)
+        crit = body[offset + 8]
+    except (IndexError, struct.error):
+        return None
+    return {
+        "target_guid": target_guid,
+        "caster_guid": caster_guid,
+        "spell_id": spell_id,
+        "amount": amount,
+        "crit": crit,
+    }
+
+
+def matching_heal_logs(
+    events: list[tuple[int, bytes]], spell_id: int, target_guid: int, caster_guid: int | None = None
+) -> list[dict]:
+    """Attributed SMSG_SPELLHEALLOG amounts for one spell on one
+    target. Regen never emits logs, so any attributed amount is a
+    formula-derived heal, overheal included (the fork logs the
+    applied amount even when the gain clamps at max)."""
+    logs = []
+    for opcode, body in events:
+        if opcode != SMSG_SPELLHEALLOG:
+            continue
+        parsed = parse_heal_log_body(body)
+        if parsed is None:
+            continue
+        if parsed["spell_id"] != spell_id:
+            continue
+        if parsed["target_guid"] != target_guid:
+            continue
+        if caster_guid is not None and parsed["caster_guid"] != caster_guid:
+            continue
+        logs.append(parsed)
+    return logs
 
 
 def event_mark(driver: ScriptedDriver) -> int:
@@ -2157,6 +2204,10 @@ CLASSIFY_BLOCKED_REASONS = {
     # Corpse-target rows ride classify-only until the RESURRECT wire
     # seam lands (the pilot gate's pinned Rebirth, generalized).
     "wire-target-unsupported",
+    # Totem rows with a cast-shaped expectation stay uncast until
+    # the totem engine slice lands (live failing-cast evidence per
+    # row, e.g. Sentry 6495 dest-cast answers CAST_RESULT(145)).
+    "engine-totem",
 }
 
 
@@ -2580,6 +2631,50 @@ def live_cooldown_wait_s(spell_id: int) -> float:
         # Bench oracle unreachable: still retry once after the
         # margin rather than failing the row on a read error.
         return cooldown_wait_s(0, 0)
+
+
+def live_heal_band(spell_id: int, caster_level: int = 60) -> tuple[int, int] | None:
+    """Fork-exact direct-heal amount band (live bench oracle).
+
+    Mirrors `calculate_effect_value_bp` over the row spell's
+    first-effect coefficients at the best build <= 5875: level
+    clamp, spell-level shift, dice range. Widened by 1 each side
+    for dither. Raw formula only: no healing-bonus tail (the
+    fixtures cast naked) and no crit multiplier (unimplemented
+    in the engine); a geared or critting caster reads outside
+    the band and fails loudly instead of passing silently.
+    None when the oracle is unreadable.
+    """
+    import math as _math
+
+    try:
+        row = smoke.sql_scalar(
+            "mangos",
+            "SELECT effectBasePoints1,effectDieSides1,effectBaseDice1,"
+            "effectDicePerLevel1,effectRealPointsPerLevel1,spellLevel,baseLevel,maxLevel "
+            f"FROM spell_template WHERE entry={int(spell_id)} AND build=("
+            f"SELECT MAX(build) FROM spell_template s WHERE s.entry={int(spell_id)} AND s.build<=5875)",
+        )
+        parts = str(row).split("\t")
+        bp, sides, dice = int(parts[0]), int(parts[1]), int(parts[2])
+        dpl, rppl = float(parts[3]), float(parts[4])
+        slevel, blevel, mlevel = int(parts[5]), int(parts[6]), int(parts[7])
+    except Exception:
+        return None
+    level = caster_level
+    if mlevel > 0 and level > mlevel:
+        level = mlevel
+    elif level < blevel:
+        level = blevel
+    level -= slevel
+    base = bp + level * rppl
+    random_points = int(sides + level * dpl)
+    if random_points in (0, 1):
+        lo = hi = base + dice
+    else:
+        lo = base + min(random_points, dice)
+        hi = base + max(random_points, dice)
+    return (_math.floor(lo) - 1, _math.ceil(hi) + 1)
 
 
 def not_ready_retry(
@@ -3304,6 +3399,9 @@ def heal_leg(row: dict, driver: ScriptedDriver, guid: int, ally_driver: Scripted
     ally_driver.poll(4.0)
     t2 = time.monotonic()
     h2 = ally_driver.self_health()
+    # Flush the caster's own socket: cast-completion packets (the
+    # heal log rides here) arrive while only the ally is polled.
+    driver.poll(1.0)
     window = [op for op, _ in events_since(driver, mark)]
     if not go:
         phase = "prepare"
@@ -3347,12 +3445,39 @@ def heal_leg(row: dict, driver: ScriptedDriver, guid: int, ally_driver: Scripted
             packets=ops + window,
             target_guid=ally_guid,
         )
+    # Sub-noise heals (rank-1 heals inside the +34 regen-tick
+    # quantum, e.g. Healing Wave r1 ≈ 35-45) cannot separate from
+    # a phase-aligned tick by health delta. The engine emits the
+    # fork's SMSG_SPELLHEALLOG with the formula-derived amount,
+    # which regen never produces: bind it against the live oracle
+    # band. Health must still not have dropped over the window.
+    heal_logs = matching_heal_logs(events_since(driver, mark), spell_id, ally_guid, guid)
+    band = live_heal_band(spell_id)
+    logged = [log["amount"] for log in heal_logs if band is not None and band[0] <= log["amount"] <= band[1]]
+    if logged and h2 >= h0:
+        return make_verdict(
+            row,
+            "PASS",
+            evidence=f"bound GO + heal log {logged[0]} in oracle band "
+            f"[{band[0]}-{band[1]}] (sub-noise heal; rate "
+            f"{rate:.1f}/s, {h0}->{h1} pre, got {h2})",
+            pre=pre,
+            post=f"ally health={h2}",
+            packets=ops + window,
+            target_guid=ally_guid,
+        )
+    detail = (
+        f"GO but jump {jump:.0f} <= 50 above baseline (no oracle band; rate {rate:.1f}/s, {h0}->{h1} pre, got {h2})"
+    )
+    if heal_logs:
+        detail += f"; heal logs (out of band {band}): {[(log['spell_id'], log['amount']) for log in heal_logs]}"
+    else:
+        detail += f"; no heal log for spell {spell_id} (band {band})"
     return make_verdict(
         row,
         "FAIL",
         phase="apply",
-        evidence=f"GO but jump {jump:.0f} <= 50 above baseline "
-        f"(no oracle band; rate {rate:.1f}/s, {h0}->{h1} pre, got {h2})",
+        evidence=detail,
         pre=pre,
         post=f"ally health={h2}",
         packets=ops + window,
@@ -3993,6 +4118,13 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
         return ("blocked", "script-evidence-unknown")
     if kind == "learned_spell":
         return ("passive", None)
+    if (row.get("power_type") or 0) == 2 and (row.get("mana_cost") or 0) > 0:
+        # Pet-resource (focus) spells: no player caster holds focus,
+        # so the engine honestly answers NO_POWER, and pet autocasts
+        # have no harness leg. Without a pet scenario they stay
+        # uncast (Shaman Lightning Breath 24844/25012 are wind
+        # serpent autocasts, not player spells).
+        return ("blocked", "no-pet")
     if PET_REVIVE_EFFECT_IDS & set(row.get("effect_ids") or []):
         # Revive Pet: no dead-pet scenario in a live class run.
         return ("blocked", "target-not-dead")
@@ -4026,6 +4158,15 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
     if bucket == "hostile_dummy":
         return ("cast", "hostile")
     if bucket == "ground_area":
+        if kind == "heal_delta_target":
+            # Unit-targeted heals filed under ground_area by the
+            # target-45 first-match order (Shaman Chain Heal /
+            # Healing Wave): the dest leg would miscast a
+            # unit-targeted spell, so they ride the ally heal leg
+            # like friendly heals. Only the single-target
+            # component verifies there; chain jumps have no fork
+            # code and stay explicitly unverified.
+            return ("cast", "friendly")
         effects = set(row.get("effect_ids") or [])
         if (
             kind == "object_created"
@@ -4451,7 +4592,11 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                         f"{verdicts[-1]['evidence'][:120]}"
                     )
                     continue
-                if bucket == "friendly":
+                # Friendly bucket rows always dispatch ("cast",
+                # "friendly"); ground-bucket unit heals (Shaman
+                # Chain/Healing Wave) are routed there by
+                # pre_dispatch, so the payload owns this branch.
+                if action == "cast" and payload == "friendly":
                     heal_row = kind == "heal_delta_target"
                     ally_client, ally_driver, ally_guid = need_ally(heal_row, force=heal_row)
                     if kind == "heal_delta_target":
@@ -4730,6 +4875,26 @@ def run_self_test() -> int:
     assert matching_periodic_ticks(tick_window, 20924, dummy, caster) == [12]
     assert matching_periodic_ticks(tick_window, 133, dummy, caster) == []
     assert matching_periodic_ticks(tick_window, 20924, dummy, 900016) == []
+    # Heal logs ride 336: victim, caster, spell, amount, crit.
+    # Regen never emits logs, so attribution is exact.
+    ally = 900015
+    heal_body = smoke.pack_guid(ally) + smoke.pack_guid(caster) + struct.pack("<II", 331, 40) + bytes([0])
+    assert parse_heal_log_body(heal_body) == {
+        "target_guid": ally,
+        "caster_guid": caster,
+        "spell_id": 331,
+        "amount": 40,
+        "crit": 0,
+    }
+    assert parse_heal_log_body(b"\x01") is None
+    heal_window = [
+        (336, heal_body),
+        (336, smoke.pack_guid(ally) + smoke.pack_guid(900016) + struct.pack("<II", 331, 999) + bytes([0])),
+        (592, dmg_body),
+    ]
+    assert matching_heal_logs(heal_window, 331, ally, caster)[0]["amount"] == 40
+    assert matching_heal_logs(heal_window, 331, ally, 900015) == []
+    assert matching_heal_logs(heal_window, 133, ally, caster) == []
     # Tick-band gate: in-band PASS, out-of-band FAIL, GO-only FAIL.
     # Band 40 vs 100 hp: two ticks do not kill, so the 2-tick
     # minimum is enforceable here.
@@ -5009,6 +5174,13 @@ def run_self_test() -> int:
     assert class_gate_failures({"Paladin": gate_no_go}, {"Paladin": 1})
     gate_count = [make_verdict(row, "PASS", evidence="ok", packets=[306], target_guid=dummy)]
     assert class_gate_failures({"Paladin": gate_count}, {"Paladin": 2})
+    # Documented blockers stay gate-compatible: engine-totem rows
+    # (Sentry 6495) are left uncast with live failing-cast evidence
+    # until the totem engine slice lands.
+    gate_totem = [make_verdict(row, "BLOCKED", reason="engine-totem", evidence="no live scenario")]
+    assert class_gate_failures({"Shaman": gate_totem}, {"Shaman": 1}) == []
+    gate_scenario = [make_verdict(row, "BLOCKED", reason="dummy-unavailable", evidence="x")]
+    assert class_gate_failures({"Shaman": gate_scenario}, {"Shaman": 1})
     print("SELFTEST anti-vacuity + class gate ok")
     # Per-class matrix paths: pilot classes stay on the pilot matrix;
     # fan-out classes resolve to their own artifact (never MATRIX_PATH).
@@ -5676,6 +5848,88 @@ def run_self_test() -> int:
         assert reason in BLOCKED_REASONS, reason
         assert reason in UNSCENARIOED_EVIDENCE, reason
     print("SELFTEST Hunter dispatch table ok")
+    # Shaman dispatch: ground-bucket unit heals ride the ally heal
+    # leg (Chain Heal shape); actual totems stay engine-totem;
+    # Ghost Wolf rides the form leg; Ancestral Spirit stays
+    # wire-target-unsupported; Reincarnation rides the item leg.
+    chain_row = {
+        "class": "Shaman",
+        "spell_id": 1064,
+        "bucket": "ground_area",
+        "effect_ids": [10, 0, 0],
+        "target_a": [45, 0, 0],
+        "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+        "expected": {"kind": "heal_delta_target"},
+    }
+    assert pre_dispatch(chain_row) == ("cast", "friendly")
+    sentry_row = {
+        "class": "Shaman",
+        "spell_id": 6495,
+        "bucket": "form_totem",
+        "stances": 0,
+        "totem": [5178, 0],
+        "expected": {"kind": "aura_on_caster", "aura": 6495},
+    }
+    assert pre_dispatch(sentry_row) == ("blocked", "engine-totem")
+    earthbind_row = {
+        "class": "Shaman",
+        "spell_id": 2484,
+        "bucket": "form_totem",
+        "stances": 0,
+        "totem": [5175, 0],
+        "campaign": "classify_only",
+        "expected": {"kind": "none_marker"},
+    }
+    assert pre_dispatch(earthbind_row) == ("blocked", "effect-marker-only")
+    windfury_row = {
+        "class": "Shaman",
+        "spell_id": 8232,
+        "bucket": "self",
+        "effect_ids": [54, 0, 0],
+        "target_a": [0, 0, 0],
+        "reagents": [0, 0, 0, 0, 0, 0, 0, 0],
+        "campaign": "classify_only",
+        "expected": {"kind": "none_marker"},
+    }
+    assert pre_dispatch(windfury_row) == ("blocked", "effect-marker-only")
+    ghost_row = {
+        "class": "Shaman",
+        "spell_id": 2645,
+        "bucket": "form",
+        "expected": {"kind": "form_change"},
+    }
+    assert pre_dispatch(ghost_row) == ("cast", "form")
+    breath_row = {
+        "class": "Shaman",
+        "spell_id": 24844,
+        "bucket": "hostile_dummy",
+        "power_type": 2,
+        "mana_cost": 50,
+        "expected": {"kind": "damage_log", "opcode": 592},
+    }
+    assert pre_dispatch(breath_row) == ("blocked", "no-pet")
+    ancestral_row = {
+        "class": "Shaman",
+        "spell_id": 2008,
+        "bucket": "corpse",
+        "expected": {"kind": "resurrect_request"},
+    }
+    assert pre_dispatch(ancestral_row) == ("blocked", "wire-target-unsupported")
+    reincarnation_row = {
+        "class": "Shaman",
+        "spell_id": 21169,
+        "bucket": "item_reagent_ammo",
+        "effect_ids": [94, 0, 0],
+        "target_a": [0, 0, 0],
+        "reagents": [17030, 0, 0, 0, 0, 0, 0, 0],
+        "equipped_item_class": -1,
+        "expected": {"kind": "item_consumed", "reagent": 17030},
+    }
+    assert pre_dispatch(reincarnation_row) == ("cast", "item")
+    for reason in ("engine-totem", "wire-target-unsupported"):
+        assert reason in BLOCKED_REASONS, reason
+        assert reason in UNSCENARIOED_EVIDENCE, reason
+    print("SELFTEST Shaman dispatch table ok")
     # Totality over the real Hunter fan-out artifact when present:
     # every row dispatches to a cast leg, the passive check, or a
     # closed-enum BLOCKED reason, with the Call Pet fixture summon.
@@ -5736,6 +5990,66 @@ def run_self_test() -> int:
         )
     else:
         print("SELFTEST Hunter artifact absent; skipping totality")
+    # Totality over the real Shaman fan-out artifact when present:
+    # every row dispatches to a cast leg, the passive check, or a
+    # closed-enum BLOCKED reason. Ground-bucket unit heals ride
+    # the ally heal leg, so the ground leg is unused; actual
+    # totems stay engine-totem; the only no-pet rows are the two
+    # focus-cost wind-serpent autocasts, and no stance rows ride
+    # form_gated.
+    shaman_path = matrix_path_for("Shaman")
+    if shaman_path.exists():
+        shaman_doc = json.loads(shaman_path.read_text())
+        shaman_rows = [r for r in shaman_doc.get("rows", []) if r.get("class") == "Shaman"]
+        assert shaman_rows, "Shaman artifact has no Shaman rows"
+        assert class_summon_spell(shaman_rows) is None
+        assert shaman_doc.get("full_talent_build") == "enhance", shaman_doc.get("full_talent_build")
+        seen_legs: set[str] = set()
+        seen_blocked: set[str] = set()
+        for real_row in shaman_rows:
+            act, pay = pre_dispatch(real_row)
+            if act == "cast":
+                assert pay in ("self", "friendly", "hostile", "item", "form"), (real_row, pay)
+                seen_legs.add(pay)
+            elif act == "blocked":
+                assert pay in BLOCKED_REASONS, (real_row, pay)
+                seen_blocked.add(pay)
+            else:
+                assert act == "passive" and pay is None, real_row
+        assert {"self", "friendly", "hostile", "item", "form"} <= seen_legs, seen_legs
+        assert "ground" not in seen_legs, seen_legs
+        assert "form_gated" not in seen_legs, seen_legs
+        focus_blocked = sorted(r["spell_id"] for r in shaman_rows if pre_dispatch(r) == ("blocked", "no-pet"))
+        assert focus_blocked == [24844, 25012], focus_blocked
+        assert "engine-totem" in seen_blocked, seen_blocked
+        assert "wire-target-unsupported" in seen_blocked, seen_blocked
+        assert "effect-marker-only" in seen_blocked, seen_blocked
+        for real_row in shaman_rows:
+            if real_row.get("bucket") == "ground_area" and not (real_row.get("campaign", "") or "").startswith(
+                "classify_only"
+            ):
+                assert (real_row.get("expected") or {}).get("kind") == "heal_delta_target", real_row
+                assert pre_dispatch(real_row) == ("cast", "friendly"), real_row
+        shaman_seed = set(shaman_doc.get("full_seed_spell_ids", {}).get("Shaman", []))
+        assert shaman_seed, "Shaman artifact seed empty"
+        assert shaman_doc.get("full_seed_talent_cost", 99) <= 51, shaman_doc.get("full_seed_talent_cost")
+        castable = [
+            r
+            for r in shaman_rows
+            if not (r.get("campaign", "") or "").startswith("classify_only")
+            and (r.get("expected") or {}).get("kind") not in ("none_marker", "dual_outcome", "learned_spell")
+        ]
+        assert castable, "no castable Shaman rows"
+        for cast_row in castable:
+            assert cast_row["spell_id"] in shaman_seed, cast_row["spell_id"]
+            assert isinstance(cast_row.get("cooldown_ms"), int), cast_row
+        print(
+            f"SELFTEST Shaman artifact dispatch totality ok "
+            f"({len(shaman_rows)} rows, legs={sorted(seen_legs)}, "
+            f"blocked={sorted(seen_blocked)})"
+        )
+    else:
+        print("SELFTEST Shaman artifact absent; skipping totality")
     # Artifact writers round-trip.
     tmp = [make_verdict(row, "PASS", evidence="t", packets=[306, 169, 306])]
     assert tmp[0]["packets"] == [169, 306]
