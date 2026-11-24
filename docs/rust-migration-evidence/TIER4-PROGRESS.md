@@ -2623,3 +2623,14 @@ alive below 20%). Pilot-clobbered shipped
 artifacts were restored to HEAD before the
 final run, so the summary diff is only the
 appended Warrior section.
+Warrior deploy (same day): mangosd 4063e9c3
+built in the ubuntu:22.04 amd64 recipe
+(buildvm; ELF x86-64 PIE, system `ldd` only,
+max `GLIBC_2.34`), side-port 18101
+boot-checked to listening, droplet backed up
+(`*_20261124_234414`, gzip-verified), swapped
+binary-only (previous mangosd preserved as
+`mangosd.dd74-bak`; realmd 1582565b unchanged,
+not restarted); 8085 listening at 23:44:55 UTC
+with no severe save/session errors at first
+check.
