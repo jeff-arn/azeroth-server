@@ -2866,3 +2866,10 @@ the JEF-17 row set. Gates: pilot PASS; both
 Python self-tests and ruff clean; full
 `./ci.sh` exit 0 with live suites, no skip
 lines; independent artifact audit PASS.
+Deploy (same day): mangosd 079fedd0 built in
+the ubuntu:22.04 amd64 recipe, side-port
+18101 boot-checked, droplet backed up
+(`*_20261125_125828`, gzip-verified), swapped
+binary-only (previous preserved as
+`mangosd.81c8-bak`; realmd unchanged); 8085
+listening at 12:59:10 UTC, first check clean.
