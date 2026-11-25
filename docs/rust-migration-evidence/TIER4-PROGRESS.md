@@ -2714,3 +2714,13 @@ suites incl. live_spells 4/4, no skip lines);
 independent artifact audit PASS (row set ==
 matrix, manifest == results, every PASS
 carries evidence + SPELL_GO).
+Rogue deploy (same day): mangosd 745974f9
+built in the ubuntu:22.04 amd64 recipe
+(buildvm; ELF x86-64 PIE, system `ldd` only),
+side-port 18101 boot-checked to listening,
+droplet backed up (`*_20261125_014530`,
+gzip-verified), swapped binary-only (previous
+mangosd preserved as `mangosd.4063-bak`;
+realmd 1582565b unchanged, not restarted);
+8085 listening at 01:51:08 UTC with no severe
+save/session errors at first check.
