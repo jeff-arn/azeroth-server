@@ -602,6 +602,17 @@ impl Map {
                 if !alive {
                     return CastOutcome::Failed(cast_result::FAILED_TARGETS_DEAD);
                 }
+                // Creature-type gate (`CheckCast`
+                // :5710): explicit non-caster targets
+                // only; players get the dedicated
+                // reason.
+                if victim != caster && !self.check_target_creature_type(spell, victim) {
+                    return CastOutcome::Failed(if victim.is_player() {
+                        cast_result::FAILED_TARGET_IS_PLAYER
+                    } else {
+                        cast_result::FAILED_BAD_TARGETS
+                    });
+                }
                 // Positive-spell immunity gate
                 // (`Spell::CheckTarget`).
                 #[allow(clippy::cast_possible_wrap)]
@@ -1168,6 +1179,47 @@ impl Map {
             }
         }
         None
+    }
+
+    /// `CheckTargetCreatureType` (`Spell.cpp:7646`):
+    /// aura 8179 exempts the target; Curse of Doom
+    /// (603) refuses player-owned targets outright
+    /// and widens to all types; Dismiss Pet (2641)
+    /// and Taming Lesson (23356) clear the mask.
+    /// A zero target mask (creature type NONE)
+    /// passes any spell mask.
+    pub(crate) fn check_target_creature_type(
+        &self,
+        spell: &SpellEntry,
+        target: ObjectGuid,
+    ) -> bool {
+        if self.aura_holders(target).iter().any(|h| h.spell_id == 8179) {
+            return true;
+        }
+        let mut mask = spell.target_creature_type;
+        if spell.id == 603 {
+            // `GetCharmerOrOwnerPlayerOrPlayerItself`
+            // via the SUMMONEDBY/CHARMEDBY fields.
+            let player_owned = target.is_player()
+                || self.unit_base(target).is_some_and(|unit| {
+                    let values = unit.world.object.values();
+                    let owner = values.get_guid(offsets::UNIT_FIELD_SUMMONEDBY);
+                    let charmer = values.get_guid(offsets::UNIT_FIELD_CHARMEDBY);
+                    owner.is_player() || charmer.is_player()
+                });
+            if player_owned {
+                return false;
+            }
+            mask = 0x7FF;
+        }
+        if spell.id == 2641 || spell.id == 23356 {
+            mask = 0;
+        }
+        if mask == 0 {
+            return true;
+        }
+        let target_mask = self.creature_type_mask(target);
+        target_mask == 0 || (i32::from_ne_bytes(mask.to_ne_bytes()) & target_mask) != 0
     }
 
     /// `TakeReagents` (`Spell.cpp:5257`): destroy the

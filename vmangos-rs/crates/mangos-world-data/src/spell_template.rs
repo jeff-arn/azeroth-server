@@ -146,6 +146,7 @@ fn load_spell(f: &Fields, report: &mut LoadReport) -> SpellEntry {
         stances: f.u32(12),
         stances_not: f.u32(13),
         targets: f.u32(14),
+        target_creature_type: f.u32(15),
         caster_aura_state: f.u32(17),
         target_aura_state: f.u32(18),
         casting_time_index: f.u32(19),

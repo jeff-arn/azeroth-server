@@ -386,6 +386,12 @@ impl Map {
         // land on it; area effects exclude it per effect
         // below instead.
         let main_target = Self::script_unit_target(target);
+        // Creature-type victim filter (fork
+        // `CheckTarget` inside the fill): non-caster
+        // victims outside the spell's creature-type
+        // mask take no effects. The explicit main
+        // target already passed the CheckCast gate.
+        targets.retain(|v| *v == caster || self.check_target_creature_type(spell, *v));
         targets.retain(|v| {
             Some(*v) == main_target
                 || self.spell_script_on_check_target(caster, spell, main_target, *v, eff_index)

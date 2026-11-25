@@ -2996,7 +2996,11 @@ class artifacts restored untouched.
 Discovered, not fixed: Enslave Demon casts
 on a non-demon dummy — the engine has no
 creature-type target gate (`targetCreatureType`
-mask), recorded for the spell-seam remainder.
+mask), recorded for the spell-seam remainder
+(fixed immediately after; see next entry —
+the two Enslave rows above now read BLOCKED
+`scenario-target`, so the subset tally is
+40 PASS + 2 BLOCKED).
 Gates: pilot PASS; both Python self-tests,
 ruff, fmt, clippy clean; full `./ci.sh`
 exit 0 (146 suites). Committed `59ecd817`,
@@ -3008,3 +3012,27 @@ up (`*_20261125_155310`), swapped binary-only
 realmd `1582565b` unchanged — the fresh build
 reproduced its hash exactly); 8085 listening,
 first check clean. JEF-18 closed.
+
+Creature-type target gate (2026-11-25, from
+the JEF-18 discovery): `SpellEntry` carries
+`target_creature_type` (field 15); the cast
+check rejects explicit non-caster unit
+targets outside the mask — `BAD_TARGETS`
+(10), or `TARGET_IS_PLAYER` (109) for players
+— and enumerated victims failing
+`CheckTargetCreatureType` take no effects.
+Fork specials ride along: aura 8179 exempts,
+Curse of Doom (603) refuses player-owned
+targets and widens to 0x7FF, Dismiss Pet /
+Taming Lesson clear the mask; creature type
+NONE passes any mask. Regression
+`creature_type_gate_rejects_wrong_type_and_players`
+(beast rejected, player rejected with 109,
+demon lands). Live: Enslave Demon 1098/11726
+now rejected BAD_TARGETS on the humanoid
+dummy and read BLOCKED `scenario-target` in
+the updated Warlock reagent subset (14 PASS
++ 2 BLOCKED). Gates: pilot PASS, fmt/clippy
+clean, full `./ci.sh` exit 0, oracle
+regenerated for the new field. Deploy
+follows below.

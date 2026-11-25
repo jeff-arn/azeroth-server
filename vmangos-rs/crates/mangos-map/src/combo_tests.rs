@@ -81,6 +81,13 @@ const GREATER_SPELL: u32 = 9217;
 const LIGHTWELL_GO_ENTRY: u32 = 181_105;
 /// Creature template entry for victims.
 const VICTIM_ENTRY: u32 = 9301;
+/// Demon-typed victim template (creature type 3).
+const DEMON_ENTRY: u32 = 9304;
+/// Beast-typed victim template (creature type 1).
+const BEAST_ENTRY: u32 = 9305;
+/// Enslave Demon stand-in: dummy aura gated to the
+/// demon creature-type mask (1 << (3 - 1) = 4).
+const ENSLAVE_SPELL: u32 = 9218;
 /// `TARGET_UNIT` implicit target (see insignia fixture).
 const TARGET_UNIT: u32 = 25;
 
@@ -383,6 +390,26 @@ fn insert_gate_spells(stores: &mut WorldStores) {
             ..Default::default()
         },
     );
+    // Enslave stand-in: unit aura gated to demons.
+    stores.spells.spells.insert(
+        ENSLAVE_SPELL,
+        SpellEntry {
+            id: ENSLAVE_SPELL,
+            target_creature_type: 4, // demon mask
+            effects: [
+                SpellEffectData {
+                    effect: effect::APPLY_AURA,
+                    apply_aura_name: 69, // SCHOOL_ABSORB stand-in holder
+                    base_points: 100,
+                    implicit_target_a: TARGET_UNIT,
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
     // Long-cast stand-in for the logout cast-cleanup
     // regression.
     stores.spells.tables.cast_times.insert(
@@ -479,15 +506,34 @@ fn insert_gate_spells(stores: &mut WorldStores) {
     );
 }
 
+#[allow(clippy::too_many_lines)] // one stand-in spell per gate, kept together
 fn combo_stores() -> WorldStores {
     let mut stores = WorldStores::empty();
-    stores.creature_templates = CreatureTemplates::from_entries_for_tests(vec![CreatureInfo {
-        entry: VICTIM_ENTRY,
-        display_id: [100, 0, 0, 0],
-        display_probability: [100, 0, 0, 0],
-        display_total_probability: 100,
-        ..Default::default()
-    }]);
+    stores.creature_templates = CreatureTemplates::from_entries_for_tests(vec![
+        CreatureInfo {
+            entry: VICTIM_ENTRY,
+            display_id: [100, 0, 0, 0],
+            display_probability: [100, 0, 0, 0],
+            display_total_probability: 100,
+            ..Default::default()
+        },
+        CreatureInfo {
+            entry: DEMON_ENTRY,
+            creature_type: 3,
+            display_id: [100, 0, 0, 0],
+            display_probability: [100, 0, 0, 0],
+            display_total_probability: 100,
+            ..Default::default()
+        },
+        CreatureInfo {
+            entry: BEAST_ENTRY,
+            creature_type: 1,
+            display_id: [100, 0, 0, 0],
+            display_probability: [100, 0, 0, 0],
+            display_total_probability: 100,
+            ..Default::default()
+        },
+    ]);
     stores.display_addons =
         DisplayInfoAddons::from_creature_addons_for_tests(vec![CreatureDisplayInfoAddon {
             display_id: 100,
@@ -1513,5 +1559,66 @@ fn raid_and_class_expands_to_same_class_group_members() {
             .iter()
             .any(|h| h.spell_id == GREATER_SPELL),
         "same-class group member must gain the aura"
+    );
+}
+
+#[test]
+fn creature_type_gate_rejects_wrong_type_and_players() {
+    // `CheckTargetCreatureType` (fork `Spell.cpp:7646`,
+    // CheckCast arm :5710): a demon-mask spell fails
+    // BAD_TARGETS (10) on a beast, TARGET_IS_PLAYER
+    // (109) on a player, and lands on a demon. The
+    // engine had no gate at all — Enslave Demon cast
+    // on a humanoid dummy in the Warlock reagent
+    // subset.
+    use mangos_spells::defines::cast_result;
+    let Fixture {
+        mut map, caster, ..
+    } = setup(22);
+    let pos = map.unit_position(caster).expect("caster positioned");
+    let beast = map
+        .summon_creature(BEAST_ENTRY, pos, caster, 0, 0)
+        .expect("beast victim");
+    let demon = map
+        .summon_creature(DEMON_ENTRY, pos, caster, 0, 0)
+        .expect("demon victim");
+    let outcome = map.cast_spell(
+        caster,
+        ENSLAVE_SPELL,
+        CastTarget::Unit(beast),
+        cast_options(),
+    );
+    assert_eq!(
+        outcome,
+        CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS),
+        "beast must fail the demon gate"
+    );
+    let infos = test_infos();
+    let other = materialize(8, &infos).unit.guid();
+    let respawns = mangos_world_data::spawn_support::RespawnTimes::default();
+    map.add_player(materialize(8, &infos), &respawns, 1_800_000_000, 0);
+    let outcome = map.cast_spell(
+        caster,
+        ENSLAVE_SPELL,
+        CastTarget::Unit(other),
+        cast_options(),
+    );
+    assert_eq!(
+        outcome,
+        CastOutcome::Failed(cast_result::FAILED_TARGET_IS_PLAYER),
+        "player must fail with the player-specific reason"
+    );
+    let outcome = map.cast_spell(
+        caster,
+        ENSLAVE_SPELL,
+        CastTarget::Unit(demon),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    assert!(
+        map.aura_holders(demon)
+            .iter()
+            .any(|h| h.spell_id == ENSLAVE_SPELL),
+        "demon must gain the holder"
     );
 }

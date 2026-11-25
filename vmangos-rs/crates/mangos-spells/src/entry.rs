@@ -93,6 +93,9 @@ pub struct SpellEntry {
     pub stances_not: u32,
     /// fields[14] (target mask bits).
     pub targets: u32,
+    /// fields[15] (`targetCreatureType` mask;
+    /// 0 = any creature type).
+    pub target_creature_type: u32,
     /// fields[17] (`casterAuraState` column).
     pub caster_aura_state: u32,
     /// fields[18] (`targetAuraState` column).

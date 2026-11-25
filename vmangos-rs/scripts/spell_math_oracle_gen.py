@@ -82,7 +82,7 @@ COLS = [
     "entry", "school", "category", "dispel", "mechanic",
     "attributes", "attributesEx", "attributesEx2", "attributesEx3",
     "attributesEx4", "stances", "stancesNot", "targets",
-    "casterAuraState", "targetAuraState",
+    "targetCreatureType", "casterAuraState", "targetAuraState",
     "castingTimeIndex", "recoveryTime",
     "categoryRecoveryTime", "interruptFlags", "auraInterruptFlags",
     "channelInterruptFlags", "maxLevel", "baseLevel", "spellLevel",
@@ -239,7 +239,8 @@ def main():
         )
         lines.append(
             f"                stances: {row['stances']}, stances_not: {row['stancesNot']}, "
-            f"targets: {row['targets']}, caster_aura_state: {row['casterAuraState']}, "
+            f"targets: {row['targets']}, target_creature_type: {row['targetCreatureType']}, "
+            f"caster_aura_state: {row['casterAuraState']}, "
             f"target_aura_state: {row['targetAuraState']}, "
             f"casting_time_index: {row['castingTimeIndex']}, "
             f"recovery_time: {row['recoveryTime']}, category_recovery_time: {row['categoryRecoveryTime']},"

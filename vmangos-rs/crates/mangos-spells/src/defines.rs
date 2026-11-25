@@ -400,6 +400,9 @@ pub mod cast_result {
     /// arm of `CheckItems` (the fork never emits
     /// `SPELL_FAILED_REAGENTS` server-side).
     pub const FAILED_ITEM_NOT_READY: u8 = 39;
+    /// `SPELL_FAILED_TARGET_IS_PLAYER` (109): the
+    /// creature-type gate's player arm.
+    pub const FAILED_TARGET_IS_PLAYER: u8 = 109;
     pub const FAILED_LINE_OF_SIGHT: u8 = 42;
     /// `SPELL_FAILED_NOT_BEHIND` (51, counted over
     /// the `SpellDefines.h:351+` enum at 1.12.1).
