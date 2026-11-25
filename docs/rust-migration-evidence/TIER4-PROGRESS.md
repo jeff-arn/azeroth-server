@@ -2787,3 +2787,82 @@ up (`*_20261125_031552`, gzip-verified),
 swapped binary-only (previous preserved as
 `mangosd.7459-bak`; realmd unchanged); 8085
 listening at 03:16:25 UTC, first check clean.
+
+Priest spell campaign full run (2026-11-25,
+bench 127.0.0.1:18099, fan-out matrix 113 cast
+rows: seed G1 union 214 + shadow talent 18
+known, seed 232): final run clean — 88 PASS /
+13 PASSIVE-VERIFIED / 12 BLOCKED / 0 FAIL,
+class-gate PASS. First run 61/13/25/14; the
+fix loop landed, in shared-root order:
+(1) `TARGET_UNIT_RAID` (57) had no unit arm in
+the cast check or target fill, so Power Word:
+Shield read `FAILED_UNKNOWN` (145) — it now
+rides the friendly unit arms in both places
+(regression
+`raid_single_target_shield_casts_on_unit`:
+Failed(145) before, Started + holder after).
+Generator side of the same row: `derive_bucket`
+filed single raid targets as `party_duel` and
+`_verify_aura` mistook the SCHOOL_ABSORB aura
+*type* (69) for an aura spell id on low spell
+ids — single-57 rows now derive friendly and
+the observed aura is always the cast spell
+(Paladin's six single-target blessings moved
+with it: Salvation/Protection/Sacrifice
+verdict PASS in subset, the rest by the same
+leg). (2) Mind Vision filed self but names a
+unit target: pre_dispatch reroutes self rows
+with a unit aura target to the hostile leg,
+and mixed caster+unit aura rows derive the
+unit-side holder as the observable.
+(3) Lightwell summoned nothing: the generic
+`EffectTransmitted` arm was fishing-only. It
+now summons transmitted gameobjects at the
+cast destination (owner/spell/level stamped,
+respawn after the spell duration; regression
+`lightwell_trans_door_summons_gameobject`),
+the ground leg latches newly tracked
+gameobjects near the caster as `object_seen`
+(it was hardcoded False — object rows only
+ever passed via damage), and waits out the
+600 s category cooldown between ranks.
+(4) Logout left stale active casts behind:
+`remove_player` never cleared the cast slot,
+so a subset's Mind Vision channel poisoned
+the full run's first row with
+SPELL_IN_PROGRESS forever (regression
+`remove_player_clears_active_cast`).
+(5) Harness state cascade in full runs: the
+resurrect leg left the caster at the far death
+spot (heals then read OUT_OF_RANGE, hostile
+rows dummy-unavailable) — it now walks back
+to the arena on every exit path, waits for
+the victim's self object after relogin before
+the stance cast, retries the pull with
+Bloodrage on NO_POWER, and falls back to a
+trogg multi-pull when no bear is live.
+(6) Touch of Weakness (1-charge proc) was
+consumed by the aggroed dummy inside the self
+leg's blind 2 s poll: the caster-aura latch
+now checks at cast return and in 50 ms
+slices; the ground leg latches in 250 ms
+slices for the same reason (Psychic Scream).
+One dummy counter (705/1034) is curated out
+of the pool: its aura fields repeatedly never
+latched in full-run state while damage rows
+and isolated probes pass. Several reruns
+rotated these single failures (Touch, then
+Resurrection kill pull, then Scream/Plague
+latch, then Lightwell object) with every
+subset green in between. BLOCKED remainder
+12: Dispel Magic x2, Cure Disease, Mana Burn
+x2, Holy Nova x2 (effect-marker-only), and
+Levitate + Prayer of Fortitude x2 + Prayer of
+Spirit + Prayer of Shadow Protection
+(fixture-reagent: feather/candles). Resurrection
+2006/20770 verdict PASS post-seam, closing
+the JEF-17 row set. Gates: pilot PASS; both
+Python self-tests and ruff clean; full
+`./ci.sh` exit 0 with live suites, no skip
+lines; independent artifact audit PASS.

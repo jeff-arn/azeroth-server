@@ -213,3 +213,230 @@ counts: BLOCKED=10, PASS=34, PASSIVE-VERIFIED=15
 - 8676 Ambush form_totem target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
 - 11269 Ambush form_totem target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
 - 25302 Feint hostile_dummy target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+## Priest run-class (113 rows)
+
+counts: BLOCKED=25, FAIL=14, PASS=61, PASSIVE-VERIFIED=13
+- 17 Power Word: Shield party_duel target=None: BLOCKED no-party  | solo character with no party; scenario-inapplicable
+- 527 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 528 Cure Disease friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 988 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 1706 Levitate item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 2050 Lesser Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2053 Lesser Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2054 Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2060 Greater Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2061 Flash Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2096 Mind Vision self target=900021: FAIL CAST_RESULT(9) prepare | no bound SPELL_GO for spell 2096 (reason=9)
+- 2943 Touch of Weakness hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 2944 Devouring Plague hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 6064 Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 6346 Fear Ward friendly target=900015: FAIL CAST_RESULT(None/89) prepare | blessing legs incomplete: self leg go=True reason=None aura=True; ally leg go=False reason=89 aura=False
+- 8092 Mind Blast hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 8122 Psychic Scream ground_area target=None: BLOCKED dummy-unavailable  | no live dummy for the radius leg
+- 8129 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 9035 Hex of Weakness hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 9484 Shackle Undead hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 10797 Starshards hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 10876 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 10890 Psychic Scream ground_area target=None: BLOCKED dummy-unavailable  | no live dummy for the radius leg
+- 10894 Shadow Word: Pain hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 10901 Power Word: Shield party_duel target=None: BLOCKED no-party  | solo character with no party; scenario-inapplicable
+- 10909 Mind Vision self target=900021: FAIL CAST_RESULT(9) prepare | no bound SPELL_GO for spell 10909 (reason=9)
+- 10912 Mind Control hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 10917 Flash Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 10934 Smite hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 15430 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 19266 Touch of Weakness self target=900021: FAIL  apply | SPELL_GO without required observable outcome: caster_aura=False
+- 20770 Resurrection corpse target=None: FAIL  prepare | no live bear to kill the victim ally
+- 21562 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 21564 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 27870 Lightwell ground_area target=17379390973850682870: FAIL  apply | SPELL_GO without required observable outcome: object_seen=False, health 100->100, matching damage=0
+- 27871 Lightwell ground_area target=17379390973850682869: FAIL CAST_RESULT(60) prepare | no bound SPELL_GO for spell 27871 (reason=60)
+
+failure clusters:
+- phase=prepare reason=CAST_RESULT(89) bucket=friendly count=7 spells=[2050, 2053, 2054, 2060, 2061, 6064, 10917]
+- phase=prepare reason=CAST_RESULT(9) bucket=self count=2 spells=[2096, 10909]
+- phase=apply reason=None bucket=ground_area count=1 spells=[27870]
+- phase=apply reason=None bucket=self count=1 spells=[19266]
+- phase=prepare reason=CAST_RESULT(60) bucket=ground_area count=1 spells=[27871]
+- phase=prepare reason=CAST_RESULT(None/89) bucket=friendly count=1 spells=[6346]
+- phase=prepare reason=None bucket=corpse count=1 spells=[20770]
+## Priest run-class (113 rows)
+
+counts: BLOCKED=23, FAIL=10, PASS=67, PASSIVE-VERIFIED=13
+- 17 Power Word: Shield friendly target=900015: FAIL CAST_RESULT(97/97) prepare | blessing legs incomplete: self leg go=False reason=97 aura=False; ally leg go=False reason=97 aura=False
+- 527 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 528 Cure Disease friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 988 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 1706 Levitate item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 2050 Lesser Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2053 Lesser Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2054 Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2060 Greater Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2061 Flash Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 2096 Mind Vision self target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 2943 Touch of Weakness hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 2944 Devouring Plague hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 6064 Heal friendly target=900015: FAIL CAST_RESULT(89) prepare | no bound SPELL_GO (reason=89)
+- 6346 Fear Ward friendly target=900015: FAIL CAST_RESULT(None/89) prepare | blessing legs incomplete: self leg go=True reason=None aura=True; ally leg go=False reason=89 aura=False
+- 8092 Mind Blast hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 8122 Psychic Scream ground_area target=None: BLOCKED dummy-unavailable  | no live dummy for the radius leg
+- 8129 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 9035 Hex of Weakness hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 9484 Shackle Undead hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 10797 Starshards hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 10876 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 10890 Psychic Scream ground_area target=None: BLOCKED dummy-unavailable  | no live dummy for the radius leg
+- 10894 Shadow Word: Pain hostile_dummy target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 10901 Power Word: Shield friendly target=900015: FAIL CAST_RESULT(None/89) prepare | blessing legs incomplete: self leg go=True reason=None aura=True; ally leg go=False reason=89 aura=False
+- 10909 Mind Vision self target=None: BLOCKED dummy-unavailable  | no live 705/707 counter left in WorldState
+- 15430 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 21562 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 21564 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 27871 Lightwell ground_area target=17379390973850682869: FAIL  apply | SPELL_GO without required observable outcome: object_seen=False, health 100->100, matching damage=0
+
+failure clusters:
+- phase=prepare reason=CAST_RESULT(89) bucket=friendly count=6 spells=[2050, 2053, 2054, 2060, 2061, 6064]
+- phase=prepare reason=CAST_RESULT(None/89) bucket=friendly count=2 spells=[6346, 10901]
+- phase=apply reason=None bucket=ground_area count=1 spells=[27871]
+- phase=prepare reason=CAST_RESULT(97/97) bucket=friendly count=1 spells=[17]
+## Priest run-class (113 rows)
+
+counts: BLOCKED=12, FAIL=1, PASS=87, PASSIVE-VERIFIED=13
+- 527 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 528 Cure Disease friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 988 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 1706 Levitate item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 8129 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 10876 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 15430 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 19266 Touch of Weakness self target=900021: FAIL  apply | SPELL_GO without required observable outcome: caster_aura=False
+- 21562 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 21564 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+
+failure clusters:
+- phase=apply reason=None bucket=self count=1 spells=[19266]
+## Priest run-class (113 rows)
+
+counts: BLOCKED=12, FAIL=1, PASS=87, PASSIVE-VERIFIED=13
+- 527 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 528 Cure Disease friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 988 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 1706 Levitate item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 8129 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 10876 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 15430 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 20770 Resurrection corpse target=None: FAIL  prepare | no live bear to kill the victim ally
+- 21562 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 21564 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+
+failure clusters:
+- phase=prepare reason=None bucket=corpse count=1 spells=[20770]
+## Priest run-class (113 rows)
+
+counts: BLOCKED=12, FAIL=2, PASS=86, PASSIVE-VERIFIED=13
+- 527 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 528 Cure Disease friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 988 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 1706 Levitate item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 2006 Resurrection corpse target=None: FAIL  prepare | no live bear or trogg to kill the victim ally
+- 8129 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 10876 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 15430 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 20770 Resurrection corpse target=None: FAIL  prepare | no live bear or trogg to kill the victim ally
+- 21562 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 21564 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+
+failure clusters:
+- phase=prepare reason=None bucket=corpse count=2 spells=[2006, 20770]
+## Priest run-class (113 rows)
+
+counts: BLOCKED=12, FAIL=2, PASS=86, PASSIVE-VERIFIED=13
+- 527 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 528 Cure Disease friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 988 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 1706 Levitate item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 8122 Psychic Scream ground_area target=17379390973850682378: FAIL  apply | SPELL_GO without required observable outcome: target_aura=False
+- 8129 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 10876 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 15430 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 19280 Devouring Plague hostile_dummy target=17379390973850682378: FAIL  apply | SPELL_GO without required observable outcome: target_aura=False after 2 attempt(s); landed cast retained over cooldown-blocked recast
+- 21562 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 21564 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+
+failure clusters:
+- phase=apply reason=None bucket=ground_area count=1 spells=[8122]
+- phase=apply reason=None bucket=hostile_dummy count=1 spells=[19280]
+## Priest run-class (113 rows)
+
+counts: BLOCKED=12, FAIL=2, PASS=86, PASSIVE-VERIFIED=13
+- 527 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 528 Cure Disease friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 988 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 1706 Levitate item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 2006 Resurrection corpse target=None: FAIL  prepare | no live bear or trogg to kill the victim ally
+- 8122 Psychic Scream ground_area target=17379390973850682871: FAIL  apply | SPELL_GO without required observable outcome: target_aura=False
+- 8129 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 10876 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 15430 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 21562 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 21564 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+
+failure clusters:
+- phase=apply reason=None bucket=ground_area count=1 spells=[8122]
+- phase=prepare reason=None bucket=corpse count=1 spells=[2006]
+## Priest run-class (113 rows)
+
+counts: BLOCKED=12, FAIL=1, PASS=87, PASSIVE-VERIFIED=13
+- 527 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 528 Cure Disease friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 988 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 1706 Levitate item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 8129 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 10876 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 15430 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 21562 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 21564 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 27870 Lightwell ground_area target=17379390973850682870: FAIL  apply | SPELL_GO without required observable outcome: object_seen=False, health 100->100, matching damage=0
+
+failure clusters:
+- phase=apply reason=None bucket=ground_area count=1 spells=[27870]
+## Priest run-class (113 rows)
+
+counts: BLOCKED=12, PASS=88, PASSIVE-VERIFIED=13
+- 527 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 528 Cure Disease friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 988 Dispel Magic self target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 1706 Levitate item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 8129 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 10876 Mana Burn hostile_dummy target=None: BLOCKED effect-marker-only  | sub-observable heal (raw max 0 < 10, below one regen tick); classify_only
+- 15430 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 21562 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 21564 Prayer of Fortitude item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op

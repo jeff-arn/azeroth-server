@@ -1,0 +1,119 @@
+{
+ "mode": "run-class",
+ "class": "Priest",
+ "matrix_file": "/Users/jeffarn/Programming/azeroth-server/vmangos-rs/scripts/spell_campaign_matrix-Priest.json",
+ "matrix_mode": "full",
+ "matrix_counts": {
+  "Priest": 113
+ },
+ "talent_build": {
+  "name": "shadow",
+  "role": "RangeDps",
+  "total_points": 51,
+  "known_spell_ids": [
+   14528,
+   14751,
+   14767,
+   14769,
+   14777,
+   15286,
+   15310,
+   15316,
+   15317,
+   15318,
+   15330,
+   15334,
+   15338,
+   15407,
+   15448,
+   15473,
+   15487,
+   17325
+  ],
+  "required_spell_ids": []
+ },
+ "fixture_note": "union-seeded single-race fixture; not a legal single-race spellbook claim where union exceeds any one race (Paladin Human==Dwarf==160, numerically equal)",
+ "seed_count": 232,
+ "talent_seed_checks": [
+  {
+   "spell_id": 14528,
+   "learned": true
+  },
+  {
+   "spell_id": 14751,
+   "learned": true
+  },
+  {
+   "spell_id": 14767,
+   "learned": true
+  },
+  {
+   "spell_id": 14769,
+   "learned": true
+  },
+  {
+   "spell_id": 14777,
+   "learned": true
+  },
+  {
+   "spell_id": 15286,
+   "learned": true
+  },
+  {
+   "spell_id": 15310,
+   "learned": true
+  },
+  {
+   "spell_id": 15316,
+   "learned": true
+  },
+  {
+   "spell_id": 15317,
+   "learned": true
+  },
+  {
+   "spell_id": 15318,
+   "learned": true
+  },
+  {
+   "spell_id": 15330,
+   "learned": true
+  },
+  {
+   "spell_id": 15334,
+   "learned": true
+  },
+  {
+   "spell_id": 15338,
+   "learned": true
+  },
+  {
+   "spell_id": 15407,
+   "learned": true
+  },
+  {
+   "spell_id": 15448,
+   "learned": true
+  },
+  {
+   "spell_id": 15473,
+   "learned": true
+  },
+  {
+   "spell_id": 15487,
+   "learned": true
+  },
+  {
+   "spell_id": 17325,
+   "learned": true
+  }
+ ],
+ "failure_clusters": [],
+ "verdict_counts": {
+  "BLOCKED": 12,
+  "PASS": 88,
+  "PASSIVE-VERIFIED": 13
+ },
+ "git_head": "d98e338e",
+ "git_dirty": true
+}

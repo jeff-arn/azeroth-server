@@ -144,10 +144,10 @@ USES_RANGED_SLOT_ATTR = 0x2
 # this so derivation drift fails loudly instead of silently.
 PALADIN_FULL_BUCKET_COUNTS = {
     "self": 50,
-    "friendly": 48,
+    "friendly": 54,
     "hostile_dummy": 39,
     "item_reagent_ammo": 11,
-    "party_duel": 6,
+    "party_duel": 0,
     "ground_area": 4,
     "dual": 2,
     "corpse": 0,
@@ -1333,6 +1333,11 @@ def derive_bucket(spell_id: int, eff: dict) -> str:
         or eff["equipped_item_class"] != -1
     ):
         return "item_reagent_ammo"
+    if targets - {0} == {57}:
+        # TARGET_UNIT_RAID alone is a single friendly unit
+        # (Power Word: Shield): castable on self/ally with
+        # no party, unlike the area party modes.
+        return "friendly"
     if targets & PARTY_TARGETS or effects & DUEL_EFFECTS:
         return "party_duel"
     if targets & PET_TARGETS or 27 in targets or effects & (PET_SUMMON_EFFECTS | LEARN_PET_EFFECTS):
@@ -1485,12 +1490,12 @@ def select_rank_coverage(ordered_members: list[int], signatures: dict[int, tuple
 
 
 def _verify_aura(spell_id: int, eff: dict) -> int:
-    """Aura id to observe: the applied aura when it is a separate
-    spell (DoT pattern: max aura id above the cast id), else the cast
-    spell id itself (its presence in fields 47-94)."""
-    nonzero = [a for a in (eff["aura1"], eff["aura2"], eff["aura3"]) if a]
-    best = max(nonzero) if nonzero else 0
-    return best if best > spell_id else spell_id
+    """Aura id to observe: the cast spell id itself (its
+    presence in fields 47-94). The aura columns carry aura
+    *types*, never spell ids — comparing them to the cast
+    id mistook Power Word: Shield's SCHOOL_ABSORB type
+    (69) for an aura spell on the low spell id 17."""
+    return spell_id
 
 
 def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, int] | None = None) -> dict:
@@ -1663,6 +1668,12 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
             # unit target, the haste aura lands on the caster).
             # The bucket cannot decide the side; the aura slots can.
             return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
+        if aura_targets & {6, 25}:
+            # Mixed caster+unit aura rows (Mind Vision: dummy
+            # aura on the caster, view auras on the unit): the
+            # unit-side holder is the wire-observable one on
+            # the dummy, whichever bucket filed the row.
+            return _with_tick_band({"kind": "aura_on_target", "aura": aura}, eff, durations)
         if bucket == "self":
             return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
         if bucket == "form_totem":
@@ -2371,8 +2382,8 @@ def run_self_test() -> int:
     assert derive_bucket(25916, greater) == "item_reagent_ammo"
     assert derive_expected(25916, greater, "item_reagent_ammo") == {"kind": "item_consumed", "reagent": 21177}
     protection = _eff(effect1=6, aura1=39, aura2=25, targ_a1=57, targ_a2=57)
-    assert derive_bucket(10278, protection) == "party_duel"
-    assert derive_expected(10278, protection, "party_duel") == {"kind": "aura_on_target", "aura": 10278}
+    assert derive_bucket(10278, protection) == "friendly"
+    assert derive_expected(10278, protection, "friendly") == {"kind": "aura_on_target", "aura": 10278}
     shock = _eff(effect1=3, targ_a1=25, script_name="spell_paladin_holy_shock", name="Holy Shock")
     assert derive_bucket(20930, shock) == "dual"
     assert derive_expected(20930, shock, "dual")["kind"] == "dual_outcome"
@@ -2462,6 +2473,29 @@ def run_self_test() -> int:
     distract = _eff(effect1=69, targ_a1=16, name="Distract")
     assert derive_bucket(1725, distract) == "ground_area"
     assert derive_expected(1725, distract, "ground_area")["kind"] == "none_marker"
+    # Power Word: Shield: single raid target rides the friendly
+    # leg (no party needed), and the observed aura is the cast
+    # spell itself — aura columns carry aura *types* (69 =
+    # SCHOOL_ABSORB), never aura spell ids.
+    shield = _eff(effect1=6, aura1=69, targ_a1=57, name="Power Word: Shield")
+    assert derive_bucket(17, shield) == "friendly"
+    assert derive_expected(17, shield, "friendly") == {"kind": "aura_on_target", "aura": 17}
+    # Mind Vision: aura effects split across the unit and the
+    # caster; the unit-side holder is the observable one even
+    # though the row filed in the self bucket.
+    vision = _eff(
+        effect1=6,
+        effect2=6,
+        effect3=6,
+        aura1=1,
+        aura2=4,
+        aura3=68,
+        targ_a1=25,
+        targ_a2=1,
+        targ_a3=25,
+        name="Mind Vision",
+    )
+    assert derive_expected(2096, vision, "self") == {"kind": "aura_on_target", "aura": 2096}
     # Non-damaging persistent area aura rows verify the aura on the
     # in-radius dummy (Flare shape); damaging ground rows keep the
     # object (Consecration shape, asserted above).

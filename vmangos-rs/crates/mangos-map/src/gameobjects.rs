@@ -1324,15 +1324,15 @@ impl Map {
     }
 
     /// `Spell::EffectTransmitted`
-    /// (`SpellEffects.cpp:5538-5678`) fishing subset:
-    /// the `FISHINGNODE` bobber summon. Returns false
-    /// exactly when the fork calls `finish()` after
-    /// `SendCastResult(NOT_FISHABLE)` (dry land or no
-    /// surface LOS). Other GO types stay no-ops (the
-    /// slice covers fishing only; ritual extras are
-    /// unmodeled with the ritual use path).
+    /// (`SpellEffects.cpp:5538-5678`): the
+    /// `FISHINGNODE` bobber summon plus the generic
+    /// transmitted-object summon (Lightwell). Returns
+    /// false exactly when the fork calls `finish()`
+    /// after `SendCastResult(NOT_FISHABLE)` (dry land
+    /// or no surface LOS, fishing only). Ritual extras
+    /// stay unmodeled with the ritual use path.
     #[allow(clippy::too_many_lines)] // one fork EffectTransmitted port
-    pub(crate) fn effect_transmitted_fishing(
+    pub(crate) fn effect_transmitted(
         &mut self,
         caster: ObjectGuid,
         spell: &mangos_spells::entry::SpellEntry,
@@ -1353,9 +1353,6 @@ impl Map {
         let Some(info) = self.stores.gameobject_templates.get(entry).cloned() else {
             return true;
         };
-        if info.go_type != TYPE_FISHINGNODE {
-            return true;
-        }
         // Placement (fork `:5555-5580`): client dest,
         // else the radius point, else the random
         // range/angle point; both computed points are
@@ -1417,6 +1414,35 @@ impl Map {
                 (fx, fy, fz)
             }
         };
+        if info.go_type != TYPE_FISHINGNODE {
+            // Generic transmitted summon (Lightwell):
+            // dynamic GO at the placement point, owner
+            // registration + spell/level stamps, respawn
+            // after the spell duration. No water gate,
+            // no channel object.
+            let dest_z = client_dest.map_or(caster_pos.z, |d| d.z);
+            let pos = Position::new(fx, fy, dest_z, caster_pos.o);
+            let Some(go_guid) = self.create_dynamic_gameobject(entry, pos, [0.0; 4]) else {
+                return true;
+            };
+            let duration_ms = spell.calculate_duration_ms(&self.stores.spells.tables);
+            if duration_ms > 0 {
+                let now = self.now_unix;
+                if let Some(go) = self.gameobjects.get_mut(&go_guid) {
+                    #[allow(clippy::cast_sign_loss)]
+                    go.set_respawn_time((duration_ms / 1000) as u32, now);
+                }
+            }
+            self.unit_add_gameobject(caster, go_guid);
+            self.go_set_spell_id(go_guid, spell.id);
+            let level = self.unit_level(caster);
+            let _ = self.object_set_field(go_guid, u32::from(offsets::GAMEOBJECT_LEVEL), level);
+            self.go_summon_linked_trap(go_guid);
+            if caster.is_creature_or_pet() {
+                self.creature_script_just_summoned(caster, go_guid);
+            }
+            return true;
+        }
         // Swimmable gate (fork `:5601-5612`): fail when
         // dry or when the caster has no surface LOS.
         // `fz` rides the water surface on success

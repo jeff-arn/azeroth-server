@@ -1135,6 +1135,11 @@ impl Map {
     /// `Map::Remove(Player*)` subset: out-of-range to
     /// viewers, returns the aggregate for logout handling.
     pub fn remove_player(&mut self, guid: ObjectGuid) -> Option<Player> {
+        // The fork `Spell` object dies with the session:
+        // a cast still preparing/channeling at logout
+        // must not outlive it (a stale entry would read
+        // SPELL_IN_PROGRESS on the next login forever).
+        self.casts.remove(&guid);
         // `ZoneScript::OnPlayerLeave` fires while the
         // player is still bound to the map.
         self.instance_on_player_leave(guid);

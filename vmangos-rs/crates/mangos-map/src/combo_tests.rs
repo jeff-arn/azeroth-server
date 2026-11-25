@@ -53,6 +53,15 @@ const STEALTH_SPELL: u32 = 9208;
 /// Resurrect stand-in: `RESURRECT_NEW` with flat
 /// health/mana like Rebirth (base health, misc mana).
 const RESURRECT_SPELL: u32 = 9209;
+/// Lightwell stand-in: `TRANS_DOOR` summoning the
+/// Lightwell gameobject entry.
+const LIGHTWELL_SPELL: u32 = 9210;
+/// Power Word: Shield stand-in: single raid target
+/// (mode 57) absorb aura.
+const SHIELD_SPELL: u32 = 9211;
+/// Long-cast stand-in: 5 s cast time via table index 99.
+const LONGCAST_SPELL: u32 = 9212;
+const LIGHTWELL_GO_ENTRY: u32 = 181_105;
 /// Creature template entry for victims.
 const VICTIM_ENTRY: u32 = 9301;
 /// `TARGET_UNIT` implicit target (see insignia fixture).
@@ -211,6 +220,7 @@ fn unit_target_effect(effect_id: u32, base_points: i32, multiplier: f32) -> Spel
 
 /// Cast-gate stand-ins (Execute health gate, Backstab
 /// behind gate, Stealth cooldown-on-event conversion).
+#[allow(clippy::too_many_lines)] // one stand-in spell per gate, kept together
 fn insert_gate_spells(stores: &mut WorldStores) {
     // Execute stand-in: unit damage gated on the target
     // being under 20% health (fork TargetAuraState).
@@ -261,6 +271,79 @@ fn insert_gate_spells(stores: &mut WorldStores) {
                     implicit_target_a: 1,
                     ..Default::default()
                 },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Lightwell stand-in: TRANS_DOOR gameobject summon
+    // at the cast destination.
+    stores.gameobject_templates =
+        mangos_world_data::gameobject_template::GameObjectTemplates::from_entries_for_tests(vec![
+            mangos_world_data::gameobject_template::GameObjectInfo {
+                id: LIGHTWELL_GO_ENTRY,
+                go_type: 22,
+                display_id: 6671,
+                name: "Lightwell".into(),
+                size: 1.0,
+                ..Default::default()
+            },
+        ]);
+    stores.spells.spells.insert(
+        LIGHTWELL_SPELL,
+        SpellEntry {
+            id: LIGHTWELL_SPELL,
+            effects: [
+                SpellEffectData {
+                    effect: effect::TRANS_DOOR,
+                    misc_value: 181_105,
+                    implicit_target_a: 22,
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Power Word: Shield stand-in: absorb aura on a
+    // single raid target (mode 57).
+    stores.spells.spells.insert(
+        SHIELD_SPELL,
+        SpellEntry {
+            id: SHIELD_SPELL,
+            effects: [
+                SpellEffectData {
+                    effect: effect::APPLY_AURA,
+                    apply_aura_name: 69, // SCHOOL_ABSORB
+                    base_points: 100,
+                    implicit_target_a: 57,
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Long-cast stand-in for the logout cast-cleanup
+    // regression.
+    stores.spells.tables.cast_times.insert(
+        99,
+        mangos_spells::entry::CastTimeEntry {
+            cast_time: 5000,
+            cast_time_per_level: 0,
+            min_cast_time: 0,
+        },
+    );
+    stores.spells.spells.insert(
+        LONGCAST_SPELL,
+        SpellEntry {
+            id: LONGCAST_SPELL,
+            casting_time_index: 99,
+            effects: [
+                unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
                 SpellEffectData::default(),
                 SpellEffectData::default(),
             ],
@@ -997,5 +1080,86 @@ fn resurrect_new_requests_and_accept_resurrects_at_caster() {
         map.corpses.get(&corpse_guid).map(|c| c.corpse_type),
         Some(CorpseType::Bones),
         "corpse converts to bones on resurrect"
+    );
+}
+
+#[test]
+fn raid_single_target_shield_casts_on_unit() {
+    // `TARGET_UNIT_RAID` (57) is a single friendly
+    // unit target (Power Word: Shield): the cast
+    // check and target fill must ride the unit arms.
+    // Before, mode 57 fell to the check's default
+    // `FAILED_UNKNOWN` (145) (Priest campaign).
+    let Fixture {
+        mut map, caster, ..
+    } = setup(18);
+    let outcome = map.cast_spell(
+        caster,
+        SHIELD_SPELL,
+        CastTarget::Unit(caster),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    assert!(
+        map.aura_holders(caster)
+            .iter()
+            .any(|h| h.spell_id == SHIELD_SPELL),
+        "shield holder missing on the caster"
+    );
+}
+
+#[test]
+fn remove_player_clears_active_cast() {
+    // Logout must not leave a stale active cast behind:
+    // the next login of the same guid would read
+    // SPELL_IN_PROGRESS forever (live Priest campaign:
+    // a subset Mind Vision channel poisoned the full
+    // run's first row). The fork Spell object dies
+    // with the session.
+    let Fixture {
+        mut map,
+        caster,
+        victim,
+    } = setup(19);
+    let outcome = map.cast_spell(
+        caster,
+        LONGCAST_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    assert!(map.casts.contains_key(&caster), "long cast in progress");
+    let _ = map.remove_player(caster);
+    assert!(
+        !map.casts.contains_key(&caster),
+        "active cast must die with the session"
+    );
+}
+
+#[test]
+fn lightwell_trans_door_summons_gameobject() {
+    // `Spell::EffectTransmitted` generic arm: a
+    // non-fishing transmitted object (Lightwell)
+    // summons its gameobject at the cast
+    // destination. Before the generic arm landed,
+    // only the FISHINGNODE subset summoned and
+    // Lightwell's GO silently never appeared
+    // (Priest campaign object_seen=False).
+    let Fixture {
+        mut map, caster, ..
+    } = setup(17);
+    let pos = map.unit_position(caster).expect("caster positioned");
+    let outcome = map.cast_spell(
+        caster,
+        LIGHTWELL_SPELL,
+        CastTarget::Dest(pos),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    assert!(
+        map.gameobjects
+            .values()
+            .any(|go| go.info.id == LIGHTWELL_GO_ENTRY),
+        "Lightwell gameobject must be summoned"
     );
 }

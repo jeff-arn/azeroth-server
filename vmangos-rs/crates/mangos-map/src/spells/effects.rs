@@ -140,17 +140,19 @@ impl Map {
             // target (fork `Spell.cpp:2949` pushes
             // `pUnitTarget`; jumps are execution-time and
             // stay unverified).
-            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT | tgt::UNIT_FRIEND_CHAIN_HEAL => {
-                match target {
-                    CastTarget::Unit(g) => vec![g],
-                    CastTarget::Corpse(g) => self
-                        .corpses
-                        .get(&g)
-                        .map(|corpse| vec![corpse.owner])
-                        .unwrap_or_default(),
-                    CastTarget::SelfCast | CastTarget::Dest(_) => vec![caster],
-                }
-            }
+            tgt::UNIT_ENEMY
+            | tgt::UNIT_FRIEND
+            | tgt::UNIT
+            | tgt::UNIT_FRIEND_CHAIN_HEAL
+            | tgt::UNIT_RAID => match target {
+                CastTarget::Unit(g) => vec![g],
+                CastTarget::Corpse(g) => self
+                    .corpses
+                    .get(&g)
+                    .map(|corpse| vec![corpse.owner])
+                    .unwrap_or_default(),
+                CastTarget::SelfCast | CastTarget::Dest(_) => vec![caster],
+            },
             tgt::ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC | tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC => {
                 let center = if mode == tgt::ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC {
                     self.world_object_position(caster).unwrap_or_default()
@@ -994,14 +996,15 @@ impl Map {
                 }
                 // SPELL_EFFECT_TRANS_DOOR (fork
                 // `SpellEffects.cpp:5538-5678`): the
-                // fishing slice models the FISHINGNODE
-                // arm only (other GO types stay
-                // no-ops); a failed water gate aborts
-                // the cast fork-exactly (`&=` keeps the
-                // arm running for every effect slot,
-                // like the fork's effect loop).
+                // FISHINGNODE bobber arm plus the
+                // generic transmitted-object summon
+                // (Lightwell); a failed fishing water
+                // gate aborts the cast fork-exactly
+                // (`&=` keeps the arm running for
+                // every effect slot, like the fork's
+                // effect loop).
                 effect::TRANS_DOOR => {
-                    effects_ok &= self.effect_transmitted_fishing(caster, spell, i, client_dest);
+                    effects_ok &= self.effect_transmitted(caster, spell, i, client_dest);
                 }
                 // SPELL_EFFECT_PERSISTENT_AREA_AURA
                 // spawns once per cast in

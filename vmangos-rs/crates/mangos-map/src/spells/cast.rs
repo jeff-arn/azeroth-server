@@ -559,7 +559,7 @@ impl Map {
                 }
                 CastOutcome::Started
             }
-            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT | tgt::UNIT_FRIEND_CHAIN_HEAL => {
+            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT | tgt::UNIT_FRIEND_CHAIN_HEAL | tgt::UNIT_RAID => {
                 let CastTarget::Unit(victim) = target else {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_IMPLICIT_TARGETS);
                 };
@@ -597,7 +597,7 @@ impl Map {
                 // Chain heal is an explicit friendly unit target
                 // (fork `SpellEntry.h` IsExplicitPositiveTarget):
                 // the single-target component is the unit target.
-                if (mode == tgt::UNIT_FRIEND || mode == tgt::UNIT_FRIEND_CHAIN_HEAL)
+                if (mode == tgt::UNIT_FRIEND || mode == tgt::UNIT_FRIEND_CHAIN_HEAL || mode == tgt::UNIT_RAID)
                     && Self::is_hostile_pair(caster, victim)
                 {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS);

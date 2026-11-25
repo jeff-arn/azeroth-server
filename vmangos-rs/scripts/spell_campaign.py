@@ -93,6 +93,7 @@ SMSG_RESURRECT_REQUEST = 347
 CMSG_RESURRECT_RESPONSE = 348
 MSG_MOVE_TELEPORT_ACK = 199
 TYPEID_CORPSE = 7
+TYPEID_GAMEOBJECT = 5
 CORPSE_FIELD_OWNER = 6
 #: NO_POWER retry budget shared by every cast leg (self, unit,
 #: hostile, ground, blessing, heal). A fixture's pool refills from
@@ -205,14 +206,17 @@ ALLY_POS = (-6268.0, 290.0, 380.0)
 # Every 705/707 spawn within 160 yd of the arena, nearest first
 # (bench creature table): the original 10 counters starved once
 # rank coverage tripled hostile rows per class, even with the
-# 2-3 s dummy respawn (visibility + clean-reuse gates).
+# 2-3 s dummy respawn (visibility + clean-reuse gates). Counter
+# 1034 is curated out: in full runs its aura fields repeatedly
+# never latch (Psychic Scream + Devouring Plague landed GOs with
+# no observable aura) while damage rows pass and isolated probes
+# pass — a wander/evade state the pool cannot rely on.
 WOLF_COUNTERS = [
     1526,
     1525,
     344,
     345,
     1519,
-    1034,
     1527,
     1515,
     346,
@@ -2842,9 +2846,13 @@ def not_ready_retry(
     legs): the full DBC cooldown plus margin is waited out, so the
     recast proves both the cooldown (NOT_READY observed first) and
     its expiry (the Freedom pattern, extended to long rows like
-    Innervate 29166). Capped at 600 s; longer cooldowns stay FAIL.
+    Innervate 29166). The wait comes from the live oracle
+    (recovery + category): category-only cooldowns like
+    Blessing of Protection (recovery 0, category 300 s) read
+    30 s from the matrix recovery alone and stayed NOT_READY.
+    Capped at 600 s; longer cooldowns stay FAIL.
     Returns (go, reason, ops, evidence_note)."""
-    wait_s = min(float(cooldown_ms or 1500) / 1000.0 + 30.0, 600.0)
+    wait_s = live_cooldown_wait_s(spell_id, cap_s=600.0)
     driver.poll(wait_s)
     go, reason, chunk, _waited = cast_unit_retry_power(driver, spell_id, guid, timeout=10.0)
     return go, reason, ops + chunk, f" cooldown_wait={wait_s:.1f}s"
@@ -3009,14 +3017,29 @@ def self_leg(
             packets=ops,
             target_guid=guid,
         )
-    driver.poll(2.0)
-    window = events_since(driver, mark)
+    # Latch the aura in slices from the cast return: a
+    # 1-charge proc aura (Touch of Weakness) is consumed by
+    # the first dummy swing inside one blind poll, while a
+    # slow holder can also arrive seconds after SPELL_GO
+    # (Shield Block read absent at +2 s twice).
     aura_id = int(expected.get("aura", spell_id))
-    # Poll for the aura instead of a single check: under bench
-    # load the holder can arrive seconds after SPELL_GO (Shield
-    # Block's 5 s holder read absent at +2 s twice), and only a
-    # truly missing aura still reads absent after the timeout.
-    caster_aura = wait_for_aura(driver, guid, aura_id) if go else False
+    caster_aura = False
+    if go:
+        # Check before any poll first (the aura update can
+        # ride the GO batch), then in 50 ms slices: a
+        # 1-charge proc aura can be consumed by the first
+        # dummy swing inside one 250 ms slice.
+        caster_aura = aura_present(driver, guid, aura_id)
+        for _ in range(40):
+            if caster_aura:
+                break
+            driver.poll(0.05)
+            if aura_present(driver, guid, aura_id):
+                caster_aura = True
+                break
+        if not caster_aura:
+            caster_aura = wait_for_aura(driver, guid, aura_id)
+    window = events_since(driver, mark)
     if caster_aura and aura_id not in applied_auras:
         applied_auras.append(aura_id)
     post = snapshot(driver, guid)
@@ -3970,8 +3993,22 @@ def resurrect_leg(row: dict, driver: ScriptedDriver, guid: int, ally) -> tuple[d
     smoke.sql_scalar("characters", f"UPDATE characters SET level=1, health=5 WHERE guid={ally_guid}")
     ally_client, ally_driver = login_as("SPELLCAMP01", ally_account, ally_guid)
     pre = f"victim ally {ally_guid} level1/5hp"
+    # Readiness: the stance cast can outrun the ally's own
+    # object landing in its world state right after a
+    # relogin (full runs read stance go=False/reason=None
+    # there while subsets pass). Wait for the self object.
+    ready_deadline = time.monotonic() + 15.0
+    while time.monotonic() < ready_deadline and ally_driver.world.get(ally_guid) is None:
+        ally_driver.poll(0.5)
+    caster_moved = [False]
 
     def fail(phase: str, evidence: str, packets: list[int], target_guid: int | None = None):
+        if caster_moved[0]:
+            # The caster walked to the far death spot for
+            # the corpse cast: walk back to the arena or
+            # every following row starts out of dummy/
+            # ally visibility (and in bear aggro range).
+            driver.walk_to(*CASTER_POS)
         try:
             smoke.logout(ally_client, "resurrect-victim")
         except Exception:
@@ -3983,7 +4020,25 @@ def resurrect_leg(row: dict, driver: ScriptedDriver, guid: int, ally) -> tuple[d
             None,
         )
 
-    ensure_battle_stance(ally_driver, ally_guid)
+    stance_ok, stance_reason, _stance_ops = ensure_battle_stance(ally_driver, ally_guid)
+    for _retry in range(2):
+        if stance_ok:
+            break
+        ally_driver.poll(2.0)
+        stance_ok, stance_reason, _stance_ops = ensure_battle_stance(ally_driver, ally_guid)
+    pull_notes = [f"stance go={stance_ok} reason={stance_reason}"]
+
+    def pull(target: int, label: str) -> bool:
+        go, reason, _ops = cast_unit_faced(ally_driver, 1715, target, timeout=10.0)
+        if not go and reason == SPELL_FAILED_NO_POWER:
+            # Rage decayed on the walk over: Bloodrage
+            # (seeded setup spell) refills one Hamstring.
+            send_and_wait(ally_driver, cast_self_body(2687), 2687, timeout=10.0)
+            ally_driver.poll(1.6)
+            go, reason, _ops = cast_unit_faced(ally_driver, 1715, target, timeout=10.0)
+        pull_notes.append(f"{label}:go={go}/r{reason}")
+        return go
+
     # Pull a finisher bear with Hamstring: arena troggs
     # cannot finish the victim (proximity alone never
     # aggroed; one trogg ties level-1 regen; several
@@ -3996,14 +4051,29 @@ def resurrect_leg(row: dict, driver: ScriptedDriver, guid: int, ally) -> tuple[d
         bear = raw_guid(1196, counter)
         ally_driver.approach_guid(bear, 2.5, fallback=xyz)
         if ally_driver.target_health(bear) in (0, None):
+            pull_notes.append(f"bear{counter}:untracked")
             continue
-        go, _reason, _ops = cast_unit_faced(ally_driver, 1715, bear, timeout=10.0)
-        if go:
+        if pull(bear, f"bear{counter}"):
             pulled = True
             break
     if not pulled and ally_driver.self_health() != 0:
-        return fail("prepare", "no live bear to kill the victim ally", [])
-    deadline = time.monotonic() + 60.0
+        # Bear fallback: multi-pull arena troggs (the
+        # second resurrect row in a run can find every
+        # bear dead, evaded, or untracked after the
+        # first kill).
+        for _ in range(4):
+            if ally_driver.self_health() == 0:
+                break
+            trogg = live_dummy(ally_driver, 707, TROGG_COUNTERS)
+            if trogg is None:
+                pull_notes.append("trogg:none")
+                break
+            ally_driver.approach_guid(trogg, 2.5)
+            pulled = pull(trogg, "trogg") or pulled
+    pre += "; pulls " + ",".join(pull_notes)
+    if not pulled and ally_driver.self_health() != 0:
+        return fail("prepare", "no live bear or trogg to kill the victim ally", [])
+    deadline = time.monotonic() + 90.0
     while time.monotonic() < deadline and ally_driver.self_health() not in (0, None):
         ally_driver.poll(0.5)
         driver.poll(0.1)
@@ -4014,6 +4084,7 @@ def resurrect_leg(row: dict, driver: ScriptedDriver, guid: int, ally) -> tuple[d
     if not ack_teleports(ally_driver):
         return fail("apply", "no graveyard teleport after repop request", [])
     driver.walk_to(*death_pos)
+    caster_moved[0] = True
     driver.poll(1.0)
     corpse_guid = corpse_guid_for(driver, ally_guid)
     if corpse_guid is None:
@@ -4040,6 +4111,7 @@ def resurrect_leg(row: dict, driver: ScriptedDriver, guid: int, ally) -> tuple[d
         smoke.logout(ally_client, "resurrect-victim")
     except Exception:
         pass
+    driver.walk_to(*CASTER_POS)
     verdict = make_verdict(
         row,
         "PASS",
@@ -4445,16 +4517,30 @@ def ground_leg(
     # caster stands now, not where the approach left it.
     pos = driver.position
     mark = event_mark(driver)
+    pre_gameobjects = {g for g, o in driver.world.objects.items() if o.type_id == TYPEID_GAMEOBJECT}
     # One cast with the dest-target sender (mask 0x0040 + xyz at the
     # caster's feet), with NO_POWER pacing, not a self cast plus a
     # dest cast.
     go, reason, ops = False, None, []
     waited = 0
+    cooldown_waited = False
     while True:
         go, reason, cast_ops = send_and_wait(
             driver, cast_dest_body(spell_id, pos[0], pos[1], pos[2]), spell_id, timeout=15.0, target_guid=guid
         )
         ops += cast_ops
+        if not go and reason == SPELL_FAILED_NOT_READY and not cooldown_waited:
+            # Long category cooldowns shared across ranks
+            # (Lightwell: 600 s) wait out once, in chunks
+            # that keep the session polling.
+            cooldown_waited = True
+            remaining = live_cooldown_wait_s(spell_id, cap_s=900.0)
+            pre += f"; cooldown wait +{remaining:.0f}s"
+            while remaining > 0:
+                chunk = min(30.0, remaining)
+                driver.poll(chunk)
+                remaining -= chunk
+            continue
         if go or reason != SPELL_FAILED_NO_POWER or waited >= POWER_RETRIES:
             break
         waited += 1
@@ -4482,15 +4568,30 @@ def ground_leg(
         want_aura_id = int((row.get("expected") or {}).get("aura", spell_id))
     min_hp = pre_hp
     target_aura = False
+    object_seen = False
     sliced = 0.0
     while sliced < 6.0:
-        driver.poll(1.0)
-        sliced += 1.0
+        # Quarter-second slices: a fear aura that breaks on
+        # the first dummy swing (or a field update batch
+        # that lands late) can come and go inside one
+        # 1 s slice in full-run load.
+        driver.poll(0.25)
+        sliced += 0.25
         probe_hp = driver.target_health(dummy)
         if probe_hp is not None and (min_hp is None or probe_hp < min_hp):
             min_hp = probe_hp
         if want_aura_id is not None and not target_aura and aura_present(driver, dummy, want_aura_id):
             target_aura = True
+        if not object_seen:
+            # Summoned-object outcome (Lightwell): a new
+            # gameobject tracked near the caster that was
+            # not there before the cast.
+            for obj_guid, obj in driver.world.objects.items():
+                if obj.type_id != TYPEID_GAMEOBJECT or obj_guid in pre_gameobjects or obj.position is None:
+                    continue
+                if math.dist(obj.position[:3], driver.position[:3]) <= 15.0:
+                    object_seen = True
+                    break
     window = events_since(driver, mark)
     ops += [op for op, _ in window]
     post_hp = driver.target_health(dummy)
@@ -4518,7 +4619,7 @@ def ground_leg(
             "pre_hp": pre_hp,
             "post_hp": post_hp,
             "damage_logs": logs,
-            "object_seen": False,
+            "object_seen": object_seen,
             "pre": pre,
             "post": f"dummy guid={dummy} health={post_hp}",
             "packets": ops,
@@ -5005,6 +5106,13 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
         return ("cast", "form")
     if bucket == "friendly":
         return ("cast", "friendly")
+    if bucket == "self" and 25 in (row.get("target_a") or []):
+        # Self-bucketed but unit-targeted (Mind Vision: aura
+        # effects on the selected unit plus the caster): a
+        # bare self cast reads BAD_IMPLICIT_TARGETS, so ride
+        # the hostile leg on a dummy (its caster-aura latch
+        # verifies the channel side).
+        return ("cast", "hostile")
     if bucket == "self" and kind == "heal_delta_target":
         # Self-targeted heals (Warrior Bloodthirst restore rows):
         # the single-repro self leg has no damaged-caster scenario,
@@ -5666,6 +5774,18 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                         f"{verdicts[-1]['evidence'][:120]}"
                     )
                     continue
+                if action == "cast" and payload == "hostile" and bucket == "self":
+                    # Self-bucketed unit-target rows (Mind
+                    # Vision) rerouted by pre_dispatch: ride
+                    # the hostile leg on a dummy.
+                    verdicts.append(hostile_leg(row, driver, guid, used_dummies, applied_auras))
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
                 if action == "cast" and payload == "self_heal":
                     verdict, session = self_heal_leg(row, driver, guid, client, seed_all, account, account_id)
                     verdicts.append(verdict)
@@ -6290,6 +6410,16 @@ def run_self_test() -> int:
         (
             {"class": "Paladin", "spell_id": 0, "bucket": "corpse", "expected": {"kind": "resurrect_request"}},
             ("cast", "resurrect"),
+        ),
+        (
+            {
+                "class": "Priest",
+                "spell_id": 2096,
+                "bucket": "self",
+                "target_a": [25, 1, 25],
+                "expected": {"kind": "aura_on_caster", "aura": 2096},
+            },
+            ("cast", "hostile"),
         ),
         (
             {"class": "Paladin", "spell_id": 0, "bucket": "pet", "expected": {"kind": "none_marker"}},
@@ -6990,7 +7120,9 @@ def run_self_test() -> int:
         assert {"self", "friendly", "hostile", "ground", "item"} <= seen_legs, seen_legs
         assert "script-evidence-unknown" in seen_blocked, seen_blocked
         assert "effect-marker-only" in seen_blocked, seen_blocked
-        assert "no-party" in seen_blocked, seen_blocked
+        # Single raid-target blessings ride the friendly leg
+        # now; no Paladin row needs a party scenario.
+        assert "no-party" not in seen_blocked, seen_blocked
         print(
             f"SELFTEST Paladin artifact dispatch totality ok "
             f"({len(paladin_rows)} rows, legs={sorted(seen_legs)}, "
