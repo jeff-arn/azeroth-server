@@ -124,6 +124,10 @@ pub enum CastTarget {
     /// Ground destination (`TARGET_FLAG_DEST_LOCATION`;
     /// mask 0 fills it from the caster in the fork).
     Dest(Position),
+    /// Corpse object target (`TARGET_FLAG_CORPSE_ALLY` /
+    /// `CORPSE_ENEMY`): resurrect spells resolve it to
+    /// the corpse's owner player at fill time.
+    Corpse(ObjectGuid),
 }
 
 /// The cast item of an item-use cast (`m_CastItem`):

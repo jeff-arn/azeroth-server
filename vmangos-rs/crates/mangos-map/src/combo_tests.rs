@@ -50,6 +50,9 @@ const BACKSTAB_SPELL: u32 = 9207;
 /// only recovery is the category recovery (recovery 0,
 /// category 38 at 10 s, like the real Stealth rows).
 const STEALTH_SPELL: u32 = 9208;
+/// Resurrect stand-in: `RESURRECT_NEW` with flat
+/// health/mana like Rebirth (base health, misc mana).
+const RESURRECT_SPELL: u32 = 9209;
 /// Creature template entry for victims.
 const VICTIM_ENTRY: u32 = 9301;
 /// `TARGET_UNIT` implicit target (see insignia fixture).
@@ -256,6 +259,26 @@ fn insert_gate_spells(stores: &mut WorldStores) {
                     apply_aura_name: 36, // MOD_SHAPESHIFT
                     misc_value: 30,      // FORM_STEALTH
                     implicit_target_a: 1,
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Resurrect stand-in: RESURRECT_NEW, corpse-targeted
+    // like the real rows (implicit target NONE, spell
+    // Targets carries the corpse flag fork-side).
+    stores.spells.spells.insert(
+        RESURRECT_SPELL,
+        SpellEntry {
+            id: RESURRECT_SPELL,
+            effects: [
+                SpellEffectData {
+                    effect: effect::RESURRECT_NEW,
+                    base_points: 500,
+                    misc_value: 300,
                     ..Default::default()
                 },
                 SpellEffectData::default(),
@@ -873,5 +896,106 @@ fn stealth_category_only_cooldown_on_event_converts_on_fade() {
         outcome,
         CastOutcome::Started,
         "stealth must recast after the 10 s category cooldown"
+    );
+}
+
+#[test]
+fn resurrect_new_requests_and_accept_resurrects_at_caster() {
+    // Fork resurrect flow (`EffectResurrectNew`,
+    // `SpellEffects.cpp:202`; `SendResurrectRequest`,
+    // `Spell.cpp:5147`; `HandleResurrectResponseOpcode`,
+    // `MiscHandler.cpp:647`): a corpse-targeted cast
+    // sends SMSG_RESURRECT_REQUEST to the dead owner;
+    // accepting teleports the ghost to the caster and
+    // resurrects with the effect's flat health/mana,
+    // leaving bones. Found by the spell campaign:
+    // corpse targets were dropped by the cast parser
+    // and the effect had no body.
+    use mangos_entities::corpse::{Corpse, CorpseAppearance, CorpseType};
+    use mangos_entities::unit::DeathState;
+    use mangos_protocol::opcode_table::opcode_id as op;
+    let Fixture {
+        mut map, caster, ..
+    } = setup(14);
+    let infos = test_infos();
+    let dead = materialize(8, &infos).unit.guid();
+    let respawns = mangos_world_data::spawn_support::RespawnTimes::default();
+    map.add_player(materialize(8, &infos), &respawns, 1_800_000_000, 0);
+    {
+        let player = map.player_mut(dead).expect("dead player");
+        player.unit.death_state = DeathState::Dead;
+        player.unit.set_health(0);
+    }
+    let pos = map.unit_position(dead).expect("dead positioned");
+    map.seed_corpse_counter(1000);
+    let corpse = Corpse::create(
+        1001,
+        0,
+        0,
+        dead,
+        CorpseType::ResurrectablePvE,
+        pos,
+        &CorpseAppearance::default(),
+        1_800_000_000,
+    );
+    let corpse_guid = corpse.guid();
+    map.add_corpse(corpse);
+    let _ = map.drain_events();
+    let outcome = map.cast_spell(
+        caster,
+        RESURRECT_SPELL,
+        CastTarget::Corpse(corpse_guid),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    let events = map.drain_events();
+    let requests: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            crate::map::MapEvent::Packet { to, packet }
+                if *to == dead && packet.opcode() == op::SMSG_RESURRECT_REQUEST =>
+            {
+                Some(packet.body().to_vec())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(requests.len(), 1, "one resurrect request to the dead owner");
+    assert_eq!(
+        u64::from_le_bytes(requests[0][0..8].try_into().unwrap()),
+        caster.raw(),
+        "request carries the resurrector guid"
+    );
+    // Decline clears the request without resurrecting.
+    map.resurrect_response(dead, caster, false);
+    assert_eq!(
+        map.player(dead).expect("dead player").unit.death_state,
+        DeathState::Dead
+    );
+    // Re-cast and accept: alive at the caster with the
+    // flat health/mana, corpse converted to bones.
+    let outcome = map.cast_spell(
+        caster,
+        RESURRECT_SPELL,
+        CastTarget::Corpse(corpse_guid),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    let _ = map.drain_events();
+    map.resurrect_response(dead, caster, true);
+    let player = map.player(dead).expect("resurrected player");
+    assert_eq!(player.unit.death_state, DeathState::Alive);
+    let hp = map.unit_value_u32(dead, offsets::UNIT_FIELD_HEALTH);
+    let max_hp = map.unit_value_u32(dead, offsets::UNIT_FIELD_MAXHEALTH);
+    assert_eq!(hp, max_hp.min(500), "resurrect health capped at max");
+    let max_mana = map.unit_value_u32(dead, offsets::UNIT_FIELD_MAXPOWER1);
+    assert_eq!(
+        map.unit_value_u32(dead, offsets::UNIT_FIELD_POWER1),
+        max_mana.min(300)
+    );
+    assert_eq!(
+        map.corpses.get(&corpse_guid).map(|c| c.corpse_type),
+        Some(CorpseType::Bones),
+        "corpse converts to bones on resurrect"
     );
 }

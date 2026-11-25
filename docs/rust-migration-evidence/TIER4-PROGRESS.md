@@ -2724,3 +2724,60 @@ mangosd preserved as `mangosd.4063-bak`;
 realmd 1582565b unchanged, not restarted);
 8085 listening at 01:51:08 UTC with no severe
 save/session errors at first check.
+
+RESURRECT seam (2026-11-25, JEF-17): all three
+layers landed fork-exact. (1) Wire: the cast
+parser no longer discards corpse GUIDs —
+`CastTarget::Corpse` rides the mask
+0x0200/0x8000 read, the GO/start target writes,
+and effect fill resolves the corpse to its
+owner player. (2) Cast check: a corpse target
+must resolve to a corpse on this map within
+spell range (`BAD_TARGETS`/`OUT_OF_RANGE`,
+fork `Spell.cpp:5907-5920` shape; LOS stays
+unwired as elsewhere in the module); the pilot
+bogus-guid classification now reads that fork
+rejection (or NOT_SHAPESHIFT from the persisted
+Cat Form, checked first). (3) Effect:
+`EffectResurrect` (percent) and
+`EffectResurrectNew` (flat health + misc mana)
+record a one-shot offer and send
+`SMSG_RESURRECT_REQUEST` (resurrector guid,
+sender name, sickness, reclaim-delay flags);
+`CMSG_RESURRECT_RESPONSE` accepts by
+teleporting the ghost to the resurrector's
+cast-time location and resurrecting with the
+offer's health/mana (rage 0, energy full,
+bones left), declines by clearing the offer —
+the `ResurectUsingRequestData` same-map arm
+(the fork cross-map instance arm is not
+modeled; offers originate on the corpse's
+map). Dead pets revive at the caster with the
+flat health. Regression
+`resurrect_new_requests_and_accept_
+resurrects_at_caster` (request packet on the
+victim, decline clears, accept resurrects,
+bones convert). Harness: corpse rows ride a
+new resurrect leg — a level-1/5 hp ally victim
+pulls a finisher bear with Hamstring and dies
+(arena troggs cannot out-damage level-1 regen:
+survived at 60/26/2 hp across three smokes),
+releases spirit, and accepts over the wire.
+All shipped resurrect rows verdict PASS:
+Rebirth 20484/20748 and Ancestral Spirit
+2008/20777 (Priest Resurrection 2006/20770
+verdict in the Priest run next; Redemption is
+quest-learned, outside the G1 trainable set,
+so it has no matrix row — same effect path).
+Also fixed en route, found by Priest matrix
+generation: branching spell chains (Prayer of
+Spirit shares Divine Spirit's chain at rank 2)
+broke the generator's linear rank-gap
+assertion — ranks now come from the DB field
+with rank-(n-1) parent validation, and rank
+signatures include targets so group variants
+cannot merge invisibly (no shipped class cast
+counts drifted). Gates: pilot PASS; both
+Python self-tests and ruff clean; full
+`./ci.sh` exit 0 with live suites, no skip
+lines.

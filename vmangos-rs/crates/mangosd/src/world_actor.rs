@@ -17604,8 +17604,9 @@ impl World {
         if mask & 0x0800 != 0 {
             read_guid(body, &mut pos)?; // gameobject
         }
+        let mut corpse = None;
         if mask & (0x0200 | 0x8000) != 0 {
-            read_guid(body, &mut pos)?; // corpse
+            corpse = Some(read_guid(body, &mut pos)?);
         }
         if mask & (0x0010 | 0x1000) != 0 {
             read_guid(body, &mut pos)?; // item / trade item
@@ -17632,6 +17633,8 @@ impl World {
             Some(CastTarget::Dest(pos))
         } else if let Some(guid) = unit {
             Some(CastTarget::Unit(guid))
+        } else if let Some(guid) = corpse {
+            Some(CastTarget::Corpse(guid))
         } else if mask == 0 {
             Some(CastTarget::SelfCast)
         } else {
@@ -18638,6 +18641,20 @@ impl World {
                 let corpse_guid = ObjectGuid::from_raw(raw);
                 if let Some(map) = self.maps.get_mut(&map_key) {
                     map.reclaim_corpse(guid, corpse_guid);
+                }
+            }
+            opcode_id::CMSG_RESURRECT_RESPONSE => {
+                // Full guid + status byte (fork
+                // `HandleResurrectResponseOpcode`); an
+                // empty resurrector guid is the fork's
+                // anticheat case and is dropped here.
+                let mut reader = packet.reader();
+                let (Ok(raw), Ok(status)) = (reader.read_u64_le(), reader.read_u8()) else {
+                    self.bad_packet(id, packet.opcode());
+                    return;
+                };
+                if let Some(map) = self.maps.get_mut(&map_key) {
+                    map.resurrect_response(guid, ObjectGuid::from_raw(raw), status != 0);
                 }
             }
             opcode_id::CMSG_SPIRIT_HEALER_ACTIVATE => {
@@ -20010,6 +20027,7 @@ impl World {
                             opcode,
                             opcode_id::CMSG_REPOP_REQUEST
                                 | opcode_id::CMSG_RECLAIM_CORPSE
+                                | opcode_id::CMSG_RESURRECT_RESPONSE
                                 | opcode_id::CMSG_SPIRIT_HEALER_ACTIVATE
                         ) =>
                     {

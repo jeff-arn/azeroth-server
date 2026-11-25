@@ -136,7 +136,7 @@ impl Map {
             if explicit {
                 let unit_target = match target {
                     CastTarget::Unit(g) => Some(g),
-                    CastTarget::SelfCast | CastTarget::Dest(_) => None,
+                    CastTarget::SelfCast | CastTarget::Dest(_) | CastTarget::Corpse(_) => None,
                 };
                 if unit_target != Some(self.combo_target(caster)) {
                     let class =
@@ -168,7 +168,7 @@ impl Map {
                         return fail(self, cast_result::FAILED_BAD_TARGETS);
                     }
                 }
-                CastTarget::SelfCast | CastTarget::Dest(_) => {
+                CastTarget::SelfCast | CastTarget::Dest(_) | CastTarget::Corpse(_) => {
                     return fail(self, cast_result::FAILED_BAD_IMPLICIT_TARGETS);
                 }
             }
@@ -455,6 +455,40 @@ impl Map {
         {
             return outcome;
         }
+        // Resurrect corpse arm (`Spell::CheckCast`
+        // resurrect case, `Spell.cpp:5907-5920`): a
+        // corpse target must resolve to a corpse on
+        // this map (range to the corpse like the fork
+        // CheckRange; LOS is unwired in this module).
+        // Unit/self shapes keep the generic arms below
+        // (the effect itself no-ops on living targets).
+        if spell
+            .effects
+            .iter()
+            .any(|e| matches!(e.effect, effect::RESURRECT | effect::RESURRECT_NEW))
+            && let CastTarget::Corpse(corpse_guid) = target
+        {
+            let Some(corpse) = self.corpses.get(&corpse_guid) else {
+                return CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS);
+            };
+            let corpse_pos = corpse.world.position();
+            let range = self.apply_spell_mod(
+                caster,
+                spell,
+                spellmod::RANGE,
+                spell.range_max(&self.stores.spells.tables),
+                false,
+                Some(applied_mods),
+            ) + self.bounding_radius_of(caster);
+            let Some(cpos) = self.unit_position(caster) else {
+                return CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS);
+            };
+            let dist = ((cpos.x - corpse_pos.x).powi(2) + (cpos.y - corpse_pos.y).powi(2)).sqrt();
+            if range > 0.0 && dist > range {
+                return CastOutcome::Failed(cast_result::FAILED_OUT_OF_RANGE);
+            }
+            return CastOutcome::Started;
+        }
         let mode = spell
             .effects
             .iter()
@@ -608,12 +642,16 @@ impl Map {
                 payload.write_f32_le(pos.y);
                 payload.write_f32_le(pos.z);
             }
+            CastTarget::Corpse(guid) => {
+                payload.write_u16_le(0x8000); // TARGET_FLAG_CORPSE_ALLY
+                payload.write_bytes(&Self::packed_guid_bytes(guid));
+            }
         }
     }
 
     fn send_spell_start(&mut self, caster: ObjectGuid, cast: &ActiveCast, spell: &SpellEntry) {
         let target_guid = match cast.target {
-            CastTarget::Unit(g) => g,
+            CastTarget::Unit(g) | CastTarget::Corpse(g) => g,
             CastTarget::SelfCast | CastTarget::Dest(_) => caster,
         };
         let mut payload = PacketWriter::new();
@@ -1585,6 +1623,12 @@ impl Map {
                 .unit_position(g)
                 .or_else(|| self.world_object_position(caster))
                 .unwrap_or_default(),
+            CastTarget::Corpse(g) => self
+                .corpses
+                .get(&g)
+                .map(|corpse| corpse.world.position())
+                .or_else(|| self.world_object_position(caster))
+                .unwrap_or_default(),
             CastTarget::SelfCast => self.world_object_position(caster).unwrap_or_default(),
         }
     }
@@ -1624,7 +1668,7 @@ impl Map {
         misses: &[(ObjectGuid, u8)],
     ) {
         let target_guid = match cast.target {
-            CastTarget::Unit(g) => g,
+            CastTarget::Unit(g) | CastTarget::Corpse(g) => g,
             CastTarget::SelfCast | CastTarget::Dest(_) => caster,
         };
         let mut payload = PacketWriter::new();

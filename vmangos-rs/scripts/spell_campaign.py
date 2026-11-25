@@ -84,7 +84,16 @@ SPELL_FAILED_NOT_SHAPESHIFT = 61
 SPELL_FAILED_OUT_OF_RANGE = 89
 SPELL_FAILED_NOT_READY = 60
 SPELL_FAILED_NOT_BEHIND = 51
+SPELL_FAILED_BAD_TARGETS = 10
 SPELL_FAILED_TARGETS_DEAD = 101
+#: Death/resurrect wire shapes for the resurrect leg
+#: (fork `Opcodes.cpp` 0x15B/0x15C, `ObjectDefines.h`).
+CMSG_REPOP_REQUEST = 346
+SMSG_RESURRECT_REQUEST = 347
+CMSG_RESURRECT_RESPONSE = 348
+MSG_MOVE_TELEPORT_ACK = 199
+TYPEID_CORPSE = 7
+CORPSE_FIELD_OWNER = 6
 #: NO_POWER retry budget shared by every cast leg (self, unit,
 #: hostile, ground, blessing, heal). A fixture's pool refills from
 #: empty in ~100 s at bench regen, so rows behind expensive
@@ -2052,11 +2061,11 @@ class Pilot:
                         ),
                     )
 
-            # Corpse-bucket classification: fork-shaped corpse packet.
-            # The parser skips-but-discards corpse GUIDs, so no SPELL_GO
-            # is expected. A live ally guid stands in for the corpse
-            # guid because the discard happens before any state check;
-            # recorded either way, never silently passed.
+            # Corpse-bucket classification: fork-shaped corpse packet
+            # at a live ally guid (not a corpse object). The parser
+            # now returns corpse targets, so the cast must read the
+            # fork's BAD_TARGETS for a guid with no corpse behind
+            # it; the real resurrect scenario rides run-class.
             row = self.matrix_row("Druid", 20484)
             go, reason, ops = send_and_wait(driver, cast_corpse_body(20484, ally_guid), 20484, timeout=6.0)
             driver.poll(0.5)
@@ -2066,7 +2075,24 @@ class Pilot:
                 driver.poll(0.5)
             except Exception:
                 alive = False
-            if not go and reason is None:
+            if not go and reason in (SPELL_FAILED_BAD_TARGETS, SPELL_FAILED_NOT_SHAPESHIFT):
+                self.record(
+                    "Druid",
+                    make_verdict(
+                        row,
+                        "FAIL",
+                        phase="prepare",
+                        reason=f"CAST_RESULT({reason})",
+                        expected_failure=True,
+                        evidence="corpse-mask cast at a non-corpse guid is "
+                        "rejected fork-exact (BAD_TARGETS, or NOT_SHAPESHIFT "
+                        "from the persisted Cat Form, checked first); socket "
+                        f"alive={alive}",
+                        packets=ops,
+                        target_guid=ally_guid,
+                    ),
+                )
+            elif not go and reason is None:
                 self.record(
                     "Druid",
                     make_verdict(
@@ -3469,6 +3495,48 @@ def approach_behind(driver: ScriptedDriver, dummy: int, standoff: float = 2.0) -
     return f"; behind approach to ({behind_x:.1f},{behind_y:.1f}) facing dummy o={pos[3]:.2f}"
 
 
+def ack_teleports(driver: ScriptedDriver, timeout: float = 12.0) -> bool:
+    """Consume server near-teleports like the stock client:
+    adopt each `MSG_MOVE_TELEPORT_ACK` destination and reply
+    with the client ack (death probe shape)."""
+    acked = False
+    deadline = time.monotonic() + timeout
+    seen = 0
+    while time.monotonic() < deadline:
+        driver.poll(0.25)
+        while seen < len(driver.events):
+            opcode, body = driver.events[seen]
+            seen += 1
+            if opcode != MSG_MOVE_TELEPORT_ACK:
+                continue
+            raw, off = smoke.parse_packed_guid(body, 0)
+            counter = struct.unpack_from("<I", body, off)[0]
+            _flags, _time, x, y, z, o = struct.unpack_from("<IIffff", body, off + 4)
+            driver.position = (x, y, z, o)
+            ack = struct.pack("<QII", raw, counter, int(time.time() * 1000) & 0xFFFF_FFFF)
+            driver.client.send_packet(MSG_MOVE_TELEPORT_ACK, ack)
+            acked = True
+        if acked:
+            driver.poll(0.5)
+            return True
+    return acked
+
+
+def corpse_guid_for(driver: ScriptedDriver, owner_guid: int) -> int | None:
+    """Tracked corpse guid owned by `owner_guid`, else the
+    SQL corpse row (death probe resolution order)."""
+    for obj in driver.world.objects.values():
+        if obj.type_id != TYPEID_CORPSE:
+            continue
+        owner = obj.values.get(CORPSE_FIELD_OWNER, 0) | (obj.values.get(CORPSE_FIELD_OWNER + 1, 0) << 32)
+        if owner == owner_guid:
+            return obj.guid
+    low = smoke.sql_scalar("characters", f"SELECT guid FROM corpse WHERE player_guid={owner_guid} LIMIT 1")
+    if low and low != "NULL":
+        return (0xF101 << 48) | int(low)
+    return None
+
+
 def hostile_leg(
     row: dict,
     driver: ScriptedDriver,
@@ -3875,6 +3943,113 @@ def blessing_leg(
         packets=packets,
         target_guid=ally_guid,
     )
+
+
+def resurrect_leg(row: dict, driver: ScriptedDriver, guid: int, ally) -> tuple[dict, object]:
+    """Corpse-target resurrect scenario (Rebirth and kin).
+
+    The ally victim is reseeded at level 1 with 5 hp so a
+    Coldridge trogg kills it promptly (the death probe's
+    shape), releases spirit, and the caster casts on the
+    corpse object. PASS observability: the bound SPELL_GO,
+    SMSG_RESURRECT_REQUEST on the ally's own socket, and
+    the ally alive with health after it accepts
+    (CMSG_RESURRECT_RESPONSE). The ally session is always
+    logged out at the end; the caller reseeds it for later
+    legs, so the returned ally handle is None.
+    """
+    spell_id = row["spell_id"]
+    ally_guid = guid_of("Campwarrior")
+    ally_account = int(smoke.sql_scalar("realmd", "SELECT id FROM account WHERE username='SPELLCAMP01'"))
+    if ally is not None:
+        try:
+            smoke.logout(ally[0], "resurrect-ally-reset")
+        except Exception:
+            pass
+    seed_character(ally_guid, seed_spells_for("Warrior"), pos=ALLY_POS)
+    smoke.sql_scalar("characters", f"UPDATE characters SET level=1, health=5 WHERE guid={ally_guid}")
+    ally_client, ally_driver = login_as("SPELLCAMP01", ally_account, ally_guid)
+    pre = f"victim ally {ally_guid} level1/5hp"
+
+    def fail(phase: str, evidence: str, packets: list[int], target_guid: int | None = None):
+        try:
+            smoke.logout(ally_client, "resurrect-victim")
+        except Exception:
+            pass
+        return (
+            make_verdict(
+                row, "FAIL", phase=phase, evidence=evidence, pre=pre, packets=packets, target_guid=target_guid
+            ),
+            None,
+        )
+
+    ensure_battle_stance(ally_driver, ally_guid)
+    # Pull a finisher bear with Hamstring: arena troggs
+    # cannot finish the victim (proximity alone never
+    # aggroed; one trogg ties level-1 regen; several
+    # still left it at 2 hp after 90 s). A level-9 bear
+    # kills a 5 hp level-1 victim in a few swings.
+    pulled = False
+    for counter, xyz in FINISHER_DUMMIES:
+        if ally_driver.self_health() == 0:
+            break
+        bear = raw_guid(1196, counter)
+        ally_driver.approach_guid(bear, 2.5, fallback=xyz)
+        if ally_driver.target_health(bear) in (0, None):
+            continue
+        go, _reason, _ops = cast_unit_faced(ally_driver, 1715, bear, timeout=10.0)
+        if go:
+            pulled = True
+            break
+    if not pulled and ally_driver.self_health() != 0:
+        return fail("prepare", "no live bear to kill the victim ally", [])
+    deadline = time.monotonic() + 60.0
+    while time.monotonic() < deadline and ally_driver.self_health() not in (0, None):
+        ally_driver.poll(0.5)
+        driver.poll(0.1)
+    if ally_driver.self_health() != 0:
+        return fail("apply", f"victim ally survived the kill pull at {ally_driver.self_health()} hp", [])
+    death_pos = ally_driver.position[:3]
+    ally_driver.client.send_packet(CMSG_REPOP_REQUEST, b"")
+    if not ack_teleports(ally_driver):
+        return fail("apply", "no graveyard teleport after repop request", [])
+    driver.walk_to(*death_pos)
+    driver.poll(1.0)
+    corpse_guid = corpse_guid_for(driver, ally_guid)
+    if corpse_guid is None:
+        return fail("prepare", "victim corpse not resolvable on the caster socket or SQL row", [])
+    mark = event_mark(ally_driver)
+    go, reason, ops = send_and_wait(driver, cast_corpse_body(spell_id, corpse_guid), spell_id, timeout=25.0)
+    ally_driver.poll(2.0)
+    requests = [body for op, body in events_since(ally_driver, mark) if op == SMSG_RESURRECT_REQUEST]
+    if not go:
+        return fail("prepare", f"no bound SPELL_GO for spell {spell_id} (reason={reason})", ops, corpse_guid)
+    if not requests:
+        return fail("apply", "bound SPELL_GO but no SMSG_RESURRECT_REQUEST on the victim socket", ops, corpse_guid)
+    ally_driver.client.send_packet(CMSG_RESURRECT_RESPONSE, struct.pack("<QB", guid, 1))
+    ack_teleports(ally_driver)
+    deadline = time.monotonic() + 20.0
+    hp = ally_driver.self_health()
+    while time.monotonic() < deadline and not (hp and hp > 0):
+        ally_driver.poll(0.5)
+        driver.poll(0.1)
+        hp = ally_driver.self_health()
+    if not hp:
+        return fail("apply", "victim accepted but never came alive", ops, corpse_guid)
+    try:
+        smoke.logout(ally_client, "resurrect-victim")
+    except Exception:
+        pass
+    verdict = make_verdict(
+        row,
+        "PASS",
+        evidence=f"bound SPELL_GO + SMSG_RESURRECT_REQUEST on victim socket; accepted, alive at {hp} hp",
+        pre=pre,
+        post=f"victim alive hp={hp}",
+        packets=ops,
+        target_guid=corpse_guid,
+    )
+    return verdict, None
 
 
 def heal_leg(row: dict, driver: ScriptedDriver, guid: int, ally_driver: ScriptedDriver, ally_guid: int) -> dict:
@@ -4803,7 +4978,10 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
     if bucket == "party_duel":
         return ("blocked", "no-party")
     if bucket == "corpse":
-        return ("blocked", "wire-target-unsupported")
+        # Corpse-target resurrect rows ride the dedicated
+        # dead-ally scenario (kill, release, cast on the
+        # corpse object, accept over the wire).
+        return ("cast", "resurrect")
     if bucket == "pet":
         effects = set(row.get("effect_ids", []) or [])
         if effects & (PET_SUMMON_EFFECT_IDS | PET_LEARN_EFFECT_IDS):
@@ -5321,6 +5499,16 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     continue
                 if bucket == "form":
                     verdicts.append(form_leg(row, driver, guid))
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                if action == "cast" and payload == "resurrect":
+                    verdict, ally = resurrect_leg(row, driver, guid, ally)
+                    verdicts.append(verdict)
                     print(
                         f"ROW {class_name} {spell_id} {bucket}: "
                         f"{verdicts[-1]['verdict']} "
@@ -6101,7 +6289,7 @@ def run_self_test() -> int:
         ),
         (
             {"class": "Paladin", "spell_id": 0, "bucket": "corpse", "expected": {"kind": "resurrect_request"}},
-            ("blocked", "wire-target-unsupported"),
+            ("cast", "resurrect"),
         ),
         (
             {"class": "Paladin", "spell_id": 0, "bucket": "pet", "expected": {"kind": "none_marker"}},
@@ -6122,9 +6310,9 @@ def run_self_test() -> int:
     print("SELFTEST per-class dispatch table ok")
     # Druid fan-out dispatch: form rows ride the form leg; stance-gated
     # non-forms ride the form_gated leg (enter form, cast, exit);
-    # actual totem rows stay engine-totem; corpse-with-reagent
-    # (Rebirth) stays wire-target-unsupported and never reaches the
-    # item leg; taught caster-form rows ride the proven
+    # actual totem rows stay engine-totem; corpse rows (Rebirth)
+    # ride the resurrect leg and never reach the item leg; taught
+    # caster-form rows ride the proven
     # friendly/hostile/ground/item legs; form passives ride the
     # learned_spell check.
     assert required_form_spell({"stances": 144, "totem": [0, 0]}) == 9634
@@ -6171,7 +6359,7 @@ def run_self_test() -> int:
         ),
         (
             {"class": "Druid", "spell_id": 20748, "bucket": "corpse", "expected": {"kind": "resurrect_request"}},
-            ("blocked", "wire-target-unsupported"),
+            ("cast", "resurrect"),
         ),
         (
             {"class": "Druid", "spell_id": 25297, "bucket": "friendly", "expected": {"kind": "heal_delta_target"}},
@@ -6830,18 +7018,23 @@ def run_self_test() -> int:
         for real_row in druid_rows:
             act, pay = pre_dispatch(real_row)
             if act == "cast":
-                assert pay in ("self", "friendly", "hostile", "ground", "item", "form", "form_gated"), (real_row, pay)
+                assert pay in ("self", "friendly", "hostile", "ground", "item", "form", "form_gated", "resurrect"), (
+                    real_row,
+                    pay,
+                )
                 seen_legs.add(pay)
             elif act == "blocked":
                 assert pay in BLOCKED_REASONS, (real_row, pay)
                 seen_blocked.add(pay)
             else:
                 assert act == "passive" and pay is None, real_row
-        assert {"self", "friendly", "hostile", "ground", "item", "form", "form_gated"} <= seen_legs, seen_legs
+        assert {"self", "friendly", "hostile", "ground", "item", "form", "form_gated", "resurrect"} <= seen_legs, (
+            seen_legs
+        )
         # Druid has no totems: stance-gated rows ride form_gated, so
         # engine-totem must not appear for this class at all.
         assert "engine-totem" not in seen_blocked, seen_blocked
-        assert "wire-target-unsupported" in seen_blocked, seen_blocked
+        assert "wire-target-unsupported" not in seen_blocked, seen_blocked
         assert "effect-marker-only" in seen_blocked, seen_blocked
         assert not [r for r in druid_rows if (r.get("expected") or {}).get("kind") == "expect_cast_failure"], (
             "full Druid matrix must not invent expect_cast_failure rows"
@@ -7021,8 +7214,8 @@ def run_self_test() -> int:
     print("SELFTEST Hunter dispatch table ok")
     # Shaman dispatch: ground-bucket unit heals ride the ally heal
     # leg (Chain Heal shape); actual totems stay engine-totem;
-    # Ghost Wolf rides the form leg; Ancestral Spirit stays
-    # wire-target-unsupported; Reincarnation rides the item leg.
+    # Ghost Wolf rides the form leg; Ancestral Spirit rides the
+    # resurrect leg; Reincarnation rides the item leg.
     chain_row = {
         "class": "Shaman",
         "spell_id": 1064,
@@ -7085,7 +7278,7 @@ def run_self_test() -> int:
         "bucket": "corpse",
         "expected": {"kind": "resurrect_request"},
     }
-    assert pre_dispatch(ancestral_row) == ("blocked", "wire-target-unsupported")
+    assert pre_dispatch(ancestral_row) == ("cast", "resurrect")
     reincarnation_row = {
         "class": "Shaman",
         "spell_id": 21169,
@@ -7241,20 +7434,20 @@ def run_self_test() -> int:
         for real_row in shaman_rows:
             act, pay = pre_dispatch(real_row)
             if act == "cast":
-                assert pay in ("self", "friendly", "hostile", "item", "form"), (real_row, pay)
+                assert pay in ("self", "friendly", "hostile", "item", "form", "resurrect"), (real_row, pay)
                 seen_legs.add(pay)
             elif act == "blocked":
                 assert pay in BLOCKED_REASONS, (real_row, pay)
                 seen_blocked.add(pay)
             else:
                 assert act == "passive" and pay is None, real_row
-        assert {"self", "friendly", "hostile", "item", "form"} <= seen_legs, seen_legs
+        assert {"self", "friendly", "hostile", "item", "form", "resurrect"} <= seen_legs, seen_legs
         assert "ground" not in seen_legs, seen_legs
         assert "form_gated" not in seen_legs, seen_legs
         focus_blocked = sorted(r["spell_id"] for r in shaman_rows if pre_dispatch(r) == ("blocked", "no-pet"))
         assert focus_blocked == [24844, 25012], focus_blocked
         assert "engine-totem" in seen_blocked, seen_blocked
-        assert "wire-target-unsupported" in seen_blocked, seen_blocked
+        assert "wire-target-unsupported" not in seen_blocked, seen_blocked
         assert "effect-marker-only" in seen_blocked, seen_blocked
         for real_row in shaman_rows:
             if real_row.get("bucket") == "ground_area" and not (real_row.get("campaign", "") or "").startswith(

@@ -143,6 +143,11 @@ impl Map {
             tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT | tgt::UNIT_FRIEND_CHAIN_HEAL => {
                 match target {
                     CastTarget::Unit(g) => vec![g],
+                    CastTarget::Corpse(g) => self
+                        .corpses
+                        .get(&g)
+                        .map(|corpse| vec![corpse.owner])
+                        .unwrap_or_default(),
                     CastTarget::SelfCast | CastTarget::Dest(_) => vec![caster],
                 }
             }
@@ -239,6 +244,9 @@ impl Map {
                 let eff = &spell.effects[eff_index];
                 let unit_target = match target {
                     CastTarget::Unit(g) => g,
+                    CastTarget::Corpse(g) => {
+                        self.corpses.get(&g).map_or(caster, |corpse| corpse.owner)
+                    }
                     CastTarget::SelfCast | CastTarget::Dest(_) => caster,
                 };
                 match eff.effect {
@@ -1014,6 +1022,16 @@ impl Map {
                     if count > 0 && caster.is_player() {
                         self.add_combo_points(caster, victim, count);
                     }
+                }
+                // `EffectResurrect` / `EffectResurrectNew`
+                // (fork SpellEffects.cpp:5123 / :202): dead
+                // players get a resurrect offer (percent
+                // health/mana for RESURRECT, flat health +
+                // misc mana for RESURRECT_NEW); dead pets
+                // revive at the caster. Living targets and
+                // already-offered players do nothing.
+                effect::RESURRECT | effect::RESURRECT_NEW => {
+                    self.effect_resurrect(caster, spell, i, victim, caster_level, bp[i]);
                 }
                 _ => {}
             }

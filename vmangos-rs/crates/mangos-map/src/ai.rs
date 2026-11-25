@@ -2040,7 +2040,7 @@ impl Map {
                         .cloned()
                 {
                     let script_target = match target {
-                        CastTarget::Unit(g) => Some(g),
+                        CastTarget::Unit(g) | CastTarget::Corpse(g) => Some(g),
                         CastTarget::SelfCast | CastTarget::Dest(_) => Some(guid),
                     };
                     self.schedule_steps(&steps, Some(guid), script_target);

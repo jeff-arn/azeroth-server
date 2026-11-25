@@ -62,6 +62,18 @@ const PLAYER_FLAGS_HIDE_CLOAK: u32 = 0x0000_0800;
 /// templates carry 33 = gossip | spirit healer).
 const NPC_FLAG_SPIRIT_HEALER: u32 = 0x0000_0020;
 
+/// One pending spell resurrect offer
+/// (`Player::m_resurrectData`, map-local half: the
+/// fork's cross-map instance-entrance arm is not
+/// modeled — offers originate on this map).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ResurrectRequest {
+    pub resurrector: ObjectGuid,
+    pub location: Position,
+    pub health: u32,
+    pub mana: u32,
+}
+
 impl Map {
     /// Seeds `GenerateCorpseLowGuid` past the
     /// persisted table max (actor calls at map
@@ -601,6 +613,7 @@ impl Map {
         restore_percent: f32,
         apply_sickness: bool,
     ) {
+        self.resurrect_requests.remove(&guid);
         self.remove_ghost_form(guid);
         let level = {
             let Some(player) = self.player_mut(guid) else {
@@ -785,6 +798,170 @@ impl Map {
         self.durability_loss_all(guid, 0.25, true);
         let packet = WorldPacket::new(op::SMSG_DURABILITY_DAMAGE_DEATH);
         self.events.push(MapEvent::Packet { to: guid, packet });
+    }
+
+    /// `SetResurrectRequestData` + `SendResurrectRequest`
+    /// (`Spell.cpp:5147`): record the offer (one active
+    /// request per dead player) and send
+    /// `SMSG_RESURRECT_REQUEST` — resurrector guid,
+    /// NUL-terminated sender name with its byte count,
+    /// sickness flag, reclaim-delay flag. Player
+    /// resurrectors send the empty name.
+    #[allow(clippy::too_many_arguments)] // fork request-data field set
+    pub(crate) fn offer_resurrect(
+        &mut self,
+        caster: ObjectGuid,
+        target: ObjectGuid,
+        health: u32,
+        mana: u32,
+        sent_name: &str,
+        sickness: bool,
+        use_delay: bool,
+    ) {
+        if self.resurrect_requests.contains_key(&target) {
+            return;
+        }
+        let Some(location) = self.unit_position(caster) else {
+            return;
+        };
+        self.resurrect_requests.insert(
+            target,
+            ResurrectRequest {
+                resurrector: caster,
+                location,
+                health,
+                mana,
+            },
+        );
+        let mut payload = PacketWriter::new();
+        payload.write_u64_le(caster.raw());
+        #[allow(clippy::cast_possible_truncation)]
+        payload.write_u32_le(sent_name.len() as u32 + 1);
+        payload.write_bytes(sent_name.as_bytes());
+        payload.write_u8(0);
+        payload.write_u8(u8::from(sickness));
+        payload.write_u8(u8::from(use_delay));
+        let packet = WorldPacket::with_body(op::SMSG_RESURRECT_REQUEST, payload.into_vec());
+        self.events.push(MapEvent::Packet { to: target, packet });
+    }
+
+    /// `HandleResurrectResponseOpcode` +
+    /// `ResurectUsingRequestData` (same-map arm):
+    /// decline clears the offer; accept teleports the
+    /// ghost to the resurrector's cast-time location,
+    /// resurrects with the offer's flat health/mana
+    /// (rage 0, energy full), and leaves bones.
+    pub fn resurrect_response(&mut self, guid: ObjectGuid, resurrector: ObjectGuid, accept: bool) {
+        if resurrector.is_empty() {
+            return;
+        }
+        let is_dead = self
+            .players
+            .get(&guid)
+            .is_some_and(|e| !e.player.unit.is_alive());
+        if !is_dead {
+            return;
+        }
+        if !accept {
+            self.resurrect_requests.remove(&guid);
+            return;
+        }
+        let Some(request) = self.resurrect_requests.get(&guid).copied() else {
+            return;
+        };
+        if request.resurrector != resurrector {
+            return;
+        }
+        if resurrector.is_player() {
+            self.teleport_player_in_map(guid, request.location);
+        }
+        self.resurrect_player(guid, 0.0, false);
+        if let Some(player) = self.player_mut(guid) {
+            let max_hp = player.unit.max_health();
+            player.unit.set_health(request.health.min(max_hp));
+            let max_mana = player.unit.max_power(0);
+            player.unit.set_power(0, request.mana.min(max_mana));
+            player.unit.set_power(1, 0);
+            let max_energy = player.unit.max_power(3);
+            player.unit.set_power(3, max_energy);
+        }
+        self.spawn_corpse_bones_for(guid);
+    }
+
+    /// `EffectResurrect` / `EffectResurrectNew`
+    /// (`SpellEffects.cpp:5123` / `:202`): dead players
+    /// get the resurrect offer (percent health/mana for
+    /// `RESURRECT`, flat health + misc mana for
+    /// `RESURRECT_NEW`); dead pets revive at the caster
+    /// with the flat health. Living targets do nothing.
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
+    pub(crate) fn effect_resurrect(
+        &mut self,
+        caster: ObjectGuid,
+        spell: &mangos_spells::SpellEntry,
+        eff_index: usize,
+        victim: ObjectGuid,
+        caster_level: u32,
+        bp: Option<i32>,
+    ) {
+        if self.unit_is_alive(victim) {
+            return;
+        }
+        let eff = &spell.effects[eff_index];
+        let value = self.effect_value_bp(spell, eff_index, caster_level, bp);
+        if victim.is_player() {
+            if !self.players.contains_key(&victim) {
+                return;
+            }
+            let (health, mana) = if eff.effect == mangos_spells::defines::effect::RESURRECT {
+                let (max_hp, max_mana) = self
+                    .unit_base(victim)
+                    .map_or((0, 0), |u| (u.max_health(), u.max_power(0)));
+                (
+                    (max_hp as f32 * value / 100.0) as u32,
+                    (max_mana as f32 * value / 100.0) as u32,
+                )
+            } else {
+                (value.max(0.0) as u32, eff.misc_value.max(0) as u32)
+            };
+            let (sent_name, sickness) = if caster.is_player() {
+                (String::new(), false)
+            } else {
+                let name = self
+                    .creatures
+                    .get(&caster)
+                    .map(|c| c.info.name.clone())
+                    .unwrap_or_default();
+                let flags = self.unit_value_u32(caster, offsets::UNIT_NPC_FLAGS);
+                (name, flags & NPC_FLAG_SPIRIT_HEALER != 0)
+            };
+            // `SPELL_ATTR_EX3_NO_RES_TIMER` (0x10): instant
+            // resurrection, no reclaim delay on accept.
+            let use_delay = spell.attributes_ex3 & 0x0000_0010 == 0;
+            self.offer_resurrect(
+                caster, victim, health, mana, &sent_name, sickness, use_delay,
+            );
+        } else if eff.effect == mangos_spells::defines::effect::RESURRECT_NEW
+            && self.pet_owner(victim).is_some()
+        {
+            let Some(cpos) = self.unit_position(caster) else {
+                return;
+            };
+            self.teleport_creature_in_map(victim, cpos);
+            if let Some(unit) = self.unit_base_mut(victim) {
+                unit.death_state = DeathState::Alive;
+                let max_hp = unit.max_health();
+                unit.set_health((value.max(0.0) as u32).min(max_hp));
+                let values = unit.world.object.values_mut();
+                values.set_u32(offsets::UNIT_DYNAMIC_FLAGS, 0);
+                let flags = values.get_u32(offsets::UNIT_FIELD_FLAGS);
+                values.set_u32(offsets::UNIT_FIELD_FLAGS, flags & !0x0400_0000);
+            }
+        }
     }
 
     /// Team of a resident player (spirit-resurrect

@@ -725,6 +725,9 @@ pub struct Map {
     /// `GenerateCorpseLowGuid` counter, seeded by the
     /// actor past the persisted `corpse` table max.
     pub(crate) corpse_counter: u32,
+    /// Pending spell resurrect offers by dead player
+    /// (`Player::m_resurrectData`, map-local half).
+    pub(crate) resurrect_requests: HashMap<ObjectGuid, crate::death::ResurrectRequest>,
     /// Dynobj affected-pass throttle accumulator.
     pub(crate) dynobj_tick_ms: u32,
     /// Runtime cell index for units/GOs (guid sets per
@@ -896,6 +899,7 @@ impl Map {
             dynobjects: HashMap::new(),
             corpses: HashMap::new(),
             corpse_counter: 0,
+            resurrect_requests: HashMap::new(),
             dynobj_tick_ms: 0,
             cells: HashMap::new(),
             spawn_cells_loaded: HashSet::new(),

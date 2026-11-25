@@ -593,29 +593,36 @@ def derive_chain_metadata(chain_rows: list[dict], spell_id: int) -> dict:
             "rank_count": 1,
             "is_last_rank": True,
         }
-    rows = sorted(chain_rows, key=lambda r: int(r["rank"]))
+    # Chains can branch (Prayer of Spirit shares Divine
+    # Spirit's chain at rank 2): order by (rank, spell_id),
+    # take ranks from the DB field, and require each
+    # prev_spell to name a rank-(n-1) member of the chain.
+    rows = sorted(chain_rows, key=lambda r: (int(r["rank"]), int(r["spell_id"])))
     first = int(rows[0]["first_spell"])
     all_rank_ids = [int(r["spell_id"]) for r in rows]
     if all_rank_ids.count(spell_id) != 1:
         raise AssertionError(f"spell {spell_id}: chain {first} does not contain it once")
-    for index, chain_row in enumerate(rows, start=1):
+    by_id = {int(r["spell_id"]): r for r in rows}
+    for chain_row in rows:
         if int(chain_row["first_spell"]) != first:
             raise AssertionError(f"spell chain {first}: mixed first_spell")
-        if int(chain_row["rank"]) != index:
-            raise AssertionError(f"spell chain {first}: rank gap at {index}")
-        expected_prev = 0 if index == 1 else all_rank_ids[index - 2]
-        if int(chain_row["prev_spell"]) != expected_prev:
+        rank = int(chain_row["rank"])
+        prev = int(chain_row["prev_spell"])
+        if rank == 1:
+            if prev != 0:
+                raise AssertionError(f"spell chain {first}: rank 1 prev_spell is {prev}, want 0")
+        elif prev not in by_id or int(by_id[prev]["rank"]) != rank - 1:
             raise AssertionError(
-                f"spell chain {first}: prev_spell at rank {index} is {chain_row['prev_spell']}, want {expected_prev}"
+                f"spell chain {first}: prev_spell at rank {rank} is {prev}, want a rank {rank - 1} member"
             )
-    rank = all_rank_ids.index(spell_id) + 1
+    last_rank_id = max(rows, key=lambda r: (int(r["rank"]), int(r["spell_id"])))["spell_id"]
     return {
         "chain_first": first,
-        "rank": rank,
+        "rank": int(by_id[spell_id]["rank"]),
         "all_rank_ids": all_rank_ids,
-        "last_rank_id": all_rank_ids[-1],
+        "last_rank_id": int(last_rank_id),
         "rank_count": len(all_rank_ids),
-        "is_last_rank": spell_id == all_rank_ids[-1],
+        "is_last_rank": spell_id == int(last_rank_id),
     }
 
 
@@ -1872,6 +1879,11 @@ def derive_full_rows(class_name: str = "Paladin", pre_g1: dict | None = None, ta
             (row_eff["effect1"], row_eff["effect2"], row_eff["effect3"]),
             (row_eff["aura1"], row_eff["aura2"], row_eff["aura3"]),
             row_eff["script_name"],
+            # Targets are observable behavior too: a branching
+            # group variant (Prayer of Spirit) must not merge
+            # invisibly into its single-target chain.
+            (row_eff["targ_a1"], row_eff["targ_a2"], row_eff["targ_a3"]),
+            (row_eff["targ_b1"], row_eff["targ_b2"], row_eff["targ_b3"]),
         )
 
     rows = []
@@ -2011,6 +2023,26 @@ def run_self_test() -> int:
         "rank_count": 1,
         "is_last_rank": True,
     }
+    # Branching chains are real shipped data (Divine Spirit:
+    # Prayer of Spirit branches at rank 2 alongside the
+    # single-target rank 2). Ranks come from the DB field,
+    # prev links only need a rank-(n-1) parent in the chain.
+    branching = [
+        {"spell_id": 14752, "prev_spell": 0, "first_spell": 14752, "rank": 1, "req_spell": 0},
+        {"spell_id": 14818, "prev_spell": 14752, "first_spell": 14752, "rank": 2, "req_spell": 0},
+        {"spell_id": 27681, "prev_spell": 14752, "first_spell": 14752, "rank": 2, "req_spell": 0},
+        {"spell_id": 14819, "prev_spell": 14818, "first_spell": 14752, "rank": 3, "req_spell": 0},
+        {"spell_id": 27841, "prev_spell": 14819, "first_spell": 14752, "rank": 4, "req_spell": 0},
+    ]
+    branch_meta = derive_chain_metadata(branching, 27681)
+    assert branch_meta == {
+        "chain_first": 14752,
+        "rank": 2,
+        "all_rank_ids": [14752, 14818, 27681, 14819, 27841],
+        "last_rank_id": 27841,
+        "rank_count": 5,
+        "is_last_rank": False,
+    }, branch_meta
     try:
         derive_chain_metadata(
             [
@@ -2064,7 +2096,7 @@ def run_self_test() -> int:
             assert row["name"], row
             assert row["bucket"] in VALID_BUCKETS, row
             assert row["expected"]["kind"] in VALID_EXPECTED, row
-            assert row["all_rank_ids"][row["rank"] - 1] == row["spell_id"], row
+            assert row["spell_id"] in row["all_rank_ids"], row
             assert row["chain_first"] == row["all_rank_ids"][0], row
             assert row["last_rank_id"] == row["all_rank_ids"][-1], row
             assert row["rank_count"] == len(row["all_rank_ids"]), row
@@ -2132,7 +2164,7 @@ def run_self_test() -> int:
             assert isinstance(row.get("requires_behind_target"), bool), row
             assert row["bucket"] in VALID_BUCKETS, row
             assert row["expected"]["kind"] in VALID_EXPECTED, row
-            assert row["all_rank_ids"][row["rank"] - 1] == row["spell_id"]
+            assert row["spell_id"] in row["all_rank_ids"]
             assert row["chain_first"] == row["all_rank_ids"][0]
             assert "merged_chain" in row and row["merged_chain"]["members"]
             assert row["spell_id"] in row["merged_chain"]["members"]
