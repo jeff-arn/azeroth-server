@@ -64,6 +64,20 @@ const LONGCAST_SPELL: u32 = 9212;
 /// Cone of Cold stand-in: frontal-cone (mode 24) school
 /// damage with a 10 yd radius (table index 13).
 const CONE_SPELL: u32 = 9213;
+/// Reagent stand-in: unit damage costing 2x item 9302.
+const REAGENT_SPELL: u32 = 9214;
+/// Totem-item stand-in: unit damage requiring item 9303
+/// in inventory (never consumed).
+const TOTEM_SPELL: u32 = 9215;
+const REAGENT_ITEM: u32 = 9302;
+const TOTEM_ITEM: u32 = 9303;
+/// Portal stand-in: `TRANS_DOOR` at
+/// `LOCATION_CASTER_FRONT` (47) summoning the
+/// Lightwell gameobject entry.
+const PORTAL_SPELL: u32 = 9216;
+/// Greater Blessing stand-in: absorb aura at
+/// `TARGET_UNIT_RAID_AND_CLASS` (61).
+const GREATER_SPELL: u32 = 9217;
 const LIGHTWELL_GO_ENTRY: u32 = 181_105;
 /// Creature template entry for victims.
 const VICTIM_ENTRY: u32 = 9301;
@@ -310,6 +324,25 @@ fn insert_gate_spells(stores: &mut WorldStores) {
             ..Default::default()
         },
     );
+    // Portal stand-in: same transmitted summon at the
+    // directional caster-front location (mode 47).
+    stores.spells.spells.insert(
+        PORTAL_SPELL,
+        SpellEntry {
+            id: PORTAL_SPELL,
+            effects: [
+                SpellEffectData {
+                    effect: effect::TRANS_DOOR,
+                    misc_value: 181_105,
+                    implicit_target_a: 47,
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
     // Power Word: Shield stand-in: absorb aura on a
     // single raid target (mode 57).
     stores.spells.spells.insert(
@@ -322,6 +355,26 @@ fn insert_gate_spells(stores: &mut WorldStores) {
                     apply_aura_name: 69, // SCHOOL_ABSORB
                     base_points: 100,
                     implicit_target_a: 57,
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Greater Blessing stand-in: raid-and-class aura.
+    stores.spells.spells.insert(
+        GREATER_SPELL,
+        SpellEntry {
+            id: GREATER_SPELL,
+            effects: [
+                SpellEffectData {
+                    effect: effect::APPLY_AURA,
+                    apply_aura_name: 69, // SCHOOL_ABSORB
+                    base_points: 100,
+                    implicit_target_a: 61,
+                    radius_index: 13,
                     ..Default::default()
                 },
                 SpellEffectData::default(),
@@ -369,6 +422,35 @@ fn insert_gate_spells(stores: &mut WorldStores) {
                     dmg_multiplier: 1.0,
                     ..Default::default()
                 },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Reagent + totem-item stand-ins (CheckItems /
+    // TakeReagents gate).
+    stores.spells.spells.insert(
+        REAGENT_SPELL,
+        SpellEntry {
+            id: REAGENT_SPELL,
+            reagents: [9302, 0, 0, 0, 0, 0, 0, 0],
+            reagent_counts: [2, 0, 0, 0, 0, 0, 0, 0],
+            effects: [
+                unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    stores.spells.spells.insert(
+        TOTEM_SPELL,
+        SpellEntry {
+            id: TOTEM_SPELL,
+            totems: [TOTEM_ITEM, 0],
+            effects: [
+                unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
                 SpellEffectData::default(),
                 SpellEffectData::default(),
             ],
@@ -1227,5 +1309,209 @@ fn frontal_cone_hits_ahead_not_behind() {
         victim_health(&map, back),
         back_before,
         "back victim must be outside the cone"
+    );
+}
+
+fn give_item(
+    map: &mut Map,
+    caster: ObjectGuid,
+    item_guid: u32,
+    item_id: u32,
+    count: u32,
+    slot: u8,
+) {
+    use mangos_db::character_load::{InventoryRow, ItemInstanceRow};
+    let row = InventoryRow {
+        item: ItemInstanceRow {
+            creator_guid: 0,
+            gift_creator_guid: 0,
+            count,
+            duration: 0,
+            charges: String::new(),
+            flags: 0,
+            enchantments: String::new(),
+            random_property_id: 0,
+            durability: 0,
+            text: 0,
+            item_guid,
+            item_id,
+            generated_loot: 0,
+        },
+        bag: 0,
+        slot,
+    };
+    let player = map.player_mut(caster).expect("caster player");
+    player.deferred.inventory.push(row.clone());
+    player.saved.inventory.push(row);
+}
+
+#[test]
+fn reagent_gate_fails_without_and_consumes_on_cast() {
+    // `CheckItems` + `TakeReagents` (JEF-18): without
+    // the reagent the cast fails ITEM_NOT_READY (39);
+    // with 3 in the backpack it starts and consumes
+    // 2 at finish, emitting the persistence event; a
+    // second cast at 1 remaining fails again. The
+    // totem-item arm fails ITEM_GONE (37) when absent
+    // and never consumes the totem.
+    use mangos_spells::defines::cast_result;
+    let Fixture {
+        mut map,
+        caster,
+        victim,
+    } = setup(19);
+    let outcome = map.cast_spell(
+        caster,
+        REAGENT_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(
+        outcome,
+        CastOutcome::Failed(cast_result::FAILED_ITEM_NOT_READY),
+        "missing reagent must fail the cast"
+    );
+    give_item(&mut map, caster, 990_001, REAGENT_ITEM, 3, 23);
+    let _ = map.drain_events();
+    let outcome = map.cast_spell(
+        caster,
+        REAGENT_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    assert_eq!(
+        map.player(caster)
+            .expect("caster")
+            .quest_item_count(REAGENT_ITEM),
+        1,
+        "cast must consume 2 of 3 reagents"
+    );
+    let changed = map.drain_events().into_iter().any(|e| {
+        matches!(
+            e,
+            crate::map::MapEvent::ItemCountsChanged { changes, .. }
+                if changes == vec![(990_001, 1)]
+        )
+    });
+    assert!(changed, "persistence event must carry the new count");
+    let outcome = map.cast_spell(
+        caster,
+        REAGENT_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(
+        outcome,
+        CastOutcome::Failed(cast_result::FAILED_ITEM_NOT_READY),
+        "one remaining reagent is not enough for a second cast"
+    );
+    let outcome = map.cast_spell(
+        caster,
+        TOTEM_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(
+        outcome,
+        CastOutcome::Failed(cast_result::FAILED_ITEM_GONE),
+        "missing totem item must fail the cast"
+    );
+    give_item(&mut map, caster, 990_002, TOTEM_ITEM, 1, 24);
+    let outcome = map.cast_spell(
+        caster,
+        TOTEM_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    assert_eq!(
+        map.player(caster)
+            .expect("caster")
+            .quest_item_count(TOTEM_ITEM),
+        1,
+        "totem items are required, never consumed"
+    );
+    // Non-player casters skip the gate entirely (fork
+    // `ToPlayer` null -> SPELL_CAST_OK).
+    let outcome = map.cast_spell(
+        victim,
+        REAGENT_SPELL,
+        CastTarget::Unit(caster),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+}
+
+#[test]
+fn caster_front_location_cast_starts_and_summons() {
+    // Portal shape: `TRANS_DOOR` at
+    // `LOCATION_CASTER_FRONT` (47) needs no explicit
+    // target — the destination is server-computed.
+    // The cast check used to fall through to
+    // FAILED_UNKNOWN (145), so every Portal row died
+    // at prepare (Mage reagent subset).
+    let Fixture {
+        mut map, caster, ..
+    } = setup(20);
+    let outcome = map.cast_spell(caster, PORTAL_SPELL, CastTarget::SelfCast, cast_options());
+    assert_eq!(outcome, CastOutcome::Started);
+    assert!(
+        map.gameobjects
+            .values()
+            .any(|go| go.info.id == LIGHTWELL_GO_ENTRY),
+        "transmitted gameobject must be summoned in front of the caster"
+    );
+}
+
+#[test]
+fn raid_and_class_expands_to_same_class_group_members() {
+    // `TARGET_UNIT_RAID_AND_CLASS` (61, Greater
+    // Blessings): solo, the aura lands on the explicit
+    // target only; grouped, every same-class member in
+    // radius of the target gains it. Before the check
+    // + fill arms existed the cast died
+    // FAILED_UNKNOWN (145) at prepare (Paladin reagent
+    // subset).
+    let Fixture {
+        mut map, caster, ..
+    } = setup(21);
+    let infos = test_infos();
+    let other = materialize(8, &infos).unit.guid();
+    let respawns = mangos_world_data::spawn_support::RespawnTimes::default();
+    map.add_player(materialize(8, &infos), &respawns, 1_800_000_000, 0);
+    let outcome = map.cast_spell(
+        caster,
+        GREATER_SPELL,
+        CastTarget::Unit(caster),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    assert!(
+        map.aura_holders(caster)
+            .iter()
+            .any(|h| h.spell_id == GREATER_SPELL),
+        "solo cast must land on the explicit target"
+    );
+    assert!(
+        map.aura_holders(other)
+            .iter()
+            .all(|h| h.spell_id != GREATER_SPELL),
+        "ungrouped bystander must not gain the aura"
+    );
+    map.player_mut(caster).expect("caster").group_id = Some(42);
+    map.player_mut(other).expect("other").group_id = Some(42);
+    let outcome = map.cast_spell(
+        caster,
+        GREATER_SPELL,
+        CastTarget::Unit(caster),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    assert!(
+        map.aura_holders(other)
+            .iter()
+            .any(|h| h.spell_id == GREATER_SPELL),
+        "same-class group member must gain the aura"
     );
 }

@@ -2173,6 +2173,35 @@ impl Player {
         out
     }
 
+    /// `DestroyItemCount(item, count, update=true)`:
+    /// consume up to `count` across the candidate
+    /// stacks in fork walk order, mutating both the
+    /// live (`deferred`) and as-saved (`saved`) rows
+    /// in lockstep like the actor's quest destroy.
+    /// Returns the (item guid, new count) pairs the
+    /// caller persists (0 deletes the row).
+    pub fn destroy_item_count(&mut self, item_id: u32, mut count: u32) -> Vec<(u32, u32)> {
+        let mut changes = Vec::new();
+        for (item_guid, stack) in self.quest_destroy_candidates(item_id) {
+            if count == 0 {
+                break;
+            }
+            let take = stack.min(count);
+            changes.push((item_guid, stack - take));
+            count -= take;
+        }
+        for (item_guid, new_count) in &changes {
+            for rows in [&mut self.deferred.inventory, &mut self.saved.inventory] {
+                if let Some(inv) = rows.iter_mut().find(|inv| inv.item.item_guid == *item_guid) {
+                    inv.item.count = *new_count;
+                }
+            }
+        }
+        self.deferred.inventory.retain(|inv| inv.item.count != 0);
+        self.saved.inventory.retain(|inv| inv.item.count != 0);
+        changes
+    }
+
     /// `ItemAddedQuestCheck`: for each incomplete
     /// DELIVER quest in log-slot order whose item
     /// objectives include `item_id`, increment the

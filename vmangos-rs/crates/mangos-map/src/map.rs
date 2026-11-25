@@ -524,6 +524,14 @@ pub enum MapEvent {
         item_id: u32,
         count: u32,
     },
+    /// `Spell::TakeReagents` consumption: the map
+    /// already mutated the player's live inventory
+    /// rows; the actor persists each
+    /// (item guid, new count) pair (0 deletes).
+    ItemCountsChanged {
+        player: ObjectGuid,
+        changes: Vec<(u32, u32)>,
+    },
     /// Cross-map player transfer request
     /// (`Player::TeleportTo` far arm of
     /// `Spell::EffectTeleportUnits`): the actor runs

@@ -58,11 +58,12 @@ none yet. Per-class cost is dominated by real-time bench runs
   corpse cast targets, percent/flat effects, offer flow,
   `CMSG_RESURRECT_RESPONSE`; Resurrection verdict PASS in the
   Priest run.
-- **Reagent gate** (M, SEAM): no `CheckItems`/`TakeReagents` in the
-  cast path and no harness item-grant path. ~19 rows blocked across
-  three classes so far (Greater Blessings, Divine Intervention,
-  Gift of the Wild, soul-shard rows). Needs both directions tested:
-  consume on cast, `SPELL_FAILED_REAGENTS` without.
+- **Reagent gate** (M): **DONE** (JEF-18) — `CheckItems` reagent/
+  totem arm + `TakeReagents` consumption in the cast path, harness
+  `seed_reagents` grant; 42 blocked rows across five classes re-run
+  to PASS in subsets. Landed alongside: directional-location cast
+  arm (Portals), `TARGET_UNIT_RAID_AND_CLASS` (61) fill, and the
+  percentage-cost create-pool fix.
 - **Script-effect indexing (G4)** (L, SEAM): `SCRIPT_EFFECT` /
   script-named rows ride classify-only until each script body gets
   an observable oracle. Paladin 9, Druid small, Warlock 2 so far;

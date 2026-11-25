@@ -61,6 +61,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 4,
                 speed: 28.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 6,
@@ -205,6 +208,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 5,
                 speed: 0.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 6,
@@ -337,6 +343,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 4,
                 speed: 0.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 6,
@@ -469,6 +478,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 4,
                 speed: 20.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 2,
@@ -601,6 +613,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 2,
                 speed: 0.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 6,
@@ -733,6 +748,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 5,
                 speed: 0.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 10,
@@ -873,6 +891,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 3,
                 speed: 0.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 2,
@@ -1005,6 +1026,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 1,
                 speed: 0.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 6,
@@ -1137,6 +1161,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 2,
                 speed: 0.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 6,
@@ -1269,6 +1296,9 @@ pub fn cases() -> Vec<OracleCase> {
                 range_index: 1,
                 speed: 0.0_f32,
                 stack_amount: 0,
+                totems: [0, 0],
+                reagents: [0, 0, 0, 0, 0, 0, 0, 0],
+                reagent_counts: [0, 0, 0, 0, 0, 0, 0, 0],
                 effects: [
                     SpellEffectData {
                         effect: 6,

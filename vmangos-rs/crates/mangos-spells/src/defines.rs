@@ -393,6 +393,13 @@ pub mod cast_result {
     pub const FAILED_FIZZLE: u8 = 29;
     pub const FAILED_CASTER_DEAD: u8 = 19;
     pub const FAILED_IMMUNE: u8 = 34;
+    /// `SPELL_FAILED_ITEM_GONE` (37): the totem-item
+    /// arm of `CheckItems`.
+    pub const FAILED_ITEM_GONE: u8 = 37;
+    /// `SPELL_FAILED_ITEM_NOT_READY` (39): the reagent
+    /// arm of `CheckItems` (the fork never emits
+    /// `SPELL_FAILED_REAGENTS` server-side).
+    pub const FAILED_ITEM_NOT_READY: u8 = 39;
     pub const FAILED_LINE_OF_SIGHT: u8 = 42;
     /// `SPELL_FAILED_NOT_BEHIND` (51, counted over
     /// the `SpellDefines.h:351+` enum at 1.12.1).

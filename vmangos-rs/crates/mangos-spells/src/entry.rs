@@ -131,6 +131,14 @@ pub struct SpellEntry {
     pub speed: f32,
     /// fields[40].
     pub stack_amount: u32,
+    /// fields[41..43] (`Totem[2]`): item entries that
+    /// must be in the caster's inventory.
+    pub totems: [u32; 2],
+    /// fields[43..51] (`Reagent[8]`): item entries
+    /// consumed per cast (<= 0 = none).
+    pub reagents: [i32; 8],
+    /// fields[51..59] (`ReagentCount[8]`).
+    pub reagent_counts: [u32; 8],
     /// Effect slots 0..3.
     pub effects: [SpellEffectData; 3],
     /// fields[119].
@@ -435,12 +443,22 @@ impl SpellEntry {
     }
 
     /// `Spell::CalculatePowerCost` subset: flat +
-    /// per-level (rank 0) + percentage of max power
-    /// (health for `POWER_HEALTH`). No spell mods or
-    /// cost auras. `SPELL_ATTR_EX_USE_ALL_MANA` handled
-    /// by draining the full pool.
+    /// per-level (rank 0) + percentage arm on the
+    /// fork's bases (`Spell.cpp:7053`): create mana
+    /// for `POWER_MANA`, create health for
+    /// `POWER_HEALTH`, max power for the rest. No
+    /// spell mods or cost auras.
+    /// `SPELL_ATTR_EX_USE_ALL_MANA` handled by
+    /// draining the full pool.
     #[must_use]
-    pub fn power_cost(&self, caster_power: u32, caster_max_power: u32, caster_health: u32) -> u32 {
+    pub fn power_cost(
+        &self,
+        caster_power: u32,
+        caster_max_power: u32,
+        caster_health: u32,
+        create_mana: u32,
+        create_health: u32,
+    ) -> u32 {
         const ATTR_EX_USE_ALL_MANA: u32 = 0x0000_0002;
         if self.attributes_ex & ATTR_EX_USE_ALL_MANA != 0 {
             return if self.power_type == crate::defines::power::HEALTH {
@@ -453,10 +471,10 @@ impl SpellEntry {
         let mut cost: i32 =
             self.mana_cost as i32 + self.mana_cost_per_level as i32 * -(self.base_level as i32);
         if self.mana_cost_percentage != 0 {
-            let base = if self.power_type == crate::defines::power::HEALTH {
-                caster_health
-            } else {
-                caster_max_power
+            let base = match self.power_type {
+                p if p == crate::defines::power::HEALTH => create_health,
+                p if p == crate::defines::power::MANA => create_mana,
+                _ => caster_max_power,
             };
             #[allow(clippy::cast_possible_wrap)]
             {
@@ -1061,6 +1079,23 @@ mod tests {
             effects,
             ..SpellEntry::default()
         }
+    }
+
+    #[test]
+    fn percentage_cost_uses_create_pools_not_max() {
+        // Fork `CalculatePowerCost` (`Spell.cpp:7053`):
+        // percentage costs ride the *create* (base)
+        // mana/health pools, never the geared max —
+        // 100%-cost pet summons cast from roughly half
+        // a geared pool. Rage-class powers keep max.
+        let mut entry = entry_with([SpellEffectData::default(); 3]);
+        entry.mana_cost_percentage = 100;
+        entry.power_type = crate::defines::power::MANA;
+        assert_eq!(entry.power_cost(500, 3000, 2000, 1200, 1500), 1200);
+        entry.power_type = crate::defines::power::HEALTH;
+        assert_eq!(entry.power_cost(500, 3000, 2000, 1200, 1500), 1500);
+        entry.power_type = crate::defines::power::ENERGY;
+        assert_eq!(entry.power_cost(500, 3000, 2000, 1200, 1500), 3000);
     }
 
     #[test]

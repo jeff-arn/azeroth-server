@@ -202,6 +202,47 @@ impl Map {
                 // (Battle Shout self-buff evidence).
                 vec![caster]
             }
+            tgt::UNIT_RAID_AND_CLASS => {
+                // Greater Blessings (fork `Spell.cpp:3026`):
+                // the explicit unit target, expanded to
+                // every member of the *target's* group
+                // sharing the target's class within the
+                // effect radius of the target and not
+                // hostile to the caster. No group (or a
+                // non-player target) keeps the single
+                // target.
+                let unit_target = match target {
+                    CastTarget::Unit(g) => g,
+                    CastTarget::Corpse(g) => {
+                        self.corpses.get(&g).map_or(caster, |corpse| corpse.owner)
+                    }
+                    CastTarget::SelfCast | CastTarget::Dest(_) => caster,
+                };
+                let group_id = self.player(unit_target).and_then(|p| p.group_id);
+                match group_id {
+                    None => vec![unit_target],
+                    Some(group_id) => {
+                        let target_class = self.unit_class_of(unit_target);
+                        let Some(tpos) = self.unit_position(unit_target) else {
+                            return Vec::new();
+                        };
+                        self.players
+                            .keys()
+                            .copied()
+                            .filter(|g| {
+                                self.unit_is_alive(*g)
+                                    && self.player(*g).and_then(|p| p.group_id) == Some(group_id)
+                                    && self.unit_class_of(*g) == target_class
+                                    && !Self::is_hostile_pair(caster, *g)
+                                    && self.unit_position(*g).is_some_and(|pos| {
+                                        (pos.x - tpos.x).powi(2) + (pos.y - tpos.y).powi(2)
+                                            <= radius * radius
+                                    })
+                            })
+                            .collect()
+                    }
+                }
+            }
             tgt::LOCATION_CASTER_SRC | tgt::ENEMY_AOE_AT_SRC_LOC_SCRIPT => {
                 // A names the caster as the area source; B
                 // selects the units there (fork `Spell.cpp`

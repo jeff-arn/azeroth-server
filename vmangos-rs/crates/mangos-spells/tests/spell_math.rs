@@ -69,10 +69,10 @@ fn spell_math_matches_oracle() {
             "range spell {}",
             e.id
         );
-        // Oracle power cost used max power 1000 for the
-        // percentage arm.
+        // Oracle power cost used 1000 for every pool
+        // arm (max, health, create mana/health).
         assert_eq!(
-            e.power_cost(0, 1000, 1000),
+            e.power_cost(0, 1000, 1000, 1000, 1000),
             case.expected_power_cost,
             "power cost spell {} ({})",
             e.id,

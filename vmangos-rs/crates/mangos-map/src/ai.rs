@@ -2169,7 +2169,7 @@ impl Map {
         }
     }
 
-    fn unit_class_of(&self, guid: ObjectGuid) -> u32 {
+    pub(crate) fn unit_class_of(&self, guid: ObjectGuid) -> u32 {
         self.unit_value_u32(guid, offsets::UNIT_FIELD_BYTES_0) >> 8 & 0xFF
     }
 

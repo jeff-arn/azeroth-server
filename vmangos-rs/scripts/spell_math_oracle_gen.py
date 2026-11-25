@@ -82,11 +82,15 @@ COLS = [
     "entry", "school", "category", "dispel", "mechanic",
     "attributes", "attributesEx", "attributesEx2", "attributesEx3",
     "attributesEx4", "stances", "stancesNot", "targets",
+    "casterAuraState", "targetAuraState",
     "castingTimeIndex", "recoveryTime",
     "categoryRecoveryTime", "interruptFlags", "auraInterruptFlags",
     "channelInterruptFlags", "maxLevel", "baseLevel", "spellLevel",
     "durationIndex", "powerType", "manaCost", "manCostPerLevel",
     "rangeIndex", "speed", "stackAmount",
+    "totem1", "totem2",
+    *[f"reagent{i}" for i in range(1, 9)],
+    *[f"reagentCount{i}" for i in range(1, 9)],
 ]
 EFF_COLS = []
 for group in [
@@ -235,7 +239,9 @@ def main():
         )
         lines.append(
             f"                stances: {row['stances']}, stances_not: {row['stancesNot']}, "
-            f"targets: {row['targets']}, casting_time_index: {row['castingTimeIndex']}, "
+            f"targets: {row['targets']}, caster_aura_state: {row['casterAuraState']}, "
+            f"target_aura_state: {row['targetAuraState']}, "
+            f"casting_time_index: {row['castingTimeIndex']}, "
             f"recovery_time: {row['recoveryTime']}, category_recovery_time: {row['categoryRecoveryTime']},"
         )
         lines.append(
@@ -255,6 +261,12 @@ def main():
         lines.append(
             f"                range_index: {row['rangeIndex']}, speed: {float(row['speed'])}_f32, "
             f"stack_amount: {row['stackAmount']},"
+        )
+        reagents = ", ".join(str(int(row[f"reagent{i}"])) for i in range(1, 9))
+        reagent_counts = ", ".join(str(int(row[f"reagentCount{i}"])) for i in range(1, 9))
+        lines.append(
+            f"                totems: [{row['totem1']}, {row['totem2']}], "
+            f"reagents: [{reagents}], reagent_counts: [{reagent_counts}],"
         )
         lines.append("                effects: [")
         for e in norm_effs:

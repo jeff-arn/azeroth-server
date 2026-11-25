@@ -17482,6 +17482,18 @@ impl World {
                 } => {
                     self.store_created_item(player.counter(), item_id, count);
                 }
+                MapEvent::ItemCountsChanged { changes, .. } => {
+                    // `TakeReagents` persistence: rows
+                    // already mutated map-side in
+                    // lockstep, mirror them to the DB.
+                    for (item_guid, new_count) in changes {
+                        if let Err(e) = self.deps.quest_reward.set_item_count(item_guid, new_count)
+                        {
+                            self.log
+                                .out(Level::Error, &format!("reagent take failed: {e}"));
+                        }
+                    }
+                }
                 MapEvent::TeleportPlayer {
                     player,
                     map_id,

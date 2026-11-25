@@ -301,6 +301,7 @@ BLOCKED_REASONS = {
     "effect-marker-only",
     "script-evidence-unknown",
     "target-not-dead",
+    "scenario-target",
 }
 
 
@@ -650,8 +651,8 @@ def seed_hunter_gear(guid: int) -> None:
     for item_guid, entry, bag, slot, count in HUNTER_GEAR_ROWS:
         smoke.sql_scalar(
             "characters",
-            "INSERT INTO item_instance (guid, item_id, owner_guid, count, enchantments) VALUES "
-            f"({item_guid}, {entry}, {guid}, {count}, '')",
+            "INSERT INTO item_instance (guid, item_id, owner_guid, count, enchantments, durability) VALUES "
+            f"({item_guid}, {entry}, {guid}, {count}, '', 100)",
         )
         smoke.sql_scalar(
             "characters",
@@ -683,8 +684,8 @@ def seed_warrior_gear(guid: int) -> None:
     for item_guid, entry, bag, slot, count in WARRIOR_GEAR_ROWS:
         smoke.sql_scalar(
             "characters",
-            "INSERT INTO item_instance (guid, item_id, owner_guid, count, enchantments) VALUES "
-            f"({item_guid}, {entry}, {guid}, {count}, '')",
+            "INSERT INTO item_instance (guid, item_id, owner_guid, count, enchantments, durability) VALUES "
+            f"({item_guid}, {entry}, {guid}, {count}, '', 100)",
         )
         smoke.sql_scalar(
             "characters",
@@ -692,6 +693,109 @@ def seed_warrior_gear(guid: int) -> None:
             f"({guid}, {bag}, {slot}, {item_guid}, {entry})",
         )
     print(f"SEEDED warrior gear guid={guid} rows={len(WARRIOR_GEAR_ROWS)}")
+
+
+#: Caster intellect cloth (equipment slots 0/2/4/6/9): the
+#: bare level-60 fixture maxes at ~2808 mana, below Arcane
+#: Brilliance's 3400 cost — a legal geared 60 casts it, so the
+#: fixture wears fork-legal intellect cloth (+155 int total).
+CASTER_GEAR_ROWS = (
+    # (item_guid, entry, bag, slot, count)
+    (940001, 16914, 0, 0, 1),  # Netherwind Crown +40
+    (940002, 16917, 0, 2, 1),  # Netherwind Mantle +27
+    (940003, 19844, 0, 4, 1),  # Zandalar Illusionist's Robe +24
+    (940004, 20329, 0, 6, 1),  # 90 Epic Frost Leggings +37
+    (940005, 20328, 0, 9, 1),  # 90 Epic Frost Gloves +27
+)
+
+
+def seed_caster_gear(guid: int) -> None:
+    """Equip the caster intellect fixture (idempotent,
+    fixture-scoped); mirrors seed_hunter_gear."""
+    slots = ",".join(str(slot) for _g, _e, _b, slot, _c in CASTER_GEAR_ROWS)
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM character_inventory WHERE guid={guid} AND bag=0 AND slot IN ({slots})",
+    )
+    fixed = ",".join(str(item_guid) for item_guid, _e, _b, _s, _c in CASTER_GEAR_ROWS)
+    # Fixture guids are campaign-global (see seed_reagents):
+    # delete by guid alone, across characters.
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM character_inventory WHERE item_guid IN ({fixed})",
+    )
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM item_instance WHERE guid IN ({fixed})",
+    )
+    for item_guid, entry, bag, slot, count in CASTER_GEAR_ROWS:
+        # durability 100: a 0-durability row is a broken item
+        # in the fork bonus rules and grants no stats.
+        smoke.sql_scalar(
+            "characters",
+            "INSERT INTO item_instance (guid, item_id, owner_guid, count, enchantments, durability) VALUES "
+            f"({item_guid}, {entry}, {guid}, {count}, '', 100)",
+        )
+        smoke.sql_scalar(
+            "characters",
+            "INSERT INTO character_inventory (guid, bag, slot, item_guid, item_id) VALUES "
+            f"({guid}, {bag}, {slot}, {item_guid}, {entry})",
+        )
+    print(f"SEEDED caster gear guid={guid} rows={len(CASTER_GEAR_ROWS)}")
+
+
+#: Fixed item-guid base for reagent fixture stacks (910xxx is
+#: Hunter gear, 920xxx Warrior gear).
+REAGENT_FIXTURE_GUID_BASE = 930001
+REAGENT_FIXTURE_COUNT = 200
+
+
+def seed_reagents(guid: int, rows: list[dict]) -> None:
+    """Seed one generous stack of every distinct reagent the
+    class matrix references into the backpack (bag 0, slots
+    23+), idempotent and fixture-scoped like the gear seeds.
+
+    The engine reagent gate (CheckItems/TakeReagents) makes
+    these rows castable and consumable; the item leg then
+    verdicts on the DB count decrement. Totem-item rows ride
+    the same seed (presence is all the gate checks).
+    """
+    entries = sorted(
+        {int(entry) for row in rows for entry in (row.get("reagents") or []) if int(entry or 0) > 0}
+        | {int(t) for row in rows for t in (row.get("totem") or []) if int(t or 0) > 0}
+    )
+    if not entries:
+        return
+    fixed = ",".join(str(REAGENT_FIXTURE_GUID_BASE + i) for i in range(len(entries)))
+    # Fixture guids are global to the campaign: delete by guid
+    # alone, or a second class's seed collides on the PK with
+    # the previous character's stacks.
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM character_inventory WHERE item_guid IN ({fixed})",
+    )
+    smoke.sql_scalar(
+        "characters",
+        f"DELETE FROM item_instance WHERE guid IN ({fixed})",
+    )
+    for i, entry in enumerate(entries):
+        item_guid = REAGENT_FIXTURE_GUID_BASE + i
+        slot = 23 + i
+        smoke.sql_scalar(
+            "characters",
+            f"DELETE FROM character_inventory WHERE guid={guid} AND bag=0 AND slot={slot}",
+        )
+        smoke.sql_scalar(
+            "characters",
+            "INSERT INTO item_instance (guid, item_id, owner_guid, count, enchantments) VALUES "
+            f"({item_guid}, {entry}, {guid}, {REAGENT_FIXTURE_COUNT}, '')",
+        )
+        smoke.sql_scalar(
+            "characters",
+            "INSERT INTO character_inventory (guid, bag, slot, item_guid, item_id) VALUES "
+            f"({guid}, 0, {slot}, {item_guid}, {entry})",
+        )
+    print(f"SEEDED reagents guid={guid} entries={entries}")
 
 
 def seed_character(
@@ -916,6 +1020,14 @@ def aura_present(driver: ScriptedDriver, guid: int, spell_id: int) -> bool:
         if obj.values.get(field) == spell_id:
             return True
     return False
+
+
+def aura_ids_on(driver: ScriptedDriver, guid: int) -> set[int]:
+    """Spell ids currently in the unit's aura slots."""
+    obj = driver.world.get(guid)
+    if obj is None:
+        return set()
+    return {int(value) for field in range(AURA_FIELD_FIRST, AURA_FIELD_LAST + 1) if (value := obj.values.get(field))}
 
 
 def heal_rise_ok(
@@ -4677,12 +4789,45 @@ def item_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int
                 row,
                 "BLOCKED",
                 reason="fixture-reagent",
-                evidence=f"reagent {reagent} absent from bags and the "
-                "engine has no reagent gate; scenario-inapplicable",
+                evidence=f"reagent {reagent} absent from bags; the fixture seed did not cover this row",
                 pre=pre,
             )
+        # Hostile-unit reagent rows (Blind, Enslave Demon)
+        # cannot cast on the caster: stage a dummy and cast
+        # there; the decrement observable is unchanged. A
+        # dummy rejected BAD_TARGETS means the spell needs a
+        # target kind the dummy pool cannot stage (a demon
+        # for Enslave) — an honest scenario block, converted
+        # below.
+        cast_target = guid
+        dummy = None
+        if 6 in (row.get("target_a") or []):
+            dummy, _reused, _waited_dummy = wait_for_dummy(driver, used_dummies)
+            if dummy is None:
+                return make_verdict(
+                    row,
+                    "BLOCKED",
+                    reason="dummy-unavailable",
+                    evidence="no live dummy for the hostile-unit reagent leg",
+                    pre=pre,
+                )
+            used_dummies.add(dummy)
+            driver.approach_guid(dummy, 2.0)
+            cast_target = dummy
         mark = event_mark(driver)
-        go, reason, ops, _waited = cast_unit_retry_power(driver, spell_id, guid, timeout=15.0)
+        auras_before = aura_ids_on(driver, guid)
+        go, reason, ops, _waited = cast_unit_retry_power(driver, spell_id, cast_target, timeout=15.0)
+        if not go and dummy is not None and reason == SPELL_FAILED_BAD_TARGETS:
+            return make_verdict(
+                row,
+                "BLOCKED",
+                reason="scenario-target",
+                evidence="dummy target rejected BAD_TARGETS; the spell needs a target "
+                "kind the dummy pool cannot stage (e.g. a demon for Enslave Demon)",
+                pre=pre,
+                packets=ops,
+                target_guid=dummy,
+            )
         driver.poll(4.0)
         after = bag_reagent_count(guid, reagent)
         window = [op for op, _ in events_since(driver, mark)]
@@ -4706,6 +4851,17 @@ def item_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int
                 "packets": ops + window,
             },
         )
+        if go:
+            # Register for the inter-row cancel: a landed
+            # reagent spell can leave a controlling aura on
+            # the caster (Divine Intervention cast on self
+            # stuns via its triggered immunity holder 19753,
+            # not the cast spell's own id, and every
+            # following row read FAILED_STUNNED). Track the
+            # cast spell plus every newly appeared holder.
+            for new_id in [spell_id, *sorted(aura_ids_on(driver, guid) - auras_before)]:
+                if new_id not in applied_auras:
+                    applied_auras.append(new_id)
         if verdict["verdict"] == "PASS":
             verdict["evidence"] += detail
         return verdict
@@ -5183,15 +5339,15 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
             return ("blocked", "effect-marker-only")
         return ("cast", "ground")
     if bucket == "item_reagent_ammo":
-        if (
-            not any(row.get("reagents") or [])
-            and kind in ("damage_log", "aura_on_target")
-            and set(row.get("target_a") or []) & HOSTILE_TARGET_IDS
-        ):
-            # Reagent-free weapon rows verify on the dummy, not the
+        if kind in ("damage_log", "aura_on_target") and set(row.get("target_a") or []) & HOSTILE_TARGET_IDS:
+            # Weapon/damage rows verify on the dummy, not the
             # caster: unit-targeted rows ride hostile, area-only
-            # rows (Volley) ride the ground dest leg. Reagent rows
-            # keep the item leg (their fixture-reagent gate).
+            # rows (Volley) ride the ground dest leg. Reagent
+            # rows join them now that the fixture seeds the bags
+            # and the engine consumes (Soul Fire/Shadowburn sat
+            # fixture-gear BLOCKED behind the old reagent-free
+            # condition; the landed cast itself proves the gate
+            # passed, sibling item rows prove consumption).
             if 6 in (row.get("target_a") or []):
                 return ("cast", "hostile")
             return ("cast", "ground")
@@ -5297,6 +5453,9 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                 seed_hunter_gear(guid)
             if class_name == "Warrior":
                 seed_warrior_gear(guid)
+            if class_name in ("Mage", "Priest"):
+                seed_caster_gear(guid)
+            seed_reagents(guid, rows)
             client, driver = login_as(account, account_id, guid)
             drift_gate(driver, guid, len(seed_all))
             return client, driver

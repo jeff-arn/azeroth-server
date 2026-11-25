@@ -96,6 +96,8 @@ impl Map {
                     self.unit_power(caster, spell.power_type),
                     self.unit_max_power(caster, spell.power_type),
                     self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
+                    self.unit_base(caster).map_or(0, |u| u.create_mana),
+                    self.unit_base(caster).map_or(0, |u| u.create_health),
                 );
                 // `SPELLMOD_COST` at the power check never
                 // drops a charge (the take site does).
@@ -114,6 +116,14 @@ impl Map {
                     return fail(self, cast_result::FAILED_NO_POWER);
                 }
             }
+        }
+        // `CheckItems` reagent/totem arm (fork
+        // `Spell::CheckCast` runs it for every
+        // non-passive cast, triggered included; the
+        // `IgnoreItemRequirements` rule inside decides
+        // whether a triggered cast pays its own).
+        if let Some(reason) = self.check_reagents(caster, &spell, &options) {
+            return fail(self, reason);
         }
         // Finisher combo gate (`Spell::CheckCast`,
         // `Spell.cpp:7108`): a player finisher with an
@@ -522,6 +532,21 @@ impl Map {
             | tgt::LOCATION_CASTER_DEST
             | tgt::LOCATION_UNIT_MINION_POSITION
             | tgt::LOCATION_CASTER_SRC
+            // Directional caster locations (Portal's
+            // TRANS_DOOR at LOCATION_CASTER_FRONT):
+            // the destination is computed server-side
+            // from caster position + orientation, so
+            // no explicit target is required and the
+            // fork check passes.
+            | tgt::LOCATION_CASTER_FRONT
+            | tgt::LOCATION_CASTER_BACK
+            | tgt::LOCATION_CASTER_LEFT
+            | tgt::LOCATION_CASTER_RIGHT
+            | tgt::LOCATION_CASTER_FRONT_LEFT
+            | tgt::LOCATION_CASTER_FRONT_RIGHT
+            | tgt::LOCATION_CASTER_BACK_LEFT
+            | tgt::LOCATION_CASTER_BACK_RIGHT
+            | tgt::LOCATION_CASTER_FRONT_LEAP
             | tgt::ENUM_UNITS_ENEMY_IN_CONE => CastOutcome::Started,
             // Ground enumerations: destination comes
             // from the client (or the caster for
@@ -559,7 +584,7 @@ impl Map {
                 }
                 CastOutcome::Started
             }
-            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT | tgt::UNIT_FRIEND_CHAIN_HEAL | tgt::UNIT_RAID => {
+            tgt::UNIT_ENEMY | tgt::UNIT_FRIEND | tgt::UNIT | tgt::UNIT_FRIEND_CHAIN_HEAL | tgt::UNIT_RAID | tgt::UNIT_RAID_AND_CLASS => {
                 let CastTarget::Unit(victim) = target else {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_IMPLICIT_TARGETS);
                 };
@@ -597,7 +622,7 @@ impl Map {
                 // Chain heal is an explicit friendly unit target
                 // (fork `SpellEntry.h` IsExplicitPositiveTarget):
                 // the single-target component is the unit target.
-                if (mode == tgt::UNIT_FRIEND || mode == tgt::UNIT_FRIEND_CHAIN_HEAL || mode == tgt::UNIT_RAID)
+                if (mode == tgt::UNIT_FRIEND || mode == tgt::UNIT_FRIEND_CHAIN_HEAL || mode == tgt::UNIT_RAID || mode == tgt::UNIT_RAID_AND_CLASS)
                     && Self::is_hostile_pair(caster, victim)
                 {
                     return CastOutcome::Failed(cast_result::FAILED_BAD_TARGETS);
@@ -1089,6 +1114,90 @@ impl Map {
     /// slot-less triggered casts, fork prepare:
     /// triggered timer 0 executes in the call point).
     #[allow(clippy::too_many_lines)] // one cast() port (split from update_cast)
+    /// `IgnoreItemRequirements` (`Spell.cpp:7141`):
+    /// a triggered cast ignores item requirements
+    /// unless its master spell exists and carries no
+    /// reagent in slot 0 — then the triggered cast
+    /// pays its own. The traded-item-target arm has
+    /// no row flag here.
+    fn ignore_item_requirements(&self, triggered: bool, triggered_by_spell: u32) -> bool {
+        if !triggered {
+            return false;
+        }
+        !(triggered_by_spell != 0
+            && self
+                .stores
+                .spells
+                .get(triggered_by_spell)
+                .is_some_and(|master| master.reagents[0] == 0))
+    }
+
+    /// The reagent + totem-item arm of `CheckItems`
+    /// (`Spell.cpp:7315`): player casters only,
+    /// passive spells skip (fork `CheckCast` gate).
+    /// Missing reagent -> `ITEM_NOT_READY`; missing
+    /// totem item -> `ITEM_GONE`. The cast-item
+    /// charge nuance is unmodeled (`CastItemCtx`
+    /// carries no charges), so a cast item counts
+    /// toward its own reagent like any stack.
+    fn check_reagents(
+        &self,
+        caster: ObjectGuid,
+        spell: &SpellEntry,
+        options: &CastOptions,
+    ) -> Option<u8> {
+        const ATTR_PASSIVE: u32 = 0x0000_0040;
+        if spell.attributes & ATTR_PASSIVE != 0 {
+            return None;
+        }
+        let player = self.player(caster)?;
+        if self.ignore_item_requirements(options.triggered, options.triggered_by_spell) {
+            return None;
+        }
+        for (i, reagent) in spell.reagents.iter().enumerate() {
+            if *reagent <= 0 {
+                continue;
+            }
+            if player.quest_item_count(*reagent as u32) < spell.reagent_counts[i] {
+                return Some(cast_result::FAILED_ITEM_NOT_READY);
+            }
+        }
+        for totem in spell.totems {
+            if totem != 0 && player.quest_item_count(totem) == 0 {
+                return Some(cast_result::FAILED_ITEM_GONE);
+            }
+        }
+        None
+    }
+
+    /// `TakeReagents` (`Spell.cpp:5257`): destroy the
+    /// reagent counts from the player caster's
+    /// inventory; the actor persists the row changes
+    /// from the emitted event.
+    fn take_reagents(&mut self, caster: ObjectGuid, spell: &SpellEntry, cast: &ActiveCast) {
+        if !caster.is_player()
+            || self.ignore_item_requirements(cast.triggered, cast.triggered_by_spell)
+        {
+            return;
+        }
+        let mut changes: Vec<(u32, u32)> = Vec::new();
+        for (i, reagent) in spell.reagents.iter().enumerate() {
+            if *reagent <= 0 || spell.reagent_counts[i] == 0 {
+                continue;
+            }
+            if let Some(player) = self.player_mut(caster) {
+                changes.extend(player.destroy_item_count(*reagent as u32, spell.reagent_counts[i]));
+            }
+        }
+        if !changes.is_empty() {
+            self.events.push(MapEvent::ItemCountsChanged {
+                player: caster,
+                changes,
+            });
+        }
+    }
+
+    #[allow(clippy::too_many_lines)] // one cast() port
     pub(crate) fn execute_cast(&mut self, caster: ObjectGuid, mut cast: ActiveCast) {
         let Some(spell) = self.stores.spells.get(cast.spell_id).cloned() else {
             return;
@@ -1115,6 +1224,8 @@ impl Map {
                 self.unit_power(caster, spell.power_type),
                 self.unit_max_power(caster, spell.power_type),
                 self.unit_value_u32(caster, offsets::UNIT_FIELD_HEALTH),
+                self.unit_base(caster).map_or(0, |u| u.create_mana),
+                self.unit_base(caster).map_or(0, |u| u.create_health),
             );
             #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
             let power_cost = self
@@ -1164,6 +1275,10 @@ impl Map {
         } else {
             self.add_cooldowns(caster, &spell, &mut cast.applied_mods, None);
         }
+        // `TakeReagents` (fork `Spell::cast`, before
+        // `HandleEffects` so a crafted item can land
+        // in the freed slot).
+        self.take_reagents(caster, &spell, &cast);
         // `SpellScript::OnCast` (fork `Spell::cast`
         // after TakePower/TakeReagents,
         // `Spell.cpp:3827`).

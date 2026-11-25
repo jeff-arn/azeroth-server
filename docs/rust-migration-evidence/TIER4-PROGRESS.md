@@ -2929,3 +2929,75 @@ mangosd `079fedd0` (built from `c1f05805`) is
 already behavior-identical for every audited
 row; JEF-35 closed on that basis. All nine
 class first passes are now DONE at 0 FAIL.
+
+Reagent gate seam (JEF-18, 2026-11-25):
+`SpellEntry` now carries `totems[2]`,
+`reagents[8]`, `reagent_counts[8]` from
+`spell_template` fields 41-58. The cast path
+runs the fork `CheckItems` reagent/totem arm
+(player casters, non-passive,
+`IgnoreItemRequirements` triggered rule):
+missing reagent -> `FAILED_ITEM_NOT_READY`
+(39; the fork never emits
+`SPELL_FAILED_REAGENTS` server-side), missing
+totem item -> `FAILED_ITEM_GONE` (37).
+`TakeReagents` runs at cast finish before
+effects, destroying counts over the live
+inventory rows (`destroy_item_count`, fork
+walk order) and emitting
+`MapEvent::ItemCountsChanged` for actor-side
+DB persistence. Regressions:
+`reagent_gate_fails_without_and_consumes_on_cast`
+(both directions + totem + non-player skip).
+Exposed en route and fixed: (1) directional
+caster-location targets (Portal's
+`LOCATION_CASTER_FRONT` 47 and kin) fell to
+`FAILED_UNKNOWN` at the cast check — they now
+start like the fork (regression
+`caster_front_location_cast_starts_and_summons`);
+(2) `TARGET_UNIT_RAID_AND_CLASS` (61, Greater
+Blessings) had no check or fill arm — it now
+expands to same-class group members within
+radius of the target (regression
+`raid_and_class_expands_to_same_class_group_members`);
+(3) percentage power costs rode max mana —
+the fork uses create (base) mana/health
+(`Spell.cpp:7053`), so 100%-cost pet summons
+were nearly uncastable unless exactly full
+(regression `percentage_cost_uses_create_pools_not_max`;
+the spell-math oracle generator was also
+stale — missing aura-state fields the
+committed oracle already carried — and is
+regenerated). Harness: `seed_reagents` grants
+every matrix reagent/totem item per class
+run, `seed_caster_gear` gives Mage/Priest
+fork-legal intellect cloth (Arcane Brilliance
+and Prayer of Fortitude r2 cost 3400 vs the
+bare fixture's ~2800 max; seeded gear needs
+durability > 0 or the fork broken-item rule
+zeroes its stats), fixture item guids delete
+campaign-globally (cross-character PK
+collisions), hostile damage reagent rows
+ride the hostile leg, and hostile-unit
+reagent rows cast on a staged dummy (dummy
+rejection reads BLOCKED `scenario-target`;
+the inter-row cancel also tracks newly
+appeared caster holders — Divine
+Intervention's triggered stun holder 19753
+poisoned every following row). Verdicts:
+42 previously `fixture-reagent` /
+`fixture-gear` rows re-run to PASS in
+per-class subsets (Mage 8, Paladin 9,
+Priest 5, Druid 4 incl. both Rebirth ranks
+under the gate — cooldown-separated,
+Warlock 16), filed as
+`results-<Class>-reagent.jsonl`; canonical
+class artifacts restored untouched.
+Discovered, not fixed: Enslave Demon casts
+on a non-demon dummy — the engine has no
+creature-type target gate (`targetCreatureType`
+mask), recorded for the spell-seam remainder.
+Gates: pilot PASS; both Python self-tests,
+ruff, fmt, clippy clean; full `./ci.sh`
+exit 0. Deploy: engine changed (cast path),
+droplet swap follows below.
