@@ -1,0 +1,114 @@
+{
+ "mode": "run-class",
+ "class": "Rogue",
+ "matrix_file": "/Users/jeffarn/Programming/azeroth-server/vmangos-rs/scripts/spell_campaign_matrix-Rogue.json",
+ "matrix_mode": "full",
+ "matrix_counts": {
+  "Rogue": 59
+ },
+ "talent_build": {
+  "name": "combat",
+  "role": "MeleeDps",
+  "total_points": 51,
+  "known_spell_ids": [
+   13750,
+   13791,
+   13792,
+   13845,
+   13852,
+   13863,
+   13877,
+   13964,
+   14137,
+   14142,
+   14159,
+   14161,
+   14163,
+   14165,
+   14179,
+   18429,
+   30920
+  ],
+  "required_spell_ids": []
+ },
+ "fixture_note": "union-seeded single-race fixture; not a legal single-race spellbook claim where union exceeds any one race (Paladin Human==Dwarf==160, numerically equal)",
+ "seed_count": 106,
+ "talent_seed_checks": [
+  {
+   "spell_id": 13750,
+   "learned": true
+  },
+  {
+   "spell_id": 13791,
+   "learned": true
+  },
+  {
+   "spell_id": 13792,
+   "learned": true
+  },
+  {
+   "spell_id": 13845,
+   "learned": true
+  },
+  {
+   "spell_id": 13852,
+   "learned": true
+  },
+  {
+   "spell_id": 13863,
+   "learned": true
+  },
+  {
+   "spell_id": 13877,
+   "learned": true
+  },
+  {
+   "spell_id": 13964,
+   "learned": true
+  },
+  {
+   "spell_id": 14137,
+   "learned": true
+  },
+  {
+   "spell_id": 14142,
+   "learned": true
+  },
+  {
+   "spell_id": 14159,
+   "learned": true
+  },
+  {
+   "spell_id": 14161,
+   "learned": true
+  },
+  {
+   "spell_id": 14163,
+   "learned": true
+  },
+  {
+   "spell_id": 14165,
+   "learned": true
+  },
+  {
+   "spell_id": 14179,
+   "learned": true
+  },
+  {
+   "spell_id": 18429,
+   "learned": true
+  },
+  {
+   "spell_id": 30920,
+   "learned": true
+  }
+ ],
+ "failure_clusters": [],
+ "verdict_counts": {
+  "BLOCKED": 10,
+  "PASS": 34,
+  "PASSIVE-VERIFIED": 15
+ },
+ "git_head": "9ce0af10",
+ "git_dirty": true
+}

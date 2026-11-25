@@ -1,0 +1,106 @@
+{
+ "mode": "run-class",
+ "class": "Druid",
+ "matrix_file": "/Users/jeffarn/Programming/azeroth-server/vmangos-rs/scripts/spell_campaign_matrix.json",
+ "matrix_mode": "full",
+ "matrix_counts": {
+  "Druid": 63
+ },
+ "talent_build": {
+  "name": "balance",
+  "role": "RangeDps",
+  "total_points": 51,
+  "known_spell_ids": [
+   16689,
+   16818,
+   16820,
+   16825,
+   16835,
+   16847,
+   16864,
+   16880,
+   16901,
+   16906,
+   16913,
+   16926,
+   17055,
+   17249,
+   24858
+  ],
+  "required_spell_ids": [
+   339
+  ]
+ },
+ "fixture_note": "union-seeded single-race fixture; not a legal single-race spellbook claim where union exceeds any one race (Paladin Human==Dwarf==160, numerically equal)",
+ "seed_count": 202,
+ "talent_seed_checks": [
+  {
+   "spell_id": 16689,
+   "learned": true
+  },
+  {
+   "spell_id": 16818,
+   "learned": true
+  },
+  {
+   "spell_id": 16820,
+   "learned": true
+  },
+  {
+   "spell_id": 16825,
+   "learned": true
+  },
+  {
+   "spell_id": 16835,
+   "learned": true
+  },
+  {
+   "spell_id": 16847,
+   "learned": true
+  },
+  {
+   "spell_id": 16864,
+   "learned": true
+  },
+  {
+   "spell_id": 16880,
+   "learned": true
+  },
+  {
+   "spell_id": 16901,
+   "learned": true
+  },
+  {
+   "spell_id": 16906,
+   "learned": true
+  },
+  {
+   "spell_id": 16913,
+   "learned": true
+  },
+  {
+   "spell_id": 16926,
+   "learned": true
+  },
+  {
+   "spell_id": 17055,
+   "learned": true
+  },
+  {
+   "spell_id": 17249,
+   "learned": true
+  },
+  {
+   "spell_id": 24858,
+   "learned": true
+  }
+ ],
+ "failure_clusters": [],
+ "verdict_counts": {
+  "BLOCKED": 8,
+  "PASS": 40,
+  "PASSIVE-VERIFIED": 15
+ },
+ "git_head": "f593d4bd",
+ "git_dirty": true
+}

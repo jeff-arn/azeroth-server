@@ -1,0 +1,13 @@
+[package]
+name = "mangos-spells"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Spell data (SpellEntry subset) and deterministic spell math for the Rust mangosd (Phase 4 Slice 5), mirroring vmangos src/game/Spells"
+
+[dependencies]
+mangos-dbc = { path = "../mangos-dbc" }
+
+[lints]
+workspace = true

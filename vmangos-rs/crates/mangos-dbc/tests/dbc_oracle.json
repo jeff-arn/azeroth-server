@@ -1,0 +1,1481 @@
+{
+ "files": {
+  "AnimationData.dbc": {
+   "field_count": 7,
+   "record_count": 208,
+   "record_size": 28,
+   "records_sha256": "fecd63021a38500558e77849554e1bb9afd1cdc4555b3bf6b3a379905992a9aa",
+   "string_size": 2249,
+   "strings_sha256": "ebc653e6ebebe9435181ab8531f58fbcf72c23eedb76e3fc92f869d9ef27e45f"
+  },
+  "AreaPOI.dbc": {
+   "field_count": 29,
+   "record_count": 339,
+   "record_size": 116,
+   "records_sha256": "de4b4483b917248359ea5e840c06177a1abc57dcdd4c05dc6065459939c80966",
+   "string_size": 3856,
+   "strings_sha256": "15095ea0f387c9e0e5f1b801e7f0b9d0919a9e597f1fe78e201f72ec30974914"
+  },
+  "AreaTable.dbc": {
+   "field_count": 25,
+   "record_count": 1081,
+   "record_size": 100,
+   "records_sha256": "557027369849076139eef6fa8d2bbf70b87475b4c57d9eccaca7629989436db7",
+   "string_size": 15838,
+   "strings_sha256": "d1d5d56b38dd1e812c459a3abcc4afb954ab9c08aed1611ff088351f14dc1d3e"
+  },
+  "AreaTrigger.dbc": {
+   "field_count": 10,
+   "record_count": 432,
+   "record_size": 40,
+   "records_sha256": "1af0656a327374d6563a3e2c75ddf9a8d21838600bbafee834f75ebe537135f2",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "AttackAnimKits.dbc": {
+   "field_count": 5,
+   "record_count": 26,
+   "record_size": 20,
+   "records_sha256": "c9694b6d79cb60ed527ad6c09724f778130962396518800e1dd45e920400be91",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "AttackAnimTypes.dbc": {
+   "field_count": 2,
+   "record_count": 7,
+   "record_size": 8,
+   "records_sha256": "ab0ad23bd506cf955a3bbca310bb6a62b4fa9ce248a8c16cf741a06b7e00ba95",
+   "string_size": 84,
+   "strings_sha256": "3bdcdc70a44b8379550b8bb9787a965dea21bf95ae866e7f3d54ca97512f9bf7"
+  },
+  "AuctionHouse.dbc": {
+   "field_count": 13,
+   "record_count": 7,
+   "record_size": 52,
+   "records_sha256": "fa2079b5a97beeba74c9e665e7721c38736b423c0d7b7ab131fb08f14a68d2a6",
+   "string_size": 170,
+   "strings_sha256": "c3f571eb8294e578f35607be4e44517d055623f6b6262e416dca6271bc1a883d"
+  },
+  "BankBagSlotPrices.dbc": {
+   "field_count": 2,
+   "record_count": 12,
+   "record_size": 8,
+   "records_sha256": "6c5c9f3b1dbba91b151aae858c29cb6d24040be94b970e401e9f8dc9e0984168",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CameraShakes.dbc": {
+   "field_count": 8,
+   "record_count": 24,
+   "record_size": 32,
+   "records_sha256": "19982e5478d26eac5802eb147d59004c71a866b23dec2931ca09127cd4d69bff",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "Cfg_Categories.dbc": {
+   "field_count": 11,
+   "record_count": 14,
+   "record_size": 44,
+   "records_sha256": "a20f3b72bf481441370342374dbbb6a51252590aa872acceb5ec6189a342b2c2",
+   "string_size": 102,
+   "strings_sha256": "b95d073f023eb3255b7547a62997073829c5e1a88e677f82e47b312a6e02c447"
+  },
+  "Cfg_Configs.dbc": {
+   "field_count": 4,
+   "record_count": 11,
+   "record_size": 16,
+   "records_sha256": "af8123982cf1fef2f1e334ec0f97018212412139d4fa3b18ccda885f3ca5f980",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CharBaseInfo.dbc": {
+   "byte_fields": true,
+   "field_count": 2,
+   "record_count": 41,
+   "record_size": 2,
+   "records_sha256": "0d36e8d3a9e0ae30bc1d3a6af87d82e5263f2320c9e6c0cba1e2bfd70c44fe1e",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CharHairGeosets.dbc": {
+   "field_count": 6,
+   "record_count": 148,
+   "record_size": 24,
+   "records_sha256": "fff73c52a0269c60c2216be8b83b578c5ac819d7aa6e4000eab2d14df5acbc8a",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CharHairTextures.dbc": {
+   "field_count": 8,
+   "record_count": 69,
+   "record_size": 32,
+   "records_sha256": "71c9bb93559dd6fa3b5399012b9307d167edb6ae0976d0531cb4a8e4174c34f1",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CharSections.dbc": {
+   "field_count": 10,
+   "record_count": 3671,
+   "record_size": 40,
+   "records_sha256": "c76e1d00a7f75ed93870eed79b05f4f2f1abb4ab6032faac2f1e34f41d58e574",
+   "string_size": 198838,
+   "strings_sha256": "9a0c4866c5859902ec3f218f963ae59057e7015c075a83829aa2366c319b111d"
+  },
+  "CharStartOutfit.dbc": {
+   "field_count": 41,
+   "record_count": 82,
+   "record_size": 152,
+   "records_sha256": "604f6e13efa8d2689e4e546cd1c0956f5f8f6b93e09bb1b677bcf15ee469c433",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CharVariations.dbc": {
+   "field_count": 6,
+   "record_count": 16,
+   "record_size": 24,
+   "records_sha256": "e10a98cb638f0deab2430fd14f51cb27a8c6fb846e72db0ec9456fe20657a297",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CharacterCreateCameras.dbc": {
+   "empty_file": true
+  },
+  "CharacterFacialHairStyles.dbc": {
+   "field_count": 9,
+   "record_count": 136,
+   "record_size": 36,
+   "records_sha256": "db97712150c6dfa8a12d8d9c14336213216f6dc77a653d2c4a428b96a2136cd4",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "ChatChannels.dbc": {
+   "field_count": 21,
+   "record_count": 6,
+   "record_size": 84,
+   "records_sha256": "84291926ed91e9901bfc8e004e7c9a9ad0ccd70bfddc02c2b7a9708f94f2bdf1",
+   "string_size": 138,
+   "strings_sha256": "85fbc4ea5197dd7de8b01abd1f49e14baeab74d84e82c8c46efee071505d326d"
+  },
+  "ChatProfanity.dbc": {
+   "field_count": 2,
+   "record_count": 2289,
+   "record_size": 8,
+   "records_sha256": "ea9825dd034e24df364a5c6512e8f97281eb4cd9f9f3bf50bc6e808b803b4c83",
+   "string_size": 28534,
+   "strings_sha256": "613ef9d3dad37bd6e60d8b954a10d2d0ad43c0a06ff596015b44cb3210672139"
+  },
+  "ChrClasses.dbc": {
+   "field_count": 17,
+   "record_count": 9,
+   "record_size": 68,
+   "records_sha256": "6b905bd5cf0aa48c7b1f1a5f50539eefc8708e7e8be477b841b3f87bf7959423",
+   "string_size": 135,
+   "strings_sha256": "1cb486d71b329ac9b776fc7544ac8fc17c9bae273e4e57ae9316956deeae2a61"
+  },
+  "ChrRaces.dbc": {
+   "field_count": 29,
+   "record_count": 9,
+   "record_size": 116,
+   "records_sha256": "227ad780c4cdce5781e5741d4ac89fb237f83d7b71b96b22211e10f83eeddfac",
+   "string_size": 170,
+   "strings_sha256": "2b04d79c5fc1c0363c6c029cf54720b0941adb6aef746ab2b9816d96b12248a6"
+  },
+  "CinematicCamera.dbc": {
+   "field_count": 7,
+   "record_count": 10,
+   "record_size": 28,
+   "records_sha256": "a66498fdb5c9504c062d13eb6a5ae661b2b0647c486f41efac7189a25eda4496",
+   "string_size": 237,
+   "strings_sha256": "1d6877feb7e29c41f75783d8696c464c447009dcdcc15e7b4317f87e9d23e0af"
+  },
+  "CinematicSequences.dbc": {
+   "field_count": 10,
+   "record_count": 10,
+   "record_size": 40,
+   "records_sha256": "90e274d46c77a62b2457e428058eaa9102a95b023589b536dcdc8dd2a7f48812",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CreatureDisplayInfo.dbc": {
+   "field_count": 12,
+   "record_count": 10534,
+   "record_size": 48,
+   "records_sha256": "0e3ff23fe4a87e702391b7f77e3810e0f54490a490d5154d5ebb9292d4ca7a0a",
+   "string_size": 25639,
+   "strings_sha256": "2a1f688d8c50d914f313d8bc3ec974f734f5560fbafa473294347395dc51bea7"
+  },
+  "CreatureDisplayInfoExtra.dbc": {
+   "field_count": 19,
+   "record_count": 6939,
+   "record_size": 76,
+   "records_sha256": "beb2e9c4ac0764e2c587af47c29a1abdba92093650ff341a227f1792dd556e3e",
+   "string_size": 251115,
+   "strings_sha256": "c5de90b5824386cc0d0fb65abf3bbd66022e13c542f1b9f514c3306241972b45"
+  },
+  "CreatureFamily.dbc": {
+   "field_count": 18,
+   "record_count": 23,
+   "record_size": 72,
+   "records_sha256": "57bde9e2afea53ed45e2ab0b959a7d53e77cb9cad6ff3451c0855040280b0b3c",
+   "string_size": 933,
+   "strings_sha256": "5dfa8edeb55d723e973543f6d08ec1d932a709c16346d970fab360590a24ae98"
+  },
+  "CreatureModelData.dbc": {
+   "field_count": 16,
+   "record_count": 430,
+   "record_size": 64,
+   "records_sha256": "f6598fd5bab12ec739a6eabee55b6c92e192870b53851e855f67558d2cf68895",
+   "string_size": 15023,
+   "strings_sha256": "fd6c4e21d0eadab98fb4a6acfd71d10d86c46a7b0c3034ac8ac61669630cfc5c"
+  },
+  "CreatureSoundData.dbc": {
+   "field_count": 30,
+   "record_count": 406,
+   "record_size": 120,
+   "records_sha256": "b06af1110a3543477b844185a2012a535aa3cb81af7fba1dbe3805fff34b89ba",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CreatureSpellData.dbc": {
+   "field_count": 9,
+   "record_count": 315,
+   "record_size": 36,
+   "records_sha256": "ad5ff62a9ecc9b7c5cbe40effd7930adedf0aecb5e93b2d2de32000439ebaaee",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "CreatureType.dbc": {
+   "field_count": 11,
+   "record_count": 11,
+   "record_size": 44,
+   "records_sha256": "be20da073be73a765eb579f2b301a9b87d9d069880aab4a6c13d751a249731fa",
+   "string_size": 94,
+   "strings_sha256": "eea4ffad5dadeae81cfa95577ad76a71c402449374e170b0d91c94c718bfacd8"
+  },
+  "DeathThudLookups.dbc": {
+   "field_count": 5,
+   "record_count": 45,
+   "record_size": 20,
+   "records_sha256": "9cc838fec0998fdc7579d2c44aa68b2710700358891852cf67d529cbe59b4716",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "DurabilityCosts.dbc": {
+   "field_count": 30,
+   "record_count": 300,
+   "record_size": 120,
+   "records_sha256": "d127e680b4d42435746bc728e3319af55ca15d0783645808c8e9d218ca2076a3",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "DurabilityQuality.dbc": {
+   "field_count": 2,
+   "record_count": 14,
+   "record_size": 8,
+   "records_sha256": "fbe63a27987cec6975d17207787dab555c4900eab5e996d0bc0622f73f35e739",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "Emotes.dbc": {
+   "field_count": 7,
+   "record_count": 78,
+   "record_size": 28,
+   "records_sha256": "bc17c090aca6ee4a9aa04a05a342a7239a7f7c75fb59389d32a361143544c0f8",
+   "string_size": 1365,
+   "strings_sha256": "c2e080305b0b6e5a4b74a8502cffc20aac9dbe9889e4e5e2dbee419c38650779"
+  },
+  "EmotesText.dbc": {
+   "field_count": 19,
+   "record_count": 169,
+   "record_size": 76,
+   "records_sha256": "719f43a62a775f16779f7ed9f00e0cc288695f9c7b3110a63aa81f0e3ef70615",
+   "string_size": 1044,
+   "strings_sha256": "b959355a596376f340c9939d3f3a2d94ed465e016f50ec68a24fc46130913dcc"
+  },
+  "EmotesTextData.dbc": {
+   "field_count": 10,
+   "record_count": 879,
+   "record_size": 40,
+   "records_sha256": "33eaad0d8e779b2972abc9541902a25c2c16bf000fb05b3025ee62fba501e650",
+   "string_size": 25360,
+   "strings_sha256": "1d8d4aea95140e0261f7cf2d8c9a59b71f7372807956cf9fb2a00e9cbe4f38e5"
+  },
+  "EmotesTextSound.dbc": {
+   "field_count": 5,
+   "record_count": 418,
+   "record_size": 20,
+   "records_sha256": "2937351c43ded90d5f78327e3be275324120f522ca796ecbe58e03d538d19f92",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "EnvironmentalDamage.dbc": {
+   "field_count": 3,
+   "record_count": 6,
+   "record_size": 12,
+   "records_sha256": "13faeb82edf29b628df9d8248895aa66884cdc09521af1a7cdb8193d21664059",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "Exhaustion.dbc": {
+   "field_count": 15,
+   "record_count": 5,
+   "record_size": 60,
+   "records_sha256": "1597b76712cc4805093cf1761d6c746d3351a8c36056fa4e79b7ce28432873cc",
+   "string_size": 37,
+   "strings_sha256": "767ab5d280780c945d0625f1532c9c20b7073243cd58e49b0d0151f3b4961731"
+  },
+  "Faction.dbc": {
+   "field_count": 37,
+   "record_count": 190,
+   "record_size": 148,
+   "records_sha256": "4cfe5f74d2cdeccbd8cd4593d6a478f47e1b3ede9c06e689b230cbaa93364ccd",
+   "string_size": 7014,
+   "strings_sha256": "3249f02babd484e66ffefa3a8f90e4bf6a3edb2c91c224ee9097595332476a7a"
+  },
+  "FactionGroup.dbc": {
+   "field_count": 12,
+   "record_count": 4,
+   "record_size": 48,
+   "records_sha256": "5fcd27630b562b4cc615af4dfc9d7e269afe9e3c6ee01e9f92987a2337df951a",
+   "string_size": 31,
+   "strings_sha256": "0a9541310585b9b9dea1e817c95486f12028113f442e51e4ac7b9f1f31e38646"
+  },
+  "FactionTemplate.dbc": {
+   "field_count": 14,
+   "record_count": 314,
+   "record_size": 56,
+   "records_sha256": "4836709bed461f6c2b6ceb1c823cafc5ad55f60d0b8433a2dca496e674b0006e",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "FootprintTextures.dbc": {
+   "field_count": 2,
+   "record_count": 6,
+   "record_size": 8,
+   "records_sha256": "d97b22922fa8d9c3d8a0bc4865195846c44de60bc3744631da0cedb755269508",
+   "string_size": 200,
+   "strings_sha256": "96e7cb816c388a3f99dfbd10fa0464f997de211b2cacaf431b24baa9437f19a8"
+  },
+  "FootstepTerrainLookup.dbc": {
+   "field_count": 5,
+   "record_count": 179,
+   "record_size": 20,
+   "records_sha256": "ff24e381944409779717fc91aea1ac9f39bc412ad7d6b6c255ca9e6cfd09d6f4",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "GMSurveyCurrentSurvey.dbc": {
+   "field_count": 2,
+   "record_count": 8,
+   "record_size": 8,
+   "records_sha256": "b19bec8884d53eaff2b7e5e52fd20fe3b832a33981db207814933c45dd764299",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "GMSurveyQuestions.dbc": {
+   "field_count": 10,
+   "record_count": 6,
+   "record_size": 40,
+   "records_sha256": "9f2bee8f2f327d56f157c6820a44746bbafdb3f93672b9dab24a1c16121d659e",
+   "string_size": 475,
+   "strings_sha256": "01a990f77a820e01d3ad355f971b489b10da218d404deb8b454ff0c9143ac58e"
+  },
+  "GMSurveySurveys.dbc": {
+   "field_count": 11,
+   "record_count": 1,
+   "record_size": 44,
+   "records_sha256": "74a60162c64fee6a3140347154db039e12af12dd7d430614f17960fddf1bdb64",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "GMTicketCategory.dbc": {
+   "field_count": 10,
+   "record_count": 10,
+   "record_size": 40,
+   "records_sha256": "2e7d8f7cab8a8f73c71b00812467c200c6f99a2b80052786078467ef98c4d66f",
+   "string_size": 120,
+   "strings_sha256": "ffeee720f07efa09a5c05eda87a045c85334f10f456a060b9cf8ff5ddf34afcf"
+  },
+  "GameObjectArtKit.dbc": {
+   "field_count": 8,
+   "record_count": 3,
+   "record_size": 32,
+   "records_sha256": "e22cb5a53bf3297ddc968d8cfa48817c750035bc456af0054aa34f33b724f6e0",
+   "string_size": 250,
+   "strings_sha256": "90a4b75cedbaf62a4c04293a23735a84667e65fd5f385393174a1afe6b34b426"
+  },
+  "GameObjectDisplayInfo.dbc": {
+   "field_count": 12,
+   "record_count": 1638,
+   "record_size": 48,
+   "records_sha256": "c4cb10ee4837751e62cc1752a55c6f022d923436328935396d385d2da596b93d",
+   "string_size": 102200,
+   "strings_sha256": "26e9b6f9f5019eaba01628cf32d9d714554965ed45592d4fbf1d1a2303f9b46f"
+  },
+  "GameTips.dbc": {
+   "field_count": 10,
+   "record_count": 74,
+   "record_size": 40,
+   "records_sha256": "29a8406026d1bb81eceb894f187f5b6a6dd40653361daef4e1539d28fd9cc31f",
+   "string_size": 7903,
+   "strings_sha256": "6fe86ee560667a0dde7a8ab5b7da19b1c4f42190e2ccf53f3fcc13f620ae60e1"
+  },
+  "GroundEffectDoodad.dbc": {
+   "field_count": 3,
+   "record_count": 443,
+   "record_size": 12,
+   "records_sha256": "b28f836604370d646b571d5cec8b2d3a53c6b60967cad61f39a787f857fb30be",
+   "string_size": 5866,
+   "strings_sha256": "b9bd6e55c613d59e5bbc26b1d3fdbad7c28a12a98729f93bec57cc712ed26f99"
+  },
+  "GroundEffectTexture.dbc": {
+   "field_count": 7,
+   "record_count": 12742,
+   "record_size": 28,
+   "records_sha256": "442df56b7d712f857b08b919fa71605a7d1ed13a06f536021556080773b547cb",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "HelmetGeosetVisData.dbc": {
+   "field_count": 6,
+   "record_count": 16,
+   "record_size": 24,
+   "records_sha256": "03ed774868c22799bef1aa3122a8d04cc7d8a31b975346ad540f64e3c34caee7",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "ItemBagFamily.dbc": {
+   "field_count": 10,
+   "record_count": 8,
+   "record_size": 40,
+   "records_sha256": "1c7ce37c03532b0f1cc1f277f96924846ba3ae09fe19dd752856ce8209c135dc",
+   "string_size": 85,
+   "strings_sha256": "0346e69e71caaefa6a3a0be3a04684c58ccf2cbb4f3b06982fbde51a317129d7"
+  },
+  "ItemClass.dbc": {
+   "field_count": 12,
+   "record_count": 16,
+   "record_size": 48,
+   "records_sha256": "91abe9c00b3935fd614947ece39f43aa855a4b4e02003602ee14fe7f1289f99f",
+   "string_size": 176,
+   "strings_sha256": "f1a72aee1245f3443f63c264d345794516291ab897592d00b9d751cc8c74228c"
+  },
+  "ItemDisplayInfo.dbc": {
+   "field_count": 23,
+   "record_count": 29604,
+   "record_size": 92,
+   "records_sha256": "5d8abfce4797beba0429e3a6c8f3cb62f0f73379f064bf155a13e03caaa89839",
+   "string_size": 336436,
+   "strings_sha256": "9da2123b559c3776ee17d9a5ef3b0a4bbfe2e094ff7a3fd4e162a6e0301eea52"
+  },
+  "ItemGroupSounds.dbc": {
+   "field_count": 5,
+   "record_count": 24,
+   "record_size": 20,
+   "records_sha256": "79a8e8a4c145b14f64ce34e0cd4a6fc7fb82eccf1e54b4b5dae69496edb83bc1",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "ItemPetFood.dbc": {
+   "field_count": 10,
+   "record_count": 8,
+   "record_size": 40,
+   "records_sha256": "a6b7f0410680b2439ad5901ba382f893c62101379cda9d7013abd342d2e8b0f8",
+   "string_size": 55,
+   "strings_sha256": "b491d1284167be2ddf432c8e4dcfe8d049c7953e08e331d4f94778f12c32dabb"
+  },
+  "ItemRandomProperties.dbc": {
+   "field_count": 16,
+   "record_count": 2012,
+   "record_size": 64,
+   "records_sha256": "6f3eabc5a389c5f2a38622fd2f2659df9f847ea7f158d6de97bc0d4f81363c82",
+   "string_size": 636,
+   "strings_sha256": "e85538752af2ec030e3cc7021565095d0732d23c915e47cf8cac84e96b0cd827"
+  },
+  "ItemSet.dbc": {
+   "field_count": 45,
+   "record_count": 172,
+   "record_size": 180,
+   "records_sha256": "2171904bedffc5cbe2d3fe70c0e5d0e04679710c9a4180b564b64813f8fa86dd",
+   "string_size": 3696,
+   "strings_sha256": "0d58d0be5bf7b0563bb545fae7a339ef79371924d3137dc61963c0f9dbb61b87"
+  },
+  "ItemSubClass.dbc": {
+   "field_count": 28,
+   "record_count": 72,
+   "record_size": 112,
+   "records_sha256": "05660c67e2f79df97a1f313e1070750e6520f6864f88b34cdf38ec8a805007ca",
+   "string_size": 882,
+   "strings_sha256": "3bd6abdffc7bc05abace7f2e3291c89e648289f85d341e22bc2b41a08bd0f410"
+  },
+  "ItemSubClassMask.dbc": {
+   "field_count": 11,
+   "record_count": 3,
+   "record_size": 44,
+   "records_sha256": "1a6e4fc22ca135bfc79eebe5914e2cbdf2cd9ed1a244378764067698dc6276c0",
+   "string_size": 35,
+   "strings_sha256": "420f3a9f7db2506b3f641985c4ec88adb0dba86970fa451118e14732233b1d3b"
+  },
+  "ItemVisualEffects.dbc": {
+   "field_count": 2,
+   "record_count": 35,
+   "record_size": 8,
+   "records_sha256": "df48b88db429061a82f547730e2df74276f156de3118b16d4a93d085f17d6974",
+   "string_size": 1304,
+   "strings_sha256": "e14215b3f15274d2cb0caf1aecc86b2f3758557a9c2657270f8ddf0debc896f0"
+  },
+  "ItemVisuals.dbc": {
+   "field_count": 6,
+   "record_count": 34,
+   "record_size": 24,
+   "records_sha256": "ab5fed6911d6def121e77bb2c4e688fc543c6b78f53fd1319f170f7dc3584dfe",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "LFGDungeons.dbc": {
+   "field_count": 14,
+   "record_count": 67,
+   "record_size": 56,
+   "records_sha256": "4274a207d41af92312f0a647e9ee01c9ac99d1caaed527bc36cf794dce070d93",
+   "string_size": 929,
+   "strings_sha256": "15852e11cd418643db4c8922892fa9aaa567d8d70c790c2fa41436a0183ac9f9"
+  },
+  "LanguageWords.dbc": {
+   "field_count": 3,
+   "record_count": 1481,
+   "record_size": 12,
+   "records_sha256": "074eb34188b2a3bcb11373aa499dd22f91f9e80c7bc45c27cc2b3bd8164960b0",
+   "string_size": 6604,
+   "strings_sha256": "40105e7e8bc6f9362451d705d9c017186a8c61a129ef24f72d3046c81c9a4020"
+  },
+  "Languages.dbc": {
+   "field_count": 10,
+   "record_count": 13,
+   "record_size": 40,
+   "records_sha256": "5d5f626966d4e525ac13b0de393b2c33e086bf0437ddaa627c9fbf873bfeb251",
+   "string_size": 111,
+   "strings_sha256": "f8a77852157adcb6095c44b5bb8f835401a8c4423c0f50de4f80c6d45771f200"
+  },
+  "Light.dbc": {
+   "field_count": 12,
+   "record_count": 374,
+   "record_size": 48,
+   "records_sha256": "067cfe1253f93f819ebc04aaac6291b95ecbc4137e3eb76e2588f531837ba10a",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "LightFloatBand.dbc": {
+   "field_count": 34,
+   "record_count": 2556,
+   "record_size": 136,
+   "records_sha256": "751cedc13bf03fc97faabf2daf67a6465686ae7637c598be5bfcad8a076de855",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "LightIntBand.dbc": {
+   "field_count": 34,
+   "record_count": 7668,
+   "record_size": 136,
+   "records_sha256": "8f8b831e37f016dcdbb972270bd37e8d1b4a5a22b9217422a03336667a72cc4f",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "LightParams.dbc": {
+   "field_count": 9,
+   "record_count": 426,
+   "record_size": 36,
+   "records_sha256": "74c9d9e0e596b633666cda7774e8016204830d789b683e27ee1e824f12352d1f",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "LightSkybox.dbc": {
+   "field_count": 2,
+   "record_count": 6,
+   "record_size": 8,
+   "records_sha256": "24fade373c384d92e9fb108cddb64e784f2ba7ee496f5d3da049ce631832beba",
+   "string_size": 227,
+   "strings_sha256": "9bfb68297765e395ffff08abaf9cf647a8414fe9845414c011a9b57152721808"
+  },
+  "LiquidType.dbc": {
+   "field_count": 4,
+   "record_count": 5,
+   "record_size": 16,
+   "records_sha256": "5bdbc2ad83269de3b6f8effa91e7f39e4453edb57d5a4afdc6bebeb0df48e6ba",
+   "string_size": 43,
+   "strings_sha256": "7277edfba3d916ba3d8a9e0edd210ee8d2db26cc46c9db28999bd672133b2a41"
+  },
+  "LoadingScreenTaxiSplines.dbc": {
+   "field_count": 19,
+   "record_count": 12,
+   "record_size": 76,
+   "records_sha256": "e6e62a10e4d7156090ce2dc5f21b32dc1ea8e80344591d388ffedf1bc3a0105f",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "LoadingScreens.dbc": {
+   "field_count": 3,
+   "record_count": 40,
+   "record_size": 12,
+   "records_sha256": "2f7296c3bce235585020bdac4396b0520bbec71888374f8853ad4736752b2792",
+   "string_size": 2926,
+   "strings_sha256": "f943846fb0961da806546a9591a34e43ba6b7967f1ff863cbe5350aec2ea3228"
+  },
+  "Lock.dbc": {
+   "field_count": 33,
+   "record_count": 209,
+   "record_size": 132,
+   "records_sha256": "4956da62533573bb48ab1208bbc5fdbb9c0a053cfe76509ba3f18f040c874617",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "LockType.dbc": {
+   "field_count": 29,
+   "record_count": 19,
+   "record_size": 116,
+   "records_sha256": "9105d2fdebbd53ee44939f5c7f747d8aad11343dd7259faf7bbd7033e22cfafc",
+   "string_size": 379,
+   "strings_sha256": "0537c13e8626733d25d64f96c24b895d88c93f62af5b8fe2274b2cc089b89809"
+  },
+  "MailTemplate.dbc": {
+   "field_count": 10,
+   "record_count": 96,
+   "record_size": 40,
+   "records_sha256": "463adefdc860d36b660ca97b5c7892abcb98a38def6be36f2774c14934ea6d19",
+   "string_size": 10850,
+   "strings_sha256": "7d6eb5eb6a77741e8d4cdc33707359643b6900f625a5819f59228bdefb17cbe5"
+  },
+  "Map.dbc": {
+   "field_count": 42,
+   "record_count": 44,
+   "record_size": 168,
+   "records_sha256": "86528fcc50d8bb8c7bea7c30afb1dc0b2dacfc4cebabfa37083c17cd795ae871",
+   "string_size": 2349,
+   "strings_sha256": "71715fb62c350cc261490e43f9eac62a50460bba633b59c8d1c46f368a74751d"
+  },
+  "Material.dbc": {
+   "field_count": 3,
+   "record_count": 8,
+   "record_size": 12,
+   "records_sha256": "34f02e484b34714717f2a7a29cbb77b935af8daf9790d2cea88646c025c5659c",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "NPCSounds.dbc": {
+   "field_count": 5,
+   "record_count": 156,
+   "record_size": 20,
+   "records_sha256": "70a9b353f3fe3eabb149a37fd2999868ad7cefee6501d240472e3e279524c81e",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "NameGen.dbc": {
+   "field_count": 4,
+   "record_count": 1405,
+   "record_size": 16,
+   "records_sha256": "02c7f0bf4d3dc69126991a18b5f5ef69e2266e185f02e7cbdfe962de84fe9729",
+   "string_size": 9637,
+   "strings_sha256": "34cadc19e0f53f47212ac93466ee410970e55af005cb8b87f1ae1fe51b6db7f0"
+  },
+  "NamesProfanity.dbc": {
+   "field_count": 2,
+   "record_count": 1535,
+   "record_size": 8,
+   "records_sha256": "9d8302fe2e2fec4d258e659adb66fd9d6273fa86316a36583fc922be30684b90",
+   "string_size": 17530,
+   "strings_sha256": "e658682507b9176eb2d5da3462e847c5832e5163e07bacd4e7c05e22515c40b0"
+  },
+  "NamesReserved.dbc": {
+   "field_count": 2,
+   "record_count": 2288,
+   "record_size": 8,
+   "records_sha256": "a232da2458806308c67090e1cb14ad60905fc742644c81d97f5187c3e8853064",
+   "string_size": 27321,
+   "strings_sha256": "5b43a71318b669d3ab61ec84ec32deda7d98c28e96a56a81de05797f87c7bc7a"
+  },
+  "Package.dbc": {
+   "field_count": 12,
+   "record_count": 1,
+   "record_size": 48,
+   "records_sha256": "20a468bb07a1e36e74eeef8d9d189edc186f831cd79df58dba6caca4b6028e0c",
+   "string_size": 25,
+   "strings_sha256": "0ea64f06649aab669e6e030bba5c98849a782a8a94c68408c5fc82bbb7878dd5"
+  },
+  "PageTextMaterial.dbc": {
+   "field_count": 2,
+   "record_count": 6,
+   "record_size": 8,
+   "records_sha256": "937f5fbce7a801447198297f23a5d4c591f4bed39f0a4c1edc51e70392547b19",
+   "string_size": 48,
+   "strings_sha256": "aa8312e8f476e719ac35983d51a1c152403497053b3c7ef60cff2089fe5560e5"
+  },
+  "PaperDollItemFrame.dbc": {
+   "field_count": 3,
+   "record_count": 36,
+   "record_size": 12,
+   "records_sha256": "23993e8321d41d91e62de83f72921e5676d11254d3168c743482be919050fc7a",
+   "string_size": 1150,
+   "strings_sha256": "88ee4fe3b09e1bcb338202d34be5a45b71510dc5d8fe1a925b451cedff1520f9"
+  },
+  "PetLoyalty.dbc": {
+   "field_count": 10,
+   "record_count": 8,
+   "record_size": 40,
+   "records_sha256": "8c79e9084e6f54785c089cfa9ea5311cf9cd4c15f31984b5993738639179c5ae",
+   "string_size": 225,
+   "strings_sha256": "945a8f02234cfe324bd568e46b0ab7cbd646bdb5d28fdf739496809ce125e7f3"
+  },
+  "PetPersonality.dbc": {
+   "field_count": 19,
+   "record_count": 2,
+   "record_size": 76,
+   "records_sha256": "bcad6625fc3717ca30225c8849349dc51e5072ef0a79ecf23ea9241192920fbe",
+   "string_size": 35,
+   "strings_sha256": "b2579d5a0ee60c2ba48342faf29b8b56d71c18b414045e0276179baf87e95e8e"
+  },
+  "QuestInfo.dbc": {
+   "field_count": 10,
+   "record_count": 7,
+   "record_size": 40,
+   "records_sha256": "61b5821577ffaf55c7ab018631441e5d0c68d39e85f3f241d6c9807b7285f026",
+   "string_size": 51,
+   "strings_sha256": "9402ff808c125c27cc0b7d59d148d92698f9a48778673c77e8027fae95c9d987"
+  },
+  "QuestSort.dbc": {
+   "field_count": 10,
+   "record_count": 34,
+   "record_size": 40,
+   "records_sha256": "5b9071fcb5e612d01bd95dc5659bbfebd36af6bf0ad1d92411a52cf9d87b9879",
+   "string_size": 407,
+   "strings_sha256": "26ca546f8cd5ca938f61475cac90a130b4c51c1591d9fb1ed2cc3049fdb1620f"
+  },
+  "Resistances.dbc": {
+   "field_count": 12,
+   "record_count": 7,
+   "record_size": 48,
+   "records_sha256": "d6a19afc90b793f73664182b0622f0537b30da2fa96fef80625aa52c8daddce9",
+   "string_size": 47,
+   "strings_sha256": "c35b3105857cf9fae87d238db084772af44974bc94ffdd365b8dedf4b0604965"
+  },
+  "ServerMessages.dbc": {
+   "field_count": 10,
+   "record_count": 5,
+   "record_size": 40,
+   "records_sha256": "5178f1b0fb00944a3fbd2150a5686034cdbd002acd9f4dbc948e42e0111055d7",
+   "string_size": 106,
+   "strings_sha256": "55225774c48d4e45f0c049adbc34f765424231ad33905576c9720ccc44d32412"
+  },
+  "SheatheSoundLookups.dbc": {
+   "field_count": 7,
+   "record_count": 33,
+   "record_size": 28,
+   "records_sha256": "7a0510336e0511324bb010edb06ee069e7c02a57d35f57cc1ba7cd27491a92d5",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SkillCostsData.dbc": {
+   "field_count": 5,
+   "record_count": 1500,
+   "record_size": 20,
+   "records_sha256": "1cd6e48beee4b7ca114a45addfafd6795524349ce94c048e32f071b7ffeb28d9",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SkillLine.dbc": {
+   "field_count": 22,
+   "record_count": 123,
+   "record_size": 88,
+   "records_sha256": "f80601b90e3b0d215ad3babb7309d0c4c9861af966165dfb3160fabbcc86d2ac",
+   "string_size": 4172,
+   "strings_sha256": "e620c34eb012f348dc4ad19f4539cfe0cc747ab09be85a72d14956005f610a44"
+  },
+  "SkillLineAbility.dbc": {
+   "field_count": 15,
+   "record_count": 5072,
+   "record_size": 60,
+   "records_sha256": "db9c97abfa03623cefe766c38db79ca620a7e72905da9276accc6c48e1af6943",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SkillLineCategory.dbc": {
+   "field_count": 11,
+   "record_count": 8,
+   "record_size": 44,
+   "records_sha256": "0bb77ea94997bb9a599c0027ef8f695089050541fb1de5c733851f291ecb0e36",
+   "string_size": 112,
+   "strings_sha256": "4d1e5fdc42a8ef5083eec880edaff9466a037c618cf13de7780b7ca4defc2542"
+  },
+  "SkillRaceClassInfo.dbc": {
+   "field_count": 8,
+   "record_count": 201,
+   "record_size": 32,
+   "records_sha256": "ef58c1bbfe61510c557185c1086459347ede807199c6cec8e7da113d02608612",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SkillTiers.dbc": {
+   "field_count": 33,
+   "record_count": 26,
+   "record_size": 132,
+   "records_sha256": "2d513c703733fd22a6d6e9301b1351a3edfadb3d7b9590d4d39aae9648590cdb",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SoundAmbience.dbc": {
+   "field_count": 3,
+   "record_count": 68,
+   "record_size": 12,
+   "records_sha256": "87504aa49b2460c087ac6b20fad079f0881e4a9f560b784c92ddf5d41a98f654",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SoundCharacterMacroLines.dbc": {
+   "empty_file": true
+  },
+  "SoundEntries.dbc": {
+   "field_count": 29,
+   "record_count": 4623,
+   "record_size": 116,
+   "records_sha256": "24e38a16de1e8d45a546bfb0822292b873fcc7696133c8d3c38f496afa37c510",
+   "string_size": 293075,
+   "strings_sha256": "1508f7679231a3f1f2cae558fac11ee90f3260699153a62a85019934a6ab06fb"
+  },
+  "SoundProviderPreferences.dbc": {
+   "field_count": 24,
+   "record_count": 38,
+   "record_size": 96,
+   "records_sha256": "5341d3d5436fa5bdcc3537a8af3c30f829f9c9a0d9bf66fb86e9c9f624d78998",
+   "string_size": 574,
+   "strings_sha256": "eb9cfffa130dc9ad658e6d17672be16023363e525e338a272bbd4bee2de89401"
+  },
+  "SoundSamplePreferences.dbc": {
+   "field_count": 17,
+   "record_count": 2,
+   "record_size": 68,
+   "records_sha256": "cadad4f685a9497631326e9fbb04816868dd0e5113c0d2445a4beb1bacb5e983",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SoundWaterType.dbc": {
+   "field_count": 4,
+   "record_count": 12,
+   "record_size": 16,
+   "records_sha256": "9032187c296bee147592a76bbca4b63cf94c2574e6c8fa57d9e0593cf26f0b42",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SpamMessages.dbc": {
+   "field_count": 2,
+   "record_count": 28,
+   "record_size": 8,
+   "records_sha256": "9499492e345b1a6a1cfa84a08a5ec04c8857bb1008226fcc3f5ec6d3bea37e10",
+   "string_size": 1917,
+   "strings_sha256": "00fe57dae88eecec2483cffb2b7f959677ac6a08fd50adbe781d4078ed3bded6"
+  },
+  "Spell.dbc": {
+   "field_count": 173,
+   "record_count": 22357,
+   "record_size": 692,
+   "records_sha256": "b387538f69f0b1ceb4f098690049b3b6ae188f500af7eb862829d605ff847ee9",
+   "string_size": 833949,
+   "strings_sha256": "54ffe01a7745b41d30235c6533ddaebef4bd2a7dfe8ef7b0889309fd171dd92a"
+  },
+  "SpellAuraNames.dbc": {
+   "empty_file": true
+  },
+  "SpellCastTimes.dbc": {
+   "field_count": 4,
+   "record_count": 52,
+   "record_size": 16,
+   "records_sha256": "a936c82a65b3348bd5d4aa9253a2f54e1e8390331b6c1b1401f5529267a4fd30",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SpellCategory.dbc": {
+   "field_count": 2,
+   "record_count": 166,
+   "record_size": 8,
+   "records_sha256": "614794025098d70141104948b76f4610e2f15bee124e3e6ba234a8984e328f81",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SpellChainEffects.dbc": {
+   "field_count": 8,
+   "record_count": 18,
+   "record_size": 32,
+   "records_sha256": "95f47289d58b8bdc9768818a26c21b1403276688c2cf0847693546070842d31f",
+   "string_size": 511,
+   "strings_sha256": "01ed8ab85ddabe9a7e3b90c56b0a18c7992908b3fcf6f9b23085567a17b5bcd5"
+  },
+  "SpellDispelType.dbc": {
+   "field_count": 12,
+   "record_count": 11,
+   "record_size": 48,
+   "records_sha256": "59d2f644e15530b552093d732e7ca4be75c75e285cc843a691b417177199964d",
+   "string_size": 105,
+   "strings_sha256": "bfff797aa575a7478b1581b8bcdfcffec82a7989293c55f2e7512f7f9b27c683"
+  },
+  "SpellDuration.dbc": {
+   "field_count": 4,
+   "record_count": 82,
+   "record_size": 16,
+   "records_sha256": "ef4d2ba187c424af30d9fb31f6d375347dfc686887b1098c38da6bd39f86b4c8",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SpellEffectCameraShakes.dbc": {
+   "field_count": 4,
+   "record_count": 9,
+   "record_size": 16,
+   "records_sha256": "b2ae0af35726ac5cb480b72c8705ae73d7f6c14dda1f3b03cb4c121d3b13699e",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SpellEffectNames.dbc": {
+   "empty_file": true
+  },
+  "SpellFocusObject.dbc": {
+   "field_count": 10,
+   "record_count": 138,
+   "record_size": 40,
+   "records_sha256": "fded0f0facdc26f3d7d57199024a59d2efba60cccc8bdc970f03596ef044a172",
+   "string_size": 2727,
+   "strings_sha256": "0d507fb41e176222a428d073a0370aec849f07d53e084973700e97d8af1ee385"
+  },
+  "SpellIcon.dbc": {
+   "field_count": 2,
+   "record_count": 1033,
+   "record_size": 8,
+   "records_sha256": "a449a1666cefa52155661045ec8b75e5e91c19de348d21023db92f651dd172dc",
+   "string_size": 38158,
+   "strings_sha256": "d8a77c51b6753868490708ce35b7d3e46e401d317769a2a8769917bb61f008a2"
+  },
+  "SpellItemEnchantment.dbc": {
+   "field_count": 24,
+   "record_count": 1460,
+   "record_size": 96,
+   "records_sha256": "a2ce5db6ca7792e13ecdfde1123430d027ebef5f4dc37bb96bb81167f3c099ab",
+   "string_size": 25092,
+   "strings_sha256": "45733b1eb364e465eeec76e2fabef773f53336f4d6d231259aa337d79e1b119a"
+  },
+  "SpellMechanic.dbc": {
+   "field_count": 10,
+   "record_count": 27,
+   "record_size": 40,
+   "records_sha256": "7aeeb1c0c3deb5c3bbe131227d6a6ba59a98bd22205fc7e51aa2e2aef4561bd5",
+   "string_size": 246,
+   "strings_sha256": "e7188c0436fcf7177ba056b4ea0f87ea7600baf68c5f8d40cc6bd7e839876346"
+  },
+  "SpellRadius.dbc": {
+   "field_count": 4,
+   "record_count": 24,
+   "record_size": 16,
+   "records_sha256": "22ba63a1ded038b585a3a9caf71e60422c0cd8e1d98d7fbd3bd08800a0378705",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SpellRange.dbc": {
+   "field_count": 22,
+   "record_count": 28,
+   "record_size": 88,
+   "records_sha256": "a843da41d53f0b280968ac4d26974fe18569b08f59365347b2f4e11b0f1ebd1c",
+   "string_size": 495,
+   "strings_sha256": "db9ff71c92429b7b6be32cd89a0263f78d58fa7c8b961bd4a6a62051e0716994"
+  },
+  "SpellShapeshiftForm.dbc": {
+   "field_count": 14,
+   "record_count": 32,
+   "record_size": 56,
+   "records_sha256": "4b64a9d81bcc48c3b8be01223ef5f5886875b0bfde5c51cd4a9b3feefdc45d74",
+   "string_size": 227,
+   "strings_sha256": "df600fe3301ec3de6546f29cb75663b3d7ed5bddcf9c950ed905972a8e5c6a2d"
+  },
+  "SpellVisual.dbc": {
+   "field_count": 16,
+   "record_count": 2165,
+   "record_size": 64,
+   "records_sha256": "e3d72f0c8cc1f51ca0ba7a355bd5bc0de6de7e53d404770057f5d9d41cbac763",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SpellVisualEffectName.dbc": {
+   "field_count": 5,
+   "record_count": 775,
+   "record_size": 20,
+   "records_sha256": "b3b00e3adf31c9f178e130e906cc0f0b85ffd82fdba62a1274027c5d777ca359",
+   "string_size": 42550,
+   "strings_sha256": "a12e3091a1d188cb0a2811ab1a8ded2da7c73aafad9a948b74e69a28417f2cd3"
+  },
+  "SpellVisualKit.dbc": {
+   "field_count": 35,
+   "record_count": 1772,
+   "record_size": 140,
+   "records_sha256": "03a97c7edef88c4cc9561f9d270c27c599eda1168887ec5875b64aacbf0dd007",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "SpellVisualPrecastTransitions.dbc": {
+   "field_count": 3,
+   "record_count": 3,
+   "record_size": 12,
+   "records_sha256": "b8756e121667190def4acba00b857e391b64a0f298b523f2bab8cdeeccd4b4b7",
+   "string_size": 59,
+   "strings_sha256": "23594c6b96d0fd5763acb9a956a66d3fa4b7d1e97de6c8c6a4bd31880ce0c3c3"
+  },
+  "StableSlotPrices.dbc": {
+   "field_count": 2,
+   "record_count": 2,
+   "record_size": 8,
+   "records_sha256": "47b3143575be75d76cc5f54a757fc3354bfde8e62049c3848b8e6832bc39b614",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "Startup_Strings.dbc": {
+   "field_count": 11,
+   "record_count": 7,
+   "record_size": 44,
+   "records_sha256": "c4226eacff456adcdf769b541f9b9a0d9f15fb98737403de9828ae455f091925",
+   "string_size": 676,
+   "strings_sha256": "fa4682f03f79fc6da413faa5414896d2fd1e320ad15e93ae1a6af1cd05908b5c"
+  },
+  "Stationery.dbc": {
+   "field_count": 4,
+   "record_count": 5,
+   "record_size": 16,
+   "records_sha256": "991517531a930befd3674e8849983570c1e2b475b6340604e389c01603ec5a3f",
+   "string_size": 62,
+   "strings_sha256": "5b660e1ad23c7ee7c51440dfde173151908db2b247ff96e13fc1984bf08a479b"
+  },
+  "StringLookups.dbc": {
+   "field_count": 2,
+   "record_count": 9,
+   "record_size": 8,
+   "records_sha256": "4c8a4ec0e7339d0f0226de0bb7ff543bdcfc769d19cd248c6875b6206bdcc115",
+   "string_size": 292,
+   "strings_sha256": "88db29953413f2fb07e8b8acf7997445e981cfe569cf1f6bc46ff304467a976d"
+  },
+  "Talent.dbc": {
+   "field_count": 21,
+   "record_count": 432,
+   "record_size": 84,
+   "records_sha256": "6aea22f0e5cf62886ff9401b5c672baecc826c93f7c6a6c941f34937f883308b",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "TalentTab.dbc": {
+   "field_count": 15,
+   "record_count": 27,
+   "record_size": 60,
+   "records_sha256": "30c09e22f3579a7684c44b0d02eeb72e7c25f5211b7b8dcdf980626b3ef9d218",
+   "string_size": 640,
+   "strings_sha256": "c3e1766d944d7f94329b22eae37fe428c541b489c1b7960dd9385c771f18bd41"
+  },
+  "TaxiNodes.dbc": {
+   "field_count": 16,
+   "record_count": 85,
+   "record_size": 64,
+   "records_sha256": "36e41514646c161ea579cbafde74a474fec417d95ac76a0e8ab02c3f57e55d58",
+   "string_size": 1991,
+   "strings_sha256": "bcfde960b11ef45917e605ab2e5f105275f516603e1ad973825c03124d214e5c"
+  },
+  "TaxiPath.dbc": {
+   "field_count": 4,
+   "record_count": 287,
+   "record_size": 16,
+   "records_sha256": "440d1d3bca0d1ebeab850b1cadacca1b307f050278ccdf7d6ed32de2411e1073",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "TaxiPathNode.dbc": {
+   "field_count": 9,
+   "record_count": 9582,
+   "record_size": 36,
+   "records_sha256": "07fcc4dbda80c18d5e314c173b6cf102369a630a5e85894d2a013ab0c1b36212",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "TerrainType.dbc": {
+   "field_count": 6,
+   "record_count": 11,
+   "record_size": 24,
+   "records_sha256": "b17e7e8b190ff03856ac661a4983809a0b57ed5374f63ffaa28352432349f4e7",
+   "string_size": 71,
+   "strings_sha256": "801672ad3f4f401f9f2f426c234b6486825c2546d3f7c084b9c276bca72afb90"
+  },
+  "TerrainTypeSounds.dbc": {
+   "field_count": 1,
+   "record_count": 9,
+   "record_size": 4,
+   "records_sha256": "e3d25e7590edd76206831801f67d1ee231d8b90a2bb4bfe31a152be21d2f536c",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "TransportAnimation.dbc": {
+   "field_count": 7,
+   "record_count": 630,
+   "record_size": 28,
+   "records_sha256": "01730a4720b82f3a53d221ea1fe8741c3a989169ce2deaded89c18a9aaecd94c",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "UISoundLookups.dbc": {
+   "field_count": 3,
+   "record_count": 129,
+   "record_size": 12,
+   "records_sha256": "3ca776c02a18e2f4a73682b3971e660cd5e3b248c5cbfd772f56ccdb1d5dfef6",
+   "string_size": 2360,
+   "strings_sha256": "18cd548c35fcb101adeba987e047d63cf49892f87c0d0594fe5a6233edf11bd5"
+  },
+  "UnitBlood.dbc": {
+   "field_count": 10,
+   "record_count": 3,
+   "record_size": 40,
+   "records_sha256": "2559fc06f5e57fa30136a555f12caedca343b92228b37b05a2bd1920f0f52ee5",
+   "string_size": 461,
+   "strings_sha256": "bd8c718614597dfde5aab6ffdd7858b20b0d62c8698ecf770b84c80867c80371"
+  },
+  "UnitBloodLevels.dbc": {
+   "field_count": 4,
+   "record_count": 3,
+   "record_size": 16,
+   "records_sha256": "b63f6bc81a251bfc965c05484863a353bffe84fce2beb0b0c32128cfb70ced1a",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "VideoHardware.dbc": {
+   "field_count": 22,
+   "record_count": 193,
+   "record_size": 88,
+   "records_sha256": "82b2856c172634da84a30a28f2f6c2740e08e75366a8eda6bc3bc4cfaa4dca0b",
+   "string_size": 25,
+   "strings_sha256": "712ee3ff8429c475a5bd3dab814766e355074e0aa63d5851e05cad5711ffc2ae"
+  },
+  "VocalUISounds.dbc": {
+   "field_count": 7,
+   "record_count": 533,
+   "record_size": 28,
+   "records_sha256": "b7ee64627a5f5251c140505add0054cc7183be0a526229e190fd75c22753cb67",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "WMOAreaTable.dbc": {
+   "field_count": 20,
+   "record_count": 21115,
+   "record_size": 80,
+   "records_sha256": "d0b9fa307f9d2e706664367aa560e068e02ef663ad65c0a70619a581366d2ef3",
+   "string_size": 8410,
+   "strings_sha256": "6807571f4f937cdc29fc5317dead4f55d44adea79c48fd9171338ca1bec86562"
+  },
+  "WeaponImpactSounds.dbc": {
+   "field_count": 23,
+   "record_count": 30,
+   "record_size": 92,
+   "records_sha256": "c4fa1d0b5607ed1db8dc4b657e39d6f01f8e4ac39dee45d6c97632565acd9eac",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "WeaponSwingSounds2.dbc": {
+   "field_count": 4,
+   "record_count": 6,
+   "record_size": 16,
+   "records_sha256": "14dc0bc7aab5211e87eb94022cedde079b31636f2e2df25ed9f5cda5afcff024",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "WorldMapArea.dbc": {
+   "field_count": 8,
+   "record_count": 51,
+   "record_size": 32,
+   "records_sha256": "861046981a7192fd58e7524e156fe2191bc85e38bdd6e79c22f847b3d533b2eb",
+   "string_size": 556,
+   "strings_sha256": "ceeedac5c4b54fcc73a865eab9aacfafe2c38e2761fecb54d6c6fa219514614d"
+  },
+  "WorldMapContinent.dbc": {
+   "field_count": 13,
+   "record_count": 2,
+   "record_size": 52,
+   "records_sha256": "24b2291bf66764dcadd50a8f31d54d77f871a2703a4d270e87c68edddfe8a9a9",
+   "string_size": 1,
+   "strings_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  "WorldMapOverlay.dbc": {
+   "field_count": 17,
+   "record_count": 526,
+   "record_size": 68,
+   "records_sha256": "9846540346d9c13e2facca9a14407cc1599fb4852ee8af88840e5f49b1a984df",
+   "string_size": 7436,
+   "strings_sha256": "e0f5a5a87d37b8102da6ec644215a3ad333e823ff30b13decf2d6e9d6abd6106"
+  },
+  "WorldSafeLocs.dbc": {
+   "field_count": 14,
+   "record_count": 122,
+   "record_size": 56,
+   "records_sha256": "125e4600d93293280193a42bfb691436b0b3e5c2663bc75d7667e7a5fc4e99d7",
+   "string_size": 3546,
+   "strings_sha256": "3d6d921d41884a640476ac4b93aa5c6500a21adc0f03b91a3fdab4b7c262d38a"
+  },
+  "WorldStateUI.dbc": {
+   "field_count": 39,
+   "record_count": 20,
+   "record_size": 156,
+   "records_sha256": "14c13d032ed574e0aed97f7d5206883043dff5b01d703541e22a78903b20e07e",
+   "string_size": 1822,
+   "strings_sha256": "5fa47caebf3f0a3824668911e62ce6272c78565935d299bc7e6c39a2f63c1457"
+  },
+  "WowError_Strings.dbc": {
+   "field_count": 11,
+   "record_count": 13,
+   "record_size": 44,
+   "records_sha256": "5aa7b6a18f590a64f1f9d7317e543ff2ba03888922dbd97d6ac557a9232132d4",
+   "string_size": 466,
+   "strings_sha256": "7761d4558882ab2bd1a535a8fcc4069d57291d0f979635366683174531a1a6fa"
+  },
+  "ZoneIntroMusicTable.dbc": {
+   "field_count": 5,
+   "record_count": 43,
+   "record_size": 20,
+   "records_sha256": "644a4e26a7cc806d68f56198c27b2f3720bc6afc7441561644cc6e14fc5e7480",
+   "string_size": 545,
+   "strings_sha256": "f00762691a71e4ba9450408333b81800bab8edbd7b9a85c8dc045b1309c2f4c3"
+  },
+  "ZoneMusic.dbc": {
+   "field_count": 8,
+   "record_count": 99,
+   "record_size": 32,
+   "records_sha256": "6159378945ddda3715545fb84effc63cb9a739557690901fced80a21e9762cc9",
+   "string_size": 1820,
+   "strings_sha256": "5da845e9fde3e38700640f4b19a5e5add6fcdf57eb7ac044af63182878116fbb"
+  }
+ },
+ "stores": {
+  "AuctionHouse.dbc": {
+   "fmt": "niiixxxxxxxxx",
+   "max_index": 7,
+   "produced_sha256": "27725f62186fefedb42fa819b37f037f4c2ec20a3ebfc4582973acc028359c27"
+  },
+  "BankBagSlotPrices.dbc": {
+   "fmt": "ni",
+   "max_index": 12,
+   "produced_sha256": "d62cadc97d35ac2dea99e1821d7ea125e457a2bfe0ac78af3c6ce7964aaa10f7"
+  },
+  "CharSections.dbc": {
+   "fmt": "diiiiixxxi",
+   "max_index": 4942,
+   "produced_sha256": "fe98ea18d5918d1bead1651cc792b20f7fda3336a7c190c39e9d676d22d1020e"
+  },
+  "CharacterFacialHairStyles.dbc": {
+   "fmt": "iiixxxxxx",
+   "max_index": null,
+   "produced_sha256": "9eb5b7f2397d00a33bc2d71bd12171b0137a75a0ef49155798c5c11e169d76cb"
+  },
+  "ChatChannels.dbc": {
+   "fmt": "nixssssssssxxxxxxxxxx",
+   "max_index": 25,
+   "produced_sha256": "e086441d0998ce626d942b0a118642c0cc3747fb73bbd810a565710855c890dc"
+  },
+  "ChrClasses.dbc": {
+   "fmt": "nxxixssssssssxxix",
+   "max_index": 11,
+   "produced_sha256": "760977548481f602a670200e68eb7439378062508fe0016f7a70ab1c16049475"
+  },
+  "ChrRaces.dbc": {
+   "fmt": "niixiixxiiiiixixissssssssxxxx",
+   "max_index": 9,
+   "produced_sha256": "b1134ed3e0c4dcd6abbfcf5867a8dd0b401a407605dc291c5e9f4ae7352d4238"
+  },
+  "CinematicSequences.dbc": {
+   "fmt": "nxxxxxxxxx",
+   "max_index": 161,
+   "produced_sha256": "e15d0e7d17bd8622aabe21e5964fdb74d25ff88b287aadac31ea9805f95f1e93"
+  },
+  "CreatureDisplayInfo.dbc": {
+   "fmt": "nixifxxxxxxx",
+   "max_index": 17548,
+   "produced_sha256": "63e237dfcfa9e6030309daf16c0c58de1298a0ece54371d10ac37a0a4c744022"
+  },
+  "CreatureDisplayInfoExtra.dbc": {
+   "fmt": "nixxxxxxxxxxxxxxxxx",
+   "max_index": 12016,
+   "produced_sha256": "b9de1699530673655f7b6f1a4ec19cd3447c01911eaf52e1371906490e64e265"
+  },
+  "CreatureFamily.dbc": {
+   "fmt": "nfifiiiissssssssxx",
+   "max_index": 28,
+   "produced_sha256": "34192e1321b2753602c92d5681170a9c49566d24fe028e2c84b65ad0e4b90061"
+  },
+  "CreatureModelData.dbc": {
+   "fmt": "nisxfxxxxxxxxxxf",
+   "max_index": 2365,
+   "produced_sha256": "55e04b62383a190324425e20390f6b893c616fbeca492f6f6de7f65f978b995d"
+  },
+  "CreatureType.dbc": {
+   "fmt": "nxxxxxxxxxx",
+   "max_index": 11,
+   "produced_sha256": "41b2b6667b31bc1e262428420acc57186238249b3dc67655315b2c890b4a0c93"
+  },
+  "DurabilityCosts.dbc": {
+   "fmt": "niiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+   "max_index": 300,
+   "produced_sha256": "7838641d6a2a2a6e321047e7508e32d59b7a750b77f283dff91f211d364d3f55"
+  },
+  "DurabilityQuality.dbc": {
+   "fmt": "nf",
+   "max_index": 14,
+   "produced_sha256": "58e0afb9b3798de5c03ed50b8ad4188b0d8e41eba56563f792f14e44e396248e"
+  },
+  "Emotes.dbc": {
+   "fmt": "nsxiiix",
+   "max_index": 376,
+   "produced_sha256": "5bfdfcf74e32dd17ad51625d4e43a13a6e13be9f1c7ac5edff09609e1577a5a7"
+  },
+  "EmotesText.dbc": {
+   "fmt": "nxixxxxxxxxxxxxxxxx",
+   "max_index": 364,
+   "produced_sha256": "b75a6c67d785f0f3d2b207acf2a4738535a2fba7f40680fb6082a90484efea37"
+  },
+  "GameObjectDisplayInfo.dbc": {
+   "fmt": "nsxxxxxxxxxx",
+   "max_index": 6914,
+   "produced_sha256": "1dff2a109ee7c8676fec361c9ef037c8f1ee28ae2445b681423a37731636c2ec"
+  },
+  "ItemBagFamily.dbc": {
+   "fmt": "nxxxxxxxxx",
+   "max_index": 9,
+   "produced_sha256": "7a606ff98a48d7a20b09a18b2bd56a2ce856a21f6a5ef99bcec019955bef68a3"
+  },
+  "ItemRandomProperties.dbc": {
+   "fmt": "nsiiixxssssssssx",
+   "max_index": 2164,
+   "produced_sha256": "ae58ba0014c3ef6d2a8223b41ef00349047366b363db7992759ea79733012425"
+  },
+  "ItemSet.dbc": {
+   "fmt": "dssssssssxxxxxxxxxxxxxxxxxxiiiiiiiiiiiiiiiiii",
+   "max_index": 551,
+   "produced_sha256": "ae9eb30600329f6154e952b44635fea6b353b1493a3429f215a845c4e15417fc"
+  },
+  "Lock.dbc": {
+   "fmt": "niiiiiiiiiiiiiiiiiiiiiiiixxxxxxxx",
+   "max_index": 1647,
+   "produced_sha256": "989209b0edecd2346293e071a509ff8d26823e42742dd826d7bcf216ab6ccc72"
+  },
+  "NamesProfanity.dbc": {
+   "fmt": "ds",
+   "max_index": 6377,
+   "produced_sha256": "401b0c65211163674f66ed972a871086e1406dd7aa776ee30cd433e622b2c343"
+  },
+  "NamesReserved.dbc": {
+   "fmt": "ds",
+   "max_index": 5628,
+   "produced_sha256": "6c4cada531c8992a3a669b7a826ed81ae77d505281400816c44b06ab9c3cb55f"
+  },
+  "QuestSort.dbc": {
+   "fmt": "nxxxxxxxxx",
+   "max_index": 369,
+   "produced_sha256": "5c811a7b0bb07de3759782cea67fd5cf2dd16870590699d4b04334ecb534fc78"
+  },
+  "SkillLine.dbc": {
+   "fmt": "nixssssssssxxxxxxxxxxi",
+   "max_index": 762,
+   "produced_sha256": "8cd09c650461cb3c0fa24fc80551af16fc3f58be31699c2fe7bfa697044d29eb"
+  },
+  "SkillRaceClassInfo.dbc": {
+   "fmt": "diiiiiix",
+   "max_index": 890,
+   "produced_sha256": "ea5c91de0eeec62ed260233ffb9d947489e051cbef2af49b87b34f6bb13d2667"
+  },
+  "SkillTiers.dbc": {
+   "fmt": "niiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+   "max_index": 223,
+   "produced_sha256": "2cadc9e5a068554b5892faddaac38bc8e4ac6f92dac3a33f65a632815314cac8"
+  },
+  "SpellCastTimes.dbc": {
+   "fmt": "niii",
+   "max_index": 191,
+   "produced_sha256": "4ce2357e276646b07d3791cdfcff64029f5866c4d8bf175512b2feac4cc92fed"
+  },
+  "SpellCategory.dbc": {
+   "fmt": "ni",
+   "max_index": 1161,
+   "produced_sha256": "215717cd4ea4b25f6d36d6430f4c7ffd639f049a2198183591cff1311ed58c40"
+  },
+  "SpellDuration.dbc": {
+   "fmt": "niii",
+   "max_index": 553,
+   "produced_sha256": "0cc50cf9dff4b8af5ea17b34580447f9199785f81a874aa57253f88d9109032b"
+  },
+  "SpellFocusObject.dbc": {
+   "fmt": "nxxxxxxxxx",
+   "max_index": 1366,
+   "produced_sha256": "bf20d469180cef860065563451ed82cc29158107bf9caa4b26d60a79e8a2aa9c"
+  },
+  "SpellItemEnchantment.dbc": {
+   "fmt": "niiiiiixxxiiissssssssxii",
+   "max_index": 2721,
+   "produced_sha256": "d90392bc314a0840edb1f0f0808afa269f91a9ea0b5bbcae4076f92ac594dfc4"
+  },
+  "SpellRadius.dbc": {
+   "fmt": "nfxx",
+   "max_index": 31,
+   "produced_sha256": "6f7c34dad6a9ea748599003a4b394d721b7a62c8bb4f8bfac863a9eead77bf52"
+  },
+  "SpellRange.dbc": {
+   "fmt": "nffxxxxxxxxxxxxxxxxxxx",
+   "max_index": 136,
+   "produced_sha256": "b988849eb88d139c03586798d1f94d745c3c314bb677fcd841bb887ad07c9c2e"
+  },
+  "SpellShapeshiftForm.dbc": {
+   "fmt": "nxssssssssxiix",
+   "max_index": 32,
+   "produced_sha256": "05e90e4f9e13f92e46bf60b626eb6015bb72baa95b075f5b19d7f4f19cc31cd5"
+  },
+  "SpellVisual.dbc": {
+   "fmt": "niiiiiiiiiiiiiii",
+   "max_index": 7891,
+   "produced_sha256": "8b37981a1435c88aa6f1c39e0cae18cab70766668f3cadea7e2abe8a095d48bf"
+  },
+  "StableSlotPrices.dbc": {
+   "fmt": "ni",
+   "max_index": 2,
+   "produced_sha256": "88c637039b34434a6c00779e3b196aab94562a26d21cc2be7876048fea56d72c"
+  },
+  "Talent.dbc": {
+   "fmt": "niiiiiiiixxxxixxixxxi",
+   "max_index": 1703,
+   "produced_sha256": "e37c10bf9c7700deef3d4ddf6fc9fa2b3acbcf847292bf67d0e2ec54abd1d70d"
+  },
+  "TalentTab.dbc": {
+   "fmt": "nxxxxxxxxxxxiix",
+   "max_index": 383,
+   "produced_sha256": "3dd95dd9827eaef162c7208b6ca776646505ff95310c93cd5fab523e52f125ae"
+  },
+  "TaxiPath.dbc": {
+   "fmt": "niii",
+   "max_index": 500,
+   "produced_sha256": "94d58f84e9eaf66293b44de89fc747ff84d95cd9aa43dcbc25b1c26bb7b240ce"
+  },
+  "TaxiPathNode.dbc": {
+   "fmt": "diiifffii",
+   "max_index": 13260,
+   "produced_sha256": "fec32dbc577f344563eeafc7e2757628e7c8565d12426e9d5ca9c8c458069d54"
+  },
+  "TransportAnimation.dbc": {
+   "fmt": "diifffx",
+   "max_index": 45671,
+   "produced_sha256": "ad4d792dbc1a78d21833ff1215ba0cae3c8cb922bbf27271bc4dbde7f6fcad6d"
+  },
+  "WMOAreaTable.dbc": {
+   "fmt": "niiixxxxxiixxxxxxxxx",
+   "max_index": 38956,
+   "produced_sha256": "78e57565c10e055506e68d4c60de2bf6f4f14bdfca2dd2d1a0d2984a7290658f"
+  },
+  "WorldMapArea.dbc": {
+   "fmt": "xinxffff",
+   "max_index": 3358,
+   "produced_sha256": "af458707e3d0f5b3b75feab83fd7e6c2cf430d75a65e42f9b08816376bb58849"
+  },
+  "WorldSafeLocs.dbc": {
+   "fmt": "nifffxxxxxxxxx",
+   "max_index": 927,
+   "produced_sha256": "90630e85278b9805b953117b9f89ca7ba853dc7eb61c7c0a461e4ce8bf45c18e"
+  }
+ }
+}

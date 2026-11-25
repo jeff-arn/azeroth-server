@@ -1,0 +1,120 @@
+=== binaries/logs ===
+ls: cannot access '/home/wow/wow-private-server/vmangos/run/bin/mangosd.conf': No such file or directory
+ls: cannot access '/home/wow/wow-private-server/vmangos/run/bin/realmd.conf': No such file or directory
+-rw-rw-r-- 1 wow wow 276K Oct 15 20:35 /home/wow/wow-private-server/vmangos/run/bin/Server.log
+-rwxr-xr-x 1 wow wow 19M Apr 14 2026 /home/wow/wow-private-server/vmangos/run/bin/mangosd
+-rwxr-xr-x 1 wow wow 2.1M Apr 13 2026 /home/wow/wow-private-server/vmangos/run/bin/realmd
+/home/wow/wow-private-server/vmangos/run/bin/mangosd 19838640 bytes mtime=2026-04-14 02:03:02.000000000 +0000
+/home/wow/wow-private-server/vmangos/run/bin/realmd 2182912 bytes mtime=2026-04-13 02:34:15.000000000 +0000
+/home/wow/wow-private-server/vmangos/run/bin/Server.log 282429 bytes mtime=2026-10-15 20:35:12.324086714 +0000
+=== Server.log tail ===
+2026-10-15 20:02:11 [44.220.188.208] Connection accepted
+2026-10-15 20:02:11 [44.220.188.208] Connection closed
+2026-10-15 20:02:11 [44.220.188.208] Connection accepted
+2026-10-15 20:02:11 [44.220.188.208] WorldSocket::DoRecvIncomingData: client sent malformed packet size = 18245, cmd = 539959380
+2026-10-15 20:02:11 [44.220.188.208] Connection closed
+2026-10-15 20:02:11 [44.220.188.208] Connection accepted
+2026-10-15 20:02:11 [44.220.188.208] WorldSocket::DoRecvIncomingData: client sent malformed packet size = 5635, cmd = 16777729
+2026-10-15 20:02:11 [44.220.188.208] Connection closed
+2026-10-15 20:02:11 [44.220.188.208] Connection accepted
+2026-10-15 20:02:11 [44.220.188.208] Connection closed
+2026-10-15 20:34:51 [91.92.41.174] Connection accepted
+2026-10-15 20:34:51 [91.92.41.174] Connection closed
+2026-10-15 20:35:11 [91.92.41.174] Connection accepted
+2026-10-15 20:35:11 ERROR: [91.92.41.174] epoll reported socket error: (104) Connection reset by peer
+2026-10-15 20:35:11 [91.92.41.174] Connection closed
+2026-10-15 20:35:11 [91.92.41.174] Connection accepted
+2026-10-15 20:35:11 [91.92.41.174] WorldSocket::DoRecvIncomingData: client sent malformed packet size = 1025, cmd = 16863232
+2026-10-15 20:35:11 [91.92.41.174] Connection closed
+2026-10-15 20:35:11 [91.92.41.174] Connection accepted
+2026-10-15 20:35:11 [91.92.41.174] WorldSocket::DoRecvIncomingData: client sent malformed packet size = 18245, cmd = 1952981076
+2026-10-15 20:35:11 [91.92.41.174] Connection closed
+2026-10-15 20:35:12 [91.92.41.174] Connection accepted
+2026-10-15 20:35:12 [91.92.41.174] WorldSocket::DoRecvIncomingData: client sent malformed packet size = 18245, cmd = 1952981076
+2026-10-15 20:35:12 [91.92.41.174] Connection closed
+2026-10-15 20:35:12 [91.92.41.174] Connection accepted
+2026-10-15 20:35:12 [91.92.41.174] WorldSocket::DoRecvIncomingData: client sent malformed packet size = 18245, cmd = 1952981076
+2026-10-15 20:35:12 [91.92.41.174] Connection closed
+2026-10-15 20:35:12 [91.92.41.174] Connection accepted
+2026-10-15 20:35:12 [91.92.41.174] WorldSocket::DoRecvIncomingData: client sent malformed packet size = 17231, cmd = 1128615502
+2026-10-15 20:35:12 [91.92.41.174] Connection closed
+=== bin subdirs ===
+5875
+Anticheat.log
+Bg.log
+Char.log
+Chat.log
+DBErrorFixes.sql
+DBErrors.log
+Extractors
+HCR__2026-03-25_02-01-1.txt
+HCR__2026-04-01_00-15-3.txt
+HCR__2026-04-08_01-26-2.txt
+HCR__2026-04-15_00-15-4.txt
+HCR__2026-04-22_00-16-2.txt
+HCR__2026-09-13_18-27-1.txt
+HCR__2026-09-13_18-42-4.txt
+HCR__2026-09-13_18-58-0.txt
+HCR__2026-09-13_19-13-3.txt
+HCR__2026-09-13_19-29-0.txt
+HCR__2026-09-13_19-44-3.txt
+HCR__2026-09-13_19-59-5.txt
+HCR__2026-09-13_20-15-2.txt
+HCR__2026-09-13_20-30-5.txt
+HCR__2026-09-13_20-46-2.txt
+HCR__2026-09-13_21-01-4.txt
+HCR__2026-09-13_21-17-1.txt
+HCR__2026-09-13_21-32-4.txt
+HCR__2026-09-14_00-00-2.txt
+HCR__2026-09-14_00-15-5.txt
+HCR__2026-09-14_00-31-1.txt
+HCR__2026-09-14_00-46-4.txt
+HCR__2026-09-14_01-02-1.txt
+HCR__2026-09-14_01-17-3.txt
+HCR__2026-09-14_01-33-0.txt
+LevelUp.log
+Loot.log
+Movement.log
+Network.log
+Perf.log
+Ra.log
+Realmd.log
+Scripts.log
+Server.log
+Trades.log
+gm_critical.log
+mangosd
+maps
+mmaps
+realmd
+run-mangosd
+vmaps
+=== du top ===
+4.9G	/home/wow/wow-private-server
+300M	/home/wow/backups
+=== du run/bin detail ===
+2.0G	/home/wow/wow-private-server/vmangos/run/bin/mmaps
+574M	/home/wow/wow-private-server/vmangos/run/bin/vmaps
+279M	/home/wow/wow-private-server/vmangos/run/bin/maps
+28M	/home/wow/wow-private-server/vmangos/run/bin/5875
+19M	/home/wow/wow-private-server/vmangos/run/bin/mangosd
+12M	/home/wow/wow-private-server/vmangos/run/bin/LevelUp.log
+11M	/home/wow/wow-private-server/vmangos/run/bin/Perf.log
+3.9M	/home/wow/wow-private-server/vmangos/run/bin/Extractors
+2.1M	/home/wow/wow-private-server/vmangos/run/bin/realmd
+1.3M	/home/wow/wow-private-server/vmangos/run/bin/Network.log
+336K	/home/wow/wow-private-server/vmangos/run/bin/Loot.log
+280K	/home/wow/wow-private-server/vmangos/run/bin/Server.log
+212K	/home/wow/wow-private-server/vmangos/run/bin/Anticheat.log
+148K	/home/wow/wow-private-server/vmangos/run/bin/Trades.log
+12K	/home/wow/wow-private-server/vmangos/run/bin/Chat.log
+8.0K	/home/wow/wow-private-server/vmangos/run/bin/Realmd.log
+4.0K	/home/wow/wow-private-server/vmangos/run/bin/run-mangosd
+4.0K	/home/wow/wow-private-server/vmangos/run/bin/Scripts.log
+4.0K	/home/wow/wow-private-server/vmangos/run/bin/Ra.log
+4.0K	/home/wow/wow-private-server/vmangos/run/bin/HCR__2026-09-14_01-33-0.txt
+=== build dir ===
+drwxrwxr-x 6 wow wow 4096 May 26 01:55 /home/wow/wow-private-server/vmangos/build
+719M	/home/wow/wow-private-server/vmangos/build
+=== git clean check ===
+0

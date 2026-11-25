@@ -1,0 +1,124 @@
+SEEDED guid=900022 spells=174 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP06 guid=900022 map=0 pos=(-6295.00,315.00,377.50)
+DRIFT-OK guid=900022 level=60 spells=174 health=2070
+ROW Shaman 324 self: PASS  | observable outcome: caster_aura=True
+SEEDED guid=900015 spells=20 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Shaman 331 ground_area: PASS  | bound GO + heal log 43 in oracle band [35-48] (sub-noise heal; rate 22.7/s, 743->811 pre, got 956)
+ROW Shaman 370 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Shaman 403 hostile_dummy: PASS  | observable outcome: health 100->64, matching damage=15 after 1 attempt(s)
+ROW Shaman 421 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=223 after 1 attempt(s)
+ROW Shaman 526 friendly: BLOCKED effect-marker-only | classify_only
+LOGOUT-OK Shaman-ally
+SEEDED guid=900015 spells=20 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Shaman 1064 ground_area: PASS  | bound GO + regen-baselined jump 334 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 709->777 pre, got 1282)
+ROW Shaman 1535 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 2008 corpse: BLOCKED wire-target-unsupported | no live scenario
+ROW Shaman 2484 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 2645 form: PASS  | bound SPELL_GO + form aura 2645 on self, cancelled after (pre-cleared {})
+ROW Shaman 2870 friendly: BLOCKED effect-marker-only | classify_only
+ROW Shaman 3599 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 5394 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 5675 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 5730 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 6495 form_totem: BLOCKED engine-totem | no live scenario
+LOGOUT-OK Shaman-ally
+SEEDED guid=900015 spells=20 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Shaman 8004 friendly: PASS  | bound GO + regen-baselined jump 181 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 675->743 pre, got 1055)
+ROW Shaman 8012 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8042 hostile_dummy: PASS  | observable outcome: health 100->50, matching damage=21 after 1 attempt(s)
+ROW Shaman 8050 hostile_dummy: PASS  | observable outcome: health 100->7, matching damage=32; ticks 2/4 in oracle band [7-7] (required>=2, target_alive=True, o
+ROW Shaman 8056 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=97 after 1 attempt(s)
+ROW Shaman 8071 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8075 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8143 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8166 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8170 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8177 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8181 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8184 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8190 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8227 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8232 self: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8512 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 8835 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10408 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10414 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=524 after 1 attempt(s)
+ROW Shaman 10428 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10432 self: PASS  | observable outcome: caster_aura=True
+ROW Shaman 10438 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10463 form_totem: BLOCKED effect-marker-only | classify_only
+LOGOUT-OK Shaman-ally
+SEEDED guid=900015 spells=20 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Shaman 10468 friendly: PASS  | bound GO + regen-baselined jump 864 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 811->879 pre, got 1869)
+ROW Shaman 10473 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=503 after 1 attempt(s)
+ROW Shaman 10479 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10497 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10538 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10587 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10595 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10601 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 10605 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=520 after 1 attempt(s)
+ROW Shaman 10614 form_totem: BLOCKED effect-marker-only | classify_only
+LOGOUT-OK Shaman-ally
+SEEDED guid=900015 spells=20 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Shaman 10623 ground_area: PASS  | bound GO + regen-baselined jump 618 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 777->845 pre, got 1647)
+ROW Shaman 11315 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 15107 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 15112 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 15208 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=469 after 1 attempt(s)
+ROW Shaman 16108 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16109 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16116 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16119 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16161 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16164 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16268 self: BLOCKED effect-marker-only | classify_only
+ROW Shaman 16284 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16287 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16301 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16305 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 16362 self: BLOCKED effect-marker-only | classify_only
+ROW Shaman 16387 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 17354 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 17359 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 17364 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Shaman 17489 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 20608 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 20777 corpse: BLOCKED wire-target-unsupported | no live scenario
+ROW Shaman 21169 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17030 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Shaman 24844 hostile_dummy: BLOCKED no-pet | no live scenario
+ROW Shaman 25012 hostile_dummy: BLOCKED no-pet | no live scenario
+ROW Shaman 25076 passive: PASSIVE-VERIFIED | learned=True
+LOGOUT-OK Shaman-ally
+SEEDED guid=900015 spells=20 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Shaman 25357 ground_area: PASS  | bound GO + regen-baselined jump 1536 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 811->879 pre, got 2609)
+ROW Shaman 25359 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 25361 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 25908 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Shaman 26363 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=198 after 1 attempt(s)
+ROW Shaman 26364 hostile_dummy: PASS  | observable outcome: health 100->69, matching damage=13 after 1 attempt(s)
+ROW Shaman 26365 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=44 after 1 attempt(s)
+ROW Shaman 26366 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=51 after 1 attempt(s)
+ROW Shaman 26367 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=80 after 1 attempt(s)
+ROW Shaman 26369 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=114 after 1 attempt(s)
+ROW Shaman 26370 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=154 after 1 attempt(s)
+ROW Shaman 29080 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 29087 passive: PASSIVE-VERIFIED | learned=True
+ROW Shaman 29228 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=292; ticks 0/4 in oracle band [80-80]: target died before a tick coul
+LOGOUT-OK Shaman-ally
+LOGOUT-OK Shaman-run
+run-class Shaman: 93 rows, BLOCKED=51, PASS=27, PASSIVE-VERIFIED=15
+SPELL-CAMPAIGN-RUN-CLASS-SHAMAN-PASS

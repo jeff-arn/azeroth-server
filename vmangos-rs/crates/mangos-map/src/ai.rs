@@ -1,0 +1,3692 @@
+//! Creature AI (Slice 6a): proximity aggro, the
+//! `BasicAI` combat loop over the `mangos-threat`
+//! manager, white melee with the C++ outcome table,
+//! creature spell-list casting, and evade/home.
+//! Slice 6b adds the `CreatureEventAI` runtime (event
+//! holders, 500 ms cadence, phases) driving the DB
+//! script engine in `scripts.rs`, plus scripted flee.
+//!
+//! Recorded subset deviations: no assistance calls
+//! (`CallAssistance`), no pet/charm handling, proximity
+//! aggro uses the faction-reaction hostile bit but
+//! spell targeting still uses the player-vs-creature
+//! `is_hostile_pair` approximation, static
+//! creature flags beyond critter/totem types are not
+//! consulted, spell-list target types outside
+//! self/victim/random-threat fall back to the victim,
+//! `CF_MAIN_RANGED_SPELL` kiting and spell-list scripts
+//! are not modeled (Slice 6b engine), in-combat mana
+//! regen is identity (out-of-combat max/3 regen is
+//! implemented), melee facing/leeway is reach-only,
+//! dual wield does not exist (`BASE_ATTACK` only), the
+//! player damage fields are the unarmed bases until
+//! item-stat projection lands, and `IsOutOfThreatArea`
+//! is existence+alive only.
+
+use mangos_entities::creature::Creature;
+use mangos_entities::unit::UnitVisibility;
+use mangos_guid::ObjectGuid;
+use mangos_movement::movement_info::Position;
+use mangos_protocol::buffer::PacketWriter;
+use mangos_protocol::opcode_table::opcode_id as op;
+use mangos_protocol::update_field_table::offsets;
+use mangos_protocol::world::WorldPacket;
+use mangos_scripts_engine::{
+    EFLAG_CHECK_RESULT, EFLAG_NOT_CASTING, EFLAG_RANDOM_ACTION, EFLAG_REPEATABLE,
+    EVENT_UPDATE_TIME, EventAiEvent, event_type,
+};
+use mangos_threat::{AddDecision, ThreatHost, ThreatManager};
+use mangos_world_data::creature_spells::CreatureSpellEntry;
+
+use mangos_entities::creature::SpawnRng;
+
+use mangos_spells::defines::proc_ex;
+
+use crate::map::Map;
+use crate::motion::CHASE_MOTION_TYPE;
+use crate::spells::{CastOptions, CastOutcome, CastTarget};
+
+/// `CREATURE_FLAG_EXTRA_NO_AGGRO`.
+const FLAG_EXTRA_NO_AGGRO: u32 = 0x0000_0002;
+/// `CREATURE_FLAG_EXTRA_NO_LEASH_EVADE`.
+const FLAG_EXTRA_NO_LEASH_EVADE: u32 = 0x0000_0001;
+/// `CREATURE_TYPE_CRITTER`.
+const CREATURE_TYPE_CRITTER: u32 = 8;
+/// `CREATURE_TYPE_TOTEM`.
+const CREATURE_TYPE_TOTEM: u32 = 11;
+/// `UNIT_FLAG_IN_COMBAT`.
+const UNIT_FLAG_IN_COMBAT: u32 = 0x0008_0000;
+/// `CREATURE_Z_ATTACK_RANGE`.
+const CREATURE_Z_ATTACK_RANGE: f32 = 3.0;
+/// `MAX_LEVEL_DIFF_FOR_AGGRO_RANGE`.
+const MAX_LEVEL_DIFF_FOR_AGGRO_RANGE: i32 = 25;
+/// `REGEN_TIME_CREATURE_FULL` fallback (regen tick).
+const REGEN_TIME_MS: u32 = 1000;
+/// Player combat-drop delay after the last damage
+/// (`m_combatTimer` approximation).
+const PLAYER_COMBAT_DROP_MS: u32 = 5000;
+
+// HitInfo (5875 branch, build > 1_9_4).
+const HITINFO_AFFECTS_VICTIM: u32 = 0x0000_0002;
+const HITINFO_MISS: u32 = 0x0000_0010;
+const HITINFO_CRITICALHIT: u32 = 0x0000_0080;
+const HITINFO_GLANCING: u32 = 0x0000_4000;
+const HITINFO_CRUSHING: u32 = 0x0000_8000;
+const HITINFO_SWINGNOHITSOUND: u32 = 0x0008_0000;
+// VictimState.
+const VICTIMSTATE_UNAFFECTED: u32 = 0;
+const VICTIMSTATE_NORMAL: u32 = 1;
+const VICTIMSTATE_DODGE: u32 = 2;
+const VICTIMSTATE_PARRY: u32 = 3;
+const VICTIMSTATE_BLOCKS: u32 = 5;
+const VICTIMSTATE_EVADES: u32 = 6;
+/// `AI_REACTION_HOSTILE`.
+const AI_REACTION_HOSTILE: u32 = 2;
+/// `CF_*` creature-spell cast flags used by the subset.
+const CF_INTERRUPT_PREVIOUS: u16 = 0x001;
+const CF_TRIGGERED: u16 = 0x002;
+const CF_AURA_NOT_PRESENT: u16 = 0x020;
+const CF_ONLY_IN_MELEE: u16 = 0x040;
+const CF_NOT_IN_MELEE: u16 = 0x080;
+const CF_TARGET_CASTING: u16 = 0x100;
+/// `CREATURE_CASTING_DELAY` (spell-list refresh cadence).
+const CREATURE_CASTING_DELAY: u32 = 1200;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AiKind {
+    /// `NullAI` / passive templates (critters, totems).
+    Null,
+    /// `BasicAI` core.
+    Basic,
+    /// `CreatureEventAI`: the Basic core plus DB event
+    /// processing (`ai_name == "EventAI"`).
+    EventAi,
+}
+
+/// One event's live state (`CreatureEventAIHolder`
+/// minus the event copy, which sits beside it).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct EventHolder {
+    pub time_ms: u32,
+    pub enabled: bool,
+}
+
+/// Per-creature `EventAI` runtime
+/// (`CreatureEventAI` state).
+pub(crate) struct EventAiRuntime {
+    pub events: Vec<EventAiEvent>,
+    pub holders: Vec<EventHolder>,
+    pub event_update_ms: u32,
+    pub event_diff_ms: u32,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct SpellRuntime {
+    entry: CreatureSpellEntry,
+    cooldown_ms: u32,
+}
+
+/// Per-creature AI runtime (`CreatureAI` subset).
+#[allow(clippy::struct_excessive_bools)]
+pub(crate) struct CreatureAi {
+    pub kind: AiKind,
+    pub threat: ThreatManager,
+    pub in_combat: bool,
+    pub combat_start: Position,
+    pub combat_start_ms: u32,
+    pub spells: Vec<SpellRuntime>,
+    pub casting_delay_ms: u32,
+    pub evading: bool,
+    pub regen_timer_ms: u32,
+    /// `EventAI` `m_Phase` (0..31).
+    pub phase: u8,
+    pub eventai: Option<EventAiRuntime>,
+    /// `SetMeleeAttack` toggle.
+    pub melee_enabled: bool,
+    /// `SetCombatMovement` toggle (chase on/off).
+    pub combat_movement: bool,
+    /// Scripted flee expiry (map ms; 0 = not fleeing).
+    pub flee_until_ms: u32,
+    pub flee_from: ObjectGuid,
+    pub flee_next_ms: u32,
+    /// `SetInvincibilityHpThreshold`.
+    pub invincibility_hp: u32,
+    /// `SCRIPT_COMMAND_SET_REACT_STATE` override.
+    pub react_override: Option<u8>,
+    /// Hand-ported `CreatureAI` script state
+    /// (`script_name` binding, Tier 3 Slice 2 step 3).
+    pub script: Option<crate::content::CreatureScriptAi>,
+}
+
+impl CreatureAi {
+    pub(crate) fn smite(&self) -> Option<&crate::content::SmiteState> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::MrSmite(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn smite_mut(&mut self) -> Option<&mut crate::content::SmiteState> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MrSmite(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn herod_mut(&mut self) -> Option<&mut crate::content::HerodAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Herod(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn trainee_mut(&mut self) -> Option<&mut crate::content::ScarletTraineeAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::ScarletTrainee(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn anastari(&self) -> Option<&crate::content::BaronessAnastariAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::BaronessAnastari(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn anastari_mut(&mut self) -> Option<&mut crate::content::BaronessAnastariAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::BaronessAnastari(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn ancient_hound_mut(&mut self) -> Option<&mut crate::content::AncientCoreHoundAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::AncientCoreHound(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn archaedas_minion_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::ArchaedasMinionAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::ArchaedasMinion(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn barthilas(&self) -> Option<&crate::content::MagistrateBarthilasAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::MagistrateBarthilas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn barthilas_mut(&mut self) -> Option<&mut crate::content::MagistrateBarthilasAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MagistrateBarthilas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn blackhand_veteran_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::BlackhandVeteranAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::BlackhandVeteran(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn commander_felstrom_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::CommanderFelstromAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CommanderFelstrom(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn core_hound_mut(&mut self) -> Option<&mut crate::content::CoreHoundAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CoreHound(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn core_rager_mut(&mut self) -> Option<&mut crate::content::CoreRagerAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CoreRager(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn cristal(&self) -> Option<&crate::content::CristalZigguratAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::CristalZiggurat(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn cristal_mut(&mut self) -> Option<&mut crate::content::CristalZigguratAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CristalZiggurat(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn dark_touched_warrior_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::DarkTouchedWarriorAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::DarkTouchedWarrior(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn dathrohan(&self) -> Option<&crate::content::DathrohanBalnazzarAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::DathrohanBalnazzar(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn dathrohan_mut(&mut self) -> Option<&mut crate::content::DathrohanBalnazzarAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::DathrohanBalnazzar(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn death_talon_captain_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::DeathTalonCaptainAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::DeathTalonCaptain(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn death_talon_seether_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::DeathTalonSeetherAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::DeathTalonSeether(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn emperor_thaurissan_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::EmperorThaurissanAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::EmperorThaurissan(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn eris_peasant_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::ErisHavenfirePeasantAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::ErisHavenfirePeasant(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn firelord_mut(&mut self) -> Option<&mut crate::content::FirelordAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Firelord(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn firesworn_mut(&mut self) -> Option<&mut crate::content::FireswornAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Firesworn(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn firewalker_mut(&mut self) -> Option<&mut crate::content::FirewalkerAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Firewalker(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn garr_mut(&mut self) -> Option<&mut crate::content::GarrAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Garr(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn geddon_mut(&mut self) -> Option<&mut crate::content::BaronGeddonAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::BaronGeddon(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn gehennas_mut(&mut self) -> Option<&mut crate::content::GehennasAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Gehennas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn general_angerforge_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::GeneralAngerforgeAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::GeneralAngerforge(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn gerstahn_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::HighInterrogatorGerstahnAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::HighInterrogatorGerstahn(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn golem_lord_argelmach_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::GolemLordArgelmachAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::GolemLordArgelmach(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn golemagg_mut(&mut self) -> Option<&mut crate::content::GolemaggAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Golemagg(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn gorosh_the_dervish_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::GoroshTheDervishAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::GoroshTheDervish(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn guardsman(&self) -> Option<&crate::content::CrimsonGuardsmanAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::CrimsonGuardsman(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn guardsman_mut(&mut self) -> Option<&mut crate::content::CrimsonGuardsmanAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CrimsonGuardsman(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn high_inquisitor_fairbanks(
+        &self,
+    ) -> Option<&crate::content::HighInquisitorFairbanksAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::HighInquisitorFairbanks(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn high_inquisitor_fairbanks_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::HighInquisitorFairbanksAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::HighInquisitorFairbanks(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn houndmaster_loksey_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::HoundmasterLokseyAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::HoundmasterLoksey(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn interrogator_vishas_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::InterrogatorVishasAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::InterrogatorVishas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn jandice_illusion_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::JandiceIllusionAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::JandiceIllusion(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn kt_shadow_fissure_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::KtShadowFissureAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::KtShadowFissure(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn lava_surger_mut(&mut self) -> Option<&mut crate::content::LavaSurgerAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::LavaSurger(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn lucifron_mut(&mut self) -> Option<&mut crate::content::LucifronAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Lucifron(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn majordomo_mut(&mut self) -> Option<&mut crate::content::MajordomoAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Majordomo(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn maleki(&self) -> Option<&crate::content::MalekiThePallidAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::MalekiThePallid(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn maleki_mut(&mut self) -> Option<&mut crate::content::MalekiThePallidAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MalekiThePallid(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn malgen_longspear_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::MalgenLongspearAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MalgenLongspear(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn mistress_nagmara_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::MistressNagmaraAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MistressNagmara(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn moira_bronzebeard_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::MoiraBronzebeardAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::MoiraBronzebeard(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn naxx_plague_slime_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::NaxxPlagueSlimeAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::NaxxPlagueSlime(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn nerubenkan(&self) -> Option<&crate::content::NerubenkanAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::Nerubenkan(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn nerubenkan_mut(&mut self) -> Option<&mut crate::content::NerubenkanAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Nerubenkan(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn overlord_wyrmthalak_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::OverlordWyrmthalakAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::OverlordWyrmthalak(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn plugger_spazzring_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::PluggerSpazzringAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::PluggerSpazzring(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn postmaster(&self) -> Option<&crate::content::PostmasterMalownAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::PostmasterMalown(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn postmaster_mut(&mut self) -> Option<&mut crate::content::PostmasterMalownAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::PostmasterMalown(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn ragnaros_mut(&mut self) -> Option<&mut crate::content::RagnarosAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Ragnaros(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn ramstein(&self) -> Option<&crate::content::RamsteinTheGorgerAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::RamsteinTheGorger(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn ramstein_mut(&mut self) -> Option<&mut crate::content::RamsteinTheGorgerAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::RamsteinTheGorger(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn rat(&self) -> Option<&crate::content::RatPestifereAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::RatPestifere(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn rat_mut(&mut self) -> Option<&mut crate::content::RatPestifereAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::RatPestifere(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn restless_soul(&self) -> Option<&crate::content::RestlessSoulAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::RestlessSoul(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn restless_soul_mut(&mut self) -> Option<&mut crate::content::RestlessSoulAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::RestlessSoul(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn sapphiron_blizzard_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::SapphironBlizzardAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SapphironBlizzard(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn shazzrah_mut(&mut self) -> Option<&mut crate::content::ShazzrahAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Shazzrah(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn silver_hand(&self) -> Option<&crate::content::SilverHandBossesAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::SilverHandBosses(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn silver_hand_mut(&mut self) -> Option<&mut crate::content::SilverHandBossesAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SilverHandBosses(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn snokh_blackspine_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::SnokhBlackspineAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SnokhBlackspine(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn spectral(&self) -> Option<&crate::content::SpectralGhostlyCitizenAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::SpectralGhostlyCitizen(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn spectral_mut(&mut self) -> Option<&mut crate::content::SpectralGhostlyCitizenAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SpectralGhostlyCitizen(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn spirit_of_naxxramas_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::SpiritOfNaxxramasAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::SpiritOfNaxxramas(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn sulfuron_mut(&mut self) -> Option<&mut crate::content::SulfuronAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::Sulfuron(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn timmy(&self) -> Option<&crate::content::TimmyTheCruelAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::TimmyTheCruel(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn timmy_mut(&mut self) -> Option<&mut crate::content::TimmyTheCruelAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::TimmyTheCruel(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn twilight_corrupter_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::TwilightCorrupterAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::TwilightCorrupter(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn watcher_blomberg_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::WatcherBlombergAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::WatcherBlomberg(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn watchman_doomgrip_mut(
+        &mut self,
+    ) -> Option<&mut crate::content::WatchmanDoomgripAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::WatchmanDoomgrip(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn willey(&self) -> Option<&crate::content::CannonMasterWilleyAi> {
+        match &self.script {
+            Some(crate::content::CreatureScriptAi::CannonMasterWilley(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn willey_mut(&mut self) -> Option<&mut crate::content::CannonMasterWilleyAi> {
+        match &mut self.script {
+            Some(crate::content::CreatureScriptAi::CannonMasterWilley(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    fn new(kind: AiKind, owner: ObjectGuid, spells: Vec<SpellRuntime>) -> Self {
+        Self {
+            kind,
+            threat: ThreatManager::new(owner),
+            in_combat: false,
+            combat_start: Position::default(),
+            combat_start_ms: 0,
+            spells,
+            casting_delay_ms: 0,
+            evading: false,
+            regen_timer_ms: REGEN_TIME_MS,
+            phase: 0,
+            eventai: None,
+            melee_enabled: true,
+            combat_movement: true,
+            flee_until_ms: 0,
+            flee_from: ObjectGuid::EMPTY,
+            flee_next_ms: 0,
+            invincibility_hp: 0,
+            react_override: None,
+            script: None,
+        }
+    }
+}
+
+/// Read-only threat queries over the map.
+pub(crate) struct MapThreatHost<'a> {
+    pub(crate) map: &'a Map,
+}
+
+impl ThreatHost for MapThreatHost<'_> {
+    fn spellmod_threat(&self, _hated: ObjectGuid, _spell_id: u32, threat: f32) -> f32 {
+        threat
+    }
+
+    fn crit_threat_multiplier(&self, _hated: ObjectGuid, _school_mask: u32) -> f32 {
+        1.0
+    }
+
+    fn apply_total_threat_modifier(
+        &self,
+        _hated: ObjectGuid,
+        threat: f32,
+        _school_mask: u32,
+    ) -> f32 {
+        threat
+    }
+
+    fn add_gate(&self, _owner: ObjectGuid, victim: ObjectGuid, _is_assist: bool) -> AddDecision {
+        if self.map.unit_is_alive(victim) {
+            AddDecision::Allow
+        } else {
+            AddDecision::Reject
+        }
+    }
+
+    fn direct_gate(&self, _owner: ObjectGuid, victim: ObjectGuid) -> bool {
+        self.map.unit_position(victim).is_some()
+    }
+
+    fn is_gamemaster_player(&self, _victim: ObjectGuid) -> bool {
+        false
+    }
+
+    fn refresh_online(&self, _owner: ObjectGuid, victim: ObjectGuid) -> bool {
+        self.map.unit_position(victim).is_some()
+    }
+
+    fn pet_owner_to_register(&self, _owner: ObjectGuid, _victim: ObjectGuid) -> Option<ObjectGuid> {
+        None
+    }
+
+    fn out_of_threat_area(&self, _attacker: ObjectGuid, target: ObjectGuid) -> bool {
+        !self.map.unit_is_alive(target)
+    }
+
+    fn valid_attack_target(&self, attacker: ObjectGuid, target: ObjectGuid) -> bool {
+        self.map.unit_is_alive(target)
+            && self.map.unit_is_alive(attacker)
+            && attacker.is_player() != target.is_player()
+    }
+
+    fn low_priority_target(&self, _attacker: ObjectGuid, _target: ObjectGuid) -> bool {
+        false
+    }
+
+    fn can_reach_with_melee(&self, attacker: ObjectGuid, target: ObjectGuid) -> bool {
+        self.map.can_reach_melee(attacker, target)
+    }
+
+    fn faction_id(&self, unit: ObjectGuid) -> u32 {
+        self.map
+            .unit_value_u32(unit, offsets::UNIT_FIELD_FACTIONTEMPLATE)
+    }
+}
+
+impl Map {
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn unit_is_alive(&self, guid: ObjectGuid) -> bool {
+        if let Some(entry) = self.players.get(&guid) {
+            return entry.player.unit.is_alive();
+        }
+        self.creatures.get(&guid).is_some_and(|c| c.unit.is_alive())
+    }
+
+    /// Has a `BasicAI` combat core (Basic or `EventAI`).
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    pub(crate) fn ai_kind_is_basic(creature: &Creature) -> bool {
+        Self::ai_kind_for(creature) != AiKind::Null
+    }
+
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    fn ai_kind_for(creature: &Creature) -> AiKind {
+        let info = &creature.info;
+        if info.ai_name == "NullAI"
+            || info.ai_name == "TotemAI"
+            || info.creature_type == CREATURE_TYPE_CRITTER
+            || info.creature_type == CREATURE_TYPE_TOTEM
+        {
+            return AiKind::Null;
+        }
+        if info.ai_name == "EventAI" {
+            return AiKind::EventAi;
+        }
+        AiKind::Basic
+    }
+
+    /// `ReactStates` subset: 0 passive, 1 defensive,
+    /// 2 aggressive (from the ctor/`UpdateEntry` arms
+    /// reachable with loaded template data).
+    #[allow(dead_code)] // NO-DISPATCHER-YET (step-3 remainder)
+    fn react_state_for(creature: &Creature) -> u8 {
+        let info = &creature.info;
+        if info.creature_type == CREATURE_TYPE_TOTEM {
+            return 0;
+        }
+        if info.flags_extra & FLAG_EXTRA_NO_AGGRO != 0 || info.civilian {
+            return 1;
+        }
+        2
+    }
+
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn ensure_ai(&mut self, guid: ObjectGuid) {
+        if self.ai.contains_key(&guid) {
+            return;
+        }
+        let Some(creature) = self.creatures.get(&guid) else {
+            return;
+        };
+        let kind = Self::ai_kind_for(creature);
+        let list_id = creature.info.spell_list_id;
+        let entry = creature.info.entry;
+        let script_name = creature.info.script_name.clone();
+        let spells = self.build_spell_runtime(list_id);
+        let mut ai = CreatureAi::new(kind, guid, spells);
+        if kind == AiKind::EventAi {
+            let events = self
+                .stores
+                .scripts
+                .eventai_events
+                .get(&entry)
+                .cloned()
+                .unwrap_or_default();
+            let holders = events
+                .iter()
+                .map(|_| EventHolder {
+                    time_ms: 0,
+                    enabled: true,
+                })
+                .collect();
+            ai.eventai = Some(EventAiRuntime {
+                events,
+                holders,
+                event_update_ms: EVENT_UPDATE_TIME,
+                event_diff_ms: 0,
+            });
+        }
+        ai.script =
+            crate::content::CreatureScriptAi::for_script_gated(&script_name, self.map_id, entry);
+        let has_script = ai.script.is_some();
+        self.ai.insert(guid, ai);
+        if kind == AiKind::EventAi {
+            self.eventai_reset(guid);
+        }
+        if has_script {
+            self.creature_script_reset(guid);
+        }
+    }
+
+    /// `Creature::SelectAttackingTarget` (no-spell arm;
+    /// `Creature.cpp:2987`) over the online threat list.
+    /// `target`: fork `AttackingTarget` (RANDOM 0,
+    /// TOPAGGRO 1, BOTTOMAGGRO 2, NEAREST 3, FARTHEST 4);
+    /// `flags`: fork `SelectFlags` (`CreatureDefines.h:516`).
+    /// The friendly recheck folds into threat-list
+    /// membership; FARTHEST uses center distance (fork
+    /// `GetCombatDistance` unmodeled).
+    pub(crate) fn select_attacking_target(
+        &mut self,
+        guid: ObjectGuid,
+        target: u32,
+        position: usize,
+        flags: u32,
+    ) -> Option<ObjectGuid> {
+        let list: Vec<ObjectGuid> = self
+            .ai
+            .get(&guid)?
+            .threat
+            .threat_list()
+            .iter()
+            .map(mangos_threat::HostileRef::target)
+            .collect();
+        if position >= list.len() || list.is_empty() {
+            return None;
+        }
+        let mut suit: Vec<bool> = Vec::with_capacity(list.len());
+        for &t in &list {
+            suit.push(self.meets_select_requirement(guid, t, flags));
+        }
+        let suitable = |t: ObjectGuid| list.iter().position(|&x| x == t).is_some_and(|i| suit[i]);
+        match target {
+            0 => {
+                let pool: Vec<ObjectGuid> = list[position..]
+                    .iter()
+                    .copied()
+                    .filter(|&t| suitable(t))
+                    .collect();
+                if pool.is_empty() {
+                    return None;
+                }
+                let hi = u32::try_from(pool.len() - 1).unwrap_or(0);
+                let idx = self.rng.urand(0, hi) as usize;
+                pool.get(idx).copied()
+            }
+            1 => list[position..].iter().copied().find(|&t| suitable(t)),
+            2 => list[..list.len().saturating_sub(position)]
+                .iter()
+                .rev()
+                .copied()
+                .find(|&t| suitable(t)),
+            3 | 4 => {
+                let me = self.unit_position(guid)?;
+                let mut best: Option<(ObjectGuid, f32)> = None;
+                for &t in &list[position..] {
+                    if !suitable(t) {
+                        continue;
+                    }
+                    let Some(p) = self.unit_position(t) else {
+                        continue;
+                    };
+                    let dx = p.x - me.x;
+                    let dy = p.y - me.y;
+                    let dz = p.z - me.z;
+                    let d = dx * dx + dy * dy + dz * dz;
+                    let better = match best {
+                        None => true,
+                        Some((_, bd)) => {
+                            if target == 3 {
+                                d < bd
+                            } else {
+                                d > bd
+                            }
+                        }
+                    };
+                    if better {
+                        best = Some((t, d));
+                    }
+                }
+                best.map(|(t, _)| t)
+            }
+            _ => None,
+        }
+    }
+
+    /// `Unit::DoResetThreat` (`Unit.cpp`): zero every nonzero
+    /// online threat entry via `modifyThreatPercent(-100)`.
+    /// Fork-exact: the C++ `-100` arm keeps the reference at
+    /// zero threat (only `< -100` removes), so the entries
+    /// survive, the current victim is untouched, and a guid
+    /// with no AI entry is a silent no-op (the fork's
+    /// `CanHaveThreatList`/empty-list early return).
+    pub(crate) fn do_reset_threat(&mut self, guid: ObjectGuid) {
+        let Some(mut ai) = self.ai.remove(&guid) else {
+            return;
+        };
+        {
+            let targets: Vec<ObjectGuid> = ai
+                .threat
+                .threat_list()
+                .iter()
+                .filter(|r| r.threat() != 0.0)
+                .map(mangos_threat::HostileRef::target)
+                .collect();
+            let host = MapThreatHost { map: self };
+            for target in targets {
+                ai.threat.modify_threat_percent(&host, target, -100);
+            }
+        }
+        self.ai.insert(guid, ai);
+    }
+
+    /// `SelectUnit(SELECT_TARGET_RANDOM, 0)` script shorthand
+    /// (fork default flags `SELECT_FLAG_NO_TOTEM`).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn select_random_hostile(&mut self, guid: ObjectGuid) -> Option<ObjectGuid> {
+        self.select_attacking_target(guid, 0, 0, 0x100)
+    }
+
+    /// `Creature::MeetsSelectAttackingRequirement`
+    /// (no-spell arm; `Creature.cpp:2834`).
+    fn meets_select_requirement(
+        &mut self,
+        guid: ObjectGuid,
+        target: ObjectGuid,
+        flags: u32,
+    ) -> bool {
+        const SELECT_FLAG_IN_LOS: u32 = 0x001;
+        const SELECT_FLAG_PLAYER: u32 = 0x002;
+        const SELECT_FLAG_POWER_MANA: u32 = 0x004;
+        const SELECT_FLAG_POWER_RAGE: u32 = 0x008;
+        const SELECT_FLAG_POWER_ENERGY: u32 = 0x010;
+        const SELECT_FLAG_IN_MELEE_RANGE: u32 = 0x040;
+        const SELECT_FLAG_NOT_IN_MELEE_RANGE: u32 = 0x080;
+        const SELECT_FLAG_NO_TOTEM: u32 = 0x100;
+        const SELECT_FLAG_PLAYER_NOT_GM: u32 = 0x200;
+        const SELECT_FLAG_PET: u32 = 0x400;
+        const SELECT_FLAG_NOT_PLAYER: u32 = 0x800;
+        const SELECT_FLAG_POWER_NOT_MANA: u32 = 0x1000;
+        // SPAWNING | NOT_ATTACKABLE_1 | NON_ATTACKABLE_2 |
+        // TAXI_FLIGHT | NOT_SELECTABLE (`UnitDefines.h`).
+        const MASK: u32 = 0x0000_0002 | 0x0000_0080 | 0x0001_0000 | 0x0010_0000 | 0x0200_0000;
+        // Powers (`SharedDefines.h`): MANA 0, RAGE 1, ENERGY 3.
+        let power = self
+            .unit_base(target)
+            .map_or(255, mangos_entities::unit::UnitBase::power_type);
+        if flags & SELECT_FLAG_PLAYER != 0 && !target.is_player() {
+            return false;
+        }
+        if flags & SELECT_FLAG_NO_TOTEM != 0
+            && self
+                .creatures
+                .get(&target)
+                .is_some_and(|c| c.info.creature_type == CREATURE_TYPE_TOTEM)
+        {
+            return false;
+        }
+        if flags & SELECT_FLAG_POWER_MANA != 0 && power != 0 {
+            return false;
+        }
+        if flags & SELECT_FLAG_POWER_NOT_MANA != 0 && power == 0 {
+            return false;
+        }
+        if flags & SELECT_FLAG_POWER_RAGE != 0 && power != 1 {
+            return false;
+        }
+        if flags & SELECT_FLAG_POWER_ENERGY != 0 && power != 3 {
+            return false;
+        }
+        if flags & SELECT_FLAG_IN_MELEE_RANGE != 0 && !self.can_reach_melee(guid, target) {
+            return false;
+        }
+        if flags & SELECT_FLAG_NOT_IN_MELEE_RANGE != 0 && self.can_reach_melee(guid, target) {
+            return false;
+        }
+        if flags & SELECT_FLAG_IN_LOS != 0 {
+            let (Some(a), Some(b)) = (self.unit_position(guid), self.unit_position(target)) else {
+                return false;
+            };
+            if !self.heights.vmaps().is_in_line_of_sight(
+                a.x,
+                a.y,
+                a.z + 2.0,
+                b.x,
+                b.y,
+                b.z + 2.0,
+                false,
+            ) {
+                return false;
+            }
+        }
+        if flags & SELECT_FLAG_PLAYER_NOT_GM != 0 && !target.is_player() {
+            return false;
+        }
+        if flags & SELECT_FLAG_PET != 0 && !self.is_pet(target) {
+            return false;
+        }
+        if flags & SELECT_FLAG_NOT_PLAYER != 0 && target.is_player() {
+            return false;
+        }
+        if !self.unit_is_alive(target) {
+            return false;
+        }
+        let unit_flags = self.unit_value_u32(target, offsets::UNIT_FIELD_FLAGS);
+        unit_flags & MASK == 0
+    }
+
+    /// `SelectHostileTarget` over the threat manager
+    /// (shared by the generic loop and hand-ported
+    /// script AIs).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn get_hostile_target(&mut self, guid: ObjectGuid) -> Option<ObjectGuid> {
+        let mut ai = self.ai.remove(&guid)?;
+        let selected = {
+            let host = MapThreatHost { map: self };
+            ai.threat.get_hostile_target(&host)
+        };
+        self.ai.insert(guid, ai);
+        selected
+    }
+
+    /// Build the runtime rows of one creature spell
+    /// list (initial delays rolled).
+    /// `CreatureAI::SetSpellsList`.
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    /// Build the runtime rows of one creature spell
+    /// list (initial delays rolled).
+    pub(crate) fn build_spell_runtime(&mut self, list_id: u32) -> Vec<SpellRuntime> {
+        let mut spells: Vec<SpellRuntime> = Vec::new();
+        if let Some(list) = self.stores.creature_spells.get(&list_id).cloned() {
+            for entry in list {
+                let cooldown_ms = if entry.delay_initial_max >= entry.delay_initial_min
+                    && entry.delay_initial_max > 0
+                {
+                    self.rng
+                        .urand(entry.delay_initial_min, entry.delay_initial_max)
+                } else {
+                    entry.delay_initial_min
+                };
+                spells.push(SpellRuntime { entry, cooldown_ms });
+            }
+        }
+        spells
+    }
+
+    pub(crate) fn set_creature_spells_list(&mut self, guid: ObjectGuid, list_id: u32) {
+        self.ensure_ai(guid);
+        let spells = self.build_spell_runtime(list_id);
+        if let Some(ai) = self.ai.get_mut(&guid) {
+            ai.spells = spells;
+        }
+    }
+
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn set_in_combat_flag(&mut self, guid: ObjectGuid, on: bool) {
+        if let Some(u) = self.unit_base_mut(guid) {
+            let flags = u.values().get_u32(offsets::UNIT_FIELD_FLAGS);
+            let next = if on {
+                flags | UNIT_FLAG_IN_COMBAT
+            } else {
+                flags & !UNIT_FLAG_IN_COMBAT
+            };
+            u.values().set_u32(offsets::UNIT_FIELD_FLAGS, next);
+        }
+    }
+
+    /// `Creature::GetAttackDistance` (detection range
+    /// replaces the formula when set; stealth not
+    /// modeled).
+    pub(crate) fn attack_distance(&self, creature: ObjectGuid, target: ObjectGuid) -> f32 {
+        let Some(c) = self.creatures.get(&creature) else {
+            return 0.0;
+        };
+        #[allow(clippy::cast_possible_wrap)]
+        let target_level = self.unit_level(target) as i32;
+        #[allow(clippy::cast_possible_wrap)]
+        let my_level = self.unit_level(creature) as i32;
+        let level_diff = (target_level - my_level).clamp(
+            -MAX_LEVEL_DIFF_FOR_AGGRO_RANGE,
+            MAX_LEVEL_DIFF_FOR_AGGRO_RANGE,
+        );
+        #[allow(clippy::cast_precision_loss)]
+        let distance = if c.info.detection_range > 0.0 {
+            c.info.detection_range
+        } else {
+            25.0 - level_diff as f32
+        };
+        (distance + 2.0 * self.combat_reach_of(creature)).max(self.combat_reach_of(creature))
+    }
+
+    fn can_initiate_attack(&self, creature: ObjectGuid, target: ObjectGuid) -> bool {
+        if self.is_pet(creature) {
+            return false; // pets engage via PetAI only
+        }
+        let Some(c) = self.creatures.get(&creature) else {
+            return false;
+        };
+        if !c.unit.is_alive() || self.react_state_of(creature) != 2 {
+            return false;
+        }
+        if !self.unit_is_alive(target) || !target.is_player() {
+            return false;
+        }
+        // `m_creature->IsHostileTo(pWho)` (BasicAI.cpp:64):
+        // proximity aggro only against reaction-hostile
+        // players; friendly/neutral NPCs (town guards,
+        // quest givers) never initiate. GuardAI's extra
+        // arms (attacking a friendly, hostile-to-players)
+        // are not modeled here.
+        // UNMODELED: GuardAI::MoveInLineOfSight extra arms.
+        if !self.creature_hostile_to_player(creature, target) {
+            return false;
+        }
+        // `MoveInLineOfSight` rides visibility notifiers:
+        // no aggro before the creature is in the player's
+        // view.
+        if !self
+            .visible_to(target)
+            .is_some_and(|v| v.contains(&creature))
+        {
+            return false;
+        }
+        let (Some(cp), Some(tp)) = (self.unit_position(creature), self.unit_position(target))
+        else {
+            return false;
+        };
+        if (cp.z - tp.z).abs() > CREATURE_Z_ATTACK_RANGE {
+            return false;
+        }
+        self.within_dist(creature, target, self.attack_distance(creature, target))
+    }
+
+    /// Proximity aggro scan (`MoveInLineOfSight`):
+    /// engage the first attackable visible player.
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn try_proximity_aggro(&mut self, guid: ObjectGuid) {
+        let players: Vec<ObjectGuid> = self.players.keys().copied().collect();
+        for player in players {
+            if self.can_initiate_attack(guid, player) {
+                self.enter_combat(guid, player);
+                break;
+            }
+        }
+    }
+
+    fn react_state_of(&self, guid: ObjectGuid) -> u8 {
+        if let Some(state) = self.ai.get(&guid).and_then(|ai| ai.react_override) {
+            return state;
+        }
+        self.creatures.get(&guid).map_or(0, Self::react_state_for)
+    }
+
+    /// `CreatureAI::AttackStart` + `SetInCombatWith`
+    /// (proximity/damage entry into combat).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn enter_combat(&mut self, creature: ObjectGuid, target: ObjectGuid) {
+        self.ensure_ai(creature);
+        let position = self.unit_position(creature).unwrap_or_default();
+        let now = self.now_ms;
+        let fresh = self.ai.get(&creature).is_some_and(|ai| !ai.in_combat);
+        if let Some(ai) = self.ai.get_mut(&creature) {
+            if fresh {
+                ai.in_combat = true;
+                ai.evading = false;
+                ai.combat_start = position;
+                ai.combat_start_ms = now;
+            }
+        }
+        self.add_threat(creature, target, 0.0);
+        self.set_in_combat_flag(creature, true);
+        self.set_in_combat_flag(target, true);
+        if let Some(u) = self.unit_base_mut(target) {
+            u.last_combat_ms = now;
+        }
+        if fresh {
+            // `npc_escortAI::EnterCombat` combat-start
+            // record (Tier 4 B0-6).
+            self.escort_on_enter_combat(creature);
+            self.instance_on_creature_enter_combat(creature);
+            self.eventai_enter_combat(creature, target);
+            self.creature_script_aggro(creature, target);
+            // SMSG_AI_REACTION (raw guid + reaction).
+            let mut payload = PacketWriter::new();
+            payload.write_u64_le(creature.raw());
+            payload.write_u32_le(AI_REACTION_HOSTILE);
+            let packet = WorldPacket::with_body(op::SMSG_AI_REACTION, payload.into_vec());
+            self.broadcast_movement(creature, &packet);
+        }
+        self.attack_start(creature, target);
+    }
+
+    /// `Creature::SetInCombatWithZone(initialPulse=true)`
+    /// (`Creature.cpp:2781`) reduced: instance maps only,
+    /// every living player on the map enters combat with
+    /// the creature, closest first (the fork's initial
+    /// `AttackStart` pulse). Not modeled: the
+    /// `CSTATE_COMBAT_WITH_ZONE` leash state, pet
+    /// `EnterCombatWithTarget`, and the full
+    /// `IsValidAttackTarget` flag/faction screen (alive
+    /// only).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn set_in_combat_with_zone(&mut self, creature: ObjectGuid) {
+        if self.instance_id == 0 || !self.unit_is_alive(creature) {
+            return;
+        }
+        let center = self.unit_position(creature).unwrap_or_default();
+        let mut players: Vec<(f32, ObjectGuid)> = self
+            .players
+            .keys()
+            .copied()
+            .filter(|p| self.unit_is_alive(*p))
+            .map(|p| {
+                (
+                    self.unit_position(p)
+                        .map_or(f32::MAX, |pos| crate::visibility::dist3d(pos, center)),
+                    p,
+                )
+            })
+            .collect();
+        players.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for (_, player) in players {
+            self.enter_combat(creature, player);
+        }
+    }
+
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn add_threat(&mut self, creature: ObjectGuid, victim: ObjectGuid, amount: f32) {
+        self.ensure_ai(creature);
+        let Some(mut ai) = self.ai.remove(&creature) else {
+            return;
+        };
+        {
+            let host = MapThreatHost { map: self };
+            ai.threat.add_threat_simple(&host, victim, amount);
+        }
+        self.ai.insert(creature, ai);
+    }
+
+    /// Threat for `victim` on `creature` (tests).
+    #[must_use]
+    pub fn threat_on(&self, creature: ObjectGuid, victim: ObjectGuid) -> f32 {
+        self.ai
+            .get(&creature)
+            .map_or(0.0, |ai| ai.threat.get_threat(victim, true))
+    }
+
+    /// Bot query: units melee-attacking `victim`
+    /// (`GetAttackers` reduced to the melee-victim
+    /// relation the Rust AI maintains).
+    #[must_use]
+    pub fn bot_attackers_of(&self, victim: ObjectGuid) -> Vec<ObjectGuid> {
+        let mut out = Vec::new();
+        for (guid, creature) in &self.creatures {
+            if creature.unit.melee_victim == Some(victim) && creature.unit.is_alive() {
+                out.push(*guid);
+            }
+        }
+        for (guid, entry) in &self.players {
+            if entry.player.unit.melee_victim == Some(victim) && entry.player.unit.is_alive() {
+                out.push(*guid);
+            }
+        }
+        out
+    }
+
+    /// Bot query: `GetIncomingdamage` — reachable
+    /// attackers' average weapon damage.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn bot_incoming_damage(&self, victim: ObjectGuid) -> i32 {
+        let Some(victim_pos) = self.unit_position(victim) else {
+            return 0;
+        };
+        let mut damage = 0i32;
+        for attacker in self.bot_attackers_of(victim) {
+            let Some(pos) = self.unit_position(attacker) else {
+                continue;
+            };
+            let dist = ((pos.x - victim_pos.x).powi(2)
+                + (pos.y - victim_pos.y).powi(2)
+                + (pos.z - victim_pos.z).powi(2))
+            .sqrt();
+            if dist > 5.0 {
+                continue;
+            }
+            let unit = self
+                .creature(attacker)
+                .map(|c| &c.unit)
+                .or_else(|| self.player(attacker).map(|p| &p.unit));
+            if let Some(unit) = unit {
+                let values = unit.world.object.values();
+                let min = values.get_f32(offsets::UNIT_FIELD_MINDAMAGE);
+                let max = values.get_f32(offsets::UNIT_FIELD_MAXDAMAGE);
+                damage += f32::midpoint(min, max) as i32;
+            }
+        }
+        damage
+    }
+
+    /// Bot query: alive hostile creatures within
+    /// `radius` of `center` (player<->creature
+    /// hostility, matching `is_hostile_pair`).
+    #[must_use]
+    pub fn bot_hostile_count_around(&self, center: ObjectGuid, radius: f32) -> u8 {
+        let Some(center_pos) = self.unit_position(center) else {
+            return 0;
+        };
+        let mut count = 0u8;
+        for (guid, creature) in &self.creatures {
+            if !creature.unit.is_alive() || *guid == center {
+                continue;
+            }
+            let pos = creature.unit.world.position();
+            let dist = ((pos.x - center_pos.x).powi(2)
+                + (pos.y - center_pos.y).powi(2)
+                + (pos.z - center_pos.z).powi(2))
+            .sqrt();
+            if dist <= radius {
+                count = count.saturating_add(1);
+            }
+        }
+        count
+    }
+
+    /// Bot query: any alive hostile creature
+    /// within `radius` of a point (formation
+    /// slot/flee safety scans).
+    #[must_use]
+    pub fn bot_hostiles_near_point(&self, x: f32, y: f32, z: f32, radius: f32) -> bool {
+        self.creatures.values().any(|creature| {
+            if !creature.unit.is_alive() {
+                return false;
+            }
+            let pos = creature.unit.world.position();
+            ((pos.x - x).powi(2) + (pos.y - y).powi(2) + (pos.z - z).powi(2)).sqrt() <= radius
+        })
+    }
+
+    /// AI combat state probe (tests).
+    #[must_use]
+    pub fn ai_in_combat(&self, creature: ObjectGuid) -> bool {
+        self.ai.get(&creature).is_some_and(|ai| ai.in_combat)
+    }
+
+    /// `Unit::Attack`: set the melee victim, target
+    /// field and swing timer; `SMSG_ATTACKSTART`.
+    pub fn attack_start(&mut self, attacker: ObjectGuid, victim: ObjectGuid) {
+        if !self.unit_is_alive(attacker) || !self.unit_is_alive(victim) {
+            return;
+        }
+        // Fork `CreatureAI::AttackStart` enters combat
+        // (`Unit::Attack` + `SetInCombatWith`): threat entry
+        // plus the fresh-combat `Aggro` hook. Script bodies
+        // transcribe that call to this helper, so a creature
+        // attacker out of combat routes through
+        // `enter_combat` (which ends by setting the victim
+        // here). Pets keep the plain victim set (PetAI owns
+        // their combat entry).
+        if attacker.is_creature() && !self.is_pet(attacker) && !self.ai_in_combat(attacker) {
+            self.enter_combat(attacker, victim);
+            return;
+        }
+        let already = self
+            .unit_base_mut(attacker)
+            .is_some_and(|u| u.melee_victim == Some(victim));
+        if already {
+            return;
+        }
+        if let Some(u) = self.unit_base_mut(attacker) {
+            if u.melee_victim.is_none() {
+                u.attack_timers[0] = 0;
+            }
+            u.melee_victim = Some(victim);
+            u.values().set_guid(offsets::UNIT_FIELD_TARGET, victim);
+        }
+        self.set_in_combat_flag(attacker, true);
+        let mut payload = PacketWriter::new();
+        payload.write_u64_le(attacker.raw());
+        payload.write_u64_le(victim.raw());
+        let packet = WorldPacket::with_body(op::SMSG_ATTACKSTART, payload.into_vec());
+        self.broadcast_movement(attacker, &packet);
+    }
+
+    /// `Unit::AttackStop` + `SMSG_ATTACKSTOP` (packed
+    /// guids + 0 on 5875).
+    pub fn attack_stop(&mut self, attacker: ObjectGuid) {
+        let victim = self
+            .unit_base_mut(attacker)
+            .and_then(|u| u.melee_victim.take());
+        let Some(victim) = victim else {
+            return;
+        };
+        if let Some(u) = self.unit_base_mut(attacker) {
+            u.values()
+                .set_guid(offsets::UNIT_FIELD_TARGET, ObjectGuid::EMPTY);
+        }
+        let mut payload = PacketWriter::new();
+        payload.write_bytes(&Self::packed_guid_bytes(attacker));
+        payload.write_bytes(&Self::packed_guid_bytes(victim));
+        payload.write_u32_le(0);
+        let packet = WorldPacket::with_body(op::SMSG_ATTACKSTOP, payload.into_vec());
+        self.broadcast_movement(attacker, &packet);
+    }
+
+    // ------------------------------------------------ AI update
+
+    /// Home arrivals from this tick's motion step
+    /// (`JustReachedHome`): clear the evade flag so the
+    /// creature can fight again.
+    fn process_home_arrivals(&mut self) {
+        let arrived: Vec<ObjectGuid> = self
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                crate::map::MapEvent::JustReachedHome { guid } => Some(*guid),
+                _ => None,
+            })
+            .collect();
+        for guid in arrived {
+            if let Some(ai) = self.ai.get_mut(&guid) {
+                ai.evading = false;
+            }
+            self.eventai_process_type(guid, event_type::REACHED_HOME, None);
+            self.eventai_reset(guid);
+            self.creature_script_just_reached_home(guid);
+        }
+    }
+
+    /// `Creature::Update` AI half + `BasicAI::UpdateAI`
+    /// + melee-timer decrement for every unit.
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn update_ai(&mut self, diff_ms: u32) {
+        self.process_home_arrivals();
+        self.process_movement_informs();
+        // Attack timers tick for players and creatures.
+        let units: Vec<ObjectGuid> = self
+            .players
+            .keys()
+            .chain(self.creatures.keys())
+            .copied()
+            .collect();
+        for guid in &units {
+            if let Some(u) = self.unit_base_mut(*guid) {
+                for timer in &mut u.attack_timers {
+                    *timer = timer.saturating_sub(diff_ms);
+                }
+            }
+        }
+        let creature_guids: Vec<ObjectGuid> = self.creatures.keys().copied().collect();
+        for guid in creature_guids {
+            self.update_creature_ai(guid, diff_ms);
+        }
+        // Melee swings for everyone with a victim.
+        for guid in &units {
+            self.update_melee_attacking(*guid);
+        }
+        self.update_player_combat_drop();
+    }
+
+    fn update_creature_ai(&mut self, guid: ObjectGuid, diff_ms: u32) {
+        if !self.unit_is_alive(guid) {
+            return;
+        }
+        // Hidden patrol spawns (Deadmines) stay inert
+        // (legacy alias folded into `get_visibility`).
+        if self.get_visibility(guid) != UnitVisibility::On {
+            return;
+        }
+        self.ensure_ai(guid);
+        // Controlled pets run the PetAI subset instead
+        // of creature AI (Tier 1 Slice 2).
+        if self.is_pet(guid) {
+            self.regenerate_creature(guid, diff_ms);
+            self.pet_ai_update(guid);
+            return;
+        }
+        // Totems run the TotemAI subset (rooted; lifecycle
+        // in `update_totems`).
+        if self.totems.contains_key(&guid) {
+            self.totem_ai_update(guid);
+            return;
+        }
+        let kind = self.ai.get(&guid).map_or(AiKind::Null, |ai| ai.kind);
+        if kind == AiKind::Null {
+            return;
+        }
+        self.regenerate_creature(guid, diff_ms);
+        if self.ai.get(&guid).is_some_and(|ai| ai.script.is_some())
+            && self.creature_script_update(guid, diff_ms)
+        {
+            return;
+        }
+
+        // Scripted flee drives away-points and suppresses
+        // the combat loop (events still tick below via
+        // the in-combat path state).
+        if self.update_fleeing(guid) {
+            self.eventai_update(guid, diff_ms, true);
+            return;
+        }
+
+        let in_combat = self.ai.get(&guid).is_some_and(|ai| ai.in_combat);
+        if !in_combat {
+            // EventAI OOC events + OOC line-of-sight
+            // scan, then proximity aggro
+            // (`MoveInLineOfSight` order).
+            self.eventai_update(guid, diff_ms, false);
+            self.eventai_ooc_los_scan(guid);
+            self.try_proximity_aggro(guid);
+            return;
+        }
+
+        // Casting creatures skip the rest while a
+        // non-melee cast runs (BasicAI gate).
+        if self.casts.contains_key(&guid) {
+            return;
+        }
+
+        // Leash (`Creature::Update` distance arm).
+        if self.should_leash_evade(guid) {
+            self.enter_evade_mode(guid);
+            return;
+        }
+
+        let victim = {
+            let Some(mut ai) = self.ai.remove(&guid) else {
+                return;
+            };
+            let selected = {
+                let host = MapThreatHost { map: self };
+                ai.threat.get_hostile_target(&host)
+            };
+            self.ai.insert(guid, ai);
+            selected
+        };
+        let Some(victim) = victim else {
+            // `OnCombatStop` before the evade unwind.
+            self.eventai_process_type(guid, event_type::LEAVE_COMBAT, None);
+            self.enter_evade_mode(guid);
+            return;
+        };
+
+        // EventAI combat events run after victim
+        // selection, before spell lists/melee
+        // (`CreatureEventAI::UpdateAI` order).
+        self.eventai_update(guid, diff_ms, true);
+        if !self.unit_is_alive(guid) {
+            return;
+        }
+
+        // Victim management + chase.
+        let current_victim = self.unit_base_mut(guid).and_then(|u| u.melee_victim);
+        if current_victim != Some(victim) {
+            self.attack_start(guid, victim);
+        }
+        let combat_movement = self.ai.get(&guid).is_some_and(|ai| ai.combat_movement);
+        if combat_movement
+            && (self.motion_type_of(guid) != CHASE_MOTION_TYPE
+                || self.chase_target_of(guid) != Some(victim))
+        {
+            self.creature_move_chase(guid, victim, 0.0, 0.0);
+        }
+        self.update_spells_list(guid, victim, diff_ms);
+    }
+
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn should_leash_evade(&self, guid: ObjectGuid) -> bool {
+        let Some(ai) = self.ai.get(&guid) else {
+            return false;
+        };
+        let Some(c) = self.creatures.get(&guid) else {
+            return false;
+        };
+        if c.info.flags_extra & FLAG_EXTRA_NO_LEASH_EVADE != 0 || ai.evading {
+            return false;
+        }
+        let leash = c.info.leash_range;
+        let Some(pos) = self.unit_position(guid) else {
+            return false;
+        };
+        if leash > 0.0 {
+            let dx = pos.x - ai.combat_start.x;
+            let dy = pos.y - ai.combat_start.y;
+            let dz = pos.z - ai.combat_start.z;
+            return (dx * dx + dy * dy + dz * dz).sqrt() > leash;
+        }
+        // Distance-from-home rule: 2x detection or 50 yd.
+        let check_dist = (2.0 * c.info.detection_range).max(50.0);
+        let dx = pos.x - ai.combat_start.x;
+        let dy = pos.y - ai.combat_start.y;
+        (dx * dx + dy * dy).sqrt() > check_dist
+    }
+
+    /// `CreatureAI::EnterEvadeMode`.
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn enter_evade_mode(&mut self, guid: ObjectGuid) {
+        // `InstanceData::OnCreatureEvade` (fork fires it from
+        // `CreatureAI::EnterEvadeMode`).
+        self.instance_on_creature_evade(guid);
+        // `SetLootRecipient(nullptr)` on evade.
+        self.clear_loot_tap(guid);
+        self.attack_stop(guid);
+        self.cancel_cast(guid, false);
+        self.remove_all_auras(guid);
+        if let Some(ai) = self.ai.get_mut(&guid) {
+            ai.threat = ThreatManager::new(guid);
+            ai.in_combat = false;
+            ai.evading = true;
+            for spell in &mut ai.spells {
+                spell.cooldown_ms = self.rng.urand(
+                    spell.entry.delay_initial_min,
+                    spell
+                        .entry
+                        .delay_initial_max
+                        .max(spell.entry.delay_initial_min),
+                );
+            }
+        }
+        self.set_in_combat_flag(guid, false);
+        if let Some(ai) = self.ai.get_mut(&guid) {
+            ai.flee_until_ms = 0;
+        }
+        self.creature_script_enter_evade(guid);
+        self.eventai_process_type(guid, event_type::EVADE, None);
+        if let Some(mut master) = self.motion.remove(&guid) {
+            master.clear(self, guid);
+            self.motion.entry(guid).or_insert(master);
+        }
+        // Tier 4 B0-6: escorting/following creatures
+        // return to their escort anchor instead of
+        // walking home.
+        if !self.escort_on_evade(guid) {
+            self.creature_move_home(guid);
+        }
+    }
+
+    /// Out-of-combat creature regen (`RegenerateAll`:
+    /// max/3 per regen tick for health and mana).
+    fn regenerate_creature(&mut self, guid: ObjectGuid, diff_ms: u32) {
+        let due = {
+            let Some(ai) = self.ai.get_mut(&guid) else {
+                return;
+            };
+            if ai.in_combat {
+                return;
+            }
+            ai.regen_timer_ms = ai.regen_timer_ms.saturating_sub(diff_ms);
+            if ai.regen_timer_ms > 0 {
+                return;
+            }
+            ai.regen_timer_ms = REGEN_TIME_MS;
+            true
+        };
+        if !due {
+            return;
+        }
+        let max_health = self.unit_value_u32(guid, offsets::UNIT_FIELD_MAXHEALTH);
+        let health = self.unit_value_u32(guid, offsets::UNIT_FIELD_HEALTH);
+        if health < max_health
+            && let Some(u) = self.unit_base_mut(guid)
+        {
+            u.set_health((health + max_health / 3).min(max_health));
+        }
+        let max_mana = self.unit_value_u32(guid, offsets::UNIT_FIELD_MAXPOWER1);
+        let mana = self.unit_value_u32(guid, offsets::UNIT_FIELD_POWER1);
+        if mana < max_mana
+            && let Some(u) = self.unit_base_mut(guid)
+        {
+            u.set_power(0, (mana + max_mana / 3).min(max_mana));
+        }
+    }
+
+    /// Player combat drop: clear `UNIT_FLAG_IN_COMBAT`
+    /// and stop swings once nothing references the
+    /// player and the drop delay elapsed.
+    fn update_player_combat_drop(&mut self) {
+        let players: Vec<ObjectGuid> = self.players.keys().copied().collect();
+        let now = self.now_ms;
+        for player in players {
+            let referenced = self
+                .ai
+                .values()
+                .any(|ai| ai.in_combat && ai.threat.get_threat(player, true) > 0.0)
+                || self
+                    .creatures
+                    .values()
+                    .any(|c| c.unit.melee_victim == Some(player));
+            let last = self.unit_base_mut(player).map_or(0, |u| u.last_combat_ms);
+            let victim_alive = self
+                .unit_base_mut(player)
+                .and_then(|u| u.melee_victim)
+                .is_some_and(|v| self.unit_is_alive(v));
+            if !referenced && !victim_alive && now.saturating_sub(last) > PLAYER_COMBAT_DROP_MS {
+                if self
+                    .unit_base_mut(player)
+                    .and_then(|u| u.melee_victim)
+                    .is_some()
+                {
+                    self.attack_stop(player);
+                }
+                self.set_in_combat_flag(player, false);
+            }
+        }
+    }
+
+    // ------------------------------------------------ spell list
+
+    fn resolve_spell_target(
+        &mut self,
+        creature: ObjectGuid,
+        victim: ObjectGuid,
+        entry: &CreatureSpellEntry,
+    ) -> CastTarget {
+        match entry.cast_target {
+            // PROVIDED (= self in the spells-list call),
+            // OWNER_OR_SELF, and the FRIENDLY_* family
+            // (subset resolves friendlies to self).
+            0 | 8 | 16..=20 => CastTarget::SelfCast,
+            // HOSTILE_RANDOM / RANDOM_NOT_TOP / second
+            // aggro: uniform over the threat list subset.
+            2 | 4 | 5 => {
+                let refs: Vec<ObjectGuid> = self
+                    .ai
+                    .get(&creature)
+                    .map(|ai| {
+                        ai.threat
+                            .threat_list()
+                            .iter()
+                            .map(mangos_threat::HostileRef::target)
+                            .filter(|g| entry.cast_target != 5 || *g != victim)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if refs.is_empty() {
+                    CastTarget::Unit(victim)
+                } else if entry.cast_target == 2 && refs.len() > 1 {
+                    CastTarget::Unit(refs[1])
+                } else {
+                    #[allow(clippy::cast_possible_truncation)]
+                    let idx = self.rng.urand(0, refs.len() as u32 - 1) as usize;
+                    CastTarget::Unit(refs[idx])
+                }
+            }
+            // HOSTILE (top aggro); every unhandled type
+            // also falls back to the victim.
+            _ => CastTarget::Unit(victim),
+        }
+    }
+
+    /// `CreatureAI::UpdateSpellsList` +
+    /// `DoSpellsListCasts` subset.
+    fn update_spells_list(&mut self, guid: ObjectGuid, victim: ObjectGuid, diff_ms: u32) {
+        let due = {
+            let Some(ai) = self.ai.get_mut(&guid) else {
+                return;
+            };
+            if ai.casting_delay_ms <= diff_ms {
+                let desync = diff_ms - ai.casting_delay_ms;
+                ai.casting_delay_ms = CREATURE_CASTING_DELAY.saturating_sub(desync);
+                CREATURE_CASTING_DELAY + desync
+            } else {
+                ai.casting_delay_ms -= diff_ms;
+                return;
+            }
+        };
+
+        let mut dont_cast = false;
+        let spell_count = self.ai.get(&guid).map_or(0, |ai| ai.spells.len());
+        for i in 0..spell_count {
+            let (entry, cooldown) = {
+                let ai = self.ai.get(&guid).expect("ai");
+                (ai.spells[i].entry.clone(), ai.spells[i].cooldown_ms)
+            };
+            if cooldown > due {
+                if let Some(ai) = self.ai.get_mut(&guid) {
+                    ai.spells[i].cooldown_ms -= due;
+                }
+                continue;
+            }
+            if let Some(ai) = self.ai.get_mut(&guid) {
+                ai.spells[i].cooldown_ms = 0;
+            }
+            let triggered = entry.cast_flags & CF_TRIGGERED != 0;
+            if !triggered
+                && entry.cast_flags & CF_INTERRUPT_PREVIOUS == 0
+                && (dont_cast || self.casts.contains_key(&guid))
+            {
+                continue;
+            }
+            if entry.cast_flags & CF_ONLY_IN_MELEE != 0 && !self.can_reach_melee(guid, victim) {
+                continue;
+            }
+            if entry.cast_flags & CF_NOT_IN_MELEE != 0 && self.can_reach_melee(guid, victim) {
+                continue;
+            }
+            if entry.cast_flags & CF_AURA_NOT_PRESENT != 0 {
+                let target_guid = match entry.cast_target {
+                    0 | 8 | 16..=20 => guid,
+                    _ => victim,
+                };
+                if self
+                    .aura_holders(target_guid)
+                    .iter()
+                    .any(|h| h.spell_id == entry.spell_id)
+                {
+                    continue;
+                }
+            }
+            if entry.cast_flags & CF_TARGET_CASTING != 0 && !self.casts.contains_key(&victim) {
+                continue;
+            }
+            // Probability roll (`SPELL_FAILED_TRY_AGAIN`).
+            let roll = self.rng.frand(0.0, 100.0);
+            if roll >= f32::from(entry.probability) {
+                self.reset_spell_cooldown(guid, i, &entry);
+                continue;
+            }
+            let target = self.resolve_spell_target(guid, victim, &entry);
+            let outcome = self.cast_spell(
+                guid,
+                entry.spell_id,
+                target,
+                CastOptions {
+                    triggered,
+                    triggered_by_aura: false,
+                    skip_known: true,
+                    cast_item: None,
+                    custom_base_points: [None; 3],
+                    triggered_by_aura_spell: 0,
+                    triggered_by_spell: 0,
+                },
+            );
+            if outcome == CastOutcome::Started {
+                dont_cast = !triggered;
+                self.reset_spell_cooldown(guid, i, &entry);
+                // `creature_spells_scripts` companion
+                // script (`ScriptsStart`), Slice 6b.
+                if entry.script_id != 0
+                    && let Some(steps) = self
+                        .stores
+                        .scripts
+                        .creature_spells_scripts
+                        .get(&entry.script_id)
+                        .cloned()
+                {
+                    let script_target = match target {
+                        CastTarget::Unit(g) | CastTarget::Corpse(g) => Some(g),
+                        CastTarget::SelfCast | CastTarget::Dest(_) => Some(guid),
+                    };
+                    self.schedule_steps(&steps, Some(guid), script_target);
+                }
+            }
+        }
+    }
+
+    fn reset_spell_cooldown(&mut self, guid: ObjectGuid, index: usize, entry: &CreatureSpellEntry) {
+        let cooldown = if entry.delay_repeat_max > 0 {
+            self.rng.urand(
+                entry.delay_repeat_min,
+                entry.delay_repeat_max.max(entry.delay_repeat_min),
+            )
+        } else {
+            entry.delay_repeat_min
+        };
+        if let Some(ai) = self.ai.get_mut(&guid) {
+            ai.spells[index].cooldown_ms = cooldown;
+        }
+    }
+
+    // ------------------------------------------------ melee
+
+    fn skill_max_for_level(&self, guid: ObjectGuid) -> i32 {
+        #[allow(clippy::cast_possible_wrap)]
+        {
+            (self.unit_level(guid) * 5) as i32
+        }
+    }
+
+    /// `MeleeMissChanceCalc(BASE_ATTACK)` at maxed
+    /// weapon/defense skills (no skill system yet).
+    #[allow(clippy::cast_precision_loss)]
+    fn melee_miss_chance(&self, attacker: ObjectGuid, victim: ObjectGuid) -> f32 {
+        let skill_diff = self.skill_max_for_level(attacker) - self.skill_max_for_level(victim);
+        let mut miss = if victim.is_player() {
+            5.0 - skill_diff as f32 * 0.04
+        } else if skill_diff < -10 {
+            5.0 - skill_diff as f32 * 0.2
+        } else {
+            5.0 - skill_diff as f32 * 0.1
+        };
+        let victim_level = self.unit_level(victim);
+        if !victim.is_player() && victim_level < 10 {
+            miss *= victim_level as f32 / 10.0;
+        }
+        miss.clamp(0.0, 60.0)
+    }
+
+    /// `GetUnitDodgeChance`: players read the percentage
+    /// field (set at materialization), creatures 5%.
+    fn unit_dodge_chance(&self, guid: ObjectGuid) -> f32 {
+        if self.casts.contains_key(&guid) {
+            return 0.0;
+        }
+        if guid.is_player() {
+            f32::from_bits(self.unit_value_u32(guid, offsets::PLAYER_DODGE_PERCENTAGE))
+        } else if self
+            .creatures
+            .get(&guid)
+            .is_some_and(|c| c.info.creature_type == CREATURE_TYPE_TOTEM)
+        {
+            0.0
+        } else {
+            5.0
+        }
+    }
+
+    /// `GetUnitParryChance`.
+    fn unit_parry_chance(&self, guid: ObjectGuid) -> f32 {
+        if self.casts.contains_key(&guid) {
+            return 0.0;
+        }
+        if guid.is_player() {
+            f32::from_bits(self.unit_value_u32(guid, offsets::PLAYER_PARRY_PERCENTAGE))
+        } else if self
+            .creatures
+            .get(&guid)
+            .is_some_and(|c| c.info.creature_type == CREATURE_TYPE_TOTEM)
+        {
+            0.0
+        } else {
+            5.0
+        }
+    }
+
+    /// `GetUnitBlockChance` (players 0 until shield
+    /// detection lands with item stats).
+    fn unit_block_chance(&self, guid: ObjectGuid) -> f32 {
+        if self.casts.contains_key(&guid) || guid.is_player() {
+            return 0.0;
+        }
+        if self
+            .creatures
+            .get(&guid)
+            .is_some_and(|c| c.info.creature_type == CREATURE_TYPE_TOTEM)
+        {
+            0.0
+        } else {
+            5.0
+        }
+    }
+
+    /// `GetShieldBlockValue`: creature arm
+    /// (`level/2 + strength/20`); players 0 (no shield).
+    pub(crate) fn unit_block_value(&self, guid: ObjectGuid) -> u32 {
+        if guid.is_player() {
+            // `Player::GetShieldBlockValue`
+            // (`Player.cpp:5178-5185`) at pct identity:
+            // flat group + strength / 20 - 1, floored.
+            let Some(entry) = self.players.get(&guid) else {
+                return 0;
+            };
+            let value = entry.player.shield_block_flat
+                + entry.player.unit.stat(mangos_entities::unit::STAT_STRENGTH) / 20.0
+                - 1.0;
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            {
+                return if value < 0.0 { 0 } else { value as u32 };
+            }
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            self.unit_level(guid) / 2 + (self.unit_stat_f32(guid, 0) / 20.0) as u32
+        }
+    }
+
+    pub(crate) fn unit_class_of(&self, guid: ObjectGuid) -> u32 {
+        self.unit_value_u32(guid, offsets::UNIT_FIELD_BYTES_0) >> 8 & 0xFF
+    }
+
+    fn unit_stat_f32(&self, guid: ObjectGuid, stat: u16) -> f32 {
+        f32::from_bits(self.unit_value_u32(guid, offsets::UNIT_FIELD_STAT0 + stat))
+    }
+
+    /// `GetUnitCriticalChance(BASE_ATTACK, victim)`:
+    /// players read the percentage field, creatures 5%,
+    /// plus the defense-skill adjustment.
+    #[allow(clippy::cast_precision_loss)]
+    fn unit_crit_chance(&self, attacker: ObjectGuid, victim: ObjectGuid) -> f32 {
+        let mut crit = if attacker.is_player() {
+            f32::from_bits(self.unit_value_u32(attacker, offsets::PLAYER_CRIT_PERCENTAGE))
+        } else {
+            5.0
+        };
+        let skill_diff = self.skill_max_for_level(attacker) - self.skill_max_for_level(victim);
+        #[allow(clippy::cast_precision_loss)]
+        {
+            crit += if victim.is_player() || skill_diff > 0 {
+                skill_diff as f32 * 0.04
+            } else {
+                skill_diff as f32 * 0.2
+            };
+        }
+        crit.max(0.0)
+    }
+
+    /// `UpdateMeleeAttackingState` (`BASE_ATTACK` only;
+    /// the swing itself is in the reach check of
+    /// `melee_swing`).
+    fn update_melee_attacking(&mut self, attacker: ObjectGuid) {
+        let Some(victim) = self.unit_base_mut(attacker).and_then(|u| u.melee_victim) else {
+            return;
+        };
+        if !self.unit_is_alive(attacker) || !self.unit_is_alive(victim) {
+            self.attack_stop(attacker);
+            return;
+        }
+        // Casting units do not swing (`IsNonMeleeSpellCasted`).
+        if self.casts.contains_key(&attacker) {
+            return;
+        }
+        // Script melee toggle + fleeing creatures do
+        // not swing (Slice 6b).
+        if attacker.is_creature()
+            && self
+                .ai
+                .get(&attacker)
+                .is_some_and(|ai| !ai.melee_enabled || ai.flee_until_ms > self.now_ms)
+        {
+            return;
+        }
+        let timer_ready = self
+            .unit_base_mut(attacker)
+            .is_some_and(|u| u.attack_timers[0] == 0);
+        if !timer_ready || !self.can_reach_melee(attacker, victim) {
+            return;
+        }
+        let swing_ms = self.swing_time_ms(attacker);
+        if let Some(u) = self.unit_base_mut(attacker) {
+            u.attack_timers[0] = swing_ms;
+        }
+        self.melee_swing(attacker, victim);
+    }
+
+    fn swing_time_ms(&self, attacker: ObjectGuid) -> u32 {
+        let ms = f32::from_bits(self.unit_value_u32(attacker, offsets::UNIT_FIELD_BASEATTACKTIME));
+        if ms > 0.0 {
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                ms as u32
+            }
+        } else {
+            2000
+        }
+    }
+
+    /// `CalculateMeleeDamage` + `RollMeleeOutcomeAgainst`
+    /// + `DealMeleeDamage` subset.
+    ///
+    /// Chances are integer hundredths over a 0..9999 roll,
+    /// like C++.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        clippy::too_many_lines
+    )]
+    /// Armor-reduced melee base damage before outcome
+    /// modifiers (`CalculateMeleeDamage` clean damage).
+    fn melee_base_damage(&mut self, attacker: ObjectGuid, victim: ObjectGuid) -> u32 {
+        // Field range roll, dithered, then armor
+        // (CalculateMeleeDamage order).
+        let min_dmg = f32::from_bits(self.unit_value_u32(attacker, offsets::UNIT_FIELD_MINDAMAGE));
+        let max_dmg = f32::from_bits(self.unit_value_u32(attacker, offsets::UNIT_FIELD_MAXDAMAGE));
+        let (lo, hi) = if min_dmg > max_dmg {
+            (max_dmg, min_dmg)
+        } else {
+            (min_dmg, max_dmg)
+        };
+        let rolled = mangos_spells::ditheru(
+            self.rng
+                .frand(lo.max(0.0), if hi == 0.0 { 5.0 } else { hi }),
+            self.spell_rng(),
+        );
+        let victim_armor = self.unit_resistance(victim, 0);
+        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+        {
+            mangos_spells::armor_reduced_damage(
+                rolled as f32,
+                victim_armor,
+                self.unit_level(attacker),
+            ) as u32
+        }
+    }
+
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        clippy::too_many_lines
+    )]
+    fn melee_swing(&mut self, attacker: ObjectGuid, victim: ObjectGuid) {
+        // Victim creature in evade mode: MELEE_HIT_EVADE.
+        if victim.is_creature() && self.ai.get(&victim).is_some_and(|ai| ai.evading) {
+            self.send_attacker_state(
+                attacker,
+                victim,
+                HITINFO_MISS | HITINFO_AFFECTS_VICTIM | HITINFO_SWINGNOHITSOUND,
+                0,
+                VICTIMSTATE_EVADES,
+                0,
+            );
+            return;
+        }
+
+        let victim_level = self.unit_level(victim);
+        let skill_diff = self.skill_max_for_level(attacker) - self.skill_max_for_level(victim);
+        // Hundredths.
+        let miss_c = (self.melee_miss_chance(attacker, victim) * 100.0) as i32;
+        let mut dodge_c = (self.unit_dodge_chance(victim) * 100.0) as i32;
+        let mut parry_c = (self.unit_parry_chance(victim) * 100.0) as i32;
+        let mut block_c = (self.unit_block_chance(victim) * 100.0) as i32;
+        let crit_c = (self.unit_crit_chance(attacker, victim) * 100.0) as i32;
+
+        let low_level_scale = |chance: i32| -> i32 {
+            if !victim.is_player() && victim_level < 10 {
+                (chance as f32 * victim_level as f32 / 10.0) as i32
+            } else {
+                chance
+            }
+        };
+        dodge_c -= if victim.is_player() {
+            4 * skill_diff
+        } else {
+            10 * skill_diff
+        };
+        dodge_c = low_level_scale(dodge_c);
+        parry_c -= if victim.is_player() {
+            4 * skill_diff
+        } else if skill_diff < -10 {
+            60 * skill_diff
+        } else {
+            20 * skill_diff
+        };
+        parry_c = low_level_scale(parry_c);
+        block_c -= if victim.is_player() {
+            4 * skill_diff
+        } else {
+            10 * skill_diff
+        };
+        if !victim.is_player() && block_c > 500 {
+            block_c = 500;
+        }
+        block_c = low_level_scale(block_c);
+
+        let glancing_c = if attacker.is_player() && !victim.is_player() {
+            // (10 + (defense - weapon) * 2) percent.
+            ((10 + (-skill_diff) * 2) * 100).clamp(0, 4000)
+        } else {
+            0
+        };
+        let crushing_c = if !attacker.is_player() && skill_diff >= 15 {
+            skill_diff * 200 - 1500
+        } else {
+            0
+        };
+
+        let no_parry = self
+            .creatures
+            .get(&victim)
+            .is_some_and(|c| c.info.flags_extra & 0x0000_0004 != 0);
+        let no_block = self
+            .creatures
+            .get(&victim)
+            .is_some_and(|c| c.info.flags_extra & 0x0000_0010 != 0);
+
+        #[allow(clippy::cast_possible_wrap)]
+        let roll = self.rng.urand(0, 9999) as i32;
+        // Cumulative bands in C++ outcome order.
+        let bands: [(bool, i32, MeleeOutcome); 7] = [
+            (miss_c > 0, miss_c, MeleeOutcome::Miss),
+            (dodge_c > 0, dodge_c, MeleeOutcome::Dodge),
+            (!no_parry && parry_c > 0, parry_c, MeleeOutcome::Parry),
+            (glancing_c > 0, glancing_c, MeleeOutcome::Glancing),
+            (!no_block && block_c > 0, block_c, MeleeOutcome::Block),
+            (crit_c > 0, crit_c, MeleeOutcome::Crit),
+            (crushing_c > 0, crushing_c, MeleeOutcome::Crushing),
+        ];
+        let mut sum = 0i32;
+        let mut outcome = MeleeOutcome::Normal;
+        for (enabled, width, kind) in bands {
+            if !enabled {
+                continue;
+            }
+            sum += width;
+            if roll < sum {
+                outcome = kind;
+                break;
+            }
+        }
+
+        match outcome {
+            MeleeOutcome::Miss => {
+                self.raise_melee_procs(attacker, victim, proc_ex::MISS, 0);
+                self.send_attacker_state(
+                    attacker,
+                    victim,
+                    HITINFO_MISS | HITINFO_AFFECTS_VICTIM,
+                    0,
+                    VICTIMSTATE_UNAFFECTED,
+                    0,
+                );
+                return;
+            }
+            MeleeOutcome::Dodge => {
+                if attacker != victim {
+                    let clean = self.melee_base_damage(attacker, victim);
+                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                    self.reward_rage(attacker, (clean as f32 * 0.75) as u32, true);
+                }
+                self.raise_melee_procs(attacker, victim, proc_ex::DODGE, 0);
+                self.send_attacker_state(
+                    attacker,
+                    victim,
+                    HITINFO_AFFECTS_VICTIM,
+                    0,
+                    VICTIMSTATE_DODGE,
+                    0,
+                );
+                return;
+            }
+            MeleeOutcome::Parry => {
+                if attacker != victim {
+                    let clean = self.melee_base_damage(attacker, victim);
+                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                    self.reward_rage(attacker, (clean as f32 * 0.75) as u32, true);
+                }
+                self.raise_melee_procs(attacker, victim, proc_ex::PARRY, 0);
+                self.send_attacker_state(
+                    attacker,
+                    victim,
+                    HITINFO_AFFECTS_VICTIM,
+                    0,
+                    VICTIMSTATE_PARRY,
+                    0,
+                );
+                return;
+            }
+            _ => {}
+        }
+
+        let mut total = self.melee_base_damage(attacker, victim);
+
+        let mut hit_info = HITINFO_AFFECTS_VICTIM;
+        let mut victim_state = VICTIMSTATE_NORMAL;
+        let mut blocked_amount = 0u32;
+        match outcome {
+            MeleeOutcome::Crit => {
+                hit_info |= HITINFO_CRITICALHIT;
+                total = (total as f32 * 2.0) as u32;
+            }
+            MeleeOutcome::Glancing => {
+                hit_info |= HITINFO_GLANCING;
+                // Baeza reduction band.
+                let diff = -skill_diff as f32;
+                let mut low = 1.3 - 0.05 * diff;
+                let mut high = 1.2 - 0.03 * diff;
+                let (mut low_cap, high_cap) = (0.91f32, 0.99f32);
+                if matches!(self.unit_class_of(attacker), 5 | 8 | 9) {
+                    low -= 0.7;
+                    high -= 0.3;
+                    low_cap = 0.6;
+                }
+                low = low.clamp(0.01, low_cap);
+                high = high.clamp(0.2, high_cap);
+                let reduce = self.rng.frand(low, high.max(low));
+                total = (reduce * total as f32) as u32;
+            }
+            MeleeOutcome::Crushing => {
+                hit_info |= HITINFO_CRUSHING;
+                total += total / 2;
+            }
+            MeleeOutcome::Block => {
+                blocked_amount = self.unit_block_value(victim);
+                if blocked_amount >= total {
+                    blocked_amount = total;
+                    victim_state = VICTIMSTATE_BLOCKS;
+                }
+                total -= blocked_amount;
+            }
+            _ => {}
+        }
+
+        // Melee percent damage auras
+        // (`MeleeDamageBonusDone/Taken` pct terms,
+        // NORMAL school mask).
+        if total > 0 {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            {
+                let pct = self.total_aura_multiplier(
+                    attacker,
+                    mangos_spells::defines::aura::MOD_DAMAGE_PERCENT_DONE,
+                    Some(1),
+                ) * self.total_aura_multiplier(
+                    victim,
+                    mangos_spells::defines::aura::MOD_DAMAGE_PERCENT_TAKEN,
+                    Some(1),
+                );
+                total = (total as f32 * pct) as u32;
+            }
+        }
+        if total > 0 {
+            self.deal_damage(attacker, victim, total, false);
+            // `TriggerDamageShields` (fork
+            // Unit.cpp:1714): victim's DAMAGE_SHIELD
+            // auras reflect their amount to the
+            // attacker (spell hit/immunity rolls and
+            // damage-done bonuses unmodeled).
+            let shields: Vec<(u32, i32)> = self
+                .aura_holders(victim)
+                .iter()
+                .flat_map(|h| {
+                    h.effects
+                        .iter()
+                        .flatten()
+                        .filter(|e| e.aura_type == mangos_spells::defines::aura::DAMAGE_SHIELD)
+                        .map(move |e| (h.spell_id, e.amount))
+                })
+                .collect();
+            for (spell_id, amount) in shields {
+                if amount > 0 && self.unit_is_alive(victim) {
+                    let school_id = self.stores.spells.get(spell_id).map_or(0, |s| s.school);
+                    #[allow(clippy::cast_sign_loss)]
+                    self.deal_damage_school(victim, attacker, amount as u32, false, school_id);
+                }
+            }
+        }
+        let swing_ex = match outcome {
+            MeleeOutcome::Crit => proc_ex::CRITICAL_HIT,
+            MeleeOutcome::Block => proc_ex::BLOCK,
+            _ => proc_ex::NORMAL_HIT,
+        };
+        self.raise_melee_procs(attacker, victim, swing_ex, total);
+        self.send_attacker_state(
+            attacker,
+            victim,
+            hit_info,
+            total,
+            victim_state,
+            blocked_amount,
+        );
+    }
+
+    /// `SMSG_ATTACKERSTATEUPDATE` (5875 layout, one
+    /// NORMAL-school sub-damage, no absorb/resist).
+    fn send_attacker_state(
+        &mut self,
+        attacker: ObjectGuid,
+        victim: ObjectGuid,
+        hit_info: u32,
+        damage: u32,
+        victim_state: u32,
+        blocked_amount: u32,
+    ) {
+        let mut payload = PacketWriter::new();
+        payload.write_u32_le(hit_info);
+        payload.write_bytes(&Self::packed_guid_bytes(attacker));
+        payload.write_bytes(&Self::packed_guid_bytes(victim));
+        payload.write_u32_le(damage);
+        payload.write_u8(1); // sub-damage count
+        payload.write_u32_le(0); // school index (NORMAL)
+        #[allow(clippy::cast_precision_loss)]
+        payload.write_f32_le(damage as f32);
+        payload.write_u32_le(damage);
+        payload.write_u32_le(0); // absorb
+        payload.write_u32_le(0); // resist (signed on the wire)
+        payload.write_u32_le(victim_state);
+        payload.write_u32_le(0);
+        payload.write_u32_le(0); // spell id
+        payload.write_u32_le(blocked_amount);
+        let packet = WorldPacket::with_body(op::SMSG_ATTACKERSTATEUPDATE, payload.into_vec());
+        self.broadcast_movement(attacker, &packet);
+    }
+
+    // ------------------------------------------------ EventAI (Slice 6b)
+
+    fn eventai_active(&self, guid: ObjectGuid) -> bool {
+        self.ai
+            .get(&guid)
+            .is_some_and(|ai| ai.kind == AiKind::EventAi && ai.eventai.is_some())
+    }
+
+    /// `CreatureEventAIHolder::UpdateRepeatTimer`:
+    /// returns false (and disables) on inverted ranges.
+    fn holder_repeat_timer(&mut self, guid: ObjectGuid, idx: usize, min: u32, max: u32) -> bool {
+        match min.cmp(&max) {
+            std::cmp::Ordering::Equal => {
+                if let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) {
+                    rt.holders[idx].time_ms = min;
+                }
+                true
+            }
+            std::cmp::Ordering::Less => {
+                let time = self.rng.urand(min, max);
+                if let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) {
+                    rt.holders[idx].time_ms = time;
+                }
+                true
+            }
+            std::cmp::Ordering::Greater => {
+                if let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) {
+                    rt.holders[idx].enabled = false;
+                }
+                false
+            }
+        }
+    }
+
+    /// `CreatureEventAI::Reset` (OOC timers re-armed).
+    /// `CreatureEventAI::JustRespawned` (spawn path).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    /// `CreatureEventAI::Reset` (OOC timers re-armed).
+    pub(crate) fn eventai_reset(&mut self, guid: ObjectGuid) {
+        if !self.eventai_active(guid) {
+            return;
+        }
+        let count = self
+            .ai
+            .get(&guid)
+            .and_then(|ai| ai.eventai.as_ref())
+            .map_or(0, |rt| rt.events.len());
+        if let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) {
+            rt.event_update_ms = EVENT_UPDATE_TIME;
+            rt.event_diff_ms = 0;
+        }
+        for idx in 0..count {
+            let (etype, p) = {
+                let rt = self
+                    .ai
+                    .get(&guid)
+                    .and_then(|ai| ai.eventai.as_ref())
+                    .expect("rt");
+                (rt.events[idx].event_type, rt.events[idx].params)
+            };
+            if etype == event_type::TIMER_OOC
+                && self.holder_repeat_timer(guid, idx, p[0], p[1])
+                && let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut())
+            {
+                rt.holders[idx].enabled = true;
+            }
+        }
+    }
+
+    pub(crate) fn eventai_on_spawn(&mut self, guid: ObjectGuid) {
+        let is_eventai = self
+            .creatures
+            .get(&guid)
+            .is_some_and(|c| c.info.ai_name == "EventAI");
+        if !is_eventai {
+            return;
+        }
+        self.ensure_ai(guid);
+        self.eventai_process_type(guid, event_type::SPAWNED, None);
+    }
+
+    /// `CreatureEventAI::EnterCombat`.
+    fn eventai_enter_combat(&mut self, guid: ObjectGuid, enemy: ObjectGuid) {
+        if !self.eventai_active(guid) {
+            return;
+        }
+        let count = self
+            .ai
+            .get(&guid)
+            .and_then(|ai| ai.eventai.as_ref())
+            .map_or(0, |rt| rt.events.len());
+        for idx in 0..count {
+            let (etype, p) = {
+                let rt = self
+                    .ai
+                    .get(&guid)
+                    .and_then(|ai| ai.eventai.as_ref())
+                    .expect("rt");
+                (rt.events[idx].event_type, rt.events[idx].params)
+            };
+            match etype {
+                event_type::AGGRO => {
+                    if let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) {
+                        rt.holders[idx].enabled = true;
+                    }
+                    self.eventai_process_event(guid, idx, Some(enemy));
+                }
+                event_type::TIMER_IN_COMBAT => {
+                    if self.holder_repeat_timer(guid, idx, p[0], p[1])
+                        && let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut())
+                    {
+                        rt.holders[idx].enabled = true;
+                    }
+                }
+                _ => {
+                    if let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) {
+                        rt.holders[idx].enabled = true;
+                        rt.holders[idx].time_ms = 0;
+                    }
+                }
+            }
+            if !self.unit_is_alive(guid) {
+                return;
+            }
+        }
+        if let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) {
+            rt.event_update_ms = EVENT_UPDATE_TIME;
+            rt.event_diff_ms = 0;
+        }
+    }
+
+    /// Process every holder of one event type
+    /// (hook-driven types).
+    pub(crate) fn eventai_process_type(
+        &mut self,
+        guid: ObjectGuid,
+        etype: u16,
+        invoker: Option<ObjectGuid>,
+    ) {
+        if !self.eventai_active(guid) {
+            return;
+        }
+        let count = self
+            .ai
+            .get(&guid)
+            .and_then(|ai| ai.eventai.as_ref())
+            .map_or(0, |rt| rt.events.len());
+        for idx in 0..count {
+            let matches = self
+                .ai
+                .get(&guid)
+                .and_then(|ai| ai.eventai.as_ref())
+                .is_some_and(|rt| rt.events[idx].event_type == etype);
+            if matches {
+                self.eventai_process_event(guid, idx, invoker);
+            }
+            if !self.creatures.contains_key(&guid) {
+                return;
+            }
+        }
+    }
+
+    /// `CreatureEventAI::UpdateEventsOn_UpdateAI`
+    /// cadence + per-type dispatch.
+    fn eventai_update(&mut self, guid: ObjectGuid, diff_ms: u32, combat: bool) {
+        if !self.eventai_active(guid) {
+            return;
+        }
+        let due = {
+            let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) else {
+                return;
+            };
+            if rt.event_update_ms < diff_ms {
+                rt.event_diff_ms += diff_ms;
+                let due = rt.event_diff_ms;
+                rt.event_diff_ms = 0;
+                rt.event_update_ms = EVENT_UPDATE_TIME;
+                due
+            } else {
+                rt.event_diff_ms += diff_ms;
+                rt.event_update_ms -= diff_ms;
+                return;
+            }
+        };
+        let phase = self.ai.get(&guid).map_or(0, |ai| ai.phase);
+        let count = self
+            .ai
+            .get(&guid)
+            .and_then(|ai| ai.eventai.as_ref())
+            .map_or(0, |rt| rt.events.len());
+        for idx in 0..count {
+            // Decrement timers (phase-masked holders hold).
+            let (etype, params) = {
+                let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) else {
+                    return;
+                };
+                let ev = rt.events[idx].clone();
+                let holder = &mut rt.holders[idx];
+                if holder.time_ms > 0 {
+                    if holder.time_ms > due {
+                        if ev.inverse_phase_mask & (1u32 << phase) == 0 {
+                            holder.time_ms -= due;
+                        }
+                        continue;
+                    }
+                    holder.time_ms = 0;
+                }
+                (ev.event_type, ev.params)
+            };
+            let process = match etype {
+                event_type::TIMER_OOC | event_type::FRIENDLY_MISSING_BUFF => true,
+                event_type::TIMER_IN_COMBAT
+                | event_type::MANA
+                | event_type::HP
+                | event_type::TARGET_HP
+                | event_type::TARGET_CASTING
+                | event_type::FRIENDLY_HP
+                | event_type::FRIENDLY_IS_CC
+                | event_type::AURA
+                | event_type::TARGET_AURA
+                | event_type::MISSING_AURA
+                | event_type::TARGET_MISSING_AURA
+                | event_type::VICTIM_ROOTED => combat,
+                event_type::RANGE => {
+                    combat
+                        && self.unit_victim(guid).is_some_and(|v| {
+                            let raw = self
+                                .unit_position(guid)
+                                .zip(self.unit_position(v))
+                                .map_or(f32::MAX, |(a, b)| crate::visibility::dist2d(a, b));
+                            #[allow(clippy::cast_precision_loss)]
+                            let dist =
+                                (raw - self.bounding_radius_of(guid) - self.bounding_radius_of(v))
+                                    .max(0.0);
+                            #[allow(clippy::cast_precision_loss)]
+                            {
+                                dist >= params[0] as f32 && dist <= params[1] as f32
+                            }
+                        })
+                }
+                _ => false,
+            };
+            if process {
+                self.eventai_process_event(guid, idx, None);
+            }
+            if !self.creatures.contains_key(&guid) || !self.unit_is_alive(guid) {
+                return;
+            }
+        }
+    }
+
+    /// `UpdateEventsOn_MoveInLineOfSight` (polled at AI
+    /// tick rate while out of combat; holder timers
+    /// gate repeats).
+    fn eventai_ooc_los_scan(&mut self, guid: ObjectGuid) {
+        if !self.eventai_active(guid) || self.unit_victim(guid).is_some() {
+            return;
+        }
+        let has_los = self
+            .ai
+            .get(&guid)
+            .and_then(|ai| ai.eventai.as_ref())
+            .is_some_and(|rt| {
+                rt.events
+                    .iter()
+                    .any(|e| e.event_type == event_type::OOC_LOS)
+            });
+        if !has_los {
+            return;
+        }
+        let players: Vec<ObjectGuid> = self.players.keys().copied().collect();
+        for player in players {
+            if !self.visible_to(player).is_some_and(|v| v.contains(&guid)) {
+                continue;
+            }
+            let count = self
+                .ai
+                .get(&guid)
+                .and_then(|ai| ai.eventai.as_ref())
+                .map_or(0, |rt| rt.events.len());
+            for idx in 0..count {
+                let ev = {
+                    let rt = self
+                        .ai
+                        .get(&guid)
+                        .and_then(|ai| ai.eventai.as_ref())
+                        .expect("rt");
+                    rt.events[idx].clone()
+                };
+                if ev.event_type != event_type::OOC_LOS {
+                    continue;
+                }
+                #[allow(clippy::cast_precision_loss)]
+                let max_range = ev.params[1] as f32;
+                let hostile = guid.is_player() != player.is_player();
+                let reaction_ok = match ev.params[0] {
+                    1 => hostile,
+                    2 => !hostile,
+                    _ => true,
+                };
+                if reaction_ok && self.within_dist(guid, player, max_range) {
+                    self.eventai_process_event(guid, idx, Some(player));
+                }
+            }
+            if !self.creatures.contains_key(&guid) {
+                return;
+            }
+        }
+    }
+
+    /// `CreatureEventAI::ProcessEvent`.
+    #[allow(clippy::too_many_lines)]
+    fn eventai_process_event(
+        &mut self,
+        guid: ObjectGuid,
+        idx: usize,
+        invoker: Option<ObjectGuid>,
+    ) -> bool {
+        let (ev, holder, phase) = {
+            let Some(ai) = self.ai.get(&guid) else {
+                return false;
+            };
+            let Some(rt) = ai.eventai.as_ref() else {
+                return false;
+            };
+            (rt.events[idx].clone(), rt.holders[idx], ai.phase)
+        };
+        if !holder.enabled || holder.time_ms > 0 {
+            return false;
+        }
+        if ev.inverse_phase_mask & (1u32 << phase) != 0 {
+            return false;
+        }
+        if ev.flags & EFLAG_NOT_CASTING != 0 && self.casts.contains_key(&guid) {
+            return false;
+        }
+        let victim = self.unit_victim(guid);
+        if ev.condition_id != 0
+            && !self.condition_satisfied(ev.condition_id, invoker.or(victim), Some(guid))
+        {
+            return false;
+        }
+        let p = ev.params;
+        let mut action_invoker = invoker;
+        let in_combat = self.ai_in_combat(guid);
+        let pct = |cur: u32, max: u32| -> u32 {
+            if max == 0 {
+                0
+            } else {
+                (u64::from(cur) * 100 / u64::from(max)) as u32
+            }
+        };
+        match ev.event_type {
+            event_type::TIMER_IN_COMBAT => {
+                if !in_combat {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::TIMER_OOC => {
+                let evading = self.ai.get(&guid).is_some_and(|ai| ai.evading);
+                if in_combat || evading {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::HP => {
+                let max = self.unit_value_u32(guid, offsets::UNIT_FIELD_MAXHEALTH);
+                if !in_combat || max == 0 {
+                    return false;
+                }
+                let perc = pct(self.unit_value_u32(guid, offsets::UNIT_FIELD_HEALTH), max);
+                if perc > p[0] || perc < p[1] {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::MANA => {
+                let max = self.unit_value_u32(guid, offsets::UNIT_FIELD_MAXPOWER1);
+                if !in_combat || max == 0 {
+                    return false;
+                }
+                let perc = pct(self.unit_value_u32(guid, offsets::UNIT_FIELD_POWER1), max);
+                if perc > p[0] || perc < p[1] {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::KILL => {
+                if p[2] != 0 && !invoker.is_some_and(ObjectGuid::is_player) {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[0], p[1]);
+            }
+            event_type::HIT_BY_SPELL
+            | event_type::SPELL_HIT_TARGET
+            | event_type::RANGE
+            | event_type::OOC_LOS
+            | event_type::MOVEMENT_INFORM
+            | event_type::HIT_BY_AURA => {
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::TARGET_HP => {
+                let Some(v) = victim else { return false };
+                let max = self.unit_value_u32(v, offsets::UNIT_FIELD_MAXHEALTH);
+                if !in_combat || max == 0 {
+                    return false;
+                }
+                let perc = pct(self.unit_value_u32(v, offsets::UNIT_FIELD_HEALTH), max);
+                if perc > p[0] || perc < p[1] {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::TARGET_CASTING => {
+                let Some(v) = victim else { return false };
+                if !in_combat || !self.casts.contains_key(&v) {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[0], p[1]);
+            }
+            event_type::TARGET_MANA => {
+                let Some(v) = victim else { return false };
+                let max = self.unit_value_u32(v, offsets::UNIT_FIELD_MAXPOWER1);
+                if !in_combat || max == 0 {
+                    return false;
+                }
+                let perc = pct(self.unit_value_u32(v, offsets::UNIT_FIELD_POWER1), max);
+                if perc > p[0] || perc < p[1] {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::FRIENDLY_HP => {
+                if !in_combat {
+                    return false;
+                }
+                #[allow(clippy::cast_precision_loss)]
+                let Some(unit) = self.lowest_hp_friendly(guid, p[1] as f32, p[0], None) else {
+                    return false;
+                };
+                action_invoker = Some(unit);
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::FRIENDLY_IS_CC => {
+                // No CC auras are modeled yet.
+                return false;
+            }
+            event_type::FRIENDLY_MISSING_BUFF => {
+                #[allow(clippy::cast_precision_loss)]
+                let found = self.get_target_by_type(
+                    Some(guid),
+                    None,
+                    mangos_scripts_engine::script_target::FRIENDLY_MISSING_BUFF,
+                    p[1],
+                    p[0],
+                    None,
+                );
+                let Some(unit) = found else { return false };
+                action_invoker = Some(unit);
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::SUMMONED_UNIT
+            | event_type::SUMMONED_JUST_DIED
+            | event_type::SUMMONED_JUST_DESPAWN => {
+                let Some(inv) = invoker.filter(|g| g.is_creature()) else {
+                    return false;
+                };
+                if self.object_entry(inv) != Some(p[0]) {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[1], p[2]);
+            }
+            event_type::AURA => {
+                if self.aura_stack_of(guid, p[0]) < p[1] {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::TARGET_AURA => {
+                let Some(v) = victim else { return false };
+                if !in_combat || self.aura_stack_of(v, p[0]) < p[1] {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::MISSING_AURA => {
+                if self.aura_stack_of(guid, p[0]) >= p[1] && p[1] > 0 {
+                    return false;
+                }
+                if p[1] == 0 && self.aura_stack_of(guid, p[0]) > 0 {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::TARGET_MISSING_AURA => {
+                let Some(v) = victim else { return false };
+                if !in_combat {
+                    return false;
+                }
+                let stack = self.aura_stack_of(v, p[0]);
+                if stack >= p[1] && (p[1] > 0 || stack > 0) {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[2], p[3]);
+            }
+            event_type::VICTIM_ROOTED => {
+                let Some(v) = victim else { return false };
+                let rooted = self.aura_holders(v).iter().any(|h| {
+                    h.effects
+                        .iter()
+                        .flatten()
+                        .any(|e| e.aura_type == mangos_spells::defines::aura::MOD_ROOT)
+                });
+                if !rooted {
+                    return false;
+                }
+                self.holder_repeat_timer(guid, idx, p[0], p[1]);
+            }
+            event_type::STEALTH_ALERT => {
+                self.holder_repeat_timer(guid, idx, p[0], p[1]);
+            }
+            // AGGRO, DEATH, EVADE, LEAVE_COMBAT, SPAWNED,
+            // REACHED_HOME, RECEIVE_EMOTE, SCRIPT,
+            // GROUP_MEMBER_DIED: no extra gate.
+            _ => {}
+        }
+
+        if ev.flags & EFLAG_REPEATABLE == 0
+            && let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut())
+        {
+            rt.holders[idx].enabled = false;
+        }
+        if u32::from(ev.chance) <= self.rng.urand(0, 99) {
+            return false;
+        }
+
+        let target = action_invoker.or(victim);
+        let mut script_failed = false;
+        if ev.flags & EFLAG_RANDOM_ACTION == 0 {
+            for script_id in ev.action_scripts {
+                if script_id != 0 && self.run_script_direct(script_id, Some(guid), target) {
+                    script_failed = true;
+                }
+                if !self.creatures.contains_key(&guid) {
+                    return true;
+                }
+            }
+        } else {
+            let present: Vec<u32> = ev
+                .action_scripts
+                .iter()
+                .copied()
+                .filter(|id| *id != 0)
+                .collect();
+            if !present.is_empty() {
+                #[allow(clippy::cast_possible_truncation)]
+                let pick = present[self.rng.urand(0, present.len() as u32 - 1) as usize];
+                script_failed = self.run_script_direct(pick, Some(guid), target);
+            }
+        }
+
+        if script_failed && ev.flags & EFLAG_CHECK_RESULT != 0 {
+            if let Some(rt) = self.ai.get_mut(&guid).and_then(|ai| ai.eventai.as_mut()) {
+                rt.holders[idx].enabled = true;
+                rt.holders[idx].time_ms = 0;
+            }
+            return false;
+        }
+        true
+    }
+
+    /// Aura presence as a stack count (holders do not
+    /// stack in the slice aura model: 0 or 1).
+    fn aura_stack_of(&self, guid: ObjectGuid, spell_id: u32) -> u32 {
+        u32::from(
+            self.aura_holders(guid)
+                .iter()
+                .any(|h| h.spell_id == spell_id),
+        )
+    }
+
+    // -- EventAI hooks called from other systems --
+
+    /// `CreatureEventAI::JustDied` + the killer's
+    /// `KilledUnit` (player victims only, as in C++).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn eventai_on_death(&mut self, victim: ObjectGuid, killer: Option<ObjectGuid>) {
+        if victim.is_creature() {
+            self.ensure_ai(victim);
+            self.eventai_reset(victim);
+            self.eventai_process_type(victim, event_type::DEATH, killer);
+            if let Some(ai) = self.ai.get_mut(&victim) {
+                ai.phase = 0;
+            }
+        }
+        if let Some(k) = killer.filter(|g| g.is_creature())
+            && victim.is_player()
+        {
+            self.eventai_process_type(k, event_type::KILL, Some(victim));
+        }
+    }
+
+    /// `CreatureEventAI::SpellHit`.
+    pub(crate) fn eventai_on_spell_hit(
+        &mut self,
+        creature: ObjectGuid,
+        caster: ObjectGuid,
+        spell_id: u32,
+        school: u32,
+    ) {
+        if !self.eventai_active(creature) {
+            return;
+        }
+        let count = self
+            .ai
+            .get(&creature)
+            .and_then(|ai| ai.eventai.as_ref())
+            .map_or(0, |rt| rt.events.len());
+        for idx in 0..count {
+            let ev = {
+                let rt = self
+                    .ai
+                    .get(&creature)
+                    .and_then(|ai| ai.eventai.as_ref())
+                    .expect("rt");
+                rt.events[idx].clone()
+            };
+            if ev.event_type == event_type::HIT_BY_SPELL
+                && (ev.params[0] == 0 || ev.params[0] == spell_id)
+                && ev.params[1] & (1u32 << school) != 0
+            {
+                self.eventai_process_event(creature, idx, Some(caster));
+            }
+            if !self.creatures.contains_key(&creature) {
+                return;
+            }
+        }
+    }
+
+    /// `CreatureEventAI::SpellHitTarget`.
+    pub(crate) fn eventai_on_spell_hit_target(
+        &mut self,
+        creature: ObjectGuid,
+        target: ObjectGuid,
+        spell_id: u32,
+        school: u32,
+    ) {
+        if !self.eventai_active(creature) {
+            return;
+        }
+        let count = self
+            .ai
+            .get(&creature)
+            .and_then(|ai| ai.eventai.as_ref())
+            .map_or(0, |rt| rt.events.len());
+        for idx in 0..count {
+            let ev = {
+                let rt = self
+                    .ai
+                    .get(&creature)
+                    .and_then(|ai| ai.eventai.as_ref())
+                    .expect("rt");
+                rt.events[idx].clone()
+            };
+            if ev.event_type == event_type::SPELL_HIT_TARGET
+                && (ev.params[0] == 0 || ev.params[0] == spell_id)
+                && ev.params[1] & (1u32 << school) != 0
+            {
+                self.eventai_process_event(creature, idx, Some(target));
+            }
+            if !self.creatures.contains_key(&creature) {
+                return;
+            }
+        }
+    }
+
+    /// `EVENT_T_HIT_BY_AURA` (aura applied to the
+    /// creature).
+    pub(crate) fn eventai_on_hit_by_aura(
+        &mut self,
+        creature: ObjectGuid,
+        aura_type_id: u32,
+        caster: ObjectGuid,
+    ) {
+        if !self.eventai_active(creature) {
+            return;
+        }
+        let count = self
+            .ai
+            .get(&creature)
+            .and_then(|ai| ai.eventai.as_ref())
+            .map_or(0, |rt| rt.events.len());
+        for idx in 0..count {
+            let ev = {
+                let rt = self
+                    .ai
+                    .get(&creature)
+                    .and_then(|ai| ai.eventai.as_ref())
+                    .expect("rt");
+                rt.events[idx].clone()
+            };
+            if ev.event_type == event_type::HIT_BY_AURA && ev.params[0] == aura_type_id {
+                self.eventai_process_event(creature, idx, Some(caster));
+            }
+            if !self.creatures.contains_key(&creature) {
+                return;
+            }
+        }
+    }
+
+    /// `CreatureEventAI::MovementInform` + waypoint
+    /// script starts, drained from the map event queue
+    /// each AI tick.
+    fn process_movement_informs(&mut self) {
+        let informs: Vec<(ObjectGuid, u32, u32)> = self
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                crate::map::MapEvent::MovementInform {
+                    guid,
+                    motion_type,
+                    point_id,
+                } => Some((*guid, *motion_type, *point_id)),
+                _ => None,
+            })
+            .collect();
+        for (guid, motion_type, point_id) in informs {
+            if motion_type == crate::motion::POINT_MOTION_TYPE {
+                // Tier 4 B0-6: escort/follower
+                // `MovementInform` (base class runs
+                // before script overrides).
+                self.escort_movement_inform(guid, point_id);
+                self.creature_script_movement_inform(guid, point_id);
+                self.go_ai_summoned_movement_inform(guid, point_id);
+                self.creature_script_summoned_movement_inform(guid, point_id);
+            }
+            if !self.eventai_active(guid) {
+                continue;
+            }
+            let count = self
+                .ai
+                .get(&guid)
+                .and_then(|ai| ai.eventai.as_ref())
+                .map_or(0, |rt| rt.events.len());
+            for idx in 0..count {
+                let ev = {
+                    let rt = self
+                        .ai
+                        .get(&guid)
+                        .and_then(|ai| ai.eventai.as_ref())
+                        .expect("rt");
+                    rt.events[idx].clone()
+                };
+                if ev.event_type == event_type::MOVEMENT_INFORM
+                    && ev.params[0] == motion_type
+                    && ev.params[1] == point_id
+                {
+                    self.eventai_process_event(guid, idx, None);
+                }
+                if !self.creatures.contains_key(&guid) {
+                    break;
+                }
+            }
+        }
+        let scripts: Vec<(ObjectGuid, u32)> = self
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                crate::map::MapEvent::WaypointScript {
+                    guid, script_id, ..
+                } => Some((*guid, *script_id)),
+                _ => None,
+            })
+            .collect();
+        for (guid, script_id) in scripts {
+            if let Some(steps) = self
+                .stores
+                .scripts
+                .creature_movement_scripts
+                .get(&script_id)
+                .cloned()
+            {
+                self.schedule_steps(&steps, Some(guid), None);
+            }
+        }
+    }
+
+    /// `CreatureEventAI::OnScriptEventHappened`.
+    pub(crate) fn eventai_on_script_event(
+        &mut self,
+        creature: ObjectGuid,
+        event_id: u32,
+        data: u32,
+        invoker: Option<ObjectGuid>,
+    ) {
+        if !self.eventai_active(creature) {
+            return;
+        }
+        let count = self
+            .ai
+            .get(&creature)
+            .and_then(|ai| ai.eventai.as_ref())
+            .map_or(0, |rt| rt.events.len());
+        for idx in 0..count {
+            let ev = {
+                let rt = self
+                    .ai
+                    .get(&creature)
+                    .and_then(|ai| ai.eventai.as_ref())
+                    .expect("rt");
+                rt.events[idx].clone()
+            };
+            if ev.event_type == event_type::SCRIPT
+                && ev.params[0] == event_id
+                && ev.params[1] == data
+            {
+                self.eventai_process_event(creature, idx, invoker);
+            }
+            if !self.creatures.contains_key(&creature) {
+                return;
+            }
+        }
+    }
+
+    /// `CreatureEventAI::ReceiveEmote` for the one
+    /// creature the player's text emote targeted.
+    pub(crate) fn eventai_receive_emote(
+        &mut self,
+        creature: ObjectGuid,
+        player: ObjectGuid,
+        text_emote: u32,
+    ) {
+        if !self.eventai_active(creature) {
+            return;
+        }
+        let count = self
+            .ai
+            .get(&creature)
+            .and_then(|ai| ai.eventai.as_ref())
+            .map_or(0, |rt| rt.events.len());
+        for idx in 0..count {
+            let ev = {
+                let rt = self
+                    .ai
+                    .get(&creature)
+                    .and_then(|ai| ai.eventai.as_ref())
+                    .expect("rt");
+                rt.events[idx].clone()
+            };
+            if ev.event_type == event_type::RECEIVE_EMOTE && ev.params[0] == text_emote {
+                self.eventai_process_event(creature, idx, Some(player));
+            }
+            if !self.creatures.contains_key(&creature) {
+                return;
+            }
+        }
+    }
+
+    /// Flee driving: relaunch an away-point roughly
+    /// every second until the flee timer expires (the
+    /// `FleeingMovementGenerator` approximation).
+    /// Returns true while fleeing.
+    fn update_fleeing(&mut self, guid: ObjectGuid) -> bool {
+        let (until, from, next) = {
+            let Some(ai) = self.ai.get(&guid) else {
+                return false;
+            };
+            (ai.flee_until_ms, ai.flee_from, ai.flee_next_ms)
+        };
+        if until == 0 || until <= self.now_ms {
+            if until != 0
+                && let Some(ai) = self.ai.get_mut(&guid)
+            {
+                ai.flee_until_ms = 0;
+            }
+            return false;
+        }
+        if self.now_ms >= next {
+            let pos = self.unit_position(guid).unwrap_or_default();
+            let from_pos = self.unit_position(from).unwrap_or(pos);
+            let (mut dx, mut dy) = (pos.x - from_pos.x, pos.y - from_pos.y);
+            let len = (dx * dx + dy * dy).sqrt();
+            if len < 0.01 {
+                dx = 1.0;
+                dy = 0.0;
+            } else {
+                dx /= len;
+                dy /= len;
+            }
+            let flee_dist = self.rng.frand(12.0, 22.0);
+            let jitter = self.rng.frand(-4.0, 4.0);
+            let dest = Position {
+                x: pos.x + dx * flee_dist - dy * jitter,
+                y: pos.y + dy * flee_dist + dx * jitter,
+                z: pos.z,
+                o: 0.0,
+            };
+            let dest = Position {
+                z: self.ground_z(dest.x, dest.y, dest.z),
+                ..dest
+            };
+            self.creature_move_point(guid, 0, dest, 0, 0.0, -10.0);
+            if let Some(ai) = self.ai.get_mut(&guid) {
+                ai.flee_next_ms = self.now_ms + 1000;
+            }
+        }
+        true
+    }
+
+    /// Recompute the `UNIT_FIELD_MINDAMAGE` family from
+    /// the base ranges and the current AP factor
+    /// (`Creature::UpdateDamagePhysical` AP-scale arm).
+    /// Players take the fork player arm instead
+    /// (`Player::UpdateDamagePhysical` over the stored
+    /// weapon ranges and total attack power; offhand
+    /// only with the dual-wield passive and an offhand
+    /// weapon, melee AP mods never touch ranged).
+    #[allow(dead_code)] // generated accessor; lane uses direct match
+    pub(crate) fn refresh_weapon_damage_fields(&mut self, guid: ObjectGuid) {
+        if let Some(entry) = self.players.get(&guid) {
+            let offhand = entry.player.has_offhand_weapon && self.bot_knows_spell(guid, 674);
+            let Some(u) = self.unit_base_mut(guid) else {
+                return;
+            };
+            let (min, max) = u.calculate_min_max_damage(0);
+            let off = offhand.then(|| u.calculate_min_max_damage(1));
+            let v = u.values();
+            v.set_f32(offsets::UNIT_FIELD_MINDAMAGE, min);
+            v.set_f32(offsets::UNIT_FIELD_MAXDAMAGE, max);
+            if let Some((omin, omax)) = off {
+                v.set_f32(offsets::UNIT_FIELD_MINOFFHANDDAMAGE, omin);
+                v.set_f32(offsets::UNIT_FIELD_MAXOFFHANDDAMAGE, omax);
+            }
+            return;
+        }
+        let Some(u) = self.unit_base_mut(guid) else {
+            return;
+        };
+        let (base_ap, mods) = (u.base_attack_power, u.attack_power_mods);
+        let ranges = if let Some(c) = self.creatures.get(&guid) {
+            c.base_weapon_damage
+        } else {
+            [(1.0, 2.0), (0.5, 1.0), (1.0, 2.0)]
+        };
+        let ap_now = base_ap + mods[0] + mods[1];
+        let factor = if base_ap > 0.0 {
+            0.7 + 0.3 * (ap_now / base_ap)
+        } else {
+            1.0
+        };
+        if let Some(u) = self.unit_base_mut(guid) {
+            let v = u.values();
+            v.set_f32(offsets::UNIT_FIELD_MINDAMAGE, ranges[0].0 * factor);
+            v.set_f32(offsets::UNIT_FIELD_MAXDAMAGE, ranges[0].1 * factor);
+            v.set_f32(offsets::UNIT_FIELD_MINOFFHANDDAMAGE, ranges[1].0 * factor);
+            v.set_f32(offsets::UNIT_FIELD_MAXOFFHANDDAMAGE, ranges[1].1 * factor);
+            v.set_f32(offsets::UNIT_FIELD_MINRANGEDDAMAGE, ranges[2].0 * factor);
+            v.set_f32(offsets::UNIT_FIELD_MAXRANGEDDAMAGE, ranges[2].1 * factor);
+        }
+    }
+}
+
+/// `MeleeHitOutcome` subset.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MeleeOutcome {
+    Normal,
+    Miss,
+    Dodge,
+    Parry,
+    Glancing,
+    Block,
+    Crit,
+    Crushing,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use mangos_guid::ObjectGuid;
+    use mangos_threat::{AddDecision, ThreatHost};
+
+    use super::{AiKind, CreatureAi};
+    use crate::WorldRng;
+    use crate::map::{Map, MapConfig};
+    use crate::stores::WorldStores;
+
+    fn guid(n: u64) -> ObjectGuid {
+        ObjectGuid::from_raw(0xF130_0000_0000_0000 + n)
+    }
+
+    /// Seeding host: every gate open, no calc adjustments, so
+    /// the manager holds exactly the seeded refs.
+    struct OpenHost;
+
+    impl ThreatHost for OpenHost {
+        fn spellmod_threat(&self, _hated: ObjectGuid, _spell: u32, threat: f32) -> f32 {
+            threat
+        }
+        fn crit_threat_multiplier(&self, _hated: ObjectGuid, _mask: u32) -> f32 {
+            1.0
+        }
+        fn apply_total_threat_modifier(&self, _hated: ObjectGuid, threat: f32, _mask: u32) -> f32 {
+            threat
+        }
+        fn add_gate(
+            &self,
+            _owner: ObjectGuid,
+            _victim: ObjectGuid,
+            _is_assist: bool,
+        ) -> AddDecision {
+            AddDecision::Allow
+        }
+        fn direct_gate(&self, _owner: ObjectGuid, _victim: ObjectGuid) -> bool {
+            true
+        }
+        fn is_gamemaster_player(&self, _victim: ObjectGuid) -> bool {
+            false
+        }
+        fn refresh_online(&self, _owner: ObjectGuid, _victim: ObjectGuid) -> bool {
+            true
+        }
+        fn pet_owner_to_register(
+            &self,
+            _owner: ObjectGuid,
+            _victim: ObjectGuid,
+        ) -> Option<ObjectGuid> {
+            None
+        }
+        fn out_of_threat_area(&self, _attacker: ObjectGuid, _target: ObjectGuid) -> bool {
+            false
+        }
+        fn valid_attack_target(&self, _attacker: ObjectGuid, _target: ObjectGuid) -> bool {
+            true
+        }
+        fn low_priority_target(&self, _attacker: ObjectGuid, _target: ObjectGuid) -> bool {
+            false
+        }
+        fn can_reach_with_melee(&self, _attacker: ObjectGuid, _target: ObjectGuid) -> bool {
+            true
+        }
+        fn faction_id(&self, _unit: ObjectGuid) -> u32 {
+            0
+        }
+    }
+
+    fn map_with_threat(owner: ObjectGuid, entries: &[(u64, f32)]) -> Map {
+        let mut map = Map::new(
+            0,
+            0,
+            MapConfig::default(),
+            Arc::new(WorldStores::empty()),
+            WorldRng::from_seed(42),
+        );
+        map.ai
+            .insert(owner, CreatureAi::new(AiKind::Basic, owner, Vec::new()));
+        let host = OpenHost;
+        let Some(ai) = map.ai.get_mut(&owner) else {
+            panic!("seeded ai missing");
+        };
+        for (victim, threat) in entries {
+            ai.threat
+                .add_threat_directly(&host, guid(*victim), *threat, false);
+        }
+        map
+    }
+
+    /// `Unit::DoResetThreat` fork contract (`Unit.cpp`): every
+    /// nonzero online entry is zeroed via `modifyThreatPercent`
+    /// (`-100`); entries survive at zero (only `< -100`
+    /// removes), the victim selection and offline list are
+    /// untouched, and an unknown guid is a no-op.
+    #[test]
+    fn do_reset_threat_zeroes_nonzero_entries_fork_exact() {
+        let owner = guid(1);
+        let mut map = map_with_threat(owner, &[(10, 100.0), (11, 50.0), (12, 0.0)]);
+        assert_eq!(
+            map.ai.get(&owner).expect("ai").threat.threat_list().len(),
+            3
+        );
+
+        map.do_reset_threat(owner);
+
+        let ai = map.ai.get(&owner).expect("ai");
+        assert_eq!(ai.threat.threat_list().len(), 3, "refs survive at zero");
+        for victim in [10, 11, 12] {
+            assert_eq!(
+                ai.threat.get_threat(guid(victim), false).to_bits(),
+                0.0f32.to_bits(),
+                "victim {victim}"
+            );
+            assert!(
+                ai.threat.reference_by_target(guid(victim)).is_some(),
+                "victim {victim}"
+            );
+        }
+        assert!(ai.threat.offline_list().is_empty());
+        assert_eq!(ai.threat.current_victim(), None);
+
+        // Unknown guid: silent no-op, nothing inserted.
+        map.do_reset_threat(guid(99));
+        assert!(!map.ai.contains_key(&guid(99)));
+    }
+}

@@ -1,0 +1,66 @@
+SEEDED guid=900020 spells=106 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP04 guid=900020 map=0 pos=(-6295.00,315.00,377.50)
+DRIFT-OK guid=900020 level=60 spells=106 health=2093
+ROW Rogue 53 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=72 after 1 attempt(s)
+ROW Rogue 408 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Rogue 703 form_totem: PASS  | observable outcome: target_aura=True; ticks 2/6 in oracle band [24-24] (required>=1, target_alive=False, out_of_band=0, 
+ROW Rogue 921 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Rogue 1725 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Rogue 1752 item_reagent_ammo: PASS  | observable outcome: health 100->4, matching damage=40 after 1 attempt(s)
+ROW Rogue 1766 hostile_dummy: PASS  | observable outcome: health 100->64, matching damage=15 after 1 attempt(s)
+ROW Rogue 1769 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=80 after 1 attempt(s)
+ROW Rogue 1776 item_reagent_ammo: PASS  | observable outcome: health 100->76, matching damage=10 after 1 attempt(s)
+ROW Rogue 1784 form: PASS  | bound SPELL_GO + form aura 1784 on self, cancelled after (pre-cleared {})
+ROW Rogue 1787 form: PASS  | bound SPELL_GO + form aura 1787 on self, cancelled after (pre-cleared {})
+ROW Rogue 1833 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 1784 setup verified, exited=True
+ROW Rogue 1842 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Rogue 1856 item_reagent_ammo: BLOCKED fixture-reagent | reagent 5140 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Rogue 1857 item_reagent_ammo: BLOCKED fixture-reagent | reagent 5140 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Rogue 1943 item_reagent_ammo: PASS  | observable outcome: target_aura=True; ticks 2/3 in oracle band [8-8] (required>=2, target_alive=True, out_of_band=0, amo
+ROW Rogue 1966 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Rogue 2094 item_reagent_ammo: BLOCKED fixture-reagent | reagent 5530 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Rogue 2098 item_reagent_ammo: PASS  | observable outcome: health 100->73, matching damage=11 after 1 attempt(s); reused observably-clean dummy (alive, full he
+ROW Rogue 2764 item_reagent_ammo: PASS  | observable outcome: health 100->11, matching damage=37 after 1 attempt(s)
+ROW Rogue 2983 self: PASS  | observable outcome: caster_aura=True
+ROW Rogue 5171 hostile_dummy: PASS  | observable outcome: caster_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Rogue 5277 self: PASS  | observable outcome: caster_aura=True
+ROW Rogue 6770 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 1784 setup verified, exited=True
+ROW Rogue 6774 hostile_dummy: PASS  | observable outcome: caster_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Rogue 8643 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Rogue 8647 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Rogue 8676 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Rogue 11198 item_reagent_ammo: PASS  | observable outcome: target_aura=True after 1 attempt(s); reused observably-clean dummy (alive, full health, aura-free)
+ROW Rogue 11269 form_totem: BLOCKED effect-marker-only | classify_only
+ROW Rogue 11275 item_reagent_ammo: PASS  | observable outcome: target_aura=True; ticks 2/3 in oracle band [60-60] (required>=1, target_alive=True, out_of_band=0, a
+ROW Rogue 11286 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=75 after 1 attempt(s)
+ROW Rogue 11290 form_totem: PASS  | observable outcome: target_aura=True; ticks 1/6 in oracle band [92-92] (required>=1, target_alive=True, out_of_band=0, a
+ROW Rogue 11294 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=105 after 1 attempt(s)
+ROW Rogue 11297 form_totem: PASS  | observable outcome: target_aura=True after 1 attempt(s); form 1784 setup verified, exited=True
+ROW Rogue 11305 self: PASS  | observable outcome: caster_aura=True
+ROW Rogue 13750 self: PASS  | observable outcome: caster_aura=True
+ROW Rogue 13791 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 13792 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 13845 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 13852 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 13863 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 13877 self: PASS  | observable outcome: caster_aura=True
+ROW Rogue 13964 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 14137 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 14142 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 14159 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 14161 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 14163 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 14165 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 14179 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 17347 item_reagent_ammo: PASS  | observable outcome: health 100->14, matching damage=36 after 1 attempt(s)
+ROW Rogue 17348 item_reagent_ammo: PASS  | observable outcome: health 100->11, matching damage=37 after 1 attempt(s)
+ROW Rogue 18429 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 20580 self: PASS  | observable outcome: caster_aura=True
+ROW Rogue 25300 item_reagent_ammo: PASS  | observable outcome: health 100->0, matching damage=280 after 1 attempt(s)
+ROW Rogue 25302 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Rogue 30920 passive: PASSIVE-VERIFIED | learned=True
+ROW Rogue 31016 item_reagent_ammo: PASS  | observable outcome: health 100->1, matching damage=123 after 1 attempt(s); reused observably-clean dummy (alive, full he
+LOGOUT-OK Rogue-run
+run-class Rogue: 59 rows, BLOCKED=10, PASS=34, PASSIVE-VERIFIED=15
+SPELL-CAMPAIGN-RUN-CLASS-ROGUE-PASS

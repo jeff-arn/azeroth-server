@@ -1,0 +1,204 @@
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+DRIFT-OK guid=900021 level=60 spells=232 health=1717
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Priest 17 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True cooldown_wai
+ROW Priest 139 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Priest 453 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 527 self: BLOCKED effect-marker-only | classify_only
+ROW Priest 528 friendly: BLOCKED effect-marker-only | classify_only
+ROW Priest 552 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Priest 585 hostile_dummy: PASS  | observable outcome: health 100->57, matching damage=18 after 1 attempt(s)
+ROW Priest 586 self: PASS  | observable outcome: caster_aura=True
+ROW Priest 588 self: PASS  | observable outcome: caster_aura=True
+ROW Priest 589 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 2/6 in oracle band [5-5] (required>=2, target_alive=True, out_of_band=0, amo
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 596 self: PASS  | bound GO + self heal rise 329 > 50 (rate 13.3/s, 501->541 pre, got 964)
+ROW Priest 605 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 976 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Priest 988 self: BLOCKED effect-marker-only | classify_only
+ROW Priest 1243 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Priest 1706 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+LOGOUT-OK resurrect-ally-reset
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+LOGOUT-OK resurrect-victim
+ROW Priest 2006 corpse: PASS  | bound SPELL_GO + SMSG_RESURRECT_REQUEST on victim socket; accepted, alive at 60 hp
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Priest 2050 friendly: PASS  | bound GO + heal log 57 in oracle band [46-59] (sub-noise heal; rate 22.6/s, 743->811 pre, got 970)
+LOGOUT-OK Priest-ally
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Priest 2053 friendly: PASS  | bound GO + regen-baselined jump 217 > 50 (no oracle band; band-less rise gate, rate 11.3/s, 709->743 pre, got 1034)
+LOGOUT-OK Priest-ally
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Priest 2054 friendly: PASS  | bound GO + regen-baselined jump 440 > 50 (no oracle band; band-less rise gate, rate 11.3/s, 675->709 pre, got 1229)
+LOGOUT-OK Priest-ally
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Priest 2060 friendly: PASS  | bound GO + regen-baselined jump 970 > 50 (no oracle band; band-less rise gate, rate 23.0/s, 640->709 pre, got 1841)
+LOGOUT-OK Priest-ally
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Priest 2061 friendly: PASS  | bound GO + regen-baselined jump 311 > 50 (no oracle band; band-less rise gate, rate 11.3/s, 675->709 pre, got 1083)
+ROW Priest 2096 self: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 2651 self: PASS  | observable outcome: caster_aura=True
+ROW Priest 2652 self: PASS  | observable outcome: caster_aura=True
+ROW Priest 2943 hostile_dummy: PASS  | observable outcome: health 100->80, matching damage=8 after 1 attempt(s)
+ROW Priest 2944 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+LOGOUT-OK Priest-ally
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Priest 6064 friendly: PASS  | bound GO + regen-baselined jump 789 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 743->811 pre, got 1782)
+ROW Priest 6346 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True cooldown_wai
+ROW Priest 8092 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=45 after 1 attempt(s)
+ROW Priest 8122 ground_area: PASS  | observable outcome: target_aura=True
+ROW Priest 8129 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Priest 9035 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 9484 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 10797 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 2/6 in oracle band [14-14] (required>=2, target_alive=True, out_of_band=0, a
+ROW Priest 10876 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Priest 10890 ground_area: PASS  | observable outcome: target_aura=True
+ROW Priest 10894 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/6 in oracle band [142-142] (required>=1, target_alive=True, out_of_band=0,
+ROW Priest 10901 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True cooldown_wai
+ROW Priest 10909 self: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 10912 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+LOGOUT-OK Priest-ally
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Priest 10917 friendly: PASS  | bound GO + regen-baselined jump 880 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 879->947 pre, got 1953)
+ROW Priest 10934 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=413 after 1 attempt(s)
+ROW Priest 10938 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Priest 10942 self: PASS  | observable outcome: caster_aura=True after 1 mana wait(s)
+ROW Priest 10947 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=531 after 1 attempt(s)
+ROW Priest 10952 self: PASS  | observable outcome: caster_aura=True after 1 mana wait(s)
+ROW Priest 10953 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 10955 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 10958 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Priest 13896 self: PASS  | observable outcome: caster_aura=True
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 13908 self: PASS  | bound GO + self heal rise 174 > 50 (rate 13.3/s, 501->541 pre, got 769)
+ROW Priest 14528 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 14751 self: PASS  | observable outcome: caster_aura=True
+ROW Priest 14767 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 14769 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 14777 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 14818 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Priest 14914 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=87; ticks 0/5 in oracle band [6-6]: target died before a tick could l
+ROW Priest 15261 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=423; ticks 0/5 in oracle band [29-29]: target died before a tick coul
+ROW Priest 15286 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 15310 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 15316 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 15317 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 15318 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 15330 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 15334 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 15338 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 15407 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 2/3 in oracle band [25-25] (required>=1, target_alive=False, out_of_band=0, 
+ROW Priest 15430 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Priest 15448 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 15473 form: PASS  | bound SPELL_GO + form aura 15473 on self, cancelled after (pre-cleared {})
+ROW Priest 15487 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 17325 passive: PASSIVE-VERIFIED | learned=True
+ROW Priest 18137 self: PASS  | observable outcome: caster_aura=True
+ROW Priest 18807 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/3 in oracle band [142-142] (required>=1, target_alive=False, out_of_band=0
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 19243 self: PASS  | bound GO + self heal rise 1123 > 50 (rate 13.3/s, 501->541 pre, got 1717)
+ROW Priest 19249 hostile_dummy: PASS  | observable outcome: health 100->64, matching damage=15 after 1 attempt(s)
+ROW Priest 19251 hostile_dummy: PASS  | observable outcome: health 100->42, matching damage=24 after 1 attempt(s)
+ROW Priest 19252 hostile_dummy: PASS  | observable outcome: health 100->16, matching damage=35 after 1 attempt(s)
+ROW Priest 19253 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=48 after 1 attempt(s)
+ROW Priest 19254 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=96 after 1 attempt(s)
+ROW Priest 19266 self: PASS  | observable outcome: caster_aura=True
+ROW Priest 19275 self: PASS  | observable outcome: caster_aura=True
+ROW Priest 19280 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 19285 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Priest 19293 self: PASS  | observable outcome: caster_aura=True
+ROW Priest 19305 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks 1/6 in oracle band [156-156] (required>=1, target_alive=False, out_of_band=0
+ROW Priest 19312 self: PASS  | observable outcome: caster_aura=True
+LOGOUT-OK resurrect-ally-reset
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+LOGOUT-OK resurrect-victim
+ROW Priest 20770 corpse: PASS  | bound SPELL_GO + SMSG_RESURRECT_REQUEST on victim socket; accepted, alive at 60 hp
+ROW Priest 21562 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17028 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Priest 21564 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 23455 self: PASS  | bound GO + self heal rise 64 > 50 (rate 13.3/s, 501->541 pre, got 659)
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 23458 self: PASS  | bound GO + self heal rise 101 > 50 (rate 13.3/s, 501->541 pre, got 696)
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 23459 self: PASS  | bound GO + self heal rise 137 > 50 (rate 13.3/s, 501->541 pre, got 732)
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Priest 25314 friendly: PASS  | bound GO + regen-baselined jump 1639 > 50 (no oracle band; band-less rise gate, rate 22.6/s, 743->811 pre, got 2609)
+ROW Priest 25315 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 25316 self: PASS  | bound GO + self heal rise 1112 > 50 (rate 6.7/s, 521->541 pre, got 1700)
+ROW Priest 27681 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Priest 27683 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Priest 27801 ground_area: BLOCKED effect-marker-only | classify_only
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 27803 self: PASS  | bound GO + self heal rise 195 > 50 (rate 13.3/s, 501->541 pre, got 790)
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 27804 self: PASS  | bound GO + self heal rise 255 > 50 (rate 13.3/s, 501->541 pre, got 850)
+LOGOUT-OK warrior-selfheal
+SEEDED guid=900021 spells=232 pos=(-6295.0,315.0,377.5)
+AUTH-OK + ADDON-INFO
+LOGIN-OK account=SPELLCAMP05 guid=900021 map=0 pos=(-6295.00,315.00,377.50)
+ROW Priest 27805 self: PASS  | bound GO + self heal rise 336 > 50 (rate 13.3/s, 501->541 pre, got 931)
+ROW Priest 27841 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Priest 27870 ground_area: PASS  | observable outcome: object_seen=True, health 100->100, matching damage=0
+ROW Priest 27871 ground_area: PASS  | observable outcome: object_seen=True, health 100->100, matching damage=0
+ROW Priest 28377 hostile_dummy: PASS  | observable outcome: health 100->52, matching damage=20 after 1 attempt(s)
+ROW Priest 28378 hostile_dummy: PASS  | observable outcome: health 100->16, matching damage=35 after 1 attempt(s)
+ROW Priest 28379 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=51 after 1 attempt(s)
+ROW Priest 28380 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=70 after 1 attempt(s)
+ROW Priest 28381 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=90 after 1 attempt(s)
+ROW Priest 28382 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=116 after 1 attempt(s)
+LOGOUT-OK Priest-ally
+LOGOUT-OK Priest-run
+run-class Priest: 113 rows, BLOCKED=12, PASS=88, PASSIVE-VERIFIED=13
+SPELL-CAMPAIGN-RUN-CLASS-PRIEST-PASS

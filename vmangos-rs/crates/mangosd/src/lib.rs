@@ -1,0 +1,936 @@
+//! Rust `mangosd` world server (migration document section 12:
+//! Tokio runtime + world actor + per-map executors).
+//!
+//! Phase 3 scope: the boot/session skeleton — listener, socket-layer
+//! auth and ping, a single world actor at the C++ 50 ms tick, and
+//! class-stubbed opcode dispatch over the generated 828-slot table.
+//! World simulation arrives in later phases; nothing here invents
+//! behaviour the C++ does not have.
+
+pub mod account_data;
+pub mod addon_info;
+pub mod anticheat;
+pub mod auction;
+pub mod auth;
+pub mod channels;
+pub mod char_enum;
+pub mod char_queries;
+pub mod character_save;
+pub mod chat;
+pub mod commands;
+pub mod group;
+pub mod guild;
+pub mod mail;
+pub mod petition;
+pub mod ping;
+pub mod player_login;
+pub mod queries;
+pub mod session_core;
+pub mod social;
+pub mod socket;
+pub mod trade;
+pub mod who;
+pub mod world_actor;
+
+use std::net::{IpAddr, Ipv4Addr};
+
+use mangos_config::Config;
+
+/// `SHUTDOWN_EXIT_CODE` (`World.h:77`): clean shutdown.
+pub const SHUTDOWN_EXIT_CODE: u8 = 0;
+/// `ERROR_EXIT_CODE` (`World.h:78`).
+pub const ERROR_EXIT_CODE: u8 = 1;
+/// `RESTART_EXIT_CODE` (`World.h:79`): what SIGINT maps to
+/// (`Master.cpp:522-523`). Load-bearing for the supervisor.
+pub const RESTART_EXIT_CODE: u8 = 2;
+
+/// `EXPECTED_MANGOSD_CLIENT_BUILD` for the 1.12.1 progression gate
+/// (`cmake/generators/Progression.h.in:40`).
+pub const ACCEPTED_CLIENT_BUILDS: [u32; 3] = [5875, 6005, 6141];
+
+/// `IsAcceptableClientBuild` (`DBCStores.cpp:117-125`).
+#[must_use]
+pub fn is_acceptable_client_build(build: u32) -> bool {
+    ACCEPTED_CLIENT_BUILDS.contains(&build)
+}
+
+/// Security levels from `enum AccountTypes` (`Common.h:136-145`),
+/// kept as the raw u8 the DB stores.
+pub mod security {
+    pub const PLAYER: u8 = 0;
+    /// `SEC_MODERATOR` (`Common.h:139`).
+    pub const MODERATOR: u8 = 1;
+    /// `SEC_TICKETMASTER` (`Common.h:140`).
+    pub const TICKETMASTER: u8 = 2;
+    /// `SEC_GAMEMASTER` (`Common.h:141`).
+    pub const GAMEMASTER: u8 = 3;
+    /// `SEC_BASIC_ADMIN` (`Common.h:142`).
+    pub const BASIC_ADMIN: u8 = 4;
+    /// `SEC_DEVELOPER` (`Common.h:143`).
+    pub const DEVELOPER: u8 = 5;
+    pub const ADMINISTRATOR: u8 = 6;
+    /// `SEC_CONSOLE` (`Common.h:145`).
+    pub const CONSOLE: u8 = 7;
+}
+
+/// The `mangosd.conf` keys the Phase 3 skeleton consumes. Defaults
+/// mirror the C++ `setConfig` calls and `GetIntDefault` fallbacks,
+/// not the `.dist` file's explicit values, so an absent key behaves
+/// the same as in C++.
+#[derive(Clone, Debug)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct ServerConfig {
+    /// `RealmID`; 0/missing fails boot (`Master.cpp:461-466`).
+    pub realm_id: u32,
+    /// `WorldServerPort` (default 8085).
+    pub port: u16,
+    /// `BindIP` (default `0.0.0.0`).
+    pub bind_ip: IpAddr,
+    /// `MaxOverspeedPings` (default 2; 0 disables; 1 clamps to 2,
+    /// `World.cpp:703-708`).
+    pub max_overspeed_pings: u32,
+    /// `Network.KickOnBadPacket` (default false, `World.cpp:1055`).
+    pub kick_on_bad_packet: bool,
+    /// `Network.TimeoutSecsIfNoAuth` (default 10, 0 disables;
+    /// `WorldSocket.cpp:594`).
+    pub no_auth_timeout_secs: u32,
+    /// `CharacterScreenMaxIdleTime` seconds (C++ code default 0 =
+    /// disabled, `World.cpp:555`; the `.dist` file sets 900).
+    pub character_screen_max_idle_secs: u32,
+    /// Security level floor for auth, derived from `PlayerLimit`
+    /// exactly like `World::GetPlayerSecurityLimit` (`World.h:705`):
+    /// a non-positive limit `-n` demands security `n`; any positive
+    /// limit is a plain player count and imposes no floor.
+    /// `PlayerLimit` defaults to 100 (`SystemConfig.h:92`,
+    /// `World.cpp:467`).
+    pub player_security_limit: u8,
+    /// `Antiflood.Sanction` raw bitmask (default
+    /// `CHEAT_ACTION_KICK = 0x08`, `World.cpp:804`,
+    /// `Anticheat.h:34-41`). Phase 3 honors the kick bit and logs
+    /// the rest; the full anticheat action lands later.
+    pub antiflood_sanction: u32,
+    /// Raw `PlayerLimit` (default 100): positive = admission
+    /// cap (login queue beyond it), non-positive encodes the
+    /// security floor in `player_security_limit`.
+    pub player_limit: i32,
+    /// `LoginQueue.GracePeriodSecs` (default 0, `World.cpp:554`).
+    pub login_queue_grace_secs: u32,
+    /// `RestrictUnverifiedAccounts` (default false,
+    /// `World.cpp:614`); drives the trial billing flags.
+    pub restrict_unverified_accounts: bool,
+    /// `WorldAvailable` (default true, `World.cpp:609`); when
+    /// false, plain players get `SMSG_CHARACTER_LOGIN_FAILED`.
+    pub world_available: bool,
+    /// `WowPatch` (default 0 = patch 1.2, clamped to 10 at the
+    /// 1.12 gate, `World.cpp:461-465`).
+    pub wow_patch: u32,
+    /// `MaintenanceDay` (default 4, clamped 0-6,
+    /// `World.cpp:634`): weekday of honor maintenance.
+    pub maintenance_day: u32,
+    /// `MinHonorKills` raw value (default 0 = patch
+    /// default resolved in the maintenancer,
+    /// `World.cpp:622-631`).
+    pub min_honor_kills: u32,
+    /// `RpDecay` (default 0.2, clamped 0-1,
+    /// `World.cpp:633`).
+    pub rp_decay: f32,
+    /// `PvP.PoolSizePerFaction` (default 0).
+    pub pvp_pool_size_per_faction: u32,
+    /// `PvP.DishonorableKills` (default true).
+    pub pvp_dishonorable_kills: bool,
+    /// `PvP.CityProtector` (default true).
+    pub pvp_city_protector: bool,
+    /// `AutoHonorRestart` (default true).
+    pub auto_honor_restart: bool,
+    /// `Event.Announce` (dist default 0).
+    pub event_announce: bool,
+    /// `PvP.AccurateTimeline` (default true).
+    pub pvp_accurate_timeline: bool,
+    /// `PvP.AccurateRewards` (default true).
+    pub pvp_accurate_rewards: bool,
+    /// `TimeZoneOffset` in hours (default 0,
+    /// `World.cpp:588`).
+    pub time_zone_offset_hours: i32,
+    /// `HonorDir` (default `./`, `World.cpp:883`).
+    pub honor_dir: String,
+    /// `UpdateUptimeInterval` in minutes (default 10,
+    /// `World.cpp:679`). Zero disables the periodic refresh
+    /// (the C++ timer would fire every tick at 0; recorded
+    /// deviation, dist default is 10).
+    pub uptime_update_mins: u32,
+    /// `Motd` base text; the patch banner is appended at load
+    /// (`World.cpp:467`).
+    pub motd: String,
+    /// `GameType` (`RealmType`, default 0 = NORMAL,
+    /// `World.cpp:582-583`). `FFA_PVP` (16) is published as `PVP` (1).
+    pub game_type: u32,
+    /// `RealmZone` (default 1 = DEVELOPMENT, `World.cpp:585-586`).
+    pub realm_zone: u32,
+    /// `AllowTwoSide.AddFriend` (default false,
+    /// `World.cpp:599`).
+    pub allow_two_side_add_friend: bool,
+    /// `AllowTwoSide.WhoList` (default false, `World.cpp:598`).
+    pub allow_two_side_who_list: bool,
+    /// `AllowTwoSide.Interaction.Chat` (default false,
+    /// `World.cpp:591`).
+    pub allow_two_side_interaction_chat: bool,
+    /// `AllowTwoSide.Interaction.Channel` (default false,
+    /// `World.cpp:592`).
+    pub allow_two_side_interaction_channel: bool,
+    /// `AllowTwoSide.Interaction.Group` (default false,
+    /// `World.cpp:593`).
+    pub allow_two_side_interaction_group: bool,
+    /// `AllowTwoSide.Interaction.Guild` (default false,
+    /// `World.cpp:594`).
+    pub allow_two_side_interaction_guild: bool,
+    /// `Guild.EventLogRecordsCount` (default 100, min
+    /// 100, `World.cpp:793`).
+    pub guild_event_log_count: u32,
+    /// `MinPetitionSigns` (default 9, clamped 0..=9,
+    /// `World.cpp:647`): signatures that complete a
+    /// guild charter petition.
+    pub min_petition_signs: u32,
+    /// `MinCharterName` (default 2, clamped 2..=24,
+    /// `World.cpp:606`).
+    pub min_charter_name: u32,
+    /// `StrictCharterNames` (default 0, `World.cpp:602`).
+    pub strict_charter_names: u32,
+    /// `CharactersCreatingDisabled` team mask (default
+    /// 0, `World.cpp:610`): bit 0 Alliance, bit 1 Horde.
+    pub characters_creating_disabled: u32,
+    /// `CharactersPerRealm` (default 10, clamped
+    /// 1..=10, `World.cpp:611`).
+    pub characters_per_realm: u32,
+    /// `AllowTwoSide.Accounts` (default false,
+    /// `World.cpp:590`): both factions on one account
+    /// on a `PvP` realm.
+    pub allow_two_side_accounts: bool,
+    /// `StartPlayerLevel` (default 1, `World.cpp:620`;
+    /// clamped to the DBC max level at use).
+    pub start_player_level: u32,
+    /// `GM.StartLevel` (default 1, `World.cpp:658`;
+    /// fork floors it at `StartPlayerLevel`).
+    pub start_gm_level: u32,
+    /// `StartPlayerMoney` (default 0 copper,
+    /// `World.cpp:621`).
+    pub start_player_money: u32,
+    /// `MinPlayerName` (default 2, clamped 2..=12,
+    /// `World.cpp:605`).
+    pub min_player_name: u32,
+    /// `StrictPlayerNames` (default 0, `World.cpp:601`).
+    pub strict_player_names: u32,
+    /// `CharDelete.Method` (default 0, clamped 0..=1,
+    /// `World.cpp:873`).
+    pub char_delete_method: u32,
+    /// `CharDelete.MinLevel` (default 0, `World.cpp:874`):
+    /// below it, deletes always fully erase.
+    pub char_delete_min_level: u32,
+    /// `CharDelete.KeepDays` (default 30, `World.cpp:875`):
+    /// soft-deleted retention before the final sweep;
+    /// 0 disables the sweep.
+    pub char_delete_keep_days: u32,
+    /// `Visibility.Distance.Continents` (fork
+    /// `DEFAULT_VISIBILITY_DISTANCE` 100).
+    pub visibility_continents: f32,
+    /// `Visibility.Distance.Instances` (170).
+    pub visibility_instances: f32,
+    /// `Visibility.Distance.BG` (fork code
+    /// default 533; dist template's 180 is stale).
+    pub visibility_bg: f32,
+    /// `Visibility.Distance.Grey.Unit` (1) /
+    /// `.Grey.Object` (10).
+    pub visibility_grey_unit: f32,
+    pub visibility_grey_object: f32,
+    /// `Visibility.RelocationLowerLimit` (10).
+    pub visibility_relocation_lower_limit: f32,
+    /// `Visibility.ForceActiveObjects` (true).
+    pub visibility_force_active_objects: bool,
+    /// `Rate.Creature.*` + `Corpse.Decay.*`
+    /// (all 1.0 / fork decay seconds).
+    pub creature_rates: mangos_entities::creature::CreatureRates,
+    /// `Rate.Creature.Aggro` (1.0).
+    pub rate_creature_aggro: f32,
+    /// `Rate.Drop.Item.*` by quality + Referenced +
+    /// `Rate.Drop.Money` (all 1.0).
+    pub loot_rates: mangos_world_data::loot::LootRates,
+    /// `Rate.Corpse.Decay.Looted` (0.0).
+    pub rate_corpse_decay_looted: f32,
+    /// `MaxGroupXPDistance` (74.0; fork
+    /// `GROUP_XP_DISTANCE` config index).
+    pub max_group_xp_distance: f32,
+    /// `Quests.LowLevelHideDiff` (4; negative
+    /// disables the low-level hide icon downgrade).
+    pub quest_low_level_hide_diff: i32,
+    /// `Quests.HighLevelHideDiff` (7; negative
+    /// disables the too-high quest hide).
+    pub quest_high_level_hide_diff: i32,
+    /// `ShowHealthValues` (false): strangers see
+    /// real health values instead of percent words.
+    pub show_health_values: bool,
+    /// `SendLootRollUponReconnect` (false).
+    pub send_loot_roll_upon_reconnect: bool,
+    /// `AllFlightPaths` (false): login sets the
+    /// taxi-cheat extra flag.
+    pub all_flight_paths: bool,
+    /// `AddonChannel` (true): addon-language chat
+    /// is dropped when disabled.
+    pub addon_channel: bool,
+    /// `Rate.Health` (1.0).
+    pub rate_health: f32,
+    /// `Rate.Mana` (1.0).
+    pub rate_mana: f32,
+    /// `Rate.Rage.Loss` (1.0).
+    pub rate_rage_loss: f32,
+    /// `Rate.Rage.Income` (1.0).
+    pub rate_rage_income: f32,
+    /// `Rate.Energy` (1.0).
+    pub rate_energy: f32,
+    /// `Rate.Rest.*` multipliers (all 1.0).
+    pub rest_rates: mangos_entities::player::RestRates,
+    /// `Death.SicknessLevel` (default 11,
+    /// `World.cpp:753`).
+    pub death_sickness_level: i32,
+    /// `Death.CorpseReclaimDelay.PvP` (default true,
+    /// `World.cpp:754`).
+    pub corpse_reclaim_delay_pvp: bool,
+    /// `Death.CorpseReclaimDelay.PvE` (default true,
+    /// `World.cpp:755`).
+    pub corpse_reclaim_delay_pve: bool,
+    /// `Death.Bones.World` (default true,
+    /// `World.cpp:756`).
+    pub death_bones_world: bool,
+    /// `Death.Bones.Battleground` (default true,
+    /// `World.cpp:757`).
+    pub death_bones_bg: bool,
+    /// `Rate.Respec*` + `Progression.NoRespecPriceDecay`
+    /// (`World.cpp:528-531`, `1081`; Tier 4 step 4g).
+    pub respec: mangos_map::map::RespecConfig,
+    /// `AllowTwoSide.Interaction.Mail` (default false,
+    /// `World.cpp:597`).
+    pub allow_two_side_interaction_mail: bool,
+    /// `AllowTwoSide.Interaction.Trade` (default false,
+    /// `World.cpp:595`).
+    pub allow_two_side_interaction_trade: bool,
+    /// `MailDeliveryDelay` seconds (default 3600,
+    /// `World.cpp:672`).
+    pub mail_delivery_delay_secs: u32,
+    /// `GM.AllowTrades` (default true, `World.cpp:661`).
+    pub gm_allow_trades: bool,
+    /// `MailSpam.Level` (default 1, `World.cpp:1049`).
+    pub mailspam_level: u32,
+    /// `MailSpam.Money` (default 0, `World.cpp:1050`).
+    pub mailspam_money: u32,
+    /// `MailSpam.Item` (default false, `World.cpp:1051`).
+    pub mailspam_item: bool,
+    /// `MailSpam.ExpireSecs` (default 0, `World.cpp:1047`).
+    pub mailspam_expire_secs: u32,
+    /// `MailSpam.MaxMails` (default 2, `World.cpp:1048`).
+    pub mailspam_max_mails: u32,
+    /// `Mails.COD.ForceTag.MaxLevel` (default 0,
+    /// `World.cpp:1052`).
+    pub cod_force_tag_max_level: u32,
+    /// `AllowTwoSide.Interaction.Auction` (default
+    /// false, `World.cpp:596`).
+    pub allow_two_side_interaction_auction: bool,
+    /// `Progression.UnlinkedAuctionHouses` (default
+    /// true, `World.cpp:1084`): separate house per
+    /// DBC entry before patch 1.9.
+    pub unlinked_auction_houses: bool,
+    /// `Rate.Auction.Time` (default 1.0, `World.cpp:516`).
+    pub rate_auction_time: f32,
+    /// `Rate.Auction.Deposit` (default 1.0, `World.cpp:517`).
+    pub rate_auction_deposit: f32,
+    /// `Rate.Auction.Cut` (default 1.0, `World.cpp:518`).
+    pub rate_auction_cut: f32,
+    /// `Instance.IgnoreLevel`.
+    pub instance_ignore_level: bool,
+    /// `Rate.InstanceResetTime`.
+    pub rate_instance_reset_time: f32,
+    /// `Rate.XP.Kill` (default 1.0, `World.cpp:506`;
+    /// production conf runs 1.4).
+    pub rate_xp_kill: f32,
+    /// `Rate.XP.Kill.Elite` (default 1.0, `World.cpp:507`).
+    pub rate_xp_kill_elite: f32,
+    /// `Rate.XP.Quest` (default 1.0, `World.cpp:508`).
+    pub rate_xp_quest: f32,
+    /// `Rate.Drop.Money` (quest money rewards).
+    pub rate_drop_money: f32,
+    /// `Rate.XP.Explore` (default 1.0, `World.cpp:509`).
+    pub rate_xp_explore: f32,
+    /// `Rate.Reputation.Gain` (default 1.0, `World.cpp:493`).
+    pub rate_reputation_gain: f32,
+    /// `Rate.Reputation.LowLevel.Kill` (default 1.0,
+    /// `World.cpp:494`).
+    pub rate_reputation_lowlevel_kill: f32,
+    /// `Spell.ProcDelay` batching window in ms (fork
+    /// code default 400; example conf ships 800).
+    pub spell_proc_delay_ms: u32,
+    /// `Anticheat.*` movement-anticheat family.
+    pub anticheat: crate::anticheat::AnticheatConfig,
+    /// `Auction.Deposit.Min` (default 0, `World.cpp:519`).
+    pub auction_deposit_min: u32,
+    /// `Auction.AccountConcurrentLimit` (default 0 =
+    /// unlimited, `World.cpp:520`).
+    pub auction_account_concurrent_limit: u32,
+    /// `PlayerCommands` (default true,
+    /// `World.cpp:789`): whether player sessions
+    /// may use dot commands at all.
+    pub player_commands: bool,
+    /// `GM.JoinOppositeFactionChannels` (default false,
+    /// forced false when two-side chat is on,
+    /// `World.cpp:663-665`).
+    pub gm_join_opposite_faction_channels: bool,
+    /// `Channel.SilentlyGMJoin` (default false,
+    /// `World.cpp:734`).
+    pub channel_silently_gm_join: bool,
+    /// `ChannelInvite.MinLevel` (default 10,
+    /// `World.cpp:1016`).
+    pub channel_invite_min_level: u32,
+    /// `WorldChan.MinLevel` (default 0, `World.cpp:1018`).
+    pub world_chan_min_level: u32,
+    /// `ListenRange.Say` (default 25, `World.cpp:538`).
+    pub listen_range_say: f32,
+    /// `ListenRange.Yell` (default 300, `World.cpp:539`).
+    pub listen_range_yell: f32,
+    /// `ListenRange.TextEmote` (default 25, `World.cpp:540`).
+    pub listen_range_text_emote: f32,
+    /// `YellRange.LinearScale.MaxLevel` (default 0 = off).
+    pub yell_range_linear_scale_max_level: u32,
+    /// `YellRange.QuadraticScale.MaxLevel` (default 0 = off).
+    pub yell_range_quadratic_scale_max_level: u32,
+    /// `YellRange.Min` (default 0).
+    pub yell_range_min: u32,
+    /// `GM.InWhoList.Level` (default `SEC_ADMINISTRATOR`,
+    /// `World.cpp:656`): accounts above this security are
+    /// hidden from player who lists.
+    pub gm_level_in_who_list: u8,
+    /// `Item.PreventDataMining` (default true).
+    pub prevent_item_datamining: bool,
+    /// `ActivateWeather` (default true).
+    pub activate_weather: bool,
+    /// `OutdoorPvP.SI.Enable` (`mangosd.conf.dist.in:2747`,
+    /// fork default true): Silithus turn-ins on map 1.
+    pub outdoor_pvp_si_enable: bool,
+    /// `OutdoorPvP.EP.Enable` (fork `World.cpp:786`, default
+    /// true): Eastern Plaguelands tower sliders on map 0.
+    pub outdoor_pvp_ep_enable: bool,
+    /// `vmap.enableLOS` (fork default false).
+    pub vmap_enable_los: bool,
+    /// `vmap.enableHeight` (fork default false).
+    pub vmap_enable_height: bool,
+    /// `ChangeWeatherInterval` in milliseconds (default
+    /// 600000 = 10 minutes).
+    pub change_weather_interval_ms: u32,
+    /// `BotChat.*` (fork `BotChatManager::Load`).
+    pub bot_chat: mangos_bots::chat::ChatConfig,
+    /// `BotService.Enable` (default true).
+    pub bot_service_enable: bool,
+    /// `BotService.Buy.BudgetPerDay` gold (default 200).
+    pub bot_service_buy_budget_gold: u32,
+    /// `RandomBot.*` / `PlayerBot.*` population config.
+    pub bot_population: mangos_bots::population::PopulationConfig,
+    /// `BotDirector.Enable` (default true).
+    pub bot_director_enable: bool,
+    /// `BotDirector.UpdateInterval` ms (default 120000).
+    pub bot_director_interval_ms: u32,
+    /// `GuildBot.*` config.
+    pub guild_bot: mangos_bots::guild_bots::GuildBotConfig,
+    /// `AHBot.*` config.
+    pub ah_bot: mangos_bots::ah_bot::AhBotConfig,
+    /// `PlayerSave.Interval` milliseconds (default
+    /// 15 minutes, `World.cpp:565`).
+    pub player_save_interval_ms: u32,
+    /// `PlayerSave.Stats.MinLevel` (default 0,
+    /// clamped from the C++ config range).
+    pub player_save_stats_min_level: u32,
+    /// `PlayerSave.Stats.SaveOnlyOnLogout`
+    /// (default true, `World.cpp:567`).
+    pub player_save_stats_only_on_logout: bool,
+    /// `PlayerBot.AllowSaving` (default false,
+    /// `PlayerBotMgr.cpp:56`).
+    pub player_bot_allow_saving: bool,
+    /// `Battleground.*` / `BattleGround.*` / `Alterac.*`
+    /// (`World.cpp:763-783`, Tier 3 Slice 3).
+    pub battleground: BgConfig,
+}
+
+/// Battleground tuning (`World.cpp:763-783` defaults;
+/// `Battleground.InvitationType` dist file sets 1, code
+/// default is 0 and wins when unset).
+#[derive(Clone, Debug, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // fork config-key mirror
+pub struct BgConfig {
+    /// `Alterac.MinPlayersInQueue` (default 0).
+    pub av_min_players_in_queue: u32,
+    /// `Alterac.InitMaxPlayers` (default 0).
+    pub av_init_max_players: u32,
+    /// `Battleground.CastDeserter` (default true).
+    pub cast_deserter: bool,
+    /// `Battleground.QueueAnnouncer.Join` (default 0,
+    /// clamped 0..=2).
+    pub queue_announcer_join: u32,
+    /// `Battleground.QueueAnnouncer.Start` (default false).
+    pub queue_announcer_start: bool,
+    /// `Battleground.InvitationType` (default 0).
+    pub invitation_type: u32,
+    /// `BattleGround.PrematureFinishTimer` in ms
+    /// (default 5 minutes).
+    pub premature_finish_timer_ms: u32,
+    /// `BattleGround.PremadeGroupWaitForMatch` in ms
+    /// (default 0).
+    pub premade_wait_for_match_ms: u32,
+    /// `BattleGround.PremadeQueue.MinGroupSize` (default 6).
+    pub premade_min_group_size: u32,
+    /// `BattleGround.RandomizeQueues` (default false).
+    pub randomize_queues: bool,
+    /// `BattleGround.GroupQueueLimit` (default 40).
+    pub group_queue_limit: u32,
+    /// `BattleGround.TagInBattleGrounds` (default true).
+    pub tag_in_battlegrounds: bool,
+    /// `BattleGround.QueuesCount` after the fork 0-arm:
+    /// `WowPatch == 10 ? 3 : 1` (`World.cpp:778-784`).
+    pub queues_count: u32,
+}
+
+fn bg_config(cfg: &Config, wow_patch: u32) -> BgConfig {
+    let mut queues_count = to_u32(cfg.int_default("BattleGround.QueuesCount", 0)).min(3);
+    if queues_count == 0 {
+        queues_count = if wow_patch == 10 { 3 } else { 1 };
+    }
+    BgConfig {
+        av_min_players_in_queue: to_u32(cfg.int_default("Alterac.MinPlayersInQueue", 0)),
+        av_init_max_players: to_u32(cfg.int_default("Alterac.InitMaxPlayers", 0)),
+        cast_deserter: cfg.bool_default("Battleground.CastDeserter", true),
+        queue_announcer_join: to_u32(cfg.int_default("Battleground.QueueAnnouncer.Join", 0)).min(2),
+        queue_announcer_start: cfg.bool_default("Battleground.QueueAnnouncer.Start", false),
+        invitation_type: to_u32(cfg.int_default("Battleground.InvitationType", 0)),
+        premature_finish_timer_ms: to_u32(
+            cfg.int_default("BattleGround.PrematureFinishTimer", 300_000),
+        ),
+        premade_wait_for_match_ms: to_u32(
+            cfg.int_default("BattleGround.PremadeGroupWaitForMatch", 0),
+        ),
+        premade_min_group_size: to_u32(
+            cfg.int_default("BattleGround.PremadeQueue.MinGroupSize", 6),
+        ),
+        randomize_queues: cfg.bool_default("BattleGround.RandomizeQueues", false),
+        group_queue_limit: to_u32(cfg.int_default("BattleGround.GroupQueueLimit", 40)),
+        tag_in_battlegrounds: cfg.bool_default("BattleGround.TagInBattleGrounds", true),
+        queues_count,
+    }
+}
+
+fn bot_chat_config(cfg: &Config) -> mangos_bots::chat::ChatConfig {
+    mangos_bots::chat::ChatConfig {
+        enabled: cfg.bool_default("BotChat.Enable", true),
+        trade_interval_min_s: to_u32(cfg.int_default("BotChat.TradeChat.IntervalMin", 120)),
+        trade_interval_max_s: to_u32(cfg.int_default("BotChat.TradeChat.IntervalMax", 300)),
+        guild_interval_min_s: to_u32(cfg.int_default("BotChat.GuildChat.IntervalMin", 300)),
+        guild_interval_max_s: to_u32(cfg.int_default("BotChat.GuildChat.IntervalMax", 900)),
+        cooldown_trade_s: to_u32(cfg.int_default("BotChat.Cooldown.TradeChat", 300)),
+        cooldown_guild_s: to_u32(cfg.int_default("BotChat.Cooldown.GuildChat", 180)),
+        cooldown_party_s: to_u32(cfg.int_default("BotChat.Cooldown.PartyChat", 30)),
+        cooldown_say_s: to_u32(cfg.int_default("BotChat.Cooldown.SayChat", 120)),
+        cooldown_general_s: to_u32(cfg.int_default("BotChat.Cooldown.GeneralChat", 120)),
+        cooldown_scale_threshold: to_u32(cfg.int_default("BotChat.Cooldown.ScaleThreshold", 30)),
+    }
+}
+
+impl ServerConfig {
+    #[must_use]
+    // Flat key-by-key config mirror; length is data, not logic.
+    #[allow(clippy::too_many_lines)]
+    pub fn from_config(cfg: &Config) -> Self {
+        let mut max_overspeed_pings = to_u32(cfg.int_default("MaxOverspeedPings", 2));
+        if max_overspeed_pings == 1 {
+            max_overspeed_pings = 2;
+        }
+        let bind_ip: IpAddr = cfg
+            .string_default("BindIP", "0.0.0.0")
+            .parse()
+            .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        let player_limit = cfg.int_default("PlayerLimit", 100);
+        let player_security_limit = if player_limit <= 0 {
+            i64::from(-player_limit).min(i64::from(security::ADMINISTRATOR)) as u8
+        } else {
+            security::PLAYER
+        };
+        ServerConfig {
+            realm_id: to_u32(cfg.int_default("RealmID", 0)),
+            port: to_u32(cfg.int_default("WorldServerPort", 8085)) as u16,
+            bind_ip,
+            max_overspeed_pings,
+            kick_on_bad_packet: cfg.bool_default("Network.KickOnBadPacket", false),
+            no_auth_timeout_secs: to_u32(cfg.int_default("Network.TimeoutSecsIfNoAuth", 10)),
+            character_screen_max_idle_secs: to_u32(
+                cfg.int_default("CharacterScreenMaxIdleTime", 0),
+            ),
+            player_security_limit,
+            antiflood_sanction: to_u32(cfg.int_default("Antiflood.Sanction", 8)),
+            player_limit,
+            login_queue_grace_secs: to_u32(cfg.int_default("LoginQueue.GracePeriodSecs", 0)),
+            restrict_unverified_accounts: cfg.bool_default("RestrictUnverifiedAccounts", false),
+            world_available: cfg.bool_default("WorldAvailable", true),
+            wow_patch: to_u32(cfg.int_default("WowPatch", 0)).min(10),
+            maintenance_day: to_u32(cfg.int_default("MaintenanceDay", 4)).min(6),
+            min_honor_kills: to_u32(cfg.int_default("MinHonorKills", 0)),
+            rp_decay: cfg.float_default("RpDecay", 0.2).clamp(0.0, 1.0),
+            pvp_pool_size_per_faction: to_u32(cfg.int_default("PvP.PoolSizePerFaction", 0)),
+            pvp_dishonorable_kills: cfg.bool_default("PvP.DishonorableKills", true),
+            pvp_city_protector: cfg.bool_default("PvP.CityProtector", true),
+            auto_honor_restart: cfg.bool_default("AutoHonorRestart", true),
+            event_announce: cfg.bool_default("Event.Announce", false),
+            pvp_accurate_timeline: cfg.bool_default("PvP.AccurateTimeline", true),
+            pvp_accurate_rewards: cfg.bool_default("PvP.AccurateRewards", true),
+            time_zone_offset_hours: cfg.int_default("TimeZoneOffset", 0),
+            honor_dir: cfg.string_default("HonorDir", "./"),
+            uptime_update_mins: to_u32(cfg.int_default("UpdateUptimeInterval", 10)),
+            motd: cfg.string_default("Motd", "Welcome to the Massive Network Game Object Server."),
+            game_type: to_u32(cfg.int_default("GameType", 0)),
+            realm_zone: to_u32(cfg.int_default("RealmZone", 1)),
+            allow_two_side_add_friend: cfg.bool_default("AllowTwoSide.AddFriend", false),
+            allow_two_side_who_list: cfg.bool_default("AllowTwoSide.WhoList", false),
+            allow_two_side_interaction_chat: cfg
+                .bool_default("AllowTwoSide.Interaction.Chat", false),
+            allow_two_side_interaction_channel: cfg
+                .bool_default("AllowTwoSide.Interaction.Channel", false),
+            allow_two_side_interaction_group: cfg
+                .bool_default("AllowTwoSide.Interaction.Group", false),
+            allow_two_side_interaction_guild: cfg
+                .bool_default("AllowTwoSide.Interaction.Guild", false),
+            guild_event_log_count: u32::try_from(
+                cfg.int_default("Guild.EventLogRecordsCount", 100).max(100),
+            )
+            .unwrap_or(100),
+            min_petition_signs: to_u32(cfg.int_default("MinPetitionSigns", 9)).min(9),
+            min_charter_name: to_u32(cfg.int_default("MinCharterName", 2)).clamp(2, 24),
+            strict_charter_names: to_u32(cfg.int_default("StrictCharterNames", 0)),
+            characters_creating_disabled: to_u32(cfg.int_default("CharactersCreatingDisabled", 0)),
+            characters_per_realm: to_u32(cfg.int_default("CharactersPerRealm", 10)).clamp(1, 10),
+            allow_two_side_accounts: cfg.bool_default("AllowTwoSide.Accounts", false),
+            start_player_level: to_u32(cfg.int_default("StartPlayerLevel", 1)).max(1),
+            start_gm_level: to_u32(cfg.int_default("GM.StartLevel", 1))
+                .max(to_u32(cfg.int_default("StartPlayerLevel", 1)).max(1)),
+            start_player_money: to_u32(cfg.int_default("StartPlayerMoney", 0)),
+            min_player_name: to_u32(cfg.int_default("MinPlayerName", 2)).clamp(2, 12),
+            strict_player_names: to_u32(cfg.int_default("StrictPlayerNames", 0)),
+            char_delete_method: to_u32(cfg.int_default("CharDelete.Method", 0)).min(1),
+            char_delete_min_level: to_u32(cfg.int_default("CharDelete.MinLevel", 0)),
+            char_delete_keep_days: to_u32(cfg.int_default("CharDelete.KeepDays", 30)),
+            visibility_continents: cfg.float_default("Visibility.Distance.Continents", 100.0),
+            visibility_instances: cfg.float_default("Visibility.Distance.Instances", 170.0),
+            visibility_bg: cfg.float_default("Visibility.Distance.BG", 533.0),
+            visibility_grey_unit: cfg.float_default("Visibility.Distance.Grey.Unit", 1.0),
+            visibility_grey_object: cfg.float_default("Visibility.Distance.Grey.Object", 10.0),
+            visibility_relocation_lower_limit: cfg
+                .float_default("Visibility.RelocationLowerLimit", 10.0),
+            visibility_force_active_objects: cfg
+                .bool_default("Visibility.ForceActiveObjects", true),
+            creature_rates: mangos_entities::creature::CreatureRates {
+                hp: [
+                    cfg.float_default("Rate.Creature.Normal.HP", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.Elite.HP", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RAREELITE.HP", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.WORLDBOSS.HP", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RARE.HP", 1.0),
+                ],
+                damage: [
+                    cfg.float_default("Rate.Creature.Normal.Damage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.Elite.Damage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RAREELITE.Damage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.WORLDBOSS.Damage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RARE.Damage", 1.0),
+                ],
+                spell_damage: [
+                    cfg.float_default("Rate.Creature.Normal.SpellDamage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.Elite.SpellDamage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RAREELITE.SpellDamage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.WORLDBOSS.SpellDamage", 1.0),
+                    cfg.float_default("Rate.Creature.Elite.RARE.SpellDamage", 1.0),
+                ],
+                corpse_decay: [
+                    to_u32(cfg.int_default("Corpse.Decay.NORMAL", 300)),
+                    to_u32(cfg.int_default("Corpse.Decay.ELITE", 600)),
+                    to_u32(cfg.int_default("Corpse.Decay.RAREELITE", 1200)),
+                    to_u32(cfg.int_default("Corpse.Decay.WORLDBOSS", 3600)),
+                    to_u32(cfg.int_default("Corpse.Decay.RARE", 900)),
+                ],
+            },
+            rate_creature_aggro: cfg.float_default("Rate.Creature.Aggro", 1.0),
+            loot_rates: mangos_world_data::loot::LootRates {
+                by_quality: [
+                    cfg.float_default("Rate.Drop.Item.Poor", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Normal", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Uncommon", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Rare", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Epic", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Legendary", 1.0),
+                    cfg.float_default("Rate.Drop.Item.Artifact", 1.0),
+                ],
+                referenced: cfg.float_default("Rate.Drop.Item.Referenced", 1.0),
+                money: cfg.float_default("Rate.Drop.Money", 1.0),
+            },
+            rate_corpse_decay_looted: cfg.float_default("Rate.Corpse.Decay.Looted", 0.0),
+            max_group_xp_distance: cfg.float_default("MaxGroupXPDistance", 74.0),
+            quest_low_level_hide_diff: cfg.int_default("Quests.LowLevelHideDiff", 4),
+            quest_high_level_hide_diff: cfg.int_default("Quests.HighLevelHideDiff", 7),
+            show_health_values: cfg.bool_default("ShowHealthValues", false),
+            send_loot_roll_upon_reconnect: cfg.bool_default("SendLootRollUponReconnect", false),
+            all_flight_paths: cfg.bool_default("AllFlightPaths", false),
+            addon_channel: cfg.bool_default("AddonChannel", true),
+            rate_health: cfg.float_default("Rate.Health", 1.0),
+            rate_mana: cfg.float_default("Rate.Mana", 1.0),
+            rate_rage_loss: cfg.float_default("Rate.Rage.Loss", 1.0),
+            rate_rage_income: cfg.float_default("Rate.Rage.Income", 1.0),
+            rate_energy: cfg.float_default("Rate.Energy", 1.0),
+            rest_rates: mangos_entities::player::RestRates {
+                in_game: cfg.float_default("Rate.Rest.InGame", 1.0),
+                offline_in_tavern_or_city: cfg
+                    .float_default("Rate.Rest.Offline.InTavernOrCity", 1.0),
+                offline_in_wilderness: cfg.float_default("Rate.Rest.Offline.InWilderness", 1.0),
+            },
+            death_sickness_level: cfg.int_default("Death.SicknessLevel", 11),
+            respec: mangos_map::map::RespecConfig {
+                base_cost_gold: to_u32(cfg.int_default("Rate.RespecBaseCost", 1)),
+                multiplicative_cost_gold: to_u32(
+                    cfg.int_default("Rate.RespecMultiplicativeCost", 5),
+                ),
+                min_multiplier: to_u32(cfg.int_default("Rate.RespecMinMultiplier", 2)),
+                max_multiplier: to_u32(cfg.int_default("Rate.RespecMaxMultiplier", 10)),
+                no_price_decay: cfg.bool_default("Progression.NoRespecPriceDecay", true),
+            },
+            corpse_reclaim_delay_pvp: cfg.bool_default("Death.CorpseReclaimDelay.PvP", true),
+            corpse_reclaim_delay_pve: cfg.bool_default("Death.CorpseReclaimDelay.PvE", true),
+            death_bones_world: cfg.bool_default("Death.Bones.World", true),
+            death_bones_bg: cfg.bool_default("Death.Bones.Battleground", true),
+            allow_two_side_interaction_mail: cfg
+                .bool_default("AllowTwoSide.Interaction.Mail", false),
+            allow_two_side_interaction_trade: cfg
+                .bool_default("AllowTwoSide.Interaction.Trade", false),
+            mail_delivery_delay_secs: to_u32(cfg.int_default("MailDeliveryDelay", 3600)),
+            gm_allow_trades: cfg.bool_default("GM.AllowTrades", true),
+            mailspam_level: to_u32(cfg.int_default("MailSpam.Level", 1)),
+            mailspam_money: to_u32(cfg.int_default("MailSpam.Money", 0)),
+            mailspam_item: cfg.bool_default("MailSpam.Item", false),
+            mailspam_expire_secs: to_u32(cfg.int_default("MailSpam.ExpireSecs", 0)),
+            mailspam_max_mails: to_u32(cfg.int_default("MailSpam.MaxMails", 2)),
+            cod_force_tag_max_level: to_u32(cfg.int_default("Mails.COD.ForceTag.MaxLevel", 0)),
+            allow_two_side_interaction_auction: cfg
+                .bool_default("AllowTwoSide.Interaction.Auction", false),
+            unlinked_auction_houses: cfg.bool_default("Progression.UnlinkedAuctionHouses", true),
+            rate_auction_time: cfg.float_default("Rate.Auction.Time", 1.0),
+            rate_auction_deposit: cfg.float_default("Rate.Auction.Deposit", 1.0),
+            rate_auction_cut: cfg.float_default("Rate.Auction.Cut", 1.0),
+            rate_instance_reset_time: cfg.float_default("Rate.InstanceResetTime", 1.0),
+            rate_xp_kill: cfg.float_default("Rate.XP.Kill", 1.0),
+            rate_xp_kill_elite: cfg.float_default("Rate.XP.Kill.Elite", 1.0),
+            rate_xp_quest: cfg.float_default("Rate.XP.Quest", 1.0),
+            rate_drop_money: cfg.float_default("Rate.Drop.Money", 1.0),
+            rate_xp_explore: cfg.float_default("Rate.XP.Explore", 1.0),
+            rate_reputation_gain: cfg.float_default("Rate.Reputation.Gain", 1.0),
+            rate_reputation_lowlevel_kill: cfg.float_default("Rate.Reputation.LowLevel.Kill", 1.0),
+            spell_proc_delay_ms: to_u32(cfg.int_default("Spell.ProcDelay", 400)),
+            anticheat: crate::anticheat::AnticheatConfig::from_config(cfg),
+            instance_ignore_level: cfg.bool_default("Instance.IgnoreLevel", false),
+            auction_deposit_min: to_u32(cfg.int_default("Auction.Deposit.Min", 0)),
+            auction_account_concurrent_limit: to_u32(
+                cfg.int_default("Auction.AccountConcurrentLimit", 0),
+            ),
+            player_commands: cfg.bool_default("PlayerCommands", true),
+            gm_join_opposite_faction_channels: cfg
+                .bool_default("GM.JoinOppositeFactionChannels", false)
+                && !cfg.bool_default("AllowTwoSide.Interaction.Chat", false),
+            channel_silently_gm_join: cfg.bool_default("Channel.SilentlyGMJoin", false),
+            channel_invite_min_level: to_u32(cfg.int_default("ChannelInvite.MinLevel", 10)),
+            world_chan_min_level: to_u32(cfg.int_default("WorldChan.MinLevel", 0)),
+            listen_range_say: cfg.float_default("ListenRange.Say", 25.0),
+            listen_range_yell: cfg.float_default("ListenRange.Yell", 300.0),
+            listen_range_text_emote: cfg.float_default("ListenRange.TextEmote", 25.0),
+            yell_range_linear_scale_max_level: to_u32(
+                cfg.int_default("YellRange.LinearScale.MaxLevel", 0),
+            ),
+            yell_range_quadratic_scale_max_level: to_u32(
+                cfg.int_default("YellRange.QuadraticScale.MaxLevel", 0),
+            ),
+            yell_range_min: to_u32(cfg.int_default("YellRange.Min", 0)),
+            gm_level_in_who_list: to_u32(
+                cfg.int_default("GM.InWhoList.Level", i32::from(security::ADMINISTRATOR)),
+            ) as u8,
+            prevent_item_datamining: cfg.bool_default("Item.PreventDataMining", true),
+            activate_weather: cfg.bool_default("ActivateWeather", true),
+            outdoor_pvp_si_enable: cfg.bool_default("OutdoorPvP.SI.Enable", true),
+            outdoor_pvp_ep_enable: cfg.bool_default("OutdoorPvP.EP.Enable", true),
+            vmap_enable_los: cfg.bool_default("vmap.enableLOS", false),
+            vmap_enable_height: cfg.bool_default("vmap.enableHeight", false),
+            change_weather_interval_ms: to_u32(cfg.int_default("ChangeWeatherInterval", 600_000)),
+            bot_chat: bot_chat_config(cfg),
+            bot_population: mangos_bots::population::PopulationConfig {
+                enable_random_bots: cfg.bool_default("RandomBot.Enable", false),
+                min_bots: to_u32(cfg.int_default("RandomBot.MinBots", 3)),
+                max_bots: to_u32(cfg.int_default("RandomBot.MaxBots", 10)),
+                refresh_ms: u64::from(to_u32(cfg.int_default("RandomBot.Refresh", 60_000))),
+                update_ms: u64::from(to_u32(cfg.int_default("PlayerBot.UpdateMs", 10_000))),
+                debug: cfg.bool_default("PlayerBot.Debug", false),
+                peak_hour: to_u32(cfg.int_default("RandomBot.PeakHour", 20)),
+                off_peak_percent: to_u32(cfg.int_default("RandomBot.OffPeakPercent", 50)),
+                timezone_offset: cfg.int_default("RandomBot.TimezoneOffset", -4),
+            },
+            ah_bot: mangos_bots::ah_bot::AhBotConfig {
+                enable: cfg.bool_default("AHBot.Enable", false),
+                ah_fid: to_u32(cfg.int_default("AHBot.ah.fid", 120)),
+                item_count: to_u32(cfg.int_default("AHBot.itemcount", 200)),
+                refresh_interval_secs: u64::from(to_u32(
+                    cfg.int_default("AHBot.RefreshInterval", 259_200),
+                )),
+                seller_account_id: to_u32(cfg.int_default("AHBot.SellerAccountId", 99)),
+                seller_count: to_u32(cfg.int_default("AHBot.SellerCount", 12)),
+                quota_min: [
+                    to_u32(cfg.int_default("AHBot.Quota.TradeGoods.Min", 35)),
+                    to_u32(cfg.int_default("AHBot.Quota.Crafting.Min", 15)),
+                    to_u32(cfg.int_default("AHBot.Quota.Consumables.Min", 20)),
+                    to_u32(cfg.int_default("AHBot.Quota.Recipes.Min", 3)),
+                    to_u32(cfg.int_default("AHBot.Quota.Equipment.Min", 5)),
+                    to_u32(cfg.int_default("AHBot.Quota.Leveling.Min", 10)),
+                ],
+                quota_max: [
+                    to_u32(cfg.int_default("AHBot.Quota.TradeGoods.Max", 40)),
+                    to_u32(cfg.int_default("AHBot.Quota.Crafting.Max", 20)),
+                    to_u32(cfg.int_default("AHBot.Quota.Consumables.Max", 25)),
+                    to_u32(cfg.int_default("AHBot.Quota.Recipes.Max", 5)),
+                    to_u32(cfg.int_default("AHBot.Quota.Equipment.Max", 10)),
+                    to_u32(cfg.int_default("AHBot.Quota.Leveling.Max", 15)),
+                ],
+                buyer_interval_secs: u64::from(to_u32(
+                    cfg.int_default("AHBot.Buyer.IntervalSecs", 1800),
+                )),
+                buyer_budget_per_cycle: to_u32(
+                    cfg.int_default("AHBot.Buyer.BudgetPerCycle", 500_000),
+                ),
+            },
+            guild_bot: mangos_bots::guild_bots::GuildBotConfig {
+                enabled: cfg.bool_default("GuildBot.Enable", true),
+                account_id: to_u32(cfg.int_default("GuildBot.AccountId", 98)),
+                presence_enabled: cfg.bool_default("GuildBot.Presence.Enable", true),
+                presence_check_interval_ms: u64::from(to_u32(
+                    cfg.int_default("GuildBot.Presence.CheckInterval", 300),
+                )) * 1000,
+                presence_peak_hour: to_u32(cfg.int_default("GuildBot.Presence.PeakHour", 20)),
+                presence_peak_count: to_u32(cfg.int_default("GuildBot.Presence.PeakCount", 14)),
+                presence_off_peak_count: to_u32(
+                    cfg.int_default("GuildBot.Presence.OffPeakCount", 3),
+                ),
+                presence_timezone_offset: cfg.int_default("GuildBot.Presence.TimezoneOffset", 0),
+            },
+            bot_director_enable: cfg.bool_default("BotDirector.Enable", true),
+            bot_director_interval_ms: to_u32(
+                cfg.int_default("BotDirector.UpdateInterval", 120_000),
+            ),
+            bot_service_enable: cfg.bool_default("BotService.Enable", true),
+            bot_service_buy_budget_gold: to_u32(
+                cfg.int_default("BotService.Buy.BudgetPerDay", 200),
+            ),
+            player_save_interval_ms: to_u32(cfg.int_default("PlayerSave.Interval", 900_000)),
+            player_save_stats_min_level: to_u32(cfg.int_default("PlayerSave.Stats.MinLevel", 0)),
+            player_save_stats_only_on_logout: cfg
+                .bool_default("PlayerSave.Stats.SaveOnlyOnLogout", true),
+            player_bot_allow_saving: cfg.bool_default("PlayerBot.AllowSaving", false),
+            battleground: bg_config(cfg, to_u32(cfg.int_default("WowPatch", 0)).min(10)),
+        }
+    }
+}
+
+/// C++ int configs are reinterpreted as unsigned at use sites;
+/// negative values wrap. Centralised so the cast is reviewed once.
+const fn to_u32(value: i32) -> u32 {
+    value as u32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cfg(text: &str) -> Config {
+        Config::parse(text.as_bytes())
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)] // exact config defaults
+    fn defaults_match_cpp_code() {
+        let s = ServerConfig::from_config(&cfg("RealmID = 1\n"));
+        assert_eq!(s.realm_id, 1);
+        assert_eq!(s.port, 8085);
+        assert_eq!(s.max_overspeed_pings, 2);
+        assert!(!s.kick_on_bad_packet);
+        assert_eq!(s.no_auth_timeout_secs, 10);
+        assert_eq!(s.character_screen_max_idle_secs, 0);
+        assert_eq!(s.player_security_limit, security::PLAYER);
+        assert_eq!(s.max_group_xp_distance, 74.0);
+        assert_eq!(s.quest_low_level_hide_diff, 4);
+        assert_eq!(s.quest_high_level_hide_diff, 7);
+        assert!(!s.show_health_values);
+        assert!(!s.send_loot_roll_upon_reconnect);
+        assert!(!s.all_flight_paths);
+        assert!(s.addon_channel);
+        assert_eq!(s.rate_health, 1.0);
+        assert_eq!(s.rate_mana, 1.0);
+        assert_eq!(s.rate_rage_loss, 1.0);
+        assert_eq!(s.rate_rage_income, 1.0);
+        assert_eq!(s.rate_energy, 1.0);
+        assert_eq!(s.rest_rates.in_game, 1.0);
+        assert_eq!(s.rest_rates.offline_in_tavern_or_city, 1.0);
+        assert_eq!(s.rest_rates.offline_in_wilderness, 1.0);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)] // exact config values
+    fn tier4_config_closeout_values_are_read() {
+        let s = ServerConfig::from_config(&cfg("MaxGroupXPDistance = 99.5\n\
+             Quests.LowLevelHideDiff = -1\n\
+             Quests.HighLevelHideDiff = 12\n\
+             ShowHealthValues = 1\n\
+             SendLootRollUponReconnect = 1\n\
+             AllFlightPaths = 1\n\
+             AddonChannel = 0\n\
+             Rate.Health = 2\n\
+             Rate.Mana = 3\n\
+             Rate.Rage.Loss = 4\n\
+             Rate.Rage.Income = 9\n\
+             Rate.Energy = 5\n\
+             Rate.Rest.InGame = 6\n\
+             Rate.Rest.Offline.InTavernOrCity = 7\n\
+             Rate.Rest.Offline.InWilderness = 8\n"));
+        assert_eq!(s.max_group_xp_distance, 99.5);
+        assert_eq!(s.quest_low_level_hide_diff, -1);
+        assert_eq!(s.quest_high_level_hide_diff, 12);
+        assert!(s.show_health_values);
+        assert!(s.send_loot_roll_upon_reconnect);
+        assert!(s.all_flight_paths);
+        assert!(!s.addon_channel);
+        assert_eq!(s.rate_health, 2.0);
+        assert_eq!(s.rate_mana, 3.0);
+        assert_eq!(s.rate_rage_loss, 4.0);
+        assert_eq!(s.rate_rage_income, 9.0);
+        assert_eq!(s.rate_energy, 5.0);
+        assert_eq!(s.rest_rates.in_game, 6.0);
+        assert_eq!(s.rest_rates.offline_in_tavern_or_city, 7.0);
+        assert_eq!(s.rest_rates.offline_in_wilderness, 8.0);
+    }
+
+    #[test]
+    fn overspeed_clamp_and_security_floor() {
+        let s = ServerConfig::from_config(&cfg("MaxOverspeedPings = 1\nPlayerLimit = -3\n"));
+        assert_eq!(s.max_overspeed_pings, 2);
+        assert_eq!(s.player_security_limit, 3);
+        let s = ServerConfig::from_config(&cfg("MaxOverspeedPings = 0\nPlayerLimit = 50\n"));
+        assert_eq!(s.max_overspeed_pings, 0);
+        assert_eq!(s.player_security_limit, security::PLAYER);
+    }
+
+    #[test]
+    fn accepted_builds() {
+        assert!(is_acceptable_client_build(5875));
+        assert!(is_acceptable_client_build(6141));
+        assert!(!is_acceptable_client_build(5464));
+        assert!(!is_acceptable_client_build(0));
+    }
+}

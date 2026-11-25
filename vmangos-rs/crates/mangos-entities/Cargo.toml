@@ -1,0 +1,21 @@
+[package]
+name = "mangos-entities"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Entity values store and object-update block building (Phase 4), mirroring vmangos src/game/Objects"
+
+[dependencies]
+mangos-db = { path = "../mangos-db" }
+mangos-guid = { path = "../mangos-guid" }
+mangos-movement = { path = "../mangos-movement" }
+mangos-protocol = { path = "../mangos-protocol" }
+mangos-spells = { path = "../mangos-spells" }
+mangos-world-data = { path = "../mangos-world-data" }
+
+[dev-dependencies]
+mangos-dbc = { path = "../mangos-dbc" }
+
+[lints]
+workspace = true

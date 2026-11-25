@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client Reports - Azeroth</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #e0d8c8; font-family: 'Segoe UI', Tahoma, Geneva, sans-serif; min-height: 100vh; }
+.container { max-width: 1060px; margin: 0 auto; padding: 20px; }
+nav { text-align: right; padding: 8px 0; }
+nav a { color: #c9aa71; text-decoration: none; font-size: 13px; font-weight: 600; margin-left: 16px; }
+nav a.active { color: #ffd100; }
+nav .user-info { float: left; color: #6b6860; font-size: 12px; }
+.header { text-align: center; padding: 24px 0 16px; border-bottom: 2px solid #c9aa71; margin-bottom: 24px; }
+.header h1 { color: #ffd100; font-size: 28px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px; }
+.header h2 { color: #c9aa71; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; font-weight: 400; }
+.section { background: #16213e; border: 1px solid #c9aa71; border-radius: 6px; padding: 18px; margin-bottom: 20px; }
+.section-title { color: #ffd100; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; border-bottom: 1px solid #3d3d5c; padding-bottom: 8px; margin-bottom: 12px; }
+p, li { font-size: 14px; line-height: 1.55; }
+code, .code { font-family: Consolas, monospace; background: #0d1526; color: #d7e7a8; border: 1px solid #34405f; border-radius: 4px; }
+code { padding: 1px 5px; }
+.code { display: block; padding: 12px; margin-top: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+.btn { padding: 7px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; background: #c9aa71; color: #1a1a2e; }
+.btn:hover { background: #ffd100; }
+.btn-danger { background: #8d3446; color: #fff; }
+.btn-danger:hover { background: #b2435b; }
+.alert { border: 1px solid #b2435b; background: #331a24; color: #ffb3bf; padding: 12px; border-radius: 4px; margin-bottom: 16px; }
+.pair-code { font-size: 24px; letter-spacing: 3px; color: #a8e05f; text-align: center; padding: 12px; }
+.meta, .empty { color: #8b8878; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #263557; vertical-align: top; }
+th { color: #c9aa71; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+td a { color: #ffd100; text-decoration: none; font-weight: 600; }
+.status { text-transform: capitalize; }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+select { background: #0d1526; color: #e0d8c8; border: 1px solid #445; border-radius: 4px; padding: 6px; }
+.install { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid #263557; }
+.install:last-child { border-bottom: none; }
+@media (max-width: 760px) { .install { flex-direction: column; } table { font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav>
+    <span class="user-info">{{ char_name }}</span>
+    <a href="/">Dashboard</a>
+    <a href="/guild">Guild Roster</a>
+    <a href="/addons">Addons</a>
+    <a href="/client-reports" class="active">Client Reports</a>
+    <a href="/logout">Logout</a>
+  </nav>
+
+  <div class="header">
+    <h1>Azeroth</h1>
+    <h2>Client Bug &amp; Crash Reports</h2>
+  </div>
+
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+
+  <section class="section">
+    <div class="section-title">Pair this gaming install</div>
+    <p>Generate a one-time code, then run the reporter companion from the client-pack checkout on the gaming machine.</p>
+    <form method="post" action="/client-reports/pair" style="margin-top:12px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn" type="submit">Generate pairing code</button>
+    </form>
+    {% if pair %}
+      <div class="code pair-code">{{ pair.code }}</div>
+      <p class="meta">Expires at {{ pair.expires_at }}. Treat it like a password.</p>
+      <code class="code">python3 scripts/report_client.py pair --dashboard-url {{ dashboard_url }} --code {{ pair.code }} --label "Gaming PC"</code>
+      <p class="meta">On Windows, use <code>py -3 scripts\report_client.py</code>. Add <code>--allow-http</code> only for a trusted private-network dashboard.</p>
+    {% endif %}
+  </section>
+
+  <section class="section">
+    <div class="section-title">Your paired installs</div>
+    {% if installs %}
+      {% for install in installs %}
+      <div class="install">
+        <div>
+          <strong>{{ install.label or "Gaming PC" }}</strong><br>
+          <span class="meta">{{ install.id }} · created {{ install.created_at }} · last seen {{ install.last_seen_at or "never" }}{% if install.revoked_at %} · revoked {{ install.revoked_at }}{% endif %}</span>
+        </div>
+        {% if not install.revoked_at %}
+        <form method="post" action="/client-reports/installs/{{ install.id }}/revoke">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn btn-danger" type="submit">Revoke</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="empty">No paired installs yet.</p>
+    {% endif %}
+  </section>
+
+  {% if is_admin %}
+  <section class="section">
+    <div class="section-title">Report inbox</div>
+    <form class="filters" method="get" action="/client-reports">
+      <label>Status
+        <select name="status">
+          <option value="">All</option>
+          {% for value in ["new", "triaged", "resolved", "closed"] %}
+          <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Kind
+        <select name="kind">
+          <option value="">All</option>
+          {% for value in ["bug", "lua_error", "crash"] %}
+          <option value="{{ value }}"{% if kind_filter == value %} selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn" type="submit">Filter</button>
+    </form>
+    {% if reports %}
+    <table>
+      <thead><tr><th>Received</th><th>Report</th><th>Kind</th><th>Severity</th><th>Status</th><th>Account / character</th></tr></thead>
+      <tbody>
+      {% for report in reports %}
+        <tr>
+          <td>{{ report.received_at }}</td>
+          <td><a href="/client-reports/{{ report.id }}">{{ report.title }}</a><br><span class="meta">{{ report.client_report_id }}</span></td>
+          <td>{{ report.kind }}</td>
+          <td>{{ report.severity }}</td>
+          <td class="status">{{ report.status }}</td>
+          <td>{{ report.account_name }}<br><span class="meta">{{ report.character_name or "—" }} · {{ report.realm_name or "—" }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="empty">No reports match these filters.</p>
+    {% endif %}
+  </section>
+  {% else %}
+  <section class="section">
+    <div class="section-title">Where reports go</div>
+    <p>Submitted reports are visible to dashboard administrators in this inbox. Pairing lets the team associate a report with your account without putting a shared secret in the client pack.</p>
+  </section>
+  {% endif %}
+</div>
+</body>
+</html>

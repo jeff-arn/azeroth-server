@@ -1,0 +1,114 @@
+{
+ "mode": "run-class",
+ "class": "Warrior",
+ "matrix_file": "/Users/jeffarn/Programming/azeroth-server/vmangos-rs/scripts/spell_campaign_matrix-Warrior.json",
+ "matrix_mode": "full",
+ "matrix_counts": {
+  "Warrior": 85
+ },
+ "talent_build": {
+  "name": "fury",
+  "role": "MeleeDps",
+  "total_points": 51,
+  "known_spell_ids": [
+   12282,
+   12323,
+   12328,
+   12659,
+   12679,
+   12713,
+   12836,
+   12856,
+   12861,
+   12867,
+   12973,
+   13002,
+   13048,
+   16464,
+   16493,
+   20500,
+   23881
+  ],
+  "required_spell_ids": []
+ },
+ "fixture_note": "union-seeded single-race fixture; not a legal single-race spellbook claim where union exceeds any one race (Paladin Human==Dwarf==160, numerically equal)",
+ "seed_count": 138,
+ "talent_seed_checks": [
+  {
+   "spell_id": 12282,
+   "learned": true
+  },
+  {
+   "spell_id": 12323,
+   "learned": true
+  },
+  {
+   "spell_id": 12328,
+   "learned": true
+  },
+  {
+   "spell_id": 12659,
+   "learned": true
+  },
+  {
+   "spell_id": 12679,
+   "learned": true
+  },
+  {
+   "spell_id": 12713,
+   "learned": true
+  },
+  {
+   "spell_id": 12836,
+   "learned": true
+  },
+  {
+   "spell_id": 12856,
+   "learned": true
+  },
+  {
+   "spell_id": 12861,
+   "learned": true
+  },
+  {
+   "spell_id": 12867,
+   "learned": true
+  },
+  {
+   "spell_id": 12973,
+   "learned": true
+  },
+  {
+   "spell_id": 13002,
+   "learned": true
+  },
+  {
+   "spell_id": 13048,
+   "learned": true
+  },
+  {
+   "spell_id": 16464,
+   "learned": true
+  },
+  {
+   "spell_id": 16493,
+   "learned": true
+  },
+  {
+   "spell_id": 20500,
+   "learned": true
+  },
+  {
+   "spell_id": 23881,
+   "learned": true
+  }
+ ],
+ "failure_clusters": [],
+ "verdict_counts": {
+  "BLOCKED": 12,
+  "PASS": 54,
+  "PASSIVE-VERIFIED": 19
+ },
+ "git_head": "30d8a65d",
+ "git_dirty": true
+}

@@ -1,0 +1,13 @@
+[package]
+name = "mangos-dbc"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "DBC (WDBC) file parsing byte-compatible with vmangos DBCFileLoader/DBCStorage"
+
+[dev-dependencies]
+sha2.workspace = true
+
+[lints]
+workspace = true

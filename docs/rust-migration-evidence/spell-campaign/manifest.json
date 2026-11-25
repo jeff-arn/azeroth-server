@@ -1,0 +1,195 @@
+{
+ "git_head": "f593d4bd",
+ "git_dirty": true,
+ "binary_build": "unknown: bench mangosd was already running; this harness neither builds nor starts it",
+ "world_host": "127.0.0.1",
+ "world_port": 18099,
+ "db_host": "127.0.0.1",
+ "started": "2026-11-23T00:08:39-0500",
+ "ended": "2026-11-23T00:11:36-0500",
+ "mode": "pilot",
+ "matrix_classes": [
+  "Warrior",
+  "Mage",
+  "Druid"
+ ],
+ "entry_327": {
+  "template": "1",
+  "spawns": "1"
+ },
+ "accounts": {
+  "SPELLCAMP01": 237,
+  "SPELLCAMP07": 238,
+  "SPELLCAMP09": 239
+ },
+ "setup_spells": {
+  "Warrior": [
+   2457
+  ]
+ },
+ "db_hostname": "nautilus.local",
+ "guids": {
+  "Campwarrior": 900015,
+  "Campmage": 900016,
+  "Campdruid": 900017
+ },
+ "measured_notes": [
+  "heal leg escalated 5185->5187 mid-pilot: rank-1 oracle band is 40-54 (MaxLevel=5 clamp per calculate_effect_value_bp) but bench regen ticks a deterministic +34/1.5s, so one window cannot separate a rank-1 heal from a phase-aligned tick (triple-cast jumps 49/23/29 mean 34); rank 3 band ~204-254 (MaxLevel=19 clamp) separates completely. This pilot casts pinned 5187 (rank 3/11), not last rank 25297; generated rows report rank metadata explicitly",
+  "bench login restores health above the saved value (SQL 300 loaded at ~600 in the /tmp/health_probe.py run), then ~17/s out-of-combat regen at 60: heal legs must be regen-baselined, raw deltas over-attribute",
+  "cross-client WorldState health for the ally proved stale (caster view 27->35 while ally self-view rose hundreds); the heal leg reads the ally's own socket",
+  "CMSG_CHAR_CREATE before CMSG_CHAR_ENUM always answers SERVER_LIMIT(52): the actor defaults the session count to 10 and only the enum burst lowers it (fixtures ensure sends enum first)"
+ ],
+ "talent_builds": {
+  "selected": {
+   "Warrior": null,
+   "Paladin": {
+    "name": "ret",
+    "role": "MeleeDps",
+    "total_points": 51,
+    "known_spell_ids": [
+     20048,
+     20059,
+     20064,
+     20066,
+     20105,
+     20113,
+     20121,
+     20208,
+     20218,
+     20261,
+     20266,
+     20375,
+     26021,
+     26023
+    ],
+    "required_spell_ids": []
+   },
+   "Hunter": {
+    "name": "bm",
+    "role": "RangeDps",
+    "total_points": 51,
+    "known_spell_ids": [
+     19420,
+     19425,
+     19431,
+     19434,
+     19489,
+     19573,
+     19574,
+     19575,
+     19577,
+     19587,
+     19592,
+     19602,
+     19612,
+     19620,
+     19625
+    ],
+    "required_spell_ids": []
+   },
+   "Rogue": null,
+   "Priest": null,
+   "Shaman": {
+    "name": "elemental",
+    "role": "RangeDps",
+    "total_points": 51,
+    "known_spell_ids": [
+     16089,
+     16108,
+     16112,
+     16116,
+     16120,
+     16161,
+     16164,
+     16166,
+     16217,
+     16224,
+     16229,
+     16232,
+     16582,
+     29065
+    ],
+    "required_spell_ids": []
+   },
+   "Mage": null,
+   "Warlock": {
+    "name": "dsruin",
+    "role": "RangeDps",
+    "total_points": 51,
+    "known_spell_ids": [
+     17782,
+     17792,
+     17803,
+     17814,
+     17877,
+     17959,
+     18134,
+     18136,
+     18174,
+     18693,
+     18696,
+     18701,
+     18708,
+     18746,
+     18750,
+     18769,
+     18788
+    ],
+    "required_spell_ids": []
+   },
+   "Druid": {
+    "name": "balance",
+    "role": "RangeDps",
+    "total_points": 51,
+    "known_spell_ids": [
+     16689,
+     16818,
+     16820,
+     16825,
+     16835,
+     16847,
+     16864,
+     16880,
+     16901,
+     16906,
+     16913,
+     16926,
+     17055,
+     17249,
+     24858
+    ],
+    "required_spell_ids": [
+     339
+    ]
+   }
+  },
+  "legal_classes": [
+   "Paladin",
+   "Hunter",
+   "Shaman",
+   "Warlock",
+   "Druid"
+  ],
+  "unresolved_classes": [
+   "Warrior",
+   "Rogue",
+   "Priest",
+   "Mage"
+  ],
+  "build_count": 26,
+  "artifact": "spell_campaign_talent_builds.json"
+ },
+ "per_class_counts": {
+  "Druid": 6,
+  "Mage": 2,
+  "Warrior": 2
+ },
+ "matrix_mode": "pilot",
+ "g1_skillraceclassinfo": "resolved: generator replay 0 exclusions (Warrior 121, Paladin 160, Hunter 123, Rogue 89, Priest 214, Shaman 159, Mage 176, Warlock 202, Druid 187)",
+ "g2_talent_builds": "enumerated 26 checked-in builds; legal selected builds for 5/9 classes; unresolved classes: Warrior, Rogue, Priest, Mage (checked-in builds fail fork DependsOn/tier legality); fan-out blocked",
+ "caveats": [
+  "caveat: full IsSpellValid replay not rerun",
+  "caveat: SCRIPT_EFFECT rows ride as BLOCKED script-evidence-unknown",
+  "caveat: bench-vs-production trainer equivalence unverified"
+ ]
+}

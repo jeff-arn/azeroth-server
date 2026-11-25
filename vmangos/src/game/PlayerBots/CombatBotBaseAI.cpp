@@ -80,22 +80,23 @@ struct BotTalentBuild
 
 // --- Warrior ---
 static BotTalentPoint const s_Warrior_fury[] = {
-    {157, 5}, {159, 5}, {160, 1},  {154, 5}, // Cruelty, Unbridled Wrath, Piercing Howl, Imp Battle Shout
-    {155, 5}, {156, 5}, {167, 1}, // Enrage, Flurry, Bloodthirst
-    {124, 3}, {130, 5}, {641, 5},  {121, 3}, // Imp Heroic Strike, Deflection, Tactical Mastery, Deep Wounds
-    {662, 2}, {136, 5}, {1541, 1}, // Impale, 2H Weapon Spec, Imp Berserker Rage
+    {124, 1}, {130, 3}, {127, 3}, {641, 5}, // Improved Heroic Strike, Deflection, Improved Rend, Tactical Mastery
+    {121, 3}, {136, 4}, {662, 1}, {158, 3}, // Deep Wounds, Two-Handed Weapon Specialization, Impale, Booming Voice
+    {157, 5}, {159, 5}, {160, 1}, {154, 5}, // Cruelty, Unbridled Wrath, Piercing Howl, Improved Battle Shout
+    {155, 5}, {165, 1}, {1541, 1}, {156, 4}, // Enrage, Death Wish, Improved Berserker Rage, Flurry
+    {167, 1}, // Bloodthirst
 };
 static BotTalentPoint const s_Warrior_prot[] = {
-    {1601, 5}, {138, 5}, {147, 3}, {140, 5}, // Shield Spec, Anticipation, Imp Revenge, Toughness
-    {153, 1},  {145, 3}, {144, 5}, {152, 1}, // Last Stand, Imp Shield Block, Defiance, Concussion Blow
-    {146, 3},  {702, 5}, {148, 1}, // Imp Sunder, 1H Weapon Spec, Shield Slam
-    {157, 5},  {159, 5}, {124, 3}, {154, 1}, // Cruelty, Unbridled Wrath, Imp Heroic Strike, Imp Battle Shout
+    {124, 3}, {157, 5}, {159, 5}, {154, 1}, // Improved Heroic Strike, Cruelty, Unbridled Wrath, Improved Battle Shout
+    {1601, 5}, {138, 3}, {142, 2}, {140, 5}, // Shield Specialization, Anticipation, Improved Bloodrage, Toughness
+    {153, 1}, {145, 3}, {147, 3}, {144, 5}, // Last Stand, Improved Shield Block, Improved Revenge, Defiance
+    {146, 3}, {152, 1}, {702, 5}, {148, 1}, // Improved Sunder Armor, Concussion Blow, One-Handed Weapon Specialization, Shield Slam
 };
 static BotTalentPoint const s_Warrior_arms[] = {
-    {124, 3}, {130, 5}, {641, 5}, {137, 1}, // Imp Heroic Strike, Deflection, Tactical Mastery, Anger Mgmt
-    {121, 3}, {662, 2}, {136, 5}, {132, 5}, // Deep Wounds, Impale, 2H Weapon Spec, Axe Spec
-    {133, 1}, {123, 5}, {135, 1}, // Sweeping Strikes, Sword Spec, Mortal Strike
-    {157, 5}, {159, 5}, {160, 1}, {154, 4}, // Cruelty, Unbridled Wrath, Piercing Howl, Imp Battle Shout
+    {124, 1}, {130, 4}, {127, 3}, {641, 5}, // Improved Heroic Strike, Deflection, Improved Rend, Tactical Mastery
+    {137, 1}, {121, 3}, {136, 5}, {662, 2}, // Anger Management, Deep Wounds, Two-Handed Weapon Specialization, Impale
+    {132, 5}, {133, 1}, {123, 5}, {135, 1}, // Axe Specialization, Sweeping Strikes, Sword Specialization, Mortal Strike
+    {157, 5}, {159, 5}, {160, 1}, {154, 4}, // Cruelty, Unbridled Wrath, Piercing Howl, Improved Battle Shout
 };
 
 // --- Paladin ---
@@ -121,11 +122,10 @@ static BotTalentPoint const s_Paladin_ret[] = {
 
 // --- Hunter ---
 static BotTalentPoint const s_Hunter_mm[] = {
-    {1344, 5}, {1342, 5}, {1345, 1}, {1343, 5}, // Lethal Shots, Efficiency, Aimed Shot, Imp Hunter's Mark
-    {1349, 5}, {1353, 1}, {1347, 3}, {1362, 5}, // Mortal Shots, Scatter Shot, Barrage, Ranged Weapon Spec
-    {1361, 1}, // Trueshot Aura
-    {1623, 3}, {1301, 3}, {1306, 2}, {1310, 3}, // Monster Slaying, Humanoid Slaying, Clever Traps, Surefooted
-    {1321, 3}, {1303, 5}, {1341, 1}, // Killer Instinct, Lightning Reflexes, Imp Concussive Shot
+    {1341, 1}, {1342, 5}, {1343, 5}, {1344, 5}, // Improved Concussive Shot, Efficiency, Improved Hunter's Mark, Lethal Shots
+    {1345, 1}, {1349, 5}, {1353, 1}, {1347, 3}, // Aimed Shot, Mortal Shots, Scatter Shot, Barrage
+    {1362, 4}, {1361, 1}, {1623, 3}, {1301, 3}, // Ranged Weapon Specialization, Trueshot Aura, Monster Slaying, Humanoid Slaying
+    {1311, 5}, {1304, 4}, {1306, 2}, {1310, 3}, // Deflection, Entrapment, Clever Traps, Surefooted
 };
 static BotTalentPoint const s_Hunter_bm[] = {
     {1389, 5}, {1395, 3}, {1625, 2}, {1396, 5}, // Endurance Training, Thick Hide, Imp Revive Pet, Unleashed Fury
@@ -135,57 +135,55 @@ static BotTalentPoint const s_Hunter_bm[] = {
     {1349, 4}, // Mortal Shots
 };
 static BotTalentPoint const s_Hunter_surv[] = {
-    {1623, 3}, {1301, 3}, {1311, 5}, {1621, 2}, // Monster Slaying, Humanoid Slaying, Deflection, Savage Strikes
-    {1306, 2}, {1310, 3}, {1322, 2}, {1321, 3}, // Clever Traps, Surefooted, Trap Mastery, Killer Instinct
-    {1312, 1}, {1303, 5}, {1325, 1}, // Counterattack, Lightning Reflexes, Wyvern Sting
-    {1344, 5}, {1342, 5}, {1345, 1}, {1343, 5}, // Lethal Shots, Efficiency, Aimed Shot, Imp Hunter's Mark
-    {1349, 5}, // Mortal Shots
+    {1342, 5}, {1343, 4}, {1344, 5}, {1345, 1}, // Efficiency, Improved Hunter's Mark, Lethal Shots, Aimed Shot
+    {1349, 5}, {1623, 3}, {1301, 3}, {1311, 5}, // Mortal Shots, Monster Slaying, Humanoid Slaying, Deflection
+    {1621, 2}, {1306, 2}, {1308, 1}, {1322, 2}, // Savage Strikes, Clever Traps, Deterrence, Trap Mastery
+    {1310, 3}, {1321, 3}, {1312, 1}, {1303, 5}, // Surefooted, Killer Instinct, Counterattack, Lightning Reflexes
+    {1325, 1}, // Wyvern Sting
 };
 
 // --- Rogue ---
 static BotTalentPoint const s_Rogue_combat[] = {
-    {201, 2},  {186, 3},  {203, 3}, {181, 5}, // Imp SS, Lightning Reflexes, Imp Gouge, Precision
-    {277, 3},  {221, 5},  {223, 1}, {242, 5}, // Imp SnD, Dual Wield Spec, Blade Flurry, Sword Spec
-    {1703, 2}, {1122, 3}, {205, 1}, // Weapon Expertise, Aggression, Adrenaline Rush
-    {270, 5},  {273, 3},  {274, 2}, {281, 1}, // Malice, Ruthlessness, Murder, Relentless Strikes
-    {269, 5},  {276, 2}, // Lethality, Imp Eviscerate
+    {276, 2}, {270, 5}, {273, 3}, {274, 2}, // Improved Eviscerate, Malice, Ruthlessness, Murder
+    {277, 1}, {281, 1}, {269, 5}, {203, 3}, // Improved Slice and Dice, Relentless Strikes, Lethality, Improved Gouge
+    {201, 2}, {186, 5}, {181, 5}, {221, 5}, // Improved Sinister Strike, Lightning Reflexes, Precision, Dual Wield Specialization
+    {223, 1}, {242, 5}, {1703, 2}, {1122, 3}, // Blade Flurry, Sword Specialization, Weapon Expertise, Aggression
+    {205, 1}, // Adrenaline Rush
 };
 static BotTalentPoint const s_Rogue_assassination[] = {
-    {276, 3}, {270, 5}, {273, 3}, {274, 2}, // Imp Eviscerate, Malice, Ruthlessness, Murder
-    {281, 1}, {277, 3}, {269, 5}, {682, 5}, // Relentless Strikes, Imp SnD, Lethality, Vile Poisons
-    {268, 5}, {280, 1}, {283, 5}, // Imp Poisons, Cold Blood, Seal Fate
-    {186, 3}, {181, 5}, {201, 2}, {221, 3}, // Lightning Reflexes, Precision, Imp SS, Dual Wield Spec
+    {276, 1}, {270, 5}, {273, 1}, {274, 1}, // Improved Eviscerate, Malice, Ruthlessness, Murder
+    {277, 3}, {281, 1}, {269, 5}, {682, 5}, // Improved Slice and Dice, Relentless Strikes, Lethality, Vile Poisons
+    {268, 5}, {280, 1}, {283, 5}, {203, 3}, // Improved Poisons, Cold Blood, Seal Fate, Improved Gouge
+    {201, 2}, {186, 5}, {181, 5}, {221, 3}, // Improved Sinister Strike, Lightning Reflexes, Precision, Dual Wield Specialization
 };
 
 // --- Priest ---
 static BotTalentPoint const s_Priest_holy[] = {
-    {342, 5},  {344, 2}, {343, 3},  {348, 1}, // Unbreakable Will, Imp PW:F, Imp PW:S, Inner Focus
-    {347, 3},  {341, 3}, {351, 1},  {1201, 2}, // Meditation, Mental Agility, Divine Spirit, Mental Strength
-    {322, 1}, // Power Infusion
-    {410, 2},  {401, 5}, {1181, 5}, {361, 3}, // Healing Focus, Holy Spec, Divine Fury, Inspiration
-    {1635, 2}, {408, 3}, {402, 5},  {404, 5}, // Holy Reach, Imp Healing, Spiritual Guidance, Spiritual Healing
+    {342, 5}, {345, 5}, {344, 2}, {343, 3}, // Unbreakable Will, Wand Specialization, Improved Power Word: Fortitude, Improved Power Word: Shield
+    {348, 1}, {347, 3}, {341, 5}, {1201, 5}, // Inner Focus, Meditation, Mental Agility, Mental Strength
+    {351, 1}, {322, 1}, {410, 2}, {401, 5}, // Divine Spirit, Power Infusion, Healing Focus, Holy Specialization
+    {1181, 5}, {361, 3}, {1635, 2}, {408, 3}, // Divine Fury, Inspiration, Holy Reach, Improved Healing
 };
 static BotTalentPoint const s_Priest_shadow[] = {
-    {465, 5}, {466, 3}, {482, 2}, {463, 5}, // Spirit Tap, Shadow Affinity, Imp SW:P, Shadow Focus
-    {501, 1}, {481, 5}, {881, 3}, {461, 5}, // Mind Flay, Imp Mind Blast, Shadow Reach, Shadow Weaving
-    {541, 1}, {462, 5}, {521, 1}, {484, 1}, // Silence, Darkness, Shadowform, Vampiric Embrace
-    {345, 5}, {344, 2}, {343, 3}, {348, 1}, // Wand Spec, Imp PW:F, Imp PW:S, Inner Focus
-    {347, 3}, // Meditation
+    {345, 5}, {344, 2}, {343, 3}, {348, 1}, // Wand Specialization, Improved Power Word: Fortitude, Improved Power Word: Shield, Inner Focus
+    {347, 3}, {465, 5}, {466, 1}, {482, 2}, // Meditation, Spirit Tap, Shadow Affinity, Improved Shadow Word: Pain
+    {463, 5}, {542, 2}, {481, 5}, {501, 1}, // Shadow Focus, Improved Psychic Scream, Improved Mind Blast, Mind Flay
+    {881, 3}, {461, 5}, {541, 1}, {484, 1}, // Shadow Reach, Shadow Weaving, Silence, Vampiric Embrace
+    {462, 5}, {521, 1}, // Darkness, Shadowform
 };
 
 // --- Shaman ---
 static BotTalentPoint const s_Shaman_resto[] = {
-    {586, 5},  {593, 5}, {595, 5}, {581, 3}, // Imp HW, Tidal Focus, Totemic Focus, Ancestral Healing
-    {587, 3},  {588, 5}, {594, 5}, {591, 1}, // Healing Focus, Restorative Totems, Tidal Mastery, NS
-    {1648, 3}, {592, 5}, {590, 1}, // Healing Way, Purification, Mana Tide
-    {563, 5},  {561, 3}, {575, 2}, // Concussion, Call of Flame, Reverberation
+    {564, 2}, {563, 5}, {561, 3}, {575, 2}, // Convection, Concussion, Call of Flame, Reverberation
+    {586, 3}, {593, 5}, {581, 3}, {595, 5}, // Improved Healing Wave, Tidal Focus, Ancestral Healing, Totemic Focus
+    {587, 3}, {588, 5}, {594, 5}, {1648, 3}, // Healing Focus, Restorative Totems, Tidal Mastery, Healing Way
+    {591, 1}, {592, 5}, {590, 1}, // Nature's Swiftness, Purification, Mana Tide Totem
 };
 static BotTalentPoint const s_Shaman_enhance[] = {
-    {614, 5}, {612, 5}, {613, 5}, {605, 2}, // Ancestral Knowledge, Shield Spec, Thundering Strikes, Imp GW
-    {602, 5}, {611, 3}, {616, 1}, {1643, 5}, // Flurry, Elemental Weapons, Parry, Weapon Mastery
-    {901, 1}, // Stormstrike
-    {563, 5}, {561, 3}, {574, 1}, {562, 5}, // Concussion, Call of Flame, Elemental Focus, Call of Thunder
-    {575, 5}, // Reverberation
+    {564, 2}, {563, 5}, {561, 3}, {574, 1}, // Convection, Concussion, Call of Flame, Elemental Focus
+    {575, 5}, {562, 4}, {614, 5}, {612, 5}, // Reverberation, Call of Thunder, Ancestral Knowledge, Shield Specialization
+    {613, 5}, {605, 2}, {602, 5}, {611, 3}, // Thundering Strikes, Improved Ghost Wolf, Flurry, Elemental Weapons
+    {616, 1}, {1643, 4}, {901, 1}, // Parry, Weapon Mastery, Stormstrike
 };
 static BotTalentPoint const s_Shaman_elemental[] = {
     {564, 5}, {563, 5}, {561, 3},  {562, 5}, // Convection, Concussion, Call of Flame, Call of Thunder
@@ -196,34 +194,32 @@ static BotTalentPoint const s_Shaman_elemental[] = {
 
 // --- Mage ---
 static BotTalentPoint const s_Mage_frost[] = {
-    {37, 5}, {1649, 3}, {73, 5},  {61, 3}, // Imp Frostbolt, Ele Precision, Ice Shards, Piercing Ice
-    {69, 1}, {63, 3},   {741, 2}, {66, 3}, // Cold Snap, Imp Blizzard, Arctic Reach, Frost Channeling
-    {67, 5}, {72, 1},   {64, 3},  {68, 5}, // Shatter, Ice Block, Imp CoC, Winter's Chill
-    {71, 1}, // Ice Barrier
-    {74, 2}, {76, 3},   {75, 5},  {1142, 1}, // Arcane Subtlety, Arcane Focus, Arcane Conc, Arcane Med
+    {74, 2}, {76, 5}, {80, 3}, {75, 5}, // Arcane Subtlety, Arcane Focus, Improved Arcane Missiles, Arcane Concentration
+    {1142, 1}, {37, 2}, {1649, 3}, {73, 3}, // Arcane Meditation, Improved Frostbolt, Elemental Precision, Ice Shards
+    {62, 2}, {61, 1}, {69, 1}, {63, 3}, // Improved Frost Nova, Piercing Ice, Cold Snap, Improved Blizzard
+    {741, 2}, {66, 3}, {67, 5}, {72, 1}, // Arctic Reach, Frost Channeling, Shatter, Ice Block
+    {64, 3}, {68, 5}, {71, 1}, // Improved Cone of Cold, Winter's Chill, Ice Barrier
 };
 static BotTalentPoint const s_Mage_fire[] = {
-    {26, 5}, {34, 5}, {28, 2}, {30, 5}, // Imp Fireball, Ignite, Flame Throwing, Impact
-    {31, 3}, {29, 1}, {23, 2}, {1639, 3}, // Imp Flamestrike, Pyroblast, Burning Soul, Master of Elements
-    {33, 3}, {32, 1}, {35, 5}, {36, 1}, // Critical Mass, Blast Wave, Fire Power, Combustion
-    {74, 2}, {76, 3}, {75, 5}, {1142, 3}, // Arcane Subtlety, Arcane Focus, Arcane Conc, Arcane Med
-    {77, 2}, // Arcane Mind
+    {74, 2}, {76, 5}, {26, 1}, {30, 5}, // Arcane Subtlety, Arcane Focus, Improved Fireball, Impact
+    {80, 3}, {34, 5}, {28, 2}, {75, 5}, // Improved Arcane Missiles, Ignite, Flame Throwing, Arcane Concentration
+    {31, 3}, {29, 1}, {85, 1}, {23, 2}, // Improved Flamestrike, Pyroblast, Arcane Resilience, Burning Soul
+    {1639, 3}, {1142, 3}, {33, 3}, {32, 1}, // Master of Elements, Arcane Meditation, Critical Mass, Blast Wave
+    {35, 5}, {36, 1}, // Fire Power, Combustion
 };
 static BotTalentPoint const s_Mage_arcfrost[] = {
-    {74, 2},   {76, 5},   {75, 5}, {80, 5}, // Arcane Subtlety, Arcane Focus, Arcane Conc, Imp AM
-    {1142, 3}, {86, 1},   {77, 5}, {421, 3}, // Arcane Med, Presence of Mind, Arcane Mind, Arcane Instability
-    {87, 1}, // Arcane Power
-    {37, 5},   {1649, 3}, {73, 5}, {61, 3}, // Imp Frostbolt, Ele Precision, Ice Shards, Piercing Ice
-    {66, 3},   {69, 1},   {37, 1}, // Frost Channeling, Cold Snap, (extra Imp Frostbolt rank)
+    {74, 2}, {76, 5}, {80, 5}, {75, 5}, // Arcane Subtlety, Arcane Focus, Improved Arcane Missiles, Arcane Concentration
+    {85, 1}, {1142, 3}, {86, 1}, {77, 5}, // Arcane Resilience, Arcane Meditation, Presence of Mind, Arcane Mind
+    {421, 3}, {87, 1}, {37, 5}, {1649, 3}, // Arcane Instability, Arcane Power, Improved Frostbolt, Elemental Precision
+    {73, 5}, {61, 3}, {69, 1}, {66, 3}, // Ice Shards, Piercing Ice, Cold Snap, Frost Channeling
 };
 
 // --- Warlock ---
 static BotTalentPoint const s_Warlock_smruin[] = {
-    {1003, 5}, {1005, 5}, {1007, 2}, {1284, 3}, // Imp Corruption, Suppression, Imp Life Tap, Imp CoA
-    {1061, 1}, {1001, 5}, {1002, 2}, {1021, 2}, // Amplify Curse, Fel Conc, Nightfall, Grim Reach
-    {1041, 1}, {1042, 5}, // Siphon Life, Shadow Mastery
-    {944, 5},  {941, 5},  {943, 5},  {981, 4}, // Imp Shadow Bolt, Cataclysm, Bane, Devastation
-    {967, 1}, // Ruin
+    {1005, 5}, {1003, 4}, {1007, 2}, {1284, 3}, // Suppression, Improved Corruption, Improved Life Tap, Improved Curse of Agony
+    {1001, 5}, {1061, 1}, {1021, 2}, {1002, 2}, // Fel Concentration, Amplify Curse, Grim Reach, Nightfall
+    {1041, 1}, {1042, 5}, {944, 5}, {941, 5}, // Siphon Life, Shadow Mastery, Improved Shadow Bolt, Cataclysm
+    {943, 5}, {981, 5}, {967, 1}, // Bane, Devastation, Ruin
 };
 static BotTalentPoint const s_Warlock_dsruin[] = {
     {1221, 2}, {1222, 3}, {1223, 5}, {1242, 5}, // Imp Healthstone, Imp Imp, Demonic Embrace, Fel Intellect
@@ -241,10 +237,10 @@ static BotTalentPoint const s_Warlock_affliction[] = {
 
 // --- Druid ---
 static BotTalentPoint const s_Druid_resto[] = {
-    {821, 5}, {822, 5}, {824, 5}, {829, 3}, // Imp MotW, Furor, Imp HT, Reflection
-    {827, 1}, {841, 5}, {843, 5}, {831, 1}, // Insect Swarm, Subtlety, Tranquil Spirit, NS
-    {830, 3}, {828, 5}, {825, 5}, {844, 1}, // Imp Rejuv, Gift of Nature, Imp Regrowth, Swiftmend
-    {789, 1}, {921, 4}, {781, 2}, // Nature's Grace, Imp Nature's Grasp, Natural Shapeshifter
+    {761, 1}, {921, 4}, {781, 2}, {821, 5}, // Nature's Grasp, Improved Nature's Grasp, Natural Shapeshifter, Improved Mark of the Wild
+    {822, 5}, {824, 5}, {829, 3}, {827, 1}, // Furor, Improved Healing Touch, Reflection, Insect Swarm
+    {841, 5}, {843, 5}, {830, 3}, {831, 1}, // Subtlety, Tranquil Spirit, Improved Rejuvenation, Nature's Swiftness
+    {828, 5}, {825, 5}, {844, 1}, // Gift of Nature, Improved Regrowth, Swiftmend
 };
 static BotTalentPoint const s_Druid_feraltank[] = {
     {796, 5}, {795, 5}, {794, 5},  {799, 5}, // Ferocity, Feral Aggression, Thick Hide, Feral Instinct
@@ -253,10 +249,10 @@ static BotTalentPoint const s_Druid_feraltank[] = {
     {822, 5}, {821, 5}, {829, 3}, // Furor, Imp MotW, Reflection
 };
 static BotTalentPoint const s_Druid_feralcat[] = {
-    {796, 5}, {795, 5}, {799, 5},  {798, 3}, // Ferocity, Feral Aggression, Feral Instinct, Sharpened Claws
-    {803, 3}, {800, 2}, {801, 2},  {805, 2}, // Predatory Strikes, Blood Frenzy, Primal Fury, Savage Fury
-    {808, 5}, {809, 1}, {1162, 1}, {804, 1}, // Heart of the Wild, LotP, Faerie Fire (Feral), Feral Charge
-    {822, 5}, {821, 5}, {781, 3},  {788, 1}, // Furor, Imp MotW, Natural Shapeshifter, Omen of Clarity
+    {762, 5}, {781, 3}, {796, 1}, {795, 5}, // Improved Wrath, Natural Shapeshifter, Ferocity, Feral Aggression
+    {799, 5}, {804, 1}, {798, 3}, {803, 3}, // Feral Instinct, Feral Charge, Sharpened Claws, Predatory Strikes
+    {800, 2}, {801, 2}, {805, 2}, {1162, 1}, // Blood Frenzy, Primal Fury, Savage Fury, Faerie Fire (Feral)
+    {808, 5}, {809, 1}, {821, 5}, {822, 5}, // Heart of the Wild, Leader of the Pack, Improved Mark of the Wild, Furor
     {829, 2}, // Reflection
 };
 static BotTalentPoint const s_Druid_balance[] = {

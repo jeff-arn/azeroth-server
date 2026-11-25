@@ -1,6 +1,6 @@
 # Architecture Reference
 
-Deep dive into how the Azeroth server is built — directory layout, services, custom VMaNGOS bot systems, dashboard API, and design lessons. This is the encyclopedia. For the standards and rules that govern day-to-day work, see [CLAUDE.md](../CLAUDE.md) and the files under `.claude/rules/`.
+Deep dive into how the Azeroth server is built — directory layout, services, custom VMaNGOS bot systems, dashboard API, and design lessons. This is the encyclopedia. For the standards and rules that govern day-to-day work, see [CLAUDE.md](../CLAUDE.md) and the files under `.claude/rules/`. For the architectural evidence base prepared for a future C++→Rust migration (crate map, sequencing, byte-compatibility contracts, live deployment facts), see [RUST_MIGRATION_ARCHITECTURE.md](RUST_MIGRATION_ARCHITECTURE.md).
 
 ## Owner
 - GitHub: jeff-arn
@@ -349,8 +349,22 @@ Lightweight "scenery" bots that stand around city hotspots and inns to make the 
 | `GET /api/addons` | List all addons (JSON) |
 | `POST /api/addons` | Create new addon (admin) |
 | `POST /api/addons/<id>/releases` | Upload release zip (admin) |
+| `GET /client-reports` | Pair a client install; admin report inbox |
+| `GET /client-reports/<id>` | Client report detail and attachments (admin) |
+| `POST /api/client-reports/pair` | Exchange a one-time code for a per-install token |
+| `POST /api/client-reports` | Submit a paired companion report bundle |
+| `GET /api/client-reports` | List client reports (admin) |
 
 Player vs bot distinction: account ID < 100 = human, >= 100 = bot.
+
+Client bug and crash reports use separate `client_report_*` tables in the
+`logs` database. A logged-in player creates a one-time pairing code at
+`/client-reports`; the client-pack companion exchanges it for a revocable
+per-install bearer token (only the hash is stored). It submits redacted
+report JSON and capped text attachments to `POST /api/client-reports`.
+Attachments live under `CLIENT_REPORTS_DIR` outside the static web root.
+Only dashboard admins (`gmlevel >= 2`) can read the inbox, download files,
+or change report status.
 
 ## Commits and Versioning
 
