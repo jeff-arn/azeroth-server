@@ -3085,5 +3085,11 @@ dispel/self marker rows plus script census.
 Gates: pilot PASS, fmt/clippy clean, full
 `./ci.sh` exit 0 (146 suites; first run hit a
 `loot_round_trip` bench-contention flake —
-green isolated and on full rerun). Deploy
-follows below.
+green isolated and on full rerun). Committed
+`a2f6b51e`, pushed. Deploy (same day):
+mangosd `9317e39c` built in the ubuntu:22.04
+amd64 recipe, side-port 18101 boot-checked,
+droplet backed up (`*_20261125_171159`),
+swapped binary-only (previous preserved as
+`mangosd.942e-bak`; realmd unchanged); 8085
+listening, first check clean. JEF-20 closed.
