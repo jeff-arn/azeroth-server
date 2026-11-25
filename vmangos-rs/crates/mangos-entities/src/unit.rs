@@ -410,6 +410,10 @@ pub struct UnitBase {
     /// default `VISIBILITY_ON` (`Unit.cpp:104`), never
     /// persisted.
     pub visibility: UnitVisibility,
+    /// Summoned totem guids by slot
+    /// (`m_TotemSlot[MAX_TOTEM_SLOT]`; runtime-only,
+    /// `EMPTY` = no totem in the slot).
+    pub totem_slots: [mangos_guid::ObjectGuid; 4],
 }
 
 impl UnitBase {
@@ -451,6 +455,7 @@ impl UnitBase {
             unit_state: 0,
             base_weapon_damage: [(1.0, 2.0); 3],
             visibility: UnitVisibility::On,
+            totem_slots: [mangos_guid::ObjectGuid::EMPTY; 4],
         }
     }
 

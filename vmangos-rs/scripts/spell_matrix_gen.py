@@ -109,6 +109,7 @@ RESURRECT_EFFECTS = {18, 113}
 SUMMON_OBJECT_EFFECTS = {76, 86, 104, 105, 106, 107}
 GROUND_EFFECTS = {27, 32} | SUMMON_OBJECT_EFFECTS
 PET_SUMMON_EFFECTS = {28, 56, 112}
+TOTEM_SUMMON_EFFECTS = {74, 87, 88, 89, 90}
 LEARN_PET_EFFECTS = {57}
 DUEL_EFFECTS = {83}
 HEAL_EFFECTS = {10, 62, 67}
@@ -426,6 +427,7 @@ VALID_EXPECTED = {
     "damage_log",
     "object_created",
     "pet_created",
+    "totem_summon",
     "form_change",
     "item_consumed",
     "learned_spell",
@@ -1704,6 +1706,13 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
                 return _with_tick_band({"kind": "aura_on_target", "aura": aura}, eff, durations)
             return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
         return _with_tick_band({"kind": "aura_on_target", "aura": aura}, eff, durations)
+    if effects & TOTEM_SUMMON_EFFECTS:
+        # Summon-totem rows without a stronger aura/damage
+        # observable (Sentry Totem keeps its caster vision
+        # aura above): the summoned totem creature, latched
+        # via UNIT_CREATED_BY_SPELL, is the wire observable
+        # for the totem leg.
+        return {"kind": "totem_summon"}
     return {"kind": "none_marker", "note": "EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only"}
 
 
@@ -2396,6 +2405,9 @@ def run_self_test() -> int:
     howl = _eff(effect1=6, effect2=6, aura1=7, aura2=31, targ_a1=22, targ_a2=22)
     assert derive_bucket(5484, howl) == "ground_area"
     assert derive_expected(5484, howl, "ground_area") == {"kind": "aura_on_target", "aura": 5484}
+    # Summon-totem rows derive the summoned-creature observable.
+    totem_row = _eff(effect1=87, targ_a1=1)
+    assert derive_expected(3599, totem_row, "form_totem") == {"kind": "totem_summon"}
     greater = _eff(effect1=6, aura1=99, targ_a1=61, reagent1=21177)
     assert derive_bucket(25916, greater) == "item_reagent_ammo"
     assert derive_expected(25916, greater, "item_reagent_ammo") == {"kind": "item_consumed", "reagent": 21177}
@@ -2635,10 +2647,7 @@ def run_self_test() -> int:
     assert derive_expected(6495, sentry, "form_totem") == {"kind": "aura_on_caster", "aura": 6495}
     earthbind = _eff(effect1=88, targ_a1=41, totem1=5175, name="Earthbind Totem")
     assert derive_bucket(2484, earthbind) == "form_totem"
-    assert derive_expected(2484, earthbind, "form_totem") == {
-        "kind": "none_marker",
-        "note": "EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only",
-    }
+    assert derive_expected(2484, earthbind, "form_totem") == {"kind": "totem_summon"}
     stormstrike = _eff(effect1=58, effect2=6, aura2=87, targ_a1=6, targ_a2=6, name="Stormstrike")
     assert derive_bucket(17364, stormstrike) == "hostile_dummy"
     assert derive_expected(17364, stormstrike, "hostile_dummy") == {"kind": "aura_on_target", "aura": 17364}

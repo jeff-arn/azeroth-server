@@ -816,6 +816,9 @@ pub struct Map {
     pub(crate) despawns_due: HashMap<ObjectGuid, (u64, u32)>,
     /// Temporary summons (Slice 7): guid -> lifecycle.
     pub(crate) summons: HashMap<ObjectGuid, SummonState>,
+    /// Live totems: totem guid -> lifecycle/AI state
+    /// (fork `Totem` object state).
+    pub(crate) totems: HashMap<ObjectGuid, TotemState>,
     /// Controlled pets (Tier 1 Slice 2): pet guid ->
     /// charm state.
     pub(crate) pets: HashMap<ObjectGuid, crate::pets::PetState>,
@@ -842,6 +845,23 @@ pub struct Map {
     /// Eastern Plaguelands towers state (`OutdoorPvPEP`;
     /// map-local, in-memory only).
     pub(crate) outdoor_ep: EpState,
+}
+
+/// Fork `Totem` object state: owner, slot, the
+/// totem's own spell (creature template
+/// `spells[0]`), passive/active split
+/// (`SetTypeBySummonSpell`: cast time > 0 is
+/// active), remaining duration, and the
+/// `TotemAI` victim memory.
+pub(crate) struct TotemState {
+    pub owner: ObjectGuid,
+    pub slot: Option<usize>,
+    pub totem_spell_id: u32,
+    pub active: bool,
+    /// Remaining lifetime (`m_duration`); `None`
+    /// for permanent totems.
+    pub duration_ms: Option<u32>,
+    pub victim: ObjectGuid,
 }
 
 /// `TempSummon` lifecycle (Slice 7 subset).
@@ -936,6 +956,7 @@ impl Map {
             instance_data64: HashMap::new(),
             despawns_due: HashMap::new(),
             summons: HashMap::new(),
+            totems: HashMap::new(),
             outdoor_si: SiState::default(),
             outdoor_ep: EpState::default(),
             pets: HashMap::new(),
@@ -2548,6 +2569,7 @@ impl Map {
         self.scripts_process();
         self.process_despawns_due();
         self.update_summons();
+        self.update_totems(diff_ms);
         self.instance_update(diff_ms);
         // Tier 3 Slice 3: battleground match update.
         self.bg_update(diff_ms);

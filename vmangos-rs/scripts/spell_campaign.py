@@ -95,6 +95,9 @@ MSG_MOVE_TELEPORT_ACK = 199
 TYPEID_CORPSE = 7
 TYPEID_GAMEOBJECT = 5
 TYPEID_DYNAMICOBJECT = 6
+TYPEID_UNIT = 3
+#: `UNIT_CREATED_BY_SPELL` update-field index (1.12.1 table).
+UNIT_CREATED_BY_SPELL = 146
 CORPSE_FIELD_OWNER = 6
 #: NO_POWER retry budget shared by every cast leg (self, unit,
 #: hostile, ground, blessing, heal). A fixture's pool refills from
@@ -1625,6 +1628,21 @@ def single_outcome_verdict(row: dict, observed: dict) -> dict:
         detail = (
             f"object_seen={observed.get('object_seen')}, health {pre_hp}->{post_hp}, matching damage={damage_total}"
         )
+    elif kind == "totem_summon":
+        if "totem_seen" not in observed:
+            return make_verdict(
+                row,
+                "BLOCKED",
+                attempts=attempts,
+                reason="effect-marker-only",
+                evidence="single repro cannot observe expected kind totem_summon (no totem latch)",
+                pre=pre,
+                post=post,
+                packets=packets,
+                target_guid=target_guid,
+            )
+        outcome_ok = bool(observed.get("totem_seen"))
+        detail = f"totem_seen={observed.get('totem_seen')}"
     elif kind == "item_consumed":
         if "reagent_before" not in observed:
             return make_verdict(
@@ -4767,6 +4785,67 @@ def ground_leg(
     )
 
 
+def totem_leg(row: dict, driver: ScriptedDriver, guid: int, applied_auras: list[int]) -> dict:
+    """Summon-totem rows: self cast, then latch the new totem
+    creature by its UNIT_CREATED_BY_SPELL field near the caster
+    in sliced polls (the create-object batch can lag the GO)."""
+    spell_id = row["spell_id"]
+    pre = snapshot(driver, guid)
+    pre_units = set(driver.world.objects)
+    mark = event_mark(driver)
+    go, reason, ops, _waited = cast_self_retry_power(driver, spell_id, timeout=15.0)
+    if not go and reason == SPELL_FAILED_NOT_READY:
+        # Shared category cooldown from the chain's earlier rank
+        # (Mana Tide 17359 reads NOT_READY behind 16190's 300 s
+        # category): wait out the live fork cooldown in capped
+        # chunks like the self leg, then recast.
+        total_s = live_cooldown_wait_s(spell_id, cap_s=float("inf"))
+        waited_s = 0.0
+        chunks = 0
+        while not go and reason == SPELL_FAILED_NOT_READY and waited_s < total_s and chunks < 6:
+            chunk = min(600.0, total_s - waited_s)
+            driver.poll(chunk)
+            waited_s += chunk
+            chunks += 1
+            go, reason, chunk_ops, _waited = cast_self_retry_power(driver, spell_id, timeout=15.0)
+            ops += chunk_ops
+    totem_seen = False
+    sliced = 0.0
+    while go and sliced < 6.0 and not totem_seen:
+        driver.poll(0.25)
+        sliced += 0.25
+        for obj_guid, obj in driver.world.objects.items():
+            if (
+                obj.type_id == TYPEID_UNIT
+                and obj_guid not in pre_units
+                and obj.values.get(UNIT_CREATED_BY_SPELL) == spell_id
+                and obj.position is not None
+                and math.dist(obj.position[:3], driver.position[:3]) <= 15.0
+            ):
+                totem_seen = True
+                break
+    window = [op for op, _ in events_since(driver, mark)]
+    if go and spell_id not in applied_auras:
+        applied_auras.append(spell_id)
+    return single_outcome_verdict(
+        row,
+        {
+            "go": go,
+            "reason": reason,
+            "caster_aura": False,
+            "target_guid": guid,
+            "target_aura": False,
+            "pre_hp": None,
+            "post_hp": None,
+            "damage_logs": [],
+            "totem_seen": totem_seen,
+            "pre": pre,
+            "post": snapshot(driver, guid),
+            "packets": ops + window,
+        },
+    )
+
+
 def item_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int], applied_auras: list[int]) -> dict:
     """Reagent rows verify the count decremented; equipped-item rows
     (Holy Shield) verify the aura with a fixture-gear gate."""
@@ -5228,11 +5307,11 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
     cast, and can never PASS); "passive" means a learned_spell
     character_spell check without casting; "cast" carries the leg name
     ("friendly", "hostile", "ground", "item", "form", "form_gated",
-    "pet", or "self"). Every bucket any fan-out matrix contains maps
+    "pet", "totem", or "self"). Every bucket any fan-out matrix contains maps
     here; pet rows ride the pet leg only when a summon scenario
     exists for the class (summon_spell from class_summon_spell),
-    otherwise they stay honestly BLOCKED no-pet. Corpse/actual
-    totems map to honest BLOCKED reasons, never to a cast leg, while
+    otherwise they stay honestly BLOCKED no-pet. Actual totems
+    ride the totem leg (summoned-creature latch), while
     stance-gated form_totem rows ride form_gated. Ranged-weapon
     item rows verify on the dummy (hostile for unit targets, ground
     for area-only rows like Volley); bare summon-object placements
@@ -5283,8 +5362,16 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
             return ("cast", "pet")
         return ("blocked", "no-pet")
     if bucket == "form_totem":
+        if kind == "totem_summon":
+            return ("cast", "totem")
         if required_form_spell(row) is not None:
             return ("cast", "form_gated")
+        if kind == "aura_on_caster":
+            # Totem rows whose observable is a caster aura
+            # (Sentry Totem's vision): the self leg latches
+            # the aura; the summoned totem is incidental.
+            # Stance-gated rows keep form_gated precedence.
+            return ("cast", "self")
         return ("blocked", "engine-totem")
     if bucket == "form":
         return ("cast", "form")
@@ -5774,6 +5861,15 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                         pet_guid = None
                     else:
                         verdicts.append(pet_leg(row, driver, guid, pet_guid, applied_auras))
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                if action == "cast" and payload == "totem":
+                    verdicts.append(totem_leg(row, driver, guid, applied_auras))
                     print(
                         f"ROW {class_name} {spell_id} {bucket}: "
                         f"{verdicts[-1]['verdict']} "
@@ -7553,7 +7649,18 @@ def run_self_test() -> int:
         "totem": [5178, 0],
         "expected": {"kind": "aura_on_caster", "aura": 6495},
     }
-    assert pre_dispatch(sentry_row) == ("blocked", "engine-totem")
+    # Sentry's observable is its caster vision aura: it rides
+    # the self leg now that the totem engine exists.
+    assert pre_dispatch(sentry_row) == ("cast", "self")
+    fire_nova_row = {
+        "class": "Shaman",
+        "spell_id": 1535,
+        "bucket": "form_totem",
+        "stances": 0,
+        "totem": [5176, 0],
+        "expected": {"kind": "totem_summon"},
+    }
+    assert pre_dispatch(fire_nova_row) == ("cast", "totem")
     earthbind_row = {
         "class": "Shaman",
         "spell_id": 2484,
@@ -7738,7 +7845,7 @@ def run_self_test() -> int:
     # every row dispatches to a cast leg, the passive check, or a
     # closed-enum BLOCKED reason. Ground-bucket unit heals ride
     # the ally heal leg, so the ground leg is unused; actual
-    # totems stay engine-totem; the only no-pet rows are the two
+    # totems ride the totem leg; the only no-pet rows are the two
     # focus-cost wind-serpent autocasts, and no stance rows ride
     # form_gated.
     shaman_path = matrix_path_for("Shaman")
@@ -7753,19 +7860,19 @@ def run_self_test() -> int:
         for real_row in shaman_rows:
             act, pay = pre_dispatch(real_row)
             if act == "cast":
-                assert pay in ("self", "friendly", "hostile", "item", "form", "resurrect"), (real_row, pay)
+                assert pay in ("self", "friendly", "hostile", "item", "form", "resurrect", "totem"), (real_row, pay)
                 seen_legs.add(pay)
             elif act == "blocked":
                 assert pay in BLOCKED_REASONS, (real_row, pay)
                 seen_blocked.add(pay)
             else:
                 assert act == "passive" and pay is None, real_row
-        assert {"self", "friendly", "hostile", "item", "form", "resurrect"} <= seen_legs, seen_legs
+        assert {"self", "friendly", "hostile", "item", "form", "resurrect", "totem"} <= seen_legs, seen_legs
         assert "ground" not in seen_legs, seen_legs
         assert "form_gated" not in seen_legs, seen_legs
         focus_blocked = sorted(r["spell_id"] for r in shaman_rows if pre_dispatch(r) == ("blocked", "no-pet"))
         assert focus_blocked == [24844, 25012], focus_blocked
-        assert "engine-totem" in seen_blocked, seen_blocked
+        assert "engine-totem" not in seen_blocked, seen_blocked
         assert "wire-target-unsupported" not in seen_blocked, seen_blocked
         assert "effect-marker-only" in seen_blocked, seen_blocked
         for real_row in shaman_rows:

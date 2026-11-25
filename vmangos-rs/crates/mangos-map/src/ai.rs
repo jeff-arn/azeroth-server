@@ -1676,6 +1676,12 @@ impl Map {
             self.pet_ai_update(guid);
             return;
         }
+        // Totems run the TotemAI subset (rooted; lifecycle
+        // in `update_totems`).
+        if self.totems.contains_key(&guid) {
+            self.totem_ai_update(guid);
+            return;
+        }
         let kind = self.ai.get(&guid).map_or(AiKind::Null, |ai| ai.kind);
         if kind == AiKind::Null {
             return;

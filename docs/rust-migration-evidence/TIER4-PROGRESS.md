@@ -3043,3 +3043,47 @@ boot-checked, droplet backed up
 (previous preserved as `mangosd.e773-bak`;
 realmd unchanged); 8085 listening, first
 check clean.
+
+Totem engine (JEF-20, 2026-11-25):
+`SUMMON_TOTEM` + slot variants 87-90 summon a
+real totem creature riding the temp-summon
+materializer: slot angle placement 2 yd out,
+owner faction/level, `SUMMONEDBY`/`CREATEDBY`,
+`UNIT_CREATED_BY_SPELL`, player-controlled
+flag for player owners, health from the effect
+value, caster slot registry (`UnitBase::
+totem_slots`) with old-totem unsummon on
+recast. Lifecycle (`update_totems`): duration
+expiry, dead totem, or dead/absent player
+owner unsummons — dropping the totem spell's
+auras from totem, owner, and same-group
+players, clearing the slot, despawning
+without respawn. Passive totems cast their
+template `spells[0]` on themselves at summon;
+active totems (`TotemAI` subset) cast it at
+the current victim, the owner's attacker, or
+the nearest attackable unit in spell range,
+with hostility evaluated as the owner (the
+subset faction model). Regression
+`totem_summon_slot_lifecycle_and_active_ai`
+covers slot registry, created-by stamp,
+health-from-value, passive self-cast, slot
+replacement, expiry, and the active cast
+start. Harness: generator derives
+`totem_summon` for summon-totem effects
+(Sentry Totem keeps its caster-aura verdict
+via the self leg), a totem leg latches the
+new creature by `UNIT_CREATED_BY_SPELL` with
+the self leg's category-cooldown wait (Mana
+Tide ranks share 300 s), and totem items ride
+the reagent seed. Evidence: clean Shaman
+subset 39/39 PASS (38 totem rows + Sentry)
+filed as `results-Shaman-totems.jsonl`;
+canonical Shaman artifacts restored. Shaman
+BLOCKED remainder after JEF-18/JEF-20 is the
+dispel/self marker rows plus script census.
+Gates: pilot PASS, fmt/clippy clean, full
+`./ci.sh` exit 0 (146 suites; first run hit a
+`loot_round_trip` bench-contention flake —
+green isolated and on full rerun). Deploy
+follows below.

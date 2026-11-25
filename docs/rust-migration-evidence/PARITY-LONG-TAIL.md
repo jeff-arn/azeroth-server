@@ -68,9 +68,10 @@ none yet. Per-class cost is dominated by real-time bench runs
   script-named rows ride classify-only until each script body gets
   an observable oracle. Paladin 9, Druid small, Warlock 2 so far;
   grows with Priest/Mage script density.
-- **Totem engine completion** (M–L, SEAM): totem casters/summons are
-  stubs; Shaman audit is gated on this. Actual totem rows currently
-  classify `engine-totem`.
+- **Totem engine completion** (M–L): **DONE** (JEF-20) — slot
+  summon/lifecycle, passive self-cast, active `TotemAI` subset;
+  Shaman totem rows verdict 39/39 in subset
+  (`results-Shaman-totems.jsonl`).
 - **Party scenario** (S): `no-party` rows (party-target blessings,
   rituals) need a real invited party in the harness; two-client
   machinery exists from earlier probes.

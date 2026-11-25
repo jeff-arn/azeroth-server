@@ -52,6 +52,13 @@ pub mod effect {
     /// `SPELL_EFFECT_SUMMON_OBJECT_WILD`
     /// (`SpellDefines.h:287`).
     pub const SUMMON_OBJECT_WILD: u32 = 76;
+    /// `SPELL_EFFECT_SUMMON_TOTEM` (slotless) and
+    /// the four slot variants (fire/earth/water/air).
+    pub const SUMMON_TOTEM: u32 = 74;
+    pub const SUMMON_TOTEM_SLOT1: u32 = 87;
+    pub const SUMMON_TOTEM_SLOT2: u32 = 88;
+    pub const SUMMON_TOTEM_SLOT3: u32 = 89;
+    pub const SUMMON_TOTEM_SLOT4: u32 = 90;
     /// `SPELL_EFFECT_OPEN_LOCK` (`SpellDefines.h:244`):
     /// chest/door opening (misc value is the
     /// `LockType` skill case).

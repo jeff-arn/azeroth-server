@@ -907,6 +907,19 @@ impl Map {
                 28 | 41 | 42 if eff.misc_value > 0 => {
                     self.summon_effect(caster, caster_level, spell, victim, i, bp[i]);
                 }
+                // SPELL_EFFECT_SUMMON_TOTEM(_SLOT1..4):
+                // fork ignores the effect victim and
+                // summons for the caster; run once on
+                // the caster's own hit.
+                effect::SUMMON_TOTEM
+                | effect::SUMMON_TOTEM_SLOT1
+                | effect::SUMMON_TOTEM_SLOT2
+                | effect::SUMMON_TOTEM_SLOT3
+                | effect::SUMMON_TOTEM_SLOT4
+                    if victim == caster && eff.misc_value > 0 =>
+                {
+                    self.summon_totem_effect(caster, caster_level, spell, i, bp[i]);
+                }
                 // SPELL_EFFECT_SUMMON_PET (Tier 1 Slice
                 // 2): the fork ignores the effect victim
                 // and summons for the caster; run once

@@ -319,6 +319,7 @@ mod cooldown;
 mod damage;
 mod effects;
 mod immunity;
+mod totems;
 
 /// `Player::RewardRage` amount, returned in the
 /// stored power units (tenths of one rage point).

@@ -88,6 +88,20 @@ const BEAST_ENTRY: u32 = 9305;
 /// Enslave Demon stand-in: dummy aura gated to the
 /// demon creature-type mask (1 << (3 - 1) = 4).
 const ENSLAVE_SPELL: u32 = 9218;
+/// Passive totem creature template (spells[0] is the
+/// instant self-aura below).
+const TOTEM_CREATURE_ENTRY: u32 = 9306;
+/// Active totem creature template (spells[0] has a
+/// cast time, so `TotemAI` casts it at victims).
+const ACTIVE_TOTEM_ENTRY: u32 = 9307;
+/// Searing/Earthbind stand-ins summoning the two
+/// templates into slots 1 (fire) and 2 (earth).
+const FIRE_TOTEM_SPELL: u32 = 9219;
+const EARTH_TOTEM_SPELL: u32 = 9220;
+/// Passive totem's self-aura stand-in.
+const TOTEM_PULSE_SPELL: u32 = 9221;
+/// Active totem's bolt stand-in (5 s cast via table 99).
+const TOTEM_BOLT_SPELL: u32 = 9222;
 /// `TARGET_UNIT` implicit target (see insignia fixture).
 const TARGET_UNIT: u32 = 25;
 
@@ -410,6 +424,80 @@ fn insert_gate_spells(stores: &mut WorldStores) {
             ..Default::default()
         },
     );
+    // Totem stand-ins: 30 s duration (table 98), health
+    // from base points, slot summons for the passive
+    // (fire) and active (earth) templates.
+    stores.spells.tables.durations.insert(
+        98,
+        mangos_spells::entry::DurationEntry {
+            duration: 30_000,
+            duration_per_level: 0,
+            max_duration: 30_000,
+        },
+    );
+    stores.spells.spells.insert(
+        TOTEM_PULSE_SPELL,
+        SpellEntry {
+            id: TOTEM_PULSE_SPELL,
+            effects: [
+                SpellEffectData {
+                    effect: effect::APPLY_AURA,
+                    apply_aura_name: 69, // SCHOOL_ABSORB stand-in holder
+                    base_points: 100,
+                    implicit_target_a: 1, // TARGET_UNIT_CASTER
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    stores.spells.spells.insert(
+        TOTEM_BOLT_SPELL,
+        SpellEntry {
+            id: TOTEM_BOLT_SPELL,
+            casting_time_index: 99,
+            effects: [
+                unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    for (spell_id, effect_id, entry) in [
+        (
+            FIRE_TOTEM_SPELL,
+            effect::SUMMON_TOTEM_SLOT1,
+            TOTEM_CREATURE_ENTRY,
+        ),
+        (
+            EARTH_TOTEM_SPELL,
+            effect::SUMMON_TOTEM_SLOT2,
+            ACTIVE_TOTEM_ENTRY,
+        ),
+    ] {
+        stores.spells.spells.insert(
+            spell_id,
+            SpellEntry {
+                id: spell_id,
+                duration_index: 98,
+                effects: [
+                    SpellEffectData {
+                        effect: effect_id,
+                        misc_value: i32::from_ne_bytes(entry.to_ne_bytes()),
+                        base_points: 5,
+                        implicit_target_a: 1, // TARGET_UNIT_CASTER
+                        ..Default::default()
+                    },
+                    SpellEffectData::default(),
+                    SpellEffectData::default(),
+                ],
+                ..Default::default()
+            },
+        );
+    }
     // Long-cast stand-in for the logout cast-cleanup
     // regression.
     stores.spells.tables.cast_times.insert(
@@ -528,6 +616,22 @@ fn combo_stores() -> WorldStores {
         CreatureInfo {
             entry: BEAST_ENTRY,
             creature_type: 1,
+            display_id: [100, 0, 0, 0],
+            display_probability: [100, 0, 0, 0],
+            display_total_probability: 100,
+            ..Default::default()
+        },
+        CreatureInfo {
+            entry: TOTEM_CREATURE_ENTRY,
+            spells: [TOTEM_PULSE_SPELL, 0, 0, 0],
+            display_id: [100, 0, 0, 0],
+            display_probability: [100, 0, 0, 0],
+            display_total_probability: 100,
+            ..Default::default()
+        },
+        CreatureInfo {
+            entry: ACTIVE_TOTEM_ENTRY,
+            spells: [TOTEM_BOLT_SPELL, 0, 0, 0],
             display_id: [100, 0, 0, 0],
             display_probability: [100, 0, 0, 0],
             display_total_probability: 100,
@@ -1620,5 +1724,87 @@ fn creature_type_gate_rejects_wrong_type_and_players() {
             .iter()
             .any(|h| h.spell_id == ENSLAVE_SPELL),
         "demon must gain the holder"
+    );
+}
+
+#[test]
+fn totem_summon_slot_lifecycle_and_active_ai() {
+    // Totem engine (JEF-20): slot summon registers on
+    // the caster, stamps CREATED_BY_SPELL, takes health
+    // from the effect value, casts the passive spell on
+    // itself; recasting the slot replaces the old totem;
+    // duration expiry unsummons and clears the slot; an
+    // active totem starts casting at a hostile victim.
+    let Fixture {
+        mut map,
+        caster,
+        victim,
+    } = setup(23);
+    let outcome = map.cast_spell(
+        caster,
+        FIRE_TOTEM_SPELL,
+        CastTarget::SelfCast,
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    let totem = map
+        .player(caster)
+        .map(|_| map.unit_base(caster).expect("caster unit").totem_slots[0])
+        .expect("caster");
+    assert!(!totem.is_empty(), "fire slot must hold the totem");
+    assert!(
+        map.creatures.contains_key(&totem),
+        "totem creature must exist"
+    );
+    assert_eq!(
+        map.unit_value_u32(totem, offsets::UNIT_CREATED_BY_SPELL),
+        FIRE_TOTEM_SPELL
+    );
+    assert_eq!(map.unit_value_u32(totem, offsets::UNIT_FIELD_HEALTH), 5);
+    assert!(
+        map.aura_holders(totem)
+            .iter()
+            .any(|h| h.spell_id == TOTEM_PULSE_SPELL),
+        "passive totem must cast its spell on itself"
+    );
+    // Slot replacement unsummons the old totem.
+    let outcome = map.cast_spell(
+        caster,
+        FIRE_TOTEM_SPELL,
+        CastTarget::SelfCast,
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    let replacement = map.unit_base(caster).expect("caster unit").totem_slots[0];
+    assert_ne!(replacement, totem);
+    assert!(
+        !map.creatures.contains_key(&totem),
+        "replaced totem must be unsummoned"
+    );
+    // Duration expiry unsummons and clears the slot.
+    map.update_totems(30_000);
+    assert!(
+        !map.creatures.contains_key(&replacement),
+        "expired totem must despawn"
+    );
+    assert!(
+        map.unit_base(caster).expect("caster unit").totem_slots[0].is_empty(),
+        "slot must clear on expiry"
+    );
+    // Active totem picks the hostile victim and starts
+    // casting its bolt.
+    let outcome = map.cast_spell(
+        caster,
+        EARTH_TOTEM_SPELL,
+        CastTarget::SelfCast,
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+    let active = map.unit_base(caster).expect("caster unit").totem_slots[1];
+    assert!(!active.is_empty());
+    map.totem_ai_update(active);
+    assert!(
+        map.casts.contains_key(&active),
+        "active totem must start casting at the victim {victim:?}"
     );
 }
