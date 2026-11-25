@@ -2921,6 +2921,11 @@ Gates: pilot PASS (temp root); both Python
 self-tests, ruff, `cargo fmt` clean; full
 `./ci.sh` exit 0 (146 suites, cone regression
 inside); independent artifact audit PASS
-(`MAGE-ARTIFACT-AUDIT-PASS`). Deploy: see the
-Mage close-out entry below once the droplet
-swap lands.
+(`MAGE-ARTIFACT-AUDIT-PASS`).
+Committed `998bf651`, pushed. No droplet swap:
+the slice's only engine-tree change is the
+`#[cfg(test)]` cone regression, so the live
+mangosd `079fedd0` (built from `c1f05805`) is
+already behavior-identical for every audited
+row; JEF-35 closed on that basis. All nine
+class first passes are now DONE at 0 FAIL.
