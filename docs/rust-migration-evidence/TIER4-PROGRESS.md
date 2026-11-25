@@ -2999,5 +2999,12 @@ creature-type target gate (`targetCreatureType`
 mask), recorded for the spell-seam remainder.
 Gates: pilot PASS; both Python self-tests,
 ruff, fmt, clippy clean; full `./ci.sh`
-exit 0. Deploy: engine changed (cast path),
-droplet swap follows below.
+exit 0 (146 suites). Committed `59ecd817`,
+pushed. Deploy (same day): mangosd `e77392e1`
+built in the ubuntu:22.04 amd64 recipe,
+side-port 18101 boot-checked, droplet backed
+up (`*_20261125_155310`), swapped binary-only
+(previous preserved as `mangosd.079f-bak`;
+realmd `1582565b` unchanged — the fresh build
+reproduced its hash exactly); 8085 listening,
+first check clean. JEF-18 closed.
