@@ -3033,6 +3033,13 @@ now rejected BAD_TARGETS on the humanoid
 dummy and read BLOCKED `scenario-target` in
 the updated Warlock reagent subset (14 PASS
 + 2 BLOCKED). Gates: pilot PASS, fmt/clippy
-clean, full `./ci.sh` exit 0, oracle
-regenerated for the new field. Deploy
-follows below.
+clean, full `./ci.sh` exit 0 (146 suites),
+oracle regenerated for the new field.
+Committed `781c0e1b`, pushed. Deploy (same
+day): mangosd `942eb796` built in the
+ubuntu:22.04 amd64 recipe, side-port 18101
+boot-checked, droplet backed up
+(`*_20261125_161902`), swapped binary-only
+(previous preserved as `mangosd.e773-bak`;
+realmd unchanged); 8085 listening, first
+check clean.
