@@ -498,6 +498,33 @@ fn insert_gate_spells(stores: &mut WorldStores) {
             },
         );
     }
+    // Healthstone stand-in: the real spell/script ids
+    // (script dispatch keys on both), stone prototype.
+    stores
+        .item_prototypes
+        .insert_for_tests(mangos_world_data::item_prototype::ItemPrototype {
+            item_id: 5512,
+            stackable: 1,
+            ..Default::default()
+        });
+    stores.spells.spells.insert(
+        6201,
+        SpellEntry {
+            id: 6201,
+            script_name: "spell_warlock_create_healthstone".to_string(),
+            effects: [
+                SpellEffectData {
+                    effect: effect::SCRIPT_EFFECT,
+                    base_points: 0,
+                    implicit_target_a: 1, // TARGET_UNIT_CASTER
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
     // Long-cast stand-in for the logout cast-cleanup
     // regression.
     stores.spells.tables.cast_times.insert(
@@ -1807,4 +1834,27 @@ fn totem_summon_slot_lifecycle_and_active_ai() {
         map.casts.contains_key(&active),
         "active totem must start casting at the victim {victim:?}"
     );
+}
+
+#[test]
+fn healthstone_script_creates_stone_via_explicit_id() {
+    // `spell_warlock_create_healthstone::OnEffectExecute`
+    // computes the stone item from the talent rank and
+    // calls `DoCreateItem(effIdx, itemId)`; the script
+    // was stubbed at that seam, so no stone ever
+    // materialized. The explicit-id create must emit
+    // the actor grant event for the Minor stone (5512).
+    let Fixture {
+        mut map, caster, ..
+    } = setup(24);
+    let _ = map.drain_events();
+    let outcome = map.cast_spell(caster, 6201, CastTarget::SelfCast, cast_options());
+    assert_eq!(outcome, CastOutcome::Started);
+    let created = map.drain_events().into_iter().any(|e| {
+        matches!(
+            e,
+            crate::map::MapEvent::CreateItem { player, item_id: 5512, count: 1 } if player == caster
+        )
+    });
+    assert!(created, "Minor Healthstone grant event must fire");
 }

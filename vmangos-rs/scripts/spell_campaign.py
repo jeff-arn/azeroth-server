@@ -305,6 +305,7 @@ BLOCKED_REASONS = {
     "script-evidence-unknown",
     "target-not-dead",
     "scenario-target",
+    "dual-leg-missing",
 }
 
 
@@ -763,6 +764,30 @@ def seed_reagents(guid: int, rows: list[dict]) -> None:
     verdicts on the DB count decrement. Totem-item rows ride
     the same seed (presence is all the gate checks).
     """
+    # Purge leftover conjured items first: Unique creations
+    # (mana gems, healthstones) refuse a second copy, so a
+    # previous run's stones would silently zero the next
+    # run's bag-delta observable.
+    created = sorted(
+        {
+            item
+            for row in rows
+            if (row.get("expected") or {}).get("kind") == "item_created"
+            for item in created_item_ids(int(row["spell_id"]))
+        }
+    )
+    if created:
+        id_list = ",".join(str(i) for i in created)
+        smoke.sql_scalar(
+            "characters",
+            f"DELETE FROM character_inventory WHERE guid={guid} AND item_guid IN "
+            f"(SELECT guid FROM item_instance WHERE owner_guid={guid} AND item_id IN ({id_list}))",
+        )
+        smoke.sql_scalar(
+            "characters",
+            f"DELETE FROM item_instance WHERE owner_guid={guid} AND item_id IN ({id_list})",
+        )
+        print(f"PURGED conjured guid={guid} items={created}")
     entries = sorted(
         {int(entry) for row in rows for entry in (row.get("reagents") or []) if int(entry or 0) > 0}
         | {int(t) for row in rows for t in (row.get("totem") or []) if int(t or 0) > 0}
@@ -1643,6 +1668,23 @@ def single_outcome_verdict(row: dict, observed: dict) -> dict:
             )
         outcome_ok = bool(observed.get("totem_seen"))
         detail = f"totem_seen={observed.get('totem_seen')}"
+    elif kind == "item_created":
+        if "item_before" not in observed:
+            return make_verdict(
+                row,
+                "BLOCKED",
+                attempts=attempts,
+                reason="effect-marker-only",
+                evidence="single repro cannot observe expected kind item_created (no bag count read)",
+                pre=pre,
+                post=post,
+                packets=packets,
+                target_guid=target_guid,
+            )
+        before = observed.get("item_before")
+        after = observed.get("item_after")
+        outcome_ok = before is not None and after is not None and after > before
+        detail = f"created item count {before}->{after}"
     elif kind == "item_consumed":
         if "reagent_before" not in observed:
             return make_verdict(
@@ -1665,7 +1707,7 @@ def single_outcome_verdict(row: dict, observed: dict) -> dict:
             row,
             "BLOCKED",
             attempts=attempts,
-            reason="script-evidence-unknown",
+            reason="dual-leg-missing",
             evidence="T25 dual row: needs both the friendly heal leg "
             "and the hostile damage leg; no single-bucket home until "
             "both legs pass",
@@ -3335,6 +3377,30 @@ def combo_builder_setup(builder_id: int):
     return setup
 
 
+#: Seal of Righteousness rank 1: the Judgement row's seal.
+JUDGEMENT_SEAL_SPELL = 21084
+
+
+def judgement_seal_setup(seal_id: int, caster_guid: int):
+    """pre_cast_setup factory: put a seal up so the Judgement
+    row (20271) has a seal to release (the fork core arm
+    consumes the seal and casts its judgement spell)."""
+
+    def setup(driver: ScriptedDriver, dummy: int) -> str:
+        if not aura_present(driver, caster_guid, seal_id):
+            go, reason, _ops = cast_unit_faced(driver, seal_id, caster_guid)
+            driver.poll(3.5)
+            if not (go and aura_present(driver, caster_guid, seal_id)):
+                return f"; seal {seal_id} setup FAILED go={go} reason={reason}"
+        # Judgement's release spell is short-ranged (10 yd):
+        # at the hostile leg's 13 yd standoff the seal is
+        # consumed but the judgement lands on nobody.
+        driver.approach_guid(dummy, 2.0)
+        return f"; seal {seal_id} setup verified"
+
+    return setup
+
+
 def immolate_setup(immolate_id: int):
     """pre_cast_setup factory: land Immolate on the dummy so a
     Conflagrate row passes the fork TARGET_AURASTATE gate (the
@@ -4340,7 +4406,9 @@ def heal_leg(row: dict, driver: ScriptedDriver, guid: int, ally_driver: Scripted
     # fork's SMSG_SPELLHEALLOG with the formula-derived amount,
     # which regen never produces: bind it against the live oracle
     # band. Health must still not have dropped over the window.
-    heal_logs = matching_heal_logs(events_since(driver, mark), spell_id, ally_guid, guid)
+    heal_logs = matching_heal_logs(
+        events_since(driver, mark), int((row.get("expected") or {}).get("heal_spell") or spell_id), ally_guid, guid
+    )
     band = live_heal_band(spell_id)
     logged = [log["amount"] for log in heal_logs if band is not None and band[0] <= log["amount"] <= band[1]]
     if logged and h2 >= h0:
@@ -4477,7 +4545,9 @@ def self_heal_leg(
             ),
             session,
         )
-    heal_logs = matching_heal_logs(events_since(driver, mark), spell_id, guid, guid)
+    heal_logs = matching_heal_logs(
+        events_since(driver, mark), int((row.get("expected") or {}).get("heal_spell") or spell_id), guid, guid
+    )
     band = live_heal_band(spell_id)
     logged = [log["amount"] for log in heal_logs if band is not None and band[0] <= log["amount"] <= band[1]]
     if logged and h2 is not None and h0 is not None and h2 >= h0:
@@ -4551,8 +4621,27 @@ def teleport_leg(
     window = [op for op, _ in events_since(driver, mark)]
     packets = ops + window
     transferred = SMSG_TRANSFER_PENDING in window or SMSG_NEW_WORLD in window
+    if go and not transferred:
+        # Same-map city teleports ride the near-teleport path
+        # (no far-transfer packets): ACK like the stock client
+        # and gate on the caster's world position having moved
+        # to the destination instead. Far cells load slowly
+        # (Stormwind/Undercity lagged the 1 s read), so latch
+        # in slices.
+        ack_teleports(driver, timeout=6.0)
+        sliced = 0.0
+        while sliced < 10.0:
+            driver.poll(0.5)
+            sliced += 0.5
+            # The ack-adopted driver position is authoritative
+            # for teleports; the tracked self object can lag
+            # or stay stale after a far near-teleport.
+            candidates = [driver.position, driver.world.position(guid)]
+            if any(c is not None and math.dist(c[:2], pos[:2]) > 50.0 for c in candidates):
+                transferred = True
+                break
     if not go or not transferred:
-        phase = None if go else "prepare"
+        phase = "apply" if go else "prepare"
         if go:
             detail = "SPELL_GO without transfer packets: the engine did not start the far transfer"
             why = None
@@ -4603,7 +4692,7 @@ def teleport_leg(
         make_verdict(
             row,
             "PASS",
-            evidence=f"bound GO + far-transfer packets {sorted(set(packets))}; reseeded to bench map, session fresh",
+            evidence=f"bound GO + teleport observed (packets {sorted(set(packets))}); reseeded to bench map, session fresh",
             pre=pre,
             post=snapshot(new_driver, guid),
             packets=packets,
@@ -4846,12 +4935,74 @@ def totem_leg(row: dict, driver: ScriptedDriver, guid: int, applied_auras: list[
     )
 
 
+#: Healthstone create spells -> stone item ids by Improved
+#: Healthstone rank (fork `spell_warlock.cpp:253` table).
+HEALTHSTONE_ITEMS = {
+    6201: (5512, 19004, 19005),
+    6202: (5511, 19006, 19007),
+    5699: (5509, 19008, 19009),
+    11729: (5510, 19010, 19011),
+    11730: (9421, 19012, 19013),
+}
+
+
+def created_item_ids(spell_id: int) -> list[int]:
+    """Item ids a create-item cast can land in the bags:
+    the healthstone script's rank table, else the live
+    template's CREATE_ITEM effect item types."""
+    if spell_id in HEALTHSTONE_ITEMS:
+        return list(HEALTHSTONE_ITEMS[spell_id])
+    try:
+        raw = smoke.sql_scalar(
+            "mangos",
+            "SELECT CONCAT(effectItemType1,',',effectItemType2,',',effectItemType3) "
+            f"FROM spell_template WHERE entry={spell_id} ORDER BY build DESC LIMIT 1",
+        )
+        return [int(part) for part in str(raw).split(",") if int(part or 0) > 0]
+    except (TypeError, ValueError, RuntimeError):
+        return []
+
+
 def item_leg(row: dict, driver: ScriptedDriver, guid: int, used_dummies: set[int], applied_auras: list[int]) -> dict:
     """Reagent rows verify the count decremented; equipped-item rows
     (Holy Shield) verify the aura with a fixture-gear gate."""
     spell_id = row["spell_id"]
     expected = row.get("expected", {})
     pre = snapshot(driver, guid)
+    if expected.get("kind") == "item_created":
+        items = created_item_ids(spell_id)
+        if not items:
+            return make_verdict(
+                row,
+                "BLOCKED",
+                reason="effect-marker-only",
+                evidence="created item id unreadable; no bag-delta leg",
+                pre=pre,
+            )
+        before = sum(bag_reagent_count(guid, item) or 0 for item in items)
+        mark = event_mark(driver)
+        go, reason, ops, _waited = cast_unit_retry_power(driver, spell_id, guid, timeout=15.0)
+        driver.poll(4.0)
+        after = sum(bag_reagent_count(guid, item) or 0 for item in items)
+        window = [op for op, _ in events_since(driver, mark)]
+        return single_outcome_verdict(
+            row,
+            {
+                "go": go,
+                "reason": reason,
+                "caster_aura": False,
+                "target_guid": guid,
+                "target_aura": False,
+                "pre_hp": None,
+                "post_hp": None,
+                "damage_logs": [],
+                "item_before": before,
+                "item_after": after,
+                "pre": pre,
+                "post": snapshot(driver, guid),
+                "packets": ops + window,
+            },
+        )
     reagent = expected.get("reagent")
     if reagent:
         before = bag_reagent_count(guid, reagent)
@@ -5326,9 +5477,13 @@ def pre_dispatch(row: dict, summon_spell: int | None = None) -> tuple[str, str |
             return ("blocked", "script-evidence-unknown")
         return ("blocked", "effect-marker-only")
     if kind == "dual_outcome":
-        return ("blocked", "script-evidence-unknown")
+        return ("blocked", "dual-leg-missing")
     if kind == "learned_spell":
         return ("passive", None)
+    if kind == "item_created":
+        # Conjure/healthstone rows verify in the bags,
+        # whichever bucket filed them.
+        return ("cast", "item")
     if (row.get("power_type") or 0) == 2 and (row.get("mana_cost") or 0) > 0:
         # Pet-resource (focus) spells: no player caster holds focus,
         # so the engine honestly answers NO_POWER, and pet autocasts
@@ -5803,9 +5958,7 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     verdicts.append(
                         single_outcome_verdict(row, {"go": False, "reason": None, "packets": [], "target_guid": None})
                     )
-                    print(
-                        f"ROW {class_name} {spell_id} {bucket}: BLOCKED script-evidence-unknown | dual needs both legs"
-                    )
+                    print(f"ROW {class_name} {spell_id} {bucket}: BLOCKED dual-leg-missing | dual needs both legs")
                     continue
                 if kind == "learned_spell":
                     have = smoke.sql_scalar(
@@ -5931,6 +6084,8 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                     )
                     if row.get("requires_low_health_target"):
                         finisher_setup = low_health_setup
+                    if spell_id == 20271 and finisher_setup is None:
+                        finisher_setup = judgement_seal_setup(JUDGEMENT_SEAL_SPELL, guid)
                     if finisher_setup is None and (row.get("name") or "").startswith("Conflagrate"):
                         immolate_id = min(
                             (r["spell_id"] for r in class_rows if r.get("name") == "Immolate"),
@@ -6002,6 +6157,29 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                                 pre_cast_setup=warrior_rage_setup_for_row(class_name, row),
                             )
                         )
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    continue
+                if kind == "teleport":
+                    verdict, session = teleport_leg(row, driver, guid, client, seed_all, account, account_id)
+                    verdicts.append(verdict)
+                    print(
+                        f"ROW {class_name} {spell_id} {bucket}: "
+                        f"{verdicts[-1]['verdict']} "
+                        f"{verdicts[-1].get('reason') or ''} | "
+                        f"{verdicts[-1]['evidence'][:120]}"
+                    )
+                    if session is not None:
+                        client, driver = session
+                        used_dummies.clear()
+                        applied_auras.clear()
+                    continue
+                if action == "cast" and payload == "item" and bucket != "item_reagent_ammo":
+                    verdicts.append(item_leg(row, driver, guid, used_dummies, applied_auras))
                     print(
                         f"ROW {class_name} {spell_id} {bucket}: "
                         f"{verdicts[-1]['verdict']} "
@@ -6529,6 +6707,8 @@ def run_self_test() -> int:
         "pet_created",
         "form_change",
         "item_consumed",
+        "item_created",
+        "totem_summon",
         "learned_spell",
         "teleport",
         "dual_outcome",
@@ -6688,7 +6868,7 @@ def run_self_test() -> int:
         ),
         (
             {"class": "Paladin", "spell_id": 20930, "bucket": "dual", "expected": {"kind": "dual_outcome"}},
-            ("blocked", "script-evidence-unknown"),
+            ("blocked", "dual-leg-missing"),
         ),
         (
             {"class": "Paladin", "spell_id": 0, "bucket": "corpse", "expected": {"kind": "resurrect_request"}},

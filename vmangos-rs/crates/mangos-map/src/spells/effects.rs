@@ -1515,9 +1515,24 @@ impl Map {
         caster_level: u32,
         bp: Option<i32>,
     ) {
-        let eff = spell.effects[i];
         #[allow(clippy::cast_possible_truncation)]
-        let item_id = eff.item_type as u32;
+        let item_id = spell.effects[i].item_type as u32;
+        self.do_create_item(victim, item_id, spell, i, caster_level, bp);
+    }
+
+    /// `Spell::DoCreateItem(effIdx, itemId)` with an
+    /// explicit item id (script-computed creates like
+    /// healthstones, whose stone rank depends on the
+    /// caster's talent aura).
+    pub(crate) fn do_create_item(
+        &mut self,
+        victim: ObjectGuid,
+        item_id: u32,
+        spell: &SpellEntry,
+        i: usize,
+        caster_level: u32,
+        bp: Option<i32>,
+    ) {
         let Some(stackable) = self
             .stores
             .item_prototypes

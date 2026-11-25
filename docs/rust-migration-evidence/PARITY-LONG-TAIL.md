@@ -64,10 +64,13 @@ none yet. Per-class cost is dominated by real-time bench runs
   to PASS in subsets. Landed alongside: directional-location cast
   arm (Portals), `TARGET_UNIT_RAID_AND_CLASS` (61) fill, and the
   percentage-cost create-pool fix.
-- **Script-effect indexing (G4)** (L, SEAM): `SCRIPT_EFFECT` /
-  script-named rows ride classify-only until each script body gets
-  an observable oracle. Paladin 9, Druid small, Warlock 2 so far;
-  grows with Priest/Mage script density.
+- **Script-effect indexing (G4)** (L): **DONE** (JEF-19) — the 17
+  census rows verdict or stand as named remainders: teleports,
+  Flash/Judgement/dummy health-deltas, healthstone + conjure
+  bag-delta oracles land; scriptless effect-77 rows are
+  fork-exact no-ops on this DB (`none_marker`); Holy Shock x2
+  remains BLOCKED `dual-leg-missing` (needs friendly+hostile
+  dual-leg composition in the harness).
 - **Totem engine completion** (M–L): **DONE** (JEF-20) — slot
   summon/lifecycle, passive self-cast, active `TotemAI` subset;
   Shaman totem rows verdict 39/39 in subset

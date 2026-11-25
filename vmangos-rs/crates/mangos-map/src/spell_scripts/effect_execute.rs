@@ -1112,10 +1112,11 @@ impl Map {
         if item_id == 0 {
             return true;
         }
-        // UNMODELED: `spell->DoCreateItem(effIdx, itemId)`; the host
-        // `create_item_effect` reads the item id from effect data and takes no
-        // explicit-id override, so there is no seam for the computed `item_id`.
-        let _ = item_id;
+        // `spell->DoCreateItem(effIdx, itemId)`: the stone
+        // item is script-computed (talent rank), so it
+        // rides the explicit-id create seam.
+        let level = self.unit_level(victim);
+        self.do_create_item(victim, item_id, spell, eff_index, level, None);
         true
     }
 

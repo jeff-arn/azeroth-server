@@ -110,6 +110,7 @@ SUMMON_OBJECT_EFFECTS = {76, 86, 104, 105, 106, 107}
 GROUND_EFFECTS = {27, 32} | SUMMON_OBJECT_EFFECTS
 PET_SUMMON_EFFECTS = {28, 56, 112}
 TOTEM_SUMMON_EFFECTS = {74, 87, 88, 89, 90}
+CREATE_ITEM_EFFECTS = {24}
 LEARN_PET_EFFECTS = {57}
 DUEL_EFFECTS = {83}
 HEAL_EFFECTS = {10, 62, 67}
@@ -428,6 +429,7 @@ VALID_EXPECTED = {
     "object_created",
     "pet_created",
     "totem_summon",
+    "item_created",
     "form_change",
     "item_consumed",
     "learned_spell",
@@ -536,6 +538,8 @@ def effective_row(spell_id: int) -> dict:
         ("effect_amplitude3", int),
         ("script_name", str),
         ("target_aura_state", int),
+        ("spell_icon_id", int),
+        ("spell_family_name", int),
     ]
     out = _query(
         "SELECT entry,build,name,attributes,attributesEx,attributesEx2,"
@@ -555,7 +559,8 @@ def effective_row(spell_id: int) -> dict:
         "maxLevel,baseLevel,spellLevel,"
         "effectDicePerLevel1,effectDicePerLevel2,effectDicePerLevel3,"
         "effectRealPointsPerLevel1,effectRealPointsPerLevel2,effectRealPointsPerLevel3,"
-        "effectAmplitude1,effectAmplitude2,effectAmplitude3,script_name,targetAuraState "
+        "effectAmplitude1,effectAmplitude2,effectAmplitude3,script_name,targetAuraState,"
+        "spellIconId,spellFamilyName "
         f"FROM spell_template t1 WHERE entry={spell_id} AND "
         f"build=(SELECT max(build) FROM spell_template t2 "
         f"WHERE t1.entry=t2.entry AND build <= {SUPPORTED_BUILD})"
@@ -1544,7 +1549,18 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
         and not effects & (HEAL_EFFECTS | SCHOOL_DAMAGE_EFFECTS | APPLY_AURA_EFFECTS)
     ):
         return {"kind": "none_marker", "note": "dispel needs a debuffed ally; classify_only"}
-    if SCRIPT_EFFECTS & effects:
+    if script == "spell_warlock_create_healthstone":
+        # Script-computed stone item (talent rank table in
+        # the engine script): the leg resolves the stone
+        # ids live and reads the bag count delta.
+        return {"kind": "item_created"}
+    if script == "spell_paladin_judgement_of_command_dummy":
+        # Implemented script bodies whose observable is the
+        # triggered hurt spell's damage: the health delta
+        # gates it (damage logs attribute to the triggered
+        # spell, not the cast row).
+        return {"kind": "health_delta_target"}
+    if SCRIPT_EFFECTS & effects and script and not (TELEPORT_EFFECTS & effects):
         if HEAL_EFFECTS & effects or "Holy Light" in eff["name"] or "Flash of Light" in eff["name"]:
             kind = "heal_delta_target"
         else:
@@ -1581,11 +1597,21 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
             }
     if HEAL_EFFECTS & effects:
         return {"kind": "heal_delta_target"}
+    if int(eff.get("spell_family_name") or 0) == 10 and int(eff.get("spell_icon_id") or 0) == 242:
+        # Flash of Light: the fork core script-effect paladin
+        # arm (icon 242) casts the real heal 19993; the heal
+        # delta is the observable. (After the HEAL branch so
+        # 19993 itself keeps the sub-observable ceiling rule.)
+        return {"kind": "heal_delta_target", "heal_spell": 19993}
+    if spell_id == 20271:
+        # Judgement: the fork core arm releases the active
+        # seal's judgement spell; the harness pre-casts a
+        # seal and gates on the dummy health delta.
+        return {"kind": "health_delta_target"}
     if (
         effects & TELEPORT_EFFECTS
         and not has_aura
-        and not effects
-        & (HEAL_EFFECTS | SCHOOL_DAMAGE_EFFECTS | APPLY_AURA_EFFECTS | SCRIPT_EFFECTS | DISPEL_EFFECTS | THREAT_EFFECTS)
+        and not effects & (HEAL_EFFECTS | SCHOOL_DAMAGE_EFFECTS | APPLY_AURA_EFFECTS | DISPEL_EFFECTS | THREAT_EFFECTS)
     ):
         return {
             "kind": "teleport",
@@ -1713,6 +1739,11 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
         # via UNIT_CREATED_BY_SPELL, is the wire observable
         # for the totem leg.
         return {"kind": "totem_summon"}
+    if CREATE_ITEM_EFFECTS & effects:
+        # Conjure rows: the created item lands in the bags;
+        # the item leg reads its count delta (item id
+        # resolved live from the template).
+        return {"kind": "item_created"}
     return {"kind": "none_marker", "note": "EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only"}
 
 
@@ -2408,6 +2439,23 @@ def run_self_test() -> int:
     # Summon-totem rows derive the summoned-creature observable.
     totem_row = _eff(effect1=87, targ_a1=1)
     assert derive_expected(3599, totem_row, "form_totem") == {"kind": "totem_summon"}
+    # G4 script oracles: implemented script bodies get real
+    # observables; scriptless SCRIPT_EFFECT rows are fork-exact
+    # no-ops (none_marker), not script census rows.
+    stone = _eff(effect1=77, targ_a1=1, script_name="spell_warlock_create_healthstone")
+    assert derive_expected(6201, stone, "item_reagent_ammo") == {"kind": "item_created"}
+    shock = _eff(effect1=3, targ_a1=25, script_name="spell_paladin_holy_shock")
+    assert derive_expected(20930, shock, "dual")["kind"] == "dual_outcome"
+    scriptless = _eff(effect1=77, targ_a1=6)
+    assert derive_expected(25292, scriptless, "hostile_dummy")["kind"] == "none_marker"
+    teleport_row = _eff(effect1=5, effect2=77, targ_a1=1)
+    assert derive_expected(3561, teleport_row, "self")["kind"] == "teleport"
+    conjure = _eff(effect1=24, targ_a1=1)
+    assert derive_expected(587, conjure, "self") == {"kind": "item_created"}
+    flash = _eff(effect1=77, targ_a1=21, spell_family_name=10, spell_icon_id=242, name="Flash of Light")
+    assert derive_expected(19750, flash, "friendly") == {"kind": "heal_delta_target", "heal_spell": 19993}
+    judge = _eff(effect1=77, targ_a1=6, spell_family_name=10, name="Judgement")
+    assert derive_expected(20271, judge, "hostile_dummy") == {"kind": "health_delta_target"}
     greater = _eff(effect1=6, aura1=99, targ_a1=61, reagent1=21177)
     assert derive_bucket(25916, greater) == "item_reagent_ammo"
     assert derive_expected(25916, greater, "item_reagent_ammo") == {"kind": "item_consumed", "reagent": 21177}
@@ -2419,7 +2467,13 @@ def run_self_test() -> int:
     assert derive_expected(20930, shock, "dual")["kind"] == "dual_outcome"
     holy_light = _eff(effect1=77, targ_a1=21, name="Holy Light")
     assert derive_bucket(635, holy_light) == "friendly"
+    # Scriptless SCRIPT_EFFECT: no bound script in fork data,
+    # so the cast is a fork-exact no-op (the name-based heal
+    # intent only applies to script-bound rows).
     scripted = derive_expected(635, holy_light, "friendly")
+    assert scripted["kind"] == "none_marker"
+    holy_named = _eff(effect1=77, targ_a1=21, name="Holy Light", script_name="spell_generic_heal")
+    scripted = derive_expected(635, holy_named, "friendly")
     assert scripted["kind"] == "heal_delta_target"
     assert scripted["classify_only"] == "script"
     dispel = _eff(effect1=38, effect2=38, targ_a1=21, targ_a2=21, name="Cleanse")
@@ -2441,8 +2495,10 @@ def run_self_test() -> int:
     }
     dummy_script = _eff(effect1=6, targ_a1=6, name="Judgement", script_name="spell_paladin_judgement_of_command_dummy")
     dummy_expected = derive_expected(20184, dummy_script, "hostile_dummy")
-    assert dummy_expected["kind"] == "damage_log"
-    assert dummy_expected["classify_only"] == "script"
+    # Implemented script body: triggered damage verifies on
+    # the health delta, no longer classify-only.
+    assert dummy_expected["kind"] == "health_delta_target"
+    assert "classify_only" not in dummy_expected
     # Sub-observable heals ride marker-only, never as heal legs.
     tiny_heal = _eff(
         effect1=10, targ_a1=21, name="Holy Light", effect_base_points1=0, effect_die_sides1=1, effect_base_dice1=1

@@ -3093,3 +3093,41 @@ droplet backed up (`*_20261125_171159`),
 swapped binary-only (previous preserved as
 `mangosd.942e-bak`; realmd unchanged); 8085
 listening, first check clean. JEF-20 closed.
+
+G4 script indexing (JEF-19, 2026-11-25): the
+17 `script-evidence-unknown` rows censused to
+verdicts or named remainders. Engine: the
+healthstone script's `DoCreateItem` stub now
+creates through an explicit-id seam
+(`do_create_item`; regression
+`healthstone_script_creates_stone_via_explicit_id`).
+Generator oracles: implemented script bodies
+get real observables — Flash of Light
+(paladin family + icon 242 core arm) and
+Judgement (20271, harness pre-casts a seal;
+dummy standoff closes to release range) and
+Judgement of Command dummy x5 verify on
+heal/health deltas (Flash logs attribute to
+the triggered heal 19993 via `heal_spell`);
+healthstones and CREATE_ITEM conjures verify
+on the bag count delta (`item_created`; the
+fixture purges leftover Unique creations —
+mana gems refused a second copy); Mage city
+teleports verify on the teleport leg
+(same-map near-teleports latch on the
+ack-adopted position, cross-map on transfer
+packets). Scriptless SCRIPT_EFFECT rows
+(20271's neighbours 635/25292 Holy Light among
+them) classify `none_marker`: with this DB the
+fork cast is a no-op (no bound script, no core
+arm for icon 70), so parity holds — flagged
+as a shared-data question for the owner, not
+an engine gap. Holy Shock x2 stays BLOCKED
+`dual-leg-missing` (script implemented; the
+harness has no dual friendly+hostile leg
+composition yet). Evidence: Paladin 8/8,
+Mage 14/14 (8 conjures + 6 teleports),
+Warlock stones 2/2 in subsets filed as
+`results-<Class>-g4.jsonl`. Gates: pilot
+PASS, self-tests, ruff/fmt/clippy clean,
+full `./ci.sh` exit 0. Deploy follows below.
