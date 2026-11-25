@@ -2780,4 +2780,10 @@ cannot merge invisibly (no shipped class cast
 counts drifted). Gates: pilot PASS; both
 Python self-tests and ruff clean; full
 `./ci.sh` exit 0 with live suites, no skip
-lines.
+lines. Deploy (same day): mangosd 81c81526
+built in the ubuntu:22.04 amd64 recipe,
+side-port 18101 boot-checked, droplet backed
+up (`*_20261125_031552`, gzip-verified),
+swapped binary-only (previous preserved as
+`mangosd.7459-bak`; realmd unchanged); 8085
+listening at 03:16:25 UTC, first check clean.
