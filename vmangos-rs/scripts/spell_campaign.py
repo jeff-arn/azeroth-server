@@ -83,6 +83,7 @@ SPELL_FAILED_ONLY_SHAPESHIFT = 86
 SPELL_FAILED_NOT_SHAPESHIFT = 61
 SPELL_FAILED_OUT_OF_RANGE = 89
 SPELL_FAILED_NOT_READY = 60
+SPELL_FAILED_NOT_BEHIND = 51
 SPELL_FAILED_TARGETS_DEAD = 101
 #: NO_POWER retry budget shared by every cast leg (self, unit,
 #: hostile, ground, blessing, heal). A fixture's pool refills from
@@ -760,13 +761,24 @@ FORM_SPELL_BY_STANCE_BIT = ((0, 768), (7, 9634), (4, 5487), (30, 24858), (2, 783
 WARRIOR_STANCE_SPELLS = (2457, 71, 2458)
 WARRIOR_STANCE_BY_BIT = ((16, 2457), (17, 71), (18, 2458))
 
+#: Rogue Stealth entry spells (all ranks share FORM_STEALTH 30,
+#: fork `SharedDefines.h` 0x1E; Stances bit 29 = form 30 by the
+#: bit k -> form k+1 convention). Rank 1 (1784) is the setup
+#: entry; the full rank set rides the form pre-clear so a
+#: lingering higher-rank Stealth cannot leak into a gated row.
+STEALTH_FORM_SPELLS = (1784, 1785, 1786, 1787)
+STEALTH_BY_BIT = ((29, 1784),)
+
+#: Every shapeshift/stance aura the form legs pre-clear.
+ALL_FORM_SPELLS = DRUID_FORM_SPELLS + WARRIOR_STANCE_SPELLS + STEALTH_FORM_SPELLS
+
 
 def required_form_spell(row: dict) -> int | None:
     """Form-entry spell for a stance-gated row, or None when the row
     is not form-enterable here (actual totem rows, no stance bits the
     harness can enter). Druid bits resolve first so Druid behavior
-    is unchanged; Warrior stance bits resolve after. Pure: reads
-    only the matrix row."""
+    is unchanged; Warrior stance and Rogue stealth bits resolve
+    after. Pure: reads only the matrix row."""
     if any(row.get("totem") or ()):
         return None
     stances = int(row.get("stances") or 0)
@@ -774,6 +786,9 @@ def required_form_spell(row: dict) -> int | None:
         if stances & (1 << bit):
             return spell
     for bit, spell in WARRIOR_STANCE_BY_BIT:
+        if stances & (1 << bit):
+            return spell
+    for bit, spell in STEALTH_BY_BIT:
         if stances & (1 << bit):
             return spell
     return None
@@ -3002,6 +3017,20 @@ def self_leg(
     return verdict
 
 
+def cast_form_entry(driver: ScriptedDriver, form_spell: int):
+    """Form-entry cast with one cooldown wait: forms with a
+    category cooldown (Stealth: 10 s) answer NOT_READY on
+    re-entry inside the window a previous row opened, so wait
+    the live oracle cooldown out and retry once (like the
+    hostile/self legs' NOT_READY arms)."""
+    go, reason, ops, waited = cast_self_retry_power(driver, form_spell)
+    if not go and reason == SPELL_FAILED_NOT_READY:
+        driver.poll(live_cooldown_wait_s(form_spell))
+        go2, reason2, ops2, waited2 = cast_self_retry_power(driver, form_spell)
+        return go2, reason2, ops + ops2, waited + waited2
+    return go, reason, ops, waited
+
+
 def form_leg(row: dict, driver: ScriptedDriver, guid: int) -> dict:
     """Shapeshift entry leg for Druid `form`-bucket rows.
 
@@ -3013,9 +3042,9 @@ def form_leg(row: dict, driver: ScriptedDriver, guid: int) -> dict:
     """
     spell_id = row["spell_id"]
     pre = snapshot(driver, guid)
-    cleared = cancel_auras(driver, guid, list(DRUID_FORM_SPELLS) + list(WARRIOR_STANCE_SPELLS))
+    cleared = cancel_auras(driver, guid, list(ALL_FORM_SPELLS))
     mark = event_mark(driver)
-    go, reason, ops, waited = cast_self_retry_power(driver, spell_id)
+    go, reason, ops, waited = cast_form_entry(driver, spell_id)
     aura_ok = go and wait_for_aura(driver, guid, spell_id)
     post = snapshot(driver, guid)
     packets = ops + [op for op, _ in events_since(driver, mark)]
@@ -3109,6 +3138,10 @@ def combo_builder_setup(builder_id: int):
     NO_COMBO_POINTS cast gate with a point on that target."""
 
     def setup(driver: ScriptedDriver, dummy: int) -> str:
+        # Builders are melee abilities: close first or the cast
+        # reads OUT_OF_RANGE from a ranged standoff and the
+        # finisher then reads NO_COMBO_POINTS.
+        driver.approach_guid(dummy, 2.0)
         go, reason, _ops = cast_unit_faced(driver, builder_id, dummy)
         driver.poll(1.6)
         return f"; combo builder {builder_id} go={go} reason={reason}"
@@ -3324,14 +3357,14 @@ def form_gated_leg(
     spell_id = row["spell_id"]
     form_spell = required_form_spell(row)
     pre = snapshot(driver, guid)
-    cleared = cancel_auras(driver, guid, list(DRUID_FORM_SPELLS) + list(WARRIOR_STANCE_SPELLS))
-    go, reason, ops, _waited = cast_self_retry_power(driver, form_spell)
+    cleared = cancel_auras(driver, guid, list(ALL_FORM_SPELLS))
+    go, reason, ops, _waited = cast_form_entry(driver, form_spell)
     if not (go and wait_for_aura(driver, guid, form_spell)):
         # One retry from a verified-bare caster form: a GO without
         # the aura is a slow apply (or a stale exit cancel) far more
         # often than a dead gate, but a second miss fails loudly.
-        cleared2 = cancel_auras(driver, guid, list(DRUID_FORM_SPELLS) + list(WARRIOR_STANCE_SPELLS))
-        bare = not any(aura_present(driver, guid, s) for s in list(DRUID_FORM_SPELLS) + list(WARRIOR_STANCE_SPELLS))
+        cleared2 = cancel_auras(driver, guid, list(ALL_FORM_SPELLS))
+        bare = not any(aura_present(driver, guid, s) for s in ALL_FORM_SPELLS)
         go2, reason2, ops2, _waited2 = cast_self_retry_power(driver, form_spell)
         ops += ops2
         if not (go2 and wait_for_aura(driver, guid, form_spell)):
@@ -3404,14 +3437,36 @@ def form_gated_leg(
         )
     else:
         verdict = self_leg(row, driver, guid, applied_auras, pre_cast_setup=setup)
-    gone = cancel_auras(driver, guid, [form_spell])
-    exited = bool(gone.get(form_spell)) and not aura_present(driver, guid, form_spell)
+    _gone = cancel_auras(driver, guid, [form_spell])
+    # Exited means the form aura is gone, however it left: a
+    # stealth opener breaks Stealth itself, so the cancel finds
+    # no holder to report while the exit is still clean. A form
+    # aura still present after the cancel is the stuck case.
+    exited = not aura_present(driver, guid, form_spell)
     verdict["evidence"] += f"; form {form_spell} setup verified, exited={exited}"
     if verdict["verdict"] == "PASS" and not exited:
         verdict["verdict"] = "FAIL"
         verdict["phase"] = "apply"
         verdict["evidence"] += "; form stuck after cancel"
     return verdict
+
+
+def approach_behind(driver: ScriptedDriver, dummy: int, standoff: float = 2.0) -> str:
+    """Walk to the point behind the dummy (its facing reversed)
+    and face it, for from-behind-only rows (Backstab/Garrote).
+    The dummy's tracked orientation is read live; a missing
+    position falls back to the plain approach and the cast
+    then reads its honest NOT_BEHIND."""
+    pos = driver.world.position(dummy)
+    if pos is None:
+        driver.approach_guid(dummy, standoff)
+        return "; behind approach: dummy position unknown"
+    behind_x = pos[0] - math.cos(pos[3]) * standoff
+    behind_y = pos[1] - math.sin(pos[3]) * standoff
+    driver.walk_to(behind_x, behind_y, pos[2])
+    driver.face(pos[0], pos[1])
+    driver.poll(0.5)
+    return f"; behind approach to ({behind_x:.1f},{behind_y:.1f}) facing dummy o={pos[3]:.2f}"
 
 
 def hostile_leg(
@@ -3489,6 +3544,10 @@ def hostile_leg(
     if pre_cast_setup is not None:
         setup_note += pre_cast_setup(driver, dummy)
         pre += setup_note
+    if row.get("requires_behind_target"):
+        # From-behind-only rows: take the behind position after
+        # any setup (which may have moved the caster), then cast.
+        pre += approach_behind(driver, dummy)
     attempts = 0
     go, reason, ops = False, None, []
     post_hp, target_aura, logs = pre_hp, False, []
@@ -3524,6 +3583,12 @@ def hostile_leg(
             cooldown_waited_s = live_cooldown_wait_s(spell_id)
             driver.poll(cooldown_waited_s)
             cooldown_note = f"; cooldown wait +{cooldown_waited_s:.0f}s"
+            continue
+        if not go and reason == SPELL_FAILED_NOT_BEHIND:
+            # The dummy turned between the behind approach and
+            # the cast: re-take the behind position and retry
+            # within the same cap.
+            pre += approach_behind(driver, dummy)
             continue
         if not go and reason == SPELL_FAILED_OUT_OF_RANGE:
             # Roaming dummy drifted out of range between approach and
@@ -3603,9 +3668,10 @@ def hostile_leg(
         # Aura rows hold the window open past the hp gate: an 8 s
         # stun applied 4+ s late under bench load still verifies.
         observe_s = 6.0 if float(row.get("speed") or 0) > 0 else 4.0
-        if kind == "aura_on_target":
+        if kind in ("aura_on_target", "aura_on_caster"):
             observe_s = max(observe_s, 8.0)
         target_aura = False
+        caster_aura = False
         sliced = 0.0
         min_hp = pre_hp
         while sliced < observe_s:
@@ -3618,6 +3684,13 @@ def hostile_leg(
                 target_aura = True
                 if kind == "aura_on_target":
                     break
+            if aura_present(driver, guid, aura_id):
+                # Caster-side aura on a hostile cast (Slice and
+                # Dice: combo dummy effect on the unit target,
+                # haste aura on the caster).
+                caster_aura = True
+                if kind == "aura_on_caster":
+                    break
         window = events_since(driver, mark)
         ops += [op for op, _ in window]
         post_hp = driver.target_health(dummy)
@@ -3628,9 +3701,11 @@ def hostile_leg(
             break
         if kind == "aura_on_target" and target_aura:
             break
+        if kind == "aura_on_caster" and caster_aura:
+            break
         if kind == "damage_log" and logs and post_hp is not None and pre_hp is not None and post_hp < pre_hp:
             break
-        if kind not in ("aura_on_target", "damage_log"):
+        if kind not in ("aura_on_target", "aura_on_caster", "damage_log"):
             break
         driver.poll(1.6)
     # A landed cast whose outcome simply had not manifested inside
@@ -3689,7 +3764,7 @@ def hostile_leg(
         {
             "go": go,
             "reason": reason,
-            "caster_aura": False,
+            "caster_aura": caster_aura,
             "target_guid": dummy,
             "target_aura": target_aura,
             "pre_hp": pre_hp,
@@ -5358,9 +5433,18 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                 if bucket == "item_reagent_ammo":
                     if action == "cast" and payload == "hostile":
                         # Ranged-weapon unit rows (Hunter) and
-                        # reagent-free weapon rows (Warrior): the
-                        # pre_dispatch routes them off the item leg
-                        # to the dummy, like hostile-bucket rows.
+                        # reagent-free weapon rows (Warrior/Rogue):
+                        # the pre_dispatch routes them off the item
+                        # leg to the dummy, like hostile-bucket rows.
+                        # Combo finishers filed here (Rogue
+                        # Eviscerate/Kidney/Rupture/Expose) take the
+                        # builder setup + pinned finisher dummy,
+                        # same as hostile-bucket finishers.
+                        item_setup = warrior_rage_setup_for_row(class_name, row)
+                        item_override = None
+                        if item_setup is None and row.get("needs_combo_points") and combo_builder:
+                            item_setup = combo_builder_setup(combo_builder)
+                            item_override = finisher_dummy(used_dummies)
                         verdicts.append(
                             hostile_leg(
                                 row,
@@ -5368,7 +5452,8 @@ def run_class(class_name: str, only: list[int] | None = None, matrix_path: pathl
                                 guid,
                                 used_dummies,
                                 applied_auras,
-                                pre_cast_setup=warrior_rage_setup_for_row(class_name, row),
+                                pre_cast_setup=item_setup,
+                                dummy_override=item_override,
                             )
                         )
                     elif action == "cast" and payload == "ground":
@@ -7016,6 +7101,67 @@ def run_self_test() -> int:
         assert reason in BLOCKED_REASONS, reason
         assert reason in UNSCENARIOED_EVIDENCE, reason
     print("SELFTEST Shaman dispatch table ok")
+    # Rogue dispatch: stealth-gated openers (Stances bit 29 =
+    # FORM_STEALTH 30 in the fork SharedDefines) enter via Stealth
+    # and ride the form-gated leg; Stealth itself rides the form leg.
+    garrote_row = {
+        "class": "Rogue",
+        "spell_id": 703,
+        "bucket": "form_totem",
+        "stances": 1 << 29,
+        "totem": [0, 0],
+        "expected": {"kind": "aura_on_target", "aura": 703},
+    }
+    assert required_form_spell(garrote_row) == 1784
+    assert pre_dispatch(garrote_row) == ("cast", "form_gated")
+    stealth_row = {
+        "class": "Rogue",
+        "spell_id": 1784,
+        "bucket": "form",
+        "expected": {"kind": "form_change"},
+    }
+    assert pre_dispatch(stealth_row) == ("cast", "form")
+    # Combo builder setup closes to melee first: from a ranged
+    # standoff the builder reads OUT_OF_RANGE and the finisher
+    # then honestly reads NO_COMBO_POINTS (live Slice and Dice).
+    combo_calls = []
+    combo_driver = _TapNS(
+        approach_guid=lambda dummy, standoff: combo_calls.append(("approach", dummy, standoff)),
+        poll=lambda seconds: combo_calls.append(("poll", seconds)),
+    )
+    combo_original = globals()["cast_unit_faced"]
+
+    def fake_builder_cast(driver, spell_id, dummy, timeout=0.0):
+        combo_calls.append(("cast", spell_id, dummy))
+        return True, None, []
+
+    globals()["cast_unit_faced"] = fake_builder_cast
+    try:
+        combo_note = combo_builder_setup(1752)(combo_driver, 4242)
+    finally:
+        globals()["cast_unit_faced"] = combo_original
+    assert combo_calls[:2] == [("approach", 4242, 2.0), ("cast", 1752, 4242)], combo_calls
+    assert "go=True" in combo_note, combo_note
+    # Form entry waits out a live form cooldown (Stealth: 10 s
+    # category) instead of failing NOT_READY on re-entry.
+    form_calls = []
+    form_driver = _TapNS(poll=lambda seconds: form_calls.append(("poll", seconds)))
+    form_originals = {name: globals()[name] for name in ("cast_self_retry_power", "live_cooldown_wait_s")}
+    form_results = iter([(False, SPELL_FAILED_NOT_READY, [], 0), (True, None, [306], 0)])
+
+    def fake_form_cast(driver, spell_id, timeout=10.0, retries=POWER_RETRIES):
+        form_calls.append(("cast", spell_id))
+        return next(form_results)
+
+    globals()["cast_self_retry_power"] = fake_form_cast
+    globals()["live_cooldown_wait_s"] = lambda spell_id, cap_s=600.0: 12.0
+    try:
+        form_go, form_reason, _form_ops, _form_waited = cast_form_entry(form_driver, 1784)
+    finally:
+        globals().update(form_originals)
+    assert form_go and form_reason is None
+    assert form_calls == [("cast", 1784), ("poll", 12.0), ("cast", 1784)], form_calls
+    print("SELFTEST Rogue dispatch table ok")
     # Totality over the real Hunter fan-out artifact when present:
     # every row dispatches to a cast leg, the passive check, or a
     # closed-enum BLOCKED reason, with the Call Pet fixture summon.

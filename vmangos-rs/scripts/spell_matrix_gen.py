@@ -134,6 +134,9 @@ MOD_SHAPESHIFT_AURA = 36
 FINISHING_MOVE_EX = 0x00100000 | 0x00400000
 #: `SPELL_EFFECT_ADD_COMBO_POINTS`.
 ADD_COMBO_POINTS_EFFECT = 80
+#: `SPELL_EFFECT_DISTRACT` (`SpellDefines.h:280`): turns/stops
+#: the target only — no object, damage, or aura outcome.
+DISTRACT_EFFECT = 69
 USES_RANGED_SLOT_ATTR = 0x2
 
 # Expected Paladin full-160 bucket distribution (prior audit over the
@@ -680,6 +683,10 @@ def validate_row(spell_id: int, spec: dict, eff: dict) -> dict:
         # rejected at cast time unless the target is strictly
         # below 20% health, so the harness pre-damages the dummy.
         "requires_low_health_target": int(eff.get("target_aura_state", 0) or 0) == 2,
+        # Fork `IsFromBehindOnlySpell`: rejected at cast time
+        # unless the caster is behind the target, so the
+        # harness approaches from behind first.
+        "requires_behind_target": _is_behind_only(eff),
         "cooldown_ms": eff["recovery_time"],
         "script_name": eff["script_name"],
         "build": eff["build"],
@@ -1268,6 +1275,26 @@ def _effects_of(eff: dict) -> set[int]:
     return {eff["effect1"], eff["effect2"], eff["effect3"]}
 
 
+def _is_behind_only(eff: dict) -> bool:
+    """Fork `IsFromBehindOnlySpell` template half
+    (`SpellEntry.h:867`): `AttributesEx2 == 0x100000` with
+    `AttributesEx 0x200` (Backstab/Ambush family)."""
+    return int(eff.get("attributes_ex2", 0) or 0) == 0x00100000 and bool(
+        int(eff.get("attributes_ex", 0) or 0) & 0x00000200
+    )
+
+
+def choose_combo_builder(candidates: list[tuple[int, dict]]) -> int | None:
+    """Lowest-id combo builder, preferring non-positional
+    builders: a behind-only builder (Backstab) cannot build a
+    point from the front, so Sinister Strike wins when present.
+    Lowest rank/id keeps builder damage smallest (a last-rank
+    builder can kill the dummy before the finisher it feeds)."""
+    plain = [spell_id for spell_id, eff in candidates if not _is_behind_only(eff)]
+    pool = plain or [spell_id for spell_id, _eff in candidates]
+    return min(pool) if pool else None
+
+
 def derive_bucket(spell_id: int, eff: dict) -> str:
     """First-match bucket per SPELL_MATRIX.md §3. Pure function of the
     effective row (offline-testable)."""
@@ -1551,6 +1578,14 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
             "note": "teleport leaves the bench map; cross-map leg verifies the transfer, never an object",
         }
     if bucket == "ground_area":
+        if DISTRACT_EFFECT in effects:
+            # Distract only turns/stops the target (facing +
+            # MoveDistract): no object, damage, or aura outcome
+            # exists for the ground leg to gate on.
+            return {
+                "kind": "none_marker",
+                "note": "facing/motion only (EffectDistract): no wire-observable outcome; classify_only",
+            }
         # Consecrated/rain ground rows still tick periodically; the
         # band rides as evidence (no leg latches ground ticks yet).
         if effects & GROUND_EFFECTS:
@@ -1613,6 +1648,13 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
         if 27 in _targets_of(eff):
             # TARGET_UNIT_CASTER_MASTER: cast by the pet, lands on
             # the player (Sacrifice's shield).
+            return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
+        aura_targets = {eff[f"targ_{side}{i}"] for i in (1, 2, 3) for side in ("a", "b") if eff[f"aura{i}"]}
+        if aura_targets and aura_targets <= {0, 1}:
+            # Every aura-carrying effect targets the caster alone
+            # (Slice and Dice: the combo dummy effect rides the
+            # unit target, the haste aura lands on the caster).
+            # The bucket cannot decide the side; the aura slots can.
             return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
         if bucket == "self":
             return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
@@ -1780,17 +1822,14 @@ def derive_full_rows(class_name: str = "Paladin", pre_g1: dict | None = None, ta
         if overlap != pinned["overlap"]:
             raise AssertionError(f"{class_name} talent/G1 overlap drifted: {overlap}")
     full_counts: dict[str, int] = {}
-    combo_builders: list[int] = []
+    combo_builders: list[tuple[int, dict]] = []
     for spell_id in sorted(union):
         eff = effective_row(spell_id)
         bucket = derive_bucket(spell_id, eff)
         full_counts[bucket] = full_counts.get(bucket, 0) + 1
         if ADD_COMBO_POINTS_EFFECT in _effects_of(eff):
-            combo_builders.append(spell_id)
-    # Lowest-rank builder: one combo point for the least dummy
-    # damage (a last-rank builder can kill the dummy before the
-    # finisher it feeds).
-    combo_builder = min(combo_builders) if combo_builders else None
+            combo_builders.append((spell_id, eff))
+    combo_builder = choose_combo_builder(combo_builders)
     pinned_buckets = CLASS_FULL_BUCKET_COUNTS.get(class_name)
     if pinned_buckets is not None:
         zero_filled = {bucket: full_counts.get(bucket, 0) for bucket in pinned_buckets}
@@ -2090,6 +2129,7 @@ def run_self_test() -> int:
             assert isinstance(row.get("cooldown_ms"), int), row
             assert isinstance(row.get("needs_combo_points"), bool), row
             assert isinstance(row.get("requires_low_health_target"), bool), row
+            assert isinstance(row.get("requires_behind_target"), bool), row
             assert row["bucket"] in VALID_BUCKETS, row
             assert row["expected"]["kind"] in VALID_EXPECTED, row
             assert row["all_rank_ids"][row["rank"] - 1] == row["spell_id"]
@@ -2368,6 +2408,28 @@ def run_self_test() -> int:
     assert derive_expected(24131, wyvern, "hostile_dummy")["kind"] == "aura_on_target"
     devour = _eff(effect1=38, targ_a1=25, name="Devour Magic")
     assert derive_bucket(19505, devour) == "self"
+    # Combo finishers whose aura effect targets the caster (Slice
+    # and Dice: dummy effect on the unit target, haste aura on
+    # TARGET_UNIT_CASTER) verify the aura on the caster even
+    # though the cast rides the hostile leg.
+    slice_dice = _eff(effect1=3, effect2=6, aura2=138, targ_a1=6, targ_a2=1, name="Slice and Dice")
+    assert derive_bucket(5171, slice_dice) == "hostile_dummy"
+    assert derive_expected(5171, slice_dice, "hostile_dummy") == {"kind": "aura_on_caster", "aura": 5171}
+    # From-behind-only rows (Backstab/Ambush template predicate)
+    # are flagged for the harness behind-position scenario, and
+    # the combo builder prefers a non-positional builder
+    # (Sinister Strike) over Backstab.
+    backstab = _eff(effect1=121, targ_a1=6, attributes_ex=0x08000200, attributes_ex2=0x00100000, name="Backstab")
+    sinister = _eff(effect1=121, targ_a1=6, attributes_ex=0x08000000, attributes_ex2=0, name="Sinister Strike")
+    assert _is_behind_only(backstab)
+    assert not _is_behind_only(sinister)
+    assert choose_combo_builder([(53, backstab), (1752, sinister)]) == 1752
+    assert choose_combo_builder([(53, backstab)]) == 53
+    # Distract (Effect 69) only turns/stops the target: no
+    # object, damage, or aura outcome exists for the ground leg.
+    distract = _eff(effect1=69, targ_a1=16, name="Distract")
+    assert derive_bucket(1725, distract) == "ground_area"
+    assert derive_expected(1725, distract, "ground_area")["kind"] == "none_marker"
     # Non-damaging persistent area aura rows verify the aura on the
     # in-radius dummy (Flare shape); damaging ground rows keep the
     # object (Consecration shape, asserted above).

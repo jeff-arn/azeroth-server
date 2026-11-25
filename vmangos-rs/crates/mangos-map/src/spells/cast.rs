@@ -173,6 +173,38 @@ impl Map {
                 }
             }
         }
+        // Behind-target gate (`Spell::CheckCast`,
+        // `Spell.cpp:5772-5777`): a from-behind-only
+        // spell fails `SPELL_FAILED_NOT_BEHIND` unless
+        // the caster is behind the unit target
+        // (`Unit::IsBehindTarget` strict: a creature
+        // whose current victim is the caster counts as
+        // facing it unless incapacitated or casting).
+        if spell.is_from_behind_only() {
+            if let CastTarget::Unit(victim) = target {
+                let flags = self.unit_value_u32(victim, offsets::UNIT_FIELD_FLAGS);
+                let incapacitated = flags
+                    & (UNIT_FLAG_STUNNED
+                        | UNIT_FLAG_CONFUSED
+                        | UNIT_FLAG_FLEEING
+                        | UNIT_FLAG_POSSESSED)
+                    != 0
+                    || self.unit_base(victim).is_some_and(|u| {
+                        u.has_unit_state(
+                            mangos_entities::unit::UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL,
+                        )
+                    });
+                let creature_facing_caster = self.creatures.contains_key(&victim)
+                    && self.unit_base(victim).and_then(|u| u.melee_victim) == Some(caster)
+                    && !self.casts.contains_key(&victim)
+                    && !incapacitated;
+                let behind = !creature_facing_caster
+                    && !self.has_in_arc(victim, caster, std::f32::consts::PI);
+                if !behind {
+                    return fail(self, cast_result::FAILED_NOT_BEHIND);
+                }
+            }
+        }
         // Target validation (subset of CheckCast target
         // rules driven by effect 0's implicit target).
         if let CastOutcome::Failed(reason) =

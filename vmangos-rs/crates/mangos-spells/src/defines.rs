@@ -394,6 +394,9 @@ pub mod cast_result {
     pub const FAILED_CASTER_DEAD: u8 = 19;
     pub const FAILED_IMMUNE: u8 = 34;
     pub const FAILED_LINE_OF_SIGHT: u8 = 42;
+    /// `SPELL_FAILED_NOT_BEHIND` (51, counted over
+    /// the `SpellDefines.h:351+` enum at 1.12.1).
+    pub const FAILED_NOT_BEHIND: u8 = 51;
     pub const FAILED_NOT_READY: u8 = 60;
     pub const FAILED_NOT_SHAPESHIFT: u8 = 61;
     pub const FAILED_NOT_KNOWN: u8 = 56;

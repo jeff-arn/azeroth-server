@@ -200,3 +200,16 @@ counts: BLOCKED=12, PASS=54, PASSIVE-VERIFIED=19
 - 20662 Execute form_totem target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
 - 26090 Thunderstomp ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
 - 26188 Thunderstomp ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+## Rogue run-class (59 rows)
+
+counts: BLOCKED=10, PASS=34, PASSIVE-VERIFIED=15
+- 921 Pick Pocket form_totem target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 1725 Distract ground_area target=None: BLOCKED effect-marker-only  | facing/motion only (EffectDistract): no wire-observable outcome; classify_only
+- 1842 Disarm Trap form_totem target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 1856 Vanish item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 5140 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 1857 Vanish item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 5140 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 1966 Feint hostile_dummy target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only
+- 2094 Blind item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 5530 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 8676 Ambush form_totem target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 11269 Ambush form_totem target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 25302 Feint hostile_dummy target=None: BLOCKED effect-marker-only  | threat-only: no wire-observable outcome; classify_only

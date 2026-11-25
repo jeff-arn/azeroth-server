@@ -249,6 +249,23 @@ impl Map {
         // `permanent=false` explicitly.
         let permanent = forced.is_none() && spell.attributes & ATTR_COOLDOWN_ON_EVENT != 0;
         let base_recovery = forced.unwrap_or(spell.recovery_time);
+        if permanent && base_recovery == 0 && spell.category_recovery_time > 0 {
+            // Category-only recovery (Stealth): the fork
+            // still records a spell-key permanent entry, and
+            // the fade conversion keys off it. Without it the
+            // permanent category entry below never converts
+            // and blocks recasts forever.
+            self.cooldowns.insert(
+                (caster, spell.id),
+                CooldownEntry {
+                    expiry_ms: self.now_ms + spell.category_recovery_time,
+                    item_id: 0,
+                    permanent: true,
+                    category: spell.category,
+                    spell_id: spell.id,
+                },
+            );
+        }
         if base_recovery > 0 {
             let recovery = self.modded_cooldown(caster, spell, base_recovery, Some(applied_mods));
             if recovery > 0 {
@@ -335,6 +352,21 @@ impl Map {
             (rec, cat_rec)
         };
         let permanent = spell.attributes & ATTR_COOLDOWN_ON_EVENT != 0;
+        if permanent && rec == 0 && cat_rec > 0 {
+            // Same category-only permanent hold as the plain
+            // path: record the spell-key entry the fade
+            // conversion keys off.
+            self.cooldowns.insert(
+                (caster, spell.id),
+                CooldownEntry {
+                    expiry_ms: self.now_ms + cat_rec,
+                    item_id,
+                    permanent: true,
+                    category,
+                    spell_id: spell.id,
+                },
+            );
+        }
         if rec > 0 {
             self.cooldowns.insert(
                 (caster, spell.id),

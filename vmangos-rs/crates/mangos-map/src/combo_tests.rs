@@ -43,6 +43,13 @@ const FINISHER_SPELL: u32 = 9204;
 const MIXED_SELF_KILL_SPELL: u32 = 9205;
 /// Execute stand-in: `TargetAuraState` `HEALTHLESS_20` gate.
 const EXECUTE_SPELL: u32 = 9206;
+/// Backstab stand-in: from-behind-only gate
+/// (`AttributesEx2 == 0x100000` + `AttributesEx 0x200`).
+const BACKSTAB_SPELL: u32 = 9207;
+/// Stealth stand-in: cooldown-on-event shapeshift whose
+/// only recovery is the category recovery (recovery 0,
+/// category 38 at 10 s, like the real Stealth rows).
+const STEALTH_SPELL: u32 = 9208;
 /// Creature template entry for victims.
 const VICTIM_ENTRY: u32 = 9301;
 /// `TARGET_UNIT` implicit target (see insignia fixture).
@@ -199,6 +206,66 @@ fn unit_target_effect(effect_id: u32, base_points: i32, multiplier: f32) -> Spel
     }
 }
 
+/// Cast-gate stand-ins (Execute health gate, Backstab
+/// behind gate, Stealth cooldown-on-event conversion).
+fn insert_gate_spells(stores: &mut WorldStores) {
+    // Execute stand-in: unit damage gated on the target
+    // being under 20% health (fork TargetAuraState).
+    stores.spells.spells.insert(
+        EXECUTE_SPELL,
+        SpellEntry {
+            id: EXECUTE_SPELL,
+            target_aura_state: mangos_spells::defines::aura_state::HEALTHLESS_20_PERCENT,
+            effects: [
+                unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Backstab stand-in: unit damage usable only from
+    // behind the target (fork IsFromBehindOnlySpell
+    // template predicate).
+    stores.spells.spells.insert(
+        BACKSTAB_SPELL,
+        SpellEntry {
+            id: BACKSTAB_SPELL,
+            attributes_ex: 0x0000_0200,
+            attributes_ex2: 0x0010_0000,
+            effects: [
+                unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Stealth stand-in: shapeshift aura on the caster,
+    // cooldown-on-event with category-only recovery.
+    stores.spells.spells.insert(
+        STEALTH_SPELL,
+        SpellEntry {
+            id: STEALTH_SPELL,
+            attributes: 0x0200_0000, // SPELL_ATTR_COOLDOWN_ON_EVENT
+            category: 38,
+            category_recovery_time: 10_000,
+            effects: [
+                SpellEffectData {
+                    effect: effect::APPLY_AURA,
+                    apply_aura_name: 36, // MOD_SHAPESHIFT
+                    misc_value: 30,      // FORM_STEALTH
+                    implicit_target_a: 1,
+                    ..Default::default()
+                },
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+}
+
 fn combo_stores() -> WorldStores {
     let mut stores = WorldStores::empty();
     stores.creature_templates = CreatureTemplates::from_entries_for_tests(vec![CreatureInfo {
@@ -277,21 +344,7 @@ fn combo_stores() -> WorldStores {
             ..Default::default()
         },
     );
-    // Execute stand-in: unit damage gated on the target
-    // being under 20% health (fork TargetAuraState).
-    stores.spells.spells.insert(
-        EXECUTE_SPELL,
-        SpellEntry {
-            id: EXECUTE_SPELL,
-            target_aura_state: mangos_spells::defines::aura_state::HEALTHLESS_20_PERCENT,
-            effects: [
-                unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
-                SpellEffectData::default(),
-                SpellEffectData::default(),
-            ],
-            ..Default::default()
-        },
-    );
+    insert_gate_spells(&mut stores);
     // Mixed-target spell: unit damage + caster-targeted
     // instakill (Sacrifice's shield-master/pet-suicide shape,
     // minus the aura).
@@ -725,4 +778,100 @@ fn execute_gate_rejects_above_20_percent_health() {
         cast_options(),
     );
     assert_eq!(outcome, CastOutcome::Started);
+}
+
+#[test]
+fn backstab_gate_rejects_from_the_front() {
+    // Fork `CheckCast` behind-target gate
+    // (`Spell.cpp:5772-5777`, `IsFromBehindOnlySpell`
+    // at `SpellEntry.h:867`): a from-behind-only spell
+    // cast while the target faces the caster fails
+    // `SPELL_FAILED_NOT_BEHIND` (51); found live by
+    // the Rogue campaign, whose Backstab rows passed
+    // from the front.
+    use mangos_movement::movement_info::Position;
+    use mangos_spells::defines::cast_result;
+    let Fixture {
+        mut map,
+        caster,
+        victim,
+    } = setup(12);
+    let cpos = map.unit_position(caster).expect("caster positioned");
+    // Victim two yards east, facing west (toward the
+    // caster): the caster is in its front arc.
+    map.relocate_unit(
+        victim,
+        Position::new(cpos.x + 2.0, cpos.y, cpos.z, std::f32::consts::PI),
+    );
+    let outcome = map.cast_spell(
+        caster,
+        BACKSTAB_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(
+        outcome,
+        CastOutcome::Failed(cast_result::FAILED_NOT_BEHIND),
+        "Backstab from the front must be rejected"
+    );
+    // Same geometry with the victim facing east (away):
+    // the caster is behind it and the cast opens.
+    map.relocate_unit(victim, Position::new(cpos.x + 2.0, cpos.y, cpos.z, 0.0));
+    let outcome = map.cast_spell(
+        caster,
+        BACKSTAB_SPELL,
+        CastTarget::Unit(victim),
+        cast_options(),
+    );
+    assert_eq!(outcome, CastOutcome::Started);
+}
+
+#[test]
+fn stealth_category_only_cooldown_on_event_converts_on_fade() {
+    // Fork `Player::AddCooldown` permanent hold: a
+    // cooldown-on-event spell whose only recovery is
+    // the category recovery (Stealth: recovery 0,
+    // category 38 at 10 s) still records a spell-key
+    // permanent entry, so the fade conversion can
+    // start the timed category cooldown. Without the
+    // spell-key hold the permanent category entry
+    // blocks recasts forever (live Rogue probe:
+    // NOT_READY at +121 s).
+    use mangos_spells::defines::cast_result;
+    let Fixture {
+        mut map, caster, ..
+    } = setup(13);
+    let outcome = map.cast_spell(caster, STEALTH_SPELL, CastTarget::SelfCast, cast_options());
+    assert_eq!(outcome, CastOutcome::Started);
+    assert!(
+        map.aura_holders(caster)
+            .iter()
+            .any(|h| h.spell_id == STEALTH_SPELL),
+        "stealth holder missing"
+    );
+    map.cancel_aura(caster, STEALTH_SPELL);
+    assert!(
+        map.aura_holders(caster)
+            .iter()
+            .all(|h| h.spell_id != STEALTH_SPELL),
+        "stealth holder must cancel"
+    );
+    let outcome = map.cast_spell(caster, STEALTH_SPELL, CastTarget::SelfCast, cast_options());
+    assert_eq!(
+        outcome,
+        CastOutcome::Failed(cast_result::FAILED_NOT_READY),
+        "converted 10 s category cooldown must block an immediate recast"
+    );
+    let mut now_ms = map.now_ms;
+    for _ in 0..220 {
+        now_ms += 50;
+        map.tick(50, now_ms, 1_800_000_000);
+        let _ = map.drain_events();
+    }
+    let outcome = map.cast_spell(caster, STEALTH_SPELL, CastTarget::SelfCast, cast_options());
+    assert_eq!(
+        outcome,
+        CastOutcome::Started,
+        "stealth must recast after the 10 s category cooldown"
+    );
 }

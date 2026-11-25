@@ -2634,3 +2634,83 @@ binary-only (previous mangosd preserved as
 not restarted); 8085 listening at 23:44:55 UTC
 with no severe save/session errors at first
 check.
+
+Rogue spell campaign full run (2026-11-24,
+bench 127.0.0.1:18099, fan-out matrix 59 cast
+rows: seed G1 union 89 + combat talent 17
+known, cost 51): first full run is the final
+run — 34 PASS / 15 PASSIVE-VERIFIED / 10
+BLOCKED / 0 FAIL, class-gate PASS. The subset
+fix loop before it found, in shared-root
+order: (1) Stealth recasts blocked forever —
+Stealth is cooldown-on-event with recovery 0
+and only a category recovery (38 at 10 s), and
+`add_cooldowns` recorded no spell-key permanent
+hold when recovery was 0, so the fade
+conversion (`start_event_cooldown`, keyed off
+the spell-key hold) never fired and the
+permanent category entry blocked recasts past
++121 s live. Fixed in both cooldown paths
+(regression
+`stealth_category_only_cooldown_on_event_
+converts_on_fade`: Failed(60) after 11 s
+before, green after). (2) Backstab passed
+from the front: the fork from-behind-only gate
+(`IsFromBehindOnlySpell`, `SpellEntry.h:867`;
+`CheckCast` `Spell.cpp:5772-5777`) was missing
+entirely. Added `SpellEntry::
+is_from_behind_only` (template half:
+`AttributesEx2 == 0x100000` + `AttributesEx
+0x200`; the fork Custom half is never
+assigned), `FAILED_NOT_BEHIND` (51), and the
+cast gate with the strict creature-victim
+rule (regression
+`backstab_gate_rejects_from_the_front`:
+Started before, Failed(51) from the front and
+Started from behind after). Harness: the
+matrix flags `requires_behind_target`
+(Backstab/Garrote/Ambush family), the hostile
+leg approaches behind the dummy (live facing)
+and re-takes the position on NOT_BEHIND; the
+combo builder now prefers a non-positional
+builder (Sinister Strike 1752 over Backstab
+53) and closes to melee first (Slice and Dice
+had read builder OUT_OF_RANGE ->
+NO_COMBO_POINTS). (3) Stealth scenario:
+Stances bit 29 = FORM_STEALTH (30, fork
+`SharedDefines.h` 0x1E, template misc 30)
+enters via Stealth 1784 through the
+form-gated leg; form entry waits out a live
+cooldown once instead of failing NOT_READY,
+and a form already broken by its opener counts
+as exited (the aura is gone, however it left).
+(4) Slice and Dice derived `aura_on_target`
+although its aura effect targets the caster:
+the generator's aura side now follows the
+aura-carrying effect slots (caster-only slots
+derive `aura_on_caster` in any bucket), and
+the hostile leg latches the caster aura.
+(5) Distract (Effect 69) derives marker-only:
+it only turns/stops the target, no object,
+damage, or aura outcome exists for the ground
+leg (the facing/motion effect arm stays on
+the long-tail seam list). BLOCKED remainder
+10: 7 effect-marker-only (Pick Pocket, Disarm
+Trap, Feint x2, Ambush x2 — normalized-damage
+depth unverified by the campaign convention,
+Distract) and 3 fixture-reagent (Vanish x2,
+Blind; no reagent gate in the engine and no
+reagents seeded, the standing honest path).
+Gates: subset (stealth/combo/behind rows)
+PASS before the full run; pilot PASS after
+(temp-root artifacts; one Druid 8921
+dummy-reset flake, clean on rerun); both
+Python self-tests and ruff clean; full
+`./ci.sh` with the `.env.test` environment
+exit 0 (fmt, workspace clippy -D warnings,
+workspace build/tests incl. the two new
+regressions at 104 lib tests, env-gated live
+suites incl. live_spells 4/4, no skip lines);
+independent artifact audit PASS (row set ==
+matrix, manifest == results, every PASS
+carries evidence + SPELL_GO).

@@ -721,6 +721,15 @@ impl SpellEntry {
     pub fn needs_combo_points(&self) -> bool {
         self.attributes_ex & (0x0010_0000 | 0x0040_0000) != 0
     }
+
+    /// `IsFromBehindOnlySpell` (`SpellEntry.h:867`)
+    /// template half: `AttributesEx2 == 0x100000` with
+    /// `AttributesEx 0x200`. (The `Custom` flag half is
+    /// never assigned by the fork core.)
+    #[must_use]
+    pub fn is_from_behind_only(&self) -> bool {
+        self.attributes_ex2 == 0x0010_0000 && self.attributes_ex & 0x0000_0200 != 0
+    }
 }
 
 /// One `SkillLineAbilityEntry` (`DBCStructure.h`,
