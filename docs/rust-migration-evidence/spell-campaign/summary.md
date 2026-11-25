@@ -440,3 +440,84 @@ counts: BLOCKED=12, PASS=88, PASSIVE-VERIFIED=13
 - 27681 Prayer of Spirit item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
 - 27683 Prayer of Shadow Protection item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17029 absent from bags and the engine has no reagent gate; scenario-inapplicable
 - 27801 Holy Nova ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+## Mage run-class (100 rows)
+
+counts: BLOCKED=27, FAIL=7, PASS=50, PASSIVE-VERIFIED=16
+- 10 Blizzard ground_area target=17379390973850682870: FAIL  apply | SPELL_GO without required observable outcome: object_seen=False, health 100->100, matching damage=0
+- 120 Cone of Cold ground_area target=17379390973850681689: FAIL  apply | SPELL_GO without required observable outcome: target_aura=False
+- 130 Slow Fall item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 475 Remove Lesser Curse friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 587 Conjure Food self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 759 Conjure Mana Agate self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 1449 Arcane Explosion ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 1953 Blink ground_area target=17379390973850682859: FAIL  apply | SPELL_GO without required observable outcome: target_aura=False
+- 2139 Counterspell hostile_dummy target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 3552 Conjure Mana Jade self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 3561 Teleport: Stormwind item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3562 Teleport: Ironforge item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3563 Teleport: Undercity item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3565 Teleport: Darnassus item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3566 Teleport: Thunder Bluff item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3567 Teleport: Orgrimmar item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 5143 Arcane Missiles hostile_dummy target=17379390973850681682: FAIL  apply | SPELL_GO without required observable outcome: target_aura=False after 7 attempt(s)
+- 5504 Conjure Water self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 10053 Conjure Mana Citrine self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 10054 Conjure Mana Ruby self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 10059 Portal: Stormwind item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 10140 Conjure Water self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 10161 Cone of Cold ground_area target=17379390973850682380: FAIL  apply | SPELL_GO without required observable outcome: target_aura=False
+- 10202 Arcane Explosion ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 11416 Portal: Ironforge item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11417 Portal: Orgrimmar item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11418 Portal: Undercity item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11419 Portal: Darnassus item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11420 Portal: Thunder Bluff item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 12472 Cold Snap self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 12654 Ignite hostile_dummy target=17379390973884236815: FAIL  apply | SPELL_GO without required observable outcome: target_aura=True; ticks 0/2 in oracle band [0-0] (required>=2, target_alive=True, out_of_band=0, amounts=[]) after 1 attempt(s); tick latch +12s
+- 23028 Arcane Brilliance item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17020 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 25345 Arcane Missiles hostile_dummy target=17379390973884237316: FAIL  apply | SPELL_GO without required observable outcome: target_aura=False after 7 attempt(s)
+- 28612 Conjure Food self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+
+failure clusters:
+- phase=apply reason=None bucket=ground_area count=4 spells=[10, 120, 1953, 10161]
+- phase=apply reason=None bucket=hostile_dummy count=3 spells=[5143, 12654, 25345]
+## Mage run-class (3 rows)
+
+counts: FAIL=1, PASS=2
+- 1953 Blink ground_area target=17379390973850682869: FAIL  apply | SPELL_GO without required observable outcome: caster_aura=False
+
+failure clusters:
+- phase=apply reason=None bucket=ground_area count=1 spells=[1953]
+## Mage run-class (1 rows)
+
+counts: PASS=1
+## Mage run-class (100 rows)
+
+counts: BLOCKED=27, PASS=57, PASSIVE-VERIFIED=16
+- 130 Slow Fall item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 475 Remove Lesser Curse friendly target=None: BLOCKED effect-marker-only  | dispel needs a debuffed ally; classify_only
+- 587 Conjure Food self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 759 Conjure Mana Agate self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 1449 Arcane Explosion ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 2139 Counterspell hostile_dummy target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 3552 Conjure Mana Jade self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 3561 Teleport: Stormwind item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3562 Teleport: Ironforge item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3563 Teleport: Undercity item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3565 Teleport: Darnassus item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3566 Teleport: Thunder Bluff item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 3567 Teleport: Orgrimmar item_reagent_ammo target=None: BLOCKED script-evidence-unknown  | Effect SCRIPT_EFFECT: behavior lives in spell scripts, not SpellEffects; classify_only until G4 script evidence (script-evidence-unknown)
+- 5504 Conjure Water self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 10053 Conjure Mana Citrine self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 10054 Conjure Mana Ruby self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 10059 Portal: Stormwind item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 10140 Conjure Water self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 10202 Arcane Explosion ground_area target=None: BLOCKED effect-marker-only  | trigger-only applier: direct cast is a fork-exact no-op
+- 11416 Portal: Ironforge item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11417 Portal: Orgrimmar item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11418 Portal: Undercity item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11419 Portal: Darnassus item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 11420 Portal: Thunder Bluff item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 12472 Cold Snap self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only
+- 23028 Arcane Brilliance item_reagent_ammo target=None: BLOCKED fixture-reagent  | reagent 17020 absent from bags and the engine has no reagent gate; scenario-inapplicable
+- 28612 Conjure Food self target=None: BLOCKED effect-marker-only  | EffectEmpty/EffectUnused/marker-only: no server-side change; classify_only

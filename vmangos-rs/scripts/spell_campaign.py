@@ -94,6 +94,7 @@ CMSG_RESURRECT_RESPONSE = 348
 MSG_MOVE_TELEPORT_ACK = 199
 TYPEID_CORPSE = 7
 TYPEID_GAMEOBJECT = 5
+TYPEID_DYNAMICOBJECT = 6
 CORPSE_FIELD_OWNER = 6
 #: NO_POWER retry budget shared by every cast leg (self, unit,
 #: hostile, ground, blessing, heal). A fixture's pool refills from
@@ -1155,6 +1156,12 @@ def tick_band_check(
     failing the row. Reports observed vs expected counts."""
     band = expected.get("tick_band") or [0, 0]
     low, high = float(band[0]), float(band[1])
+    if low == 0 and high == 0:
+        # Zero-damage periodic (Ignite cast directly: the
+        # proc damage rides the triggering crit, so a bare
+        # cast ticks for 0 and sends no periodic logs).
+        # The aura presence itself is the gate.
+        return True, "ticks un-enforced: zero-damage band (proc-sourced damage)"
     expected_count = int(expected.get("tick_count_expected") or 2)
     in_band = [amount for amount in tick_amounts if low <= amount <= high]
     out_of_band = len(tick_amounts) - len(in_band)
@@ -4512,12 +4519,19 @@ def ground_leg(
         # the row dummy's radius and the dest cast (taken below)
         # would land on nobody (Piercing Howl at 25 yd).
         pre += pre_cast_setup(driver, dummy)
+    # Face the dummy at cast time: it chases into melee during
+    # the approach and can end beside or behind the caster,
+    # which empties frontal-cone enumeration (Cone of Cold saw
+    # SPELL_GO with no victims) even though radius legs pass.
+    face_guid(driver, dummy)
     # Fresh position: the setup may have moved (spare tap for a
     # dummy-less leg), so the dest must center on where the
     # caster stands now, not where the approach left it.
     pos = driver.position
     mark = event_mark(driver)
-    pre_gameobjects = {g for g, o in driver.world.objects.items() if o.type_id == TYPEID_GAMEOBJECT}
+    pre_gameobjects = {
+        g for g, o in driver.world.objects.items() if o.type_id in (TYPEID_GAMEOBJECT, TYPEID_DYNAMICOBJECT)
+    }
     # One cast with the dest-target sender (mask 0x0040 + xyz at the
     # caster's feet), with NO_POWER pacing, not a self cast plus a
     # dest cast.
@@ -4564,11 +4578,16 @@ def ground_leg(
     # daze (Piercing Howl) expires inside one long poll and a
     # single post-window check reads never-applied.
     want_aura_id = None
-    if (row.get("expected") or {}).get("kind") == "aura_on_target":
+    if (row.get("expected") or {}).get("kind") in ("aura_on_target", "aura_on_caster"):
+        # aura_on_caster must arm the latch too: Blink's 1 s
+        # mechanic-immunity aura on the caster is the outcome,
+        # and without the id the sliced caster poll below
+        # never runs (caster_aura=False on a landed Blink).
         want_aura_id = int((row.get("expected") or {}).get("aura", spell_id))
     min_hp = pre_hp
     target_aura = False
     object_seen = False
+    caster_aura = False
     sliced = 0.0
     while sliced < 6.0:
         # Quarter-second slices: a fear aura that breaks on
@@ -4582,12 +4601,19 @@ def ground_leg(
             min_hp = probe_hp
         if want_aura_id is not None and not target_aura and aura_present(driver, dummy, want_aura_id):
             target_aura = True
+        if want_aura_id is not None and not caster_aura and aura_present(driver, guid, want_aura_id):
+            caster_aura = True
         if not object_seen:
-            # Summoned-object outcome (Lightwell): a new
-            # gameobject tracked near the caster that was
-            # not there before the cast.
+            # Summoned-object outcome (Lightwell GO, Blizzard
+            # dynobject): a new gameobject/dynamicobject
+            # tracked near the caster that was not there
+            # before the cast.
             for obj_guid, obj in driver.world.objects.items():
-                if obj.type_id != TYPEID_GAMEOBJECT or obj_guid in pre_gameobjects or obj.position is None:
+                if (
+                    obj.type_id not in (TYPEID_GAMEOBJECT, TYPEID_DYNAMICOBJECT)
+                    or obj_guid in pre_gameobjects
+                    or obj.position is None
+                ):
                     continue
                 if math.dist(obj.position[:3], driver.position[:3]) <= 15.0:
                     object_seen = True
@@ -4608,12 +4634,14 @@ def ground_leg(
         target_aura = aura_present(driver, dummy, want_aura_id)
     if target_aura and want_aura_id is not None and want_aura_id not in applied_auras:
         applied_auras.append(want_aura_id)
+    if caster_aura and want_aura_id is not None and want_aura_id not in applied_auras:
+        applied_auras.append(want_aura_id)
     return single_outcome_verdict(
         row,
         {
             "go": go,
             "reason": reason,
-            "caster_aura": False,
+            "caster_aura": caster_aura,
             "target_guid": dummy,
             "target_aura": target_aura,
             "pre_hp": pre_hp,

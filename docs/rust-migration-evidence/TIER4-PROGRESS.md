@@ -2873,3 +2873,54 @@ the ubuntu:22.04 amd64 recipe, side-port
 binary-only (previous preserved as
 `mangosd.81c8-bak`; realmd unchanged); 8085
 listening at 12:59:10 UTC, first check clean.
+
+Mage spell campaign full run (2026-11-25,
+bench 127.0.0.1:18099, fan-out matrix 100 cast
+rows): final run clean — 57 PASS / 16
+PASSIVE-VERIFIED / 27 BLOCKED / 0 FAIL,
+class-gate PASS (`SPELL-CAMPAIGN-RUN-CLASS-
+MAGE-PASS`). First run 50/16/27/7; the seven
+FAIL rows (Blizzard 10, Cone of Cold
+120/10161, Blink 1953, Arcane Missiles
+5143/25345, Ignite 12654) closed in
+shared-root order: (1) Blizzard's dynobject
+was invisible to the ground leg — `object_seen`
+now accepts dynamicobjects (type 6) with a
+caster-aura latch alongside. (2) Ignite's
+oracle band was [0-0] from a zero base-points
+row — the zero-band tick rule treats any
+attributed tick as in-band when the derived
+band is empty. (3) Aura-side derivation now
+follows the aura slots' targets: Blink
+(caster-only slots) derives `aura_on_caster`,
+Cone of Cold derives `damage_log`, and
+channeled Arcane Missiles derives the
+channel holder on the caster; generator
+synthetics pin all three. (4) Cone of Cold
+still read zero victims live: the engine cone
+was innocent (new regression
+`frontal_cone_hits_ahead_not_behind`: 5 yd
+ahead inside the 60-degree arc takes damage,
+behind does not) — the dummy chases into
+melee during the approach and ends beside or
+behind the caster, so the ground leg now
+faces the dummy at cast time. (5) Blink's
+caster aura never latched because the ground
+leg only armed `want_aura_id` for
+`aura_on_target`; it now arms for
+`aura_on_caster` too, catching the 1 s
+mechanic-immunity aura in 250 ms slices.
+BLOCKED remainder 27: fixture-reagent 8
+(Slow Fall, six Portals, Arcane Brilliance —
+the reagent-gate seam), effect-marker-only 13
+(Conjure Food/Water/Mana gems, Arcane
+Explosion x2, Remove Lesser Curse,
+Counterspell, Cold Snap), script-evidence-
+unknown 6 (city Teleports — G4 census).
+Gates: pilot PASS (temp root); both Python
+self-tests, ruff, `cargo fmt` clean; full
+`./ci.sh` exit 0 (146 suites, cone regression
+inside); independent artifact audit PASS
+(`MAGE-ARTIFACT-AUDIT-PASS`). Deploy: see the
+Mage close-out entry below once the droplet
+swap lands.

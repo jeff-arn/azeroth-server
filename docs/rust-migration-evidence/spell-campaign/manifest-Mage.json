@@ -1,0 +1,124 @@
+{
+ "mode": "run-class",
+ "class": "Mage",
+ "matrix_file": "/Users/jeffarn/Programming/azeroth-server/vmangos-rs/scripts/spell_campaign_matrix-Mage.json",
+ "matrix_mode": "full",
+ "matrix_counts": {
+  "Mage": 100
+ },
+ "talent_build": {
+  "name": "frost",
+  "role": "RangeDps",
+  "total_points": 51,
+  "known_spell_ids": [
+   11151,
+   11426,
+   11958,
+   12464,
+   12472,
+   12473,
+   12475,
+   12488,
+   12490,
+   12519,
+   12577,
+   12592,
+   12842,
+   12985,
+   15047,
+   16758,
+   18462,
+   28595,
+   29440
+  ],
+  "required_spell_ids": []
+ },
+ "fixture_note": "union-seeded single-race fixture; not a legal single-race spellbook claim where union exceeds any one race (Paladin Human==Dwarf==160, numerically equal)",
+ "seed_count": 195,
+ "talent_seed_checks": [
+  {
+   "spell_id": 11151,
+   "learned": true
+  },
+  {
+   "spell_id": 11426,
+   "learned": true
+  },
+  {
+   "spell_id": 11958,
+   "learned": true
+  },
+  {
+   "spell_id": 12464,
+   "learned": true
+  },
+  {
+   "spell_id": 12472,
+   "learned": true
+  },
+  {
+   "spell_id": 12473,
+   "learned": true
+  },
+  {
+   "spell_id": 12475,
+   "learned": true
+  },
+  {
+   "spell_id": 12488,
+   "learned": true
+  },
+  {
+   "spell_id": 12490,
+   "learned": true
+  },
+  {
+   "spell_id": 12519,
+   "learned": true
+  },
+  {
+   "spell_id": 12577,
+   "learned": true
+  },
+  {
+   "spell_id": 12592,
+   "learned": true
+  },
+  {
+   "spell_id": 12842,
+   "learned": true
+  },
+  {
+   "spell_id": 12985,
+   "learned": true
+  },
+  {
+   "spell_id": 15047,
+   "learned": true
+  },
+  {
+   "spell_id": 16758,
+   "learned": true
+  },
+  {
+   "spell_id": 18462,
+   "learned": true
+  },
+  {
+   "spell_id": 28595,
+   "learned": true
+  },
+  {
+   "spell_id": 29440,
+   "learned": true
+  }
+ ],
+ "failure_clusters": [],
+ "verdict_counts": {
+  "BLOCKED": 27,
+  "PASS": 57,
+  "PASSIVE-VERIFIED": 16
+ },
+ "git_head": "4c050736",
+ "git_dirty": true
+}

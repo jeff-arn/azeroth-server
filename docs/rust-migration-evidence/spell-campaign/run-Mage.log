@@ -1,10 +1,111 @@
+SEEDED guid=900016 spells=195 pos=(-6295.0,315.0,377.5)
 AUTH-OK + ADDON-INFO
 LOGIN-OK account=SPELLCAMP07 guid=900016 map=0 pos=(-6295.00,315.00,377.50)
-DRIFT-OK guid=900016 level=60 spells=2 health=1640
-LOGOUT-OK mage-168-persist
+DRIFT-OK guid=900016 level=60 spells=195 health=1640
+ROW Mage 10 ground_area: PASS  | observable outcome: object_seen=True, health 100->0, matching damage=100
+ROW Mage 116 hostile_dummy: PASS  | observable outcome: health 100->47, matching damage=22 after 1 attempt(s)
+ROW Mage 118 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Mage 120 ground_area: PASS  | observable outcome: health 100->0, matching damage=108
+ROW Mage 122 ground_area: PASS  | observable outcome: health 100->45, matching damage=23
+ROW Mage 130 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17056 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Mage 133 hostile_dummy: PASS  | observable outcome: health 100->57, matching damage=18; ticks 2/2 in oracle band [1-1] (required>=2, target_alive=True, 
+ROW Mage 168 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 475 friendly: BLOCKED effect-marker-only | classify_only
+ROW Mage 543 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 587 self: BLOCKED effect-marker-only | classify_only
+SEEDED guid=900015 spells=138 pos=(-6268.0,290.0,380.0)
 AUTH-OK + ADDON-INFO
-LOGIN-OK account=SPELLCAMP07 guid=900016 map=0 pos=(-6295.00,315.00,377.50)
-DRIFT-OK guid=900016 level=60 spells=2 health=1640
-ROW Mage 168 self: PASS  | bound SPELL_GO + aura 168 on self; after logout character_spell total=2 (seeded=2), spell168 rows=1
-ROW Mage 133 hostile_dummy: PASS  | bound SPELL_START+SPELL_GO, then opcode 592 body spell=133 target=17379390973850682870 attacker=900016 damage=25; dummy health 100->40
-LOGOUT-OK mage-pilot
+LOGIN-OK account=SPELLCAMP01 guid=900015 map=0 pos=(-6268.00,290.00,380.00)
+ROW Mage 604 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Mage 759 self: BLOCKED effect-marker-only | classify_only
+ROW Mage 1008 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Mage 1449 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Mage 1459 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Mage 1463 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 1953 ground_area: PASS  | observable outcome: caster_aura=True
+ROW Mage 2120 ground_area: PASS  | observable outcome: object_seen=True, health 100->0, matching damage=81
+ROW Mage 2136 hostile_dummy: PASS  | observable outcome: health 100->19, matching damage=34 after 1 attempt(s)
+ROW Mage 2139 hostile_dummy: BLOCKED effect-marker-only | classify_only
+ROW Mage 2855 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Mage 2948 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=61 after 1 attempt(s)
+ROW Mage 3552 self: BLOCKED effect-marker-only | classify_only
+ROW Mage 3561 item_reagent_ammo: BLOCKED script-evidence-unknown | classify_only
+ROW Mage 3562 item_reagent_ammo: BLOCKED script-evidence-unknown | classify_only
+ROW Mage 3563 item_reagent_ammo: BLOCKED script-evidence-unknown | classify_only
+ROW Mage 3565 item_reagent_ammo: BLOCKED script-evidence-unknown | classify_only
+ROW Mage 3566 item_reagent_ammo: BLOCKED script-evidence-unknown | classify_only
+ROW Mage 3567 item_reagent_ammo: BLOCKED script-evidence-unknown | classify_only
+ROW Mage 5143 hostile_dummy: PASS  | observable outcome: caster_aura=True after 1 attempt(s)
+ROW Mage 5504 self: BLOCKED effect-marker-only | classify_only
+ROW Mage 6117 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 6143 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 7301 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 7302 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 10053 self: BLOCKED effect-marker-only | classify_only
+ROW Mage 10054 self: BLOCKED effect-marker-only | classify_only
+ROW Mage 10059 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Mage 10140 self: BLOCKED effect-marker-only | classify_only
+ROW Mage 10157 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Mage 10161 ground_area: PASS  | observable outcome: health 100->0, matching damage=355
+ROW Mage 10170 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Mage 10174 friendly: PASS  | self + friendly legs verify: self leg go=True reason=None aura=True; ally leg go=True reason=None aura=True
+ROW Mage 10187 ground_area: PASS  | observable outcome: object_seen=True, health 100->0, matching damage=298
+ROW Mage 10193 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 10199 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=451 after 1 attempt(s)
+ROW Mage 10202 ground_area: BLOCKED effect-marker-only | classify_only
+ROW Mage 10207 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=244 after 1 attempt(s)
+ROW Mage 10216 ground_area: PASS  | observable outcome: object_seen=True, health 100->0, matching damage=550
+ROW Mage 10220 self: PASS  | observable outcome: caster_aura=True after 1 mana wait(s)
+ROW Mage 10225 self: PASS  | observable outcome: caster_aura=True after 1 mana wait(s)
+ROW Mage 10230 ground_area: PASS  | observable outcome: health 100->0, matching damage=79
+ROW Mage 11151 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 11416 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Mage 11417 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Mage 11418 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Mage 11419 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Mage 11420 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17032 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Mage 11426 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 11958 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 12051 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 12464 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 12472 self: BLOCKED effect-marker-only | classify_only
+ROW Mage 12473 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 12475 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 12484 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Mage 12485 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Mage 12486 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Mage 12488 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 12490 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 12505 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=211; ticks 0/4 in oracle band [18-18]: target died before a tick coul
+ROW Mage 12519 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 12536 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 12577 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 12592 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 12654 hostile_dummy: PASS  | observable outcome: target_aura=True; ticks un-enforced: zero-damage band (proc-sourced damage) after 1 attempt(s); tick
+ROW Mage 12826 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Mage 12842 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 12985 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 13018 ground_area: PASS  | observable outcome: health 100->0, matching damage=213
+ROW Mage 13021 ground_area: PASS  | observable outcome: health 100->0, matching damage=489
+ROW Mage 13033 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 15047 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 16758 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 18462 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 18809 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=841; ticks 0/4 in oracle band [67-67]: target died before a tick coul
+ROW Mage 22783 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 23028 item_reagent_ammo: BLOCKED fixture-reagent | reagent 17020 absent from bags and the engine has no reagent gate; scenario-inapplicable
+ROW Mage 24530 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=500 after 1 attempt(s)
+ROW Mage 25304 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=520 after 1 attempt(s)
+ROW Mage 25306 hostile_dummy: PASS  | observable outcome: health 100->0, matching damage=694; ticks 0/4 in oracle band [19-19]: target died before a tick coul
+ROW Mage 25345 hostile_dummy: PASS  | observable outcome: caster_aura=True after 2 attempt(s)
+ROW Mage 28270 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Mage 28271 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Mage 28272 hostile_dummy: PASS  | observable outcome: target_aura=True after 1 attempt(s)
+ROW Mage 28595 passive: PASSIVE-VERIFIED | learned=True
+ROW Mage 28609 self: PASS  | observable outcome: caster_aura=True
+ROW Mage 28612 self: BLOCKED effect-marker-only | classify_only
+ROW Mage 29440 passive: PASSIVE-VERIFIED | learned=True
+LOGOUT-OK Mage-ally
+LOGOUT-OK Mage-run
+run-class Mage: 100 rows, BLOCKED=27, PASS=57, PASSIVE-VERIFIED=16
+SPELL-CAMPAIGN-RUN-CLASS-MAGE-PASS

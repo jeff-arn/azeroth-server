@@ -61,6 +61,9 @@ const LIGHTWELL_SPELL: u32 = 9210;
 const SHIELD_SPELL: u32 = 9211;
 /// Long-cast stand-in: 5 s cast time via table index 99.
 const LONGCAST_SPELL: u32 = 9212;
+/// Cone of Cold stand-in: frontal-cone (mode 24) school
+/// damage with a 10 yd radius (table index 13).
+const CONE_SPELL: u32 = 9213;
 const LIGHTWELL_GO_ENTRY: u32 = 181_105;
 /// Creature template entry for victims.
 const VICTIM_ENTRY: u32 = 9301;
@@ -344,6 +347,28 @@ fn insert_gate_spells(stores: &mut WorldStores) {
             casting_time_index: 99,
             effects: [
                 unit_target_effect(effect::SCHOOL_DAMAGE, 10, 1.0),
+                SpellEffectData::default(),
+                SpellEffectData::default(),
+            ],
+            ..Default::default()
+        },
+    );
+    // Cone stand-in: mode-24 frontal cone damage.
+    stores.spells.tables.radii.insert(13, 10.0);
+    stores.spells.spells.insert(
+        CONE_SPELL,
+        SpellEntry {
+            id: CONE_SPELL,
+            dmg_class: dmg_class::MAGIC,
+            effects: [
+                SpellEffectData {
+                    effect: effect::SCHOOL_DAMAGE,
+                    implicit_target_a: 24, // TARGET_FRONTAL_CONE
+                    radius_index: 13,
+                    base_points: 159,
+                    dmg_multiplier: 1.0,
+                    ..Default::default()
+                },
                 SpellEffectData::default(),
                 SpellEffectData::default(),
             ],
@@ -1161,5 +1186,46 @@ fn lightwell_trans_door_summons_gameobject() {
             .values()
             .any(|go| go.info.id == LIGHTWELL_GO_ENTRY),
         "Lightwell gameobject must be summoned"
+    );
+}
+
+#[test]
+fn frontal_cone_hits_ahead_not_behind() {
+    // Mode-24 cone enumeration (Cone of Cold): the
+    // victim 5 yd ahead inside the 60-degree arc takes
+    // the damage, the one behind does not. Mage
+    // campaign saw SPELL_GO with no damage log; this
+    // pins whether enumeration itself works.
+    let Fixture {
+        mut map, caster, ..
+    } = setup(18);
+    let pos = map.unit_position(caster).expect("caster positioned");
+    let mut ahead = pos;
+    ahead.x += 5.0 * pos.o.cos();
+    ahead.y += 5.0 * pos.o.sin();
+    let mut behind = pos;
+    behind.x -= 5.0 * pos.o.cos();
+    behind.y -= 5.0 * pos.o.sin();
+    let front = map
+        .summon_creature(VICTIM_ENTRY, ahead, caster, 0, 0)
+        .expect("front victim");
+    let back = map
+        .summon_creature(VICTIM_ENTRY, behind, caster, 0, 0)
+        .expect("back victim");
+    let front_before = victim_health(&map, front);
+    let back_before = victim_health(&map, back);
+    assert!(front_before > 0 && back_before > 0);
+    let outcome = map.cast_spell(caster, CONE_SPELL, CastTarget::Dest(pos), cast_options());
+    assert_eq!(outcome, CastOutcome::Started);
+    assert!(
+        victim_health(&map, front) < front_before,
+        "front victim must take cone damage ({} -> {})",
+        front_before,
+        victim_health(&map, front)
+    );
+    assert_eq!(
+        victim_health(&map, back),
+        back_before,
+        "back victim must be outside the cone"
     );
 }

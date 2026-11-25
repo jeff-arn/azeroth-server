@@ -21,13 +21,13 @@ test-first. Counts below are cast rows / verdicts.
 |---|---|---|
 | Paladin | ret | DONE — 84 rows: 45 PASS, 11 PASSIVE-VERIFIED, 28 BLOCKED, 0 FAIL |
 | Druid | balance | DONE — 63 rows: 40 PASS, 15 PASSIVE-VERIFIED, 8 BLOCKED, 0 FAIL |
-| Warlock | smruin | IN PROGRESS — first run 113 rows: 45/14/34 BLOCKED, 20 FAIL in 6 clusters being fixed |
-| Hunter | mm (now first legal) | QUEUED |
-| Shaman | enhance (now first legal) | QUEUED — totem engine is the risk |
-| Warrior | fury | QUEUED (unblocked 2026-11-23) |
-| Rogue | combat | QUEUED (unblocked) |
-| Priest | shadow | QUEUED (unblocked; needs RESURRECT seam for full coverage) |
-| Mage | frost | QUEUED (unblocked) |
+| Warlock | smruin | DONE — 113 rows: 62 PASS, 14 PASSIVE-VERIFIED, 37 BLOCKED, 0 FAIL |
+| Hunter | mm | DONE — 80 rows: 53 PASS, 13 PASSIVE-VERIFIED, 14 BLOCKED, 0 FAIL |
+| Shaman | enhance | DONE — 93 rows: 27 PASS, 15 PASSIVE-VERIFIED, 51 BLOCKED, 0 FAIL (totem rows classify-only, JEF-20) |
+| Warrior | fury | DONE — 85 rows: 54 PASS, 19 PASSIVE-VERIFIED, 12 BLOCKED, 0 FAIL |
+| Rogue | combat | DONE — 59 rows: 34 PASS, 15 PASSIVE-VERIFIED, 10 BLOCKED, 0 FAIL |
+| Priest | shadow | DONE — 113 rows: 88 PASS, 13 PASSIVE-VERIFIED, 12 BLOCKED, 0 FAIL |
+| Mage | frost | DONE — 100 rows: 57 PASS, 16 PASSIVE-VERIFIED, 27 BLOCKED, 0 FAIL |
 
 Warrior/Mage also have 2-row pilot coverage each; Rogue/Priest have
 none yet. Per-class cost is dominated by real-time bench runs
@@ -54,10 +54,10 @@ none yet. Per-class cost is dominated by real-time bench runs
 
 ## 2. Spell-engine seams (blockers behind today's BLOCKEDs)
 
-- **RESURRECT three-layer** (M, SEAM): wire corpse targets are
-  dropped by the cast parser, the alive-gate rejects dead targets,
-  and the effect has no resurrect body. Blocks Rebirth,
-  Resurrection, Redemption, Ancestral Spirit. Planned before Priest.
+- **RESURRECT three-layer** (M): **DONE** (JEF-17, deployed) —
+  corpse cast targets, percent/flat effects, offer flow,
+  `CMSG_RESURRECT_RESPONSE`; Resurrection verdict PASS in the
+  Priest run.
 - **Reagent gate** (M, SEAM): no `CheckItems`/`TakeReagents` in the
   cast path and no harness item-grant path. ~19 rows blocked across
   three classes so far (Greater Blessings, Divine Intervention,

@@ -1614,6 +1614,18 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
                 return _with_tick_band({"kind": "aura_on_target", "aura": _verify_aura(spell_id, eff)}, eff, durations)
             return _with_tick_band({"kind": "object_created"}, eff, durations)
         if APPLY_AURA_EFFECTS & effects or has_aura:
+            aura_targets = {eff[f"targ_{side}{i}"] for i in (1, 2, 3) for side in ("a", "b") if eff[f"aura{i}"]}
+            if aura_targets and aura_targets <= {0, 1}:
+                # Caster-only auras in a ground bucket (Blink's
+                # root/snare clears): the observable holder is
+                # on the caster, not the dummy.
+                return _with_tick_band({"kind": "aura_on_caster", "aura": _verify_aura(spell_id, eff)}, eff, durations)
+            if effects & SCHOOL_DAMAGE_EFFECTS:
+                # Instant area damage + aura (Cone of Cold):
+                # the damage log is the robust observable —
+                # the dummy can die to the hit before its
+                # aura fields ever latch.
+                return _with_tick_band({"kind": "damage_log", "opcode": 592}, eff, durations)
             # Instant area-aura rows (Howl of Terror's fear): no
             # dynobject exists, so the leg checks the aura on the
             # in-radius dummy instead of an object.
@@ -1667,6 +1679,12 @@ def derive_expected(spell_id: int, eff: dict, bucket: str, durations: dict[int, 
             # (Slice and Dice: the combo dummy effect rides the
             # unit target, the haste aura lands on the caster).
             # The bucket cannot decide the side; the aura slots can.
+            return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
+        if bucket == "hostile_dummy" and 23 in auras and int(eff.get("attributes_ex", 0) or 0) & (0x04 | 0x40):
+            # Channeled periodic-trigger damage (Arcane
+            # Missiles): the channel holder on the caster is
+            # the observable aura; the unit-side dummy aura
+            # never latches as a holder.
             return _with_tick_band({"kind": "aura_on_caster", "aura": aura}, eff, durations)
         if aura_targets & {6, 25}:
             # Mixed caster+unit aura rows (Mind Vision: dummy
@@ -2496,6 +2514,18 @@ def run_self_test() -> int:
         name="Mind Vision",
     )
     assert derive_expected(2096, vision, "self") == {"kind": "aura_on_target", "aura": 2096}
+    # Blink: caster-only aura slots in a ground bucket derive
+    # the caster holder; Cone of Cold (instant damage + slow)
+    # derives the damage log; channeled periodic-trigger
+    # damage (Arcane Missiles) derives the channel holder.
+    blink = _eff(effect1=29, effect2=6, aura2=77, targ_a1=1, targ_a2=1, name="Blink")
+    assert derive_expected(1953, blink, "ground_area") == {"kind": "aura_on_caster", "aura": 1953}
+    cone = _eff(effect1=6, effect2=2, aura1=33, targ_a1=24, targ_a2=24, name="Cone of Cold")
+    assert derive_expected(120, cone, "ground_area") == {"kind": "damage_log", "opcode": 592}
+    missiles = _eff(
+        effect1=6, effect2=6, aura1=23, aura2=4, targ_a1=1, targ_a2=6, attributes_ex=0x04, name="Arcane Missiles"
+    )
+    assert derive_expected(5143, missiles, "hostile_dummy") == {"kind": "aura_on_caster", "aura": 5143}
     # Non-damaging persistent area aura rows verify the aura on the
     # in-radius dummy (Flare shape); damaging ground rows keep the
     # object (Consecration shape, asserted above).
